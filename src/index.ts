@@ -1,6 +1,7 @@
 import { Elysia } from "elysia";
 
 import { getSql } from "./db";
+import { runMigrations } from "./migrations";
 import { startPolling } from "./polling";
 import type { PlatformAccount, PlatformClient } from "./services";
 import { PsnClient, SteamClient } from "./services";
@@ -78,73 +79,6 @@ const storeResolvedAccountId = async (
   `;
 };
 
-const app = new Elysia()
-  .get("/", () => "Hello Elysia")
-  .get("/db/health", async () => {
-    const sql = getSql();
-    await sql`select 1`;
-    return { ok: true };
-  })
-  .get("/accounts", async () => {
-    const sql = getSql();
-    const rows = await sql<{ id: number; platform: string }[]>`
-      select id, platform
-      from platform_credentials
-      order by id
-    `;
-    return rows.map((r) => ({ id: +r.id, name: r.platform }));
-  })
-  .get("/accounts/:accountId/sessions", async ({ params, set }) => {
-    const accountId = Number(params.accountId);
-    if (!Number.isInteger(accountId)) {
-      set.status = 400;
-      return { error: "accountId must be a number." };
-    }
-
-    const sql = getSql();
-    const rows = await sql<
-      Array<{
-        id: number;
-        started_at: Date;
-        ended_at: Date | null;
-        platform: string;
-        title: string;
-      }>
-    >`
-      select
-        ps.id,
-        ps.started_at,
-        ps.ended_at,
-        pc.platform,
-        g.title
-      from play_sessions ps
-      join platform_credentials pc on pc.id = ps.platform_credential_id
-      join games g on g.id = ps.game_id
-      where ps.platform_credential_id = ${accountId}
-      order by
-        case when ps.ended_at is null then 0 else 1 end,
-        ps.started_at desc
-      limit 10
-    `;
-
-    return {
-      accountId,
-      sessions: rows.map((r) => ({
-        sessionId: +r.id,
-        startedAt: r.started_at,
-        endedAt: r.ended_at,
-        platform: r.platform,
-        game: r.title,
-      })),
-    };
-  })
-  .listen(3000);
-
-console.log(
-  `🦊 Elysia is running at ${app.server?.hostname}:${app.server?.port}`
-);
-console.log(`Polling interval: ${config.pollIntervalSeconds}s`);
-
 const bootstrapPolling = async () => {
   const accounts: Array<PlatformAccount & { credentialId: number }> = [];
   const clients: PlatformClient[] = [];
@@ -206,7 +140,80 @@ const bootstrapPolling = async () => {
   });
 };
 
-bootstrapPolling().catch((error) => {
-  console.error("Failed to start polling.");
+const startServer = async () => {
+  await runMigrations();
+
+  const app = new Elysia()
+    .get("/", () => "Hello Elysia")
+    .get("/db/health", async () => {
+      const sql = getSql();
+      await sql`select 1`;
+      return { ok: true };
+    })
+    .get("/accounts", async () => {
+      const sql = getSql();
+      const rows = await sql<{ id: number; platform: string }[]>`
+        select id, platform
+        from platform_credentials
+        order by id
+      `;
+      return rows.map((r) => ({ id: +r.id, name: r.platform }));
+    })
+    .get("/accounts/:accountId/sessions", async ({ params, set }) => {
+      const accountId = Number(params.accountId);
+      if (!Number.isInteger(accountId)) {
+        set.status = 400;
+        return { error: "accountId must be a number." };
+      }
+
+      const sql = getSql();
+      const rows = await sql<
+        Array<{
+          id: number;
+          started_at: Date;
+          ended_at: Date | null;
+          platform: string;
+          title: string;
+        }>
+      >`
+        select
+          ps.id,
+          ps.started_at,
+          ps.ended_at,
+          pc.platform,
+          g.title
+        from play_sessions ps
+        join platform_credentials pc on pc.id = ps.platform_credential_id
+        join games g on g.id = ps.game_id
+        where ps.platform_credential_id = ${accountId}
+        order by
+          case when ps.ended_at is null then 0 else 1 end,
+          ps.started_at desc
+        limit 10
+      `;
+
+      return {
+        accountId,
+        sessions: rows.map((r) => ({
+          sessionId: +r.id,
+          startedAt: r.started_at,
+          endedAt: r.ended_at,
+          platform: r.platform,
+          game: r.title,
+        })),
+      };
+    })
+    .listen(3000);
+
+  console.log(
+    `🦊 Elysia is running at ${app.server?.hostname}:${app.server?.port}`
+  );
+  console.log(`Polling interval: ${config.pollIntervalSeconds}s`);
+
+  await bootstrapPolling();
+};
+
+startServer().catch((error) => {
+  console.error("Startup failed.");
   console.error(error);
 });
