@@ -16,11 +16,12 @@ if (!steamId || !steamId.trim()) {
 const client = new SteamClient({ apiKey, steamId });
 
 const run = async () => {
-  const game = await client.getCurrentlyPlaying({
+  const result = await client.getCurrentlyPlaying({
     platform: "steam",
     accountId: steamId,
   });
 
+  const game = result.game;
   if (!game) {
     console.log("No game currently playing.");
     return;

@@ -1,6 +1,9 @@
 import { Elysia } from "elysia";
 
 import { getSql } from "./db";
+import { startPolling } from "./polling";
+import type { PlatformAccount } from "./services";
+import { PsnClient, SteamClient } from "./services";
 
 const DEFAULT_POLL_INTERVAL_SECONDS = 60;
 const MIN_POLL_INTERVAL_SECONDS = 10;
@@ -51,6 +54,7 @@ const config = {
     Bun.env.POLL_INTERVAL_SECONDS
   ),
   psnNpsso: Bun.env.PSN_NPSSO ?? "",
+  psnAccountId: Bun.env.PSN_ACCOUNT_ID ?? "",
   steamApiKey: Bun.env.STEAM_API_KEY ?? "",
   steamId: Bun.env.STEAM_ID ?? "",
 };
@@ -62,17 +66,55 @@ const app = new Elysia()
     await sql`select 1`;
     return { ok: true };
   })
-  .get("/db/sample", async () => {
-    const sql = getSql();
-    await sql`insert into sample_checks default values`;
-    const rows = await sql<{ count: number }[]>`
-      select count(*)::int as count from sample_checks
-    `;
-    return { count: rows[0]?.count ?? 0 };
-  })
   .listen(3000);
 
 console.log(
   `🦊 Elysia is running at ${app.server?.hostname}:${app.server?.port}`
 );
 console.log(`Polling interval: ${config.pollIntervalSeconds}s`);
+
+const bootstrapPolling = async () => {
+  const accounts: PlatformAccount[] = [];
+  const steamClient = new SteamClient({
+    apiKey: config.steamApiKey,
+    steamId: config.steamId,
+  });
+  const psnClient = new PsnClient({ npsso: config.psnNpsso });
+
+  if (config.steamId.trim()) {
+    accounts.push({
+      platform: "steam",
+      accountId: config.steamId,
+    });
+  }
+
+  let psnAccountId = config.psnAccountId.trim();
+  if (!psnAccountId) {
+    const resolved = await psnClient.resolveAccountId();
+    if (resolved) {
+      psnAccountId = resolved;
+      console.log(`Resolved PSN account ID: ${psnAccountId}`);
+    } else {
+      console.warn("Could not resolve PSN account ID; skipping PSN polling.");
+    }
+  }
+
+  if (psnAccountId) {
+    accounts.push({
+      platform: "psn",
+      accountId: psnAccountId,
+    });
+  }
+
+  await startPolling({
+    sql: getSql(),
+    clients: [steamClient, psnClient],
+    accounts,
+    pollIntervalSeconds: config.pollIntervalSeconds,
+  });
+};
+
+bootstrapPolling().catch((error) => {
+  console.error("Failed to start polling.");
+  console.error(error);
+});

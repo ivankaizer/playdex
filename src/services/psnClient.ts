@@ -1,4 +1,9 @@
-import type { PlatformAccount, PlatformClient, PlatformGame } from "./platform";
+import type {
+  PlatformAccount,
+  PlatformClient,
+  PlatformGame,
+  PlatformPollResult,
+} from "./platform";
 
 type PsnAuthTokens = {
   accessToken: string;
@@ -89,7 +94,7 @@ export class PsnClient implements PlatformClient {
 
   async getCurrentlyPlaying(
     account: PlatformAccount
-  ): Promise<PlatformGame | null> {
+  ): Promise<PlatformPollResult> {
     const api = await this.getApi();
     const accessToken = await this.getAccessToken();
     const presence = (await api.getBasicPresence(
@@ -106,15 +111,21 @@ export class PsnClient implements PlatformClient {
     };
 
     const titleInfo = presence?.basicPresence?.gameTitleInfoList?.[0];
-    if (!titleInfo?.titleName) {
-      return null;
+    let game: PlatformGame | null = null;
+    if (titleInfo?.titleName) {
+      game = {
+        platform: "psn",
+        title: titleInfo.titleName,
+        externalId: titleInfo.npTitleId ?? titleInfo.titleId,
+        raw: presence,
+      };
     }
 
     return {
       platform: "psn",
-      title: titleInfo.titleName,
-      externalId: titleInfo.npTitleId ?? titleInfo.titleId,
+      accountId: account.accountId,
       raw: presence,
+      game,
     };
   }
 

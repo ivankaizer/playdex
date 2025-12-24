@@ -1,4 +1,9 @@
-import type { PlatformAccount, PlatformClient, PlatformGame } from "./platform";
+import type {
+  PlatformAccount,
+  PlatformClient,
+  PlatformGame,
+  PlatformPollResult,
+} from "./platform";
 
 type SteamPlayerSummaryResponse = {
   response?: {
@@ -22,7 +27,7 @@ export class SteamClient implements PlatformClient {
 
   async getCurrentlyPlaying(
     account: PlatformAccount
-  ): Promise<PlatformGame | null> {
+  ): Promise<PlatformPollResult> {
     const steamId = account.accountId || this.defaultSteamId;
     if (!steamId) {
       throw new Error("Steam accountId is required to fetch current game.");
@@ -36,21 +41,43 @@ export class SteamClient implements PlatformClient {
 
     const response = await fetch(url);
     if (!response.ok) {
-      throw new Error(`Steam API error: ${response.status}`);
+      const error = new Error(`Steam API error: ${response.status}`);
+      (error as Error & { status?: number }).status = response.status;
+      if (response.status === 429) {
+        const retryAfter = response.headers.get("retry-after");
+        if (retryAfter) {
+          const retryAfterSeconds = Number.parseInt(retryAfter, 10);
+          const retryAfterMs = Number.isNaN(retryAfterSeconds)
+            ? null
+            : retryAfterSeconds * 1000;
+          if (retryAfterMs) {
+            (
+              error as Error & { retryAfterMs?: number }
+            ).retryAfterMs = retryAfterMs;
+          }
+        }
+      }
+      throw error;
     }
 
     const payload = (await response.json()) as SteamPlayerSummaryResponse;
     const player = payload.response?.players?.[0];
 
-    if (!player?.gameid || !player?.gameextrainfo) {
-      return null;
+    let game: PlatformGame | null = null;
+    if (player?.gameid && player?.gameextrainfo) {
+      game = {
+        platform: "steam",
+        title: player.gameextrainfo,
+        externalId: player.gameid,
+        raw: player,
+      };
     }
 
     return {
       platform: "steam",
-      title: player.gameextrainfo,
-      externalId: player.gameid,
-      raw: player,
+      accountId: steamId,
+      raw: payload,
+      game,
     };
   }
 }

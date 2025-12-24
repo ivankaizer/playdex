@@ -23,11 +23,12 @@ const run = async () => {
     console.log(`Resolved PSN account ID: ${resolvedAccountId}`);
   }
 
-  const game = await client.getCurrentlyPlaying({
+  const result = await client.getCurrentlyPlaying({
     platform: "psn",
     accountId: resolvedAccountId,
   });
 
+  const game = result.game;
   if (!game) {
     console.log("No game currently playing.");
     return;

@@ -10,7 +10,15 @@ if (!databaseUrl?.trim()) {
 }
 
 const migrationsDir = join(process.cwd(), "migrations");
-const sql = postgres(databaseUrl, { max: 1 });
+const sql = postgres(databaseUrl, {
+  max: 1,
+  onnotice: (notice) => {
+    if (notice.code === "42P07") {
+      return;
+    }
+    console.warn(notice);
+  },
+});
 
 const ensureMigrationsTable = async () => {
   await sql`

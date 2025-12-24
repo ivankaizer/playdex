@@ -13,7 +13,14 @@ export type PlatformGame = {
   raw?: unknown;
 };
 
+export type PlatformPollResult = {
+  platform: Platform;
+  accountId: string;
+  game: PlatformGame | null;
+  raw: unknown;
+};
+
 export interface PlatformClient {
   platform: Platform;
-  getCurrentlyPlaying(account: PlatformAccount): Promise<PlatformGame | null>;
+  getCurrentlyPlaying(account: PlatformAccount): Promise<PlatformPollResult>;
 }
