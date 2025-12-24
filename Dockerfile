@@ -8,6 +8,8 @@ RUN bun install --frozen-lockfile
 
 COPY tsconfig.json ./
 COPY src ./src
+COPY migrations ./migrations
+COPY scripts ./scripts
 
 EXPOSE 3000
 
