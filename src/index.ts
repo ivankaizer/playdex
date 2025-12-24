@@ -5,6 +5,13 @@ import { runMigrations } from "./migrations";
 import { startPolling } from "./polling";
 import type { PlatformAccount, PlatformClient } from "./services";
 import { PsnClient, SteamClient } from "./services";
+import {
+  healthCheck,
+  listAccountSessions,
+  listAccounts,
+  loadPlatformCredentials,
+  storeResolvedAccountId as storeResolvedAccountIdQuery,
+} from "./sql/queries";
 
 const DEFAULT_POLL_INTERVAL_SECONDS = 60;
 const MIN_POLL_INTERVAL_SECONDS = 10;
@@ -51,19 +58,8 @@ const config = {
   ),
 };
 
-type PlatformCredentialRow = {
-  id: number;
-  platform: PlatformAccount["platform"];
-  api_key: string | null;
-  account_id: string | null;
-};
-
-const loadPlatformCredentials = async () => {
-  const sql = getSql();
-  const rows = await sql<PlatformCredentialRow[]>`
-    select id, platform, api_key, account_id
-    from platform_credentials
-  `;
+const loadCredentialsByPlatform = async () => {
+  const rows = await loadPlatformCredentials();
   return new Map(rows.map((row) => [row.platform, row]));
 };
 
@@ -71,18 +67,13 @@ const storeResolvedAccountId = async (
   platform: PlatformAccount["platform"],
   accountId: string
 ) => {
-  const sql = getSql();
-  await sql`
-    update platform_credentials
-    set account_id = ${accountId}, updated_at = now()
-    where platform = ${platform}
-  `;
+  await storeResolvedAccountIdQuery(platform, accountId);
 };
 
 const bootstrapPolling = async () => {
   const accounts: Array<PlatformAccount & { credentialId: number }> = [];
   const clients: PlatformClient[] = [];
-  const credentials = await loadPlatformCredentials();
+  const credentials = await loadCredentialsByPlatform();
 
   const steamCredentials = credentials.get("steam");
   if (
@@ -146,17 +137,11 @@ const startServer = async () => {
   const app = new Elysia()
     .get("/", () => "Hello Elysia")
     .get("/db/health", async () => {
-      const sql = getSql();
-      await sql`select 1`;
+      await healthCheck();
       return { ok: true };
     })
     .get("/accounts", async () => {
-      const sql = getSql();
-      const rows = await sql<{ id: number; platform: string }[]>`
-        select id, platform
-        from platform_credentials
-        order by id
-      `;
+      const rows = await listAccounts();
       return rows.map((r) => ({ id: +r.id, name: r.platform }));
     })
     .get("/accounts/:accountId/sessions", async ({ params, set }) => {
@@ -166,31 +151,7 @@ const startServer = async () => {
         return { error: "accountId must be a number." };
       }
 
-      const sql = getSql();
-      const rows = await sql<
-        Array<{
-          id: number;
-          started_at: Date;
-          ended_at: Date | null;
-          platform: string;
-          title: string;
-        }>
-      >`
-        select
-          ps.id,
-          ps.started_at,
-          ps.ended_at,
-          pc.platform,
-          g.title
-        from play_sessions ps
-        join platform_credentials pc on pc.id = ps.platform_credential_id
-        join games g on g.id = ps.game_id
-        where ps.platform_credential_id = ${accountId}
-        order by
-          case when ps.ended_at is null then 0 else 1 end,
-          ps.started_at desc
-        limit 10
-      `;
+      const rows = await listAccountSessions(accountId);
 
       return {
         accountId,

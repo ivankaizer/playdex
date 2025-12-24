@@ -4,21 +4,15 @@ import { join } from "node:path";
 import type postgres from "postgres";
 
 import { getSql } from "./db";
+import {
+  ensureMigrationsTable,
+  fetchAppliedMigrations,
+  insertAppliedMigration,
+} from "./sql/queries";
 
 type Logger = Pick<Console, "log" | "warn">;
 
 const DEFAULT_MIGRATIONS_DIR = join(process.cwd(), "migrations");
-
-const ensureMigrationsTable = async (
-  sql: ReturnType<typeof postgres>
-) => {
-  await sql`
-    create table if not exists schema_migrations (
-      version text primary key,
-      applied_at timestamptz not null default now()
-    )
-  `;
-};
 
 const loadMigrations = async (migrationsDir: string) => {
   const entries = await readdir(migrationsDir, { withFileTypes: true });
@@ -39,9 +33,7 @@ export const runMigrations = async ({
 } = {}) => {
   await ensureMigrationsTable(sql);
 
-  const appliedRows = await sql<{ version: string }[]>`
-    select version from schema_migrations
-  `;
+  const appliedRows = await fetchAppliedMigrations(sql);
   const applied = new Set(appliedRows.map((row) => row.version));
   const migrations = await loadMigrations(migrationsDir);
 
@@ -55,7 +47,7 @@ export const runMigrations = async ({
 
     await sql.begin(async (tx) => {
       await tx.unsafe(contents);
-      await tx`insert into schema_migrations (version) values (${filename})`;
+      await insertAppliedMigration(filename, tx);
     });
   }
 

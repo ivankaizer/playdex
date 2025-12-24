@@ -6,6 +6,13 @@ import type {
   PlatformAccount,
   PlatformClient,
 } from "./services/platform";
+import {
+  endPlaySession,
+  ensureGameId,
+  fetchActivePlaySession,
+  recordPollResult,
+  startPlaySession,
+} from "./sql/queries";
 
 type PollingConfig = {
   sql: ReturnType<typeof postgres>;
@@ -55,69 +62,25 @@ const getErrorMessage = (error: unknown) => {
   return typeof error === "string" ? error : "Unknown error";
 };
 
-const ensureGameId = async (
-  sql: ReturnType<typeof postgres>,
-  game: ReturnType<typeof normalizeGame>
-) => {
-  const rows = await sql<{ id: number }[]>`
-    insert into games (platform, title, external_id, canonical_key)
-    values (${game.platform}, ${game.title}, ${game.externalId ?? null}, ${game.canonicalKey})
-    on conflict (canonical_key)
-    do update set
-      title = excluded.title,
-      external_id = excluded.external_id,
-      updated_at = now()
-    returning id
-  `;
-  return rows[0].id;
-};
-
-const recordPollResult = async (
-  sql: ReturnType<typeof postgres>,
-  platformCredentialId: number,
-  gameId: number | null,
-  polledAt: Date,
-  rawPayload: unknown
-) => {
-  const payload = rawPayload === undefined ? null : sql.json(rawPayload);
-  await sql`
-    insert into poll_results (platform_credential_id, game_id, polled_at, raw_payload)
-    values (${platformCredentialId}, ${gameId}, ${polledAt}, ${payload})
-  `;
-};
-
 const syncPlaySession = async (
   sql: ReturnType<typeof postgres>,
   platformCredentialId: number,
   gameId: number | null,
   polledAt: Date
 ) => {
-  const activeRows = await sql<{ id: number; game_id: number }[]>`
-    select id, game_id
-    from play_sessions
-    where platform_credential_id = ${platformCredentialId}
-      and ended_at is null
-    order by started_at desc
-    limit 1
-  `;
-
-  const activeSession = activeRows[0];
+  const activeSession = await fetchActivePlaySession(
+    platformCredentialId,
+    sql
+  );
   if (!gameId) {
     if (activeSession) {
-      await sql`
-        update play_sessions
-        set ended_at = ${polledAt}, updated_at = now()
-        where id = ${activeSession.id}
-      `;
+      await endPlaySession(activeSession.id, polledAt, sql);
     }
     return;
   }
 
   if (!activeSession) {
-    await sql`
-      insert into play_sessions (platform_credential_id, game_id, started_at)
-      values (${platformCredentialId}, ${gameId}, ${polledAt})
-    `;
+    await startPlaySession(platformCredentialId, gameId, polledAt, sql);
     return;
   }
 
@@ -125,15 +88,8 @@ const syncPlaySession = async (
     return;
   }
 
-  await sql`
-    update play_sessions
-    set ended_at = ${polledAt}, updated_at = now()
-    where id = ${activeSession.id}
-  `;
-  await sql`
-    insert into play_sessions (platform_credential_id, game_id, started_at)
-    values (${platformCredentialId}, ${gameId}, ${polledAt})
-  `;
+  await endPlaySession(activeSession.id, polledAt, sql);
+  await startPlaySession(platformCredentialId, gameId, polledAt, sql);
 };
 
 export const startPolling = async ({
@@ -199,15 +155,15 @@ export const startPolling = async ({
 
         if (result.game) {
           const normalized = normalizeGame(result.game);
-          gameId = await ensureGameId(sql, normalized);
+          gameId = await ensureGameId(normalized, sql);
         }
 
         await recordPollResult(
-          sql,
           entry.platformCredentialId,
           gameId,
           polledAt,
-          result.raw
+          result.raw,
+          sql
         );
         await syncPlaySession(sql, entry.platformCredentialId, gameId, polledAt);
 
