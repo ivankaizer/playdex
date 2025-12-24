@@ -1,5 +1,7 @@
 import { Elysia } from "elysia";
 
+import { getSql } from "./db";
+
 const DEFAULT_POLL_INTERVAL_SECONDS = 60;
 const MIN_POLL_INTERVAL_SECONDS = 10;
 const MAX_POLL_INTERVAL_SECONDS = 3600;
@@ -53,7 +55,22 @@ const config = {
   steamId: Bun.env.STEAM_ID ?? "",
 };
 
-const app = new Elysia().get("/", () => "Hello Elysia").listen(3000);
+const app = new Elysia()
+  .get("/", () => "Hello Elysia")
+  .get("/db/health", async () => {
+    const sql = getSql();
+    await sql`select 1`;
+    return { ok: true };
+  })
+  .get("/db/sample", async () => {
+    const sql = getSql();
+    await sql`insert into sample_checks default values`;
+    const rows = await sql<{ count: number }[]>`
+      select count(*)::int as count from sample_checks
+    `;
+    return { count: rows[0]?.count ?? 0 };
+  })
+  .listen(3000);
 
 console.log(
   `🦊 Elysia is running at ${app.server?.hostname}:${app.server?.port}`

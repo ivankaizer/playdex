@@ -7,10 +7,12 @@
     "itworks": "bun run src/itworks.ts",
     "steam:now": "bun run src/steam-now.ts",
     "psn:now": "bun run src/psn-now.ts",
-    "psn:account": "bun run src/psn-account.ts"
+    "psn:account": "bun run src/psn-account.ts",
+    "db:migrate": "bun run scripts/migrate.ts"
   },
   "dependencies": {
     "elysia": "latest",
+    "postgres": "^3.4.5",
     "psn-api": "^2.14.1"
   },
   "devDependencies": {
