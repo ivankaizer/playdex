@@ -61,7 +61,6 @@ export class PsnClient implements PlatformClient {
       expiresAt: Date.now() + tokenResponse.expiresIn * 1000,
     };
 
-    console.log(this.tokens);
     return this.tokens.accessToken;
   }
 

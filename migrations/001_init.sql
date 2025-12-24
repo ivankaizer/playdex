@@ -1,19 +1,10 @@
-create table if not exists accounts (
+create table if not exists platform_credentials (
   id bigserial primary key,
-  display_name text,
+  platform text not null unique,
+  api_key text,
+  account_id text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
-);
-
-create table if not exists platform_accounts (
-  id bigserial primary key,
-  account_id bigint not null references accounts(id) on delete cascade,
-  platform text not null,
-  external_id text not null,
-  display_name text,
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now(),
-  unique (platform, external_id)
 );
 
 create table if not exists games (
@@ -29,7 +20,7 @@ create table if not exists games (
 
 create table if not exists play_sessions (
   id bigserial primary key,
-  platform_account_id bigint not null references platform_accounts(id) on delete cascade,
+  platform_credential_id bigint not null references platform_credentials(id) on delete cascade,
   game_id bigint not null references games(id) on delete cascade,
   started_at timestamptz not null,
   ended_at timestamptz,

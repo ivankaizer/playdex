@@ -10,15 +10,11 @@ import type {
 type PollingConfig = {
   sql: ReturnType<typeof postgres>;
   clients: PlatformClient[];
-  accounts: PlatformAccount[];
+  accounts: PollingPlatformAccount[];
   pollIntervalSeconds: number;
 };
 
-type PollingAccount = {
-  platformAccountId: number;
-  account: PlatformAccount;
-  client: PlatformClient;
-};
+type PollingPlatformAccount = PlatformAccount & { credentialId: number };
 
 type PlatformBackoffState = {
   failures: number;
@@ -26,7 +22,6 @@ type PlatformBackoffState = {
   lastError?: string;
 };
 
-const DEFAULT_ACCOUNT_NAME = "primary";
 const BACKOFF_BASE_MS = 5_000;
 const BACKOFF_MAX_MS = 10 * 60_000;
 const RATE_LIMIT_FALLBACK_MS = 60_000;
@@ -60,43 +55,6 @@ const getErrorMessage = (error: unknown) => {
   return typeof error === "string" ? error : "Unknown error";
 };
 
-const ensureAccountId = async (
-  sql: ReturnType<typeof postgres>,
-  displayName: string
-) => {
-  const existing = await sql<{ id: number }[]>`
-    select id from accounts where display_name = ${displayName} limit 1
-  `;
-  if (existing.length > 0) {
-    return existing[0].id;
-  }
-
-  const inserted = await sql<{ id: number }[]>`
-    insert into accounts (display_name)
-    values (${displayName})
-    returning id
-  `;
-  return inserted[0].id;
-};
-
-const ensurePlatformAccountId = async (
-  sql: ReturnType<typeof postgres>,
-  accountId: number,
-  account: PlatformAccount
-) => {
-  const rows = await sql<{ id: number }[]>`
-    insert into platform_accounts (account_id, platform, external_id, display_name)
-    values (${accountId}, ${account.platform}, ${account.accountId}, ${account.displayName ?? null})
-    on conflict (platform, external_id)
-    do update set
-      account_id = excluded.account_id,
-      display_name = excluded.display_name,
-      updated_at = now()
-    returning id
-  `;
-  return rows[0].id;
-};
-
 const ensureGameId = async (
   sql: ReturnType<typeof postgres>,
   game: ReturnType<typeof normalizeGame>
@@ -116,28 +74,28 @@ const ensureGameId = async (
 
 const recordPollResult = async (
   sql: ReturnType<typeof postgres>,
-  platformAccountId: number,
+  platformCredentialId: number,
   gameId: number | null,
   polledAt: Date,
   rawPayload: unknown
 ) => {
   const payload = rawPayload === undefined ? null : sql.json(rawPayload);
   await sql`
-    insert into poll_results (platform_account_id, game_id, polled_at, raw_payload)
-    values (${platformAccountId}, ${gameId}, ${polledAt}, ${payload})
+    insert into poll_results (platform_credential_id, game_id, polled_at, raw_payload)
+    values (${platformCredentialId}, ${gameId}, ${polledAt}, ${payload})
   `;
 };
 
 const syncPlaySession = async (
   sql: ReturnType<typeof postgres>,
-  platformAccountId: number,
+  platformCredentialId: number,
   gameId: number | null,
   polledAt: Date
 ) => {
   const activeRows = await sql<{ id: number; game_id: number }[]>`
     select id, game_id
     from play_sessions
-    where platform_account_id = ${platformAccountId}
+    where platform_credential_id = ${platformCredentialId}
       and ended_at is null
     order by started_at desc
     limit 1
@@ -157,8 +115,8 @@ const syncPlaySession = async (
 
   if (!activeSession) {
     await sql`
-      insert into play_sessions (platform_account_id, game_id, started_at)
-      values (${platformAccountId}, ${gameId}, ${polledAt})
+      insert into play_sessions (platform_credential_id, game_id, started_at)
+      values (${platformCredentialId}, ${gameId}, ${polledAt})
     `;
     return;
   }
@@ -173,8 +131,8 @@ const syncPlaySession = async (
     where id = ${activeSession.id}
   `;
   await sql`
-    insert into play_sessions (platform_account_id, game_id, started_at)
-    values (${platformAccountId}, ${gameId}, ${polledAt})
+    insert into play_sessions (platform_credential_id, game_id, started_at)
+    values (${platformCredentialId}, ${gameId}, ${polledAt})
   `;
 };
 
@@ -185,15 +143,18 @@ export const startPolling = async ({
   pollIntervalSeconds,
 }: PollingConfig) => {
   if (accounts.length === 0) {
-    console.warn("No configured platform accounts; polling is disabled.");
+    console.warn("No configured platform credentials; polling is disabled.");
     return;
   }
 
   const clientByPlatform = new Map<Platform, PlatformClient>(
     clients.map((client) => [client.platform, client])
   );
-  const rootAccountId = await ensureAccountId(sql, DEFAULT_ACCOUNT_NAME);
-  const pollingAccounts: PollingAccount[] = [];
+  const pollingAccounts: Array<{
+    platformCredentialId: number;
+    account: PlatformAccount;
+    client: PlatformClient;
+  }> = [];
 
   for (const account of accounts) {
     const client = clientByPlatform.get(account.platform);
@@ -202,14 +163,8 @@ export const startPolling = async ({
       continue;
     }
 
-    const platformAccountId = await ensurePlatformAccountId(
-      sql,
-      rootAccountId,
-      account
-    );
-
     pollingAccounts.push({
-      platformAccountId,
+      platformCredentialId: account.credentialId,
       account,
       client,
     });
@@ -249,12 +204,12 @@ export const startPolling = async ({
 
         await recordPollResult(
           sql,
-          entry.platformAccountId,
+          entry.platformCredentialId,
           gameId,
           polledAt,
           result.raw
         );
-        await syncPlaySession(sql, entry.platformAccountId, gameId, polledAt);
+        await syncPlaySession(sql, entry.platformCredentialId, gameId, polledAt);
 
         backoffState.set(entry.account.platform, {
           failures: 0,
