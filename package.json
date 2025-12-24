@@ -4,10 +4,14 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "dev": "bun run --watch src/index.ts",
-    "itworks": "bun run src/itworks.ts"
+    "itworks": "bun run src/itworks.ts",
+    "steam:now": "bun run src/steam-now.ts",
+    "psn:now": "bun run src/psn-now.ts",
+    "psn:account": "bun run src/psn-account.ts"
   },
   "dependencies": {
-    "elysia": "latest"
+    "elysia": "latest",
+    "psn-api": "^2.14.1"
   },
   "devDependencies": {
     "bun-types": "latest"
