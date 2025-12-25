@@ -1,4 +1,5 @@
 import type postgres from "postgres";
+import type { JSONValue } from "postgres";
 
 import { getSql } from "../db";
 import type { NormalizedGame } from "../services/normalize";
@@ -100,7 +101,8 @@ export const recordPollResult = async (
   rawPayload: unknown,
   sql: Sql = getSql()
 ) => {
-  const payload = rawPayload === undefined ? null : sql.json(rawPayload);
+  const payload =
+    rawPayload === undefined ? null : sql.json(rawPayload as JSONValue);
   await sql`
     insert into poll_results (platform_credential_id, game_id, polled_at, raw_payload)
     values (${platformCredentialId}, ${gameId}, ${polledAt}, ${payload})

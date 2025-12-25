@@ -1,15 +1,24 @@
-# Elysia with Bun runtime
+# Playdex
 
-## Getting Started
-To get started with this template, simply paste this command into your terminal:
+Playtime tracker for PSN and Steam accounts, powered by Bun + Elysia.
+
+## Local setup (Postgres)
+1. Start Postgres via Docker:
 ```bash
-bun create elysia ./elysia-example
+docker compose up -d db
 ```
-
-## Development
-To start the development server run:
+2. Create a `.env` file at the repo root:
 ```bash
+DATABASE_URL=postgresql://playdex:playdex@localhost:5432/playdex
+POLL_INTERVAL_SECONDS=60
+```
+3. Install dependencies and start the server:
+```bash
+bun install
 bun run dev
 ```
+Open `http://localhost:3000/` in your browser.
 
-Open http://localhost:3000/ with your browser to see the result.
+## Notes
+- Migrations run on startup.
+- Metrics are available at `http://localhost:3000/metrics`.

@@ -9,6 +9,13 @@ import {
   recordPollResult,
   startPlaySession,
 } from "./sql/queries";
+import {
+  getErrorMessage,
+  logEvent,
+  recordPollCycle,
+  recordPollFailure,
+  recordPollSuccess,
+} from "./observability";
 
 type PollingConfig = {
   sql: ReturnType<typeof postgres>;
@@ -54,13 +61,6 @@ const extractRetryAfterMs = (error: unknown): number | null => {
   return null;
 };
 
-const getErrorMessage = (error: unknown) => {
-  if (error instanceof Error) {
-    return error.message;
-  }
-  return typeof error === "string" ? error : "Unknown error";
-};
-
 const syncPlaySession = async (
   sql: ReturnType<typeof postgres>,
   platformCredentialId: number,
@@ -74,12 +74,22 @@ const syncPlaySession = async (
   if (!gameId) {
     if (activeSession) {
       await endPlaySession(activeSession.id, polledAt, sql);
+      logEvent("info", "db.play_session.ended", {
+        sessionId: activeSession.id,
+        platformCredentialId,
+        endedAt: polledAt.toISOString(),
+      });
     }
     return;
   }
 
   if (!activeSession) {
     await startPlaySession(platformCredentialId, gameId, polledAt, sql);
+    logEvent("info", "db.play_session.started", {
+      platformCredentialId,
+      gameId,
+      startedAt: polledAt.toISOString(),
+    });
     return;
   }
 
@@ -88,7 +98,17 @@ const syncPlaySession = async (
   }
 
   await endPlaySession(activeSession.id, polledAt, sql);
+  logEvent("info", "db.play_session.ended", {
+    sessionId: activeSession.id,
+    platformCredentialId,
+    endedAt: polledAt.toISOString(),
+  });
   await startPlaySession(platformCredentialId, gameId, polledAt, sql);
+  logEvent("info", "db.play_session.started", {
+    platformCredentialId,
+    gameId,
+    startedAt: polledAt.toISOString(),
+  });
 };
 
 export const startPolling = async ({
@@ -101,12 +121,16 @@ export const startPolling = async ({
 
   const pollOnce = async () => {
     const cycleStartedAt = Date.now();
+    logEvent("info", "poll.cycle.started", {
+      pollIntervalSeconds,
+    });
     let accounts: PollingAccountEntry[] = [];
     try {
       accounts = await loadAccounts();
     } catch (error) {
-      console.error("Failed to load platform credentials.");
-      console.error(error);
+      logEvent("error", "poll.load_accounts.failed", {
+        message: getErrorMessage(error),
+      });
     }
 
     if (accounts.length === 0) {
@@ -162,11 +186,23 @@ export const startPolling = async ({
           result.raw,
           sql
         );
+        logEvent("info", "db.poll_result.inserted", {
+          platformCredentialId: entry.platformCredentialId,
+          gameId,
+          polledAt: polledAt.toISOString(),
+        });
         await syncPlaySession(sql, entry.platformCredentialId, gameId, polledAt);
 
         backoffState.set(entry.platformCredentialId, {
           failures: 0,
           nextAllowedAt: 0,
+        });
+        recordPollSuccess(entry.account.platform);
+        logEvent("info", "poll.account.success", {
+          platform: entry.account.platform,
+          platformCredentialId: entry.platformCredentialId,
+          gameId,
+          polledAt: polledAt.toISOString(),
         });
       } catch (error) {
         const previous = backoffState.get(entry.platformCredentialId) ?? {
@@ -184,13 +220,23 @@ export const startPolling = async ({
           lastError: getErrorMessage(error),
         });
 
-        console.error(
-          `Polling failed for ${entry.account.platform}(${entry.platformCredentialId}): ${getErrorMessage(error)}`
-        );
+        recordPollFailure(entry.account.platform);
+        logEvent("error", "poll.account.failure", {
+          platform: entry.account.platform,
+          platformCredentialId: entry.platformCredentialId,
+          message: getErrorMessage(error),
+          backoffMs: delayMs,
+          nextAllowedAt: new Date(nextAllowedAt).toISOString(),
+        });
       }
     }
 
     const elapsedMs = Date.now() - cycleStartedAt;
+    recordPollCycle(elapsedMs);
+    logEvent("info", "poll.cycle.completed", {
+      durationMs: elapsedMs,
+      accountCount: accounts.length,
+    });
     const waitMs = Math.max(pollIntervalSeconds * 1000 - elapsedMs, 0);
     setTimeout(() => {
       void pollOnce();

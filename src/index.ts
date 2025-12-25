@@ -2,6 +2,7 @@ import { Elysia } from "elysia";
 
 import { getSql } from "./db";
 import { runMigrations } from "./migrations";
+import { getErrorMessage, getMetrics, logEvent } from "./observability";
 import { startPolling, type PollingAccountEntry } from "./polling";
 import { PsnClient, SteamClient } from "./services";
 import {
@@ -59,6 +60,30 @@ const config = {
 
 const storeResolvedAccountId = async (credentialId: number, accountId: string) =>
   storeResolvedAccountIdQuery(credentialId, accountId);
+
+const withApiErrorLogging =
+  <
+    T extends {
+      request: Request;
+      set: { status?: number | string };
+      params?: Record<string, string>;
+    },
+  >(
+    handler: (ctx: T) => Promise<unknown>
+  ) =>
+  async (ctx: T) => {
+    try {
+      return await handler(ctx);
+    } catch (error) {
+      logEvent("error", "api.error", {
+        method: ctx.request.method,
+        path: new URL(ctx.request.url).pathname,
+        message: getErrorMessage(error),
+      });
+      ctx.set.status = 500;
+      return { error: "Internal server error." };
+    }
+  };
 
 const loadPollingAccounts = async (): Promise<PollingAccountEntry[]> => {
   const accounts: PollingAccountEntry[] = [];
@@ -137,15 +162,16 @@ const startServer = async () => {
 
   const app = new Elysia()
     .get("/", () => "Hello Elysia")
-    .get("/db/health", async () => {
+    .get("/db/health", withApiErrorLogging(async () => {
       await healthCheck();
       return { ok: true };
-    })
-    .get("/accounts", async () => {
+    }))
+    .get("/metrics", () => getMetrics())
+    .get("/accounts", withApiErrorLogging(async () => {
       const rows = await listAccounts();
       return rows.map((r) => ({ id: +r.id, name: r.platform }));
-    })
-    .get("/accounts/:accountId/sessions", async ({ params, set }) => {
+    }))
+    .get("/accounts/:accountId/sessions", withApiErrorLogging(async ({ params = {}, set }) => {
       const accountId = Number(params.accountId);
       if (!Number.isInteger(accountId)) {
         set.status = 400;
@@ -164,7 +190,7 @@ const startServer = async () => {
           game: r.title,
         })),
       };
-    })
+    }))
     .listen(3000);
 
   console.log(
