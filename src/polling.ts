@@ -1,11 +1,7 @@
 import type postgres from "postgres";
 
 import { normalizeGame } from "./services/normalize";
-import type {
-  Platform,
-  PlatformAccount,
-  PlatformClient,
-} from "./services/platform";
+import type { PlatformAccount, PlatformClient } from "./services/platform";
 import {
   endPlaySession,
   ensureGameId,
@@ -16,12 +12,15 @@ import {
 
 type PollingConfig = {
   sql: ReturnType<typeof postgres>;
-  clients: PlatformClient[];
-  accounts: PollingPlatformAccount[];
+  accounts: PollingAccountEntry[];
   pollIntervalSeconds: number;
 };
 
-type PollingPlatformAccount = PlatformAccount & { credentialId: number };
+type PollingAccountEntry = {
+  platformCredentialId: number;
+  account: PlatformAccount;
+  client: PlatformClient;
+};
 
 type PlatformBackoffState = {
   failures: number;
@@ -94,7 +93,6 @@ const syncPlaySession = async (
 
 export const startPolling = async ({
   sql,
-  clients,
   accounts,
   pollIntervalSeconds,
 }: PollingConfig) => {
@@ -103,48 +101,23 @@ export const startPolling = async ({
     return;
   }
 
-  const clientByPlatform = new Map<Platform, PlatformClient>(
-    clients.map((client) => [client.platform, client])
-  );
-  const pollingAccounts: Array<{
-    platformCredentialId: number;
-    account: PlatformAccount;
-    client: PlatformClient;
-  }> = [];
-
-  for (const account of accounts) {
-    const client = clientByPlatform.get(account.platform);
-    if (!client) {
-      console.warn(`Missing client for platform ${account.platform}.`);
-      continue;
-    }
-
-    pollingAccounts.push({
-      platformCredentialId: account.credentialId,
-      account,
-      client,
-    });
-  }
-
-  if (pollingAccounts.length === 0) {
-    console.warn("No polling accounts were initialized.");
-    return;
-  }
-
-  const backoffState = new Map<Platform, PlatformBackoffState>();
+  const backoffState = new Map<number, PlatformBackoffState>();
 
   const pollOnce = async () => {
     const cycleStartedAt = Date.now();
-    for (const entry of pollingAccounts) {
+    for (const entry of accounts) {
       const now = Date.now();
       const state =
-        backoffState.get(entry.account.platform) ?? { failures: 0, nextAllowedAt: 0 };
+        backoffState.get(entry.platformCredentialId) ?? {
+          failures: 0,
+          nextAllowedAt: 0,
+        };
 
       if (state.nextAllowedAt > now) {
         console.warn(
-          `Skipping ${entry.account.platform} until ${new Date(state.nextAllowedAt).toISOString()} (${state.lastError ?? "rate limit/backoff"}).`
+          `Skipping ${entry.account.platform}(${entry.platformCredentialId}) until ${new Date(state.nextAllowedAt).toISOString()} (${state.lastError ?? "rate limit/backoff"}).`
         );
-        backoffState.set(entry.account.platform, state);
+        backoffState.set(entry.platformCredentialId, state);
         continue;
       }
 
@@ -167,12 +140,12 @@ export const startPolling = async ({
         );
         await syncPlaySession(sql, entry.platformCredentialId, gameId, polledAt);
 
-        backoffState.set(entry.account.platform, {
+        backoffState.set(entry.platformCredentialId, {
           failures: 0,
           nextAllowedAt: 0,
         });
       } catch (error) {
-        const previous = backoffState.get(entry.account.platform) ?? {
+        const previous = backoffState.get(entry.platformCredentialId) ?? {
           failures: 0,
           nextAllowedAt: 0,
         };
@@ -181,14 +154,14 @@ export const startPolling = async ({
         const retryAfterMs = extractRetryAfterMs(error);
         const delayMs = Math.max(backoffMs, retryAfterMs ?? 0);
         const nextAllowedAt = now + delayMs;
-        backoffState.set(entry.account.platform, {
+        backoffState.set(entry.platformCredentialId, {
           failures,
           nextAllowedAt,
           lastError: getErrorMessage(error),
         });
 
         console.error(
-          `Polling failed for ${entry.account.platform}: ${getErrorMessage(error)}`
+          `Polling failed for ${entry.account.platform}(${entry.platformCredentialId}): ${getErrorMessage(error)}`
         );
       }
     }

@@ -59,8 +59,7 @@ const config = {
 };
 
 const loadCredentialsByPlatform = async () => {
-  const rows = await loadPlatformCredentials();
-  return new Map(rows.map((row) => [row.platform, row]));
+  return loadPlatformCredentials();
 };
 
 const storeResolvedAccountId = async (
@@ -71,61 +70,80 @@ const storeResolvedAccountId = async (
 };
 
 const bootstrapPolling = async () => {
-  const accounts: Array<PlatformAccount & { credentialId: number }> = [];
-  const clients: PlatformClient[] = [];
+  const accounts: Array<{
+    platformCredentialId: number;
+    account: PlatformAccount;
+    client: PlatformClient;
+  }> = [];
   const credentials = await loadCredentialsByPlatform();
 
-  const steamCredentials = credentials.get("steam");
-  if (
-    steamCredentials?.api_key?.trim() &&
-    steamCredentials.account_id?.trim()
-  ) {
-    const steamClient = new SteamClient({
-      apiKey: steamCredentials.api_key,
-      steamId: steamCredentials.account_id,
-    });
-    clients.push(steamClient);
-    accounts.push({
-      platform: "steam",
-      accountId: steamCredentials.account_id,
-      credentialId: steamCredentials.id,
-    });
-  } else if (steamCredentials) {
-    console.warn(
-      "Missing Steam credentials or account ID; skipping Steam polling."
-    );
-  }
-
-  const psnCredentials = credentials.get("psn");
-  if (psnCredentials?.api_key?.trim()) {
-    const psnClient = new PsnClient({ npsso: psnCredentials.api_key });
-    clients.push(psnClient);
-    let psnAccountId = psnCredentials.account_id?.trim() ?? "";
-    if (!psnAccountId) {
-      const resolved = await psnClient.resolveAccountId();
-      if (resolved) {
-        psnAccountId = resolved;
-        console.log(`Resolved PSN account ID: ${psnAccountId}`);
-        await storeResolvedAccountId(psnCredentials.id, psnAccountId);
-      } else {
-        console.warn("Could not resolve PSN account ID; skipping PSN polling.");
+  for (const credential of credentials) {
+    if (credential.platform === "steam") {
+      if (!credential.api_key?.trim() || !credential.account_id?.trim()) {
+        console.warn(
+          `Missing Steam credentials or account ID; skipping Steam polling (credential ${credential.id}).`
+        );
+        continue;
       }
+
+      const steamClient = new SteamClient({
+        apiKey: credential.api_key,
+        steamId: credential.account_id,
+      });
+      accounts.push({
+        platformCredentialId: credential.id,
+        account: {
+          platform: "steam",
+          accountId: credential.account_id,
+        },
+        client: steamClient,
+      });
+      continue;
     }
 
-    if (psnAccountId) {
-      accounts.push({
-        platform: "psn",
-        accountId: psnAccountId,
-        credentialId: psnCredentials.id,
-      });
+    if (credential.platform === "psn") {
+      if (!credential.api_key?.trim()) {
+        console.warn(
+          `Missing PSN credentials; skipping PSN polling (credential ${credential.id}).`
+        );
+        continue;
+      }
+
+      const psnClient = new PsnClient({ npsso: credential.api_key });
+      let psnAccountId = credential.account_id?.trim() ?? "";
+      if (!psnAccountId) {
+        const resolved = await psnClient.resolveAccountId();
+        if (resolved) {
+          psnAccountId = resolved;
+          console.log(`Resolved PSN account ID: ${psnAccountId}`);
+          await storeResolvedAccountId(credential.id, psnAccountId);
+        } else {
+          console.warn(
+            `Could not resolve PSN account ID; skipping PSN polling (credential ${credential.id}).`
+          );
+        }
+      }
+
+      if (psnAccountId) {
+        accounts.push({
+          platformCredentialId: credential.id,
+          account: {
+            platform: "psn",
+            accountId: psnAccountId,
+          },
+          client: psnClient,
+        });
+      }
+      continue;
     }
-  } else if (psnCredentials) {
-    console.warn("Missing PSN credentials; skipping PSN polling.");
+
+    console.warn(
+      `Unsupported platform ${credential.platform}; skipping polling (credential ${credential.id}).`
+    );
   }
 
   await startPolling({
     sql: getSql(),
-    clients,
     accounts,
     pollIntervalSeconds: config.pollIntervalSeconds,
   });
