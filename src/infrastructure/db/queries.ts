@@ -115,12 +115,19 @@ export const ensureGameId = async (
   sql: Sql = getSql()
 ) => {
   const rows = await sql<{ id: number }[]>`
-    insert into games (platform, title, external_id, canonical_key)
-    values (${game.platform}, ${game.title}, ${game.externalId ?? null}, ${game.canonicalKey})
+    insert into games (platform, title, external_id, canonical_key, capsule_url)
+    values (
+      ${game.platform},
+      ${game.title},
+      ${game.externalId ?? null},
+      ${game.canonicalKey},
+      ${game.capsuleUrl ?? null}
+    )
     on conflict (canonical_key)
     do update set
       title = excluded.title,
       external_id = excluded.external_id,
+      capsule_url = coalesce(excluded.capsule_url, games.capsule_url),
       updated_at = now()
     returning id
   `;

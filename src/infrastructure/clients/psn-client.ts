@@ -102,6 +102,7 @@ export class PsnClient implements PlatformClient {
           titleName?: string;
           npTitleId?: string;
           titleId?: string;
+          conceptIconUrl?: string;
         }>;
       };
     };
@@ -113,6 +114,7 @@ export class PsnClient implements PlatformClient {
         platform: "psn",
         title: titleInfo.titleName,
         externalId: titleInfo.npTitleId ?? titleInfo.titleId,
+        capsuleUrl: titleInfo.conceptIconUrl,
         raw: presence,
       };
     }

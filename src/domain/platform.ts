@@ -10,6 +10,7 @@ export type PlatformGame = {
   platform: Platform;
   title: string;
   externalId?: string;
+  capsuleUrl?: string;
   raw?: unknown;
 };
 
