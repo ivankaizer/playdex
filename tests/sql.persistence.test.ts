@@ -109,3 +109,96 @@ requiresDb("play sessions are persisted and listed", async () => {
   expect(sessions[0].ended_at).not.toBeNull();
   expect(sessions[0].title).toBe("Half-Life 2");
 });
+
+requiresDb("ensureGameId de-duplicates by canonical key", async () => {
+  if (!db) {
+    throw new Error("Test database not initialized.");
+  }
+
+  const first = normalizeGame({
+    platform: "steam",
+    title: "Portal",
+    externalId: "400",
+  });
+  const second = normalizeGame({
+    platform: "steam",
+    title: "Portal (Updated)",
+    externalId: "400",
+  });
+
+  const firstId = await ensureGameId(first, db.sql);
+  const secondId = await ensureGameId(second, db.sql);
+
+  const rows = await db.sql<{ title: string }[]>`
+    select title from games where id = ${firstId}
+  `;
+
+  expect(firstId).toBe(secondId);
+  expect(rows[0].title).toBe("Portal (Updated)");
+});
+
+requiresDb("listAccountSessions returns an empty list when none exist", async () => {
+  if (!db) {
+    throw new Error("Test database not initialized.");
+  }
+
+  const sessions = await listAccountSessions(credentialId, db.sql);
+  expect(sessions).toEqual([]);
+});
+
+requiresDb("listAccountSessions enforces the 10-session limit", async () => {
+  if (!db) {
+    throw new Error("Test database not initialized.");
+  }
+
+  const normalized = normalizeGame({
+    platform: "steam",
+    title: "Limit Test",
+    externalId: "limit-1",
+  });
+  const gameId = await ensureGameId(normalized, db.sql);
+
+  const baseTime = Date.parse("2024-01-01T00:00:00Z");
+  for (let index = 0; index < 12; index += 1) {
+    const startedAt = new Date(baseTime + index * 60_000);
+    const endedAt = new Date(baseTime + (index + 1) * 60_000);
+    await startPlaySession(credentialId, gameId, startedAt, db.sql);
+    const active = await fetchActivePlaySession(credentialId, db.sql);
+    if (active) {
+      await endPlaySession(active.id, endedAt, db.sql);
+    }
+  }
+
+  const sessions = await listAccountSessions(credentialId, db.sql);
+  expect(sessions.length).toBe(10);
+});
+
+requiresDb("play session timestamps survive DST transitions", async () => {
+  if (!db) {
+    throw new Error("Test database not initialized.");
+  }
+
+  const normalized = normalizeGame({
+    platform: "steam",
+    title: "DST Test",
+    externalId: "dst-1",
+  });
+  const gameId = await ensureGameId(normalized, db.sql);
+
+  const startedAt = new Date("2024-03-10T01:55:00-08:00");
+  await startPlaySession(credentialId, gameId, startedAt, db.sql);
+  const active = await fetchActivePlaySession(credentialId, db.sql);
+  if (!active) {
+    throw new Error("Expected active session after starting.");
+  }
+
+  const endedAt = new Date("2024-03-10T03:05:00-07:00");
+  await endPlaySession(active.id, endedAt, db.sql);
+
+  const rows = await db.sql<{ started_at: Date; ended_at: Date | null }[]>`
+    select started_at, ended_at from play_sessions where id = ${active.id}
+  `;
+
+  expect(rows[0].started_at.toISOString()).toBe(startedAt.toISOString());
+  expect(rows[0].ended_at?.toISOString()).toBe(endedAt.toISOString());
+});

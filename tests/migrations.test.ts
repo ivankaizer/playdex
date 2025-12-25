@@ -1,9 +1,11 @@
 import { beforeAll, afterAll, expect, test } from "bun:test";
-import { readdir } from "node:fs/promises";
+import { readdir, writeFile, rm, mkdtemp } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import type { TestDatabase } from "./helpers/db";
 import { createTestDatabase } from "./helpers/db";
+import { runMigrations } from "../src/migrations";
 
 const hasDatabase = Boolean(Bun.env.DATABASE_URL);
 const requiresDb = hasDatabase ? test : test.skip;
@@ -57,4 +59,57 @@ requiresDb("runMigrations creates expected tables", async () => {
   expect(tableNames).toContain("games");
   expect(tableNames).toContain("play_sessions");
   expect(tableNames).toContain("poll_results");
+});
+
+requiresDb("runMigrations does not reapply applied migrations", async () => {
+  if (!db) {
+    throw new Error("Test database not initialized.");
+  }
+
+  const logs: string[] = [];
+  const logger = {
+    log: (message: string) => logs.push(message),
+    warn: (message: string) => logs.push(message),
+  };
+
+  await runMigrations({ sql: db.sql, logger });
+
+  const appliedAgain = logs.filter((line) =>
+    line.startsWith("Applying migration ")
+  );
+
+  expect(appliedAgain).toEqual([]);
+});
+
+requiresDb("runMigrations rolls back failed migrations", async () => {
+  if (!db) {
+    throw new Error("Test database not initialized.");
+  }
+
+  const dir = await mkdtemp(join(tmpdir(), "playdex-migrations-"));
+  const filename = "999_failed.sql";
+  await writeFile(
+    join(dir, filename),
+    [
+      "insert into users (email) values ('rollback@example.com');",
+      "insert into missing_table (id) values (1);",
+    ].join("\n"),
+    "utf8"
+  );
+
+  try {
+    await expect(runMigrations({ sql: db.sql, migrationsDir: dir })).rejects.toThrow();
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+
+  const applied = await db.sql<{ version: string }[]>`
+    select version from schema_migrations where version = ${filename}
+  `;
+  const users = await db.sql<{ count: string }[]>`
+    select count(*) from users where email = 'rollback@example.com'
+  `;
+
+  expect(applied.length).toBe(0);
+  expect(Number(users[0].count)).toBe(0);
 });

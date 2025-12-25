@@ -74,3 +74,26 @@ test("PsnClient returns null game when not playing", async () => {
 
   expect(result.game).toBeNull();
 });
+
+test("PsnClient refreshes expired access tokens", async () => {
+  apiMock.exchangeCodeForAccessToken.mockResolvedValue({
+    accessToken: makeAccessToken("acct-123"),
+    expiresIn: 0,
+    refreshToken: "refresh",
+  });
+  apiMock.getBasicPresence.mockResolvedValue(
+    await loadFixture("psn.playing.json")
+  );
+
+  const client = new PsnClient({ npsso: "token" });
+  await client.getCurrentlyPlaying({
+    platform: "psn",
+    accountId: "acct-123",
+  });
+  await client.getCurrentlyPlaying({
+    platform: "psn",
+    accountId: "acct-123",
+  });
+
+  expect(apiMock.exchangeCodeForAccessToken).toHaveBeenCalledTimes(2);
+});
