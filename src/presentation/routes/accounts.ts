@@ -10,7 +10,7 @@ import { ok, parseAccountIdParam, withApiErrorLogging } from "./utils";
 export const registerAccountRoutes = (app: Elysia) =>
   app
     .get(
-      "/accounts",
+      "/api/accounts",
       withApiErrorLogging(async () => {
         const rows = await getAccountSummaries();
         const response: AccountSummaryDto[] = rows;
@@ -18,7 +18,7 @@ export const registerAccountRoutes = (app: Elysia) =>
       })
     )
     .get(
-      "/accounts/:accountId/sessions",
+      "/api/accounts/:accountId/sessions",
       withApiErrorLogging(async ({ params = {}, set }) => {
         const parsed = parseAccountIdParam(params);
         if (!parsed.ok) {

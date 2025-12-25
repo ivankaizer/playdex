@@ -6,7 +6,7 @@ import { ok, withApiErrorLogging } from "./utils";
 
 export const registerHealthRoutes = (app: Elysia) =>
   app.get(
-    "/db/health",
+    "/api/db/health",
     withApiErrorLogging(async () => {
       await checkDatabaseHealth();
       const response: HealthResponseDto = { ok: true };
