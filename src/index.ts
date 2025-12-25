@@ -2,8 +2,7 @@ import { Elysia } from "elysia";
 
 import { getSql } from "./db";
 import { runMigrations } from "./migrations";
-import { startPolling } from "./polling";
-import type { PlatformAccount, PlatformClient } from "./services";
+import { startPolling, type PollingAccountEntry } from "./polling";
 import { PsnClient, SteamClient } from "./services";
 import {
   healthCheck,
@@ -58,24 +57,12 @@ const config = {
   ),
 };
 
-const loadCredentialsByPlatform = async () => {
-  return loadPlatformCredentials();
-};
+const storeResolvedAccountId = async (credentialId: number, accountId: string) =>
+  storeResolvedAccountIdQuery(credentialId, accountId);
 
-const storeResolvedAccountId = async (
-  credentialId: number,
-  accountId: string
-) => {
-  await storeResolvedAccountIdQuery(credentialId, accountId);
-};
-
-const bootstrapPolling = async () => {
-  const accounts: Array<{
-    platformCredentialId: number;
-    account: PlatformAccount;
-    client: PlatformClient;
-  }> = [];
-  const credentials = await loadCredentialsByPlatform();
+const loadPollingAccounts = async (): Promise<PollingAccountEntry[]> => {
+  const accounts: PollingAccountEntry[] = [];
+  const credentials = await loadPlatformCredentials();
 
   for (const credential of credentials) {
     if (credential.platform === "steam") {
@@ -142,11 +129,7 @@ const bootstrapPolling = async () => {
     );
   }
 
-  await startPolling({
-    sql: getSql(),
-    accounts,
-    pollIntervalSeconds: config.pollIntervalSeconds,
-  });
+  return accounts;
 };
 
 const startServer = async () => {
@@ -189,7 +172,11 @@ const startServer = async () => {
   );
   console.log(`Polling interval: ${config.pollIntervalSeconds}s`);
 
-  await bootstrapPolling();
+  await startPolling({
+    sql: getSql(),
+    loadAccounts: loadPollingAccounts,
+    pollIntervalSeconds: config.pollIntervalSeconds,
+  });
 };
 
 startServer().catch((error) => {

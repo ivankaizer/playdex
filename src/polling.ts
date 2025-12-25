@@ -12,11 +12,11 @@ import {
 
 type PollingConfig = {
   sql: ReturnType<typeof postgres>;
-  accounts: PollingAccountEntry[];
+  loadAccounts: () => Promise<PollingAccountEntry[]>;
   pollIntervalSeconds: number;
 };
 
-type PollingAccountEntry = {
+export type PollingAccountEntry = {
   platformCredentialId: number;
   account: PlatformAccount;
   client: PlatformClient;
@@ -93,18 +93,42 @@ const syncPlaySession = async (
 
 export const startPolling = async ({
   sql,
-  accounts,
+  loadAccounts,
   pollIntervalSeconds,
 }: PollingConfig) => {
-  if (accounts.length === 0) {
-    console.warn("No configured platform credentials; polling is disabled.");
-    return;
-  }
-
   const backoffState = new Map<number, PlatformBackoffState>();
+  let warnedNoAccounts = false;
 
   const pollOnce = async () => {
     const cycleStartedAt = Date.now();
+    let accounts: PollingAccountEntry[] = [];
+    try {
+      accounts = await loadAccounts();
+    } catch (error) {
+      console.error("Failed to load platform credentials.");
+      console.error(error);
+    }
+
+    if (accounts.length === 0) {
+      if (!warnedNoAccounts) {
+        console.warn(
+          "No configured platform credentials; polling will keep checking for updates."
+        );
+        warnedNoAccounts = true;
+      }
+    } else {
+      warnedNoAccounts = false;
+    }
+
+    const activeIds = new Set(
+      accounts.map((entry) => entry.platformCredentialId)
+    );
+    for (const id of backoffState.keys()) {
+      if (!activeIds.has(id)) {
+        backoffState.delete(id);
+      }
+    }
+
     for (const entry of accounts) {
       const now = Date.now();
       const state =
