@@ -2,6 +2,7 @@
 
 # dependencies
 /node_modules
+**/node_modules/
 /.pnp
 .pnp.js
 
@@ -44,3 +45,4 @@ package-lock.json
 .env
 
 dist/
+web/dist/
