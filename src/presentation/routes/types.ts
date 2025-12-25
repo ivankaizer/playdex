@@ -35,3 +35,7 @@ export type MetricsResponseDto = MetricsSnapshot;
 export type AccountSessionsParams = {
   accountId: string;
 };
+
+export type PlayniteSessionResponseDto = {
+  sessionId: number;
+};

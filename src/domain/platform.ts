@@ -1,4 +1,4 @@
-export type Platform = "psn" | "steam";
+export type Platform = "psn" | "steam" | "unknown";
 
 export type PlatformAccount = {
   platform: Platform;

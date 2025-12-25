@@ -43,6 +43,18 @@ export const loadPlatformCredentials = async (sql: Sql = getSql()) =>
     from platform_credentials
   `;
 
+export const loadPlatformCredentialsByApiKey = async (
+  apiKey: string,
+  platform: string,
+  sql: Sql = getSql()
+) =>
+  sql<PlatformCredentialRow[]>`
+    select id, platform, api_key, account_id
+    from platform_credentials
+    where api_key = ${apiKey}
+      and platform = ${platform}
+  `;
+
 export const storeResolvedAccountId = async (
   credentialId: number,
   accountId: string,
@@ -162,6 +174,21 @@ export const startPlaySession = async (
   insert into play_sessions (platform_credential_id, game_id, started_at)
   values (${platformCredentialId}, ${gameId}, ${startedAt})
 `;
+
+export const insertPlaySession = async (
+  platformCredentialId: number,
+  gameId: number,
+  startedAt: Date,
+  endedAt: Date,
+  sql: Sql = getSql()
+) => {
+  const rows = await sql<{ id: number }[]>`
+    insert into play_sessions (platform_credential_id, game_id, started_at, ended_at)
+    values (${platformCredentialId}, ${gameId}, ${startedAt}, ${endedAt})
+    returning id
+  `;
+  return rows[0]?.id ?? null;
+};
 
 export const ensureMigrationsTable = async (sql: Sql = getSql()) => sql`
   create table if not exists schema_migrations (

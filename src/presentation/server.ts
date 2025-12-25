@@ -4,6 +4,7 @@ import { registerAccountRoutes } from "./routes/accounts";
 import { registerAuthRoutes } from "./routes/auth";
 import { registerHealthRoutes } from "./routes/health";
 import { registerMetricsRoutes } from "./routes/metrics";
+import { registerPlayniteRoutes } from "./routes/playnite";
 import { registerRootRoutes } from "./routes/root";
 
 export const createServer = () => {
@@ -14,6 +15,7 @@ export const createServer = () => {
   registerHealthRoutes(app);
   registerMetricsRoutes(app);
   registerAccountRoutes(app);
+  registerPlayniteRoutes(app);
 
   return app;
 };

@@ -12,6 +12,10 @@ export const loadPollingAccounts = async (): Promise<PollingAccountEntry[]> => {
   const credentials = await loadPlatformCredentials();
 
   for (const credential of credentials) {
+    if (credential.platform === "playnite") {
+      continue;
+    }
+
     if (credential.platform === "steam") {
       if (!credential.api_key?.trim() || !credential.account_id?.trim()) {
         console.warn(
