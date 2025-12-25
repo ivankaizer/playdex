@@ -4,10 +4,7 @@ import {
   getAccountSessions,
   getAccountSummaries,
 } from "../../application/accounts";
-import type {
-  AccountSessionsResponseDto,
-  AccountSummaryDto,
-} from "./types";
+import type { AccountSessionsResponseDto, AccountSummaryDto } from "./types";
 import { ok, parseAccountIdParam, withApiErrorLogging } from "./utils";
 
 export const registerAccountRoutes = (app: Elysia) =>

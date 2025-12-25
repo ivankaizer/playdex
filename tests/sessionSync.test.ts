@@ -1,10 +1,4 @@
-import {
-  afterAll,
-  beforeAll,
-  beforeEach,
-  expect,
-  test,
-} from "bun:test";
+import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
 
 import type { TestDatabase } from "./helpers/db";
 import { createTestDatabase } from "./helpers/db";
@@ -121,10 +115,12 @@ requiresDb("syncPlaySession switches sessions when game changes", async () => {
   const switchTime = new Date("2024-01-01T01:00:00Z");
   await syncPlaySession(db.sql, credentialId, gameIdB, switchTime);
 
-  const rows = await db.sql<{
-    game_id: number;
-    ended_at: Date | null;
-  }[]>`
+  const rows = await db.sql<
+    {
+      game_id: number;
+      ended_at: Date | null;
+    }[]
+  >`
     select game_id, ended_at
     from play_sessions
     order by id

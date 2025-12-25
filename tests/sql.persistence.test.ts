@@ -1,10 +1,4 @@
-import {
-  afterAll,
-  beforeAll,
-  beforeEach,
-  expect,
-  test,
-} from "bun:test";
+import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
 
 import type { TestDatabase } from "./helpers/db";
 import { createTestDatabase } from "./helpers/db";
@@ -137,14 +131,17 @@ requiresDb("ensureGameId de-duplicates by canonical key", async () => {
   expect(rows[0].title).toBe("Portal (Updated)");
 });
 
-requiresDb("listAccountSessions returns an empty list when none exist", async () => {
-  if (!db) {
-    throw new Error("Test database not initialized.");
-  }
+requiresDb(
+  "listAccountSessions returns an empty list when none exist",
+  async () => {
+    if (!db) {
+      throw new Error("Test database not initialized.");
+    }
 
-  const sessions = await listAccountSessions(credentialId, db.sql);
-  expect(sessions).toEqual([]);
-});
+    const sessions = await listAccountSessions(credentialId, db.sql);
+    expect(sessions).toEqual([]);
+  }
+);
 
 requiresDb("listAccountSessions enforces the 10-session limit", async () => {
   if (!db) {

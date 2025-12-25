@@ -98,7 +98,9 @@ requiresDb("runMigrations rolls back failed migrations", async () => {
   );
 
   try {
-    await expect(runMigrations({ sql: db.sql, migrationsDir: dir })).rejects.toThrow();
+    await expect(
+      runMigrations({ sql: db.sql, migrationsDir: dir })
+    ).rejects.toThrow();
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

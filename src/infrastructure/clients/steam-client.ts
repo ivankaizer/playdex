@@ -51,9 +51,8 @@ export class SteamClient implements PlatformClient {
             ? null
             : retryAfterSeconds * 1000;
           if (retryAfterMs) {
-            (
-              error as Error & { retryAfterMs?: number }
-            ).retryAfterMs = retryAfterMs;
+            (error as Error & { retryAfterMs?: number }).retryAfterMs =
+              retryAfterMs;
           }
         }
       }

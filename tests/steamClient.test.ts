@@ -27,11 +27,12 @@ test("SteamClient throws when accountId is missing", async () => {
 });
 
 test("SteamClient surfaces retry-after on 429", async () => {
-  globalThis.fetch = createMockFetch(async () =>
-    new Response("rate limited", {
-      status: 429,
-      headers: { "retry-after": "120" },
-    })
+  globalThis.fetch = createMockFetch(
+    async () =>
+      new Response("rate limited", {
+        status: 429,
+        headers: { "retry-after": "120" },
+      })
   );
 
   const client = new SteamClient({ apiKey: "key", steamId: "123" });

@@ -22,7 +22,10 @@ type PollingConfig = {
   loadAccounts: () => Promise<PollingAccountEntry[]>;
   pollIntervalSeconds: number;
   maxCycles?: number;
-  onCycleComplete?: (summary: { durationMs: number; accountCount: number }) => void;
+  onCycleComplete?: (summary: {
+    durationMs: number;
+    accountCount: number;
+  }) => void;
 };
 
 export type PollingAccountEntry = {
@@ -69,10 +72,7 @@ export const syncPlaySession = async (
   gameId: number | null,
   polledAt: Date
 ) => {
-  const activeSession = await fetchActivePlaySession(
-    platformCredentialId,
-    sql
-  );
+  const activeSession = await fetchActivePlaySession(platformCredentialId, sql);
   if (!gameId) {
     if (activeSession) {
       await endPlaySession(activeSession.id, polledAt, sql);
@@ -160,11 +160,10 @@ export const startPolling = async ({
 
     for (const entry of accounts) {
       const now = Date.now();
-      const state =
-        backoffState.get(entry.platformCredentialId) ?? {
-          failures: 0,
-          nextAllowedAt: 0,
-        };
+      const state = backoffState.get(entry.platformCredentialId) ?? {
+        failures: 0,
+        nextAllowedAt: 0,
+      };
 
       if (state.nextAllowedAt > now) {
         console.warn(
@@ -196,7 +195,12 @@ export const startPolling = async ({
           gameId,
           polledAt: polledAt.toISOString(),
         });
-        await syncPlaySession(sql, entry.platformCredentialId, gameId, polledAt);
+        await syncPlaySession(
+          sql,
+          entry.platformCredentialId,
+          gameId,
+          polledAt
+        );
 
         backoffState.set(entry.platformCredentialId, {
           failures: 0,

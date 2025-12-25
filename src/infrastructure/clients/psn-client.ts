@@ -71,10 +71,7 @@ export class PsnClient implements PlatformClient {
     }
 
     const normalized = parts[1].replace(/-/g, "+").replace(/_/g, "/");
-    const padded = normalized.padEnd(
-      Math.ceil(normalized.length / 4) * 4,
-      "="
-    );
+    const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=");
 
     let payload: string;
     try {

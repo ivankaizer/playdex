@@ -2,13 +2,9 @@ import postgres from "postgres";
 
 let sql: ReturnType<typeof postgres> | null = null;
 
-const shouldIgnoreNotice = (notice: {
-  code?: string;
-  message?: string;
-}) => {
+const shouldIgnoreNotice = (notice: { code?: string; message?: string }) => {
   return (
-    notice.code === "42P07" &&
-    notice.message?.includes("schema_migrations")
+    notice.code === "42P07" && notice.message?.includes("schema_migrations")
   );
 };
 

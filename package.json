@@ -4,6 +4,8 @@
   "scripts": {
     "test": "bun test",
     "dev": "bun run --watch src/index.ts",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
     "steam:now": "bun run scripts/steam-now.ts",
     "psn:now": "bun run scripts/psn-now.ts",
     "psn:account": "bun run scripts/psn-account.ts",
@@ -15,7 +17,8 @@
     "psn-api": "^2.14.1"
   },
   "devDependencies": {
-    "bun-types": "latest"
+    "bun-types": "latest",
+    "prettier": "^3.3.3"
   },
   "module": "src/index.js"
 }
