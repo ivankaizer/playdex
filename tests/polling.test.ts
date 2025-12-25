@@ -2,8 +2,8 @@ import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
 
 import type { TestDatabase } from "./helpers/db";
 import { createTestDatabase } from "./helpers/db";
-import type { PlatformClient } from "../src/services/platform";
-import { startPolling } from "../src/polling";
+import type { PlatformClient } from "../src/domain/platform";
+import { startPolling } from "../src/application/polling";
 
 const hasDatabase = Boolean(Bun.env.DATABASE_URL);
 const requiresDb = hasDatabase ? test : test.skip;

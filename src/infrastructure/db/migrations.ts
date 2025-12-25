@@ -3,12 +3,12 @@ import { join } from "node:path";
 
 import type postgres from "postgres";
 
-import { getSql } from "./db";
+import { getSql } from "./postgres";
 import {
   ensureMigrationsTable,
   fetchAppliedMigrations,
   insertAppliedMigration,
-} from "./sql/queries";
+} from "./queries";
 
 type Logger = Pick<Console, "log" | "warn">;
 

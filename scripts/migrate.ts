@@ -1,6 +1,6 @@
 import postgres from "postgres";
 
-import { runMigrations } from "../src/migrations";
+import { runMigrations } from "../src/infrastructure/db/migrations";
 
 const databaseUrl = Bun.env.DATABASE_URL;
 if (!databaseUrl?.trim()) {

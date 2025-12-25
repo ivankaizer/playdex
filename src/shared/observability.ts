@@ -1,6 +1,6 @@
 type LogLevel = "info" | "warn" | "error";
 
-type MetricsSnapshot = {
+export type MetricsSnapshot = {
   pollSuccessTotal: number;
   pollFailureTotal: number;
   pollSuccessByPlatform: Record<string, number>;

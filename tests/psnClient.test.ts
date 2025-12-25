@@ -2,7 +2,7 @@ import { beforeEach, expect, mock, test } from "bun:test";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 
-import { PsnClient } from "../src/services/psnClient";
+import { PsnClient } from "../src/infrastructure/clients/psn-client";
 
 const makeAccessToken = (accountId: string) => {
   const payload = JSON.stringify({ account_id: accountId });

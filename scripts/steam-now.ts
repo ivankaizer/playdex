@@ -1,4 +1,4 @@
-import { SteamClient } from "./services/steamClient";
+import { SteamClient } from "../src/infrastructure/clients/steam-client";
 
 const apiKey = Bun.env.STEAM_API_KEY;
 const steamId = Bun.env.STEAM_ID;

@@ -1,4 +1,4 @@
-import { PsnClient } from "./services/psnClient";
+import { PsnClient } from "../src/infrastructure/clients/psn-client";
 
 const npsso = Bun.env.PSN_NPSSO;
 if (!npsso || !npsso.trim()) {

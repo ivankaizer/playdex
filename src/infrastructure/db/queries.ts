@@ -1,8 +1,8 @@
 import type postgres from "postgres";
 import type { JSONValue } from "postgres";
 
-import { getSql } from "../db";
-import type { NormalizedGame } from "../services/normalize";
+import { getSql } from "./postgres";
+import type { NormalizedGame } from "../../domain/normalize-game";
 
 type Sql = ReturnType<typeof postgres>;
 

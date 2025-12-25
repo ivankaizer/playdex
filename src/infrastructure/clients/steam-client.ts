@@ -3,7 +3,7 @@ import type {
   PlatformClient,
   PlatformGame,
   PlatformPollResult,
-} from "./platform";
+} from "../../domain/platform";
 
 type SteamPlayerSummaryResponse = {
   response?: {

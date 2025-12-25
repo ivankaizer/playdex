@@ -8,7 +8,7 @@ import {
 
 import type { TestDatabase } from "./helpers/db";
 import { createTestDatabase } from "./helpers/db";
-import { normalizeGame } from "../src/services/normalize";
+import { normalizeGame } from "../src/domain/normalize-game";
 import {
   endPlaySession,
   ensureGameId,
@@ -16,7 +16,7 @@ import {
   listAccountSessions,
   recordPollResult,
   startPlaySession,
-} from "../src/sql/queries";
+} from "../src/infrastructure/db/queries";
 
 const hasDatabase = Boolean(Bun.env.DATABASE_URL);
 const requiresDb = hasDatabase ? test : test.skip;
