@@ -1,9 +1,5 @@
 import { getErrorMessage, logEvent } from "../../shared/observability";
-import type {
-  AccountSessionsParams,
-  ApiErrorResponse,
-  ApiResponse,
-} from "./types";
+import type { ApiErrorResponse, ApiResponse } from "./types";
 
 type AccountIdParseResult =
   | { ok: true; accountId: number }
@@ -42,7 +38,7 @@ export const withApiErrorLogging =
   };
 
 export const parseAccountIdParam = (
-  params: AccountSessionsParams | undefined
+  params: Record<string, string> | undefined
 ): AccountIdParseResult => {
   const raw = params?.accountId?.trim() ?? "";
   const accountId = Number(raw);
