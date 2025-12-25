@@ -1,11 +1,27 @@
+create table if not exists users (
+  id bigserial primary key,
+  email text not null unique,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
 create table if not exists platform_credentials (
   id bigserial primary key,
-  platform text not null unique,
+  user_id bigint not null,
+  platform text not null,
   api_key text,
   account_id text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+alter table platform_credentials
+  add constraint platform_credentials_user_api_account_key
+  unique (user_id, api_key, account_id);
+
+alter table platform_credentials
+  add constraint platform_credentials_user_id_fkey
+  foreign key (user_id) references users(id) on delete cascade;
 
 create table if not exists games (
   id bigserial primary key,

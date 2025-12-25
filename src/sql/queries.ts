@@ -37,13 +37,13 @@ export const loadPlatformCredentials = async (sql: Sql = getSql()) =>
   `;
 
 export const storeResolvedAccountId = async (
-  platform: string,
+  credentialId: number,
   accountId: string,
   sql: Sql = getSql()
 ) => sql`
   update platform_credentials
   set account_id = ${accountId}, updated_at = now()
-  where platform = ${platform}
+  where id = ${credentialId}
 `;
 
 export const healthCheck = async (sql: Sql = getSql()) => sql`select 1`;

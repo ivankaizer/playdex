@@ -64,10 +64,10 @@ const loadCredentialsByPlatform = async () => {
 };
 
 const storeResolvedAccountId = async (
-  platform: PlatformAccount["platform"],
+  credentialId: number,
   accountId: string
 ) => {
-  await storeResolvedAccountIdQuery(platform, accountId);
+  await storeResolvedAccountIdQuery(credentialId, accountId);
 };
 
 const bootstrapPolling = async () => {
@@ -106,7 +106,7 @@ const bootstrapPolling = async () => {
       if (resolved) {
         psnAccountId = resolved;
         console.log(`Resolved PSN account ID: ${psnAccountId}`);
-        await storeResolvedAccountId("psn", psnAccountId);
+        await storeResolvedAccountId(psnCredentials.id, psnAccountId);
       } else {
         console.warn("Could not resolve PSN account ID; skipping PSN polling.");
       }
