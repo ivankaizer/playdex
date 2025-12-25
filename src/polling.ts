@@ -21,6 +21,8 @@ type PollingConfig = {
   sql: ReturnType<typeof postgres>;
   loadAccounts: () => Promise<PollingAccountEntry[]>;
   pollIntervalSeconds: number;
+  maxCycles?: number;
+  onCycleComplete?: (summary: { durationMs: number; accountCount: number }) => void;
 };
 
 export type PollingAccountEntry = {
@@ -61,7 +63,7 @@ const extractRetryAfterMs = (error: unknown): number | null => {
   return null;
 };
 
-const syncPlaySession = async (
+export const syncPlaySession = async (
   sql: ReturnType<typeof postgres>,
   platformCredentialId: number,
   gameId: number | null,
@@ -115,9 +117,12 @@ export const startPolling = async ({
   sql,
   loadAccounts,
   pollIntervalSeconds,
+  maxCycles,
+  onCycleComplete,
 }: PollingConfig) => {
   const backoffState = new Map<number, PlatformBackoffState>();
   let warnedNoAccounts = false;
+  let cycleCount = 0;
 
   const pollOnce = async () => {
     const cycleStartedAt = Date.now();
@@ -237,6 +242,11 @@ export const startPolling = async ({
       durationMs: elapsedMs,
       accountCount: accounts.length,
     });
+    cycleCount += 1;
+    onCycleComplete?.({ durationMs: elapsedMs, accountCount: accounts.length });
+    if (maxCycles && cycleCount >= maxCycles) {
+      return;
+    }
     const waitMs = Math.max(pollIntervalSeconds * 1000 - elapsedMs, 0);
     setTimeout(() => {
       void pollOnce();
