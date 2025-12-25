@@ -41,6 +41,7 @@ export const loadPlatformCredentials = async (sql: Sql = getSql()) =>
   sql<PlatformCredentialRow[]>`
     select id, platform, api_key, account_id
     from platform_credentials
+    where active = true
   `;
 
 export const loadPlatformCredentialsByApiKey = async (
@@ -53,6 +54,7 @@ export const loadPlatformCredentialsByApiKey = async (
     from platform_credentials
     where api_key = ${apiKey}
       and platform = ${platform}
+      and active = true
   `;
 
 export const storeResolvedAccountId = async (
