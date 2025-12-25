@@ -31,6 +31,12 @@ export type ActiveSessionRow = {
   game_id: number;
 };
 
+export type UserAuthRow = {
+  id: number;
+  email: string;
+  password: string | null;
+};
+
 export const loadPlatformCredentials = async (sql: Sql = getSql()) =>
   sql<PlatformCredentialRow[]>`
     select id, platform, api_key, account_id
@@ -76,6 +82,19 @@ export const listAccountSessions = async (
       ps.started_at desc
     limit 10
   `;
+
+export const loadUserByEmail = async (
+  email: string,
+  sql: Sql = getSql()
+) => {
+  const rows = await sql<UserAuthRow[]>`
+    select id, email, password
+    from users
+    where email = ${email}
+    limit 1
+  `;
+  return rows[0] ?? null;
+};
 
 export const ensureGameId = async (
   game: NormalizedGame,

@@ -18,7 +18,11 @@
     "db:migrate": "bun run scripts/migrate.ts"
   },
   "dependencies": {
+    "@types/bcryptjs": "^3.0.0",
+    "@types/jsonwebtoken": "^9.0.10",
+    "bcryptjs": "^2.4.3",
     "elysia": "latest",
+    "jsonwebtoken": "^9.0.2",
     "postgres": "^3.4.5",
     "psn-api": "^2.14.1"
   },
