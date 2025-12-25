@@ -1,8 +1,13 @@
 # Playdex
 
-Playtime tracker for PSN and Steam accounts, powered by Bun + Elysia.
+Playtime tracker for PSN and Steam accounts, built with Bun + Elysia.
 
-## Local setup (Postgres)
+## Requirements
+
+- Bun
+- Docker (for local Postgres)
+
+## Local setup
 
 1. Start Postgres via Docker:
 
@@ -14,19 +19,33 @@ docker compose up -d db
 
 ```bash
 DATABASE_URL=postgresql://playdex:playdex@localhost:5432/playdex
-POLL_INTERVAL_SECONDS=60
+POLL_INTERVAL_SECONDS=180
 ```
 
-3. Install dependencies and start the server:
+3. Install dependencies:
 
 ```bash
 bun install
+```
+
+4. Start the server:
+
+```bash
 bun run dev
 ```
 
 Open `http://localhost:3000/` in your browser.
 
+## Useful commands
+
+```bash
+bun run dev
+bun run format
+bun run format:check
+```
+
 ## Notes
 
+- The server binds to port 3000 by default.
 - Migrations run on startup.
 - Metrics are available at `http://localhost:3000/metrics`.
