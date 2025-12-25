@@ -18,6 +18,7 @@ export const withApiErrorLogging =
       request: Request;
       set: { status?: number | string };
       params?: Record<string, string>;
+      body?: unknown;
     },
     R,
   >(
