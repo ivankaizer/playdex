@@ -28,7 +28,6 @@ const buildHeaders = (auth: boolean) => {
 };
 
 const buildApiUrl = (path: string) => {
-  console.log(apiBaseUrl, import.meta.env);
   if (/^https?:\/\//i.test(path)) {
     return path;
   }
