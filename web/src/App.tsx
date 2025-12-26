@@ -497,21 +497,20 @@ export const App = () => {
                     todaySessions.map((session) => (
                       <div
                         key={session.title}
-                        className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-slate-800 bg-slate-950/50 p-4"
+                        className="relative flex flex-wrap items-center justify-between gap-4 overflow-hidden rounded-2xl border border-slate-800 bg-slate-950/50 p-4"
+                        style={{
+                          backgroundImage: `url(${session.image})`,
+                          backgroundSize: "cover",
+                          backgroundPosition: "center",
+                        }}
                       >
-                        <div className="flex items-center gap-3">
-                          <img
-                            src={session.image}
-                            alt={`${session.title} capsule art`}
-                            className="h-14 w-10 rounded-xl border border-slate-800 object-cover"
-                          />
-                          <div>
-                            <p className="text-sm font-semibold text-white">
-                              {session.title}
-                            </p>
-                          </div>
+                        <div className="absolute inset-0 bg-slate-950/80" />
+                        <div className="relative z-10">
+                          <p className="text-sm font-semibold text-white">
+                            {session.title}
+                          </p>
                         </div>
-                        <div className="flex items-center gap-4">
+                        <div className="relative z-10 flex items-center gap-4">
                           <p className="text-xs text-slate-400">
                             {session.platform}
                           </p>
