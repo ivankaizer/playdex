@@ -96,7 +96,7 @@ export const registerPlayniteRoutes = (
   notifier?: PollingNotifier
 ) =>
   app.post(
-    "/playnite/sessions",
+    "/api/playnite/sessions",
     withApiErrorLogging(async ({ body, request, set }) => {
       const token = parseBearerToken(request.headers.get("authorization"));
       if (!token) {
@@ -140,7 +140,7 @@ export const registerPlayniteRoutes = (
     })
   )
     .post(
-      "/playnite/sessions/start",
+      "/api/playnite/sessions/start",
       withApiErrorLogging(async ({ body, request, set }) => {
         const token = parseBearerToken(request.headers.get("authorization"));
         if (!token) {
@@ -195,7 +195,7 @@ export const registerPlayniteRoutes = (
       })
     )
     .post(
-      "/playnite/sessions/end",
+      "/api/playnite/sessions/end",
       withApiErrorLogging(async ({ request, set }) => {
         const token = parseBearerToken(request.headers.get("authorization"));
         if (!token) {

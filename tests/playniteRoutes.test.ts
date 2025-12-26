@@ -82,7 +82,7 @@ const sendStartRequest = async (
   }
 
   return await app.handle(
-    new Request("http://localhost/playnite/sessions/start", {
+    new Request("http://localhost/api/playnite/sessions/start", {
       method: "POST",
       headers: {
         "content-type": "application/json",
@@ -99,7 +99,7 @@ const sendEndRequest = async (token?: string) => {
   }
 
   return await app.handle(
-    new Request("http://localhost/playnite/sessions/end", {
+    new Request("http://localhost/api/playnite/sessions/end", {
       method: "POST",
       headers: {
         ...(token ? { authorization: `Bearer ${token}` } : {}),

@@ -26,7 +26,7 @@ import {
 export const registerAccountRoutes = (app: Elysia) =>
   app
     .get(
-      "/accounts",
+      "/api/accounts",
       withApiErrorLogging(async ({ request, set }) => {
         const auth = requireAuth(request);
         if (!auth.ok) {
@@ -40,7 +40,7 @@ export const registerAccountRoutes = (app: Elysia) =>
       })
     )
     .get(
-      "/accounts/:accountId/sessions",
+      "/api/accounts/:accountId/sessions",
       withApiErrorLogging(async ({ request, params = {}, set }) => {
         const auth = requireAuth(request);
         if (!auth.ok) {
@@ -94,7 +94,7 @@ export const registerAccountRoutes = (app: Elysia) =>
       })
     )
     .get(
-      "/accounts/:accountId/sessions/today",
+      "/api/accounts/:accountId/sessions/today",
       withApiErrorLogging(async ({ request, params = {}, set }) => {
         const auth = requireAuth(request);
         if (!auth.ok) {
@@ -122,7 +122,7 @@ export const registerAccountRoutes = (app: Elysia) =>
       })
     )
     .get(
-      "/accounts/:accountId/sessions/current",
+      "/api/accounts/:accountId/sessions/current",
       withApiErrorLogging(async ({ request, params = {}, set }) => {
         const auth = requireAuth(request);
         if (!auth.ok) {
@@ -149,7 +149,7 @@ export const registerAccountRoutes = (app: Elysia) =>
       })
     )
     .get(
-      "/accounts/:accountId/stats",
+      "/api/accounts/:accountId/stats",
       withApiErrorLogging(async ({ request, params = {}, set }) => {
         const auth = requireAuth(request);
         if (!auth.ok) {
