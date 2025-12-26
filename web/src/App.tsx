@@ -7,7 +7,10 @@ export const App = () => {
   const [password, setPassword] = useState("");
   const [status, setStatus] = useState<"idle" | "loading" | "success">("idle");
   const [error, setError] = useState("");
-  const [helloEmail, setHelloEmail] = useState("");
+  const [sessionEmail, setSessionEmail] = useState(
+    () => localStorage.getItem("playdex.email") ?? ""
+  );
+  const [isProfileLoading, setIsProfileLoading] = useState(false);
   const [playniteKey, setPlayniteKey] = useState("plx_");
   const [providerStatus, setProviderStatus] = useState(() => [
     { id: "steam", name: "Steam", account: "7656119••••", status: "active" },
@@ -134,6 +137,11 @@ export const App = () => {
     ],
     []
   );
+  const handleLogout = () => {
+    localStorage.removeItem("playdex.token");
+    localStorage.removeItem("playdex.email");
+    window.location.assign("/");
+  };
 
   const generatePlayniteKey = () => {
     const bytes = new Uint8Array(12);
@@ -182,8 +190,10 @@ export const App = () => {
       }
 
       localStorage.setItem("playdex.token", payload.data.token);
+      localStorage.setItem("playdex.email", payload.data.email);
+      setSessionEmail(payload.data.email);
       setStatus("success");
-      window.location.assign("/hello");
+      window.location.assign("/dashboard");
     } catch (err) {
       setError("Login failed.");
       setStatus("idle");
@@ -191,17 +201,26 @@ export const App = () => {
   };
 
   useEffect(() => {
-    if (path !== "/hello") {
+    const handlePopState = () => setPath(window.location.pathname);
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, []);
+
+  useEffect(() => {
+    if (path !== "/") {
       return;
     }
-
     const token = localStorage.getItem("playdex.token");
     if (!token) {
-      setHelloEmail("");
-      setError("Please log in first.");
+      setSessionEmail("");
+      setIsProfileLoading(false);
       return;
     }
-
+    if (sessionEmail) {
+      return;
+    }
+    let cancelled = false;
+    setIsProfileLoading(true);
     const loadProfile = async () => {
       try {
         const response = await fetch("/api/me", {
@@ -214,25 +233,30 @@ export const App = () => {
           error: { error: string } | null;
         };
 
-        if (!response.ok || payload.error || !payload.data) {
-          setError(payload.error?.error ?? "Unable to load profile.");
+        if (cancelled) {
           return;
         }
 
-        setHelloEmail(payload.data.email);
+        if (!response.ok || payload.error || !payload.data) {
+          setIsProfileLoading(false);
+          return;
+        }
+
+        localStorage.setItem("playdex.email", payload.data.email);
+        setSessionEmail(payload.data.email);
+        setIsProfileLoading(false);
       } catch (err) {
-        setError("Unable to load profile.");
+        if (!cancelled) {
+          setIsProfileLoading(false);
+        }
       }
     };
 
     loadProfile();
-  }, [path]);
-
-  useEffect(() => {
-    const handlePopState = () => setPath(window.location.pathname);
-    window.addEventListener("popstate", handlePopState);
-    return () => window.removeEventListener("popstate", handlePopState);
-  }, []);
+    return () => {
+      cancelled = true;
+    };
+  }, [path, sessionEmail]);
 
   const background = (
     <div className="pointer-events-none absolute inset-0">
@@ -322,38 +346,10 @@ export const App = () => {
       </svg>
     );
   };
+  const isLoggedIn = Boolean(localStorage.getItem("playdex.token"));
+  const profileLabel =
+    sessionEmail || (isProfileLoading ? "Loading..." : "unknown");
 
-  if (path === "/hello") {
-    return (
-      <main className="relative min-h-screen overflow-hidden bg-slate-950 text-slate-100">
-        {background}
-
-        <div className="relative mx-auto flex min-h-screen w-full max-w-4xl flex-col items-center justify-center gap-6 px-6 py-16 text-center">
-          <p className="text-xs font-semibold uppercase tracking-[0.5em] text-emerald-300">
-            Playdex
-          </p>
-          <h1 className="text-4xl font-semibold text-white sm:text-5xl">
-            Hello{helloEmail ? `, ${helloEmail}` : ""}!
-          </h1>
-          <p className="max-w-xl text-sm text-slate-300">
-            {error
-              ? error
-              : "You're signed in. We'll route you to your dashboard soon."}
-          </p>
-          <button
-            type="button"
-            onClick={() => {
-              localStorage.removeItem("playdex.token");
-              window.location.assign("/");
-            }}
-            className="rounded-full border border-slate-700 px-5 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-slate-200 transition hover:border-slate-500"
-          >
-            Sign out
-          </button>
-        </div>
-      </main>
-    );
-  }
 
   if (path === "/dashboard") {
     return (
@@ -382,6 +378,13 @@ export const App = () => {
                   {item.label}
                 </button>
               ))}
+              <button
+                type="button"
+                onClick={handleLogout}
+                className="rounded-full border border-rose-500/60 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-rose-200 transition hover:border-rose-400 hover:text-rose-100"
+              >
+                Logout
+              </button>
             </nav>
           </header>
 
@@ -741,6 +744,13 @@ export const App = () => {
                   {item.label}
                 </button>
               ))}
+              <button
+                type="button"
+                onClick={handleLogout}
+                className="rounded-full border border-rose-500/60 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-rose-200 transition hover:border-rose-400 hover:text-rose-100"
+              >
+                Logout
+              </button>
             </nav>
           </header>
 
@@ -945,6 +955,13 @@ export const App = () => {
                   {item.label}
                 </button>
               ))}
+              <button
+                type="button"
+                onClick={handleLogout}
+                className="rounded-full border border-rose-500/60 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-rose-200 transition hover:border-rose-400 hover:text-rose-100"
+              >
+                Logout
+              </button>
             </nav>
           </header>
 
@@ -1149,39 +1166,67 @@ export const App = () => {
 
           <section className="flex items-center justify-center">
             <div className="w-full max-w-md rounded-3xl border border-slate-800 bg-slate-900/70 p-8 shadow-[0_25px_80px_rgba(15,23,42,0.65)]">
-              <form className="space-y-5" onSubmit={handleSubmit}>
-                <label className="block text-sm font-medium text-slate-200">
-                  Email address
-                  <input
-                    type="email"
-                    placeholder="you@example.com"
-                    value={email}
-                    onChange={(event) => setEmail(event.target.value)}
-                    className="mt-2 w-full rounded-xl border border-slate-700 bg-slate-950/80 px-4 py-3 text-sm text-white outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/30"
-                  />
-                </label>
-                <label className="block text-sm font-medium text-slate-200">
-                  Password
-                  <input
-                    type="password"
-                    placeholder="••••••••"
-                    value={password}
-                    onChange={(event) => setPassword(event.target.value)}
-                    className="mt-2 w-full rounded-xl border border-slate-700 bg-slate-950/80 px-4 py-3 text-sm text-white outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/30"
-                  />
-                </label>
+              {isLoggedIn ? (
+                <div className="space-y-5 text-center">
+                  <p className="text-xs font-semibold uppercase tracking-[0.4em] text-emerald-300">
+                    Signed in
+                  </p>
+                  <div className="space-y-2">
+                    <h2 className="text-2xl font-semibold text-white">
+                      Welcome back
+                    </h2>
+                    <p className="text-sm text-slate-300">
+                      Logged in as{" "}
+                      <span className="font-semibold text-emerald-200">
+                        {profileLabel}
+                      </span>
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleLogout}
+                    className="w-full rounded-xl border border-rose-500/60 px-6 py-3 text-sm font-semibold uppercase tracking-[0.3em] text-rose-200 transition hover:border-rose-400 hover:text-rose-100"
+                  >
+                    Logout
+                  </button>
+                </div>
+              ) : (
+                <form className="space-y-5" onSubmit={handleSubmit}>
+                  <label className="block text-sm font-medium text-slate-200">
+                    Email address
+                    <input
+                      type="email"
+                      placeholder="you@example.com"
+                      value={email}
+                      onChange={(event) => setEmail(event.target.value)}
+                      className="mt-2 w-full rounded-xl border border-slate-700 bg-slate-950/80 px-4 py-3 text-sm text-white outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/30"
+                    />
+                  </label>
+                  <label className="block text-sm font-medium text-slate-200">
+                    Password
+                    <input
+                      type="password"
+                      placeholder="••••••••"
+                      value={password}
+                      onChange={(event) => setPassword(event.target.value)}
+                      className="mt-2 w-full rounded-xl border border-slate-700 bg-slate-950/80 px-4 py-3 text-sm text-white outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/30"
+                    />
+                  </label>
 
-                <button
-                  type="submit"
-                  disabled={status === "loading"}
-                  className="w-full rounded-xl bg-emerald-400 px-6 py-3 text-sm font-semibold text-slate-900 transition hover:bg-emerald-300 disabled:cursor-not-allowed disabled:bg-emerald-300/60"
-                >
-                  {status === "loading" ? "Signing in..." : "Log in"}
-                </button>
-              </form>
+                  <button
+                    type="submit"
+                    disabled={status === "loading"}
+                    className="w-full rounded-xl bg-emerald-400 px-6 py-3 text-sm font-semibold text-slate-900 transition hover:bg-emerald-300 disabled:cursor-not-allowed disabled:bg-emerald-300/60"
+                  >
+                    {status === "loading" ? "Signing in..." : "Log in"}
+                  </button>
+                </form>
+              )}
 
               <div className="mt-6 text-center text-xs text-slate-400">
-                {error ? (
+                {isLoggedIn ? (
+                  <p className="text-emerald-300">Session active.</p>
+                ) : error ? (
                   <p className="text-rose-300">{error}</p>
                 ) : status === "success" ? (
                   <p className="text-emerald-300">Signed in successfully.</p>
