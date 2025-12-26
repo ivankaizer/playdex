@@ -35,6 +35,25 @@ export type UserAuthRow = {
   id: number;
   email: string;
   password: string | null;
+  chat_id?: string | null;
+};
+
+export type NotificationTargetRow = {
+  user_id: number;
+  chat_id: string | null;
+  platform: string;
+};
+
+export type GameRow = {
+  id: number;
+  title: string;
+  platform: string;
+};
+
+export type UserChatRow = {
+  id: number;
+  email: string;
+  chat_id: string | null;
 };
 
 export const loadPlatformCredentials = async (sql: Sql = getSql()) =>
@@ -102,13 +121,66 @@ export const loadUserByEmail = async (
   sql: Sql = getSql()
 ) => {
   const rows = await sql<UserAuthRow[]>`
-    select id, email, password
+    select id, email, password, chat_id
     from users
     where email = ${email}
     limit 1
   `;
   return rows[0] ?? null;
 };
+
+export const loadUserByChatId = async (
+  chatId: string,
+  sql: Sql = getSql()
+) => {
+  const rows = await sql<UserChatRow[]>`
+    select id, email, chat_id
+    from users
+    where chat_id = ${chatId}
+    limit 1
+  `;
+  return rows[0] ?? null;
+};
+
+export const loadNotificationTargetByCredential = async (
+  platformCredentialId: number,
+  sql: Sql = getSql()
+) => {
+  const rows = await sql<NotificationTargetRow[]>`
+    select u.id as user_id, u.chat_id, pc.platform
+    from platform_credentials pc
+    join users u on u.id = pc.user_id
+    where pc.id = ${platformCredentialId}
+    limit 1
+  `;
+  return rows[0] ?? null;
+};
+
+export const loadGameById = async (gameId: number, sql: Sql = getSql()) => {
+  const rows = await sql<GameRow[]>`
+    select id, title, platform
+    from games
+    where id = ${gameId}
+    limit 1
+  `;
+  return rows[0] ?? null;
+};
+
+export const endActiveSessionsForUser = async (
+  userId: number,
+  endedAt: Date,
+  sql: Sql = getSql()
+) =>
+  sql<{ id: number; platform: string; title: string }[]>`
+    update play_sessions as ps
+    set ended_at = ${endedAt}, updated_at = now()
+    from platform_credentials pc, games g
+    where ps.platform_credential_id = pc.id
+      and g.id = ps.game_id
+      and pc.user_id = ${userId}
+      and ps.ended_at is null
+    returning ps.id, pc.platform, g.title
+  `;
 
 export const ensureGameId = async (
   game: NormalizedGame,

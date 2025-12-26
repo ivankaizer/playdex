@@ -20,6 +20,7 @@ docker compose up -d db
 ```bash
 DATABASE_URL=postgresql://playdex:playdex@localhost:5432/playdex
 POLL_INTERVAL_SECONDS=180
+TELEGRAM_BOT_TOKEN=your-telegram-bot-token
 ```
 
 3. Install dependencies:
@@ -49,3 +50,4 @@ bun run format:check
 - The server binds to port 3000 by default.
 - Migrations run on startup.
 - Metrics are available at `http://localhost:3000/metrics`.
+- Set `TELEGRAM_BOT_TOKEN` and `users.chat_id` to enable Telegram notifications.

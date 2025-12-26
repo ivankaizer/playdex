@@ -22,6 +22,7 @@ type PollingConfig = {
   loadAccounts: () => Promise<PollingAccountEntry[]>;
   pollIntervalSeconds: number;
   maxCycles?: number;
+  notifier?: PollingNotifier;
   onCycleComplete?: (summary: {
     durationMs: number;
     accountCount: number;
@@ -32,6 +33,25 @@ export type PollingAccountEntry = {
   platformCredentialId: number;
   account: PlatformAccount;
   client: PlatformClient;
+};
+
+export type PollingNotifier = {
+  onPollFailure?: (payload: {
+    platformCredentialId: number;
+    platform: string;
+    message: string;
+    backoffMs: number;
+  }) => Promise<void>;
+  onSessionStarted?: (payload: {
+    platformCredentialId: number;
+    gameId: number;
+    startedAt: Date;
+  }) => Promise<void>;
+  onSessionEnded?: (payload: {
+    platformCredentialId: number;
+    gameId: number;
+    endedAt: Date;
+  }) => Promise<void>;
 };
 
 type PlatformBackoffState = {
@@ -66,11 +86,31 @@ const extractRetryAfterMs = (error: unknown): number | null => {
   return null;
 };
 
+const safeNotify = async <T>(
+  handler: ((payload: T) => Promise<void>) | undefined,
+  payload: T,
+  eventName: string
+) => {
+  if (!handler) {
+    return;
+  }
+
+  try {
+    await handler(payload);
+  } catch (error) {
+    logEvent("error", "poll.notification.failed", {
+      event: eventName,
+      message: getErrorMessage(error),
+    });
+  }
+};
+
 export const syncPlaySession = async (
   sql: ReturnType<typeof postgres>,
   platformCredentialId: number,
   gameId: number | null,
-  polledAt: Date
+  polledAt: Date,
+  notifier?: PollingNotifier
 ) => {
   const activeSession = await fetchActivePlaySession(platformCredentialId, sql);
   if (!gameId) {
@@ -81,6 +121,15 @@ export const syncPlaySession = async (
         platformCredentialId,
         endedAt: polledAt.toISOString(),
       });
+      await safeNotify(
+        notifier?.onSessionEnded,
+        {
+          platformCredentialId,
+          gameId: activeSession.game_id,
+          endedAt: polledAt,
+        },
+        "session.ended"
+      );
     }
     return;
   }
@@ -92,6 +141,11 @@ export const syncPlaySession = async (
       gameId,
       startedAt: polledAt.toISOString(),
     });
+    await safeNotify(
+      notifier?.onSessionStarted,
+      { platformCredentialId, gameId, startedAt: polledAt },
+      "session.started"
+    );
     return;
   }
 
@@ -105,12 +159,26 @@ export const syncPlaySession = async (
     platformCredentialId,
     endedAt: polledAt.toISOString(),
   });
+  await safeNotify(
+    notifier?.onSessionEnded,
+    {
+      platformCredentialId,
+      gameId: activeSession.game_id,
+      endedAt: polledAt,
+    },
+    "session.ended"
+  );
   await startPlaySession(platformCredentialId, gameId, polledAt, sql);
   logEvent("info", "db.play_session.started", {
     platformCredentialId,
     gameId,
     startedAt: polledAt.toISOString(),
   });
+  await safeNotify(
+    notifier?.onSessionStarted,
+    { platformCredentialId, gameId, startedAt: polledAt },
+    "session.started"
+  );
 };
 
 export const startPolling = async ({
@@ -118,6 +186,7 @@ export const startPolling = async ({
   loadAccounts,
   pollIntervalSeconds,
   maxCycles,
+  notifier,
   onCycleComplete,
 }: PollingConfig) => {
   const backoffState = new Map<number, PlatformBackoffState>();
@@ -199,7 +268,8 @@ export const startPolling = async ({
           sql,
           entry.platformCredentialId,
           gameId,
-          polledAt
+          polledAt,
+          notifier
         );
 
         backoffState.set(entry.platformCredentialId, {
@@ -230,6 +300,16 @@ export const startPolling = async ({
         });
 
         recordPollFailure(entry.account.platform);
+        await safeNotify(
+          notifier?.onPollFailure,
+          {
+            platformCredentialId: entry.platformCredentialId,
+            platform: entry.account.platform,
+            message: getErrorMessage(error),
+            backoffMs: delayMs,
+          },
+          "poll.failure"
+        );
         logEvent("error", "poll.account.failure", {
           platform: entry.account.platform,
           platformCredentialId: entry.platformCredentialId,

@@ -41,4 +41,5 @@ export const config = {
   pollIntervalSeconds: resolvePollIntervalSeconds(
     Bun.env.POLL_INTERVAL_SECONDS
   ),
+  telegramBotToken: Bun.env.TELEGRAM_BOT_TOKEN?.trim() ?? "",
 };
