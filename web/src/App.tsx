@@ -39,8 +39,32 @@ export const App = () => {
       spark: [3, 5, 6, 7, 6, 8, 9],
     },
   ];
-  const monthlyTrend = [8, 12, 10, 15, 13, 18, 16, 21, 19, 23, 20, 24];
-  const yearlyTrend = [120, 160, 140, 190, 175, 220, 210, 245, 230, 260, 250];
+  const monthlyPlatforms = [
+    { label: "Steam", value: 46 },
+    { label: "PS5", value: 28 },
+    { label: "Switch", value: 16 },
+    { label: "Playnite", value: 10 },
+  ];
+  const monthlyTopGames = [
+    { title: "Helldivers 2", hours: "12.4h" },
+    { title: "Hades II", hours: "9.8h" },
+    { title: "Stardew Valley", hours: "6.1h" },
+    { title: "Sea of Stars", hours: "5.4h" },
+    { title: "Baldur's Gate 3", hours: "4.7h" },
+  ];
+  const yearlyPlatforms = [
+    { label: "Steam", value: 52 },
+    { label: "PS5", value: 24 },
+    { label: "Switch", value: 14 },
+    { label: "Playnite", value: 10 },
+  ];
+  const yearlyTopGames = [
+    { title: "Helldivers 2", hours: "68h" },
+    { title: "Hades II", hours: "54h" },
+    { title: "Stardew Valley", hours: "41h" },
+    { title: "Sea of Stars", hours: "36h" },
+    { title: "Baldur's Gate 3", hours: "31h" },
+  ];
   const sessionRows = [
     {
       title: "Helldivers 2",
@@ -241,44 +265,6 @@ export const App = () => {
         className="text-emerald-300"
       >
         <path d={path} fill="none" stroke={stroke} strokeWidth="2" />
-      </svg>
-    );
-  };
-  const renderTrendLine = (points: number[]) => {
-    const width = 320;
-    const height = 120;
-    const max = Math.max(...points);
-    const min = Math.min(...points);
-    const range = Math.max(max - min, 1);
-    const step = width / (points.length - 1);
-    const path = points
-      .map((value, index) => {
-        const x = index * step;
-        const y = height - ((value - min) / range) * height;
-        return `${index === 0 ? "M" : "L"}${x} ${y}`;
-      })
-      .join(" ");
-
-    return (
-      <svg
-        aria-hidden="true"
-        width={width}
-        height={height}
-        viewBox={`0 0 ${width} ${height}`}
-        className="w-full"
-      >
-        <defs>
-          <linearGradient id="playdex-trend" x1="0" x2="1" y1="0" y2="1">
-            <stop offset="0%" stopColor="#34d399" stopOpacity="0.55" />
-            <stop offset="100%" stopColor="#22d3ee" stopOpacity="0.15" />
-          </linearGradient>
-        </defs>
-        <path d={path} fill="none" stroke="#34d399" strokeWidth="2.5" />
-        <path
-          d={`${path} L ${width} ${height} L 0 ${height} Z`}
-          fill="url(#playdex-trend)"
-          opacity="0.7"
-        />
       </svg>
     );
   };
@@ -492,11 +478,53 @@ export const App = () => {
                     </div>
                   ))}
                 </div>
-                <div className="mt-5 rounded-2xl border border-slate-800 bg-slate-950/50 p-4">
-                  <p className="text-xs uppercase tracking-[0.3em] text-slate-400">
-                    Playtime trend
-                  </p>
-                  <div className="mt-3">{renderTrendLine(monthlyTrend)}</div>
+                <div className="mt-5 grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
+                  <div className="rounded-2xl border border-slate-800 bg-slate-950/50 p-4">
+                    <p className="text-xs uppercase tracking-[0.3em] text-slate-400">
+                      Platform distribution
+                    </p>
+                    <div className="mt-4 space-y-3">
+                      {monthlyPlatforms.map((item) => (
+                        <div key={item.label}>
+                          <div className="flex items-center justify-between text-xs text-slate-300">
+                            <span>{item.label}</span>
+                            <span>{item.value}%</span>
+                          </div>
+                          <div className="mt-2 h-2 rounded-full bg-slate-800">
+                            <div
+                              className="h-2 rounded-full bg-emerald-400"
+                              style={{ width: `${item.value}%` }}
+                            />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="rounded-2xl border border-slate-800 bg-slate-950/50 p-4">
+                    <p className="text-xs uppercase tracking-[0.3em] text-slate-400">
+                      Top 5 games
+                    </p>
+                    <div className="mt-4 space-y-3">
+                      {monthlyTopGames.map((game, index) => (
+                        <div
+                          key={game.title}
+                          className="flex items-center justify-between text-sm"
+                        >
+                          <div className="flex items-center gap-3">
+                            <span className="text-xs font-semibold text-slate-400">
+                              {String(index + 1).padStart(2, "0")}
+                            </span>
+                            <span className="font-semibold text-white">
+                              {game.title}
+                            </span>
+                          </div>
+                          <span className="text-xs font-semibold text-emerald-200">
+                            {game.hours}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -528,11 +556,53 @@ export const App = () => {
                     </div>
                   ))}
                 </div>
-                <div className="mt-5 rounded-2xl border border-slate-800 bg-slate-950/50 p-4">
-                  <p className="text-xs uppercase tracking-[0.3em] text-slate-400">
-                    Playtime trend
-                  </p>
-                  <div className="mt-3">{renderTrendLine(yearlyTrend)}</div>
+                <div className="mt-5 grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
+                  <div className="rounded-2xl border border-slate-800 bg-slate-950/50 p-4">
+                    <p className="text-xs uppercase tracking-[0.3em] text-slate-400">
+                      Platform distribution
+                    </p>
+                    <div className="mt-4 space-y-3">
+                      {yearlyPlatforms.map((item) => (
+                        <div key={item.label}>
+                          <div className="flex items-center justify-between text-xs text-slate-300">
+                            <span>{item.label}</span>
+                            <span>{item.value}%</span>
+                          </div>
+                          <div className="mt-2 h-2 rounded-full bg-slate-800">
+                            <div
+                              className="h-2 rounded-full bg-emerald-400"
+                              style={{ width: `${item.value}%` }}
+                            />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="rounded-2xl border border-slate-800 bg-slate-950/50 p-4">
+                    <p className="text-xs uppercase tracking-[0.3em] text-slate-400">
+                      Top 5 games
+                    </p>
+                    <div className="mt-4 space-y-3">
+                      {yearlyTopGames.map((game, index) => (
+                        <div
+                          key={game.title}
+                          className="flex items-center justify-between text-sm"
+                        >
+                          <div className="flex items-center gap-3">
+                            <span className="text-xs font-semibold text-slate-400">
+                              {String(index + 1).padStart(2, "0")}
+                            </span>
+                            <span className="font-semibold text-white">
+                              {game.title}
+                            </span>
+                          </div>
+                          <span className="text-xs font-semibold text-emerald-200">
+                            {game.hours}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
