@@ -13,7 +13,6 @@ type RequestOptions = {
 };
 
 const apiBaseUrl = (import.meta.env.VITE_API_URL ?? "").trim();
-const normalizedApiBase = apiBaseUrl.replace(/\/+$/, "");
 
 const buildHeaders = (auth: boolean) => {
   const headers: Record<string, string> = {
@@ -32,11 +31,11 @@ const buildApiUrl = (path: string) => {
   if (/^https?:\/\//i.test(path)) {
     return path;
   }
-  if (!normalizedApiBase) {
+  if (!apiBaseUrl) {
     return path;
   }
   const normalizedPath = path.startsWith("/") ? path : `/${path}`;
-  return `${normalizedApiBase}${normalizedPath}`;
+  return `${apiBaseUrl}${normalizedPath}`;
 };
 
 export const apiRequest = async <T>(

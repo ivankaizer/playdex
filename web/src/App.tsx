@@ -65,6 +65,8 @@ type PlayniteKeyResponse = {
   apiKey: string;
 };
 
+const protectedPaths = new Set(["/dashboard", "/sessions", "/settings"]);
+
 export const App = () => {
   const [path, setPath] = useState(() => window.location.pathname);
   const [email, setEmail] = useState("");
@@ -658,6 +660,17 @@ export const App = () => {
   const profileLabel =
     sessionEmail || (isProfileLoading ? "Loading..." : "unknown");
 
+  useEffect(() => {
+    if (isLoggedIn || !protectedPaths.has(path)) {
+      return;
+    }
+    window.history.replaceState({}, "", "/");
+    setPath("/");
+  }, [isLoggedIn, path]);
+
+  if (!isLoggedIn && protectedPaths.has(path)) {
+    return null;
+  }
 
   if (path === "/dashboard") {
     return (
