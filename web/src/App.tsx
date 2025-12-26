@@ -40,10 +40,10 @@ export const App = () => {
     },
   ];
   const monthlyPlatforms = [
-    { label: "Steam", value: 46 },
-    { label: "PS5", value: 28 },
-    { label: "Switch", value: 16 },
-    { label: "Playnite", value: 10 },
+    { label: "Steam", value: 46, hours: "19.7h" },
+    { label: "PS5", value: 28, hours: "12.0h" },
+    { label: "Switch", value: 16, hours: "6.8h" },
+    { label: "Playnite", value: 10, hours: "4.3h" },
   ];
   const monthlyTopGames = [
     { title: "Helldivers 2", hours: "12.4h" },
@@ -53,10 +53,10 @@ export const App = () => {
     { title: "Baldur's Gate 3", hours: "4.7h" },
   ];
   const yearlyPlatforms = [
-    { label: "Steam", value: 52 },
-    { label: "PS5", value: 24 },
-    { label: "Switch", value: 14 },
-    { label: "Playnite", value: 10 },
+    { label: "Steam", value: 52, hours: "162h" },
+    { label: "PS5", value: 24, hours: "75h" },
+    { label: "Switch", value: 14, hours: "44h" },
+    { label: "Playnite", value: 10, hours: "31h" },
   ];
   const yearlyTopGames = [
     { title: "Helldivers 2", hours: "68h" },
@@ -265,6 +265,60 @@ export const App = () => {
         className="text-emerald-300"
       >
         <path d={path} fill="none" stroke={stroke} strokeWidth="2" />
+      </svg>
+    );
+  };
+  const renderPieChart = (
+    segments: { label: string; value: number }[],
+    colors: string[],
+    size = 150
+  ) => {
+    const strokeWidth = 18;
+    const radius = (size - strokeWidth) / 2;
+    const circumference = 2 * Math.PI * radius;
+    const total = Math.max(
+      segments.reduce((sum, segment) => sum + segment.value, 0),
+      1
+    );
+    let offset = 0;
+
+    return (
+      <svg
+        aria-hidden="true"
+        width={size}
+        height={size}
+        viewBox={`0 0 ${size} ${size}`}
+        className="shrink-0"
+      >
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          fill="transparent"
+          stroke="rgba(30,41,59,0.8)"
+          strokeWidth={strokeWidth}
+        />
+        {segments.map((segment, index) => {
+          const dash = (segment.value / total) * circumference;
+          const gap = circumference - dash;
+          const strokeDasharray = `${dash} ${gap}`;
+          const strokeDashoffset = -offset;
+          offset += dash;
+          return (
+            <circle
+              key={segment.label}
+              cx={size / 2}
+              cy={size / 2}
+              r={radius}
+              fill="transparent"
+              stroke={colors[index % colors.length]}
+              strokeWidth={strokeWidth}
+              strokeDasharray={strokeDasharray}
+              strokeDashoffset={strokeDashoffset}
+              transform={`rotate(-90 ${size / 2} ${size / 2})`}
+            />
+          );
+        })}
       </svg>
     );
   };
@@ -482,21 +536,38 @@ export const App = () => {
                   <p className="text-xs uppercase tracking-[0.3em] text-slate-400">
                     Platform distribution
                   </p>
-                  <div className="mt-4 space-y-3">
-                    {monthlyPlatforms.map((item) => (
-                      <div key={item.label}>
-                        <div className="flex items-center justify-between text-xs text-slate-300">
-                          <span>{item.label}</span>
-                          <span>{item.value}%</span>
+                  <div className="mt-4 flex flex-wrap items-center gap-4">
+                    {renderPieChart(
+                      monthlyPlatforms,
+                      ["#34d399", "#22d3ee", "#a78bfa", "#f59e0b"],
+                      168
+                    )}
+                    <div className="flex-1 space-y-2 text-xs text-slate-300">
+                      {monthlyPlatforms.map((item, index) => (
+                        <div
+                          key={item.label}
+                          className="flex items-center justify-between gap-3"
+                        >
+                          <div className="flex items-center gap-2">
+                            <span
+                              className="h-2 w-2 rounded-full"
+                              style={{
+                                backgroundColor: [
+                                  "#34d399",
+                                  "#22d3ee",
+                                  "#a78bfa",
+                                  "#f59e0b",
+                                ][index % 4],
+                              }}
+                            />
+                            <span>{item.label}</span>
+                          </div>
+                          <span>
+                            {item.value}% · {item.hours}
+                          </span>
                         </div>
-                        <div className="mt-2 h-2 rounded-full bg-slate-800">
-                          <div
-                            className="h-2 rounded-full bg-emerald-400"
-                            style={{ width: `${item.value}%` }}
-                          />
-                        </div>
-                      </div>
-                    ))}
+                      ))}
+                    </div>
                   </div>
                 </div>
                 <div className="rounded-2xl border border-slate-800 bg-slate-950/50 p-4">
@@ -560,21 +631,38 @@ export const App = () => {
                   <p className="text-xs uppercase tracking-[0.3em] text-slate-400">
                     Platform distribution
                   </p>
-                  <div className="mt-4 space-y-3">
-                    {yearlyPlatforms.map((item) => (
-                      <div key={item.label}>
-                        <div className="flex items-center justify-between text-xs text-slate-300">
-                          <span>{item.label}</span>
-                          <span>{item.value}%</span>
+                  <div className="mt-4 flex flex-wrap items-center gap-4">
+                    {renderPieChart(
+                      yearlyPlatforms,
+                      ["#34d399", "#22d3ee", "#a78bfa", "#f59e0b"],
+                      168
+                    )}
+                    <div className="flex-1 space-y-2 text-xs text-slate-300">
+                      {yearlyPlatforms.map((item, index) => (
+                        <div
+                          key={item.label}
+                          className="flex items-center justify-between gap-3"
+                        >
+                          <div className="flex items-center gap-2">
+                            <span
+                              className="h-2 w-2 rounded-full"
+                              style={{
+                                backgroundColor: [
+                                  "#34d399",
+                                  "#22d3ee",
+                                  "#a78bfa",
+                                  "#f59e0b",
+                                ][index % 4],
+                              }}
+                            />
+                            <span>{item.label}</span>
+                          </div>
+                          <span>
+                            {item.value}% · {item.hours}
+                          </span>
                         </div>
-                        <div className="mt-2 h-2 rounded-full bg-slate-800">
-                          <div
-                            className="h-2 rounded-full bg-emerald-400"
-                            style={{ width: `${item.value}%` }}
-                          />
-                        </div>
-                      </div>
-                    ))}
+                      ))}
+                    </div>
                   </div>
                 </div>
                 <div className="rounded-2xl border border-slate-800 bg-slate-950/50 p-4">
