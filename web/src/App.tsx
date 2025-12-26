@@ -509,12 +509,12 @@ export const App = () => {
                             <p className="text-sm font-semibold text-white">
                               {session.title}
                             </p>
-                            <p className="text-xs text-slate-400">
-                              {session.platform}
-                            </p>
                           </div>
                         </div>
                         <div className="flex items-center gap-4">
+                          <p className="text-xs text-slate-400">
+                            {session.platform}
+                          </p>
                           <p className="text-sm font-semibold text-emerald-200">
                             {session.time}
                           </p>
