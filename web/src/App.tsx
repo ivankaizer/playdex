@@ -104,6 +104,41 @@ export const App = () => {
       duration: "1h 38m",
       image: capsuleUrl,
     },
+    {
+      title: "Animal Crossing",
+      platform: "Switch",
+      date: "Apr 10",
+      duration: "55m",
+      image: capsuleUrl,
+    },
+    {
+      title: "Final Fantasy VII Rebirth",
+      platform: "PS5",
+      date: "Apr 9",
+      duration: "2h 20m",
+      image: capsuleUrl,
+    },
+    {
+      title: "Hollow Knight",
+      platform: "Steam",
+      date: "Apr 9",
+      duration: "40m",
+      image: capsuleUrl,
+    },
+    {
+      title: "Forza Horizon 5",
+      platform: "Playnite",
+      date: "Apr 8",
+      duration: "1h 05m",
+      image: capsuleUrl,
+    },
+    {
+      title: "Metroid Dread",
+      platform: "Switch",
+      date: "Apr 7",
+      duration: "50m",
+      image: capsuleUrl,
+    },
   ];
   const providerMeta: Record<
     string,
@@ -1101,7 +1136,7 @@ export const App = () => {
             </div>
 
             <div className="mt-6 flex flex-wrap items-center justify-between gap-4 text-xs text-slate-300">
-              <p>Showing 1-5 of 48 sessions</p>
+              <p>Showing 1-10 of 48 sessions</p>
               <div className="flex items-center gap-2">
                 <button
                   type="button"
