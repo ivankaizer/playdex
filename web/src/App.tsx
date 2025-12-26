@@ -40,19 +40,7 @@ export const App = () => {
     },
   ];
   const monthlyTrend = [8, 12, 10, 15, 13, 18, 16, 21, 19, 23, 20, 24];
-  const platformBreakdown = [
-    { label: "Steam", value: 42 },
-    { label: "PS5", value: 28 },
-    { label: "Switch", value: 18 },
-    { label: "Playnite", value: 12 },
-  ];
   const yearlyTrend = [120, 160, 140, 190, 175, 220, 210, 245, 230, 260, 250];
-  const yearlyBreakdown = [
-    { label: "Action", value: 34 },
-    { label: "RPG", value: 28 },
-    { label: "Indie", value: 22 },
-    { label: "Co-op", value: 16 },
-  ];
   const sessionRows = [
     {
       title: "Helldivers 2",
@@ -357,7 +345,7 @@ export const App = () => {
             </nav>
           </header>
 
-          <section className="mt-10 grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
+          <section className="mt-10 grid gap-6 lg:grid-cols-2">
             <div className="space-y-6">
               <div className="rounded-3xl border border-slate-800 bg-slate-900/60 p-6">
                 <div className="flex items-center justify-between">
@@ -379,15 +367,6 @@ export const App = () => {
                     alt="Hades II capsule art"
                     className="h-28 w-20 rounded-2xl border border-slate-800 object-cover shadow-[0_15px_40px_rgba(15,23,42,0.55)]"
                   />
-                  <div className="flex-1 text-sm text-slate-300">
-                    <p className="text-xs uppercase tracking-[0.3em] text-slate-400">
-                      Session notes
-                    </p>
-                    <p className="mt-2 text-sm text-slate-200">
-                      Last run hit a new personal best on floor 4. Tracking boss
-                      clears and heat level.
-                    </p>
-                  </div>
                 </div>
                 <div className="mt-6 grid gap-4 sm:grid-cols-3">
                   {[
@@ -407,17 +386,6 @@ export const App = () => {
                       </p>
                     </div>
                   ))}
-                </div>
-                <div className="mt-6 flex flex-wrap gap-3 text-xs text-slate-300">
-                  <span className="rounded-full border border-slate-700 px-3 py-1">
-                    Focus: Story run
-                  </span>
-                  <span className="rounded-full border border-slate-700 px-3 py-1">
-                    Mood: Chill grind
-                  </span>
-                  <span className="rounded-full border border-slate-700 px-3 py-1">
-                    Goal: 2 more boss clears
-                  </span>
                 </div>
               </div>
 
@@ -497,12 +465,14 @@ export const App = () => {
 
             <div className="space-y-6">
               <div className="rounded-3xl border border-slate-800 bg-slate-900/60 p-6">
-                <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-300">
-                  Monthly stats
-                </p>
-                <h2 className="mt-2 text-xl font-semibold text-white">
-                  April highlights
-                </h2>
+                <div className="flex flex-wrap items-baseline gap-3">
+                  <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-300">
+                    Monthly stats
+                  </p>
+                  <p className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-200">
+                    April highlights
+                  </p>
+                </div>
                 <div className="mt-5 grid gap-4 sm:grid-cols-3">
                   {[
                     { label: "Hours played", value: "42.8" },
@@ -522,49 +492,28 @@ export const App = () => {
                     </div>
                   ))}
                 </div>
-                <div className="mt-5 grid gap-4 lg:grid-cols-[1.4fr_0.6fr]">
-                  <div className="rounded-2xl border border-slate-800 bg-slate-950/50 p-4">
-                    <p className="text-xs uppercase tracking-[0.3em] text-slate-400">
-                      Playtime trend
-                    </p>
-                    <div className="mt-3">{renderTrendLine(monthlyTrend)}</div>
-                  </div>
-                  <div className="rounded-2xl border border-slate-800 bg-slate-950/50 p-4">
-                    <p className="text-xs uppercase tracking-[0.3em] text-slate-400">
-                      Platform share
-                    </p>
-                    <div className="mt-4 space-y-3">
-                      {platformBreakdown.map((item) => (
-                        <div key={item.label}>
-                          <div className="flex items-center justify-between text-xs text-slate-300">
-                            <span>{item.label}</span>
-                            <span>{item.value}%</span>
-                          </div>
-                          <div className="mt-2 h-2 rounded-full bg-slate-800">
-                            <div
-                              className="h-2 rounded-full bg-emerald-400"
-                              style={{ width: `${item.value}%` }}
-                            />
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
+                <div className="mt-5 rounded-2xl border border-slate-800 bg-slate-950/50 p-4">
+                  <p className="text-xs uppercase tracking-[0.3em] text-slate-400">
+                    Playtime trend
+                  </p>
+                  <div className="mt-3">{renderTrendLine(monthlyTrend)}</div>
                 </div>
               </div>
 
               <div className="rounded-3xl border border-slate-800 bg-slate-900/60 p-6">
-                <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-300">
-                  Yearly stats
-                </p>
-                <h2 className="mt-2 text-xl font-semibold text-white">
-                  2024 recap
-                </h2>
+                <div className="flex flex-wrap items-baseline gap-3">
+                  <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-300">
+                    Yearly stats
+                  </p>
+                  <p className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-200">
+                    2024 recap
+                  </p>
+                </div>
                 <div className="mt-5 grid gap-4 sm:grid-cols-3">
                   {[
                     { label: "Hours played", value: "312" },
                     { label: "Sessions", value: "198" },
-                    { label: "Top genre", value: "Action RPG" },
+                    { label: "Top title", value: "Helldivers 2" },
                   ].map((stat) => (
                     <div
                       key={stat.label}
@@ -579,34 +528,11 @@ export const App = () => {
                     </div>
                   ))}
                 </div>
-                <div className="mt-5 grid gap-4 lg:grid-cols-[1.4fr_0.6fr]">
-                  <div className="rounded-2xl border border-slate-800 bg-slate-950/50 p-4">
-                    <p className="text-xs uppercase tracking-[0.3em] text-slate-400">
-                      Playtime trend
-                    </p>
-                    <div className="mt-3">{renderTrendLine(yearlyTrend)}</div>
-                  </div>
-                  <div className="rounded-2xl border border-slate-800 bg-slate-950/50 p-4">
-                    <p className="text-xs uppercase tracking-[0.3em] text-slate-400">
-                      Genre share
-                    </p>
-                    <div className="mt-4 space-y-3">
-                      {yearlyBreakdown.map((item) => (
-                        <div key={item.label}>
-                          <div className="flex items-center justify-between text-xs text-slate-300">
-                            <span>{item.label}</span>
-                            <span>{item.value}%</span>
-                          </div>
-                          <div className="mt-2 h-2 rounded-full bg-slate-800">
-                            <div
-                              className="h-2 rounded-full bg-emerald-400"
-                              style={{ width: `${item.value}%` }}
-                            />
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
+                <div className="mt-5 rounded-2xl border border-slate-800 bg-slate-950/50 p-4">
+                  <p className="text-xs uppercase tracking-[0.3em] text-slate-400">
+                    Playtime trend
+                  </p>
+                  <div className="mt-3">{renderTrendLine(yearlyTrend)}</div>
                 </div>
               </div>
             </div>
