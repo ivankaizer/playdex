@@ -4,10 +4,12 @@ import {
   getAccountSessions,
   getAccountSessionsToday,
   getAccountSessionsTotal,
+  getAccountCurrentSession,
   getAccountSummaries,
   getAccountStats,
 } from "../../application/accounts";
 import type {
+  AccountCurrentSessionResponseDto,
   AccountSessionsResponseDto,
   AccountStatsResponseDto,
   AccountSummaryDto,
@@ -115,6 +117,33 @@ export const registerAccountRoutes = (app: Elysia) =>
         const response: AccountTodaySessionsResponseDto = {
           accountId: parsed.accountId,
           sessions,
+        };
+        return ok(response);
+      })
+    )
+    .get(
+      "/api/accounts/:accountId/sessions/current",
+      withApiErrorLogging(async ({ request, params = {}, set }) => {
+        const auth = requireAuth(request);
+        if (!auth.ok) {
+          set.status = auth.status;
+          return auth.response;
+        }
+
+        const parsed = parseAccountIdParam(params);
+        if (!parsed.ok) {
+          set.status = 400;
+          return parsed.response;
+        }
+
+        const session = await getAccountCurrentSession(
+          parsed.accountId,
+          auth.userId
+        );
+
+        const response: AccountCurrentSessionResponseDto = {
+          accountId: parsed.accountId,
+          session,
         };
         return ok(response);
       })

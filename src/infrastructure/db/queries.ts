@@ -198,6 +198,31 @@ export const listAccountSessionsToday = async (
     limit ${limit}
   `;
 
+export const loadAccountCurrentSession = async (
+  accountId: number,
+  userId: number,
+  sql: Sql = getSql()
+) => {
+  const rows = await sql<AccountSessionRow[]>`
+    select
+      ps.id,
+      ps.started_at,
+      ps.ended_at,
+      pc.platform,
+      g.title,
+      g.capsule_url
+    from play_sessions ps
+    join platform_credentials pc on pc.id = ps.platform_credential_id
+    join games g on g.id = ps.game_id
+    where ps.platform_credential_id = ${accountId}
+      and pc.user_id = ${userId}
+      and ps.ended_at is null
+    order by ps.started_at desc
+    limit 1
+  `;
+  return rows[0] ?? null;
+};
+
 export const loadAccountPlaytimeSummary = async (
   accountId: number,
   userId: number,

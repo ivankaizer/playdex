@@ -4,6 +4,7 @@ import {
   listAccountSessions,
   listAccountSessionsToday,
   listAccountsForUser,
+  loadAccountCurrentSession,
   loadAccountPlatformTotals,
   loadAccountPlaytimeSummary,
   loadAccountTopGames,
@@ -57,6 +58,24 @@ export const getAccountSessionsToday = async (
     game: row.title,
     capsuleUrl: row.capsule_url,
   }));
+};
+
+export const getAccountCurrentSession = async (
+  accountId: number,
+  userId: number
+) => {
+  const row = await loadAccountCurrentSession(accountId, userId);
+  if (!row) {
+    return null;
+  }
+  return {
+    sessionId: +row.id,
+    startedAt: row.started_at,
+    endedAt: row.ended_at,
+    platform: row.platform,
+    game: row.title,
+    capsuleUrl: row.capsule_url,
+  };
 };
 
 const buildStatsPeriod = async (

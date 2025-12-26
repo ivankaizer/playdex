@@ -30,6 +30,11 @@ type AccountTodaySessionsResponse = {
   sessions: AccountSession[];
 };
 
+type AccountCurrentSessionResponse = {
+  accountId: number;
+  session: AccountSession | null;
+};
+
 type AccountStatsPeriod = {
   totalSeconds: number;
   sessionCount: number;
@@ -82,6 +87,9 @@ export const App = () => {
   const [isProvidersLoading, setIsProvidersLoading] = useState(false);
   const [providersError, setProvidersError] = useState("");
   const [todaySessions, setTodaySessions] = useState<AccountSession[]>([]);
+  const [currentSession, setCurrentSession] = useState<AccountSession | null>(
+    null
+  );
   const [monthlyStats, setMonthlyStats] = useState<AccountStatsPeriod | null>(
     null
   );
@@ -235,12 +243,15 @@ export const App = () => {
 
     const loadDashboard = async () => {
       try {
-        const [today, stats] = await Promise.all([
+        const [today, stats, current] = await Promise.all([
           apiRequest<AccountTodaySessionsResponse>(
             `/api/accounts/${selectedAccountId}/sessions/today`
           ),
           apiRequest<AccountStatsResponse>(
             `/api/accounts/${selectedAccountId}/stats`
+          ),
+          apiRequest<AccountCurrentSessionResponse>(
+            `/api/accounts/${selectedAccountId}/sessions/current`
           ),
         ]);
 
@@ -251,12 +262,14 @@ export const App = () => {
         setTodaySessions(today.sessions);
         setMonthlyStats(stats.monthly);
         setYearlyStats(stats.yearly);
+        setCurrentSession(current.session);
         setIsDashboardLoading(false);
       } catch (err) {
         if (!cancelled) {
           setTodaySessions([]);
           setMonthlyStats(null);
           setYearlyStats(null);
+          setCurrentSession(null);
           setIsDashboardLoading(false);
           setDashboardError(
             err instanceof Error ? err.message : "Failed to load dashboard data."
@@ -492,6 +505,8 @@ export const App = () => {
     providerNames[platform] ?? platform;
   const formatDateLabel = (date: Date) =>
     date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  const formatTimeLabel = (date: Date) =>
+    date.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
   const formatDuration = (seconds: number, format: "short" | "long") => {
     const safeSeconds = Math.max(0, Math.floor(seconds));
     const hours = Math.floor(safeSeconds / 3600);
@@ -527,6 +542,12 @@ export const App = () => {
       : Date.now();
     return Math.max(0, Math.floor((ended - started) / 1000));
   };
+  const currentSessionStartedAt = currentSession
+    ? new Date(currentSession.startedAt)
+    : null;
+  const currentSessionElapsed = currentSession
+    ? formatDuration(getSessionDurationSeconds(currentSession), "long")
+    : "0 min";
 
   const todaySessionCards = useMemo(
     () =>
@@ -689,59 +710,105 @@ export const App = () => {
                       Current session
                     </p>
                     <h2 className="text-2xl font-semibold text-white">
-                      Hades II
+                      {isDashboardLoading
+                        ? "Loading..."
+                        : currentSession?.game ?? "No active session"}
                     </h2>
                   </div>
                   <span className="rounded-full border border-emerald-400/40 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.3em] text-emerald-200">
-                    Live
+                    {currentSession ? "Live" : "Idle"}
                   </span>
                 </div>
-                <div className="mt-5 flex flex-wrap gap-5">
-                  <img
-                    src={capsuleUrl}
-                    alt="Hades II capsule art"
-                    className="h-32 w-24 rounded-2xl border border-slate-800 object-cover shadow-[0_15px_40px_rgba(15,23,42,0.55)]"
-                  />
-                  <div className="flex min-w-[220px] flex-1 flex-col gap-4">
-                    <div className="flex flex-wrap gap-2 text-xs font-semibold uppercase tracking-[0.3em] text-slate-300">
-                      <span className="rounded-full border border-slate-700 px-3 py-1">
-                        Steam Deck
-                      </span>
-                      <span className="rounded-full border border-slate-700 px-3 py-1">
-                        Started 8:41 PM
-                      </span>
-                      <span className="rounded-full border border-slate-700 px-3 py-1">
-                        Elapsed 01:12:09
-                      </span>
-                    </div>
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      {[
-                        { label: "Last sync", value: "2 min ago" },
-                        { label: "Streak", value: "4 days" },
-                      ].map((stat) => (
-                        <div
-                          key={stat.label}
-                          className="rounded-2xl border border-slate-800 bg-slate-950/50 px-4 py-3"
-                        >
-                          <p className="text-[10px] uppercase tracking-[0.3em] text-slate-400">
-                            {stat.label}
-                          </p>
-                          <p className="mt-2 text-sm font-semibold text-white">
-                            {stat.value}
-                          </p>
-                        </div>
-                      ))}
-                    </div>
-                    <div className="flex flex-wrap gap-2 text-xs text-slate-300">
-                      <button
-                        type="button"
-                        className="rounded-full border border-slate-700 px-4 py-2 font-semibold uppercase tracking-[0.3em] text-slate-200 transition hover:border-emerald-400/60"
-                      >
-                        Stop tracking
-                      </button>
+                {isDashboardLoading ? (
+                  <div className="mt-5 flex flex-wrap gap-5">
+                    <div className="h-32 w-24 rounded-2xl border border-slate-800 bg-slate-800/60" />
+                    <div className="flex min-w-[220px] flex-1 flex-col gap-4">
+                      <div className="flex flex-wrap gap-2">
+                        {[1, 2, 3].map((item) => (
+                          <div
+                            key={item}
+                            className="h-6 w-24 rounded-full bg-slate-800/60"
+                          />
+                        ))}
+                      </div>
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        {[1, 2].map((item) => (
+                          <div
+                            key={item}
+                            className="h-16 rounded-2xl border border-slate-800 bg-slate-950/50"
+                          />
+                        ))}
+                      </div>
                     </div>
                   </div>
-                </div>
+                ) : (
+                  <div className="mt-5 flex flex-wrap gap-5">
+                    {currentSession ? (
+                      <img
+                        src={currentSession.capsuleUrl ?? capsuleUrl}
+                        alt={`${currentSession.game} capsule art`}
+                        className="h-32 w-24 rounded-2xl border border-slate-800 object-cover shadow-[0_15px_40px_rgba(15,23,42,0.55)]"
+                      />
+                    ) : (
+                      <div className="h-32 w-24 rounded-2xl border border-dashed border-slate-800 bg-slate-950/40" />
+                    )}
+                    <div className="flex min-w-[220px] flex-1 flex-col gap-4">
+                      <div className="flex flex-wrap gap-2 text-xs font-semibold uppercase tracking-[0.3em] text-slate-300">
+                        {currentSession ? (
+                          <>
+                            <span className="rounded-full border border-slate-700 px-3 py-1">
+                              {formatPlatformLabel(currentSession.platform)}
+                            </span>
+                            <span className="rounded-full border border-slate-700 px-3 py-1">
+                              Started{" "}
+                              {currentSessionStartedAt
+                                ? formatTimeLabel(currentSessionStartedAt)
+                                : "--"}
+                            </span>
+                            <span className="rounded-full border border-slate-700 px-3 py-1">
+                              Elapsed {currentSessionElapsed}
+                            </span>
+                          </>
+                        ) : (
+                          <span className="rounded-full border border-slate-700 px-3 py-1">
+                            Not tracking
+                          </span>
+                        )}
+                      </div>
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        {[
+                          { label: "Last sync", value: "--" },
+                          { label: "Streak", value: "--" },
+                        ].map((stat) => (
+                          <div
+                            key={stat.label}
+                            className="rounded-2xl border border-slate-800 bg-slate-950/50 px-4 py-3"
+                          >
+                            <p className="text-[10px] uppercase tracking-[0.3em] text-slate-400">
+                              {stat.label}
+                            </p>
+                            <p className="mt-2 text-sm font-semibold text-white">
+                              {stat.value}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="flex flex-wrap gap-2 text-xs text-slate-300">
+                        <button
+                          type="button"
+                          disabled={!currentSession}
+                          className={`rounded-full border border-slate-700 px-4 py-2 font-semibold uppercase tracking-[0.3em] text-slate-200 transition ${
+                            currentSession
+                              ? "hover:border-emerald-400/60"
+                              : "cursor-not-allowed opacity-50"
+                          }`}
+                        >
+                          Stop tracking
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="rounded-3xl border border-slate-800 bg-slate-900/60 p-6">

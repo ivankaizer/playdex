@@ -39,6 +39,11 @@ export type AccountTodaySessionsResponseDto = {
   sessions: AccountSessionDto[];
 };
 
+export type AccountCurrentSessionResponseDto = {
+  accountId: number;
+  session: AccountSessionDto | null;
+};
+
 export type AccountStatsPeriodDto = {
   totalSeconds: number;
   sessionCount: number;
