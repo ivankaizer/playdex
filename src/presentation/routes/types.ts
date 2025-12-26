@@ -39,3 +39,11 @@ export type AccountSessionsParams = {
 export type PlayniteSessionResponseDto = {
   sessionId: number;
 };
+
+export type PlayniteSessionStartResponseDto = {
+  sessionId: number;
+};
+
+export type PlayniteSessionEndResponseDto = {
+  endedSessionCount: number;
+};

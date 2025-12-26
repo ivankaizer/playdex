@@ -6,8 +6,13 @@ import { registerHealthRoutes } from "./routes/health";
 import { registerMetricsRoutes } from "./routes/metrics";
 import { registerPlayniteRoutes } from "./routes/playnite";
 import { registerRootRoutes } from "./routes/root";
+import type { PollingNotifier } from "../application/polling";
 
-export const createServer = () => {
+type ServerOptions = {
+  notifier?: PollingNotifier;
+};
+
+export const createServer = (options: ServerOptions = {}) => {
   const app = new Elysia();
 
   registerRootRoutes(app);
@@ -15,7 +20,7 @@ export const createServer = () => {
   registerHealthRoutes(app);
   registerMetricsRoutes(app);
   registerAccountRoutes(app);
-  registerPlayniteRoutes(app);
+  registerPlayniteRoutes(app, options.notifier);
 
   return app;
 };

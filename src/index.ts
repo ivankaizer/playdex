@@ -9,18 +9,18 @@ import { createServer } from "./presentation/server";
 const startServer = async () => {
   await runMigrations();
 
-  const app = createServer().listen(3000);
-
-  console.log(
-    `🦊 Elysia is running at ${app.server?.hostname}:${app.server?.port}`
-  );
-  console.log(`Polling interval: ${config.pollIntervalSeconds}s`);
-
   const sql = getSql();
   const telegramToken = config.telegramBotToken;
   const notifier = telegramToken
     ? createTelegramNotifier({ token: telegramToken, sql })
     : undefined;
+
+  const app = createServer({ notifier }).listen(3000);
+
+  console.log(
+    `🦊 Elysia is running at ${app.server?.hostname}:${app.server?.port}`
+  );
+  console.log(`Polling interval: ${config.pollIntervalSeconds}s`);
 
   if (telegramToken) {
     startTelegramBot({ token: telegramToken, sql });

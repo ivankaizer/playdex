@@ -182,6 +182,19 @@ export const endActiveSessionsForUser = async (
     returning ps.id, pc.platform, g.title
   `;
 
+export const endActiveSessionsForCredential = async (
+  platformCredentialId: number,
+  endedAt: Date,
+  sql: Sql = getSql()
+) =>
+  sql<{ id: number; game_id: number }[]>`
+    update play_sessions
+    set ended_at = ${endedAt}, updated_at = now()
+    where platform_credential_id = ${platformCredentialId}
+      and ended_at is null
+    returning id, game_id
+  `;
+
 export const ensureGameId = async (
   game: NormalizedGame,
   sql: Sql = getSql()
@@ -255,6 +268,20 @@ export const startPlaySession = async (
   insert into play_sessions (platform_credential_id, game_id, started_at)
   values (${platformCredentialId}, ${gameId}, ${startedAt})
 `;
+
+export const insertActivePlaySession = async (
+  platformCredentialId: number,
+  gameId: number,
+  startedAt: Date,
+  sql: Sql = getSql()
+) => {
+  const rows = await sql<{ id: number }[]>`
+    insert into play_sessions (platform_credential_id, game_id, started_at)
+    values (${platformCredentialId}, ${gameId}, ${startedAt})
+    returning id
+  `;
+  return rows[0]?.id ?? null;
+};
 
 export const insertPlaySession = async (
   platformCredentialId: number,
