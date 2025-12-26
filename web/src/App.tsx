@@ -442,13 +442,7 @@ export const App = () => {
                         type="button"
                         className="rounded-full border border-slate-700 px-4 py-2 font-semibold uppercase tracking-[0.3em] text-slate-200 transition hover:border-emerald-400/60"
                       >
-                        Pause tracking
-                      </button>
-                      <button
-                        type="button"
-                        className="rounded-full border border-slate-700 px-4 py-2 font-semibold uppercase tracking-[0.3em] text-slate-200 transition hover:border-emerald-400/60"
-                      >
-                        Add note
+                        Stop tracking
                       </button>
                     </div>
                   </div>
@@ -868,15 +862,6 @@ export const App = () => {
                             <p className="text-sm font-semibold text-white">
                               {provider.name}
                             </p>
-                            <span
-                              className={`rounded-full px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.3em] ${
-                                provider.status === "active"
-                                  ? "bg-emerald-400/20 text-emerald-200"
-                                  : "bg-amber-400/10 text-amber-200"
-                              }`}
-                            >
-                              {provider.status}
-                            </span>
                           </div>
                           <p className="text-xs text-slate-400">
                             {provider.account}
@@ -973,12 +958,6 @@ export const App = () => {
                   Every session tracked
                 </h2>
               </div>
-              <button
-                type="button"
-                className="rounded-full border border-slate-700 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-slate-200"
-              >
-                Export CSV
-              </button>
             </div>
 
             <div className="mt-6 grid gap-3 md:grid-cols-[1.2fr_0.6fr_0.6fr]">
@@ -1117,7 +1096,7 @@ export const App = () => {
                   <button
                     key={page}
                     type="button"
-                    className={`rounded-full px-3 py-2 font-semibold uppercase tracking-[0.3em] ${
+                    className={`flex h-9 w-9 items-center justify-center rounded-full text-xs font-semibold leading-none ${
                       page === 1
                         ? "bg-emerald-400 text-slate-900"
                         : "border border-slate-700 text-slate-200"
