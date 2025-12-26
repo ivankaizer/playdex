@@ -331,8 +331,8 @@ export const App = () => {
             </nav>
           </header>
 
-          <section className="mt-10 grid gap-6 lg:grid-cols-2">
-            <div className="space-y-6">
+          <section className="mt-10 space-y-6">
+            <div className="grid gap-6 lg:grid-cols-2">
               <div className="rounded-3xl border border-slate-800 bg-slate-900/60 p-6">
                 <div className="flex items-center justify-between">
                   <div>
@@ -449,159 +449,157 @@ export const App = () => {
               </div>
             </div>
 
-            <div className="space-y-6">
-              <div className="rounded-3xl border border-slate-800 bg-slate-900/60 p-6">
-                <div className="flex flex-wrap items-baseline gap-3">
-                  <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-300">
-                    Monthly stats
-                  </p>
-                  <p className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-200">
-                    April highlights
-                  </p>
-                </div>
-                <div className="mt-5 grid gap-4 sm:grid-cols-3">
-                  {[
-                    { label: "Hours played", value: "42.8" },
-                    { label: "Sessions", value: "28" },
-                    { label: "Top title", value: "Helldivers 2" },
-                  ].map((stat) => (
-                    <div
-                      key={stat.label}
-                      className="rounded-2xl border border-slate-800 bg-slate-950/50 p-4"
-                    >
-                      <p className="text-xs uppercase tracking-[0.3em] text-slate-400">
-                        {stat.label}
-                      </p>
-                      <p className="mt-2 text-lg font-semibold text-white">
-                        {stat.value}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-                <div className="mt-5 grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
-                  <div className="rounded-2xl border border-slate-800 bg-slate-950/50 p-4">
+            <div className="rounded-3xl border border-slate-800 bg-slate-900/60 p-6">
+              <div className="flex flex-wrap items-baseline gap-3">
+                <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-300">
+                  Monthly stats
+                </p>
+                <p className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-200">
+                  April highlights
+                </p>
+              </div>
+              <div className="mt-5 grid gap-4 sm:grid-cols-3">
+                {[
+                  { label: "Hours played", value: "42.8" },
+                  { label: "Sessions", value: "28" },
+                  { label: "Top title", value: "Helldivers 2" },
+                ].map((stat) => (
+                  <div
+                    key={stat.label}
+                    className="rounded-2xl border border-slate-800 bg-slate-950/50 p-4"
+                  >
                     <p className="text-xs uppercase tracking-[0.3em] text-slate-400">
-                      Platform distribution
+                      {stat.label}
                     </p>
-                    <div className="mt-4 space-y-3">
-                      {monthlyPlatforms.map((item) => (
-                        <div key={item.label}>
-                          <div className="flex items-center justify-between text-xs text-slate-300">
-                            <span>{item.label}</span>
-                            <span>{item.value}%</span>
-                          </div>
-                          <div className="mt-2 h-2 rounded-full bg-slate-800">
-                            <div
-                              className="h-2 rounded-full bg-emerald-400"
-                              style={{ width: `${item.value}%` }}
-                            />
-                          </div>
-                        </div>
-                      ))}
-                    </div>
+                    <p className="mt-2 text-lg font-semibold text-white">
+                      {stat.value}
+                    </p>
                   </div>
-                  <div className="rounded-2xl border border-slate-800 bg-slate-950/50 p-4">
-                    <p className="text-xs uppercase tracking-[0.3em] text-slate-400">
-                      Top 5 games
-                    </p>
-                    <div className="mt-4 space-y-3">
-                      {monthlyTopGames.map((game, index) => (
-                        <div
-                          key={game.title}
-                          className="flex items-center justify-between text-sm"
-                        >
-                          <div className="flex items-center gap-3">
-                            <span className="text-xs font-semibold text-slate-400">
-                              {String(index + 1).padStart(2, "0")}
-                            </span>
-                            <span className="font-semibold text-white">
-                              {game.title}
-                            </span>
-                          </div>
-                          <span className="text-xs font-semibold text-emerald-200">
-                            {game.hours}
+                ))}
+              </div>
+              <div className="mt-5 grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
+                <div className="rounded-2xl border border-slate-800 bg-slate-950/50 p-4">
+                  <p className="text-xs uppercase tracking-[0.3em] text-slate-400">
+                    Platform distribution
+                  </p>
+                  <div className="mt-4 space-y-3">
+                    {monthlyPlatforms.map((item) => (
+                      <div key={item.label}>
+                        <div className="flex items-center justify-between text-xs text-slate-300">
+                          <span>{item.label}</span>
+                          <span>{item.value}%</span>
+                        </div>
+                        <div className="mt-2 h-2 rounded-full bg-slate-800">
+                          <div
+                            className="h-2 rounded-full bg-emerald-400"
+                            style={{ width: `${item.value}%` }}
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div className="rounded-2xl border border-slate-800 bg-slate-950/50 p-4">
+                  <p className="text-xs uppercase tracking-[0.3em] text-slate-400">
+                    Top 5 games
+                  </p>
+                  <div className="mt-4 space-y-3">
+                    {monthlyTopGames.map((game, index) => (
+                      <div
+                        key={game.title}
+                        className="flex items-center justify-between text-sm"
+                      >
+                        <div className="flex items-center gap-3">
+                          <span className="text-xs font-semibold text-slate-400">
+                            {String(index + 1).padStart(2, "0")}
+                          </span>
+                          <span className="font-semibold text-white">
+                            {game.title}
                           </span>
                         </div>
-                      ))}
-                    </div>
+                        <span className="text-xs font-semibold text-emerald-200">
+                          {game.hours}
+                        </span>
+                      </div>
+                    ))}
                   </div>
                 </div>
               </div>
+            </div>
 
-              <div className="rounded-3xl border border-slate-800 bg-slate-900/60 p-6">
-                <div className="flex flex-wrap items-baseline gap-3">
-                  <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-300">
-                    Yearly stats
-                  </p>
-                  <p className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-200">
-                    2024 recap
-                  </p>
-                </div>
-                <div className="mt-5 grid gap-4 sm:grid-cols-3">
-                  {[
-                    { label: "Hours played", value: "312" },
-                    { label: "Sessions", value: "198" },
-                    { label: "Top title", value: "Helldivers 2" },
-                  ].map((stat) => (
-                    <div
-                      key={stat.label}
-                      className="rounded-2xl border border-slate-800 bg-slate-950/50 p-4"
-                    >
-                      <p className="text-xs uppercase tracking-[0.3em] text-slate-400">
-                        {stat.label}
-                      </p>
-                      <p className="mt-2 text-lg font-semibold text-white">
-                        {stat.value}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-                <div className="mt-5 grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
-                  <div className="rounded-2xl border border-slate-800 bg-slate-950/50 p-4">
+            <div className="rounded-3xl border border-slate-800 bg-slate-900/60 p-6">
+              <div className="flex flex-wrap items-baseline gap-3">
+                <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-300">
+                  Yearly stats
+                </p>
+                <p className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-200">
+                  2024 recap
+                </p>
+              </div>
+              <div className="mt-5 grid gap-4 sm:grid-cols-3">
+                {[
+                  { label: "Hours played", value: "312" },
+                  { label: "Sessions", value: "198" },
+                  { label: "Top title", value: "Helldivers 2" },
+                ].map((stat) => (
+                  <div
+                    key={stat.label}
+                    className="rounded-2xl border border-slate-800 bg-slate-950/50 p-4"
+                  >
                     <p className="text-xs uppercase tracking-[0.3em] text-slate-400">
-                      Platform distribution
+                      {stat.label}
                     </p>
-                    <div className="mt-4 space-y-3">
-                      {yearlyPlatforms.map((item) => (
-                        <div key={item.label}>
-                          <div className="flex items-center justify-between text-xs text-slate-300">
-                            <span>{item.label}</span>
-                            <span>{item.value}%</span>
-                          </div>
-                          <div className="mt-2 h-2 rounded-full bg-slate-800">
-                            <div
-                              className="h-2 rounded-full bg-emerald-400"
-                              style={{ width: `${item.value}%` }}
-                            />
-                          </div>
-                        </div>
-                      ))}
-                    </div>
+                    <p className="mt-2 text-lg font-semibold text-white">
+                      {stat.value}
+                    </p>
                   </div>
-                  <div className="rounded-2xl border border-slate-800 bg-slate-950/50 p-4">
-                    <p className="text-xs uppercase tracking-[0.3em] text-slate-400">
-                      Top 5 games
-                    </p>
-                    <div className="mt-4 space-y-3">
-                      {yearlyTopGames.map((game, index) => (
-                        <div
-                          key={game.title}
-                          className="flex items-center justify-between text-sm"
-                        >
-                          <div className="flex items-center gap-3">
-                            <span className="text-xs font-semibold text-slate-400">
-                              {String(index + 1).padStart(2, "0")}
-                            </span>
-                            <span className="font-semibold text-white">
-                              {game.title}
-                            </span>
-                          </div>
-                          <span className="text-xs font-semibold text-emerald-200">
-                            {game.hours}
+                ))}
+              </div>
+              <div className="mt-5 grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
+                <div className="rounded-2xl border border-slate-800 bg-slate-950/50 p-4">
+                  <p className="text-xs uppercase tracking-[0.3em] text-slate-400">
+                    Platform distribution
+                  </p>
+                  <div className="mt-4 space-y-3">
+                    {yearlyPlatforms.map((item) => (
+                      <div key={item.label}>
+                        <div className="flex items-center justify-between text-xs text-slate-300">
+                          <span>{item.label}</span>
+                          <span>{item.value}%</span>
+                        </div>
+                        <div className="mt-2 h-2 rounded-full bg-slate-800">
+                          <div
+                            className="h-2 rounded-full bg-emerald-400"
+                            style={{ width: `${item.value}%` }}
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div className="rounded-2xl border border-slate-800 bg-slate-950/50 p-4">
+                  <p className="text-xs uppercase tracking-[0.3em] text-slate-400">
+                    Top 5 games
+                  </p>
+                  <div className="mt-4 space-y-3">
+                    {yearlyTopGames.map((game, index) => (
+                      <div
+                        key={game.title}
+                        className="flex items-center justify-between text-sm"
+                      >
+                        <div className="flex items-center gap-3">
+                          <span className="text-xs font-semibold text-slate-400">
+                            {String(index + 1).padStart(2, "0")}
+                          </span>
+                          <span className="font-semibold text-white">
+                            {game.title}
                           </span>
                         </div>
-                      ))}
-                    </div>
+                        <span className="text-xs font-semibold text-emerald-200">
+                          {game.hours}
+                        </span>
+                      </div>
+                    ))}
                   </div>
                 </div>
               </div>
