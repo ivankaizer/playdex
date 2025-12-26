@@ -14,6 +14,89 @@ export const App = () => {
     { id: "psn", name: "PlayStation", account: "ivk_psn", status: "paused" },
     { id: "playnite", name: "Playnite", account: "Local", status: "active" },
   ]);
+  const capsuleUrl =
+    "https://shared.steamstatic.com/store_item_assets/steam/apps/2186680/library_600x900_2x.jpg";
+  const todaySessions = [
+    {
+      title: "Helldivers 2",
+      time: "45 min",
+      platform: "PS5",
+      image: capsuleUrl,
+      spark: [2, 4, 3, 6, 5, 7, 6],
+    },
+    {
+      title: "Stardew Valley",
+      time: "30 min",
+      platform: "Switch",
+      image: capsuleUrl,
+      spark: [1, 2, 2, 3, 2, 3, 4],
+    },
+    {
+      title: "Hades II",
+      time: "1h 12m",
+      platform: "Steam",
+      image: capsuleUrl,
+      spark: [3, 5, 6, 7, 6, 8, 9],
+    },
+  ];
+  const monthlyTrend = [8, 12, 10, 15, 13, 18, 16, 21, 19, 23, 20, 24];
+  const platformBreakdown = [
+    { label: "Steam", value: 42 },
+    { label: "PS5", value: 28 },
+    { label: "Switch", value: 18 },
+    { label: "Playnite", value: 12 },
+  ];
+  const sessionRows = [
+    {
+      title: "Helldivers 2",
+      platform: "PS5",
+      date: "Apr 14",
+      duration: "45m",
+      image: capsuleUrl,
+    },
+    {
+      title: "Hades II",
+      platform: "Steam",
+      date: "Apr 14",
+      duration: "1h 12m",
+      image: capsuleUrl,
+    },
+    {
+      title: "Stardew Valley",
+      platform: "Switch",
+      date: "Apr 13",
+      duration: "30m",
+      image: capsuleUrl,
+    },
+    {
+      title: "Sea of Stars",
+      platform: "Playnite",
+      date: "Apr 12",
+      duration: "2h 05m",
+      image: capsuleUrl,
+    },
+    {
+      title: "Baldur's Gate 3",
+      platform: "Steam",
+      date: "Apr 11",
+      duration: "1h 38m",
+      image: capsuleUrl,
+    },
+  ];
+  const providerMeta: Record<
+    string,
+    { label: string; color: string; accent: string }
+  > = {
+    steam: { label: "S", color: "bg-slate-800", accent: "text-slate-100" },
+    psn: { label: "P", color: "bg-indigo-500/30", accent: "text-indigo-200" },
+    playnite: {
+      label: "PL",
+      color: "bg-amber-500/30",
+      accent: "text-amber-200",
+    },
+  };
+  const isDashboardLoading = false;
+  const isSessionsLoading = false;
 
   const navigate = (target: string) => {
     if (target === path) {
@@ -139,6 +222,71 @@ export const App = () => {
       <div className="absolute bottom-0 left-1/3 h-64 w-64 rounded-full bg-amber-400/10 blur-3xl" />
     </div>
   );
+  const renderSparkline = (points: number[], stroke: string) => {
+    const width = 64;
+    const height = 24;
+    const max = Math.max(...points);
+    const min = Math.min(...points);
+    const range = Math.max(max - min, 1);
+    const step = width / (points.length - 1);
+    const path = points
+      .map((value, index) => {
+        const x = index * step;
+        const y = height - ((value - min) / range) * height;
+        return `${index === 0 ? "M" : "L"}${x} ${y}`;
+      })
+      .join(" ");
+
+    return (
+      <svg
+        aria-hidden="true"
+        width={width}
+        height={height}
+        viewBox={`0 0 ${width} ${height}`}
+        className="text-emerald-300"
+      >
+        <path d={path} fill="none" stroke={stroke} strokeWidth="2" />
+      </svg>
+    );
+  };
+  const renderTrendLine = (points: number[]) => {
+    const width = 320;
+    const height = 120;
+    const max = Math.max(...points);
+    const min = Math.min(...points);
+    const range = Math.max(max - min, 1);
+    const step = width / (points.length - 1);
+    const path = points
+      .map((value, index) => {
+        const x = index * step;
+        const y = height - ((value - min) / range) * height;
+        return `${index === 0 ? "M" : "L"}${x} ${y}`;
+      })
+      .join(" ");
+
+    return (
+      <svg
+        aria-hidden="true"
+        width={width}
+        height={height}
+        viewBox={`0 0 ${width} ${height}`}
+        className="w-full"
+      >
+        <defs>
+          <linearGradient id="playdex-trend" x1="0" x2="1" y1="0" y2="1">
+            <stop offset="0%" stopColor="#34d399" stopOpacity="0.55" />
+            <stop offset="100%" stopColor="#22d3ee" stopOpacity="0.15" />
+          </linearGradient>
+        </defs>
+        <path d={path} fill="none" stroke="#34d399" strokeWidth="2.5" />
+        <path
+          d={`${path} L ${width} ${height} L 0 ${height} Z`}
+          fill="url(#playdex-trend)"
+          opacity="0.7"
+        />
+      </svg>
+    );
+  };
 
   if (path === "/hello") {
     return (
@@ -217,6 +365,22 @@ export const App = () => {
                   Live
                 </span>
               </div>
+              <div className="mt-5 flex flex-wrap items-center gap-4">
+                <img
+                  src={capsuleUrl}
+                  alt="Hades II capsule art"
+                  className="h-28 w-20 rounded-2xl border border-slate-800 object-cover shadow-[0_15px_40px_rgba(15,23,42,0.55)]"
+                />
+                <div className="flex-1 text-sm text-slate-300">
+                  <p className="text-xs uppercase tracking-[0.3em] text-slate-400">
+                    Session notes
+                  </p>
+                  <p className="mt-2 text-sm text-slate-200">
+                    Last run hit a new personal best on floor 4. Tracking boss
+                    clears and heat level.
+                  </p>
+                </div>
+              </div>
               <div className="mt-6 grid gap-4 sm:grid-cols-3">
                 {[
                   { label: "Platform", value: "Steam Deck" },
@@ -268,40 +432,58 @@ export const App = () => {
                   </button>
                 </div>
                 <div className="mt-5 space-y-4">
-                  {[
-                    {
-                      title: "Helldivers 2",
-                      time: "45 min",
-                      platform: "PS5",
-                    },
-                    {
-                      title: "Stardew Valley",
-                      time: "30 min",
-                      platform: "Switch",
-                    },
-                    {
-                      title: "Hades II",
-                      time: "1h 12m",
-                      platform: "Steam",
-                    },
-                  ].map((session) => (
-                    <div
-                      key={session.title}
-                      className="flex items-center justify-between rounded-2xl border border-slate-800 bg-slate-950/50 p-4"
-                    >
-                      <div>
-                        <p className="text-sm font-semibold text-white">
-                          {session.title}
-                        </p>
-                        <p className="text-xs text-slate-400">
-                          {session.platform}
-                        </p>
+                  {isDashboardLoading ? (
+                    [1, 2, 3].map((item) => (
+                      <div
+                        key={item}
+                        className="flex items-center justify-between gap-4 rounded-2xl border border-slate-800 bg-slate-950/50 p-4"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="h-14 w-10 rounded-xl bg-slate-800/60" />
+                          <div className="space-y-2">
+                            <div className="h-3 w-28 rounded-full bg-slate-800/70" />
+                            <div className="h-2 w-16 rounded-full bg-slate-800/50" />
+                          </div>
+                        </div>
+                        <div className="h-3 w-12 rounded-full bg-slate-800/60" />
                       </div>
-                      <p className="text-sm font-semibold text-emerald-200">
-                        {session.time}
-                      </p>
+                    ))
+                  ) : todaySessions.length === 0 ? (
+                    <div className="rounded-2xl border border-dashed border-slate-800 bg-slate-950/40 p-4 text-xs text-slate-400">
+                      No sessions logged today yet.
                     </div>
-                  ))}
+                  ) : (
+                    todaySessions.map((session) => (
+                      <div
+                        key={session.title}
+                        className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-slate-800 bg-slate-950/50 p-4"
+                      >
+                        <div className="flex items-center gap-3">
+                          <img
+                            src={session.image}
+                            alt={`${session.title} capsule art`}
+                            className="h-14 w-10 rounded-xl border border-slate-800 object-cover"
+                          />
+                          <div>
+                            <p className="text-sm font-semibold text-white">
+                              {session.title}
+                            </p>
+                            <p className="text-xs text-slate-400">
+                              {session.platform}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-4">
+                          <div className="hidden sm:block">
+                            {renderSparkline(session.spark, "#34d399")}
+                          </div>
+                          <p className="text-sm font-semibold text-emerald-200">
+                            {session.time}
+                          </p>
+                        </div>
+                      </div>
+                    ))
+                  )}
                 </div>
               </div>
 
@@ -331,8 +513,34 @@ export const App = () => {
                     </div>
                   ))}
                 </div>
-                <div className="mt-5 rounded-2xl border border-dashed border-slate-700 bg-slate-950/40 p-4 text-xs text-slate-400">
-                  Trendline placeholder for monthly activity chart.
+                <div className="mt-5 grid gap-4 lg:grid-cols-[1.4fr_0.6fr]">
+                  <div className="rounded-2xl border border-slate-800 bg-slate-950/50 p-4">
+                    <p className="text-xs uppercase tracking-[0.3em] text-slate-400">
+                      Playtime trend
+                    </p>
+                    <div className="mt-3">{renderTrendLine(monthlyTrend)}</div>
+                  </div>
+                  <div className="rounded-2xl border border-slate-800 bg-slate-950/50 p-4">
+                    <p className="text-xs uppercase tracking-[0.3em] text-slate-400">
+                      Platform share
+                    </p>
+                    <div className="mt-4 space-y-3">
+                      {platformBreakdown.map((item) => (
+                        <div key={item.label}>
+                          <div className="flex items-center justify-between text-xs text-slate-300">
+                            <span>{item.label}</span>
+                            <span>{item.value}%</span>
+                          </div>
+                          <div className="mt-2 h-2 rounded-full bg-slate-800">
+                            <div
+                              className="h-2 rounded-full bg-emerald-400"
+                              style={{ width: `${item.value}%` }}
+                            />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -464,60 +672,89 @@ export const App = () => {
                 Active connections
               </h2>
               <div className="mt-6 space-y-4">
-                {providerStatus.map((provider) => (
-                  <div
-                    key={provider.id}
-                    className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-slate-800 bg-slate-950/50 p-4"
-                  >
-                    <div>
-                      <p className="text-sm font-semibold text-white">
-                        {provider.name}
-                      </p>
-                      <p className="text-xs text-slate-400">
-                        {provider.account}
-                      </p>
-                    </div>
-                    <div className="flex flex-wrap items-center gap-2 text-xs">
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setProviderStatus((current) =>
-                            current.map((item) =>
-                              item.id === provider.id
-                                ? {
-                                    ...item,
-                                    status:
-                                      item.status === "active"
-                                        ? "paused"
-                                        : "active",
-                                  }
-                                : item
-                            )
-                          )
-                        }
-                        className={`rounded-full px-3 py-2 font-semibold uppercase tracking-[0.3em] ${
-                          provider.status === "active"
-                            ? "bg-emerald-400 text-slate-900"
-                            : "border border-slate-700 text-slate-200"
-                        }`}
-                      >
-                        {provider.status === "active" ? "Active" : "Paused"}
-                      </button>
-                      <button
-                        type="button"
-                        className="rounded-full border border-slate-700 px-3 py-2 font-semibold uppercase tracking-[0.3em] text-slate-200"
-                      >
-                        Edit
-                      </button>
-                      <button
-                        type="button"
-                        className="rounded-full border border-rose-500/50 px-3 py-2 font-semibold uppercase tracking-[0.3em] text-rose-300"
-                      >
-                        Remove
-                      </button>
-                    </div>
+                {providerStatus.length === 0 ? (
+                  <div className="rounded-2xl border border-dashed border-slate-800 bg-slate-950/40 p-4 text-xs text-slate-400">
+                    No providers connected yet. Add one to start syncing
+                    playtime.
                   </div>
-                ))}
+                ) : (
+                  providerStatus.map((provider) => (
+                    <div
+                      key={provider.id}
+                      className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-slate-800 bg-slate-950/50 p-4"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div
+                          className={`flex h-10 w-10 items-center justify-center rounded-full ${providerMeta[provider.id]?.color ?? "bg-slate-800"}`}
+                        >
+                          <span
+                            className={`text-xs font-semibold uppercase ${providerMeta[provider.id]?.accent ?? "text-slate-200"}`}
+                          >
+                            {providerMeta[provider.id]?.label ?? "PX"}
+                          </span>
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <p className="text-sm font-semibold text-white">
+                              {provider.name}
+                            </p>
+                            <span
+                              className={`rounded-full px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.3em] ${
+                                provider.status === "active"
+                                  ? "bg-emerald-400/20 text-emerald-200"
+                                  : "bg-amber-400/10 text-amber-200"
+                              }`}
+                            >
+                              {provider.status}
+                            </span>
+                          </div>
+                          <p className="text-xs text-slate-400">
+                            {provider.account}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2 text-xs">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setProviderStatus((current) =>
+                              current.map((item) =>
+                                item.id === provider.id
+                                  ? {
+                                      ...item,
+                                      status:
+                                        item.status === "active"
+                                          ? "paused"
+                                          : "active",
+                                    }
+                                  : item
+                              )
+                            )
+                          }
+                          className={`rounded-full px-3 py-2 font-semibold uppercase tracking-[0.3em] ${
+                            provider.status === "active"
+                              ? "bg-emerald-400 text-slate-900"
+                              : "border border-slate-700 text-slate-200"
+                          }`}
+                        >
+                          {provider.status === "active" ? "Active" : "Paused"}
+                        </button>
+                        <button
+                          type="button"
+                          className="rounded-full border border-slate-700 px-3 py-2 font-semibold uppercase tracking-[0.3em] text-slate-200"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          className="rounded-full border border-rose-500/50 px-3 py-2 font-semibold uppercase tracking-[0.3em] text-rose-300"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    </div>
+                  ))
+                )}
               </div>
             </div>
           </section>
@@ -603,60 +840,96 @@ export const App = () => {
               <table className="w-full text-left text-sm">
                 <thead className="bg-slate-950/70 text-xs uppercase tracking-[0.3em] text-slate-400">
                   <tr>
-                    <th className="px-4 py-3">Title</th>
-                    <th className="px-4 py-3">Platform</th>
-                    <th className="px-4 py-3">Date</th>
-                    <th className="px-4 py-3 text-right">Duration</th>
+                    {[
+                      "Title",
+                      "Platform",
+                      "Date",
+                      "Duration",
+                    ].map((label, index) => (
+                      <th
+                        key={label}
+                        className={`px-4 py-3 ${
+                          index === 3 ? "text-right" : "text-left"
+                        }`}
+                      >
+                        <button
+                          type="button"
+                          className="inline-flex items-center gap-2 text-xs uppercase tracking-[0.3em] text-slate-400 transition hover:text-slate-200"
+                        >
+                          {label}
+                          <svg
+                            aria-hidden="true"
+                            viewBox="0 0 20 20"
+                            className="h-3 w-3"
+                            fill="currentColor"
+                          >
+                            <path d="M6 8l4-4 4 4H6zM14 12l-4 4-4-4h8z" />
+                          </svg>
+                        </button>
+                      </th>
+                    ))}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800 bg-slate-900/60">
-                  {[
-                    {
-                      title: "Helldivers 2",
-                      platform: "PS5",
-                      date: "Apr 14",
-                      duration: "45m",
-                    },
-                    {
-                      title: "Hades II",
-                      platform: "Steam",
-                      date: "Apr 14",
-                      duration: "1h 12m",
-                    },
-                    {
-                      title: "Stardew Valley",
-                      platform: "Switch",
-                      date: "Apr 13",
-                      duration: "30m",
-                    },
-                    {
-                      title: "Sea of Stars",
-                      platform: "Playnite",
-                      date: "Apr 12",
-                      duration: "2h 05m",
-                    },
-                    {
-                      title: "Baldur's Gate 3",
-                      platform: "Steam",
-                      date: "Apr 11",
-                      duration: "1h 38m",
-                    },
-                  ].map((session) => (
-                    <tr key={`${session.title}-${session.date}`}>
-                      <td className="px-4 py-3 font-semibold text-white">
-                        {session.title}
-                      </td>
-                      <td className="px-4 py-3 text-slate-300">
-                        {session.platform}
-                      </td>
-                      <td className="px-4 py-3 text-slate-300">
-                        {session.date}
-                      </td>
-                      <td className="px-4 py-3 text-right text-emerald-200">
-                        {session.duration}
+                  {isSessionsLoading ? (
+                    [1, 2, 3, 4].map((row) => (
+                      <tr key={row}>
+                        <td className="px-4 py-4">
+                          <div className="flex items-center gap-3">
+                            <div className="h-12 w-9 rounded-lg bg-slate-800/60" />
+                            <div className="h-3 w-28 rounded-full bg-slate-800/60" />
+                          </div>
+                        </td>
+                        <td className="px-4 py-4">
+                          <div className="h-3 w-16 rounded-full bg-slate-800/50" />
+                        </td>
+                        <td className="px-4 py-4">
+                          <div className="h-3 w-12 rounded-full bg-slate-800/50" />
+                        </td>
+                        <td className="px-4 py-4">
+                          <div className="ml-auto h-3 w-12 rounded-full bg-slate-800/50" />
+                        </td>
+                      </tr>
+                    ))
+                  ) : sessionRows.length === 0 ? (
+                    <tr>
+                      <td
+                        colSpan={4}
+                        className="px-4 py-10 text-center text-sm text-slate-400"
+                      >
+                        No sessions yet. Sync a provider to populate this list.
                       </td>
                     </tr>
-                  ))}
+                  ) : (
+                    sessionRows.map((session) => (
+                      <tr
+                        key={`${session.title}-${session.date}`}
+                        className="transition hover:bg-slate-900/70"
+                      >
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-3">
+                            <img
+                              src={session.image}
+                              alt={`${session.title} capsule art`}
+                              className="h-12 w-9 rounded-lg border border-slate-800 object-cover"
+                            />
+                            <span className="font-semibold text-white">
+                              {session.title}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 text-slate-300">
+                          {session.platform}
+                        </td>
+                        <td className="px-4 py-3 text-slate-300">
+                          {session.date}
+                        </td>
+                        <td className="px-4 py-3 text-right text-emerald-200">
+                          {session.duration}
+                        </td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
