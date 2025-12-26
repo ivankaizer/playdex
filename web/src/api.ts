@@ -35,6 +35,7 @@ const buildApiUrl = (path: string) => {
     return path;
   }
   const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+  console.log(`${apiBaseUrl}${normalizedPath}`);
   return `${apiBaseUrl}${normalizedPath}`;
 };
 
