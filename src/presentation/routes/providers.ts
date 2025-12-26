@@ -7,7 +7,7 @@ import { ok, requireAuth, withApiErrorLogging } from "./utils";
 export const registerProviderRoutes = (app: Elysia) =>
   app
     .get(
-      "/api/providers",
+      "/providers",
       withApiErrorLogging(async ({ request, set }) => {
         const auth = requireAuth(request);
         if (!auth.ok) {
@@ -21,7 +21,7 @@ export const registerProviderRoutes = (app: Elysia) =>
       })
     )
     .post(
-      "/api/playnite/key",
+      "/playnite/key",
       withApiErrorLogging(async ({ request, set }) => {
         const auth = requireAuth(request);
         if (!auth.ok) {

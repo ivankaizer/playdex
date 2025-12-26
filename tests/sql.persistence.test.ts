@@ -17,6 +17,7 @@ const requiresDb = hasDatabase ? test : test.skip;
 
 let db: TestDatabase | null = null;
 let credentialId = 0;
+let userId = 0;
 
 beforeAll(async () => {
   if (!hasDatabase) {
@@ -44,10 +45,11 @@ beforeEach(async () => {
   const userRows = await db.sql<{ id: number }[]>`
     insert into users (email) values ('tester@example.com') returning id
   `;
+  userId = userRows[0].id;
 
   const credentialRows = await db.sql<{ id: number }[]>`
     insert into platform_credentials (user_id, platform, api_key, account_id)
-    values (${userRows[0].id}, 'steam', 'key', 'steam-id')
+    values (${userId}, 'steam', 'key', 'steam-id')
     returning id
   `;
   credentialId = credentialRows[0].id;
@@ -97,7 +99,7 @@ requiresDb("play sessions are persisted and listed", async () => {
 
   const endedAt = new Date("2024-01-01T02:00:00Z");
   await endPlaySession(active!.id, endedAt, db.sql);
-  const sessions = await listAccountSessions(credentialId, db.sql);
+  const sessions = await listAccountSessions(credentialId, userId, 10, 0, db.sql);
 
   expect(sessions.length).toBe(1);
   expect(sessions[0].ended_at).not.toBeNull();
@@ -138,7 +140,13 @@ requiresDb(
       throw new Error("Test database not initialized.");
     }
 
-    const sessions = await listAccountSessions(credentialId, db.sql);
+    const sessions = await listAccountSessions(
+      credentialId,
+      userId,
+      10,
+      0,
+      db.sql
+    );
     expect(sessions).toEqual([]);
   }
 );
@@ -166,7 +174,7 @@ requiresDb("listAccountSessions enforces the 10-session limit", async () => {
     }
   }
 
-  const sessions = await listAccountSessions(credentialId, db.sql);
+  const sessions = await listAccountSessions(credentialId, userId, 10, 0, db.sql);
   expect(sessions.length).toBe(10);
 });
 

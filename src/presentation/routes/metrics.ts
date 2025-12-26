@@ -5,7 +5,7 @@ import type { MetricsResponseDto } from "./types";
 import { ok } from "./utils";
 
 export const registerMetricsRoutes = (app: Elysia) =>
-  app.get("/api/metrics", () => {
+  app.get("/metrics", () => {
     const response: MetricsResponseDto = getMetrics();
     return ok(response);
   });

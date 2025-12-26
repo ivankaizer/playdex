@@ -145,7 +145,7 @@ export const App = () => {
     setIsPlayniteKeyLoading(true);
     setProvidersError("");
     try {
-      const response = await apiRequest<PlayniteKeyResponse>("/api/playnite/key", {
+      const response = await apiRequest<PlayniteKeyResponse>("/playnite/key", {
         method: "POST",
       });
       setPlayniteKey(response.apiKey);
@@ -168,7 +168,7 @@ export const App = () => {
         userId: number;
         email: string;
         token: string;
-      }>("/api/login", {
+      }>("/login", {
         method: "POST",
         body: { email, password },
         auth: false,
@@ -204,7 +204,7 @@ export const App = () => {
     setAccountsError("");
     const loadAccounts = async () => {
       try {
-        const data = await apiRequest<AccountSummary[]>("/api/accounts");
+        const data = await apiRequest<AccountSummary[]>("/accounts");
         if (cancelled) {
           return;
         }
@@ -245,13 +245,13 @@ export const App = () => {
       try {
         const [today, stats, current] = await Promise.all([
           apiRequest<AccountTodaySessionsResponse>(
-            `/api/accounts/${selectedAccountId}/sessions/today`
+            `/accounts/${selectedAccountId}/sessions/today`
           ),
           apiRequest<AccountStatsResponse>(
-            `/api/accounts/${selectedAccountId}/stats`
+            `/accounts/${selectedAccountId}/stats`
           ),
           apiRequest<AccountCurrentSessionResponse>(
-            `/api/accounts/${selectedAccountId}/sessions/current`
+            `/accounts/${selectedAccountId}/sessions/current`
           ),
         ]);
 
@@ -296,7 +296,7 @@ export const App = () => {
     const loadSessions = async () => {
       try {
         const data = await apiRequest<AccountSessionsResponse>(
-          `/api/accounts/${selectedAccountId}/sessions?limit=${sessionsLimit}&offset=${sessionsOffset}`
+          `/accounts/${selectedAccountId}/sessions?limit=${sessionsLimit}&offset=${sessionsOffset}`
         );
         if (cancelled) {
           return;
@@ -333,7 +333,7 @@ export const App = () => {
 
     const loadProviders = async () => {
       try {
-        const data = await apiRequest<ProvidersResponse>("/api/providers");
+        const data = await apiRequest<ProvidersResponse>("/providers");
         if (cancelled) {
           return;
         }
@@ -378,7 +378,7 @@ export const App = () => {
     const loadProfile = async () => {
       try {
         const profile = await apiRequest<{ userId: number; email: string }>(
-          "/api/me"
+          "/me"
         );
 
         if (cancelled) {

@@ -7,7 +7,7 @@ import { fail, ok, requireAuth, withApiErrorLogging } from "./utils";
 
 export const registerAuthRoutes = (app: Elysia) =>
   app.post(
-    "/api/login",
+    "/login",
     withApiErrorLogging(async ({ body, set }) => {
       const jwtSecret = Bun.env.JWT_SECRET;
       if (!jwtSecret?.trim()) {
@@ -48,7 +48,7 @@ export const registerAuthRoutes = (app: Elysia) =>
     })
   )
   .get(
-    "/api/me",
+    "/me",
     withApiErrorLogging(async ({ request, set }) => {
       const auth = requireAuth(request);
       if (!auth.ok) {
