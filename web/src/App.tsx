@@ -401,31 +401,57 @@ export const App = () => {
                     Live
                   </span>
                 </div>
-                <div className="mt-5 flex flex-wrap items-center gap-4">
+                <div className="mt-5 flex flex-wrap gap-5">
                   <img
                     src={capsuleUrl}
                     alt="Hades II capsule art"
-                    className="h-28 w-20 rounded-2xl border border-slate-800 object-cover shadow-[0_15px_40px_rgba(15,23,42,0.55)]"
+                    className="h-32 w-24 rounded-2xl border border-slate-800 object-cover shadow-[0_15px_40px_rgba(15,23,42,0.55)]"
                   />
-                </div>
-                <div className="mt-6 grid gap-4 sm:grid-cols-3">
-                  {[
-                    { label: "Platform", value: "Steam Deck" },
-                    { label: "Started", value: "8:41 PM" },
-                    { label: "Elapsed", value: "01:12:09" },
-                  ].map((stat) => (
-                    <div
-                      key={stat.label}
-                      className="rounded-2xl border border-slate-800 bg-slate-950/50 p-4"
-                    >
-                      <p className="text-xs uppercase tracking-[0.3em] text-slate-400">
-                        {stat.label}
-                      </p>
-                      <p className="mt-2 text-lg font-semibold text-white">
-                        {stat.value}
-                      </p>
+                  <div className="flex min-w-[220px] flex-1 flex-col gap-4">
+                    <div className="flex flex-wrap gap-2 text-xs font-semibold uppercase tracking-[0.3em] text-slate-300">
+                      <span className="rounded-full border border-slate-700 px-3 py-1">
+                        Steam Deck
+                      </span>
+                      <span className="rounded-full border border-slate-700 px-3 py-1">
+                        Started 8:41 PM
+                      </span>
+                      <span className="rounded-full border border-slate-700 px-3 py-1">
+                        Elapsed 01:12:09
+                      </span>
                     </div>
-                  ))}
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      {[
+                        { label: "Last sync", value: "2 min ago" },
+                        { label: "Streak", value: "4 days" },
+                      ].map((stat) => (
+                        <div
+                          key={stat.label}
+                          className="rounded-2xl border border-slate-800 bg-slate-950/50 px-4 py-3"
+                        >
+                          <p className="text-[10px] uppercase tracking-[0.3em] text-slate-400">
+                            {stat.label}
+                          </p>
+                          <p className="mt-2 text-sm font-semibold text-white">
+                            {stat.value}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="flex flex-wrap gap-2 text-xs text-slate-300">
+                      <button
+                        type="button"
+                        className="rounded-full border border-slate-700 px-4 py-2 font-semibold uppercase tracking-[0.3em] text-slate-200 transition hover:border-emerald-400/60"
+                      >
+                        Pause tracking
+                      </button>
+                      <button
+                        type="button"
+                        className="rounded-full border border-slate-700 px-4 py-2 font-semibold uppercase tracking-[0.3em] text-slate-200 transition hover:border-emerald-400/60"
+                      >
+                        Add note
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -489,9 +515,6 @@ export const App = () => {
                           </div>
                         </div>
                         <div className="flex items-center gap-4">
-                          <div className="hidden sm:block">
-                            {renderSparkline(session.spark, "#34d399")}
-                          </div>
                           <p className="text-sm font-semibold text-emerald-200">
                             {session.time}
                           </p>
