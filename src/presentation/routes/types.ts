@@ -23,11 +23,50 @@ export type AccountSessionDto = {
   endedAt: Date | null;
   platform: string;
   game: string;
+  capsuleUrl: string | null;
 };
 
 export type AccountSessionsResponseDto = {
   accountId: number;
   sessions: AccountSessionDto[];
+  total: number;
+  limit: number;
+  offset: number;
+};
+
+export type AccountTodaySessionsResponseDto = {
+  accountId: number;
+  sessions: AccountSessionDto[];
+};
+
+export type AccountStatsPeriodDto = {
+  totalSeconds: number;
+  sessionCount: number;
+  topGameTitle: string | null;
+  platforms: { platform: string; totalSeconds: number }[];
+  topGames: { title: string; totalSeconds: number }[];
+};
+
+export type AccountStatsResponseDto = {
+  accountId: number;
+  monthly: AccountStatsPeriodDto;
+  yearly: AccountStatsPeriodDto;
+};
+
+export type ProviderStatusDto = {
+  id: number;
+  platform: string;
+  accountId: string | null;
+  status: "active" | "paused";
+  apiKey: string | null;
+};
+
+export type ProvidersResponseDto = {
+  providers: ProviderStatusDto[];
+};
+
+export type PlayniteKeyResponseDto = {
+  apiKey: string;
 };
 
 export type MetricsResponseDto = MetricsSnapshot;

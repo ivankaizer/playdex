@@ -5,6 +5,7 @@ import { registerAuthRoutes } from "./routes/auth";
 import { registerHealthRoutes } from "./routes/health";
 import { registerMetricsRoutes } from "./routes/metrics";
 import { registerPlayniteRoutes } from "./routes/playnite";
+import { registerProviderRoutes } from "./routes/providers";
 import { registerRootRoutes } from "./routes/root";
 import type { PollingNotifier } from "../application/polling";
 
@@ -21,6 +22,7 @@ export const createServer = (options: ServerOptions = {}) => {
   registerMetricsRoutes(app);
   registerAccountRoutes(app);
   registerPlayniteRoutes(app, options.notifier);
+  registerProviderRoutes(app);
 
   return app;
 };

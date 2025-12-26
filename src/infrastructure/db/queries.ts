@@ -24,6 +24,34 @@ export type AccountSessionRow = {
   ended_at: Date | null;
   platform: string;
   title: string;
+  capsule_url: string | null;
+};
+
+export type AccountSessionCountRow = {
+  total: number;
+};
+
+export type ProviderStatusRow = {
+  id: number;
+  platform: string;
+  account_id: string | null;
+  active: boolean;
+  api_key: string | null;
+};
+
+export type AccountPlaytimeSummaryRow = {
+  total_seconds: number;
+  session_count: number;
+};
+
+export type AccountPlatformTotalsRow = {
+  platform: string;
+  total_seconds: number;
+};
+
+export type AccountTopGameRow = {
+  title: string;
+  total_seconds: number;
 };
 
 export type ActiveSessionRow = {
@@ -95,8 +123,22 @@ export const listAccounts = async (sql: Sql = getSql()) =>
     order by id
   `;
 
+export const listAccountsForUser = async (
+  userId: number,
+  sql: Sql = getSql()
+) =>
+  sql<AccountRow[]>`
+    select id, platform
+    from platform_credentials
+    where user_id = ${userId}
+    order by id
+  `;
+
 export const listAccountSessions = async (
   accountId: number,
+  userId: number,
+  limit: number,
+  offset: number,
   sql: Sql = getSql()
 ) =>
   sql<AccountSessionRow[]>`
@@ -105,15 +147,173 @@ export const listAccountSessions = async (
       ps.started_at,
       ps.ended_at,
       pc.platform,
-      g.title
+      g.title,
+      g.capsule_url
     from play_sessions ps
     join platform_credentials pc on pc.id = ps.platform_credential_id
     join games g on g.id = ps.game_id
     where ps.platform_credential_id = ${accountId}
+      and pc.user_id = ${userId}
     order by
       case when ps.ended_at is null then 0 else 1 end,
       ps.started_at desc
-    limit 10
+    limit ${limit}
+    offset ${offset}
+  `;
+
+export const countAccountSessions = async (
+  accountId: number,
+  userId: number,
+  sql: Sql = getSql()
+) =>
+  sql<AccountSessionCountRow[]>`
+    select count(*)::int as total
+    from play_sessions ps
+    join platform_credentials pc on pc.id = ps.platform_credential_id
+    where ps.platform_credential_id = ${accountId}
+      and pc.user_id = ${userId}
+  `;
+
+export const listAccountSessionsToday = async (
+  accountId: number,
+  userId: number,
+  limit: number,
+  sql: Sql = getSql()
+) =>
+  sql<AccountSessionRow[]>`
+    select
+      ps.id,
+      ps.started_at,
+      ps.ended_at,
+      pc.platform,
+      g.title,
+      g.capsule_url
+    from play_sessions ps
+    join platform_credentials pc on pc.id = ps.platform_credential_id
+    join games g on g.id = ps.game_id
+    where ps.platform_credential_id = ${accountId}
+      and pc.user_id = ${userId}
+      and ps.started_at >= date_trunc('day', now())
+    order by ps.started_at desc
+    limit ${limit}
+  `;
+
+export const loadAccountPlaytimeSummary = async (
+  accountId: number,
+  userId: number,
+  startedAt: Date,
+  sql: Sql = getSql()
+) =>
+  sql<AccountPlaytimeSummaryRow[]>`
+    select
+      coalesce(
+        sum(extract(epoch from (coalesce(ps.ended_at, now()) - ps.started_at))),
+        0
+      )::float as total_seconds,
+      count(*)::int as session_count
+    from play_sessions ps
+    join platform_credentials pc on pc.id = ps.platform_credential_id
+    where ps.platform_credential_id = ${accountId}
+      and pc.user_id = ${userId}
+      and ps.started_at >= ${startedAt}
+  `;
+
+export const loadAccountPlatformTotals = async (
+  accountId: number,
+  userId: number,
+  startedAt: Date,
+  sql: Sql = getSql()
+) =>
+  sql<AccountPlatformTotalsRow[]>`
+    select
+      pc.platform,
+      coalesce(
+        sum(extract(epoch from (coalesce(ps.ended_at, now()) - ps.started_at))),
+        0
+      )::float as total_seconds
+    from play_sessions ps
+    join platform_credentials pc on pc.id = ps.platform_credential_id
+    where ps.platform_credential_id = ${accountId}
+      and pc.user_id = ${userId}
+      and ps.started_at >= ${startedAt}
+    group by pc.platform
+    order by pc.platform
+  `;
+
+export const loadAccountTopGames = async (
+  accountId: number,
+  userId: number,
+  startedAt: Date,
+  limit: number,
+  sql: Sql = getSql()
+) =>
+  sql<AccountTopGameRow[]>`
+    select
+      g.title,
+      coalesce(
+        sum(extract(epoch from (coalesce(ps.ended_at, now()) - ps.started_at))),
+        0
+      )::float as total_seconds
+    from play_sessions ps
+    join platform_credentials pc on pc.id = ps.platform_credential_id
+    join games g on g.id = ps.game_id
+    where ps.platform_credential_id = ${accountId}
+      and pc.user_id = ${userId}
+      and ps.started_at >= ${startedAt}
+    group by g.title
+    order by total_seconds desc
+    limit ${limit}
+  `;
+
+export const listProvidersForUser = async (
+  userId: number,
+  sql: Sql = getSql()
+) =>
+  sql<ProviderStatusRow[]>`
+    select id, platform, account_id, active, api_key
+    from platform_credentials
+    where user_id = ${userId}
+    order by id
+  `;
+
+export const loadProviderByPlatform = async (
+  userId: number,
+  platform: string,
+  sql: Sql = getSql()
+) => {
+  const rows = await sql<ProviderStatusRow[]>`
+    select id, platform, account_id, active, api_key
+    from platform_credentials
+    where user_id = ${userId}
+      and platform = ${platform}
+    limit 1
+  `;
+  return rows[0] ?? null;
+};
+
+export const updateProviderApiKey = async (
+  credentialId: number,
+  apiKey: string,
+  sql: Sql = getSql()
+) => {
+  const rows = await sql<ProviderStatusRow[]>`
+    update platform_credentials
+    set api_key = ${apiKey}, updated_at = now()
+    where id = ${credentialId}
+    returning id, platform, account_id, active, api_key
+  `;
+  return rows[0] ?? null;
+};
+
+export const createPlayniteCredential = async (
+  userId: number,
+  apiKey: string,
+  sql: Sql = getSql()
+) =>
+  sql<ProviderStatusRow[]>`
+    insert into platform_credentials (user_id, platform, api_key, account_id, active)
+    values (${userId}, 'playnite', ${apiKey}, 'local', true)
+    returning id, platform, account_id, active, api_key
   `;
 
 export const loadUserByEmail = async (

@@ -1,3 +1,5 @@
+import jwt from "jsonwebtoken";
+
 import { getErrorMessage, logEvent } from "../../shared/observability";
 import type { ApiErrorResponse, ApiResponse } from "./types";
 
@@ -51,4 +53,39 @@ export const parseAccountIdParam = (
   }
 
   return { ok: true, accountId };
+};
+
+type AuthResult =
+  | { ok: true; userId: number; email: string }
+  | { ok: false; status: number; response: ApiResponse<never> };
+
+export const requireAuth = (request: Request): AuthResult => {
+  const jwtSecret = Bun.env.JWT_SECRET;
+  if (!jwtSecret?.trim()) {
+    return {
+      ok: false,
+      status: 500,
+      response: fail("JWT secret is not configured."),
+    };
+  }
+
+  const authHeader = request.headers.get("authorization") ?? "";
+  const token = authHeader.startsWith("Bearer ")
+    ? authHeader.slice("Bearer ".length).trim()
+    : "";
+
+  if (!token) {
+    return { ok: false, status: 401, response: fail("Missing token.") };
+  }
+
+  try {
+    const decoded = jwt.verify(token, jwtSecret) as {
+      sub: number;
+      email: string;
+    };
+
+    return { ok: true, userId: decoded.sub, email: decoded.email };
+  } catch (error) {
+    return { ok: false, status: 401, response: fail("Invalid token.") };
+  }
 };

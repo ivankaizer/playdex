@@ -3,7 +3,7 @@ import { compare } from "bcryptjs";
 import jwt from "jsonwebtoken";
 
 import { loadUserByEmail } from "../../infrastructure/db/queries";
-import { fail, ok, withApiErrorLogging } from "./utils";
+import { fail, ok, requireAuth, withApiErrorLogging } from "./utils";
 
 export const registerAuthRoutes = (app: Elysia) =>
   app.post(
@@ -50,32 +50,12 @@ export const registerAuthRoutes = (app: Elysia) =>
   .get(
     "/api/me",
     withApiErrorLogging(async ({ request, set }) => {
-      const jwtSecret = Bun.env.JWT_SECRET;
-      if (!jwtSecret?.trim()) {
-        set.status = 500;
-        return fail("JWT secret is not configured.");
+      const auth = requireAuth(request);
+      if (!auth.ok) {
+        set.status = auth.status;
+        return auth.response;
       }
 
-      const authHeader = request.headers.get("authorization") ?? "";
-      const token = authHeader.startsWith("Bearer ")
-        ? authHeader.slice("Bearer ".length).trim()
-        : "";
-
-      if (!token) {
-        set.status = 401;
-        return fail("Missing token.");
-      }
-
-      try {
-        const decoded = jwt.verify(token, jwtSecret) as {
-          sub: number;
-          email: string;
-        };
-
-        return ok({ userId: decoded.sub, email: decoded.email });
-      } catch (error) {
-        set.status = 401;
-        return fail("Invalid token.");
-      }
+      return ok({ userId: auth.userId, email: auth.email });
     })
   );

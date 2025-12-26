@@ -1,6 +1,65 @@
 import type { FormEvent } from "react";
 import { useEffect, useMemo, useState } from "react";
 
+import { apiRequest } from "./api";
+
+type AccountSummary = {
+  id: number;
+  name: string;
+};
+
+type AccountSession = {
+  sessionId: number;
+  startedAt: string;
+  endedAt: string | null;
+  platform: string;
+  game: string;
+  capsuleUrl: string | null;
+};
+
+type AccountSessionsResponse = {
+  accountId: number;
+  sessions: AccountSession[];
+  total: number;
+  limit: number;
+  offset: number;
+};
+
+type AccountTodaySessionsResponse = {
+  accountId: number;
+  sessions: AccountSession[];
+};
+
+type AccountStatsPeriod = {
+  totalSeconds: number;
+  sessionCount: number;
+  topGameTitle: string | null;
+  platforms: { platform: string; totalSeconds: number }[];
+  topGames: { title: string; totalSeconds: number }[];
+};
+
+type AccountStatsResponse = {
+  accountId: number;
+  monthly: AccountStatsPeriod;
+  yearly: AccountStatsPeriod;
+};
+
+type ProviderStatus = {
+  id: number;
+  platform: string;
+  accountId: string | null;
+  status: "active" | "paused";
+  apiKey: string | null;
+};
+
+type ProvidersResponse = {
+  providers: ProviderStatus[];
+};
+
+type PlayniteKeyResponse = {
+  apiKey: string;
+};
+
 export const App = () => {
   const [path, setPath] = useState(() => window.location.pathname);
   const [email, setEmail] = useState("");
@@ -11,135 +70,34 @@ export const App = () => {
     () => localStorage.getItem("playdex.email") ?? ""
   );
   const [isProfileLoading, setIsProfileLoading] = useState(false);
-  const [playniteKey, setPlayniteKey] = useState("plx_");
-  const [providerStatus, setProviderStatus] = useState(() => [
-    { id: "steam", name: "Steam", account: "7656119••••", status: "active" },
-    { id: "psn", name: "PlayStation", account: "ivk_psn", status: "paused" },
-    { id: "playnite", name: "Playnite", account: "Local", status: "active" },
-  ]);
+  const [accounts, setAccounts] = useState<AccountSummary[]>([]);
+  const [selectedAccountId, setSelectedAccountId] = useState<number | null>(
+    null
+  );
+  const [isAccountsLoading, setIsAccountsLoading] = useState(false);
+  const [accountsError, setAccountsError] = useState("");
+  const [playniteKey, setPlayniteKey] = useState("");
+  const [isPlayniteKeyLoading, setIsPlayniteKeyLoading] = useState(false);
+  const [providerStatus, setProviderStatus] = useState<ProviderStatus[]>([]);
+  const [isProvidersLoading, setIsProvidersLoading] = useState(false);
+  const [providersError, setProvidersError] = useState("");
+  const [todaySessions, setTodaySessions] = useState<AccountSession[]>([]);
+  const [monthlyStats, setMonthlyStats] = useState<AccountStatsPeriod | null>(
+    null
+  );
+  const [yearlyStats, setYearlyStats] = useState<AccountStatsPeriod | null>(
+    null
+  );
+  const [isDashboardLoading, setIsDashboardLoading] = useState(false);
+  const [dashboardError, setDashboardError] = useState("");
+  const [sessionRows, setSessionRows] = useState<AccountSession[]>([]);
+  const [sessionsTotal, setSessionsTotal] = useState(0);
+  const [sessionsOffset, setSessionsOffset] = useState(0);
+  const [isSessionsLoading, setIsSessionsLoading] = useState(false);
+  const [sessionsError, setSessionsError] = useState("");
+  const sessionsLimit = 10;
   const capsuleUrl =
     "https://shared.steamstatic.com/store_item_assets/steam/apps/2186680/library_600x900_2x.jpg";
-  const todaySessions = [
-    {
-      title: "Helldivers 2",
-      time: "45 min",
-      platform: "PS5",
-      image: capsuleUrl,
-      spark: [2, 4, 3, 6, 5, 7, 6],
-    },
-    {
-      title: "Stardew Valley",
-      time: "30 min",
-      platform: "Switch",
-      image: capsuleUrl,
-      spark: [1, 2, 2, 3, 2, 3, 4],
-    },
-    {
-      title: "Hades II",
-      time: "1h 12m",
-      platform: "Steam",
-      image: capsuleUrl,
-      spark: [3, 5, 6, 7, 6, 8, 9],
-    },
-  ];
-  const monthlyPlatforms = [
-    { label: "Steam", value: 46, hours: "19.7h" },
-    { label: "PS5", value: 28, hours: "12.0h" },
-    { label: "Switch", value: 16, hours: "6.8h" },
-    { label: "Playnite", value: 10, hours: "4.3h" },
-  ];
-  const monthlyTopGames = [
-    { title: "Helldivers 2", hours: "12.4h" },
-    { title: "Hades II", hours: "9.8h" },
-    { title: "Stardew Valley", hours: "6.1h" },
-    { title: "Sea of Stars", hours: "5.4h" },
-    { title: "Baldur's Gate 3", hours: "4.7h" },
-  ];
-  const yearlyPlatforms = [
-    { label: "Steam", value: 52, hours: "162h" },
-    { label: "PS5", value: 24, hours: "75h" },
-    { label: "Switch", value: 14, hours: "44h" },
-    { label: "Playnite", value: 10, hours: "31h" },
-  ];
-  const yearlyTopGames = [
-    { title: "Helldivers 2", hours: "68h" },
-    { title: "Hades II", hours: "54h" },
-    { title: "Stardew Valley", hours: "41h" },
-    { title: "Sea of Stars", hours: "36h" },
-    { title: "Baldur's Gate 3", hours: "31h" },
-  ];
-  const sessionRows = [
-    {
-      title: "Helldivers 2",
-      platform: "PS5",
-      date: "Apr 14",
-      duration: "45m",
-      image: capsuleUrl,
-    },
-    {
-      title: "Hades II",
-      platform: "Steam",
-      date: "Apr 14",
-      duration: "1h 12m",
-      image: capsuleUrl,
-    },
-    {
-      title: "Stardew Valley",
-      platform: "Switch",
-      date: "Apr 13",
-      duration: "30m",
-      image: capsuleUrl,
-    },
-    {
-      title: "Sea of Stars",
-      platform: "Playnite",
-      date: "Apr 12",
-      duration: "2h 05m",
-      image: capsuleUrl,
-    },
-    {
-      title: "Baldur's Gate 3",
-      platform: "Steam",
-      date: "Apr 11",
-      duration: "1h 38m",
-      image: capsuleUrl,
-    },
-    {
-      title: "Animal Crossing",
-      platform: "Switch",
-      date: "Apr 10",
-      duration: "55m",
-      image: capsuleUrl,
-    },
-    {
-      title: "Final Fantasy VII Rebirth",
-      platform: "PS5",
-      date: "Apr 9",
-      duration: "2h 20m",
-      image: capsuleUrl,
-    },
-    {
-      title: "Hollow Knight",
-      platform: "Steam",
-      date: "Apr 9",
-      duration: "40m",
-      image: capsuleUrl,
-    },
-    {
-      title: "Forza Horizon 5",
-      platform: "Playnite",
-      date: "Apr 8",
-      duration: "1h 05m",
-      image: capsuleUrl,
-    },
-    {
-      title: "Metroid Dread",
-      platform: "Switch",
-      date: "Apr 7",
-      duration: "50m",
-      image: capsuleUrl,
-    },
-  ];
   const providerMeta: Record<
     string,
     { label: string; color: string; accent: string }
@@ -152,9 +110,6 @@ export const App = () => {
       accent: "text-amber-200",
     },
   };
-  const isDashboardLoading = false;
-  const isSessionsLoading = false;
-
   const navigate = (target: string) => {
     if (target === path) {
       return;
@@ -178,19 +133,21 @@ export const App = () => {
     window.location.assign("/");
   };
 
-  const generatePlayniteKey = () => {
-    const bytes = new Uint8Array(12);
-    if (globalThis.crypto?.getRandomValues) {
-      globalThis.crypto.getRandomValues(bytes);
-    } else {
-      for (let index = 0; index < bytes.length; index += 1) {
-        bytes[index] = Math.floor(Math.random() * 256);
-      }
+  const generatePlayniteKey = async () => {
+    setIsPlayniteKeyLoading(true);
+    setProvidersError("");
+    try {
+      const response = await apiRequest<PlayniteKeyResponse>("/api/playnite/key", {
+        method: "POST",
+      });
+      setPlayniteKey(response.apiKey);
+    } catch (err) {
+      setProvidersError(
+        err instanceof Error ? err.message : "Failed to generate key."
+      );
+    } finally {
+      setIsPlayniteKeyLoading(false);
     }
-    const token = Array.from(bytes)
-      .map((byte) => byte.toString(16).padStart(2, "0"))
-      .join("");
-    setPlayniteKey(`plx_${token}`);
   };
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -199,38 +156,23 @@ export const App = () => {
     setStatus("loading");
 
     try {
-      const response = await fetch("/api/login", {
+      const payload = await apiRequest<{
+        userId: number;
+        email: string;
+        token: string;
+      }>("/api/login", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ email, password }),
+        body: { email, password },
+        auth: false,
       });
 
-      const payload = (await response.json()) as {
-        data: { userId: number; email: string; token: string } | null;
-        error: { error: string } | null;
-      };
-
-      if (!response.ok || payload.error) {
-        setError(payload.error?.error ?? "Login failed.");
-        setStatus("idle");
-        return;
-      }
-
-      if (!payload.data?.token) {
-        setError("Login failed.");
-        setStatus("idle");
-        return;
-      }
-
-      localStorage.setItem("playdex.token", payload.data.token);
-      localStorage.setItem("playdex.email", payload.data.email);
-      setSessionEmail(payload.data.email);
+      localStorage.setItem("playdex.token", payload.token);
+      localStorage.setItem("playdex.email", payload.email);
+      setSessionEmail(payload.email);
       setStatus("success");
       window.location.assign("/dashboard");
     } catch (err) {
-      setError("Login failed.");
+      setError(err instanceof Error ? err.message : "Login failed.");
       setStatus("idle");
     }
   };
@@ -242,9 +184,173 @@ export const App = () => {
   }, []);
 
   useEffect(() => {
-    if (path !== "/") {
+    const token = localStorage.getItem("playdex.token");
+    if (!token) {
+      setAccounts([]);
+      setSelectedAccountId(null);
       return;
     }
+
+    let cancelled = false;
+    setIsAccountsLoading(true);
+    setAccountsError("");
+    const loadAccounts = async () => {
+      try {
+        const data = await apiRequest<AccountSummary[]>("/api/accounts");
+        if (cancelled) {
+          return;
+        }
+        setAccounts(data);
+        setSelectedAccountId((current) => current ?? data[0]?.id ?? null);
+        setIsAccountsLoading(false);
+      } catch (err) {
+        if (!cancelled) {
+          setAccounts([]);
+          setIsAccountsLoading(false);
+          setAccountsError(
+            err instanceof Error ? err.message : "Failed to load accounts."
+          );
+        }
+      }
+    };
+
+    loadAccounts();
+    return () => {
+      cancelled = true;
+    };
+  }, [sessionEmail]);
+
+  useEffect(() => {
+    setSessionsOffset(0);
+  }, [selectedAccountId]);
+
+  useEffect(() => {
+    if (path !== "/dashboard" || !selectedAccountId) {
+      return;
+    }
+
+    let cancelled = false;
+    setIsDashboardLoading(true);
+    setDashboardError("");
+
+    const loadDashboard = async () => {
+      try {
+        const [today, stats] = await Promise.all([
+          apiRequest<AccountTodaySessionsResponse>(
+            `/api/accounts/${selectedAccountId}/sessions/today`
+          ),
+          apiRequest<AccountStatsResponse>(
+            `/api/accounts/${selectedAccountId}/stats`
+          ),
+        ]);
+
+        if (cancelled) {
+          return;
+        }
+
+        setTodaySessions(today.sessions);
+        setMonthlyStats(stats.monthly);
+        setYearlyStats(stats.yearly);
+        setIsDashboardLoading(false);
+      } catch (err) {
+        if (!cancelled) {
+          setTodaySessions([]);
+          setMonthlyStats(null);
+          setYearlyStats(null);
+          setIsDashboardLoading(false);
+          setDashboardError(
+            err instanceof Error ? err.message : "Failed to load dashboard data."
+          );
+        }
+      }
+    };
+
+    loadDashboard();
+    return () => {
+      cancelled = true;
+    };
+  }, [path, selectedAccountId]);
+
+  useEffect(() => {
+    if (path !== "/sessions" || !selectedAccountId) {
+      return;
+    }
+
+    let cancelled = false;
+    setIsSessionsLoading(true);
+    setSessionsError("");
+
+    const loadSessions = async () => {
+      try {
+        const data = await apiRequest<AccountSessionsResponse>(
+          `/api/accounts/${selectedAccountId}/sessions?limit=${sessionsLimit}&offset=${sessionsOffset}`
+        );
+        if (cancelled) {
+          return;
+        }
+        setSessionRows(data.sessions);
+        setSessionsTotal(data.total);
+        setIsSessionsLoading(false);
+      } catch (err) {
+        if (!cancelled) {
+          setSessionRows([]);
+          setSessionsTotal(0);
+          setIsSessionsLoading(false);
+          setSessionsError(
+            err instanceof Error ? err.message : "Failed to load sessions."
+          );
+        }
+      }
+    };
+
+    loadSessions();
+    return () => {
+      cancelled = true;
+    };
+  }, [path, selectedAccountId, sessionsOffset, sessionsLimit]);
+
+  useEffect(() => {
+    if (path !== "/settings") {
+      return;
+    }
+
+    let cancelled = false;
+    setIsProvidersLoading(true);
+    setProvidersError("");
+
+    const loadProviders = async () => {
+      try {
+        const data = await apiRequest<ProvidersResponse>("/api/providers");
+        if (cancelled) {
+          return;
+        }
+
+        setProviderStatus(data.providers);
+        const playnite = data.providers.find(
+          (provider) => provider.platform === "playnite"
+        );
+        if (playnite?.apiKey) {
+          setPlayniteKey(playnite.apiKey);
+        }
+        setIsProvidersLoading(false);
+      } catch (err) {
+        if (!cancelled) {
+          setProviderStatus([]);
+          setIsProvidersLoading(false);
+          setProvidersError(
+            err instanceof Error ? err.message : "Failed to load providers."
+          );
+        }
+      }
+    };
+
+    loadProviders();
+    return () => {
+      cancelled = true;
+    };
+  }, [path]);
+
+  useEffect(() => {
     const token = localStorage.getItem("playdex.token");
     if (!token) {
       setSessionEmail("");
@@ -258,27 +364,16 @@ export const App = () => {
     setIsProfileLoading(true);
     const loadProfile = async () => {
       try {
-        const response = await fetch("/api/me", {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
-        const payload = (await response.json()) as {
-          data: { userId: number; email: string } | null;
-          error: { error: string } | null;
-        };
+        const profile = await apiRequest<{ userId: number; email: string }>(
+          "/api/me"
+        );
 
         if (cancelled) {
           return;
         }
 
-        if (!response.ok || payload.error || !payload.data) {
-          setIsProfileLoading(false);
-          return;
-        }
-
-        localStorage.setItem("playdex.email", payload.data.email);
-        setSessionEmail(payload.data.email);
+        localStorage.setItem("playdex.email", profile.email);
+        setSessionEmail(profile.email);
         setIsProfileLoading(false);
       } catch (err) {
         if (!cancelled) {
@@ -291,7 +386,7 @@ export const App = () => {
     return () => {
       cancelled = true;
     };
-  }, [path, sessionEmail]);
+  }, [sessionEmail]);
 
   const background = (
     <div className="pointer-events-none absolute inset-0">
@@ -381,6 +476,163 @@ export const App = () => {
       </svg>
     );
   };
+  const platformLabels: Record<string, string> = {
+    steam: "Steam",
+    psn: "PS5",
+    playnite: "Playnite",
+  };
+  const providerNames: Record<string, string> = {
+    steam: "Steam",
+    psn: "PlayStation",
+    playnite: "Playnite",
+  };
+  const formatPlatformLabel = (platform: string) =>
+    platformLabels[platform] ?? platform;
+  const formatProviderName = (platform: string) =>
+    providerNames[platform] ?? platform;
+  const formatDateLabel = (date: Date) =>
+    date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  const formatDuration = (seconds: number, format: "short" | "long") => {
+    const safeSeconds = Math.max(0, Math.floor(seconds));
+    const hours = Math.floor(safeSeconds / 3600);
+    const minutes = Math.floor((safeSeconds % 3600) / 60);
+    if (hours <= 0 && minutes <= 0) {
+      return format === "short" ? "0m" : "0 min";
+    }
+    if (format === "short") {
+      if (hours > 0) {
+        return `${hours}h ${String(minutes).padStart(2, "0")}m`;
+      }
+      return `${minutes}m`;
+    }
+    if (hours > 0) {
+      return `${hours}h ${minutes}m`;
+    }
+    return `${minutes} min`;
+  };
+  const formatHours = (seconds: number, decimals: number) => {
+    const hours = seconds / 3600;
+    const value =
+      decimals === 0
+        ? Math.round(hours)
+        : Number.isFinite(hours)
+          ? Number(hours.toFixed(decimals))
+          : 0;
+    return `${value}h`;
+  };
+  const getSessionDurationSeconds = (session: AccountSession) => {
+    const started = new Date(session.startedAt).getTime();
+    const ended = session.endedAt
+      ? new Date(session.endedAt).getTime()
+      : Date.now();
+    return Math.max(0, Math.floor((ended - started) / 1000));
+  };
+
+  const todaySessionCards = useMemo(
+    () =>
+      todaySessions.map((session) => ({
+        title: session.game,
+        time: formatDuration(getSessionDurationSeconds(session), "long"),
+        platform: formatPlatformLabel(session.platform),
+        image: session.capsuleUrl ?? capsuleUrl,
+      })),
+    [todaySessions]
+  );
+  const monthlyPlatforms = useMemo(() => {
+    if (!monthlyStats) {
+      return [];
+    }
+    const total = Math.max(monthlyStats.totalSeconds, 1);
+    return monthlyStats.platforms.map((item) => ({
+      label: formatPlatformLabel(item.platform),
+      value: Math.round((item.totalSeconds / total) * 100),
+      hours: formatHours(item.totalSeconds, 1),
+    }));
+  }, [monthlyStats]);
+  const monthlyTopGames = useMemo(() => {
+    if (!monthlyStats) {
+      return [];
+    }
+    return monthlyStats.topGames.map((game) => ({
+      title: game.title,
+      hours: formatHours(game.totalSeconds, 1),
+    }));
+  }, [monthlyStats]);
+  const monthlySummary = useMemo(() => {
+    if (!monthlyStats) {
+      return {
+        hours: "0h",
+        sessions: "0",
+        topTitle: "—",
+      };
+    }
+    return {
+      hours: formatHours(monthlyStats.totalSeconds, 1),
+      sessions: String(monthlyStats.sessionCount),
+      topTitle: monthlyStats.topGameTitle ?? "—",
+    };
+  }, [monthlyStats]);
+  const yearlyPlatforms = useMemo(() => {
+    if (!yearlyStats) {
+      return [];
+    }
+    const total = Math.max(yearlyStats.totalSeconds, 1);
+    return yearlyStats.platforms.map((item) => ({
+      label: formatPlatformLabel(item.platform),
+      value: Math.round((item.totalSeconds / total) * 100),
+      hours: formatHours(item.totalSeconds, 0),
+    }));
+  }, [yearlyStats]);
+  const yearlyTopGames = useMemo(() => {
+    if (!yearlyStats) {
+      return [];
+    }
+    return yearlyStats.topGames.map((game) => ({
+      title: game.title,
+      hours: formatHours(game.totalSeconds, 0),
+    }));
+  }, [yearlyStats]);
+  const yearlySummary = useMemo(() => {
+    if (!yearlyStats) {
+      return {
+        hours: "0h",
+        sessions: "0",
+        topTitle: "—",
+      };
+    }
+    return {
+      hours: formatHours(yearlyStats.totalSeconds, 0),
+      sessions: String(yearlyStats.sessionCount),
+      topTitle: yearlyStats.topGameTitle ?? "—",
+    };
+  }, [yearlyStats]);
+  const sessionRowsView = useMemo(
+    () =>
+      sessionRows.map((session) => ({
+        title: session.game,
+        platform: formatPlatformLabel(session.platform),
+        date: formatDateLabel(new Date(session.startedAt)),
+        duration: formatDuration(getSessionDurationSeconds(session), "short"),
+        image: session.capsuleUrl ?? capsuleUrl,
+      })),
+    [sessionRows]
+  );
+  const sessionsStart = sessionsTotal === 0 ? 0 : sessionsOffset + 1;
+  const sessionsEnd = Math.min(sessionsOffset + sessionsLimit, sessionsTotal);
+  const totalPages = Math.max(1, Math.ceil(sessionsTotal / sessionsLimit));
+  const currentPage = Math.min(
+    totalPages,
+    Math.floor(sessionsOffset / sessionsLimit) + 1
+  );
+  const maxPages = 4;
+  const startPage = Math.max(
+    1,
+    Math.min(currentPage - 1, totalPages - maxPages + 1)
+  );
+  const pageNumbers = Array.from(
+    { length: Math.min(totalPages, maxPages) },
+    (_, index) => startPage + index
+  );
   const isLoggedIn = Boolean(localStorage.getItem("playdex.token"));
   const profileLabel =
     sessionEmail || (isProfileLoading ? "Loading..." : "unknown");
@@ -424,6 +676,11 @@ export const App = () => {
           </header>
 
           <section className="mt-10 space-y-6">
+            {accountsError ? (
+              <div className="rounded-2xl border border-rose-500/30 bg-rose-500/10 p-4 text-xs text-rose-200">
+                {accountsError}
+              </div>
+            ) : null}
             <div className="grid gap-6 lg:grid-cols-2">
               <div className="rounded-3xl border border-slate-800 bg-slate-900/60 p-6">
                 <div className="flex items-center justify-between">
@@ -494,18 +751,25 @@ export const App = () => {
                       Today sessions
                     </p>
                     <h2 className="text-xl font-semibold text-white">
-                      3 sessions logged
+                      {todaySessionCards.length}{" "}
+                      {todaySessionCards.length === 1 ? "session" : "sessions"}{" "}
+                      logged
                     </h2>
                   </div>
                   <button
                     type="button"
+                    onClick={() => navigate("/sessions")}
                     className="rounded-full border border-slate-700 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-slate-200 transition hover:border-emerald-400/60"
                   >
                     View all
                   </button>
                 </div>
                 <div className="mt-5 space-y-4">
-                  {isDashboardLoading ? (
+                  {dashboardError ? (
+                    <div className="rounded-2xl border border-rose-500/30 bg-rose-500/10 p-4 text-xs text-rose-200">
+                      {dashboardError}
+                    </div>
+                  ) : isDashboardLoading ? (
                     [1, 2, 3].map((item) => (
                       <div
                         key={item}
@@ -521,12 +785,12 @@ export const App = () => {
                         <div className="h-3 w-12 rounded-full bg-slate-800/60" />
                       </div>
                     ))
-                  ) : todaySessions.length === 0 ? (
+                  ) : todaySessionCards.length === 0 ? (
                     <div className="rounded-2xl border border-dashed border-slate-800 bg-slate-950/40 p-4 text-xs text-slate-400">
                       No sessions logged today yet.
                     </div>
                   ) : (
-                    todaySessions.map((session) => (
+                    todaySessionCards.map((session) => (
                       <div
                         key={session.title}
                         className="relative flex flex-wrap items-center justify-between gap-4 overflow-hidden rounded-2xl border border-slate-800 bg-slate-950/50 p-4"
@@ -568,9 +832,9 @@ export const App = () => {
               </div>
               <div className="mt-5 grid gap-4 sm:grid-cols-3">
                 {[
-                  { label: "Hours played", value: "42.8" },
-                  { label: "Sessions", value: "28" },
-                  { label: "Top title", value: "Helldivers 2" },
+                  { label: "Hours played", value: monthlySummary.hours },
+                  { label: "Sessions", value: monthlySummary.sessions },
+                  { label: "Top title", value: monthlySummary.topTitle },
                 ].map((stat) => (
                   <div
                     key={stat.label}
@@ -663,9 +927,9 @@ export const App = () => {
               </div>
               <div className="mt-5 grid gap-4 sm:grid-cols-3">
                 {[
-                  { label: "Hours played", value: "312" },
-                  { label: "Sessions", value: "198" },
-                  { label: "Top title", value: "Helldivers 2" },
+                  { label: "Hours played", value: yearlySummary.hours },
+                  { label: "Sessions", value: yearlySummary.sessions },
+                  { label: "Top title", value: yearlySummary.topTitle },
                 ].map((stat) => (
                   <div
                     key={stat.label}
@@ -854,12 +1118,13 @@ export const App = () => {
                       <button
                         type="button"
                         onClick={generatePlayniteKey}
+                        disabled={isPlayniteKeyLoading}
                         className="rounded-full border border-emerald-400/60 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-emerald-200 transition hover:border-emerald-300"
                       >
-                        Generate key
+                        {isPlayniteKeyLoading ? "Generating..." : "Generate key"}
                       </button>
                       <span className="rounded-full border border-slate-700 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-slate-200">
-                        {playniteKey}
+                        {playniteKey || "Not generated yet"}
                       </span>
                     </div>
                     <button
@@ -880,8 +1145,27 @@ export const App = () => {
               <h2 className="mt-2 text-xl font-semibold text-white">
                 Active connections
               </h2>
+              {providersError ? (
+                <p className="mt-4 text-xs text-rose-300">{providersError}</p>
+              ) : null}
               <div className="mt-6 space-y-4">
-                {providerStatus.length === 0 ? (
+                {isProvidersLoading ? (
+                  [1, 2].map((item) => (
+                    <div
+                      key={item}
+                      className="flex items-center justify-between gap-4 rounded-2xl border border-slate-800 bg-slate-950/50 p-4"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="h-10 w-10 rounded-full bg-slate-800/60" />
+                        <div className="space-y-2">
+                          <div className="h-3 w-24 rounded-full bg-slate-800/60" />
+                          <div className="h-2 w-16 rounded-full bg-slate-800/50" />
+                        </div>
+                      </div>
+                      <div className="h-6 w-20 rounded-full bg-slate-800/60" />
+                    </div>
+                  ))
+                ) : providerStatus.length === 0 ? (
                   <div className="rounded-2xl border border-dashed border-slate-800 bg-slate-950/40 p-4 text-xs text-slate-400">
                     No providers connected yet. Add one to start syncing
                     playtime.
@@ -894,22 +1178,28 @@ export const App = () => {
                     >
                       <div className="flex items-center gap-3">
                         <div
-                          className={`flex h-10 w-10 items-center justify-center rounded-full ${providerMeta[provider.id]?.color ?? "bg-slate-800"}`}
+                          className={`flex h-10 w-10 items-center justify-center rounded-full ${
+                            providerMeta[provider.platform]?.color ??
+                            "bg-slate-800"
+                          }`}
                         >
                           <span
-                            className={`text-xs font-semibold uppercase ${providerMeta[provider.id]?.accent ?? "text-slate-200"}`}
+                            className={`text-xs font-semibold uppercase ${
+                              providerMeta[provider.platform]?.accent ??
+                              "text-slate-200"
+                            }`}
                           >
-                            {providerMeta[provider.id]?.label ?? "PX"}
+                            {providerMeta[provider.platform]?.label ?? "PX"}
                           </span>
                         </div>
                         <div>
                           <div className="flex items-center gap-2">
                             <p className="text-sm font-semibold text-white">
-                              {provider.name}
+                              {formatProviderName(provider.platform)}
                             </p>
                           </div>
                           <p className="text-xs text-slate-400">
-                            {provider.account}
+                            {provider.accountId ?? "Local"}
                           </p>
                         </div>
                       </div>
@@ -1001,6 +1291,11 @@ export const App = () => {
           </header>
 
           <section className="mt-10 rounded-3xl border border-slate-800 bg-slate-900/60 p-6">
+            {accountsError ? (
+              <div className="mb-4 rounded-2xl border border-rose-500/30 bg-rose-500/10 p-4 text-xs text-rose-200">
+                {accountsError}
+              </div>
+            ) : null}
             <div className="flex flex-wrap items-center justify-between gap-4">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-300">
@@ -1036,6 +1331,9 @@ export const App = () => {
                 />
               </label>
             </div>
+            {sessionsError ? (
+              <p className="mt-4 text-xs text-rose-300">{sessionsError}</p>
+            ) : null}
 
             <div className="mt-6 overflow-hidden rounded-2xl border border-slate-800">
               <table className="w-full text-left text-sm">
@@ -1092,7 +1390,7 @@ export const App = () => {
                         </td>
                       </tr>
                     ))
-                  ) : sessionRows.length === 0 ? (
+                  ) : sessionRowsView.length === 0 ? (
                     <tr>
                       <td
                         colSpan={4}
@@ -1102,7 +1400,7 @@ export const App = () => {
                       </td>
                     </tr>
                   ) : (
-                    sessionRows.map((session) => (
+                    sessionRowsView.map((session) => (
                       <tr
                         key={`${session.title}-${session.date}`}
                         className="transition hover:bg-slate-900/70"
@@ -1136,20 +1434,32 @@ export const App = () => {
             </div>
 
             <div className="mt-6 flex flex-wrap items-center justify-between gap-4 text-xs text-slate-300">
-              <p>Showing 1-10 of 48 sessions</p>
+              <p>
+                Showing {sessionsStart}-{sessionsEnd} of {sessionsTotal}{" "}
+                sessions
+              </p>
               <div className="flex items-center gap-2">
                 <button
                   type="button"
+                  disabled={sessionsOffset === 0 || isSessionsLoading}
+                  onClick={() =>
+                    setSessionsOffset((current) =>
+                      Math.max(0, current - sessionsLimit)
+                    )
+                  }
                   className="rounded-full border border-slate-700 px-3 py-2 font-semibold uppercase tracking-[0.3em] text-slate-200"
                 >
                   Prev
                 </button>
-                {[1, 2, 3, 4].map((page) => (
+                {pageNumbers.map((page) => (
                   <button
                     key={page}
                     type="button"
+                    onClick={() =>
+                      setSessionsOffset((page - 1) * sessionsLimit)
+                    }
                     className={`flex h-9 w-9 items-center justify-center rounded-full text-xs font-semibold leading-none ${
-                      page === 1
+                      page === currentPage
                         ? "bg-emerald-400 text-slate-900"
                         : "border border-slate-700 text-slate-200"
                     }`}
@@ -1159,6 +1469,13 @@ export const App = () => {
                 ))}
                 <button
                   type="button"
+                  disabled={
+                    sessionsOffset + sessionsLimit >= sessionsTotal ||
+                    isSessionsLoading
+                  }
+                  onClick={() =>
+                    setSessionsOffset((current) => current + sessionsLimit)
+                  }
                   className="rounded-full border border-slate-700 px-3 py-2 font-semibold uppercase tracking-[0.3em] text-slate-200"
                 >
                   Next
