@@ -989,7 +989,7 @@ export const App = () => {
                   Yearly stats
                 </p>
                 <p className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-200">
-                  2024 recap
+                  2025 recap
                 </p>
               </div>
               <div className="mt-5 grid gap-4 sm:grid-cols-3">

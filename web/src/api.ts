@@ -12,6 +12,9 @@ type RequestOptions = {
   auth?: boolean;
 };
 
+const apiBaseUrl = (import.meta.env.VITE_API_URL ?? "").trim();
+const normalizedApiBase = apiBaseUrl.replace(/\/+$/, "");
+
 const buildHeaders = (auth: boolean) => {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
@@ -25,11 +28,22 @@ const buildHeaders = (auth: boolean) => {
   return headers;
 };
 
+const buildApiUrl = (path: string) => {
+  if (/^https?:\/\//i.test(path)) {
+    return path;
+  }
+  if (!normalizedApiBase) {
+    return path;
+  }
+  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+  return `${normalizedApiBase}${normalizedPath}`;
+};
+
 export const apiRequest = async <T>(
   path: string,
   { method = "GET", body, auth = true }: RequestOptions = {}
 ): Promise<T> => {
-  const response = await fetch(path, {
+  const response = await fetch(buildApiUrl(path), {
     method,
     headers: buildHeaders(auth),
     body: body === undefined ? undefined : JSON.stringify(body),
