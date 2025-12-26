@@ -46,6 +46,13 @@ export const App = () => {
     { label: "Switch", value: 18 },
     { label: "Playnite", value: 12 },
   ];
+  const yearlyTrend = [120, 160, 140, 190, 175, 220, 210, 245, 230, 260, 250];
+  const yearlyBreakdown = [
+    { label: "Action", value: 34 },
+    { label: "RPG", value: 28 },
+    { label: "Indie", value: 22 },
+    { label: "Co-op", value: 16 },
+  ];
   const sessionRows = [
     {
       title: "Helldivers 2",
@@ -351,69 +358,69 @@ export const App = () => {
           </header>
 
           <section className="mt-10 grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
-            <div className="rounded-3xl border border-slate-800 bg-slate-900/60 p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-300">
-                    Current session
-                  </p>
-                  <h2 className="text-2xl font-semibold text-white">
-                    Hades II
-                  </h2>
-                </div>
-                <span className="rounded-full border border-emerald-400/40 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.3em] text-emerald-200">
-                  Live
-                </span>
-              </div>
-              <div className="mt-5 flex flex-wrap items-center gap-4">
-                <img
-                  src={capsuleUrl}
-                  alt="Hades II capsule art"
-                  className="h-28 w-20 rounded-2xl border border-slate-800 object-cover shadow-[0_15px_40px_rgba(15,23,42,0.55)]"
-                />
-                <div className="flex-1 text-sm text-slate-300">
-                  <p className="text-xs uppercase tracking-[0.3em] text-slate-400">
-                    Session notes
-                  </p>
-                  <p className="mt-2 text-sm text-slate-200">
-                    Last run hit a new personal best on floor 4. Tracking boss
-                    clears and heat level.
-                  </p>
-                </div>
-              </div>
-              <div className="mt-6 grid gap-4 sm:grid-cols-3">
-                {[
-                  { label: "Platform", value: "Steam Deck" },
-                  { label: "Started", value: "8:41 PM" },
-                  { label: "Elapsed", value: "01:12:09" },
-                ].map((stat) => (
-                  <div
-                    key={stat.label}
-                    className="rounded-2xl border border-slate-800 bg-slate-950/50 p-4"
-                  >
-                    <p className="text-xs uppercase tracking-[0.3em] text-slate-400">
-                      {stat.label}
+            <div className="space-y-6">
+              <div className="rounded-3xl border border-slate-800 bg-slate-900/60 p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-300">
+                      Current session
                     </p>
-                    <p className="mt-2 text-lg font-semibold text-white">
-                      {stat.value}
+                    <h2 className="text-2xl font-semibold text-white">
+                      Hades II
+                    </h2>
+                  </div>
+                  <span className="rounded-full border border-emerald-400/40 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.3em] text-emerald-200">
+                    Live
+                  </span>
+                </div>
+                <div className="mt-5 flex flex-wrap items-center gap-4">
+                  <img
+                    src={capsuleUrl}
+                    alt="Hades II capsule art"
+                    className="h-28 w-20 rounded-2xl border border-slate-800 object-cover shadow-[0_15px_40px_rgba(15,23,42,0.55)]"
+                  />
+                  <div className="flex-1 text-sm text-slate-300">
+                    <p className="text-xs uppercase tracking-[0.3em] text-slate-400">
+                      Session notes
+                    </p>
+                    <p className="mt-2 text-sm text-slate-200">
+                      Last run hit a new personal best on floor 4. Tracking boss
+                      clears and heat level.
                     </p>
                   </div>
-                ))}
+                </div>
+                <div className="mt-6 grid gap-4 sm:grid-cols-3">
+                  {[
+                    { label: "Platform", value: "Steam Deck" },
+                    { label: "Started", value: "8:41 PM" },
+                    { label: "Elapsed", value: "01:12:09" },
+                  ].map((stat) => (
+                    <div
+                      key={stat.label}
+                      className="rounded-2xl border border-slate-800 bg-slate-950/50 p-4"
+                    >
+                      <p className="text-xs uppercase tracking-[0.3em] text-slate-400">
+                        {stat.label}
+                      </p>
+                      <p className="mt-2 text-lg font-semibold text-white">
+                        {stat.value}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-6 flex flex-wrap gap-3 text-xs text-slate-300">
+                  <span className="rounded-full border border-slate-700 px-3 py-1">
+                    Focus: Story run
+                  </span>
+                  <span className="rounded-full border border-slate-700 px-3 py-1">
+                    Mood: Chill grind
+                  </span>
+                  <span className="rounded-full border border-slate-700 px-3 py-1">
+                    Goal: 2 more boss clears
+                  </span>
+                </div>
               </div>
-              <div className="mt-6 flex flex-wrap gap-3 text-xs text-slate-300">
-                <span className="rounded-full border border-slate-700 px-3 py-1">
-                  Focus: Story run
-                </span>
-                <span className="rounded-full border border-slate-700 px-3 py-1">
-                  Mood: Chill grind
-                </span>
-                <span className="rounded-full border border-slate-700 px-3 py-1">
-                  Goal: 2 more boss clears
-                </span>
-              </div>
-            </div>
 
-            <div className="space-y-6">
               <div className="rounded-3xl border border-slate-800 bg-slate-900/60 p-6">
                 <div className="flex items-center justify-between">
                   <div>
@@ -486,7 +493,9 @@ export const App = () => {
                   )}
                 </div>
               </div>
+            </div>
 
+            <div className="space-y-6">
               <div className="rounded-3xl border border-slate-800 bg-slate-900/60 p-6">
                 <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-300">
                   Monthly stats
@@ -526,6 +535,63 @@ export const App = () => {
                     </p>
                     <div className="mt-4 space-y-3">
                       {platformBreakdown.map((item) => (
+                        <div key={item.label}>
+                          <div className="flex items-center justify-between text-xs text-slate-300">
+                            <span>{item.label}</span>
+                            <span>{item.value}%</span>
+                          </div>
+                          <div className="mt-2 h-2 rounded-full bg-slate-800">
+                            <div
+                              className="h-2 rounded-full bg-emerald-400"
+                              style={{ width: `${item.value}%` }}
+                            />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-3xl border border-slate-800 bg-slate-900/60 p-6">
+                <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-300">
+                  Yearly stats
+                </p>
+                <h2 className="mt-2 text-xl font-semibold text-white">
+                  2024 recap
+                </h2>
+                <div className="mt-5 grid gap-4 sm:grid-cols-3">
+                  {[
+                    { label: "Hours played", value: "312" },
+                    { label: "Sessions", value: "198" },
+                    { label: "Top genre", value: "Action RPG" },
+                  ].map((stat) => (
+                    <div
+                      key={stat.label}
+                      className="rounded-2xl border border-slate-800 bg-slate-950/50 p-4"
+                    >
+                      <p className="text-xs uppercase tracking-[0.3em] text-slate-400">
+                        {stat.label}
+                      </p>
+                      <p className="mt-2 text-lg font-semibold text-white">
+                        {stat.value}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-5 grid gap-4 lg:grid-cols-[1.4fr_0.6fr]">
+                  <div className="rounded-2xl border border-slate-800 bg-slate-950/50 p-4">
+                    <p className="text-xs uppercase tracking-[0.3em] text-slate-400">
+                      Playtime trend
+                    </p>
+                    <div className="mt-3">{renderTrendLine(yearlyTrend)}</div>
+                  </div>
+                  <div className="rounded-2xl border border-slate-800 bg-slate-950/50 p-4">
+                    <p className="text-xs uppercase tracking-[0.3em] text-slate-400">
+                      Genre share
+                    </p>
+                    <div className="mt-4 space-y-3">
+                      {yearlyBreakdown.map((item) => (
                         <div key={item.label}>
                           <div className="flex items-center justify-between text-xs text-slate-300">
                             <span>{item.label}</span>
