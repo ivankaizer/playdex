@@ -12,7 +12,7 @@ type RequestOptions = {
   auth?: boolean;
 };
 
-const apiBaseUrl = (import.meta.env.VITE_API_URL ?? "https://playdex.ejwan.dev/api").trim();
+const apiBaseUrl = "https://playdex.ejwan.dev/api";
 
 const buildHeaders = (auth: boolean) => {
   const headers: Record<string, string> = {
