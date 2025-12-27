@@ -1,4 +1,5 @@
 import { Elysia } from "elysia";
+import { cors } from "@elysiajs/cors";
 
 import { registerAccountRoutes } from "./routes/accounts";
 import { registerAuthRoutes } from "./routes/auth";
@@ -8,6 +9,7 @@ import { registerPlayniteRoutes } from "./routes/playnite";
 import { registerProviderRoutes } from "./routes/providers";
 import { registerRootRoutes } from "./routes/root";
 import type { PollingNotifier } from "../application/polling";
+import { config } from "../config/env";
 
 type ServerOptions = {
   notifier?: PollingNotifier;
@@ -15,6 +17,12 @@ type ServerOptions = {
 
 export const createServer = (options: ServerOptions = {}) => {
   const app = new Elysia();
+
+  app.use(
+    cors({
+      origin: config.corsOrigins.length > 0 ? config.corsOrigins : true,
+    })
+  );
 
   registerRootRoutes(app);
   registerAuthRoutes(app);

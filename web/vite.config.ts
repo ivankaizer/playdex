@@ -4,9 +4,7 @@ import react from "@vitejs/plugin-react";
 export default defineConfig({
   plugins: [react()],
   server: {
+    allowedHosts: ["ui.playdex.orb.local"],
     port: 5173,
-    proxy: {
-      "/api": "http://localhost:3000",
-    },
   },
 });

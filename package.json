@@ -18,6 +18,7 @@
     "db:migrate": "bun run scripts/migrate.ts"
   },
   "dependencies": {
+    "@elysiajs/cors": "^1.1.0",
     "@types/bcryptjs": "^3.0.0",
     "@types/jsonwebtoken": "^9.0.10",
     "bcryptjs": "^2.4.3",

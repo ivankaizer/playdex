@@ -1,5 +1,3 @@
-version: "3.9"
-
 services:
   db:
     image: postgres:16
@@ -22,10 +20,11 @@ services:
     build: .
     restart: "no"
     command: ["bun", "run", "dev"]
-    env_file:
-      - .env
     environment:
       DATABASE_URL: postgresql://playdex:playdex@db:5432/playdex
+      CORS_ORIGINS: "http://ui.playdex.orb.local,https://ui.playdex.orb.local"
+      POLL_INTERVAL_SECONDS: 180
+      JWT_SECRET: dev-only-jwt-secret-do-not-use-in-production
     volumes:
       - .:/app
       - /app/node_modules
@@ -38,10 +37,17 @@ services:
     build:
       context: ./web
       args:
-        VITE_API_URL: ${VITE_API_URL}
+        VITE_API_URL: https://app.playdex.orb.local/api
+      dockerfile: Dockerfile.dev
     restart: "no"
+    environment:
+      CHOKIDAR_USEPOLLING: "true"
+      DATABASE_URL: postgresql://playdex:playdex@db:5432/playdex
+    volumes:
+      - ./web:/app
+      - /app/node_modules
     ports:
-      - "8080:80"
+      - "5173:5173"
     depends_on:
       - app
 

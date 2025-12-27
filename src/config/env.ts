@@ -36,10 +36,28 @@ const resolvePollIntervalSeconds = (raw: string | undefined) => {
   return clamped;
 };
 
+const resolveCorsOrigins = (raw: string | undefined) => {
+  if (!raw) {
+    return [];
+  }
+
+  const origins = raw
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+
+  if (origins.includes("*")) {
+    return ["*"];
+  }
+
+  return origins;
+};
+
 export const config = {
   databaseUrl: Bun.env.DATABASE_URL ?? "",
   pollIntervalSeconds: resolvePollIntervalSeconds(
     Bun.env.POLL_INTERVAL_SECONDS
   ),
   telegramBotToken: Bun.env.TELEGRAM_BOT_TOKEN?.trim() ?? "",
+  corsOrigins: resolveCorsOrigins(Bun.env.CORS_ORIGINS),
 };
