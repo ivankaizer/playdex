@@ -35,6 +35,8 @@ export type AccountSessionFilters = {
   title?: string | null;
   startedFrom?: Date | null;
   startedTo?: Date | null;
+  sortKey?: "date" | "duration";
+  sortDirection?: "asc" | "desc";
 };
 
 export type ProviderStatusRow = {
@@ -157,6 +159,13 @@ export const listAccountSessions = async (
   const toFilter = filters.startedTo
     ? sql`and ps.started_at < ${filters.startedTo}`
     : sql``;
+  const sortKey = filters.sortKey ?? "date";
+  const sortDirection =
+    filters.sortDirection === "asc" ? sql`asc` : sql`desc`;
+  const orderBy =
+    sortKey === "duration"
+      ? sql`extract(epoch from (coalesce(ps.ended_at, now()) - ps.started_at))`
+      : sql`ps.started_at`;
 
   return sql<AccountSessionRow[]>`
     select
@@ -174,9 +183,52 @@ export const listAccountSessions = async (
       ${titleFilter}
       ${fromFilter}
       ${toFilter}
-    order by
-      case when ps.ended_at is null then 0 else 1 end,
-      ps.started_at desc
+    order by ${orderBy} ${sortDirection}
+    limit ${limit}
+    offset ${offset}
+  `;
+};
+
+export const listUserSessions = async (
+  userId: number,
+  limit: number,
+  offset: number,
+  filters: AccountSessionFilters = {},
+  sql: Sql = getSql()
+) => {
+  const titleFilter = filters.title
+    ? sql`and g.title ilike ${`%${filters.title}%`}`
+    : sql``;
+  const fromFilter = filters.startedFrom
+    ? sql`and ps.started_at >= ${filters.startedFrom}`
+    : sql``;
+  const toFilter = filters.startedTo
+    ? sql`and ps.started_at < ${filters.startedTo}`
+    : sql``;
+  const sortKey = filters.sortKey ?? "date";
+  const sortDirection =
+    filters.sortDirection === "asc" ? sql`asc` : sql`desc`;
+  const orderBy =
+    sortKey === "duration"
+      ? sql`extract(epoch from (coalesce(ps.ended_at, now()) - ps.started_at))`
+      : sql`ps.started_at`;
+
+  return sql<AccountSessionRow[]>`
+    select
+      ps.id,
+      ps.started_at,
+      ps.ended_at,
+      pc.platform,
+      g.title,
+      g.capsule_url
+    from play_sessions ps
+    join platform_credentials pc on pc.id = ps.platform_credential_id
+    join games g on g.id = ps.game_id
+    where pc.user_id = ${userId}
+      ${titleFilter}
+      ${fromFilter}
+      ${toFilter}
+    order by ${orderBy} ${sortDirection}
     limit ${limit}
     offset ${offset}
   `;
@@ -211,6 +263,33 @@ export const countAccountSessions = async (
   `;
 };
 
+export const countUserSessions = async (
+  userId: number,
+  filters: AccountSessionFilters = {},
+  sql: Sql = getSql()
+) => {
+  const titleFilter = filters.title
+    ? sql`and g.title ilike ${`%${filters.title}%`}`
+    : sql``;
+  const fromFilter = filters.startedFrom
+    ? sql`and ps.started_at >= ${filters.startedFrom}`
+    : sql``;
+  const toFilter = filters.startedTo
+    ? sql`and ps.started_at < ${filters.startedTo}`
+    : sql``;
+
+  return sql<AccountSessionCountRow[]>`
+    select count(*)::int as total
+    from play_sessions ps
+    join platform_credentials pc on pc.id = ps.platform_credential_id
+    join games g on g.id = ps.game_id
+    where pc.user_id = ${userId}
+      ${titleFilter}
+      ${fromFilter}
+      ${toFilter}
+  `;
+};
+
 export const listAccountSessionsToday = async (
   accountId: number,
   userId: number,
@@ -230,7 +309,41 @@ export const listAccountSessionsToday = async (
     join games g on g.id = ps.game_id
     where ps.platform_credential_id = ${accountId}
       and pc.user_id = ${userId}
-      and ps.started_at >= date_trunc('day', now())
+      and (
+        (ps.started_at >= (date_trunc('day', now() at time zone 'utc') at time zone 'utc')
+          and ps.started_at < (date_trunc('day', now() at time zone 'utc') at time zone 'utc') + interval '1 day')
+        or (ps.ended_at is not null
+          and ps.ended_at >= (date_trunc('day', now() at time zone 'utc') at time zone 'utc')
+          and ps.ended_at < (date_trunc('day', now() at time zone 'utc') at time zone 'utc') + interval '1 day')
+      )
+    order by ps.started_at desc
+    limit ${limit}
+  `;
+
+export const listUserSessionsToday = async (
+  userId: number,
+  limit: number,
+  sql: Sql = getSql()
+) =>
+  sql<AccountSessionRow[]>`
+    select
+      ps.id,
+      ps.started_at,
+      ps.ended_at,
+      pc.platform,
+      g.title,
+      g.capsule_url
+    from play_sessions ps
+    join platform_credentials pc on pc.id = ps.platform_credential_id
+    join games g on g.id = ps.game_id
+    where pc.user_id = ${userId}
+      and (
+        (ps.started_at >= (date_trunc('day', now() at time zone 'utc') at time zone 'utc')
+          and ps.started_at < (date_trunc('day', now() at time zone 'utc') at time zone 'utc') + interval '1 day')
+        or (ps.ended_at is not null
+          and ps.ended_at >= (date_trunc('day', now() at time zone 'utc') at time zone 'utc')
+          and ps.ended_at < (date_trunc('day', now() at time zone 'utc') at time zone 'utc') + interval '1 day')
+      )
     order by ps.started_at desc
     limit ${limit}
   `;
@@ -260,6 +373,29 @@ export const loadAccountCurrentSession = async (
   return rows[0] ?? null;
 };
 
+export const loadUserCurrentSession = async (
+  userId: number,
+  sql: Sql = getSql()
+) => {
+  const rows = await sql<AccountSessionRow[]>`
+    select
+      ps.id,
+      ps.started_at,
+      ps.ended_at,
+      pc.platform,
+      g.title,
+      g.capsule_url
+    from play_sessions ps
+    join platform_credentials pc on pc.id = ps.platform_credential_id
+    join games g on g.id = ps.game_id
+    where pc.user_id = ${userId}
+      and ps.ended_at is null
+    order by ps.started_at desc
+    limit 1
+  `;
+  return rows[0] ?? null;
+};
+
 export const loadAccountPlaytimeSummary = async (
   accountId: number,
   userId: number,
@@ -277,6 +413,24 @@ export const loadAccountPlaytimeSummary = async (
     join platform_credentials pc on pc.id = ps.platform_credential_id
     where ps.platform_credential_id = ${accountId}
       and pc.user_id = ${userId}
+      and ps.started_at >= ${startedAt}
+  `;
+
+export const loadUserPlaytimeSummary = async (
+  userId: number,
+  startedAt: Date,
+  sql: Sql = getSql()
+) =>
+  sql<AccountPlaytimeSummaryRow[]>`
+    select
+      coalesce(
+        sum(extract(epoch from (coalesce(ps.ended_at, now()) - ps.started_at))),
+        0
+      )::float as total_seconds,
+      count(*)::int as session_count
+    from play_sessions ps
+    join platform_credentials pc on pc.id = ps.platform_credential_id
+    where pc.user_id = ${userId}
       and ps.started_at >= ${startedAt}
   `;
 
@@ -302,6 +456,26 @@ export const loadAccountPlatformTotals = async (
     order by pc.platform
   `;
 
+export const loadUserPlatformTotals = async (
+  userId: number,
+  startedAt: Date,
+  sql: Sql = getSql()
+) =>
+  sql<AccountPlatformTotalsRow[]>`
+    select
+      pc.platform,
+      coalesce(
+        sum(extract(epoch from (coalesce(ps.ended_at, now()) - ps.started_at))),
+        0
+      )::float as total_seconds
+    from play_sessions ps
+    join platform_credentials pc on pc.id = ps.platform_credential_id
+    where pc.user_id = ${userId}
+      and ps.started_at >= ${startedAt}
+    group by pc.platform
+    order by pc.platform
+  `;
+
 export const loadAccountTopGames = async (
   accountId: number,
   userId: number,
@@ -321,6 +495,29 @@ export const loadAccountTopGames = async (
     join games g on g.id = ps.game_id
     where ps.platform_credential_id = ${accountId}
       and pc.user_id = ${userId}
+      and ps.started_at >= ${startedAt}
+    group by g.title
+    order by total_seconds desc
+    limit ${limit}
+  `;
+
+export const loadUserTopGames = async (
+  userId: number,
+  startedAt: Date,
+  limit: number,
+  sql: Sql = getSql()
+) =>
+  sql<AccountTopGameRow[]>`
+    select
+      g.title,
+      coalesce(
+        sum(extract(epoch from (coalesce(ps.ended_at, now()) - ps.started_at))),
+        0
+      )::float as total_seconds
+    from play_sessions ps
+    join platform_credentials pc on pc.id = ps.platform_credential_id
+    join games g on g.id = ps.game_id
+    where pc.user_id = ${userId}
       and ps.started_at >= ${startedAt}
     group by g.title
     order by total_seconds desc

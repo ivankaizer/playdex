@@ -1,6 +1,7 @@
 import postgres from "postgres";
 
 let sql: ReturnType<typeof postgres> | null = null;
+let currentDatabaseUrl: string | null = null;
 
 const shouldIgnoreNotice = (notice: { code?: string; message?: string }) => {
   return (
@@ -9,13 +10,18 @@ const shouldIgnoreNotice = (notice: { code?: string; message?: string }) => {
 };
 
 export const getSql = () => {
-  if (sql) {
-    return sql;
-  }
-
   const databaseUrl = Bun.env.DATABASE_URL;
   if (!databaseUrl?.trim()) {
     throw new Error("DATABASE_URL is required.");
+  }
+
+  if (sql && currentDatabaseUrl === databaseUrl) {
+    return sql;
+  }
+
+  if (sql) {
+    sql.end({ timeout: 5 }).catch(() => undefined);
+    sql = null;
   }
 
   sql = postgres(databaseUrl, {
@@ -31,5 +37,6 @@ export const getSql = () => {
       console.warn(`${severity}${code}: ${message}`);
     },
   });
+  currentDatabaseUrl = databaseUrl;
   return sql;
 };

@@ -27,7 +27,7 @@ export type AccountSessionDto = {
 };
 
 export type AccountSessionsResponseDto = {
-  accountId: number;
+  accountId: number | null;
   sessions: AccountSessionDto[];
   total: number;
   limit: number;
@@ -35,12 +35,12 @@ export type AccountSessionsResponseDto = {
 };
 
 export type AccountTodaySessionsResponseDto = {
-  accountId: number;
+  accountId: number | null;
   sessions: AccountSessionDto[];
 };
 
 export type AccountCurrentSessionResponseDto = {
-  accountId: number;
+  accountId: number | null;
   session: AccountSessionDto | null;
 };
 
@@ -53,7 +53,7 @@ export type AccountStatsPeriodDto = {
 };
 
 export type AccountStatsResponseDto = {
-  accountId: number;
+  accountId: number | null;
   monthly: AccountStatsPeriodDto;
   yearly: AccountStatsPeriodDto;
 };

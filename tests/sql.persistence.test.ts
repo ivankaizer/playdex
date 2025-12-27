@@ -99,7 +99,14 @@ requiresDb("play sessions are persisted and listed", async () => {
 
   const endedAt = new Date("2024-01-01T02:00:00Z");
   await endPlaySession(active!.id, endedAt, db.sql);
-  const sessions = await listAccountSessions(credentialId, userId, 10, 0, db.sql);
+  const sessions = await listAccountSessions(
+    credentialId,
+    userId,
+    10,
+    0,
+    undefined,
+    db.sql
+  );
 
   expect(sessions.length).toBe(1);
   expect(sessions[0].ended_at).not.toBeNull();
@@ -145,6 +152,7 @@ requiresDb(
       userId,
       10,
       0,
+      undefined,
       db.sql
     );
     expect(sessions).toEqual([]);
@@ -174,7 +182,14 @@ requiresDb("listAccountSessions enforces the 10-session limit", async () => {
     }
   }
 
-  const sessions = await listAccountSessions(credentialId, userId, 10, 0, db.sql);
+  const sessions = await listAccountSessions(
+    credentialId,
+    userId,
+    10,
+    0,
+    undefined,
+    db.sql
+  );
   expect(sessions.length).toBe(10);
 });
 

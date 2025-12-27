@@ -3,11 +3,6 @@ import { useEffect, useMemo, useState } from "react";
 
 import { apiRequest } from "./api";
 
-type AccountSummary = {
-  id: number;
-  name: string;
-};
-
 type AccountSession = {
   sessionId: number;
   startedAt: string;
@@ -18,7 +13,7 @@ type AccountSession = {
 };
 
 type AccountSessionsResponse = {
-  accountId: number;
+  accountId: number | null;
   sessions: AccountSession[];
   total: number;
   limit: number;
@@ -26,12 +21,12 @@ type AccountSessionsResponse = {
 };
 
 type AccountTodaySessionsResponse = {
-  accountId: number;
+  accountId: number | null;
   sessions: AccountSession[];
 };
 
 type AccountCurrentSessionResponse = {
-  accountId: number;
+  accountId: number | null;
   session: AccountSession | null;
 };
 
@@ -44,7 +39,7 @@ type AccountStatsPeriod = {
 };
 
 type AccountStatsResponse = {
-  accountId: number;
+  accountId: number | null;
   monthly: AccountStatsPeriod;
   yearly: AccountStatsPeriod;
 };
@@ -77,12 +72,6 @@ export const App = () => {
     () => localStorage.getItem("playdex.email") ?? ""
   );
   const [isProfileLoading, setIsProfileLoading] = useState(false);
-  const [accounts, setAccounts] = useState<AccountSummary[]>([]);
-  const [selectedAccountId, setSelectedAccountId] = useState<number | null>(
-    null
-  );
-  const [isAccountsLoading, setIsAccountsLoading] = useState(false);
-  const [accountsError, setAccountsError] = useState("");
   const [playniteKey, setPlayniteKey] = useState("");
   const [isPlayniteKeyLoading, setIsPlayniteKeyLoading] = useState(false);
   const [providerStatus, setProviderStatus] = useState<ProviderStatus[]>([]);
@@ -109,6 +98,12 @@ export const App = () => {
   const [sessionsTitleDebounced, setSessionsTitleDebounced] = useState("");
   const [sessionsFrom, setSessionsFrom] = useState("");
   const [sessionsTo, setSessionsTo] = useState("");
+  const [sessionsSortKey, setSessionsSortKey] = useState<
+    "date" | "duration"
+  >("date");
+  const [sessionsSortDirection, setSessionsSortDirection] = useState<
+    "asc" | "desc"
+  >("desc");
   const sessionsLimit = 10;
   const capsuleUrl =
     "https://shared.steamstatic.com/store_item_assets/steam/apps/2186680/library_600x900_2x.jpg";
@@ -197,48 +192,7 @@ export const App = () => {
   }, []);
 
   useEffect(() => {
-    const token = localStorage.getItem("playdex.token");
-    if (!token) {
-      setAccounts([]);
-      setSelectedAccountId(null);
-      return;
-    }
-
-    let cancelled = false;
-    setIsAccountsLoading(true);
-    setAccountsError("");
-    const loadAccounts = async () => {
-      try {
-        const data = await apiRequest<AccountSummary[]>("/accounts");
-        if (cancelled) {
-          return;
-        }
-        setAccounts(data);
-        setSelectedAccountId((current) => current ?? data[0]?.id ?? null);
-        setIsAccountsLoading(false);
-      } catch (err) {
-        if (!cancelled) {
-          setAccounts([]);
-          setIsAccountsLoading(false);
-          setAccountsError(
-            err instanceof Error ? err.message : "Failed to load accounts."
-          );
-        }
-      }
-    };
-
-    loadAccounts();
-    return () => {
-      cancelled = true;
-    };
-  }, [sessionEmail]);
-
-  useEffect(() => {
-    setSessionsOffset(0);
-  }, [selectedAccountId]);
-
-  useEffect(() => {
-    if (path !== "/dashboard" || !selectedAccountId) {
+    if (path !== "/dashboard") {
       return;
     }
 
@@ -249,15 +203,9 @@ export const App = () => {
     const loadDashboard = async () => {
       try {
         const [today, stats, current] = await Promise.all([
-          apiRequest<AccountTodaySessionsResponse>(
-            `/accounts/${selectedAccountId}/sessions/today`
-          ),
-          apiRequest<AccountStatsResponse>(
-            `/accounts/${selectedAccountId}/stats`
-          ),
-          apiRequest<AccountCurrentSessionResponse>(
-            `/accounts/${selectedAccountId}/sessions/current`
-          ),
+          apiRequest<AccountTodaySessionsResponse>("/sessions/today"),
+          apiRequest<AccountStatsResponse>("/stats"),
+          apiRequest<AccountCurrentSessionResponse>("/sessions/current"),
         ]);
 
         if (cancelled) {
@@ -287,15 +235,15 @@ export const App = () => {
     return () => {
       cancelled = true;
     };
-  }, [path, selectedAccountId]);
+  }, [path]);
 
   useEffect(() => {
-    if (path !== "/sessions" || !selectedAccountId) {
+    if (path !== "/sessions") {
       return;
     }
 
     setSessionsOffset(0);
-  }, [path, selectedAccountId, sessionsFrom, sessionsTo]);
+  }, [path, sessionsFrom, sessionsTo]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -306,15 +254,15 @@ export const App = () => {
   }, [sessionsTitle]);
 
   useEffect(() => {
-    if (path !== "/sessions" || !selectedAccountId) {
+    if (path !== "/sessions") {
       return;
     }
 
     setSessionsOffset(0);
-  }, [path, selectedAccountId, sessionsTitleDebounced]);
+  }, [path, sessionsTitleDebounced]);
 
   useEffect(() => {
-    if (path !== "/sessions" || !selectedAccountId) {
+    if (path !== "/sessions") {
       return;
     }
 
@@ -341,8 +289,11 @@ export const App = () => {
           params.set("to", sessionsTo);
         }
 
+        params.set("sort", sessionsSortKey);
+        params.set("direction", sessionsSortDirection);
+
         const data = await apiRequest<AccountSessionsResponse>(
-          `/accounts/${selectedAccountId}/sessions?${params.toString()}`
+          `/sessions?${params.toString()}`
         );
         if (cancelled) {
           return;
@@ -368,12 +319,13 @@ export const App = () => {
     };
   }, [
     path,
-    selectedAccountId,
     sessionsOffset,
     sessionsLimit,
     sessionsTitleDebounced,
     sessionsFrom,
     sessionsTo,
+    sessionsSortKey,
+    sessionsSortDirection,
   ]);
 
   useEffect(() => {
@@ -558,7 +510,11 @@ export const App = () => {
   const formatProviderName = (platform: string) =>
     providerNames[platform] ?? platform;
   const formatDateLabel = (date: Date) =>
-    date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+    date.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
   const formatTimeLabel = (date: Date) =>
     date.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
   const formatDuration = (seconds: number, format: "short" | "long") => {
@@ -724,6 +680,40 @@ export const App = () => {
   const isLoggedIn = Boolean(localStorage.getItem("playdex.token"));
   const profileLabel =
     sessionEmail || (isProfileLoading ? "Loading..." : "unknown");
+  const handleSessionSort = (key: "date" | "duration") => {
+    if (sessionsSortKey === key) {
+      setSessionsSortDirection((current) =>
+        current === "asc" ? "desc" : "asc"
+      );
+      setSessionsOffset(0);
+      return;
+    }
+    setSessionsSortKey(key);
+    setSessionsSortDirection("desc");
+    setSessionsOffset(0);
+  };
+  const renderSessionSortIcon = (key: "date" | "duration") => {
+    const isActive = sessionsSortKey === key;
+    const direction = sessionsSortDirection;
+    return (
+      <svg
+        aria-hidden="true"
+        viewBox="0 0 20 20"
+        className={`h-3 w-3 ${isActive ? "text-emerald-200" : ""}`}
+        fill="currentColor"
+      >
+        {isActive ? (
+          direction === "asc" ? (
+            <path d="M10 4l4 4H6l4-4z" />
+          ) : (
+            <path d="M10 16l-4-4h8l-4 4z" />
+          )
+        ) : (
+          <path d="M6 8l4-4 4 4H6zM14 12l-4 4-4-4h8z" />
+        )}
+      </svg>
+    );
+  };
 
   useEffect(() => {
     if (isLoggedIn || !protectedPaths.has(path)) {
@@ -775,11 +765,6 @@ export const App = () => {
           </header>
 
           <section className="mt-10 space-y-6">
-            {accountsError ? (
-              <div className="rounded-2xl border border-rose-500/30 bg-rose-500/10 p-4 text-xs text-rose-200">
-                {accountsError}
-              </div>
-            ) : null}
             <div className="grid gap-6 lg:grid-cols-2">
               <div className="rounded-3xl border border-slate-800 bg-slate-900/60 p-6">
                 <div className="flex items-center justify-between">
@@ -854,14 +839,7 @@ export const App = () => {
                         )}
                       </div>
                       {currentSession ? (
-                        <div className="flex flex-wrap gap-2 text-xs text-slate-300">
-                          <button
-                            type="button"
-                            className="rounded-full border border-slate-700 px-4 py-2 font-semibold uppercase tracking-[0.3em] text-slate-200 transition hover:border-emerald-400/60"
-                          >
-                            Stop tracking
-                          </button>
-                        </div>
+                        <div className="flex flex-wrap gap-2 text-xs text-slate-300" />
                       ) : null}
                     </div>
                   </div>
@@ -1415,11 +1393,6 @@ export const App = () => {
           </header>
 
           <section className="mt-10 rounded-3xl border border-slate-800 bg-slate-900/60 p-6">
-            {accountsError ? (
-              <div className="mb-4 rounded-2xl border border-rose-500/30 bg-rose-500/10 p-4 text-xs text-rose-200">
-                {accountsError}
-              </div>
-            ) : null}
             <div className="flex flex-wrap items-center justify-between gap-4">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-300">
@@ -1469,34 +1442,28 @@ export const App = () => {
               <table className="w-full text-left text-sm">
                 <thead className="bg-slate-950/70 text-xs uppercase tracking-[0.3em] text-slate-400">
                   <tr>
-                    {[
-                      "Title",
-                      "Platform",
-                      "Date",
-                      "Duration",
-                    ].map((label, index) => (
-                      <th
-                        key={label}
-                        className={`px-4 py-3 ${
-                          index === 3 ? "text-right" : "text-left"
-                        }`}
+                    <th className="px-4 py-3 text-left">Title</th>
+                    <th className="px-4 py-3 text-left">Platform</th>
+                    <th className="px-4 py-3 text-left">
+                      <button
+                        type="button"
+                        onClick={() => handleSessionSort("date")}
+                        className="inline-flex items-center gap-2 text-xs uppercase tracking-[0.3em] text-slate-400 transition hover:text-slate-200"
                       >
-                        <button
-                          type="button"
-                          className="inline-flex items-center gap-2 text-xs uppercase tracking-[0.3em] text-slate-400 transition hover:text-slate-200"
-                        >
-                          {label}
-                          <svg
-                            aria-hidden="true"
-                            viewBox="0 0 20 20"
-                            className="h-3 w-3"
-                            fill="currentColor"
-                          >
-                            <path d="M6 8l4-4 4 4H6zM14 12l-4 4-4-4h8z" />
-                          </svg>
-                        </button>
-                      </th>
-                    ))}
+                        Date
+                        {renderSessionSortIcon("date")}
+                      </button>
+                    </th>
+                    <th className="px-4 py-3 text-right">
+                      <button
+                        type="button"
+                        onClick={() => handleSessionSort("duration")}
+                        className="inline-flex items-center gap-2 text-xs uppercase tracking-[0.3em] text-slate-400 transition hover:text-slate-200"
+                      >
+                        Duration
+                        {renderSessionSortIcon("duration")}
+                      </button>
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800 bg-slate-900/60">
