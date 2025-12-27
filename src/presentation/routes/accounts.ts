@@ -57,6 +57,9 @@ export const registerAccountRoutes = (app: Elysia) =>
         const url = new URL(request.url);
         const limitRaw = url.searchParams.get("limit");
         const offsetRaw = url.searchParams.get("offset");
+        const titleRaw = url.searchParams.get("title");
+        const fromRaw = url.searchParams.get("from");
+        const toRaw = url.searchParams.get("to");
         const limit = limitRaw ? Number(limitRaw) : 10;
         const offset = offsetRaw ? Number(offsetRaw) : 0;
 
@@ -73,14 +76,50 @@ export const registerAccountRoutes = (app: Elysia) =>
         const safeLimit = Math.min(Math.floor(limit), 100);
         const safeOffset = Math.floor(offset);
 
+        const title = titleRaw?.trim() ? titleRaw.trim() : null;
+        const parsedFrom = fromRaw ? new Date(fromRaw) : null;
+        const parsedTo = toRaw ? new Date(toRaw) : null;
+
+        if (
+          (parsedFrom && Number.isNaN(parsedFrom.getTime())) ||
+          (parsedTo && Number.isNaN(parsedTo.getTime()))
+        ) {
+          set.status = 400;
+          return fail("from and to must be valid dates.");
+        }
+
+        if (parsedFrom && parsedTo && parsedFrom > parsedTo) {
+          set.status = 400;
+          return fail("from must be before to.");
+        }
+
+        const toExclusive = parsedTo
+          ? new Date(
+              Date.UTC(
+                parsedTo.getUTCFullYear(),
+                parsedTo.getUTCMonth(),
+                parsedTo.getUTCDate() + 1
+              )
+            )
+          : null;
+
         const [sessions, total] = await Promise.all([
           getAccountSessions(
             parsed.accountId,
             auth.userId,
             safeLimit,
-            safeOffset
+            safeOffset,
+            {
+              title,
+              startedFrom: parsedFrom,
+              startedTo: toExclusive,
+            }
           ),
-          getAccountSessionsTotal(parsed.accountId, auth.userId),
+          getAccountSessionsTotal(parsed.accountId, auth.userId, {
+            title,
+            startedFrom: parsedFrom,
+            startedTo: toExclusive,
+          }),
         ]);
 
         const response: AccountSessionsResponseDto = {

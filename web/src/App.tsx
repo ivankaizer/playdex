@@ -105,6 +105,10 @@ export const App = () => {
   const [sessionsOffset, setSessionsOffset] = useState(0);
   const [isSessionsLoading, setIsSessionsLoading] = useState(false);
   const [sessionsError, setSessionsError] = useState("");
+  const [sessionsTitle, setSessionsTitle] = useState("");
+  const [sessionsTitleDebounced, setSessionsTitleDebounced] = useState("");
+  const [sessionsFrom, setSessionsFrom] = useState("");
+  const [sessionsTo, setSessionsTo] = useState("");
   const sessionsLimit = 10;
   const capsuleUrl =
     "https://shared.steamstatic.com/store_item_assets/steam/apps/2186680/library_600x900_2x.jpg";
@@ -133,7 +137,6 @@ export const App = () => {
     () => [
       { label: "Dashboard", path: "/dashboard" },
       { label: "Sessions", path: "/sessions" },
-      { label: "Settings", path: "/settings" },
     ],
     []
   );
@@ -291,14 +294,55 @@ export const App = () => {
       return;
     }
 
+    setSessionsOffset(0);
+  }, [path, selectedAccountId, sessionsFrom, sessionsTo]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setSessionsTitleDebounced(sessionsTitle.trim());
+    }, 300);
+
+    return () => window.clearTimeout(timer);
+  }, [sessionsTitle]);
+
+  useEffect(() => {
+    if (path !== "/sessions" || !selectedAccountId) {
+      return;
+    }
+
+    setSessionsOffset(0);
+  }, [path, selectedAccountId, sessionsTitleDebounced]);
+
+  useEffect(() => {
+    if (path !== "/sessions" || !selectedAccountId) {
+      return;
+    }
+
     let cancelled = false;
     setIsSessionsLoading(true);
     setSessionsError("");
 
     const loadSessions = async () => {
       try {
+        const params = new URLSearchParams({
+          limit: String(sessionsLimit),
+          offset: String(sessionsOffset),
+        });
+
+        if (sessionsTitleDebounced) {
+          params.set("title", sessionsTitleDebounced);
+        }
+
+        if (sessionsFrom) {
+          params.set("from", sessionsFrom);
+        }
+
+        if (sessionsTo) {
+          params.set("to", sessionsTo);
+        }
+
         const data = await apiRequest<AccountSessionsResponse>(
-          `/accounts/${selectedAccountId}/sessions?limit=${sessionsLimit}&offset=${sessionsOffset}`
+          `/accounts/${selectedAccountId}/sessions?${params.toString()}`
         );
         if (cancelled) {
           return;
@@ -322,7 +366,15 @@ export const App = () => {
     return () => {
       cancelled = true;
     };
-  }, [path, selectedAccountId, sessionsOffset, sessionsLimit]);
+  }, [
+    path,
+    selectedAccountId,
+    sessionsOffset,
+    sessionsLimit,
+    sessionsTitleDebounced,
+    sessionsFrom,
+    sessionsTo,
+  ]);
 
   useEffect(() => {
     if (path !== "/settings") {
@@ -649,6 +701,10 @@ export const App = () => {
       })),
     [sessionRows]
   );
+  const hasSessionFilters =
+    Boolean(sessionsTitle.trim()) ||
+    Boolean(sessionsFrom) ||
+    Boolean(sessionsTo);
   const sessionsStart = sessionsTotal === 0 ? 0 : sessionsOffset + 1;
   const sessionsEnd = Math.min(sessionsOffset + sessionsLimit, sessionsTotal);
   const totalPages = Math.max(1, Math.ceil(sessionsTotal / sessionsLimit));
@@ -1381,6 +1437,8 @@ export const App = () => {
                 <input
                   type="text"
                   placeholder="Search by game title"
+                  value={sessionsTitle}
+                  onChange={(event) => setSessionsTitle(event.target.value)}
                   className="mt-2 w-full rounded-xl border border-slate-700 bg-slate-950/80 px-3 py-2 text-sm text-white outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/30"
                 />
               </label>
@@ -1388,6 +1446,8 @@ export const App = () => {
                 From
                 <input
                   type="date"
+                  value={sessionsFrom}
+                  onChange={(event) => setSessionsFrom(event.target.value)}
                   className="mt-2 w-full rounded-xl border border-slate-700 bg-slate-950/80 px-3 py-2 text-sm text-white outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/30"
                 />
               </label>
@@ -1395,6 +1455,8 @@ export const App = () => {
                 To
                 <input
                   type="date"
+                  value={sessionsTo}
+                  onChange={(event) => setSessionsTo(event.target.value)}
                   className="mt-2 w-full rounded-xl border border-slate-700 bg-slate-950/80 px-3 py-2 text-sm text-white outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/30"
                 />
               </label>
@@ -1464,7 +1526,9 @@ export const App = () => {
                         colSpan={4}
                         className="px-4 py-10 text-center text-sm text-slate-400"
                       >
-                        No sessions yet. Sync a provider to populate this list.
+                        {hasSessionFilters
+                          ? "No sessions match your filters."
+                          : "No sessions yet. Sync a provider to populate this list."}
                       </td>
                     </tr>
                   ) : (

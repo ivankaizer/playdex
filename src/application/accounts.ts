@@ -8,6 +8,7 @@ import {
   loadAccountPlatformTotals,
   loadAccountPlaytimeSummary,
   loadAccountTopGames,
+  type AccountSessionFilters,
 } from "../infrastructure/db/queries";
 
 export const checkDatabaseHealth = async () => {
@@ -23,9 +24,16 @@ export const getAccountSessions = async (
   accountId: number,
   userId: number,
   limit: number,
-  offset: number
+  offset: number,
+  filters: AccountSessionFilters = {}
 ) => {
-  const rows = await listAccountSessions(accountId, userId, limit, offset);
+  const rows = await listAccountSessions(
+    accountId,
+    userId,
+    limit,
+    offset,
+    filters
+  );
   return rows.map((row) => ({
     sessionId: +row.id,
     startedAt: row.started_at,
@@ -38,9 +46,10 @@ export const getAccountSessions = async (
 
 export const getAccountSessionsTotal = async (
   accountId: number,
-  userId: number
+  userId: number,
+  filters: AccountSessionFilters = {}
 ) => {
-  const rows = await countAccountSessions(accountId, userId);
+  const rows = await countAccountSessions(accountId, userId, filters);
   return rows[0]?.total ?? 0;
 };
 

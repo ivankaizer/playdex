@@ -31,6 +31,12 @@ export type AccountSessionCountRow = {
   total: number;
 };
 
+export type AccountSessionFilters = {
+  title?: string | null;
+  startedFrom?: Date | null;
+  startedTo?: Date | null;
+};
+
 export type ProviderStatusRow = {
   id: number;
   platform: string;
@@ -139,9 +145,20 @@ export const listAccountSessions = async (
   userId: number,
   limit: number,
   offset: number,
+  filters: AccountSessionFilters = {},
   sql: Sql = getSql()
-) =>
-  sql<AccountSessionRow[]>`
+) => {
+  const titleFilter = filters.title
+    ? sql`and g.title ilike ${`%${filters.title}%`}`
+    : sql``;
+  const fromFilter = filters.startedFrom
+    ? sql`and ps.started_at >= ${filters.startedFrom}`
+    : sql``;
+  const toFilter = filters.startedTo
+    ? sql`and ps.started_at < ${filters.startedTo}`
+    : sql``;
+
+  return sql<AccountSessionRow[]>`
     select
       ps.id,
       ps.started_at,
@@ -154,25 +171,45 @@ export const listAccountSessions = async (
     join games g on g.id = ps.game_id
     where ps.platform_credential_id = ${accountId}
       and pc.user_id = ${userId}
+      ${titleFilter}
+      ${fromFilter}
+      ${toFilter}
     order by
       case when ps.ended_at is null then 0 else 1 end,
       ps.started_at desc
     limit ${limit}
     offset ${offset}
   `;
+};
 
 export const countAccountSessions = async (
   accountId: number,
   userId: number,
+  filters: AccountSessionFilters = {},
   sql: Sql = getSql()
-) =>
-  sql<AccountSessionCountRow[]>`
+) => {
+  const titleFilter = filters.title
+    ? sql`and g.title ilike ${`%${filters.title}%`}`
+    : sql``;
+  const fromFilter = filters.startedFrom
+    ? sql`and ps.started_at >= ${filters.startedFrom}`
+    : sql``;
+  const toFilter = filters.startedTo
+    ? sql`and ps.started_at < ${filters.startedTo}`
+    : sql``;
+
+  return sql<AccountSessionCountRow[]>`
     select count(*)::int as total
     from play_sessions ps
     join platform_credentials pc on pc.id = ps.platform_credential_id
+    join games g on g.id = ps.game_id
     where ps.platform_credential_id = ${accountId}
       and pc.user_id = ${userId}
+      ${titleFilter}
+      ${fromFilter}
+      ${toFilter}
   `;
+};
 
 export const listAccountSessionsToday = async (
   accountId: number,
