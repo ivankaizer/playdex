@@ -595,6 +595,12 @@ export const App = () => {
       topTitle: monthlyStats.topGameTitle ?? "—",
     };
   }, [monthlyStats]);
+  const monthlyHighlightsLabel = useMemo(() => {
+    const monthName = new Intl.DateTimeFormat("en-US", {
+      month: "long",
+    }).format(new Date());
+    return `${monthName} highlights`;
+  }, []);
   const yearlyPlatforms = useMemo(() => {
     if (!yearlyStats) {
       return [];
@@ -629,6 +635,9 @@ export const App = () => {
       topTitle: yearlyStats.topGameTitle ?? "—",
     };
   }, [yearlyStats]);
+  const yearlyRecapLabel = useMemo(() => {
+    return `${new Date().getFullYear()} recap`;
+  }, []);
   const sessionRowsView = useMemo(
     () =>
       sessionRows.map((session) => ({
@@ -788,37 +797,16 @@ export const App = () => {
                           </span>
                         )}
                       </div>
-                      <div className="grid gap-3 sm:grid-cols-2">
-                        {[
-                          { label: "Last sync", value: "--" },
-                          { label: "Streak", value: "--" },
-                        ].map((stat) => (
-                          <div
-                            key={stat.label}
-                            className="rounded-2xl border border-slate-800 bg-slate-950/50 px-4 py-3"
+                      {currentSession ? (
+                        <div className="flex flex-wrap gap-2 text-xs text-slate-300">
+                          <button
+                            type="button"
+                            className="rounded-full border border-slate-700 px-4 py-2 font-semibold uppercase tracking-[0.3em] text-slate-200 transition hover:border-emerald-400/60"
                           >
-                            <p className="text-[10px] uppercase tracking-[0.3em] text-slate-400">
-                              {stat.label}
-                            </p>
-                            <p className="mt-2 text-sm font-semibold text-white">
-                              {stat.value}
-                            </p>
-                          </div>
-                        ))}
-                      </div>
-                      <div className="flex flex-wrap gap-2 text-xs text-slate-300">
-                        <button
-                          type="button"
-                          disabled={!currentSession}
-                          className={`rounded-full border border-slate-700 px-4 py-2 font-semibold uppercase tracking-[0.3em] text-slate-200 transition ${
-                            currentSession
-                              ? "hover:border-emerald-400/60"
-                              : "cursor-not-allowed opacity-50"
-                          }`}
-                        >
-                          Stop tracking
-                        </button>
-                      </div>
+                            Stop tracking
+                          </button>
+                        </div>
+                      ) : null}
                     </div>
                   </div>
                 )}
@@ -907,7 +895,7 @@ export const App = () => {
                   Monthly stats
                 </p>
                 <p className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-200">
-                  April highlights
+                  {monthlyHighlightsLabel}
                 </p>
               </div>
               <div className="mt-5 grid gap-4 sm:grid-cols-3">
@@ -1002,7 +990,7 @@ export const App = () => {
                   Yearly stats
                 </p>
                 <p className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-200">
-                  2025 recap
+                  {yearlyRecapLabel}
                 </p>
               </div>
               <div className="mt-5 grid gap-4 sm:grid-cols-3">
