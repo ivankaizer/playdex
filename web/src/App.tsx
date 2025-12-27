@@ -863,9 +863,6 @@ export const App = () => {
                       <h2 className="text-sm font-semibold text-slate-200">
                         No session running right now.
                       </h2>
-                      <span className="text-xs text-slate-400">
-                        Sync a provider to start tracking.
-                      </span>
                     </>
                   )}
                 </div>
