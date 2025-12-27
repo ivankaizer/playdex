@@ -15,7 +15,8 @@
     "steam:now": "bun run scripts/steam-now.ts",
     "psn:now": "bun run scripts/psn-now.ts",
     "psn:account": "bun run scripts/psn-account.ts",
-    "db:migrate": "bun run scripts/migrate.ts"
+    "db:migrate": "bun run scripts/migrate.ts",
+    "db:seed": "bun run scripts/seed.ts"
   },
   "dependencies": {
     "@elysiajs/cors": "^1.1.0",
