@@ -569,6 +569,35 @@ export const App = () => {
       })),
     [todaySessions]
   );
+  const todayTotals = useMemo(() => {
+    const totalSeconds = todaySessions.reduce(
+      (sum, session) => sum + getSessionDurationSeconds(session),
+      0
+    );
+    return {
+      seconds: totalSeconds,
+      hours: formatHours(totalSeconds, 1),
+    };
+  }, [todaySessions]);
+  const todayPlatforms = useMemo(() => {
+    if (todaySessions.length === 0) {
+      return [];
+    }
+    const totals = todaySessions.reduce<Record<string, number>>(
+      (acc, session) => {
+        const key = session.platform;
+        acc[key] = (acc[key] ?? 0) + getSessionDurationSeconds(session);
+        return acc;
+      },
+      {}
+    );
+    const totalSeconds = Math.max(todayTotals.seconds, 1);
+    return Object.entries(totals).map(([platform, seconds]) => ({
+      label: formatPlatformLabel(platform),
+      value: Math.round((seconds / totalSeconds) * 100),
+      hours: formatHours(seconds, 1),
+    }));
+  }, [todaySessions, todayTotals.seconds]);
   const monthlyPlatforms = useMemo(() => {
     if (!monthlyStats) {
       return [];
@@ -765,85 +794,140 @@ export const App = () => {
           </header>
 
           <section className="mt-10 space-y-6">
-            <div className="grid gap-6 lg:grid-cols-2">
+            <div className="rounded-3xl border border-slate-800 bg-slate-900/60 px-6 py-4">
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-300">
+                  Current session
+                </p>
+                <span className="rounded-full border border-emerald-400/40 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.3em] text-emerald-200">
+                  {currentSession ? "Live" : "Idle"}
+                </span>
+              </div>
+              {isDashboardLoading ? (
+                <div className="mt-3 flex flex-wrap items-center justify-between gap-5">
+                  <div className="h-6 w-40 rounded-full bg-slate-800/60" />
+                  <div className="flex flex-wrap items-center justify-end gap-4">
+                    <div className="h-3 w-24 rounded-full bg-slate-800/60" />
+                    <div className="h-3 w-32 rounded-full bg-slate-800/60" />
+                    <div className="h-3 w-28 rounded-full bg-slate-800/60" />
+                  </div>
+                </div>
+              ) : (
+                <div className="mt-3 flex flex-wrap items-center justify-between gap-5 text-sm font-semibold text-slate-300">
+                  {currentSession ? (
+                    <>
+                      <h2 className="text-lg font-semibold text-white normal-case tracking-normal">
+                        {currentSession.game}
+                      </h2>
+                      <div className="flex flex-wrap items-center justify-end gap-4 text-sm font-semibold normal-case tracking-normal text-slate-300">
+                        <span className="inline-flex items-center gap-2 text-slate-200">
+                          <svg
+                            aria-hidden="true"
+                            viewBox="0 0 20 20"
+                            className="h-3.5 w-3.5 text-emerald-300"
+                            fill="currentColor"
+                          >
+                            <path d="M3 5a2 2 0 012-2h10a2 2 0 012 2v2H3V5zm0 4h14v6a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                          </svg>
+                          {formatPlatformLabel(currentSession.platform)}
+                        </span>
+                        <span className="inline-flex items-center gap-2 text-slate-300">
+                          <svg
+                            aria-hidden="true"
+                            viewBox="0 0 20 20"
+                            className="h-3.5 w-3.5 text-slate-400"
+                            fill="currentColor"
+                          >
+                            <path d="M10 2a8 8 0 100 16 8 8 0 000-16zm1 4v4.59l3.3 3.3-1.42 1.42L9 11V6h2z" />
+                          </svg>
+                          Started{" "}
+                          {currentSessionStartedAt
+                            ? formatTimeLabel(currentSessionStartedAt)
+                            : "--"}
+                        </span>
+                        <span className="inline-flex items-center gap-2 text-emerald-200">
+                          <svg
+                            aria-hidden="true"
+                            viewBox="0 0 20 20"
+                            className="h-3.5 w-3.5 text-emerald-300"
+                            fill="currentColor"
+                          >
+                            <path d="M10 2a8 8 0 100 16 8 8 0 000-16zm-1 3h2v6h4v2H9V5z" />
+                          </svg>
+                          Elapsed {currentSessionElapsed}
+                        </span>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <h2 className="text-sm font-semibold text-slate-200">
+                        No session running right now.
+                      </h2>
+                      <span className="text-xs text-slate-400">
+                        Sync a provider to start tracking.
+                      </span>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
               <div className="rounded-3xl border border-slate-800 bg-slate-900/60 p-6">
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-300">
-                      Current session
+                      Today stats
                     </p>
-                    <h2 className="text-2xl font-semibold text-white">
-                      {isDashboardLoading
-                        ? "Loading..."
-                        : currentSession?.game ?? "No active session"}
+                    <h2 className="text-xl font-semibold text-white">
+                      {todayTotals.hours} played
                     </h2>
                   </div>
-                  <span className="rounded-full border border-emerald-400/40 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.3em] text-emerald-200">
-                    {currentSession ? "Live" : "Idle"}
-                  </span>
                 </div>
-                {isDashboardLoading ? (
-                  <div className="mt-5 flex flex-wrap gap-5">
-                    <div className="h-32 w-24 rounded-2xl border border-slate-800 bg-slate-800/60" />
-                    <div className="flex min-w-[220px] flex-1 flex-col gap-4">
-                      <div className="flex flex-wrap gap-2">
-                        {[1, 2, 3].map((item) => (
+                <div className="mt-5 rounded-2xl border border-slate-800 bg-slate-950/50 p-4">
+                  <p className="text-xs uppercase tracking-[0.3em] text-slate-400">
+                    Platform distribution
+                  </p>
+                  {todayPlatforms.length === 0 ? (
+                    <p className="mt-3 text-xs text-slate-400">
+                      No sessions logged today yet.
+                    </p>
+                  ) : (
+                    <div className="mt-4 flex flex-wrap items-center gap-4">
+                      {renderPieChart(
+                        todayPlatforms,
+                        ["#34d399", "#22d3ee", "#a78bfa", "#f59e0b"],
+                        140
+                      )}
+                      <div className="flex-1 space-y-2 text-xs text-slate-300">
+                        {todayPlatforms.map((item, index) => (
                           <div
-                            key={item}
-                            className="h-6 w-24 rounded-full bg-slate-800/60"
-                          />
-                        ))}
-                      </div>
-                      <div className="grid gap-3 sm:grid-cols-2">
-                        {[1, 2].map((item) => (
-                          <div
-                            key={item}
-                            className="h-16 rounded-2xl border border-slate-800 bg-slate-950/50"
-                          />
+                            key={item.label}
+                            className="flex items-center justify-between gap-3"
+                          >
+                            <div className="flex items-center gap-2">
+                              <span
+                                className="h-2 w-2 rounded-full"
+                                style={{
+                                  backgroundColor: [
+                                    "#34d399",
+                                    "#22d3ee",
+                                    "#a78bfa",
+                                    "#f59e0b",
+                                  ][index % 4],
+                                }}
+                              />
+                              <span>{item.label}</span>
+                            </div>
+                            <span>
+                              {item.value}% · {item.hours}
+                            </span>
+                          </div>
                         ))}
                       </div>
                     </div>
-                  </div>
-                ) : (
-                  <div className="mt-5 flex flex-wrap gap-5">
-                    {currentSession ? (
-                      <img
-                        src={currentSession.capsuleUrl ?? capsuleUrl}
-                        alt={`${currentSession.game} capsule art`}
-                        className="h-32 w-24 rounded-2xl border border-slate-800 object-cover shadow-[0_15px_40px_rgba(15,23,42,0.55)]"
-                      />
-                    ) : (
-                      <div className="h-32 w-24 rounded-2xl border border-dashed border-slate-800 bg-slate-950/40" />
-                    )}
-                    <div className="flex min-w-[220px] flex-1 flex-col gap-4">
-                      <div className="flex flex-wrap gap-2 text-xs font-semibold uppercase tracking-[0.3em] text-slate-300">
-                        {currentSession ? (
-                          <>
-                            <span className="rounded-full border border-slate-700 px-3 py-1">
-                              {formatPlatformLabel(currentSession.platform)}
-                            </span>
-                            <span className="rounded-full border border-slate-700 px-3 py-1">
-                              Started{" "}
-                              {currentSessionStartedAt
-                                ? formatTimeLabel(currentSessionStartedAt)
-                                : "--"}
-                            </span>
-                            <span className="rounded-full border border-slate-700 px-3 py-1">
-                              Elapsed {currentSessionElapsed}
-                            </span>
-                          </>
-                        ) : (
-                          <span className="rounded-full border border-slate-700 px-3 py-1">
-                            Not tracking
-                          </span>
-                        )}
-                      </div>
-                      {currentSession ? (
-                        <div className="flex flex-wrap gap-2 text-xs text-slate-300" />
-                      ) : null}
-                    </div>
-                  </div>
-                )}
+                  )}
+                </div>
               </div>
 
               <div className="rounded-3xl border border-slate-800 bg-slate-900/60 p-6">
