@@ -13,6 +13,7 @@ import {
 import { getErrorMessage, logEvent } from "../shared/observability";
 
 import type { PollingNotifier } from "./polling";
+import { startManualSession } from "./manual";
 
 type Sql = ReturnType<typeof postgres>;
 
@@ -106,6 +107,14 @@ const summarizeStoppedSessions = (
   return `Stopped ${sessions.length} session(s): ${details}.`;
 };
 
+const summarizeStartedSession = async (
+  gameId: number,
+  sql: Sql
+): Promise<string> => {
+  const game = await loadGameById(gameId, sql);
+  return `Session started: ${formatGameLabel(game)}.`;
+};
+
 const handleStopCommand = async (token: string, sql: Sql, chatId: string) => {
   const user = await loadUserByChatId(chatId, sql);
   if (!user) {
@@ -120,6 +129,35 @@ const handleStopCommand = async (token: string, sql: Sql, chatId: string) => {
   const endedAt = new Date();
   const sessions = await endActiveSessionsForUser(user.id, endedAt, sql);
   await sendNotification(token, chatId, summarizeStoppedSessions(sessions));
+};
+
+const handleStartCommand = async (
+  token: string,
+  sql: Sql,
+  chatId: string,
+  title: string
+) => {
+  const user = await loadUserByChatId(chatId, sql);
+  if (!user) {
+    await sendNotification(
+      token,
+      chatId,
+      "This chat is not linked to a Playdex user. Ask an admin to set chat_id on your user record."
+    );
+    return;
+  }
+
+  try {
+    const result = await startManualSession(user.id, title);
+    const message = await summarizeStartedSession(result.gameId, sql);
+    await sendNotification(token, chatId, message);
+  } catch (error) {
+    await sendNotification(
+      token,
+      chatId,
+      "Unable to start a manual session right now."
+    );
+  }
 };
 
 const getCommand = (text: string) =>
@@ -154,11 +192,25 @@ export const startTelegramBot = ({ token, sql }: TelegramBotConfig) => {
           continue;
         }
 
-        if (command === "/start" || command === "/help") {
+        if (command === "/start") {
+          const title = text.slice(command.length).trim();
+          if (!title) {
+            await sendNotification(
+              token,
+              chatId,
+              "Use /start <title> to begin a manual session, or /stop to end your current session."
+            );
+          } else {
+            await handleStartCommand(token, sql, chatId, title);
+          }
+          continue;
+        }
+
+        if (command === "/help") {
           await sendNotification(
             token,
             chatId,
-            "Use /stop to end your current session."
+            "Use /start <title> to begin a manual session, or /stop to end your current session."
           );
         }
       }

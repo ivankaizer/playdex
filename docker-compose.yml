@@ -25,6 +25,8 @@ services:
       CORS_ORIGINS: "http://ui.playdex.orb.local,https://ui.playdex.orb.local"
       POLL_INTERVAL_SECONDS: 180
       JWT_SECRET: dev-only-jwt-secret-do-not-use-in-production
+      IGDB_CLIENT_ID: REMOVED
+      IGDB_CLIENT_SECRET: REMOVED
     volumes:
       - .:/app
       - /app/node_modules

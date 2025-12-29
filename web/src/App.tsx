@@ -1,5 +1,5 @@
 import type { FormEvent } from "react";
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 
 import { apiRequest } from "./api";
 
@@ -10,6 +10,8 @@ type AccountSession = {
   platform: string;
   game: string;
   capsuleUrl: string | null;
+  mappedPlatform?: string;
+  mappedSource?: "local" | "igdb";
 };
 
 type AccountSessionsResponse = {
@@ -34,7 +36,7 @@ type AccountStatsPeriod = {
   totalSeconds: number;
   sessionCount: number;
   topGameTitle: string | null;
-  platforms: { platform: string; totalSeconds: number }[];
+  platforms: { platform: string; totalSeconds: number; source?: string | null }[];
   topGames: { title: string; totalSeconds: number }[];
 };
 
@@ -42,6 +44,10 @@ type AccountStatsResponse = {
   accountId: number | null;
   monthly: AccountStatsPeriod;
   yearly: AccountStatsPeriod;
+};
+
+type AccountTodayPlatformTotalsResponse = {
+  platforms: { platform: string; totalSeconds: number; source?: string | null }[];
 };
 
 type ProviderStatus = {
@@ -60,7 +66,57 @@ type PlayniteKeyResponse = {
   apiKey: string;
 };
 
-const protectedPaths = new Set(["/dashboard", "/sessions", "/settings"]);
+type ManualInput = {
+  id: number;
+  input: string;
+  canonicalTitle: string;
+  mappedGameId: number | null;
+  mappedGame: {
+    id: number;
+    title: string;
+    platform: string;
+    capsuleUrl: string | null;
+  } | null;
+};
+
+type ManualInputsResponse = {
+  inputs: ManualInput[];
+};
+
+type ManualSessionStartResponse = {
+  sessionId: number;
+};
+
+type ManualSessionStopResponse = {
+  endedSessionCount: number;
+};
+
+type ManualMappingSearchResult = {
+  source: "local" | "igdb";
+  gameId?: number;
+  igdbId?: string;
+  title: string;
+  platform: string | null;
+  capsuleUrl: string | null;
+};
+
+type ManualMappingSearchResponse = {
+  query: string;
+  igdbAvailable: boolean;
+  results: ManualMappingSearchResult[];
+};
+
+type ManualMappingResponse = {
+  inputId: number;
+  mappedGameId: number | null;
+};
+
+const protectedPaths = new Set([
+  "/dashboard",
+  "/sessions",
+  "/mapping",
+  "/settings",
+]);
 
 export const App = () => {
   const [path, setPath] = useState(() => window.location.pathname);
@@ -78,6 +134,9 @@ export const App = () => {
   const [isProvidersLoading, setIsProvidersLoading] = useState(false);
   const [providersError, setProvidersError] = useState("");
   const [todaySessions, setTodaySessions] = useState<AccountSession[]>([]);
+  const [todayPlatformTotals, setTodayPlatformTotals] = useState<
+    { platform: string; totalSeconds: number; source?: string | null }[]
+  >([]);
   const [currentSession, setCurrentSession] = useState<AccountSession | null>(
     null
   );
@@ -104,6 +163,26 @@ export const App = () => {
   const [sessionsSortDirection, setSessionsSortDirection] = useState<
     "asc" | "desc"
   >("desc");
+  const [manualInputs, setManualInputs] = useState<ManualInput[]>([]);
+  const [isManualInputsLoading, setIsManualInputsLoading] = useState(false);
+  const [manualInputsError, setManualInputsError] = useState("");
+  const [isManualModalOpen, setIsManualModalOpen] = useState(false);
+  const [manualInputSelection, setManualInputSelection] = useState("");
+  const [manualInputText, setManualInputText] = useState("");
+  const [manualStartError, setManualStartError] = useState("");
+  const [isManualStartLoading, setIsManualStartLoading] = useState(false);
+  const [isManualStopLoading, setIsManualStopLoading] = useState(false);
+  const [activeMappingInputId, setActiveMappingInputId] = useState<
+    number | null
+  >(null);
+  const [mappingSearchQuery, setMappingSearchQuery] = useState("");
+  const [mappingSearchResults, setMappingSearchResults] = useState<
+    ManualMappingSearchResult[]
+  >([]);
+  const [mappingSearchError, setMappingSearchError] = useState("");
+  const [isMappingSearchLoading, setIsMappingSearchLoading] = useState(false);
+  const [mappingIgdbAvailable, setMappingIgdbAvailable] = useState(true);
+  const [isMappingUpdateLoading, setIsMappingUpdateLoading] = useState(false);
   const sessionsLimit = 10;
   const capsuleUrl =
     "https://shared.steamstatic.com/store_item_assets/steam/apps/2186680/library_600x900_2x.jpg";
@@ -117,6 +196,11 @@ export const App = () => {
       label: "PL",
       color: "bg-amber-500/30",
       accent: "text-amber-200",
+    },
+    manual: {
+      label: "M",
+      color: "bg-teal-500/30",
+      accent: "text-teal-200",
     },
   };
   const navigate = (target: string) => {
@@ -132,6 +216,7 @@ export const App = () => {
     () => [
       { label: "Dashboard", path: "/dashboard" },
       { label: "Sessions", path: "/sessions" },
+      { label: "Mapping", path: "/mapping" },
     ],
     []
   );
@@ -139,6 +224,9 @@ export const App = () => {
     localStorage.removeItem("playdex.token");
     localStorage.removeItem("playdex.email");
     window.location.assign("/");
+  };
+  const handleDashboardRedirect = () => {
+    window.location.assign("/dashboard");
   };
 
   const generatePlayniteKey = async () => {
@@ -185,6 +273,212 @@ export const App = () => {
     }
   };
 
+  const refreshDashboard = async (options?: {
+    silent?: boolean;
+    isCancelled?: () => boolean;
+  }) => {
+    if (!options?.silent) {
+      setIsDashboardLoading(true);
+    }
+    setDashboardError("");
+
+    try {
+      const todayDate = formatUtcDateInput(new Date());
+      const todaySessionsParams = new URLSearchParams({
+        limit: "10",
+        offset: "0",
+        from: todayDate,
+        to: todayDate,
+        sort: "date",
+        direction: "desc",
+      });
+      const [todaySessionsResponse, stats, current, todayTotalsResponse] =
+        await Promise.all([
+          apiRequest<AccountSessionsResponse>(
+            `/sessions?${todaySessionsParams.toString()}`
+          ),
+          apiRequest<AccountStatsResponse>("/stats"),
+          apiRequest<AccountCurrentSessionResponse>("/sessions/current"),
+          apiRequest<AccountTodayPlatformTotalsResponse>("/stats/today"),
+        ]);
+
+      if (options?.isCancelled?.()) {
+        return;
+      }
+
+      setTodaySessions(todaySessionsResponse.sessions);
+      setMonthlyStats(stats.monthly);
+      setYearlyStats(stats.yearly);
+      setCurrentSession(current.session);
+      setTodayPlatformTotals(todayTotalsResponse.platforms);
+      setIsDashboardLoading(false);
+    } catch (err) {
+      if (options?.isCancelled?.()) {
+        return;
+      }
+
+      setTodaySessions([]);
+      setMonthlyStats(null);
+      setYearlyStats(null);
+      setCurrentSession(null);
+      setTodayPlatformTotals([]);
+      setIsDashboardLoading(false);
+      setDashboardError(
+        err instanceof Error ? err.message : "Failed to load dashboard data."
+      );
+    }
+  };
+
+  const loadManualInputs = async () => {
+    setIsManualInputsLoading(true);
+    setManualInputsError("");
+    try {
+      const response = await apiRequest<ManualInputsResponse>(
+        "/manual/inputs"
+      );
+      setManualInputs(response.inputs);
+      setIsManualInputsLoading(false);
+    } catch (err) {
+      setManualInputs([]);
+      setIsManualInputsLoading(false);
+      setManualInputsError(
+        err instanceof Error ? err.message : "Failed to load manual inputs."
+      );
+    }
+  };
+
+  const handleManualSessionStart = async () => {
+    const title = manualInputText.trim();
+    if (!title) {
+      setManualStartError("Enter a title to start a session.");
+      return;
+    }
+
+    setIsManualStartLoading(true);
+    setManualStartError("");
+    try {
+      await apiRequest<ManualSessionStartResponse>("/manual/sessions/start", {
+        method: "POST",
+        body: { title },
+      });
+      closeManualModal();
+      await loadManualInputs();
+      if (path === "/dashboard") {
+        await refreshDashboard({ silent: true });
+      }
+    } catch (err) {
+      setManualStartError(
+        err instanceof Error ? err.message : "Failed to start session."
+      );
+    } finally {
+      setIsManualStartLoading(false);
+    }
+  };
+
+  const handleManualSessionStop = async () => {
+    setIsManualStopLoading(true);
+    setDashboardError("");
+    try {
+      await apiRequest<ManualSessionStopResponse>("/manual/sessions/stop", {
+        method: "POST",
+      });
+      if (path === "/dashboard") {
+        await refreshDashboard({ silent: true });
+      }
+    } catch (err) {
+      setDashboardError(
+        err instanceof Error ? err.message : "Failed to stop session."
+      );
+    } finally {
+      setIsManualStopLoading(false);
+    }
+  };
+
+  const closeManualModal = () => {
+    setIsManualModalOpen(false);
+    setManualInputSelection("");
+    setManualInputText("");
+    setManualStartError("");
+  };
+
+  const handleMappingSearch = async () => {
+    const query = mappingSearchQuery.trim();
+    if (!query) {
+      setMappingSearchError("Enter a search query.");
+      return;
+    }
+
+    setIsMappingSearchLoading(true);
+    setMappingSearchError("");
+    try {
+      const response = await apiRequest<ManualMappingSearchResponse>(
+        `/manual/search?query=${encodeURIComponent(query)}`
+      );
+      setMappingIgdbAvailable(response.igdbAvailable);
+      setMappingSearchResults(response.results);
+    } catch (err) {
+      setMappingSearchResults([]);
+      setMappingSearchError(
+        err instanceof Error ? err.message : "Failed to search IGDB."
+      );
+    } finally {
+      setIsMappingSearchLoading(false);
+    }
+  };
+
+  const handleMappingSelection = async (
+    inputId: number,
+    result: ManualMappingSearchResult
+  ) => {
+    setIsMappingUpdateLoading(true);
+    setMappingSearchError("");
+    try {
+      if (result.source === "local" && result.gameId) {
+        await apiRequest<ManualMappingResponse>(
+          `/manual/inputs/${inputId}/map`,
+          {
+            method: "POST",
+            body: { gameId: result.gameId },
+          }
+        );
+      } else if (result.source === "igdb" && result.igdbId) {
+        await apiRequest<ManualMappingResponse>(
+          `/manual/inputs/${inputId}/map`,
+          {
+            method: "POST",
+            body: {
+              igdbId: result.igdbId,
+              title: result.title,
+              platform: result.platform,
+              capsuleUrl: result.capsuleUrl,
+            },
+          }
+        );
+      } else {
+        setMappingSearchError("Invalid mapping selection.");
+        return;
+      }
+
+      setActiveMappingInputId(null);
+      setMappingSearchQuery("");
+      setMappingSearchResults([]);
+      await loadManualInputs();
+    } catch (err) {
+      setMappingSearchError(
+        err instanceof Error ? err.message : "Failed to map manual input."
+      );
+    } finally {
+      setIsMappingUpdateLoading(false);
+    }
+  };
+
+  const openMappingRow = (input: ManualInput) => {
+    setActiveMappingInputId(input.id);
+    setMappingSearchQuery(input.mappedGame?.title ?? input.input);
+    setMappingSearchResults([]);
+    setMappingSearchError("");
+  };
+
   useEffect(() => {
     const handlePopState = () => setPath(window.location.pathname);
     window.addEventListener("popstate", handlePopState);
@@ -197,41 +491,7 @@ export const App = () => {
     }
 
     let cancelled = false;
-    setIsDashboardLoading(true);
-    setDashboardError("");
-
-    const loadDashboard = async () => {
-      try {
-        const [today, stats, current] = await Promise.all([
-          apiRequest<AccountTodaySessionsResponse>("/sessions/today"),
-          apiRequest<AccountStatsResponse>("/stats"),
-          apiRequest<AccountCurrentSessionResponse>("/sessions/current"),
-        ]);
-
-        if (cancelled) {
-          return;
-        }
-
-        setTodaySessions(today.sessions);
-        setMonthlyStats(stats.monthly);
-        setYearlyStats(stats.yearly);
-        setCurrentSession(current.session);
-        setIsDashboardLoading(false);
-      } catch (err) {
-        if (!cancelled) {
-          setTodaySessions([]);
-          setMonthlyStats(null);
-          setYearlyStats(null);
-          setCurrentSession(null);
-          setIsDashboardLoading(false);
-          setDashboardError(
-            err instanceof Error ? err.message : "Failed to load dashboard data."
-          );
-        }
-      }
-    };
-
-    loadDashboard();
+    void refreshDashboard({ isCancelled: () => cancelled });
     return () => {
       cancelled = true;
     };
@@ -370,6 +630,14 @@ export const App = () => {
   }, [path]);
 
   useEffect(() => {
+    if (path !== "/mapping" && !isManualModalOpen) {
+      return;
+    }
+
+    void loadManualInputs();
+  }, [path, isManualModalOpen]);
+
+  useEffect(() => {
     const token = localStorage.getItem("playdex.token");
     if (!token) {
       setSessionEmail("");
@@ -499,16 +767,48 @@ export const App = () => {
     steam: "Steam",
     psn: "PS5",
     playnite: "Playnite",
+    manual: "Manual",
   };
   const providerNames: Record<string, string> = {
     steam: "Steam",
     psn: "PlayStation",
     playnite: "Playnite",
+    manual: "Manual",
   };
   const formatPlatformLabel = (platform: string) =>
     platformLabels[platform] ?? platform;
   const formatProviderName = (platform: string) =>
     providerNames[platform] ?? platform;
+  const formatSessionPlatformLabel = (session: AccountSession) => {
+    const platform = session.mappedPlatform ?? session.platform;
+    return formatPlatformLabel(platform);
+  };
+  const formatStatsPlatformLabel = (
+    platform: string,
+    source?: string | null
+  ) => {
+    return formatPlatformLabel(platform);
+  };
+  const getSessionPlatformBreakdown = (session: AccountSession) => {
+    const platform = session.mappedPlatform ?? session.platform;
+    const label = formatPlatformLabel(platform);
+    return {
+      key: platform,
+      label,
+    };
+  };
+  const formatManualMappingType = (platform?: string | null) =>
+    platform === "igdb" ? "IGDB" : "Local";
+  const formatManualInputLabel = (input: ManualInput) => {
+    if (!input.mappedGame) {
+      return input.input;
+    }
+    const platformLabel = input.mappedGame.platform
+      ? formatPlatformLabel(input.mappedGame.platform)
+      : "Unknown platform";
+    const typeLabel = formatManualMappingType(input.mappedGame.platform);
+    return `${platformLabel} · ${typeLabel} · ${input.mappedGame.title}`;
+  };
   const formatDateLabel = (date: Date) =>
     date.toLocaleDateString("en-US", {
       month: "short",
@@ -545,6 +845,8 @@ export const App = () => {
           : 0;
     return `${value}h`;
   };
+  const formatUtcDateInput = (date: Date) =>
+    date.toISOString().slice(0, 10);
   const getSessionDurationSeconds = (session: AccountSession) => {
     const started = new Date(session.startedAt).getTime();
     const ended = session.endedAt
@@ -564,47 +866,39 @@ export const App = () => {
       todaySessions.map((session) => ({
         title: session.game,
         time: formatDuration(getSessionDurationSeconds(session), "long"),
-        platform: formatPlatformLabel(session.platform),
+        platform: formatSessionPlatformLabel(session),
         image: session.capsuleUrl ?? capsuleUrl,
       })),
     [todaySessions]
   );
   const todayTotals = useMemo(() => {
-    const totalSeconds = todaySessions.reduce(
-      (sum, session) => sum + getSessionDurationSeconds(session),
+    const totalSeconds = todayPlatformTotals.reduce(
+      (sum, item) => sum + item.totalSeconds,
       0
     );
     return {
       seconds: totalSeconds,
       hours: formatHours(totalSeconds, 1),
     };
-  }, [todaySessions]);
+  }, [todayPlatformTotals]);
   const todayPlatforms = useMemo(() => {
-    if (todaySessions.length === 0) {
+    if (todayPlatformTotals.length === 0) {
       return [];
     }
-    const totals = todaySessions.reduce<Record<string, number>>(
-      (acc, session) => {
-        const key = session.platform;
-        acc[key] = (acc[key] ?? 0) + getSessionDurationSeconds(session);
-        return acc;
-      },
-      {}
-    );
     const totalSeconds = Math.max(todayTotals.seconds, 1);
-    return Object.entries(totals).map(([platform, seconds]) => ({
-      label: formatPlatformLabel(platform),
-      value: Math.round((seconds / totalSeconds) * 100),
-      hours: formatHours(seconds, 1),
+    return todayPlatformTotals.map((item) => ({
+      label: formatStatsPlatformLabel(item.platform, item.source),
+      value: Math.round((item.totalSeconds / totalSeconds) * 100),
+      hours: formatHours(item.totalSeconds, 1),
     }));
-  }, [todaySessions, todayTotals.seconds]);
+  }, [todayPlatformTotals, todayTotals.seconds]);
   const monthlyPlatforms = useMemo(() => {
     if (!monthlyStats) {
       return [];
     }
     const total = Math.max(monthlyStats.totalSeconds, 1);
     return monthlyStats.platforms.map((item) => ({
-      label: formatPlatformLabel(item.platform),
+      label: formatStatsPlatformLabel(item.platform, item.source),
       value: Math.round((item.totalSeconds / total) * 100),
       hours: formatHours(item.totalSeconds, 1),
     }));
@@ -644,7 +938,7 @@ export const App = () => {
     }
     const total = Math.max(yearlyStats.totalSeconds, 1);
     return yearlyStats.platforms.map((item) => ({
-      label: formatPlatformLabel(item.platform),
+      label: formatStatsPlatformLabel(item.platform, item.source),
       value: Math.round((item.totalSeconds / total) * 100),
       hours: formatHours(item.totalSeconds, 0),
     }));
@@ -679,7 +973,7 @@ export const App = () => {
     () =>
       sessionRows.map((session) => ({
         title: session.game,
-        platform: formatPlatformLabel(session.platform),
+        platform: formatSessionPlatformLabel(session),
         date: formatDateLabel(new Date(session.startedAt)),
         duration: formatDuration(getSessionDurationSeconds(session), "short"),
         image: session.capsuleUrl ?? capsuleUrl,
@@ -799,9 +1093,29 @@ export const App = () => {
                 <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-300">
                   Current session
                 </p>
-                <span className="rounded-full border border-emerald-400/40 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.3em] text-emerald-200">
-                  {currentSession ? "Live" : "Idle"}
-                </span>
+                <div className="flex flex-wrap items-center gap-3">
+                  {currentSession?.platform === "manual" ? (
+                    <button
+                      type="button"
+                      onClick={handleManualSessionStop}
+                      disabled={isManualStopLoading}
+                      className="rounded-full border border-rose-500/60 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.3em] text-rose-200 transition hover:border-rose-400 hover:text-rose-100 disabled:cursor-not-allowed disabled:border-rose-500/40"
+                    >
+                      {isManualStopLoading ? "Stopping..." : "Stop session"}
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setIsManualModalOpen(true)}
+                      className="rounded-full border border-emerald-400/60 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.3em] text-emerald-200 transition hover:border-emerald-300"
+                    >
+                      Start session
+                    </button>
+                  )}
+                  <span className="rounded-full border border-emerald-400/40 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.3em] text-emerald-200">
+                    {currentSession ? "Live" : "Idle"}
+                  </span>
+                </div>
               </div>
               {isDashboardLoading ? (
                 <div className="mt-3 flex flex-wrap items-center justify-between gap-5">
@@ -829,7 +1143,7 @@ export const App = () => {
                           >
                             <path d="M3 5a2 2 0 012-2h10a2 2 0 012 2v2H3V5zm0 4h14v6a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
                           </svg>
-                          {formatPlatformLabel(currentSession.platform)}
+                          {formatSessionPlatformLabel(currentSession)}
                         </span>
                         <span className="inline-flex items-center gap-2 text-slate-300">
                           <svg
@@ -1192,6 +1506,355 @@ export const App = () => {
                   </div>
                 </div>
               </div>
+            </div>
+          </section>
+        </div>
+        {isManualModalOpen ? (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 px-4 py-8">
+            <div className="w-full max-w-lg rounded-3xl border border-slate-800 bg-slate-900/90 p-6 shadow-[0_30px_80px_rgba(15,23,42,0.7)]">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-300">
+                    Manual tracking
+                  </p>
+                  <h2 className="mt-2 text-xl font-semibold text-white">
+                    Start a session
+                  </h2>
+                </div>
+                <button
+                  type="button"
+                  onClick={closeManualModal}
+                  className="rounded-full border border-slate-700 px-3 py-1 text-xs font-semibold uppercase tracking-[0.3em] text-slate-200"
+                >
+                  Close
+                </button>
+              </div>
+
+              <div className="mt-6 grid gap-4">
+                <label className="text-xs font-medium text-slate-300">
+                  Pick from history
+                  <select
+                    value={manualInputSelection}
+                    onChange={(event) => {
+                      const value = event.target.value;
+                      setManualInputSelection(value);
+                      setManualInputText(value);
+                    }}
+                    disabled={isManualInputsLoading}
+                    className="mt-2 w-full rounded-xl border border-slate-700 bg-slate-950/80 px-3 py-2 text-sm text-white outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/30"
+                  >
+                    <option value="">Choose a recent title</option>
+                    {manualInputs.map((input) => (
+                      <option key={input.id} value={input.input}>
+                        {formatManualInputLabel(input)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="text-xs font-medium text-slate-300">
+                  Or enter a new title
+                  <input
+                    type="text"
+                    placeholder="Mario Kart"
+                    value={manualInputText}
+                    onChange={(event) => setManualInputText(event.target.value)}
+                    className="mt-2 w-full rounded-xl border border-slate-700 bg-slate-950/80 px-3 py-2 text-sm text-white outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/30"
+                  />
+                </label>
+
+                {manualInputsError ? (
+                  <p className="text-xs text-rose-300">{manualInputsError}</p>
+                ) : null}
+                {manualStartError ? (
+                  <p className="text-xs text-rose-300">{manualStartError}</p>
+                ) : null}
+              </div>
+
+              <div className="mt-6 flex flex-wrap items-center justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={closeManualModal}
+                  className="rounded-full border border-slate-700 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-slate-200"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleManualSessionStart}
+                  disabled={
+                    isManualStartLoading ||
+                    isManualInputsLoading ||
+                    !manualInputText.trim()
+                  }
+                  className="rounded-full bg-emerald-400 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-slate-900 transition hover:bg-emerald-300 disabled:cursor-not-allowed disabled:bg-emerald-300/60"
+                >
+                  {isManualStartLoading ? "Starting..." : "Start session"}
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
+      </main>
+    );
+  }
+
+  if (path === "/mapping") {
+    return (
+      <main className="relative min-h-screen overflow-hidden bg-slate-950 text-slate-100">
+        {background}
+        <div className="relative mx-auto w-full max-w-6xl px-6 py-12">
+          <header className="flex flex-wrap items-center justify-between gap-4 rounded-3xl border border-slate-800 bg-slate-900/70 px-6 py-4">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.5em] text-emerald-300">
+                Playdex
+              </p>
+              <h1 className="text-2xl font-semibold text-white">Mapping</h1>
+            </div>
+            <nav className="flex flex-wrap items-center gap-3 text-sm">
+              {navItems.map((item) => (
+                <button
+                  key={item.path}
+                  type="button"
+                  onClick={() => navigate(item.path)}
+                  className={`rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] transition ${
+                    path === item.path
+                      ? "bg-emerald-400 text-slate-900"
+                      : "border border-slate-700 text-slate-200 hover:border-emerald-400/60"
+                  }`}
+                >
+                  {item.label}
+                </button>
+              ))}
+              <button
+                type="button"
+                onClick={handleLogout}
+                className="rounded-full border border-rose-500/60 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-rose-200 transition hover:border-rose-400 hover:text-rose-100"
+              >
+                Logout
+              </button>
+            </nav>
+          </header>
+
+          <section className="mt-10 rounded-3xl border border-slate-800 bg-slate-900/60 p-6">
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-300">
+                  Manual mapping
+                </p>
+                <h2 className="mt-2 text-xl font-semibold text-white">
+                  Connect manual inputs to games
+                </h2>
+              </div>
+              <button
+                type="button"
+                onClick={loadManualInputs}
+                disabled={isManualInputsLoading}
+                className="rounded-full border border-slate-700 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-slate-200 transition hover:border-emerald-400/60 disabled:cursor-not-allowed"
+              >
+                {isManualInputsLoading ? "Refreshing..." : "Refresh"}
+              </button>
+            </div>
+
+            {manualInputsError ? (
+              <p className="mt-4 text-xs text-rose-300">{manualInputsError}</p>
+            ) : null}
+
+            <div className="mt-6 overflow-hidden rounded-2xl border border-slate-800">
+              <table className="w-full text-left text-sm">
+                <thead className="bg-slate-950/70 text-xs uppercase tracking-[0.3em] text-slate-400">
+                  <tr>
+                    <th className="px-4 py-3 text-left">Input</th>
+                    <th className="px-4 py-3 text-left">Mapped game</th>
+                    <th className="px-4 py-3 text-right">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-800 bg-slate-900/60">
+                  {isManualInputsLoading ? (
+                    [1, 2, 3].map((row) => (
+                      <tr key={row}>
+                        <td className="px-4 py-4">
+                          <div className="h-3 w-32 rounded-full bg-slate-800/60" />
+                        </td>
+                        <td className="px-4 py-4">
+                          <div className="h-3 w-40 rounded-full bg-slate-800/50" />
+                        </td>
+                        <td className="px-4 py-4 text-right">
+                          <div className="ml-auto h-8 w-20 rounded-full bg-slate-800/50" />
+                        </td>
+                      </tr>
+                    ))
+                  ) : manualInputs.length === 0 ? (
+                    <tr>
+                      <td
+                        colSpan={3}
+                        className="px-4 py-10 text-center text-sm text-slate-400"
+                      >
+                        No manual inputs yet. Start a session to populate this
+                        list.
+                      </td>
+                    </tr>
+                  ) : (
+                    manualInputs.map((input) => (
+                      <Fragment key={input.id}>
+                        <tr className="transition hover:bg-slate-900/70">
+                          <td className="px-4 py-3 font-semibold text-white">
+                            {formatManualInputLabel(input)}
+                          </td>
+                          <td className="px-4 py-3 text-slate-300">
+                            {input.mappedGame ? (
+                              <span className="inline-flex items-center gap-2">
+                                {input.mappedGame.capsuleUrl ? (
+                                  <img
+                                    src={input.mappedGame.capsuleUrl}
+                                    alt={`${input.mappedGame.title} cover`}
+                                    className="h-10 w-8 rounded-lg border border-slate-800 object-cover"
+                                  />
+                                ) : null}
+                                <span>
+                                  {input.mappedGame.title}
+                                  {input.mappedGame.platform
+                                    ? ` · ${formatPlatformLabel(
+                                        input.mappedGame.platform
+                                      )}`
+                                    : ""}
+                                </span>
+                              </span>
+                            ) : (
+                              <span className="text-slate-500">Unmapped</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3 text-right">
+                            {input.mappedGame ? (
+                              <button
+                                type="button"
+                                onClick={() => openMappingRow(input)}
+                                className="rounded-full border border-slate-700 px-3 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-slate-200 transition hover:border-emerald-400/60 hover:text-emerald-100"
+                              >
+                                Edit mapping
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => openMappingRow(input)}
+                                className="rounded-full border border-emerald-400/60 px-3 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-emerald-200 transition hover:border-emerald-300"
+                              >
+                                Map
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                        {activeMappingInputId === input.id ? (
+                          <tr>
+                            <td colSpan={3} className="px-4 py-4">
+                              <div className="rounded-2xl border border-slate-800 bg-slate-950/50 p-4">
+                                <div className="flex flex-wrap items-end gap-3">
+                                  <label className="flex-1 text-xs font-medium text-slate-300">
+                                    Search IGDB
+                                    <input
+                                      type="text"
+                                      value={mappingSearchQuery}
+                                      onChange={(event) =>
+                                        setMappingSearchQuery(
+                                          event.target.value
+                                        )
+                                      }
+                                      className="mt-2 w-full rounded-xl border border-slate-700 bg-slate-950/80 px-3 py-2 text-sm text-white outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/30"
+                                    />
+                                  </label>
+                                  <button
+                                    type="button"
+                                    onClick={handleMappingSearch}
+                                    disabled={isMappingSearchLoading}
+                                    className="rounded-full bg-emerald-400 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-slate-900 transition hover:bg-emerald-300 disabled:cursor-not-allowed disabled:bg-emerald-300/60"
+                                  >
+                                    {isMappingSearchLoading
+                                      ? "Searching..."
+                                      : "Search"}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setActiveMappingInputId(null)}
+                                    className="rounded-full border border-slate-700 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-slate-200"
+                                  >
+                                    Close
+                                  </button>
+                                </div>
+
+                                {!mappingIgdbAvailable ? (
+                                  <p className="mt-3 text-xs text-amber-200">
+                                    IGDB is not configured on the server.
+                                  </p>
+                                ) : null}
+                                {mappingSearchError ? (
+                                  <p className="mt-3 text-xs text-rose-300">
+                                    {mappingSearchError}
+                                  </p>
+                                ) : null}
+
+                                <div className="mt-4 grid gap-3">
+                                  {mappingSearchResults.length === 0 ? (
+                                    <p className="text-xs text-slate-400">
+                                      Search for a game to map this input.
+                                    </p>
+                                  ) : (
+                                    mappingSearchResults.map((result) => (
+                                      <div
+                                        key={`${result.source}-${result.igdbId ?? result.gameId}-${result.title}`}
+                                        className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-800 bg-slate-950/40 p-3"
+                                      >
+                                        <div className="flex items-center gap-3">
+                                          {result.capsuleUrl ? (
+                                            <img
+                                              src={result.capsuleUrl}
+                                              alt={`${result.title} cover`}
+                                              className="h-12 w-9 rounded-lg border border-slate-800 object-cover"
+                                            />
+                                          ) : (
+                                            <div className="h-12 w-9 rounded-lg border border-slate-800 bg-slate-900/60" />
+                                          )}
+                                          <div>
+                                            <p className="text-sm font-semibold text-white">
+                                              {result.title}
+                                            </p>
+                                            <p className="text-xs text-slate-400">
+                                              {result.platform
+                                                ? formatPlatformLabel(
+                                                    result.platform
+                                                  )
+                                                : "Unknown platform"}{" "}
+                                              · {result.source.toUpperCase()}
+                                            </p>
+                                          </div>
+                                        </div>
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            handleMappingSelection(
+                                              input.id,
+                                              result
+                                            )
+                                          }
+                                          disabled={isMappingUpdateLoading}
+                                          className="rounded-full border border-emerald-400/60 px-3 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-emerald-200 transition hover:border-emerald-300 disabled:cursor-not-allowed"
+                                        >
+                                          {isMappingUpdateLoading
+                                            ? "Mapping..."
+                                            : "Map"}
+                                        </button>
+                                      </div>
+                                    ))
+                                  )}
+                                </div>
+                              </div>
+                            </td>
+                          </tr>
+                        ) : null}
+                      </Fragment>
+                    ))
+                  )}
+                </tbody>
+              </table>
             </div>
           </section>
         </div>
@@ -1714,6 +2377,13 @@ export const App = () => {
                       </span>
                     </p>
                   </div>
+                  <button
+                    type="button"
+                    onClick={handleDashboardRedirect}
+                    className="w-full rounded-xl border border-emerald-400/60 bg-emerald-400/10 px-6 py-3 text-sm font-semibold uppercase tracking-[0.3em] text-emerald-100 transition hover:border-emerald-300 hover:text-emerald-50"
+                  >
+                    Open dashboard
+                  </button>
                   <button
                     type="button"
                     onClick={handleLogout}
