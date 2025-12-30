@@ -790,4 +790,8 @@ export const exampleListPlatformCredentialsForUser = (
     `;
 
 export const calculateTotalPlaySessions = (sql: Sql = getSql()) =>
-  sql`select 1 as count`;
+  sql`
+      select
+        count(*) AS count
+      from play_sessions
+    `;
