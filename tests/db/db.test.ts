@@ -5,7 +5,7 @@ import { createTestDatabase } from "../helpers/db";
 import { dbTests } from "./cases";
 import { resetDatabase } from "./support";
 
-const hasDatabase = Boolean(Bun.env.DATABASE_TEST_URL);
+const hasDatabase = Boolean(Bun.env.DATABASE_URL);
 const requiresDb = hasDatabase ? test : test.skip;
 
 let db: TestDatabase | null = null;
