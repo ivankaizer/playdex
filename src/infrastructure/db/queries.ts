@@ -25,6 +25,8 @@ export type AccountSessionRow = {
   platform: string;
   title: string;
   capsule_url: string | null;
+  game_platform: string;
+  game_canonical_key: string;
 };
 
 export type AccountSessionCountRow = {
@@ -55,6 +57,7 @@ export type AccountPlaytimeSummaryRow = {
 export type AccountPlatformTotalsRow = {
   platform: string;
   total_seconds: number;
+  source: string | null;
 };
 
 export type AccountTopGameRow = {
@@ -90,6 +93,30 @@ export type UserChatRow = {
   id: number;
   email: string;
   chat_id: string | null;
+};
+
+export type ManualInputRow = {
+  id: number;
+  raw_title: string;
+  canonical_title: string;
+  mapped_game_id: number | null;
+  mapped_title: string | null;
+  mapped_platform: string | null;
+  mapped_capsule_url: string | null;
+};
+
+export type ManualInputLookupRow = {
+  id: number;
+  raw_title: string;
+  canonical_title: string;
+  mapped_game_id: number | null;
+};
+
+export type GameSearchRow = {
+  id: number;
+  title: string;
+  platform: string;
+  capsule_url: string | null;
 };
 
 export const loadPlatformCredentials = async (sql: Sql = getSql()) =>
@@ -174,7 +201,9 @@ export const listAccountSessions = async (
       ps.ended_at,
       pc.platform,
       g.title,
-      g.capsule_url
+      g.capsule_url,
+      g.platform as game_platform,
+      g.canonical_key as game_canonical_key
     from play_sessions ps
     join platform_credentials pc on pc.id = ps.platform_credential_id
     join games g on g.id = ps.game_id
@@ -220,7 +249,9 @@ export const listUserSessions = async (
       ps.ended_at,
       pc.platform,
       g.title,
-      g.capsule_url
+      g.capsule_url,
+      g.platform as game_platform,
+      g.canonical_key as game_canonical_key
     from play_sessions ps
     join platform_credentials pc on pc.id = ps.platform_credential_id
     join games g on g.id = ps.game_id
@@ -303,7 +334,9 @@ export const listAccountSessionsToday = async (
       ps.ended_at,
       pc.platform,
       g.title,
-      g.capsule_url
+      g.capsule_url,
+      g.platform as game_platform,
+      g.canonical_key as game_canonical_key
     from play_sessions ps
     join platform_credentials pc on pc.id = ps.platform_credential_id
     join games g on g.id = ps.game_id
@@ -332,7 +365,9 @@ export const listUserSessionsToday = async (
       ps.ended_at,
       pc.platform,
       g.title,
-      g.capsule_url
+      g.capsule_url,
+      g.platform as game_platform,
+      g.canonical_key as game_canonical_key
     from play_sessions ps
     join platform_credentials pc on pc.id = ps.platform_credential_id
     join games g on g.id = ps.game_id
@@ -360,7 +395,9 @@ export const loadAccountCurrentSession = async (
       ps.ended_at,
       pc.platform,
       g.title,
-      g.capsule_url
+      g.capsule_url,
+      g.platform as game_platform,
+      g.canonical_key as game_canonical_key
     from play_sessions ps
     join platform_credentials pc on pc.id = ps.platform_credential_id
     join games g on g.id = ps.game_id
@@ -442,18 +479,37 @@ export const loadAccountPlatformTotals = async (
 ) =>
   sql<AccountPlatformTotalsRow[]>`
     select
-      pc.platform,
+      case
+        when pc.platform = 'manual'
+          then coalesce(mapped_game.platform, g.platform)
+        else pc.platform
+      end as platform,
+      case
+        when pc.platform = 'manual'
+          and coalesce(mapped_game.canonical_key, g.canonical_key) like 'igdb:%'
+          then 'igdb'
+        when pc.platform = 'manual'
+          and coalesce(mapped_game.id, g.id) is not null
+          then 'local'
+        else null
+      end as source,
       coalesce(
         sum(extract(epoch from (coalesce(ps.ended_at, now()) - ps.started_at))),
         0
       )::float as total_seconds
     from play_sessions ps
     join platform_credentials pc on pc.id = ps.platform_credential_id
+    join games g on g.id = ps.game_id
+    left join manual_game_inputs mgi
+      on pc.platform = 'manual'
+      and mgi.user_id = pc.user_id
+      and mgi.canonical_title = split_part(g.canonical_key, ':', 2)
+    left join games mapped_game on mapped_game.id = mgi.mapped_game_id
     where ps.platform_credential_id = ${accountId}
       and pc.user_id = ${userId}
       and ps.started_at >= ${startedAt}
-    group by pc.platform
-    order by pc.platform
+    group by 1, 2
+    order by 1, 2
   `;
 
 export const loadUserPlatformTotals = async (
@@ -463,17 +519,77 @@ export const loadUserPlatformTotals = async (
 ) =>
   sql<AccountPlatformTotalsRow[]>`
     select
-      pc.platform,
+      case
+        when pc.platform = 'manual'
+          then coalesce(mapped_game.platform, g.platform)
+        else pc.platform
+      end as platform,
+      case
+        when pc.platform = 'manual'
+          and coalesce(mapped_game.canonical_key, g.canonical_key) like 'igdb:%'
+          then 'igdb'
+        when pc.platform = 'manual'
+          and coalesce(mapped_game.id, g.id) is not null
+          then 'local'
+        else null
+      end as source,
       coalesce(
         sum(extract(epoch from (coalesce(ps.ended_at, now()) - ps.started_at))),
         0
       )::float as total_seconds
     from play_sessions ps
     join platform_credentials pc on pc.id = ps.platform_credential_id
+    join games g on g.id = ps.game_id
+    left join manual_game_inputs mgi
+      on pc.platform = 'manual'
+      and mgi.user_id = pc.user_id
+      and mgi.canonical_title = split_part(g.canonical_key, ':', 2)
+    left join games mapped_game on mapped_game.id = mgi.mapped_game_id
     where pc.user_id = ${userId}
       and ps.started_at >= ${startedAt}
-    group by pc.platform
-    order by pc.platform
+    group by 1, 2
+    order by 1, 2
+  `;
+
+export const loadUserPlatformTotalsForRange = async (
+  userId: number,
+  startedAt: Date,
+  endedAt: Date,
+  sql: Sql = getSql()
+) =>
+  sql<AccountPlatformTotalsRow[]>`
+    select
+      case
+        when pc.platform = 'manual'
+          then coalesce(mapped_game.platform, g.platform)
+        else pc.platform
+      end as platform,
+      case
+        when pc.platform = 'manual'
+          and coalesce(mapped_game.canonical_key, g.canonical_key) like 'igdb:%'
+          then 'igdb'
+        when pc.platform = 'manual'
+          and coalesce(mapped_game.id, g.id) is not null
+          then 'local'
+        else null
+      end as source,
+      coalesce(
+        sum(extract(epoch from (coalesce(ps.ended_at, now()) - ps.started_at))),
+        0
+      )::float as total_seconds
+    from play_sessions ps
+    join platform_credentials pc on pc.id = ps.platform_credential_id
+    join games g on g.id = ps.game_id
+    left join manual_game_inputs mgi
+      on pc.platform = 'manual'
+      and mgi.user_id = pc.user_id
+      and mgi.canonical_title = split_part(g.canonical_key, ':', 2)
+    left join games mapped_game on mapped_game.id = mgi.mapped_game_id
+    where pc.user_id = ${userId}
+      and ps.started_at >= ${startedAt}
+      and ps.started_at < ${endedAt}
+    group by 1, 2
+    order by 1, 2
   `;
 
 export const loadAccountTopGames = async (
@@ -575,6 +691,16 @@ export const createPlayniteCredential = async (
     returning id, platform, account_id, active, api_key
   `;
 
+export const createManualCredential = async (
+  userId: number,
+  sql: Sql = getSql()
+) =>
+  sql<ProviderStatusRow[]>`
+    insert into platform_credentials (user_id, platform, api_key, account_id, active)
+    values (${userId}, 'manual', 'manual', 'manual', true)
+    returning id, platform, account_id, active, api_key
+  `;
+
 export const loadUserByEmail = async (
   email: string,
   sql: Sql = getSql()
@@ -623,6 +749,152 @@ export const loadGameById = async (gameId: number, sql: Sql = getSql()) => {
     limit 1
   `;
   return rows[0] ?? null;
+};
+
+export const listManualInputs = async (
+  userId: number,
+  sql: Sql = getSql()
+) =>
+  sql<ManualInputRow[]>`
+    select
+      mgi.id,
+      mgi.raw_title,
+      mgi.canonical_title,
+      mgi.mapped_game_id,
+      g.title as mapped_title,
+      g.platform as mapped_platform,
+      g.capsule_url as mapped_capsule_url
+    from manual_game_inputs mgi
+    left join games g on g.id = mgi.mapped_game_id
+    where mgi.user_id = ${userId}
+    order by mgi.updated_at desc
+  `;
+
+export type ManualInputMappingRow = {
+  canonical_title: string;
+  mapped_game_id: number | null;
+  mapped_title: string | null;
+  mapped_platform: string | null;
+  mapped_capsule_url: string | null;
+  mapped_canonical_key: string | null;
+};
+
+export const loadManualInputMappings = async (
+  userId: number,
+  canonicalTitles: string[],
+  sql: Sql = getSql()
+) =>
+  sql<ManualInputMappingRow[]>`
+    select
+      mgi.canonical_title,
+      mgi.mapped_game_id,
+      g.title as mapped_title,
+      g.platform as mapped_platform,
+      g.capsule_url as mapped_capsule_url,
+      g.canonical_key as mapped_canonical_key
+    from manual_game_inputs mgi
+    left join games g on g.id = mgi.mapped_game_id
+    where mgi.user_id = ${userId}
+      and mgi.canonical_title = any(${sql.array(canonicalTitles)})
+  `;
+
+export const loadManualInputByCanonical = async (
+  userId: number,
+  canonicalTitle: string,
+  sql: Sql = getSql()
+) => {
+  const rows = await sql<ManualInputLookupRow[]>`
+    select id, raw_title, canonical_title, mapped_game_id
+    from manual_game_inputs
+    where user_id = ${userId}
+      and canonical_title = ${canonicalTitle}
+    limit 1
+  `;
+  return rows[0] ?? null;
+};
+
+export const insertManualInput = async (
+  userId: number,
+  rawTitle: string,
+  canonicalTitle: string,
+  sql: Sql = getSql()
+) => {
+  const rows = await sql<ManualInputLookupRow[]>`
+    insert into manual_game_inputs (user_id, raw_title, canonical_title)
+    values (${userId}, ${rawTitle}, ${canonicalTitle})
+    returning id, raw_title, canonical_title, mapped_game_id
+  `;
+  return rows[0] ?? null;
+};
+
+export const updateManualInputTitle = async (
+  inputId: number,
+  rawTitle: string,
+  sql: Sql = getSql()
+) => sql`
+  update manual_game_inputs
+  set raw_title = ${rawTitle}, updated_at = now()
+  where id = ${inputId}
+`;
+
+export const updateManualInputMapping = async (
+  userId: number,
+  inputId: number,
+  gameId: number,
+  sql: Sql = getSql()
+) => {
+  const rows = await sql<ManualInputLookupRow[]>`
+    update manual_game_inputs
+    set mapped_game_id = ${gameId}, updated_at = now()
+    where id = ${inputId}
+      and user_id = ${userId}
+    returning id, raw_title, canonical_title, mapped_game_id
+  `;
+  return rows[0] ?? null;
+};
+
+export const searchGamesByTitle = async (
+  title: string,
+  limit: number,
+  sql: Sql = getSql()
+) =>
+  sql<GameSearchRow[]>`
+    select id, title, platform, capsule_url
+    from games
+    where title ilike ${`%${title}%`}
+    order by updated_at desc
+    limit ${limit}
+  `;
+
+export const ensureIgdbGame = async (
+  game: {
+    igdbId: string;
+    title: string;
+    platform: string | null;
+    capsuleUrl: string | null;
+  },
+  sql: Sql = getSql()
+) => {
+  const canonicalKey = `igdb:${game.igdbId}`;
+  const rows = await sql<{ id: number }[]>`
+    insert into games (platform, title, external_id, canonical_key, capsule_url)
+    values (
+      ${game.platform ?? "igdb"},
+      ${game.title},
+      ${game.igdbId},
+      ${canonicalKey},
+      ${game.capsuleUrl}
+    )
+    on conflict (canonical_key)
+    do update set
+      title = excluded.title,
+      platform = excluded.platform,
+      external_id = excluded.external_id,
+      capsule_url = coalesce(excluded.capsule_url, games.capsule_url),
+      updated_at = now()
+    returning id
+  `;
+  return rows[0].id;
 };
 
 export const endActiveSessionsForUser = async (

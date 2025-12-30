@@ -17,6 +17,8 @@ const normalizeTitle = (title: string) =>
     .replace(/\s+/g, " ")
     .trim();
 
+export const normalizeGameTitle = (title: string) => normalizeTitle(title);
+
 const buildGameKey = (
   platform: Platform,
   externalId: string | undefined,

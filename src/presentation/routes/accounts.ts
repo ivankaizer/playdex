@@ -12,12 +12,14 @@ import {
   getUserSessionsToday,
   getUserSessionsTotal,
   getUserStats,
+  getUserTodayPlatformTotals,
 } from "../../application/accounts";
 import type {
   AccountCurrentSessionResponseDto,
   AccountSessionsResponseDto,
   AccountStatsResponseDto,
   AccountSummaryDto,
+  AccountTodayPlatformTotalsResponseDto,
   AccountTodaySessionsResponseDto,
 } from "./types";
 import {
@@ -196,6 +198,20 @@ export const registerAccountRoutes = (app: Elysia) =>
           monthly: stats.monthly,
           yearly: stats.yearly,
         };
+        return ok(response);
+      })
+    )
+    .get(
+      "/api/stats/today",
+      withApiErrorLogging(async ({ request, set }) => {
+        const auth = requireAuth(request);
+        if (!auth.ok) {
+          set.status = auth.status;
+          return auth.response;
+        }
+
+        const platforms = await getUserTodayPlatformTotals(auth.userId);
+        const response: AccountTodayPlatformTotalsResponseDto = { platforms };
         return ok(response);
       })
     )

@@ -1,18 +1,36 @@
-import { PsnClient } from "../src/infrastructure/clients/psn-client";
+import {
+  exchangeCodeForAccessToken,
+  exchangeNpssoForCode,
+  makeUniversalSearch,
+} from "psn-api";
 
 const npsso = Bun.env.PSN_NPSSO;
+const nickname = Bun.env.PSN_NICKNAME;
 if (!npsso || !npsso.trim()) {
   console.error("Missing PSN_NPSSO.");
   process.exit(1);
 }
 
-const client = new PsnClient({ npsso });
+if (!nickname || !nickname.trim()) {
+  console.error("Missing PSN_NICKNAME.");
+  process.exit(1);
+}
 
 const run = async () => {
-  const accountId = await client.resolveAccountId();
+  const trimmedNickname = nickname.trim();
+  const code = await exchangeNpssoForCode(npsso);
+  const tokenResponse = await exchangeCodeForAccessToken(code);
+  const response = await makeUniversalSearch(
+    { accessToken: tokenResponse.accessToken },
+    trimmedNickname,
+    "SocialAllAccounts"
+  );
+  const accountId =
+    response.domainResponses?.[0]?.results?.[0]?.socialMetadata?.accountId ??
+    "";
 
   if (!accountId) {
-    console.error("Could not resolve account ID from access token.");
+    console.error("Could not resolve account ID from nickname.");
     process.exit(1);
   }
 

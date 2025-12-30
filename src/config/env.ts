@@ -60,4 +60,6 @@ export const config = {
   ),
   telegramBotToken: Bun.env.TELEGRAM_BOT_TOKEN?.trim() ?? "",
   corsOrigins: resolveCorsOrigins(Bun.env.CORS_ORIGINS),
+  igdbClientId: Bun.env.IGDB_CLIENT_ID?.trim() ?? "",
+  igdbClientSecret: Bun.env.IGDB_CLIENT_SECRET?.trim() ?? "",
 };

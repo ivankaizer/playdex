@@ -13,10 +13,92 @@ import {
   loadAccountTopGames,
   loadUserCurrentSession,
   loadUserPlatformTotals,
+  loadUserPlatformTotalsForRange,
   loadUserPlaytimeSummary,
   loadUserTopGames,
+  loadManualInputMappings,
   type AccountSessionFilters,
 } from "../infrastructure/db/queries";
+import { normalizeGameTitle } from "../domain/normalize-game";
+
+type SessionRow = {
+  sessionId: number;
+  startedAt: Date;
+  endedAt: Date | null;
+  platform: string;
+  game: string;
+  capsuleUrl: string | null;
+  gamePlatform?: string;
+  gameCanonicalKey?: string;
+  mappedPlatform?: string;
+  mappedSource?: "local" | "igdb";
+};
+
+const stripSessionMetadata = (session: SessionRow) => {
+  const { gamePlatform, gameCanonicalKey, ...rest } = session;
+  return rest;
+};
+
+const applyManualMappings = async (userId: number, sessions: SessionRow[]) => {
+  const manualSessions = sessions.filter(
+    (session) => session.platform === "manual"
+  );
+  if (manualSessions.length === 0) {
+    return sessions.map(stripSessionMetadata);
+  }
+
+  const canonicalTitles = Array.from(
+    new Set(
+      manualSessions.map((session) => normalizeGameTitle(session.game))
+    )
+  );
+  if (canonicalTitles.length === 0) {
+    return sessions.map(stripSessionMetadata);
+  }
+
+  const mappings = await loadManualInputMappings(userId, canonicalTitles);
+  const mappingIndex = new Map(
+    mappings
+      .filter((row) => row.mapped_game_id && row.mapped_title)
+      .map((row) => [
+        row.canonical_title,
+        {
+          title: row.mapped_title ?? "",
+          platform: row.mapped_platform ?? "manual",
+          capsuleUrl: row.mapped_capsule_url,
+          source: row.mapped_canonical_key?.startsWith("igdb:")
+            ? "igdb"
+            : "local",
+        },
+      ])
+  );
+
+  return sessions.map((session) => {
+    if (session.platform !== "manual") {
+      return stripSessionMetadata(session);
+    }
+    const mapping = mappingIndex.get(normalizeGameTitle(session.game));
+    if (!mapping) {
+      if (session.gamePlatform && session.gamePlatform !== "manual") {
+        return stripSessionMetadata({
+          ...session,
+          mappedPlatform: session.gamePlatform,
+          mappedSource: session.gameCanonicalKey?.startsWith("igdb:")
+            ? "igdb"
+            : "local",
+        });
+      }
+      return stripSessionMetadata(session);
+    }
+    return stripSessionMetadata({
+      ...session,
+      game: mapping.title,
+      capsuleUrl: mapping.capsuleUrl ?? session.capsuleUrl,
+      mappedPlatform: mapping.platform,
+      mappedSource: mapping.source,
+    });
+  });
+};
 
 export const checkDatabaseHealth = async () => {
   await healthCheck();
@@ -41,14 +123,17 @@ export const getAccountSessions = async (
     offset,
     filters
   );
-  return rows.map((row) => ({
+  const sessions = rows.map((row) => ({
     sessionId: +row.id,
     startedAt: row.started_at,
     endedAt: row.ended_at,
     platform: row.platform,
     game: row.title,
     capsuleUrl: row.capsule_url,
+    gamePlatform: row.game_platform,
+    gameCanonicalKey: row.game_canonical_key,
   }));
+  return applyManualMappings(userId, sessions);
 };
 
 export const getUserSessions = async (
@@ -58,14 +143,17 @@ export const getUserSessions = async (
   filters: AccountSessionFilters = {}
 ) => {
   const rows = await listUserSessions(userId, limit, offset, filters);
-  return rows.map((row) => ({
+  const sessions = rows.map((row) => ({
     sessionId: +row.id,
     startedAt: row.started_at,
     endedAt: row.ended_at,
     platform: row.platform,
     game: row.title,
     capsuleUrl: row.capsule_url,
+    gamePlatform: row.game_platform,
+    gameCanonicalKey: row.game_canonical_key,
   }));
+  return applyManualMappings(userId, sessions);
 };
 
 export const getAccountSessionsTotal = async (
@@ -91,26 +179,32 @@ export const getAccountSessionsToday = async (
   limit: number
 ) => {
   const rows = await listAccountSessionsToday(accountId, userId, limit);
-  return rows.map((row) => ({
+  const sessions = rows.map((row) => ({
     sessionId: +row.id,
     startedAt: row.started_at,
     endedAt: row.ended_at,
     platform: row.platform,
     game: row.title,
     capsuleUrl: row.capsule_url,
+    gamePlatform: row.game_platform,
+    gameCanonicalKey: row.game_canonical_key,
   }));
+  return applyManualMappings(userId, sessions);
 };
 
 export const getUserSessionsToday = async (userId: number, limit: number) => {
   const rows = await listUserSessionsToday(userId, limit);
-  return rows.map((row) => ({
+  const sessions = rows.map((row) => ({
     sessionId: +row.id,
     startedAt: row.started_at,
     endedAt: row.ended_at,
     platform: row.platform,
     game: row.title,
     capsuleUrl: row.capsule_url,
+    gamePlatform: row.game_platform,
+    gameCanonicalKey: row.game_canonical_key,
   }));
+  return applyManualMappings(userId, sessions);
 };
 
 export const getAccountCurrentSession = async (
@@ -121,14 +215,18 @@ export const getAccountCurrentSession = async (
   if (!row) {
     return null;
   }
-  return {
+  const session = {
     sessionId: +row.id,
     startedAt: row.started_at,
     endedAt: row.ended_at,
     platform: row.platform,
     game: row.title,
     capsuleUrl: row.capsule_url,
+    gamePlatform: row.game_platform,
+    gameCanonicalKey: row.game_canonical_key,
   };
+  const [mapped] = await applyManualMappings(userId, [session]);
+  return mapped ?? null;
 };
 
 export const getUserCurrentSession = async (userId: number) => {
@@ -136,14 +234,18 @@ export const getUserCurrentSession = async (userId: number) => {
   if (!row) {
     return null;
   }
-  return {
+  const session = {
     sessionId: +row.id,
     startedAt: row.started_at,
     endedAt: row.ended_at,
     platform: row.platform,
     game: row.title,
     capsuleUrl: row.capsule_url,
+    gamePlatform: row.game_platform,
+    gameCanonicalKey: row.game_canonical_key,
   };
+  const [mapped] = await applyManualMappings(userId, [session]);
+  return mapped ?? null;
 };
 
 const buildStatsPeriod = async (
@@ -164,6 +266,7 @@ const buildStatsPeriod = async (
     topGameTitle: topGameRows[0]?.title ?? null,
     platforms: platformRows.map((row) => ({
       platform: row.platform,
+      source: row.source,
       totalSeconds: row.total_seconds ?? 0,
     })),
     topGames: topGameRows.map((row) => ({
@@ -187,6 +290,7 @@ const buildUserStatsPeriod = async (userId: number, startedAt: Date) => {
     topGameTitle: topGameRows[0]?.title ?? null,
     platforms: platformRows.map((row) => ({
       platform: row.platform,
+      source: row.source,
       totalSeconds: row.total_seconds ?? 0,
     })),
     topGames: topGameRows.map((row) => ({
@@ -220,4 +324,20 @@ export const getUserStats = async (userId: number) => {
   ]);
 
   return { monthly, yearly };
+};
+
+export const getUserTodayPlatformTotals = async (userId: number) => {
+  const now = new Date();
+  const start = new Date(
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())
+  );
+  const end = new Date(
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1)
+  );
+  const rows = await loadUserPlatformTotalsForRange(userId, start, end);
+  return rows.map((row) => ({
+    platform: row.platform,
+    source: row.source,
+    totalSeconds: row.total_seconds ?? 0,
+  }));
 };
