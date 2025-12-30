@@ -775,3 +775,23 @@ export const insertAppliedMigration = async (
 ) => sql`
   insert into schema_migrations (version) values (${filename})
 `;
+
+export const exampleListUsers = (sql: Sql = getSql()) =>
+  sql`select id, email from users order by id`;
+
+export const exampleListPlatformCredentialsForUser = (
+  userId: number,
+  sql: Sql = getSql()
+) => sql`
+      select id, platform, api_key, account_id
+      from platform_credentials
+      where user_id = ${userId}
+      order by id
+    `;
+
+export const calculateTotalPlaySessions = (sql: Sql = getSql()) =>
+  sql`
+      select
+        count(*) AS count
+      from play_sessions
+    `;
