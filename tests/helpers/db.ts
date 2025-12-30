@@ -19,9 +19,9 @@ const buildAdminUrl = (baseUrl: URL) => {
 };
 
 export const createTestDatabase = async (): Promise<TestDatabase> => {
-  const baseUrl = Bun.env.DATABASE_URL;
+  const baseUrl = Bun.env.DATABASE_TEST_URL;
   if (!baseUrl) {
-    throw new Error("DATABASE_URL is required to run integration tests.");
+    throw new Error("DATABASE_TEST_URL is required to run integration tests.");
   }
 
   const parsed = new URL(baseUrl);

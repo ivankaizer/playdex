@@ -22,6 +22,7 @@ services:
     command: ["bun", "run", "dev"]
     environment:
       DATABASE_URL: postgresql://playdex:playdex@db:5432/playdex
+      DATABASE_TEST_URL: postgresql://playdex:playdex@127.0.0.1:5432/playdex_db_test
       CORS_ORIGINS: "http://ui.playdex.orb.local,https://ui.playdex.orb.local"
       POLL_INTERVAL_SECONDS: 180
       JWT_SECRET: dev-only-jwt-secret-do-not-use-in-production

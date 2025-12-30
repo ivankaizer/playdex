@@ -15,6 +15,7 @@
     "steam:now": "bun run scripts/steam-now.ts",
     "psn:now": "bun run scripts/psn-now.ts",
     "psn:account": "bun run scripts/psn-account.ts",
+    "db:dump": "bun run scripts/db-dump.ts",
     "db:test": "bun test tests/db",
     "db:migrate": "bun run scripts/migrate.ts",
     "db:seed": "bun run scripts/seed.ts"
