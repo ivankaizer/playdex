@@ -15,6 +15,7 @@
     "steam:now": "bun run scripts/steam-now.ts",
     "psn:now": "bun run scripts/psn-now.ts",
     "psn:account": "bun run scripts/psn-account.ts",
+    "db:test": "DATABASE_URL=postgresql://playdex:playdex@db:5432/playdex_db_test bun test tests/db",
     "db:migrate": "bun run scripts/migrate.ts",
     "db:seed": "bun run scripts/seed.ts"
   },

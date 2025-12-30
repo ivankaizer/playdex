@@ -26,11 +26,19 @@ export const createTestDatabase = async (): Promise<TestDatabase> => {
 
   const parsed = new URL(baseUrl);
   const baseName = parsed.pathname.replace(/^\//, "") || "postgres";
-  const dbName = normalizeDbName(`${baseName}_test`);
+  const normalizedBase = normalizeDbName(baseName);
+  const dbName = normalizedBase.endsWith("_test")
+    ? normalizedBase
+    : `${normalizedBase}_test`;
 
   const adminUrl = buildAdminUrl(parsed);
   const adminSql = postgres(adminUrl.toString(), { max: 1 });
-  await adminSql.unsafe(`create database "${dbName}"`);
+  const existing = await adminSql<{ exists: boolean }[]>`
+    select exists(select 1 from pg_database where datname = ${dbName})
+  `;
+  if (!existing[0]?.exists) {
+    await adminSql.unsafe(`create database "${dbName}"`);
+  }
   await adminSql.end({ timeout: 5 });
 
   const testUrl = new URL(baseUrl);
