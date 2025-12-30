@@ -22,7 +22,7 @@ export const dbTests = [
       `insert into platform_credentials (user_id, platform, api_key, account_id)
         values (1, 'steam', 'key', 'steam-id')`,
     ],
-    query: () => exampleListPlatformCredentialsForUser(1),
+    query: (sql) => exampleListPlatformCredentialsForUser(1, sql),
     expect: {
       rowCount: 1,
       rows: [

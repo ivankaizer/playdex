@@ -18,6 +18,8 @@ const buildAdminUrl = (baseUrl: URL) => {
   return adminUrl;
 };
 
+const isTestDatabaseName = (name: string) => /(^|_)test($|_)/.test(name);
+
 export const createTestDatabase = async (): Promise<TestDatabase> => {
   const baseUrl = Bun.env.DATABASE_URL;
   if (!baseUrl) {
@@ -27,7 +29,7 @@ export const createTestDatabase = async (): Promise<TestDatabase> => {
   const parsed = new URL(baseUrl);
   const baseName = parsed.pathname.replace(/^\//, "") || "postgres";
   const normalizedBase = normalizeDbName(baseName);
-  const dbName = normalizedBase.endsWith("_test")
+  const dbName = isTestDatabaseName(normalizedBase)
     ? normalizedBase
     : `${normalizedBase}_test`;
 
