@@ -183,6 +183,15 @@ export const App = () => {
   const [isMappingSearchLoading, setIsMappingSearchLoading] = useState(false);
   const [mappingIgdbAvailable, setMappingIgdbAvailable] = useState(true);
   const [isMappingUpdateLoading, setIsMappingUpdateLoading] = useState(false);
+  const [mappingPlatformOverride, setMappingPlatformOverride] =
+    useState("PS5");
+  const manualPlatformOptions = [
+    "PS5",
+    "Steam",
+    "Playnite",
+    "Nintendo Switch 2",
+    "Xbox Series X|S",
+  ];
   const sessionsLimit = 10;
   const capsuleUrl =
     "https://shared.steamstatic.com/store_item_assets/steam/apps/2186680/library_600x900_2x.jpg";
@@ -449,7 +458,7 @@ export const App = () => {
             body: {
               igdbId: result.igdbId,
               title: result.title,
-              platform: result.platform,
+              platform: mappingPlatformOverride,
               capsuleUrl: result.capsuleUrl,
             },
           }
@@ -462,6 +471,7 @@ export const App = () => {
       setActiveMappingInputId(null);
       setMappingSearchQuery("");
       setMappingSearchResults([]);
+      setMappingPlatformOverride("PS5");
       await loadManualInputs();
     } catch (err) {
       setMappingSearchError(
@@ -477,6 +487,9 @@ export const App = () => {
     setMappingSearchQuery(input.mappedGame?.title ?? input.input);
     setMappingSearchResults([]);
     setMappingSearchError("");
+    setMappingPlatformOverride(
+      input.mappedGame?.platform?.trim() ? input.mappedGame.platform : "PS5"
+    );
   };
 
   useEffect(() => {
@@ -864,6 +877,7 @@ export const App = () => {
   const todaySessionCards = useMemo(
     () =>
       todaySessions.map((session) => ({
+        sessionId: session.sessionId,
         title: session.game,
         time: formatDuration(getSessionDurationSeconds(session), "long"),
         platform: formatSessionPlatformLabel(session),
@@ -972,6 +986,7 @@ export const App = () => {
   const sessionRowsView = useMemo(
     () =>
       sessionRows.map((session) => ({
+        sessionId: session.sessionId,
         title: session.game,
         platform: formatSessionPlatformLabel(session),
         date: formatDateLabel(new Date(session.startedAt)),
@@ -1289,7 +1304,7 @@ export const App = () => {
                   ) : (
                     todaySessionCards.map((session) => (
                       <div
-                        key={session.title}
+                        key={session.sessionId}
                         className="relative flex flex-wrap items-center justify-between gap-4 overflow-hidden rounded-2xl border border-slate-800 bg-slate-950/50 p-4"
                         style={{
                           backgroundImage: `url(${session.image})`,
@@ -1699,7 +1714,7 @@ export const App = () => {
                       <Fragment key={input.id}>
                         <tr className="transition hover:bg-slate-900/70">
                           <td className="px-4 py-3 font-semibold text-white">
-                            {formatManualInputLabel(input)}
+                            {input.input}
                           </td>
                           <td className="px-4 py-3 text-slate-300">
                             {input.mappedGame ? (
@@ -1747,11 +1762,11 @@ export const App = () => {
                         {activeMappingInputId === input.id ? (
                           <tr>
                             <td colSpan={3} className="px-4 py-4">
-                              <div className="rounded-2xl border border-slate-800 bg-slate-950/50 p-4">
-                                <div className="flex flex-wrap items-end gap-3">
-                                  <label className="flex-1 text-xs font-medium text-slate-300">
-                                    Search IGDB
-                                    <input
+                                <div className="rounded-2xl border border-slate-800 bg-slate-950/50 p-4">
+                                  <div className="flex flex-wrap items-end gap-3">
+                                    <label className="flex-1 text-xs font-medium text-slate-300">
+                                      Search IGDB
+                                      <input
                                       type="text"
                                       value={mappingSearchQuery}
                                       onChange={(event) =>
@@ -1760,13 +1775,34 @@ export const App = () => {
                                         )
                                       }
                                       className="mt-2 w-full rounded-xl border border-slate-700 bg-slate-950/80 px-3 py-2 text-sm text-white outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/30"
-                                    />
-                                  </label>
-                                  <button
-                                    type="button"
-                                    onClick={handleMappingSearch}
-                                    disabled={isMappingSearchLoading}
-                                    className="rounded-full bg-emerald-400 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-slate-900 transition hover:bg-emerald-300 disabled:cursor-not-allowed disabled:bg-emerald-300/60"
+                                      />
+                                    </label>
+                                    <label className="text-xs font-medium text-slate-300">
+                                      Platform override
+                                      <select
+                                        value={mappingPlatformOverride}
+                                        onChange={(event) =>
+                                          setMappingPlatformOverride(
+                                            event.target.value
+                                          )
+                                        }
+                                        className="mt-2 w-full min-w-[180px] rounded-xl border border-slate-700 bg-slate-950/80 px-3 py-2 text-sm text-white outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/30 disabled:cursor-not-allowed"
+                                      >
+                                        {manualPlatformOptions.map((platform) => (
+                                          <option
+                                            key={platform}
+                                            value={platform}
+                                          >
+                                            {platform}
+                                          </option>
+                                        ))}
+                                      </select>
+                                    </label>
+                                    <button
+                                      type="button"
+                                      onClick={handleMappingSearch}
+                                      disabled={isMappingSearchLoading}
+                                      className="rounded-full bg-emerald-400 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-slate-900 transition hover:bg-emerald-300 disabled:cursor-not-allowed disabled:bg-emerald-300/60"
                                   >
                                     {isMappingSearchLoading
                                       ? "Searching..."
@@ -1774,7 +1810,10 @@ export const App = () => {
                                   </button>
                                   <button
                                     type="button"
-                                    onClick={() => setActiveMappingInputId(null)}
+                                    onClick={() => {
+                                      setActiveMappingInputId(null);
+                                      setMappingPlatformOverride("PS5");
+                                    }}
                                     className="rounded-full border border-slate-700 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-slate-200"
                                   >
                                     Close
@@ -1818,11 +1857,15 @@ export const App = () => {
                                               {result.title}
                                             </p>
                                             <p className="text-xs text-slate-400">
-                                              {result.platform
+                                              {result.source === "igdb"
                                                 ? formatPlatformLabel(
-                                                    result.platform
+                                                    mappingPlatformOverride
                                                   )
-                                                : "Unknown platform"}{" "}
+                                                : result.platform
+                                                  ? formatPlatformLabel(
+                                                      result.platform
+                                                    )
+                                                  : "Unknown platform"}{" "}
                                               · {result.source.toUpperCase()}
                                             </p>
                                           </div>
@@ -2245,7 +2288,7 @@ export const App = () => {
                   ) : (
                     sessionRowsView.map((session) => (
                       <tr
-                        key={`${session.title}-${session.date}`}
+                        key={`${session.sessionId}`}
                         className="transition hover:bg-slate-900/70"
                       >
                         <td className="px-4 py-3">
