@@ -13,6 +13,7 @@ import {
   formatDateLabel,
   formatDuration,
   formatSessionPlatformLabel,
+  formatUtcDateInput,
 } from "../utils/formatters";
 import { getSessionDurationSeconds } from "../utils/sessions";
 import { AppHeader } from "../components/AppHeader";
@@ -26,12 +27,76 @@ type SessionsPageProps = {
   onLogout: () => void;
 };
 
+type DateRangePreset =
+  | "today"
+  | "yesterday"
+  | "this-week"
+  | "last-week"
+  | "this-month"
+  | "this-year"
+  | "last-year"
+  | "custom";
+
+const getUtcMidnight = (date: Date) =>
+  new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+
+const addUtcDays = (date: Date, days: number) =>
+  new Date(date.getTime() + days * 24 * 60 * 60 * 1000);
+
+const getPresetRange = (preset: Exclude<DateRangePreset, "custom">) => {
+  const today = getUtcMidnight(new Date());
+  const year = today.getUTCFullYear();
+  const month = today.getUTCMonth();
+
+  if (preset === "today") {
+    const value = formatUtcDateInput(today);
+    return { from: value, to: value };
+  }
+
+  if (preset === "yesterday") {
+    const yesterday = addUtcDays(today, -1);
+    const value = formatUtcDateInput(yesterday);
+    return { from: value, to: value };
+  }
+
+  if (preset === "this-week" || preset === "last-week") {
+    const weekday = today.getUTCDay();
+    const mondayOffset = (weekday + 6) % 7;
+    const weekStart = addUtcDays(today, -mondayOffset);
+    const start =
+      preset === "last-week" ? addUtcDays(weekStart, -7) : weekStart;
+    const end = addUtcDays(start, 6);
+    return {
+      from: formatUtcDateInput(start),
+      to: formatUtcDateInput(end),
+    };
+  }
+
+  if (preset === "this-month") {
+    const start = new Date(Date.UTC(year, month, 1));
+    const end = new Date(Date.UTC(year, month + 1, 0));
+    return {
+      from: formatUtcDateInput(start),
+      to: formatUtcDateInput(end),
+    };
+  }
+
+  const targetYear = preset === "last-year" ? year - 1 : year;
+  const start = new Date(Date.UTC(targetYear, 0, 1));
+  const end = new Date(Date.UTC(targetYear, 11, 31));
+  return {
+    from: formatUtcDateInput(start),
+    to: formatUtcDateInput(end),
+  };
+};
+
 export const SessionsPage = ({
   path,
   navItems = defaultNavItems,
   onNavigate,
   onLogout,
 }: SessionsPageProps) => {
+  const defaultRange = getPresetRange("this-week");
   const [sessionRows, setSessionRows] = useState<AccountSessionsResponse["sessions"]>(
     []
   );
@@ -41,14 +106,17 @@ export const SessionsPage = ({
   const [sessionsError, setSessionsError] = useState("");
   const [sessionsTitle, setSessionsTitle] = useState("");
   const [sessionsTitleDebounced, setSessionsTitleDebounced] = useState("");
-  const [sessionsFrom, setSessionsFrom] = useState("");
-  const [sessionsTo, setSessionsTo] = useState("");
+  const [sessionsFrom, setSessionsFrom] = useState(defaultRange.from);
+  const [sessionsTo, setSessionsTo] = useState(defaultRange.to);
   const [sessionsSortKey, setSessionsSortKey] = useState<"date" | "duration">(
     "date"
   );
   const [sessionsSortDirection, setSessionsSortDirection] = useState<
     "asc" | "desc"
   >("desc");
+  const [sessionsPreset, setSessionsPreset] = useState<DateRangePreset>(
+    "this-week"
+  );
   const [manualEntrySearchQuery, setManualEntrySearchQuery] = useState("");
   const [manualEntrySearchResults, setManualEntrySearchResults] = useState<
     ManualMappingSearchResult[]
@@ -76,6 +144,13 @@ export const SessionsPage = ({
 
   const refreshSessions = () => {
     setSessionsReloadToken((current) => current + 1);
+  };
+
+  const handlePresetSelect = (preset: Exclude<DateRangePreset, "custom">) => {
+    const range = getPresetRange(preset);
+    setSessionsFrom(range.from);
+    setSessionsTo(range.to);
+    setSessionsPreset(preset);
   };
 
   const openManualEntryModal = () => {
@@ -368,6 +443,17 @@ export const SessionsPage = ({
     [sessionRows]
   );
 
+  const sessionPresets: { key: Exclude<DateRangePreset, "custom">; label: string }[] =
+    [
+      { key: "today", label: "Today" },
+      { key: "yesterday", label: "Yesterday" },
+      { key: "this-week", label: "This week" },
+      { key: "last-week", label: "Last week" },
+      { key: "this-month", label: "This month" },
+      { key: "this-year", label: "This year" },
+      { key: "last-year", label: "Last year" },
+    ];
+
   return (
     <main className="relative min-h-screen overflow-hidden bg-slate-950 text-slate-100">
       <Background />
@@ -399,6 +485,23 @@ export const SessionsPage = ({
             </button>
           </div>
 
+          <div className="mt-6 flex flex-wrap gap-2">
+            {sessionPresets.map((preset) => (
+              <button
+                key={preset.key}
+                type="button"
+                onClick={() => handlePresetSelect(preset.key)}
+                className={`rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.3em] transition ${
+                  sessionsPreset === preset.key
+                    ? "border-emerald-300 bg-emerald-400 text-slate-900"
+                    : "border-slate-700 text-slate-200 hover:border-emerald-300/70"
+                }`}
+              >
+                {preset.label}
+              </button>
+            ))}
+          </div>
+
           <div className="mt-6 grid gap-3 md:grid-cols-[1.2fr_0.6fr_0.6fr]">
             <label className="text-xs font-medium text-slate-300">
               Title
@@ -415,7 +518,10 @@ export const SessionsPage = ({
               <input
                 type="date"
                 value={sessionsFrom}
-                onChange={(event) => setSessionsFrom(event.target.value)}
+                onChange={(event) => {
+                  setSessionsFrom(event.target.value);
+                  setSessionsPreset("custom");
+                }}
                 className="mt-2 w-full rounded-xl border border-slate-700 bg-slate-950/80 px-3 py-2 text-sm text-white outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/30"
               />
             </label>
@@ -424,7 +530,10 @@ export const SessionsPage = ({
               <input
                 type="date"
                 value={sessionsTo}
-                onChange={(event) => setSessionsTo(event.target.value)}
+                onChange={(event) => {
+                  setSessionsTo(event.target.value);
+                  setSessionsPreset("custom");
+                }}
                 className="mt-2 w-full rounded-xl border border-slate-700 bg-slate-950/80 px-3 py-2 text-sm text-white outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/30"
               />
             </label>
