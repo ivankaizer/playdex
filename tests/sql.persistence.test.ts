@@ -48,8 +48,13 @@ beforeEach(async () => {
   userId = userRows[0].id;
 
   const credentialRows = await db.sql<{ id: number }[]>`
-    insert into platform_credentials (user_id, platform, api_key, account_id)
-    values (${userId}, 'steam', 'key', 'steam-id')
+    insert into platform_credentials (user_id, platform_id, api_key, account_id)
+    values (
+      ${userId},
+      (select id from platforms where key = 'steam'),
+      'key',
+      'steam-id'
+    )
     returning id
   `;
   credentialId = credentialRows[0].id;

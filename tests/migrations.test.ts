@@ -55,6 +55,7 @@ requiresDb("runMigrations creates expected tables", async () => {
 
   const tableNames = rows.map((row) => row.table_name);
   expect(tableNames).toContain("users");
+  expect(tableNames).toContain("platforms");
   expect(tableNames).toContain("platform_credentials");
   expect(tableNames).toContain("games");
   expect(tableNames).toContain("play_sessions");

@@ -50,4 +50,5 @@ bun run format:check
 - The server binds to port 3000 by default.
 - Migrations run on startup.
 - Metrics are available at `http://localhost:3000/metrics`.
+- OpenAPI docs are available at `http://localhost:3000/swagger` (JSON at `/swagger/json`).
 - Set `TELEGRAM_BOT_TOKEN` and `users.chat_id` to enable Telegram notifications.

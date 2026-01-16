@@ -20,6 +20,8 @@ services:
     build: .
     restart: "no"
     command: ["bun", "run", "dev"]
+    env_file:
+      - .env
     environment:
       DATABASE_URL: postgresql://playdex:playdex@db:5432/playdex
       CORS_ORIGINS: "http://ui.playdex.orb.local,https://ui.playdex.orb.local"
@@ -27,6 +29,7 @@ services:
       JWT_SECRET: dev-only-jwt-secret-do-not-use-in-production
       IGDB_CLIENT_ID: REMOVED
       IGDB_CLIENT_SECRET: REMOVED
+      ACCESS_TOKEN_TTL: 1m
     volumes:
       - .:/app
       - /app/node_modules

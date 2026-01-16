@@ -1,10 +1,13 @@
 import { config } from "./config/env";
-import { loadPollingAccounts } from "./application/polling-accounts";
-import { startPolling } from "./application/polling";
-import { createTelegramNotifier, startTelegramBot } from "./application/telegram";
-import { getSql } from "./infrastructure/db/postgres";
-import { runMigrations } from "./infrastructure/db/migrations";
-import { createServer } from "./presentation/server";
+import { loadPollingAccounts } from "./modules/polling/polling-accounts";
+import { startPolling } from "./modules/polling/polling";
+import {
+  createTelegramNotifier,
+  startTelegramBot,
+} from "./modules/telegram/telegram";
+import { getSql } from "./shared/db/postgres";
+import { runMigrations } from "./shared/db/migrations";
+import { createServer } from "./modules/server/server";
 
 const startServer = async () => {
   await runMigrations();

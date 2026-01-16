@@ -49,8 +49,13 @@ beforeEach(async () => {
     insert into users (email) values ('playnite@test.com') returning id
   `;
   const credentialRows = await db.sql<{ id: number }[]>`
-    insert into platform_credentials (user_id, platform, api_key, account_id)
-    values (${userRows[0].id}, 'playnite', ${apiKey}, null)
+    insert into platform_credentials (user_id, platform_id, api_key, account_id)
+    values (
+      ${userRows[0].id},
+      (select id from platforms where key = 'playnite'),
+      ${apiKey},
+      null
+    )
     returning id
   `;
   credentialId = credentialRows[0].id;
@@ -117,8 +122,13 @@ const createCredential = async (key: string) => {
     select id from users limit 1
   `;
   const credentialRows = await db.sql<{ id: number }[]>`
-    insert into platform_credentials (user_id, platform, api_key, account_id)
-    values (${userRows[0].id}, 'playnite', ${key}, null)
+    insert into platform_credentials (user_id, platform_id, api_key, account_id)
+    values (
+      ${userRows[0].id},
+      (select id from platforms where key = 'playnite'),
+      ${key},
+      null
+    )
     returning id
   `;
   return credentialRows[0].id;
@@ -135,8 +145,13 @@ const createGame = async (
 
   const canonicalKey = `${platform}:${externalId}`;
   const gameRows = await db.sql<{ id: number }[]>`
-    insert into games (platform, title, external_id, canonical_key)
-    values (${platform}, ${title}, ${externalId}, ${canonicalKey})
+    insert into games (platform_id, title, external_id, canonical_key)
+    values (
+      (select id from platforms where key = ${platform}),
+      ${title},
+      ${externalId},
+      ${canonicalKey}
+    )
     returning id
   `;
   return gameRows[0].id;
@@ -215,59 +230,68 @@ requiresDb(
   }
 );
 
-requiresDb("Playnite session start endpoint rejects missing api key", async () => {
-  const response = await sendStartRequest({
-    gameTitle: "Hades",
-    gameId: "123",
-    gameProvider: "steam",
-  });
-
-  expect(response.status).toBe(401);
-  const payload = (await response.json()) as {
-    data: null;
-    error: { error: string } | null;
-  };
-  expect(payload.data).toBeNull();
-  expect(payload.error?.error).toBe("Missing api key.");
-});
-
-requiresDb("Playnite session start endpoint rejects invalid provider", async () => {
-  const response = await sendStartRequest(
-    {
-      gameTitle: "Hades",
-      gameId: "123",
-      gameProvider: "psn",
-    },
-    apiKey
-  );
-
-  expect(response.status).toBe(400);
-  const payload = (await response.json()) as {
-    data: null;
-    error: { error: string } | null;
-  };
-  expect(payload.data).toBeNull();
-  expect(payload.error?.error).toBe("gameProvider must be steam or unknown.");
-});
-
-requiresDb("Playnite session start endpoint rejects invalid api key", async () => {
-  const response = await sendStartRequest(
-    {
+requiresDb(
+  "Playnite session start endpoint rejects missing api key",
+  async () => {
+    const response = await sendStartRequest({
       gameTitle: "Hades",
       gameId: "123",
       gameProvider: "steam",
-    },
-    "bad-key"
-  );
+    });
 
-  expect(response.status).toBe(401);
-  const payload = (await response.json()) as {
-    data: null;
-    error: { error: string } | null;
-  };
-  expect(payload.data).toBeNull();
-  expect(payload.error?.error).toBe("Invalid api key.");
-});
+    expect(response.status).toBe(401);
+    const payload = (await response.json()) as {
+      data: null;
+      error: { error: string } | null;
+    };
+    expect(payload.data).toBeNull();
+    expect(payload.error?.error).toBe("Missing api key.");
+  }
+);
+
+requiresDb(
+  "Playnite session start endpoint rejects invalid provider",
+  async () => {
+    const response = await sendStartRequest(
+      {
+        gameTitle: "Hades",
+        gameId: "123",
+        gameProvider: "psn",
+      },
+      apiKey
+    );
+
+    expect(response.status).toBe(400);
+    const payload = (await response.json()) as {
+      data: null;
+      error: { error: string } | null;
+    };
+    expect(payload.data).toBeNull();
+    expect(payload.error?.error).toBe("gameProvider must be steam or unknown.");
+  }
+);
+
+requiresDb(
+  "Playnite session start endpoint rejects invalid api key",
+  async () => {
+    const response = await sendStartRequest(
+      {
+        gameTitle: "Hades",
+        gameId: "123",
+        gameProvider: "steam",
+      },
+      "bad-key"
+    );
+
+    expect(response.status).toBe(401);
+    const payload = (await response.json()) as {
+      data: null;
+      error: { error: string } | null;
+    };
+    expect(payload.data).toBeNull();
+    expect(payload.error?.error).toBe("Invalid api key.");
+  }
+);
 
 requiresDb(
   "Playnite session end endpoint stops active sessions for the api key",
@@ -330,26 +354,32 @@ requiresDb(
   }
 );
 
-requiresDb("Playnite session end endpoint rejects missing api key", async () => {
-  const response = await sendEndRequest();
+requiresDb(
+  "Playnite session end endpoint rejects missing api key",
+  async () => {
+    const response = await sendEndRequest();
 
-  expect(response.status).toBe(401);
-  const payload = (await response.json()) as {
-    data: null;
-    error: { error: string } | null;
-  };
-  expect(payload.data).toBeNull();
-  expect(payload.error?.error).toBe("Missing api key.");
-});
+    expect(response.status).toBe(401);
+    const payload = (await response.json()) as {
+      data: null;
+      error: { error: string } | null;
+    };
+    expect(payload.data).toBeNull();
+    expect(payload.error?.error).toBe("Missing api key.");
+  }
+);
 
-requiresDb("Playnite session end endpoint rejects invalid api key", async () => {
-  const response = await sendEndRequest("bad-key");
+requiresDb(
+  "Playnite session end endpoint rejects invalid api key",
+  async () => {
+    const response = await sendEndRequest("bad-key");
 
-  expect(response.status).toBe(401);
-  const payload = (await response.json()) as {
-    data: null;
-    error: { error: string } | null;
-  };
-  expect(payload.data).toBeNull();
-  expect(payload.error?.error).toBe("Invalid api key.");
-});
+    expect(response.status).toBe(401);
+    const payload = (await response.json()) as {
+      data: null;
+      error: { error: string } | null;
+    };
+    expect(payload.data).toBeNull();
+    expect(payload.error?.error).toBe("Invalid api key.");
+  }
+);
