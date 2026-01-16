@@ -1,5 +1,6 @@
 import type { FormEvent } from "react";
 import { Fragment, useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 
 import { apiRequest } from "./api";
 
@@ -113,6 +114,10 @@ type ManualMappingResponse = {
   mappedGameId: number | null;
 };
 
+type ManualEntryCreateResponse = {
+  sessionId: number;
+};
+
 const protectedPaths = new Set([
   "/dashboard",
   "/sessions",
@@ -187,8 +192,28 @@ export const App = () => {
   const [isMappingUpdateLoading, setIsMappingUpdateLoading] = useState(false);
   const [mappingPlatformOverride, setMappingPlatformOverride] =
     useState("auto");
-  const manualPlatformOptions = [
-    { key: "auto", label: "Use IGDB platform" },
+  const [isManualEntryModalOpen, setIsManualEntryModalOpen] = useState(false);
+  const [manualEntryDate, setManualEntryDate] = useState(
+    () => new Date().toISOString().slice(0, 10)
+  );
+  const [manualEntryHours, setManualEntryHours] = useState("1");
+  const [manualEntryMinutes, setManualEntryMinutes] = useState("0");
+  const [manualEntrySearchQuery, setManualEntrySearchQuery] = useState("");
+  const [manualEntrySearchResults, setManualEntrySearchResults] = useState<
+    ManualMappingSearchResult[]
+  >([]);
+  const [manualEntrySearchError, setManualEntrySearchError] = useState("");
+  const [isManualEntrySearchLoading, setIsManualEntrySearchLoading] =
+    useState(false);
+  const [manualEntrySelection, setManualEntrySelection] =
+    useState<ManualMappingSearchResult | null>(null);
+  const [manualEntryPlatformKey, setManualEntryPlatformKey] = useState("");
+  const [manualEntryError, setManualEntryError] = useState("");
+  const [isManualEntrySaving, setIsManualEntrySaving] = useState(false);
+  const [manualEntryIgdbAvailable, setManualEntryIgdbAvailable] =
+    useState(true);
+  const [sessionsReloadToken, setSessionsReloadToken] = useState(0);
+  const platformOptions = [
     { key: "ps5", label: "PS5" },
     { key: "pc", label: "PC" },
     { key: "steam", label: "Steam" },
@@ -196,6 +221,11 @@ export const App = () => {
     { key: "switch-1", label: "Nintendo Switch 1" },
     { key: "switch-2", label: "Nintendo Switch 2" },
     { key: "xbox-series-xs", label: "Xbox Series X|S" },
+    { key: "unknown", label: "Unknown" },
+  ];
+  const manualPlatformOptions = [
+    { key: "auto", label: "Use IGDB platform" },
+    ...platformOptions,
   ];
   const sessionsLimit = 10;
   const capsuleUrl =
@@ -510,6 +540,139 @@ export const App = () => {
     );
   };
 
+  const refreshSessions = () => {
+    setSessionsReloadToken((current) => current + 1);
+  };
+
+  const openManualEntryModal = () => {
+    setManualEntryDate(new Date().toISOString().slice(0, 10));
+    setIsManualEntryModalOpen(true);
+  };
+
+  const closeManualEntryModal = () => {
+    setIsManualEntryModalOpen(false);
+    setManualEntrySearchQuery("");
+    setManualEntrySearchResults([]);
+    setManualEntrySearchError("");
+    setManualEntrySelection(null);
+    setManualEntryPlatformKey("");
+    setManualEntryError("");
+    setManualEntryHours("1");
+    setManualEntryMinutes("0");
+  };
+
+  const handleManualEntrySearch = async () => {
+    const query = manualEntrySearchQuery.trim();
+    if (!query) {
+      setManualEntrySearchError("Enter a search query.");
+      return;
+    }
+
+    setIsManualEntrySearchLoading(true);
+    setManualEntrySearchError("");
+    try {
+      const response = await apiRequest<ManualMappingSearchResponse>(
+        `/manual/search?query=${encodeURIComponent(query)}`
+      );
+      setManualEntryIgdbAvailable(response.igdbAvailable);
+      setManualEntrySearchResults(response.results);
+    } catch (err) {
+      setManualEntrySearchResults([]);
+      setManualEntrySearchError(
+        err instanceof Error ? err.message : "Failed to search games."
+      );
+    } finally {
+      setIsManualEntrySearchLoading(false);
+    }
+  };
+
+  const handleManualEntryCreate = async () => {
+    setManualEntryError("");
+    const hours = Number(manualEntryHours);
+    const minutes = Number(manualEntryMinutes);
+    if (
+      !Number.isFinite(hours) ||
+      !Number.isFinite(minutes) ||
+      hours < 0 ||
+      minutes < 0
+    ) {
+      setManualEntryError("Duration must be a positive number.");
+      return;
+    }
+
+    const durationMinutes = Math.floor(hours * 60 + minutes);
+    if (durationMinutes <= 0) {
+      setManualEntryError("Duration must be at least 1 minute.");
+      return;
+    }
+
+    if (!manualEntryDate) {
+      setManualEntryError("Select a date for this entry.");
+      return;
+    }
+
+    if (!manualEntrySelection) {
+      setManualEntryError("Select a game to log.");
+      return;
+    }
+
+    if (
+      manualEntrySelection.source === "igdb" &&
+      !manualEntryPlatformKey.trim()
+    ) {
+      setManualEntryError("Select a platform for the IGDB result.");
+      return;
+    }
+
+    setIsManualEntrySaving(true);
+    try {
+      if (manualEntrySelection.source === "local") {
+        if (!manualEntrySelection.gameId) {
+          setManualEntryError("Select a saved game.");
+          return;
+        }
+        await apiRequest<ManualEntryCreateResponse>("/manual/entries", {
+          method: "POST",
+          body: {
+            date: manualEntryDate,
+            durationMinutes,
+            gameId: manualEntrySelection.gameId,
+          },
+        });
+      } else {
+        if (!manualEntrySelection.igdbId) {
+          setManualEntryError("Select an IGDB game.");
+          return;
+        }
+        await apiRequest<ManualEntryCreateResponse>("/manual/entries", {
+          method: "POST",
+          body: {
+            date: manualEntryDate,
+            durationMinutes,
+            igdbId: manualEntrySelection.igdbId,
+            title: manualEntrySelection.title,
+            platformKey: manualEntryPlatformKey,
+            capsuleUrl: manualEntrySelection.capsuleUrl,
+          },
+        });
+      }
+
+      closeManualEntryModal();
+      if (path === "/sessions") {
+        refreshSessions();
+      }
+      if (path === "/dashboard") {
+        await refreshDashboard({ silent: true });
+      }
+    } catch (err) {
+      setManualEntryError(
+        err instanceof Error ? err.message : "Failed to create entry."
+      );
+    } finally {
+      setIsManualEntrySaving(false);
+    }
+  };
+
   useEffect(() => {
     const handlePopState = () => setPath(window.location.pathname);
     window.addEventListener("popstate", handlePopState);
@@ -617,6 +780,7 @@ export const App = () => {
     sessionsTo,
     sessionsSortKey,
     sessionsSortDirection,
+    sessionsReloadToken,
   ]);
 
   useEffect(() => {
@@ -847,6 +1011,16 @@ export const App = () => {
     const typeLabel = formatManualMappingType(input.mappedSource);
     return `${platformLabel} · ${typeLabel} · ${input.mappedGame.title}`;
   };
+  const formatEntryResultLabel = (result: ManualMappingSearchResult) => {
+    if (result.source === "local") {
+      const platformLabel = result.platform
+        ? formatPlatformLabel(result.platform)
+        : "Unknown platform";
+      return `${result.title} · ${platformLabel}`;
+    }
+    const platformLabel = result.platform ?? "Platform not set";
+    return `${result.title} · ${platformLabel} · IGDB`;
+  };
   const formatDateLabel = (date: Date) =>
     date.toLocaleDateString("en-US", {
       month: "short",
@@ -1020,6 +1194,242 @@ export const App = () => {
       })),
     [sessionRows]
   );
+  const manualEntryLocalResults = useMemo(
+    () => manualEntrySearchResults.filter((result) => result.source === "local"),
+    [manualEntrySearchResults]
+  );
+  const manualEntryIgdbResults = useMemo(
+    () => manualEntrySearchResults.filter((result) => result.source === "igdb"),
+    [manualEntrySearchResults]
+  );
+  const manualEntryModal =
+    isManualEntryModalOpen && typeof document !== "undefined"
+      ? createPortal(
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 px-4 py-8">
+            <div className="w-full max-w-2xl rounded-3xl border border-slate-800 bg-slate-900/90 p-6 shadow-[0_30px_80px_rgba(15,23,42,0.7)]">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-300">
+                    Manual entry
+                  </p>
+                  <h2 className="mt-2 text-xl font-semibold text-white">
+                    Log a time entry
+                  </h2>
+                </div>
+                <button
+                  type="button"
+                  onClick={closeManualEntryModal}
+                  className="rounded-full border border-slate-700 px-3 py-1 text-xs font-semibold uppercase tracking-[0.3em] text-slate-200"
+                >
+                  Close
+                </button>
+              </div>
+
+              <div className="mt-6 grid gap-4">
+                <div className="grid gap-3 sm:grid-cols-[0.7fr_0.3fr]">
+                  <label className="text-xs font-medium text-slate-300">
+                    Date
+                    <input
+                      type="date"
+                      value={manualEntryDate}
+                      onChange={(event) => setManualEntryDate(event.target.value)}
+                      className="mt-2 w-full rounded-xl border border-slate-700 bg-slate-950/80 px-3 py-2 text-sm text-white outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/30"
+                    />
+                  </label>
+                  <div className="grid grid-cols-2 gap-3">
+                    <label className="text-xs font-medium text-slate-300">
+                      Hours
+                      <input
+                        type="number"
+                        min="0"
+                        step="1"
+                        value={manualEntryHours}
+                        onChange={(event) =>
+                          setManualEntryHours(event.target.value)
+                        }
+                        className="mt-2 w-full rounded-xl border border-slate-700 bg-slate-950/80 px-3 py-2 text-sm text-white outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/30"
+                      />
+                    </label>
+                    <label className="text-xs font-medium text-slate-300">
+                      Minutes
+                      <input
+                        type="number"
+                        min="0"
+                        step="1"
+                        value={manualEntryMinutes}
+                        onChange={(event) =>
+                          setManualEntryMinutes(event.target.value)
+                        }
+                        className="mt-2 w-full rounded-xl border border-slate-700 bg-slate-950/80 px-3 py-2 text-sm text-white outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/30"
+                      />
+                    </label>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-end gap-3">
+                  <label className="flex-1 text-xs font-medium text-slate-300">
+                    Search by name
+                    <input
+                      type="text"
+                      value={manualEntrySearchQuery}
+                      onChange={(event) =>
+                        setManualEntrySearchQuery(event.target.value)
+                      }
+                      placeholder="Search games"
+                      className="mt-2 w-full rounded-xl border border-slate-700 bg-slate-950/80 px-3 py-2 text-sm text-white outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/30"
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    onClick={handleManualEntrySearch}
+                    disabled={isManualEntrySearchLoading}
+                    className="rounded-full bg-emerald-400 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-slate-900 transition hover:bg-emerald-300 disabled:cursor-not-allowed disabled:bg-emerald-300/60"
+                  >
+                    {isManualEntrySearchLoading ? "Searching..." : "Search"}
+                  </button>
+                </div>
+
+                {!manualEntryIgdbAvailable ? (
+                  <p className="text-xs text-amber-200">
+                    IGDB is not configured on the server.
+                  </p>
+                ) : null}
+
+                {manualEntrySearchError ? (
+                  <p className="text-xs text-rose-300">
+                    {manualEntrySearchError}
+                  </p>
+                ) : null}
+
+                <div className="grid gap-3 lg:grid-cols-2">
+                  <div className="rounded-2xl border border-slate-800 bg-slate-950/50 p-4">
+                    <p className="text-xs uppercase tracking-[0.3em] text-slate-400">
+                      Existing games
+                    </p>
+                    <div className="mt-3 space-y-2">
+                      {manualEntryLocalResults.length === 0 ? (
+                        <p className="text-xs text-slate-400">
+                          Search to see saved games.
+                        </p>
+                      ) : (
+                        manualEntryLocalResults.map((result) => (
+                          <button
+                            key={`local-${result.gameId}`}
+                            type="button"
+                            onClick={() => {
+                              setManualEntrySelection(result);
+                              setManualEntryPlatformKey("");
+                              setManualEntryError("");
+                            }}
+                            className={`flex w-full items-center justify-between gap-3 rounded-xl border px-3 py-2 text-left text-sm transition ${
+                              manualEntrySelection?.gameId === result.gameId
+                                ? "border-emerald-400/60 bg-emerald-400/10 text-emerald-100"
+                                : "border-slate-800 bg-slate-950/40 text-slate-200 hover:border-emerald-400/40"
+                            }`}
+                          >
+                            <span>{formatEntryResultLabel(result)}</span>
+                            <span className="text-[10px] uppercase tracking-[0.3em] text-slate-400">
+                              Local
+                            </span>
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl border border-slate-800 bg-slate-950/50 p-4">
+                    <p className="text-xs uppercase tracking-[0.3em] text-slate-400">
+                      IGDB results
+                    </p>
+                    <div className="mt-3 space-y-2">
+                      {manualEntryIgdbResults.length === 0 ? (
+                        <p className="text-xs text-slate-400">
+                          Search to see IGDB matches.
+                        </p>
+                      ) : (
+                        manualEntryIgdbResults.map((result) => (
+                          <button
+                            key={`igdb-${result.igdbId}`}
+                            type="button"
+                            onClick={() => {
+                              setManualEntrySelection(result);
+                              setManualEntryPlatformKey("");
+                              setManualEntryError("");
+                            }}
+                            className={`flex w-full items-center justify-between gap-3 rounded-xl border px-3 py-2 text-left text-sm transition ${
+                              manualEntrySelection?.igdbId === result.igdbId
+                                ? "border-emerald-400/60 bg-emerald-400/10 text-emerald-100"
+                                : "border-slate-800 bg-slate-950/40 text-slate-200 hover:border-emerald-400/40"
+                            }`}
+                          >
+                            <span>{formatEntryResultLabel(result)}</span>
+                            <span className="text-[10px] uppercase tracking-[0.3em] text-slate-400">
+                              IGDB
+                            </span>
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {manualEntrySelection ? (
+                  <div className="rounded-2xl border border-slate-800 bg-slate-950/50 p-4">
+                    <p className="text-xs uppercase tracking-[0.3em] text-slate-400">
+                      Selected game
+                    </p>
+                    <p className="mt-2 text-sm font-semibold text-white">
+                      {formatEntryResultLabel(manualEntrySelection)}
+                    </p>
+                    {manualEntrySelection.source === "igdb" ? (
+                      <label className="mt-4 block text-xs font-medium text-slate-300">
+                        Choose platform
+                        <select
+                          value={manualEntryPlatformKey}
+                          onChange={(event) =>
+                            setManualEntryPlatformKey(event.target.value)
+                          }
+                          className="mt-2 w-full rounded-xl border border-slate-700 bg-slate-950/80 px-3 py-2 text-sm text-white outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/30"
+                        >
+                          <option value="">Select a platform</option>
+                          {platformOptions.map((platform) => (
+                            <option key={platform.key} value={platform.key}>
+                              {platform.label}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    ) : null}
+                  </div>
+                ) : null}
+
+                {manualEntryError ? (
+                  <p className="text-xs text-rose-300">{manualEntryError}</p>
+                ) : null}
+              </div>
+
+              <div className="mt-6 flex flex-wrap items-center justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={closeManualEntryModal}
+                  className="rounded-full border border-slate-700 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-slate-200"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleManualEntryCreate}
+                  disabled={isManualEntrySaving}
+                  className="rounded-full bg-emerald-400 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-slate-900 transition hover:bg-emerald-300 disabled:cursor-not-allowed disabled:bg-emerald-300/60"
+                >
+                  {isManualEntrySaving ? "Saving..." : "Save entry"}
+                </button>
+              </div>
+            </div>
+          </div>,
+          document.body
+        )
+      : null;
   const hasSessionFilters =
     Boolean(sessionsTitle.trim()) ||
     Boolean(sessionsFrom) ||
@@ -1930,6 +2340,7 @@ export const App = () => {
             </div>
           </section>
         </div>
+        {manualEntryModal}
       </main>
     );
   }
@@ -2218,6 +2629,13 @@ export const App = () => {
                   Every session tracked
                 </h2>
               </div>
+              <button
+                type="button"
+                onClick={openManualEntryModal}
+                className="rounded-full border border-emerald-400/60 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-emerald-200 transition hover:border-emerald-300"
+              >
+                Add entry
+              </button>
             </div>
 
             <div className="mt-6 grid gap-3 md:grid-cols-[1.2fr_0.6fr_0.6fr]">
