@@ -2,6 +2,7 @@ import { Fragment, useEffect, useState } from "react";
 
 import { apiRequest } from "../api";
 import {
+  buildGamePath,
   manualPlatformOptions,
   navItems as defaultNavItems,
 } from "../constants";
@@ -152,6 +153,10 @@ export const MappingPage = ({
     void loadManualInputs();
   }, []);
 
+  const handleGameSelect = (title: string) => {
+    onNavigate(buildGamePath(title));
+  };
+
   return (
     <main className="relative min-h-screen overflow-hidden bg-slate-950 text-slate-100">
       <Background />
@@ -239,14 +244,20 @@ export const MappingPage = ({
                                   className="h-10 w-8 rounded-lg border border-slate-800 object-cover"
                                 />
                               ) : null}
-                              <span>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  handleGameSelect(input.mappedGame.title)
+                                }
+                                className="text-left text-sm font-semibold text-white transition hover:text-emerald-200"
+                              >
                                 {input.mappedGame.title}
                                 {input.mappedGame.platform
                                   ? ` · ${formatPlatformLabel(
                                       input.mappedGame.platform
                                     )}`
                                   : ""}
-                              </span>
+                              </button>
                             </span>
                           ) : (
                             <span className="text-slate-500">Unmapped</span>
@@ -364,9 +375,15 @@ export const MappingPage = ({
                                           <div className="h-12 w-9 rounded-lg border border-slate-800 bg-slate-900/60" />
                                         )}
                                         <div>
-                                          <p className="text-sm font-semibold text-white">
+                                          <button
+                                            type="button"
+                                            onClick={() =>
+                                              handleGameSelect(result.title)
+                                            }
+                                            className="text-left text-sm font-semibold text-white transition hover:text-emerald-200"
+                                          >
                                             {result.title}
-                                          </p>
+                                          </button>
                                           <p className="text-xs text-slate-400">
                                             {result.source === "igdb"
                                               ? mappingPlatformOverride ===

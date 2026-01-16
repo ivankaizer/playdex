@@ -1,7 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 
 import { apiRequest } from "../api";
-import { capsuleUrl, navItems as defaultNavItems } from "../constants";
+import {
+  buildGamePath,
+  capsuleUrl,
+  navItems as defaultNavItems,
+} from "../constants";
 import type {
   AccountCurrentSessionResponse,
   AccountSessionsResponse,
@@ -351,6 +355,10 @@ export const DashboardPage = ({
     return `${new Date().getFullYear()} recap`;
   }, []);
 
+  const handleGameSelect = (title: string) => {
+    onNavigate(buildGamePath(title));
+  };
+
   return (
     <main className="relative min-h-screen overflow-hidden bg-slate-950 text-slate-100">
       <Background />
@@ -406,9 +414,13 @@ export const DashboardPage = ({
               <div className="mt-3 flex flex-wrap items-center justify-between gap-5 text-sm font-semibold text-slate-300">
                 {currentSession ? (
                   <>
-                    <h2 className="text-lg font-semibold text-white normal-case tracking-normal">
+                    <button
+                      type="button"
+                      onClick={() => handleGameSelect(currentSession.game)}
+                      className="text-left text-lg font-semibold text-white transition hover:text-emerald-200"
+                    >
                       {currentSession.game}
-                    </h2>
+                    </button>
                     <div className="flex flex-wrap items-center justify-end gap-4 text-sm font-semibold normal-case tracking-normal text-slate-300">
                       <span className="inline-flex items-center gap-2 text-slate-200">
                         <svg
@@ -573,9 +585,13 @@ export const DashboardPage = ({
                     >
                       <div className="absolute inset-0 bg-slate-950/80" />
                       <div className="relative z-10">
-                        <p className="text-sm font-semibold text-white">
+                        <button
+                          type="button"
+                          onClick={() => handleGameSelect(session.title)}
+                          className="text-left text-sm font-semibold text-white transition hover:text-emerald-200"
+                        >
                           {session.title}
-                        </p>
+                        </button>
                       </div>
                       <div className="relative z-10 flex items-center gap-4">
                         <p className="text-xs text-slate-400">
@@ -603,6 +619,7 @@ export const DashboardPage = ({
             platforms={monthlyPlatforms}
             topGames={monthlyTopGames}
             colors={platformPieColors}
+            onGameSelect={handleGameSelect}
           />
 
           <StatsRecapSection
@@ -616,6 +633,7 @@ export const DashboardPage = ({
             platforms={yearlyPlatforms}
             topGames={yearlyTopGames}
             colors={platformPieColors}
+            onGameSelect={handleGameSelect}
           />
         </section>
       </div>

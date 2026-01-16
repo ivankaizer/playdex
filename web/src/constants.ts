@@ -13,6 +13,9 @@ export const navItems: NavItem[] = [
   { label: "Mapping", path: "/mapping" },
 ];
 
+export const buildGamePath = (title: string) =>
+  `/games/${encodeURIComponent(title)}`;
+
 export const platformOptions = [
   { key: "ps5", label: "PS5" },
   { key: "pc", label: "PC" },

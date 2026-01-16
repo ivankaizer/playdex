@@ -23,6 +23,7 @@ type StatsRecapSectionProps = {
   platforms: PlatformStat[];
   topGames: TopGameStat[];
   colors: string[];
+  onGameSelect?: (title: string) => void;
 };
 
 export const StatsRecapSection = ({
@@ -32,6 +33,7 @@ export const StatsRecapSection = ({
   platforms,
   topGames,
   colors,
+  onGameSelect,
 }: StatsRecapSectionProps) => {
   return (
     <div className="rounded-3xl border border-slate-800 bg-slate-900/60 p-6">
@@ -102,7 +104,19 @@ export const StatsRecapSection = ({
                   <span className="text-xs font-semibold text-slate-400">
                     {String(index + 1).padStart(2, "0")}
                   </span>
-                  <span className="font-semibold text-white">{game.title}</span>
+                  {onGameSelect ? (
+                    <button
+                      type="button"
+                      onClick={() => onGameSelect(game.title)}
+                      className="text-left font-semibold text-white transition hover:text-emerald-200"
+                    >
+                      {game.title}
+                    </button>
+                  ) : (
+                    <span className="font-semibold text-white">
+                      {game.title}
+                    </span>
+                  )}
                 </div>
                 <span className="text-xs font-semibold text-emerald-200">
                   {game.hours}

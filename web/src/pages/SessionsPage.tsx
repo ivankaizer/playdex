@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import { apiRequest } from "../api";
 import {
+  buildGamePath,
   capsuleUrl,
   navItems as defaultNavItems,
   platformOptions,
@@ -464,6 +465,10 @@ export const SessionsPage = ({
     { key: "last-year", label: "Last year" },
   ];
 
+  const handleGameSelect = (title: string) => {
+    onNavigate(buildGamePath(title));
+  };
+
   return (
     <main className="relative min-h-screen overflow-hidden bg-slate-950 text-slate-100">
       <Background />
@@ -629,9 +634,13 @@ export const SessionsPage = ({
                             alt={`${session.title} capsule art`}
                             className="h-12 w-9 rounded-lg border border-slate-800 object-cover"
                           />
-                          <span className="font-semibold text-white">
+                          <button
+                            type="button"
+                            onClick={() => handleGameSelect(session.title)}
+                            className="text-left font-semibold text-white transition hover:text-emerald-200"
+                          >
                             {session.title}
-                          </span>
+                          </button>
                         </div>
                       </td>
                       <td className="px-4 py-3 text-slate-300">

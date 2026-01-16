@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 
 import { navItems, protectedPaths } from "./constants";
 import { DashboardPage } from "./pages/DashboardPage";
+import { GamePage } from "./pages/GamePage";
 import { HomePage } from "./pages/HomePage";
 import { MappingPage } from "./pages/MappingPage";
 import { SessionsPage } from "./pages/SessionsPage";
@@ -37,16 +38,18 @@ export const App = () => {
   }, []);
 
   const isLoggedIn = Boolean(localStorage.getItem("playdex.token"));
+  const isProtectedPath = (target: string) =>
+    protectedPaths.has(target) || target.startsWith("/games/");
 
   useEffect(() => {
-    if (isLoggedIn || !protectedPaths.has(path)) {
+    if (isLoggedIn || !isProtectedPath(path)) {
       return;
     }
     window.history.replaceState({}, "", "/");
     setPath("/");
   }, [isLoggedIn, path]);
 
-  if (!isLoggedIn && protectedPaths.has(path)) {
+  if (!isLoggedIn && isProtectedPath(path)) {
     return null;
   }
 
@@ -88,6 +91,19 @@ export const App = () => {
       <SettingsPage
         path={path}
         navItems={navItems}
+        onNavigate={navigate}
+        onLogout={handleLogout}
+      />
+    );
+  }
+
+  if (path.startsWith("/games/")) {
+    const title = decodeURIComponent(path.replace("/games/", ""));
+    return (
+      <GamePage
+        path={path}
+        navItems={navItems}
+        gameTitle={title}
         onNavigate={navigate}
         onLogout={handleLogout}
       />
