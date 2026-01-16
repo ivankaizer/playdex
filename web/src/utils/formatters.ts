@@ -40,8 +40,7 @@ export const formatEntryResultLabel = (result: ManualMappingSearchResult) => {
       : "Unknown platform";
     return `${result.title} · ${platformLabel}`;
   }
-  const platformLabel = result.platform ?? "Platform not set";
-  return `${result.title} · ${platformLabel} · IGDB`;
+  return result.title;
 };
 
 export const formatDateLabel = (date: Date) =>

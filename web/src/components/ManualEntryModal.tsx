@@ -158,7 +158,7 @@ export const ManualEntryModal = ({
               <p className="text-xs uppercase tracking-[0.3em] text-slate-400">
                 Existing games
               </p>
-              <div className="mt-3 space-y-2">
+              <div className="mt-3 max-h-64 space-y-2 overflow-y-auto pr-1">
                 {localResults.length === 0 ? (
                   <p className="text-xs text-slate-400">
                     Search to see saved games.
@@ -189,7 +189,7 @@ export const ManualEntryModal = ({
               <p className="text-xs uppercase tracking-[0.3em] text-slate-400">
                 IGDB results
               </p>
-              <div className="mt-3 space-y-2">
+              <div className="mt-3 max-h-64 space-y-2 overflow-y-auto pr-1">
                 {igdbResults.length === 0 ? (
                   <p className="text-xs text-slate-400">
                     Search to see IGDB matches.
@@ -207,9 +207,6 @@ export const ManualEntryModal = ({
                       }`}
                     >
                       <span>{formatEntryResultLabel(result)}</span>
-                      <span className="text-[10px] uppercase tracking-[0.3em] text-slate-400">
-                        IGDB
-                      </span>
                     </button>
                   ))
                 )}
