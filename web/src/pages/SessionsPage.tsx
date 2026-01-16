@@ -9,6 +9,8 @@ import {
 } from "../constants";
 import type {
   AccountSessionsResponse,
+  AccountStatsPeriod,
+  AccountStatsRangeResponse,
   ManualEntryCreateResponse,
   ManualMappingSearchResponse,
   ManualMappingSearchResult,
@@ -17,13 +19,16 @@ import type {
 import {
   formatDateLabel,
   formatDuration,
+  formatHours,
   formatSessionPlatformLabel,
+  formatStatsPlatformLabel,
   formatUtcDateInput,
 } from "../utils/formatters";
 import { getSessionDurationSeconds } from "../utils/sessions";
 import { AppHeader } from "../components/AppHeader";
 import { Background } from "../components/Background";
 import { ManualEntryModal } from "../components/ManualEntryModal";
+import { StatsRecapSection } from "../components/StatsRecapSection";
 
 type SessionsPageProps = {
   path: string;
@@ -121,6 +126,9 @@ export const SessionsPage = ({
   const [sessionsSortDirection, setSessionsSortDirection] = useState<
     "asc" | "desc"
   >("desc");
+  const [rangeStats, setRangeStats] = useState<AccountStatsPeriod | null>(null);
+  const [isRangeStatsLoading, setIsRangeStatsLoading] = useState(false);
+  const [rangeStatsError, setRangeStatsError] = useState("");
   const [sessionsPreset, setSessionsPreset] =
     useState<DateRangePreset>("this-week");
   const [manualEntrySearchQuery, setManualEntrySearchQuery] = useState("");
@@ -382,6 +390,48 @@ export const SessionsPage = ({
     sessionsReloadToken,
   ]);
 
+  useEffect(() => {
+    if (!sessionsFrom || !sessionsTo) {
+      setRangeStats(null);
+      return;
+    }
+
+    let cancelled = false;
+    setIsRangeStatsLoading(true);
+    setRangeStatsError("");
+
+    const loadStats = async () => {
+      try {
+        const params = new URLSearchParams({
+          from: sessionsFrom,
+          to: sessionsTo,
+        });
+        const data = await apiRequest<AccountStatsRangeResponse>(
+          `/stats?${params.toString()}`
+        );
+        if (cancelled) {
+          return;
+        }
+        setRangeStats(data.stats);
+        setIsRangeStatsLoading(false);
+      } catch (err) {
+        if (cancelled) {
+          return;
+        }
+        setRangeStats(null);
+        setIsRangeStatsLoading(false);
+        setRangeStatsError(
+          err instanceof Error ? err.message : "Failed to load session stats."
+        );
+      }
+    };
+
+    void loadStats();
+    return () => {
+      cancelled = true;
+    };
+  }, [sessionsFrom, sessionsTo, sessionsReloadToken]);
+
   const hasSessionFilters =
     Boolean(sessionsTitle.trim()) ||
     Boolean(sessionsFrom) ||
@@ -468,6 +518,57 @@ export const SessionsPage = ({
   const handleGameSelect = (title: string) => {
     onNavigate(buildGamePath(title));
   };
+
+  const platformPieColors = ["#34d399", "#22d3ee", "#a78bfa", "#f59e0b"];
+  const statsRangeLabel = useMemo(() => {
+    if (!sessionsFrom && !sessionsTo) {
+      return "All time";
+    }
+    if (sessionsFrom && sessionsTo) {
+      const fromLabel = formatDateLabel(new Date(`${sessionsFrom}T00:00:00Z`));
+      const toLabel = formatDateLabel(new Date(`${sessionsTo}T00:00:00Z`));
+      return `${fromLabel} to ${toLabel}`;
+    }
+    if (sessionsFrom) {
+      return `From ${formatDateLabel(new Date(`${sessionsFrom}T00:00:00Z`))}`;
+    }
+    return `Until ${formatDateLabel(new Date(`${sessionsTo}T00:00:00Z`))}`;
+  }, [sessionsFrom, sessionsTo]);
+
+  const rangePlatforms = useMemo(() => {
+    if (!rangeStats) {
+      return [];
+    }
+    const total = Math.max(rangeStats.totalSeconds, 1);
+    return rangeStats.platforms.map((item) => ({
+      label: formatStatsPlatformLabel(item.platform),
+      value: Math.round((item.totalSeconds / total) * 100),
+      hours: formatHours(item.totalSeconds, 1),
+    }));
+  }, [rangeStats]);
+  const rangeTopGames = useMemo(() => {
+    if (!rangeStats) {
+      return [];
+    }
+    return rangeStats.topGames.map((game) => ({
+      title: game.title,
+      hours: formatHours(game.totalSeconds, 1),
+    }));
+  }, [rangeStats]);
+  const rangeSummary = useMemo(() => {
+    if (!rangeStats) {
+      return {
+        hours: "0h",
+        sessions: "0",
+        topTitle: "—",
+      };
+    }
+    return {
+      hours: formatHours(rangeStats.totalSeconds, 1),
+      sessions: String(rangeStats.sessionCount),
+      topTitle: rangeStats.topGameTitle ?? "—",
+    };
+  }, [rangeStats]);
 
   return (
     <main className="relative min-h-screen overflow-hidden bg-slate-950 text-slate-100">
@@ -556,6 +657,28 @@ export const SessionsPage = ({
           {sessionsError ? (
             <p className="mt-4 text-xs text-rose-300">{sessionsError}</p>
           ) : null}
+          {rangeStatsError ? (
+            <p className="mt-4 text-xs text-rose-300">{rangeStatsError}</p>
+          ) : null}
+
+          <div className="mt-6">
+            <StatsRecapSection
+              title="Sessions recap"
+              subtitle={statsRangeLabel}
+              summary={[
+                { label: "Hours played", value: rangeSummary.hours },
+                { label: "Sessions", value: rangeSummary.sessions },
+                { label: "Top title", value: rangeSummary.topTitle },
+              ]}
+              platforms={rangePlatforms}
+              topGames={rangeTopGames}
+              colors={platformPieColors}
+              onGameSelect={handleGameSelect}
+            />
+            {isRangeStatsLoading ? (
+              <p className="mt-3 text-xs text-slate-400">Loading stats...</p>
+            ) : null}
+          </div>
 
           <div className="mt-6 overflow-hidden rounded-2xl border border-slate-800">
             <table className="w-full text-left text-sm">

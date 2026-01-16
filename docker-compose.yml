@@ -20,6 +20,8 @@ services:
     build: .
     restart: "no"
     command: ["bun", "run", "dev"]
+    env_file:
+      - .env
     environment:
       DATABASE_URL: postgresql://playdex:playdex@db:5432/playdex
       CORS_ORIGINS: "http://ui.playdex.orb.local,https://ui.playdex.orb.local"
