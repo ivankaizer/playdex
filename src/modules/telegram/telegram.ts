@@ -10,7 +10,11 @@ import {
   fetchTelegramUpdates,
   sendTelegramMessage,
 } from "./client";
-import { getErrorMessage, logEvent } from "../../shared/observability";
+import {
+  getErrorMessage,
+  logEvent,
+  logEvent,
+} from "../../shared/observability";
 
 import type { PollingNotifier } from "../polling/polling";
 import { startManualSession } from "../manual/manual";
@@ -152,6 +156,11 @@ const handleStartCommand = async (
     const message = await summarizeStartedSession(result.gameId, sql);
     await sendNotification(token, chatId, message);
   } catch (error) {
+    logEvent("error", "error.manual_entry", {
+      error: error,
+      chatId,
+      title,
+    });
     await sendNotification(
       token,
       chatId,
