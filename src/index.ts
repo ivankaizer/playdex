@@ -1,7 +1,10 @@
 import { config } from "./config/env";
 import { loadPollingAccounts } from "./application/polling-accounts";
 import { startPolling } from "./application/polling";
-import { createTelegramNotifier, startTelegramBot } from "./application/telegram";
+import {
+  createTelegramNotifier,
+  startTelegramBot,
+} from "./application/telegram";
 import { getSql } from "./infrastructure/db/postgres";
 import { runMigrations } from "./infrastructure/db/migrations";
 import { createServer } from "./presentation/server";

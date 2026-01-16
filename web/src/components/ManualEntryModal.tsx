@@ -227,7 +227,9 @@ export const ManualEntryModal = ({
                   Choose platform
                   <select
                     value={manualEntryPlatformKey}
-                    onChange={(event) => onPlatformKeyChange(event.target.value)}
+                    onChange={(event) =>
+                      onPlatformKeyChange(event.target.value)
+                    }
                     className="mt-2 w-full rounded-xl border border-slate-700 bg-slate-950/80 px-3 py-2 text-sm text-white outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/30"
                   >
                     <option value="">Select a platform</option>

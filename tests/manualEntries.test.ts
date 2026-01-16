@@ -2,7 +2,10 @@ import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
 
 import type { TestDatabase } from "./helpers/db";
 import { createTestDatabase } from "./helpers/db";
-import { normalizeGame, normalizeGameTitle } from "../src/domain/normalize-game";
+import {
+  normalizeGame,
+  normalizeGameTitle,
+} from "../src/domain/normalize-game";
 import {
   getManualInputs,
   mapManualInput,
@@ -101,20 +104,23 @@ const createGame = async (
   );
 };
 
-requiresDb("startManualSession creates manual credential when missing", async () => {
-  if (!db) {
-    throw new Error("Test database not initialized.");
-  }
+requiresDb(
+  "startManualSession creates manual credential when missing",
+  async () => {
+    if (!db) {
+      throw new Error("Test database not initialized.");
+    }
 
-  await startManualSession(userId, "Stardew Valley");
-  const rows = await db.sql<{ id: number }[]>`
+    await startManualSession(userId, "Stardew Valley");
+    const rows = await db.sql<{ id: number }[]>`
     select id from platform_credentials
     where user_id = ${userId}
       and platform_id = (select id from platforms where key = 'manual')
   `;
 
-  expect(rows.length).toBe(1);
-});
+    expect(rows.length).toBe(1);
+  }
+);
 
 requiresDb(
   "startManualSession updates manual input title for same canonical",
@@ -309,29 +315,32 @@ requiresDb("mapManualInput maps to an IGDB entry", async () => {
   expect(rows[0].external_id).toBe("9999");
 });
 
-requiresDb("mapManualInput supports IGDB mapping without platform", async () => {
-  if (!db) {
-    throw new Error("Test database not initialized.");
-  }
+requiresDb(
+  "mapManualInput supports IGDB mapping without platform",
+  async () => {
+    if (!db) {
+      throw new Error("Test database not initialized.");
+    }
 
-  const inputId = await createManualInput("Mystery Game");
+    const inputId = await createManualInput("Mystery Game");
 
-  const result = await mapManualInput(userId, inputId, {
-    type: "igdb",
-    igdbId: "10001",
-    title: "Mystery Game",
-    platform: null,
-    coverUrl: null,
-  });
+    const result = await mapManualInput(userId, inputId, {
+      type: "igdb",
+      igdbId: "10001",
+      title: "Mystery Game",
+      platform: null,
+      coverUrl: null,
+    });
 
-  const rows = await db.sql<{ platform: string }[]>`
+    const rows = await db.sql<{ platform: string }[]>`
     select p.key as platform
     from games g
     join platforms p on p.id = g.platform_id
     where g.id = ${result?.mapped_game_id}
   `;
-  expect(rows[0].platform).toBe("unknown");
-});
+    expect(rows[0].platform).toBe("unknown");
+  }
+);
 
 requiresDb("mapManualInput returns null for missing input id", async () => {
   if (!db) {

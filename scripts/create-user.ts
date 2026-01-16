@@ -30,7 +30,9 @@ const email = getArgValue("email");
 const passwordHash = getArgValue("password-hash");
 
 if (!email || !passwordHash) {
-  console.error("Usage: bun run scripts/create-user.ts --email you@example.com --password-hash <bcrypt>");
+  console.error(
+    "Usage: bun run scripts/create-user.ts --email you@example.com --password-hash <bcrypt>"
+  );
   process.exit(1);
 }
 

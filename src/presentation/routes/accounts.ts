@@ -21,6 +21,7 @@ import type {
   AccountStatsRangeResponseDto,
   AccountSummaryDto,
   AccountTodaySessionsResponseDto,
+  AccountStatsResponseDto,
 } from "./types";
 import {
   fail,

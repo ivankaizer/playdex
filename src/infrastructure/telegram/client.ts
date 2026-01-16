@@ -61,8 +61,9 @@ export const fetchTelegramUpdates = async (
     );
   }
 
-  const payload =
-    (await response.json()) as TelegramApiResponse<TelegramUpdate[]>;
+  const payload = (await response.json()) as TelegramApiResponse<
+    TelegramUpdate[]
+  >;
   if (!payload.ok) {
     throw new Error(payload.description ?? "Telegram getUpdates failed.");
   }

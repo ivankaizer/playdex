@@ -95,50 +95,51 @@ export const registerPlayniteRoutes = (
   app: Elysia,
   notifier?: PollingNotifier
 ) =>
-  app.post(
-    "/api/playnite/sessions",
-    withApiErrorLogging(async ({ body, request, set }) => {
-      const token = parseBearerToken(request.headers.get("authorization"));
-      if (!token) {
-        set.status = 401;
-        return fail("Missing api key.");
-      }
+  app
+    .post(
+      "/api/playnite/sessions",
+      withApiErrorLogging(async ({ body, request, set }) => {
+        const token = parseBearerToken(request.headers.get("authorization"));
+        if (!token) {
+          set.status = 401;
+          return fail("Missing api key.");
+        }
 
-      const payload = body as PlayniteSessionBody | null;
-      const durationRaw = payload?.durationInSeconds;
-      const durationInSeconds =
-        typeof durationRaw === "number" ? durationRaw : Number(durationRaw);
+        const payload = body as PlayniteSessionBody | null;
+        const durationRaw = payload?.durationInSeconds;
+        const durationInSeconds =
+          typeof durationRaw === "number" ? durationRaw : Number(durationRaw);
 
-      if (!Number.isFinite(durationInSeconds) || durationInSeconds <= 0) {
-        set.status = 400;
-        return fail("durationInSeconds must be a positive number.");
-      }
+        if (!Number.isFinite(durationInSeconds) || durationInSeconds <= 0) {
+          set.status = 400;
+          return fail("durationInSeconds must be a positive number.");
+        }
 
-      const parsed = parseGamePayload(body);
-      if (!parsed.ok) {
-        set.status = 400;
-        return fail(parsed.message);
-      }
+        const parsed = parseGamePayload(body);
+        if (!parsed.ok) {
+          set.status = 400;
+          return fail(parsed.message);
+        }
 
-      const result = await recordPlayniteSession({
-        apiKey: token,
-        durationInSeconds,
-        gameTitle: parsed.gameTitle,
-        gameId: parsed.gameId,
-        gameProvider: parsed.gameProvider,
-      });
+        const result = await recordPlayniteSession({
+          apiKey: token,
+          durationInSeconds,
+          gameTitle: parsed.gameTitle,
+          gameId: parsed.gameId,
+          gameProvider: parsed.gameProvider,
+        });
 
-      if (!result) {
-        set.status = 401;
-        return fail("Invalid api key.");
-      }
+        if (!result) {
+          set.status = 401;
+          return fail("Invalid api key.");
+        }
 
-      const response: PlayniteSessionResponseDto = {
-        sessionId: result.sessionId,
-      };
-      return ok(response);
-    })
-  )
+        const response: PlayniteSessionResponseDto = {
+          sessionId: result.sessionId,
+        };
+        return ok(response);
+      })
+    )
     .post(
       "/api/playnite/sessions/start",
       withApiErrorLogging(async ({ body, request, set }) => {

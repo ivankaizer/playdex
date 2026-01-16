@@ -51,9 +51,7 @@ const applyManualMappings = async (userId: number, sessions: SessionRow[]) => {
   }
 
   const canonicalTitles = Array.from(
-    new Set(
-      manualSessions.map((session) => normalizeGameTitle(session.game))
-    )
+    new Set(manualSessions.map((session) => normalizeGameTitle(session.game)))
   );
   if (canonicalTitles.length === 0) {
     return sessions.map(stripSessionMetadata);

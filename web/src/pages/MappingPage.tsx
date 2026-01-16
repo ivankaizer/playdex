@@ -1,7 +1,10 @@
 import { Fragment, useEffect, useState } from "react";
 
 import { apiRequest } from "../api";
-import { manualPlatformOptions, navItems as defaultNavItems } from "../constants";
+import {
+  manualPlatformOptions,
+  navItems as defaultNavItems,
+} from "../constants";
 import type {
   ManualInput,
   ManualInputsResponse,
@@ -48,9 +51,7 @@ export const MappingPage = ({
     setIsManualInputsLoading(true);
     setManualInputsError("");
     try {
-      const response = await apiRequest<ManualInputsResponse>(
-        "/manual/inputs"
-      );
+      const response = await apiRequest<ManualInputsResponse>("/manual/inputs");
       setManualInputs(response.inputs);
       setIsManualInputsLoading(false);
     } catch (err) {
@@ -95,23 +96,29 @@ export const MappingPage = ({
     setMappingSearchError("");
     try {
       if (result.source === "local" && result.gameId) {
-        await apiRequest<ManualMappingResponse>(`/manual/inputs/${inputId}/map`, {
-          method: "POST",
-          body: { gameId: result.gameId },
-        });
+        await apiRequest<ManualMappingResponse>(
+          `/manual/inputs/${inputId}/map`,
+          {
+            method: "POST",
+            body: { gameId: result.gameId },
+          }
+        );
       } else if (result.source === "igdb" && result.igdbId) {
         const platformKey =
           mappingPlatformOverride === "auto" ? null : mappingPlatformOverride;
-        await apiRequest<ManualMappingResponse>(`/manual/inputs/${inputId}/map`, {
-          method: "POST",
-          body: {
-            igdbId: result.igdbId,
-            title: result.title,
-            platformId: result.platformId ?? null,
-            platformKey,
-            capsuleUrl: result.capsuleUrl,
-          },
-        });
+        await apiRequest<ManualMappingResponse>(
+          `/manual/inputs/${inputId}/map`,
+          {
+            method: "POST",
+            body: {
+              igdbId: result.igdbId,
+              title: result.title,
+              platformId: result.platformId ?? null,
+              platformKey,
+              capsuleUrl: result.capsuleUrl,
+            },
+          }
+        );
       } else {
         setMappingSearchError("Invalid mapping selection.");
         return;
@@ -364,8 +371,8 @@ export const MappingPage = ({
                                             {result.source === "igdb"
                                               ? mappingPlatformOverride ===
                                                 "auto"
-                                                ? result.platform ??
-                                                  "Unknown platform"
+                                                ? (result.platform ??
+                                                  "Unknown platform")
                                                 : formatPlatformLabel(
                                                     mappingPlatformOverride
                                                   )
@@ -381,7 +388,10 @@ export const MappingPage = ({
                                       <button
                                         type="button"
                                         onClick={() =>
-                                          handleMappingSelection(input.id, result)
+                                          handleMappingSelection(
+                                            input.id,
+                                            result
+                                          )
                                         }
                                         disabled={isMappingUpdateLoading}
                                         className="rounded-full border border-emerald-400/60 px-3 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-emerald-200 transition hover:border-emerald-300 disabled:cursor-not-allowed"

@@ -31,7 +31,11 @@ export type AccountStatsPeriod = {
   totalSeconds: number;
   sessionCount: number;
   topGameTitle: string | null;
-  platforms: { platform: string; totalSeconds: number; source?: string | null }[];
+  platforms: {
+    platform: string;
+    totalSeconds: number;
+    source?: string | null;
+  }[];
   topGames: { title: string; totalSeconds: number }[];
 };
 

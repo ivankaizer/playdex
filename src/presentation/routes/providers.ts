@@ -1,6 +1,9 @@
 import type { Elysia } from "elysia";
 
-import { getOrCreatePlayniteKey, getProviders } from "../../application/providers";
+import {
+  getOrCreatePlayniteKey,
+  getProviders,
+} from "../../application/providers";
 import type { PlayniteKeyResponseDto, ProvidersResponseDto } from "./types";
 import { ok, requireAuth, withApiErrorLogging } from "./utils";
 

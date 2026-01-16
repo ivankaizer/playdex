@@ -8,7 +8,6 @@ import {
   startManualSession,
   stopManualSession,
 } from "../../application/manual";
-import type { Platform } from "../../domain/platform";
 import type {
   ManualInputsResponseDto,
   ManualEntryCreateResponseDto,
@@ -204,7 +203,7 @@ export const registerManualRoutes = (app: Elysia) =>
             type: "igdb",
             igdbId,
             title,
-            platform: platformKey as Platform,
+            platform: platformKey,
             coverUrl: payload?.capsuleUrl ?? null,
           },
         });
@@ -264,9 +263,7 @@ export const registerManualRoutes = (app: Elysia) =>
           title,
           platform: payload?.platformKey ?? null,
           platformId:
-            typeof payload?.platformId === "number"
-              ? payload.platformId
-              : null,
+            typeof payload?.platformId === "number" ? payload.platformId : null,
           coverUrl: payload?.capsuleUrl ?? null,
         });
 

@@ -1,7 +1,7 @@
-import type { Platform, PlatformGame } from "./platform";
+import type { PlatformGame } from "./platform";
 
 export type NormalizedGame = {
-  platform: Platform;
+  platform: string;
   title: string;
   externalId?: string;
   capsuleUrl?: string;
@@ -20,7 +20,7 @@ const normalizeTitle = (title: string) =>
 export const normalizeGameTitle = (title: string) => normalizeTitle(title);
 
 const buildGameKey = (
-  platform: Platform,
+  platform: string,
   externalId: string | undefined,
   canonicalTitle: string
 ) => `${platform}:${externalId ?? canonicalTitle}`;

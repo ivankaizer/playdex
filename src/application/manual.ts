@@ -1,5 +1,4 @@
 import { normalizeGame, normalizeGameTitle } from "../domain/normalize-game";
-import type { Platform } from "../domain/platform";
 import {
   createManualCredential,
   endActiveSessionsForCredential,
@@ -36,7 +35,7 @@ type ManualEntrySelection =
       type: "igdb";
       igdbId: string;
       title: string;
-      platform: Platform;
+      platform: string;
       coverUrl: string | null;
     };
 
@@ -112,7 +111,10 @@ export const createManualEntry = async (payload: {
   durationSeconds: number;
   selection: ManualEntrySelection;
 }) => {
-  if (!Number.isFinite(payload.durationSeconds) || payload.durationSeconds <= 0) {
+  if (
+    !Number.isFinite(payload.durationSeconds) ||
+    payload.durationSeconds <= 0
+  ) {
     throw new Error("Duration must be a positive number.");
   }
 

@@ -1,7 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 
 import { apiRequest } from "../api";
-import { capsuleUrl, navItems as defaultNavItems, platformOptions } from "../constants";
+import {
+  capsuleUrl,
+  navItems as defaultNavItems,
+  platformOptions,
+} from "../constants";
 import type {
   AccountSessionsResponse,
   ManualEntryCreateResponse,
@@ -38,7 +42,9 @@ type DateRangePreset =
   | "custom";
 
 const getUtcMidnight = (date: Date) =>
-  new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+  new Date(
+    Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate())
+  );
 
 const addUtcDays = (date: Date, days: number) =>
   new Date(date.getTime() + days * 24 * 60 * 60 * 1000);
@@ -97,9 +103,9 @@ export const SessionsPage = ({
   onLogout,
 }: SessionsPageProps) => {
   const defaultRange = getPresetRange("this-week");
-  const [sessionRows, setSessionRows] = useState<AccountSessionsResponse["sessions"]>(
-    []
-  );
+  const [sessionRows, setSessionRows] = useState<
+    AccountSessionsResponse["sessions"]
+  >([]);
   const [sessionsTotal, setSessionsTotal] = useState(0);
   const [sessionsOffset, setSessionsOffset] = useState(0);
   const [isSessionsLoading, setIsSessionsLoading] = useState(false);
@@ -114,9 +120,8 @@ export const SessionsPage = ({
   const [sessionsSortDirection, setSessionsSortDirection] = useState<
     "asc" | "desc"
   >("desc");
-  const [sessionsPreset, setSessionsPreset] = useState<DateRangePreset>(
-    "this-week"
-  );
+  const [sessionsPreset, setSessionsPreset] =
+    useState<DateRangePreset>("this-week");
   const [manualEntrySearchQuery, setManualEntrySearchQuery] = useState("");
   const [manualEntrySearchResults, setManualEntrySearchResults] = useState<
     ManualMappingSearchResult[]
@@ -133,8 +138,8 @@ export const SessionsPage = ({
     useState(true);
   const [sessionsReloadToken, setSessionsReloadToken] = useState(0);
   const [isManualEntryModalOpen, setIsManualEntryModalOpen] = useState(false);
-  const [manualEntryDate, setManualEntryDate] = useState(
-    () => new Date().toISOString().slice(0, 10)
+  const [manualEntryDate, setManualEntryDate] = useState(() =>
+    new Date().toISOString().slice(0, 10)
   );
   const [manualEntryHours, setManualEntryHours] = useState("1");
   const [manualEntryMinutes, setManualEntryMinutes] = useState("0");
@@ -225,7 +230,10 @@ export const SessionsPage = ({
       return;
     }
 
-    if (manualEntrySelection.source === "igdb" && !manualEntryPlatformKey.trim()) {
+    if (
+      manualEntrySelection.source === "igdb" &&
+      !manualEntryPlatformKey.trim()
+    ) {
       setManualEntryError("Select a platform for the IGDB result.");
       return;
     }
@@ -443,16 +451,18 @@ export const SessionsPage = ({
     [sessionRows]
   );
 
-  const sessionPresets: { key: Exclude<DateRangePreset, "custom">; label: string }[] =
-    [
-      { key: "today", label: "Today" },
-      { key: "yesterday", label: "Yesterday" },
-      { key: "this-week", label: "This week" },
-      { key: "last-week", label: "Last week" },
-      { key: "this-month", label: "This month" },
-      { key: "this-year", label: "This year" },
-      { key: "last-year", label: "Last year" },
-    ];
+  const sessionPresets: {
+    key: Exclude<DateRangePreset, "custom">;
+    label: string;
+  }[] = [
+    { key: "today", label: "Today" },
+    { key: "yesterday", label: "Yesterday" },
+    { key: "this-week", label: "This week" },
+    { key: "last-week", label: "Last week" },
+    { key: "this-month", label: "This month" },
+    { key: "this-year", label: "This year" },
+    { key: "last-year", label: "Last year" },
+  ];
 
   return (
     <main className="relative min-h-screen overflow-hidden bg-slate-950 text-slate-100">
@@ -637,7 +647,9 @@ export const SessionsPage = ({
                         <button
                           type="button"
                           onClick={() => handleSessionRemove(session.sessionId)}
-                          disabled={deletingSessionIds.includes(session.sessionId)}
+                          disabled={deletingSessionIds.includes(
+                            session.sessionId
+                          )}
                           className="rounded-full border border-rose-500/60 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.3em] text-rose-200 transition hover:border-rose-400 disabled:cursor-not-allowed disabled:opacity-60"
                         >
                           Remove

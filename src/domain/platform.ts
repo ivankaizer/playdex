@@ -1,24 +1,11 @@
-export type Platform =
-  | "ps5"
-  | "xbox-series-xs"
-  | "pc"
-  | "switch-1"
-  | "switch-2"
-  | "steam"
-  | "psn"
-  | "playnite"
-  | "manual"
-  | "unknown"
-  ;
-
 export type PlatformAccount = {
-  platform: Platform;
+  platform: string;
   accountId: string;
   displayName?: string;
 };
 
 export type PlatformGame = {
-  platform: Platform;
+  platform: string;
   title: string;
   externalId?: string;
   capsuleUrl?: string;
@@ -26,13 +13,13 @@ export type PlatformGame = {
 };
 
 export type PlatformPollResult = {
-  platform: Platform;
+  platform: string;
   accountId: string;
   game: PlatformGame | null;
   raw: unknown;
 };
 
 export interface PlatformClient {
-  platform: Platform;
+  platform: string;
   getCurrentlyPlaying(account: PlatformAccount): Promise<PlatformPollResult>;
 }

@@ -26,6 +26,8 @@ import { getSessionDurationSeconds } from "../utils/sessions";
 import { AppHeader } from "../components/AppHeader";
 import { Background } from "../components/Background";
 import { ManualSessionModal } from "../components/ManualSessionModal";
+import { StatsPieChart } from "../components/StatsPieChart";
+import { StatsRecapSection } from "../components/StatsRecapSection";
 
 type DashboardPageProps = {
   path: string;
@@ -230,60 +232,7 @@ export const DashboardPage = ({
     void loadManualInputs();
   }, [isManualModalOpen]);
 
-  const renderPieChart = (
-    segments: { label: string; value: number }[],
-    colors: string[],
-    size = 150
-  ) => {
-    const strokeWidth = 18;
-    const radius = (size - strokeWidth) / 2;
-    const circumference = 2 * Math.PI * radius;
-    const total = Math.max(
-      segments.reduce((sum, segment) => sum + segment.value, 0),
-      1
-    );
-    let offset = 0;
-
-    return (
-      <svg
-        aria-hidden="true"
-        width={size}
-        height={size}
-        viewBox={`0 0 ${size} ${size}`}
-        className="shrink-0"
-      >
-        <circle
-          cx={size / 2}
-          cy={size / 2}
-          r={radius}
-          fill="transparent"
-          stroke="rgba(30,41,59,0.8)"
-          strokeWidth={strokeWidth}
-        />
-        {segments.map((segment, index) => {
-          const dash = (segment.value / total) * circumference;
-          const gap = circumference - dash;
-          const strokeDasharray = `${dash} ${gap}`;
-          const strokeDashoffset = -offset;
-          offset += dash;
-          return (
-            <circle
-              key={segment.label}
-              cx={size / 2}
-              cy={size / 2}
-              r={radius}
-              fill="transparent"
-              stroke={colors[index % colors.length]}
-              strokeWidth={strokeWidth}
-              strokeDasharray={strokeDasharray}
-              strokeDashoffset={strokeDashoffset}
-              transform={`rotate(-90 ${size / 2} ${size / 2})`}
-            />
-          );
-        })}
-      </svg>
-    );
-  };
+  const platformPieColors = ["#34d399", "#22d3ee", "#a78bfa", "#f59e0b"];
 
   const currentSessionStartedAt = currentSession
     ? new Date(currentSession.startedAt)
@@ -532,11 +481,11 @@ export const DashboardPage = ({
                   </p>
                 ) : (
                   <div className="mt-4 flex flex-wrap items-center gap-4">
-                    {renderPieChart(
-                      todayPlatforms,
-                      ["#34d399", "#22d3ee", "#a78bfa", "#f59e0b"],
-                      140
-                    )}
+                    <StatsPieChart
+                      segments={todayPlatforms}
+                      colors={platformPieColors}
+                      size={140}
+                    />
                     <div className="flex-1 space-y-2 text-xs text-slate-300">
                       {todayPlatforms.map((item, index) => (
                         <div
@@ -547,12 +496,10 @@ export const DashboardPage = ({
                             <span
                               className="h-2 w-2 rounded-full"
                               style={{
-                                backgroundColor: [
-                                  "#34d399",
-                                  "#22d3ee",
-                                  "#a78bfa",
-                                  "#f59e0b",
-                                ][index % 4],
+                                backgroundColor:
+                                  platformPieColors[
+                                    index % platformPieColors.length
+                                  ],
                               }}
                             />
                             <span>{item.label}</span>
@@ -645,195 +592,31 @@ export const DashboardPage = ({
             </div>
           </div>
 
-          <div className="rounded-3xl border border-slate-800 bg-slate-900/60 p-6">
-            <div className="flex flex-wrap items-baseline gap-3">
-              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-300">
-                Monthly stats
-              </p>
-              <p className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-200">
-                {monthlyHighlightsLabel}
-              </p>
-            </div>
-            <div className="mt-5 grid gap-4 sm:grid-cols-3">
-              {[
-                { label: "Hours played", value: monthlySummary.hours },
-                { label: "Sessions", value: monthlySummary.sessions },
-                { label: "Top title", value: monthlySummary.topTitle },
-              ].map((stat) => (
-                <div
-                  key={stat.label}
-                  className="rounded-2xl border border-slate-800 bg-slate-950/50 p-4"
-                >
-                  <p className="text-xs uppercase tracking-[0.3em] text-slate-400">
-                    {stat.label}
-                  </p>
-                  <p className="mt-2 text-lg font-semibold text-white">
-                    {stat.value}
-                  </p>
-                </div>
-              ))}
-            </div>
-            <div className="mt-5 grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
-              <div className="rounded-2xl border border-slate-800 bg-slate-950/50 p-4">
-                <p className="text-xs uppercase tracking-[0.3em] text-slate-400">
-                  Platform distribution
-                </p>
-                <div className="mt-4 flex flex-wrap items-center gap-4">
-                  {renderPieChart(
-                    monthlyPlatforms,
-                    ["#34d399", "#22d3ee", "#a78bfa", "#f59e0b"],
-                    168
-                  )}
-                  <div className="flex-1 space-y-2 text-xs text-slate-300">
-                    {monthlyPlatforms.map((item, index) => (
-                      <div
-                        key={item.label}
-                        className="flex items-center justify-between gap-3"
-                      >
-                        <div className="flex items-center gap-2">
-                          <span
-                            className="h-2 w-2 rounded-full"
-                            style={{
-                              backgroundColor: [
-                                "#34d399",
-                                "#22d3ee",
-                                "#a78bfa",
-                                "#f59e0b",
-                              ][index % 4],
-                            }}
-                          />
-                          <span>{item.label}</span>
-                        </div>
-                        <span>
-                          {item.value}% · {item.hours}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-              <div className="rounded-2xl border border-slate-800 bg-slate-950/50 p-4">
-                <p className="text-xs uppercase tracking-[0.3em] text-slate-400">
-                  Top 5 games
-                </p>
-                <div className="mt-4 space-y-3">
-                  {monthlyTopGames.map((game, index) => (
-                    <div
-                      key={game.title}
-                      className="flex items-center justify-between text-sm"
-                    >
-                      <div className="flex items-center gap-3">
-                        <span className="text-xs font-semibold text-slate-400">
-                          {String(index + 1).padStart(2, "0")}
-                        </span>
-                        <span className="font-semibold text-white">
-                          {game.title}
-                        </span>
-                      </div>
-                      <span className="text-xs font-semibold text-emerald-200">
-                        {game.hours}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
+          <StatsRecapSection
+            title="Monthly stats"
+            subtitle={monthlyHighlightsLabel}
+            summary={[
+              { label: "Hours played", value: monthlySummary.hours },
+              { label: "Sessions", value: monthlySummary.sessions },
+              { label: "Top title", value: monthlySummary.topTitle },
+            ]}
+            platforms={monthlyPlatforms}
+            topGames={monthlyTopGames}
+            colors={platformPieColors}
+          />
 
-          <div className="rounded-3xl border border-slate-800 bg-slate-900/60 p-6">
-            <div className="flex flex-wrap items-baseline gap-3">
-              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-300">
-                Yearly stats
-              </p>
-              <p className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-200">
-                {yearlyRecapLabel}
-              </p>
-            </div>
-            <div className="mt-5 grid gap-4 sm:grid-cols-3">
-              {[
-                { label: "Hours played", value: yearlySummary.hours },
-                { label: "Sessions", value: yearlySummary.sessions },
-                { label: "Top title", value: yearlySummary.topTitle },
-              ].map((stat) => (
-                <div
-                  key={stat.label}
-                  className="rounded-2xl border border-slate-800 bg-slate-950/50 p-4"
-                >
-                  <p className="text-xs uppercase tracking-[0.3em] text-slate-400">
-                    {stat.label}
-                  </p>
-                  <p className="mt-2 text-lg font-semibold text-white">
-                    {stat.value}
-                  </p>
-                </div>
-              ))}
-            </div>
-            <div className="mt-5 grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
-              <div className="rounded-2xl border border-slate-800 bg-slate-950/50 p-4">
-                <p className="text-xs uppercase tracking-[0.3em] text-slate-400">
-                  Platform distribution
-                </p>
-                <div className="mt-4 flex flex-wrap items-center gap-4">
-                  {renderPieChart(
-                    yearlyPlatforms,
-                    ["#34d399", "#22d3ee", "#a78bfa", "#f59e0b"],
-                    168
-                  )}
-                  <div className="flex-1 space-y-2 text-xs text-slate-300">
-                    {yearlyPlatforms.map((item, index) => (
-                      <div
-                        key={item.label}
-                        className="flex items-center justify-between gap-3"
-                      >
-                        <div className="flex items-center gap-2">
-                          <span
-                            className="h-2 w-2 rounded-full"
-                            style={{
-                              backgroundColor: [
-                                "#34d399",
-                                "#22d3ee",
-                                "#a78bfa",
-                                "#f59e0b",
-                              ][index % 4],
-                            }}
-                          />
-                          <span>{item.label}</span>
-                        </div>
-                        <span>
-                          {item.value}% · {item.hours}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-              <div className="rounded-2xl border border-slate-800 bg-slate-950/50 p-4">
-                <p className="text-xs uppercase tracking-[0.3em] text-slate-400">
-                  Top 5 games
-                </p>
-                <div className="mt-4 space-y-3">
-                  {yearlyTopGames.map((game, index) => (
-                    <div
-                      key={game.title}
-                      className="flex items-center justify-between text-sm"
-                    >
-                      <div className="flex items-center gap-3">
-                        <span className="text-xs font-semibold text-slate-400">
-                          {String(index + 1).padStart(2, "0")}
-                        </span>
-                        <span className="font-semibold text-white">
-                          {game.title}
-                        </span>
-                      </div>
-                      <span className="text-xs font-semibold text-emerald-200">
-                        {game.hours}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
+          <StatsRecapSection
+            title="Yearly stats"
+            subtitle={yearlyRecapLabel}
+            summary={[
+              { label: "Hours played", value: yearlySummary.hours },
+              { label: "Sessions", value: yearlySummary.sessions },
+              { label: "Top title", value: yearlySummary.topTitle },
+            ]}
+            platforms={yearlyPlatforms}
+            topGames={yearlyTopGames}
+            colors={platformPieColors}
+          />
         </section>
       </div>
       <ManualSessionModal

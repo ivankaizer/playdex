@@ -8,7 +8,7 @@ import {
 } from "../infrastructure/db/queries";
 import {
   fetchTelegramUpdates,
-  sendTelegramMessage,  
+  sendTelegramMessage,
 } from "../infrastructure/telegram/client";
 import { getErrorMessage, logEvent } from "../shared/observability";
 

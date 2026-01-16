@@ -192,8 +192,7 @@ export const listAccountSessions = async (
     ? sql`and ps.started_at < ${filters.startedTo}`
     : sql``;
   const sortKey = filters.sortKey ?? "date";
-  const sortDirection =
-    filters.sortDirection === "asc" ? sql`asc` : sql`desc`;
+  const sortDirection = filters.sortDirection === "asc" ? sql`asc` : sql`desc`;
   const orderBy =
     sortKey === "duration"
       ? sql`extract(epoch from (coalesce(ps.ended_at, now()) - ps.started_at))`
@@ -242,8 +241,7 @@ export const listUserSessions = async (
     ? sql`and ps.started_at < ${filters.startedTo}`
     : sql``;
   const sortKey = filters.sortKey ?? "date";
-  const sortDirection =
-    filters.sortDirection === "asc" ? sql`asc` : sql`desc`;
+  const sortDirection = filters.sortDirection === "asc" ? sql`asc` : sql`desc`;
   const orderBy =
     sortKey === "duration"
       ? sql`extract(epoch from (coalesce(ps.ended_at, now()) - ps.started_at))`
@@ -797,10 +795,7 @@ export const createManualCredential = async (
       api_key
   `;
 
-export const loadUserByEmail = async (
-  email: string,
-  sql: Sql = getSql()
-) => {
+export const loadUserByEmail = async (email: string, sql: Sql = getSql()) => {
   const rows = await sql<UserAuthRow[]>`
     select id, email, password, chat_id
     from users
@@ -810,10 +805,7 @@ export const loadUserByEmail = async (
   return rows[0] ?? null;
 };
 
-export const loadUserByChatId = async (
-  chatId: string,
-  sql: Sql = getSql()
-) => {
+export const loadUserByChatId = async (chatId: string, sql: Sql = getSql()) => {
   const rows = await sql<UserChatRow[]>`
     select id, email, chat_id
     from users
@@ -849,10 +841,7 @@ export const loadGameById = async (gameId: number, sql: Sql = getSql()) => {
   return rows[0] ?? null;
 };
 
-export const listManualInputs = async (
-  userId: number,
-  sql: Sql = getSql()
-) =>
+export const listManualInputs = async (userId: number, sql: Sql = getSql()) =>
   sql<ManualInputRow[]>`
     select
       mgi.id,

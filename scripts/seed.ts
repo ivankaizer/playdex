@@ -1,9 +1,11 @@
 import postgres from "postgres";
 
 import { runMigrations } from "../src/infrastructure/db/migrations";
-import { ensureGameId, insertPlaySession } from "../src/infrastructure/db/queries";
+import {
+  ensureGameId,
+  insertPlaySession,
+} from "../src/infrastructure/db/queries";
 import { normalizeGame } from "../src/domain/normalize-game";
-import type { Platform } from "../src/domain/platform";
 
 const databaseUrl = Bun.env.DATABASE_URL;
 if (!databaseUrl?.trim()) {
@@ -14,7 +16,7 @@ if (!databaseUrl?.trim()) {
 const SEED_EMAIL = "fake@playdex.local";
 
 type GameSeed = {
-  platform: Platform;
+  platform: string;
   title: string;
   externalId?: string;
   capsuleUrl?: string;
@@ -129,9 +131,7 @@ const buildSession = (
   const durationMinutes = randomInt(30, 90);
   const hour = randomInt(8, 22);
   const minute = randomInt(0, 59);
-  const startedAt = new Date(
-    Date.UTC(year, monthIndex, day, hour, minute, 0)
-  );
+  const startedAt = new Date(Date.UTC(year, monthIndex, day, hour, minute, 0));
   const endedAt = new Date(startedAt.getTime() + durationMinutes * 60 * 1000);
 
   return {
@@ -240,7 +240,7 @@ try {
       games.push({ id, platform: normalized.platform });
     }
 
-    const pickCredentialId = (platform: Platform) => {
+    const pickCredentialId = (platform: string) => {
       if (platform === "steam") {
         return steamId;
       }
@@ -263,13 +263,7 @@ try {
       for (let index = 0; index < count; index += 1) {
         const game = pick(games);
         sessions.push(
-          buildSession(
-            game.id,
-            pickCredentialId(game.platform),
-            2025,
-            11,
-            day
-          )
+          buildSession(game.id, pickCredentialId(game.platform), 2025, 11, day)
         );
       }
     }
@@ -278,13 +272,7 @@ try {
     for (let index = 0; index < 5; index += 1) {
       const game = pick(games);
       sessions.push(
-        buildSession(
-          game.id,
-          pickCredentialId(game.platform),
-          2025,
-          5,
-          juneDay
-        )
+        buildSession(game.id, pickCredentialId(game.platform), 2025, 5, juneDay)
       );
     }
 
