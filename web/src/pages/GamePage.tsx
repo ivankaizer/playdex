@@ -43,6 +43,8 @@ export const GamePage = ({
   const [selectedYear, setSelectedYear] = useState(
     new Date().getUTCFullYear()
   );
+  const [recentPage, setRecentPage] = useState(1);
+  const recentPageSize = 5;
 
   useEffect(() => {
     if (!gameTitle) {
@@ -67,7 +69,7 @@ export const GamePage = ({
         });
 
         const firstParams = new URLSearchParams(baseParams);
-        firstParams.set("limit", "8");
+        firstParams.set("limit", String(recentPageSize));
         firstParams.set("offset", "0");
         const firstResponse = await apiRequest<AccountSessionsResponse>(
           `/sessions?${firstParams.toString()}`,
@@ -106,8 +108,9 @@ export const GamePage = ({
           return;
         }
 
-        setRecentSessions(firstResponse.sessions);
+        setRecentSessions(allSessions);
         setAllSessions(allSessions);
+        setRecentPage(1);
         setIsLoading(false);
       } catch (err) {
         if (isCancelled) {
@@ -226,13 +229,22 @@ export const GamePage = ({
     ...monthlyStats.map((item) => item.hours),
     1
   );
+  const recentTotalPages = Math.max(
+    1,
+    Math.ceil(recentSessions.length / recentPageSize)
+  );
+  const recentStartIndex = (recentPage - 1) * recentPageSize;
+  const recentPageItems = recentSessions.slice(
+    recentStartIndex,
+    recentStartIndex + recentPageSize
+  );
 
   return (
     <main className="relative min-h-screen overflow-hidden bg-slate-950 text-slate-100">
       <Background />
       <div className="relative mx-auto w-full max-w-6xl px-6 py-12">
         <AppHeader
-          title="Game"
+          title={gameTitle}
           navItems={navItems}
           path={path}
           onNavigate={onNavigate}
@@ -240,7 +252,7 @@ export const GamePage = ({
         />
 
         <section className="mt-10 space-y-6">
-          <div className="grid gap-6 lg:grid-cols-[0.4fr_0.6fr]">
+          <div className="grid gap-6 lg:grid-cols-[0.25fr_0.75fr]">
             <div className="rounded-3xl border border-slate-800 bg-slate-900/60 p-6">
               <div className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-950/60">
                 <img
@@ -249,19 +261,7 @@ export const GamePage = ({
                   className="h-80 w-full object-cover"
                 />
               </div>
-            </div>
-            <div className="rounded-3xl border border-slate-800 bg-slate-900/60 p-6">
-              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-300">
-                Game profile
-              </p>
-              <h1 className="mt-3 text-3xl font-semibold text-white">
-                {gameTitle}
-              </h1>
-              <p className="mt-2 text-sm text-slate-400">
-                All-time play history since {ALL_TIME_START_YEAR}.
-              </p>
-
-              <div className="mt-6 grid gap-4 sm:grid-cols-3">
+              <div className="mt-6 grid gap-4 sm:grid-cols-3 lg:grid-cols-1">
                 <div className="rounded-2xl border border-slate-800 bg-slate-950/50 p-4">
                   <p className="text-xs uppercase tracking-[0.3em] text-slate-400">
                     Hours played
@@ -287,6 +287,95 @@ export const GamePage = ({
                   </p>
                 </div>
               </div>
+            </div>
+            <div className="rounded-3xl border border-slate-800 bg-slate-900/60 p-6">
+              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-300">
+                Recent sessions
+              </p>
+              <h2 className="mt-2 text-xl font-semibold text-white">
+                Latest play snapshots
+              </h2>
+
+              <div className="mt-6 space-y-4">
+                {gameError ? (
+                  <p className="text-xs text-rose-300">{gameError}</p>
+                ) : isLoading ? (
+                  [1, 2, 3].map((item) => (
+                    <div
+                      key={`recent-${item}`}
+                      className="flex items-center gap-3 rounded-2xl border border-slate-800 bg-slate-950/50 p-4"
+                    >
+                      <div className="h-14 w-10 rounded-xl bg-slate-800/60" />
+                      <div className="flex-1 space-y-2">
+                        <div className="h-3 w-32 rounded-full bg-slate-800/60" />
+                        <div className="h-2 w-24 rounded-full bg-slate-800/40" />
+                      </div>
+                      <div className="h-3 w-14 rounded-full bg-slate-800/60" />
+                    </div>
+                  ))
+                ) : recentSessions.length === 0 ? (
+                  <div className="rounded-2xl border border-dashed border-slate-800 bg-slate-950/50 p-4 text-sm text-slate-400">
+                    No sessions logged for this game yet.
+                  </div>
+                ) : (
+                  recentPageItems.map((session) => (
+                    <div
+                      key={session.sessionId}
+                      className="flex items-center justify-between gap-3 rounded-2xl border border-slate-800 bg-slate-950/50 p-4"
+                    >
+                      <div className="flex items-center gap-3">
+                        <img
+                          src={session.capsuleUrl ?? capsuleUrl}
+                          alt={`${session.game} capsule art`}
+                          className="h-14 w-10 rounded-xl border border-slate-800 object-cover"
+                        />
+                        <div>
+                          <p className="text-sm font-semibold text-white">
+                            {formatDateLabel(new Date(session.startedAt))}
+                          </p>
+                          <p className="text-xs text-slate-400">
+                            {formatSessionPlatformLabel(session)} ·{" "}
+                            {formatTimeLabel(new Date(session.startedAt))}
+                          </p>
+                        </div>
+                      </div>
+                      <p className="text-sm font-semibold text-emerald-200">
+                        {formatDuration(
+                          getSessionDurationSeconds(session),
+                          "short"
+                        )}
+                      </p>
+                    </div>
+                  ))
+                )}
+              </div>
+              {recentSessions.length > recentPageSize && (
+                <div className="mt-6 flex items-center justify-between text-xs uppercase tracking-[0.2em] text-slate-400">
+                  <button
+                    type="button"
+                    className="rounded-full border border-slate-800 px-4 py-2 text-slate-200 transition hover:border-emerald-400/60 hover:text-emerald-200 disabled:cursor-not-allowed disabled:border-slate-800 disabled:text-slate-600"
+                    onClick={() => setRecentPage((page) => Math.max(1, page - 1))}
+                    disabled={recentPage === 1}
+                  >
+                    Prev
+                  </button>
+                  <span>
+                    Page {recentPage} of {recentTotalPages}
+                  </span>
+                  <button
+                    type="button"
+                    className="rounded-full border border-slate-800 px-4 py-2 text-slate-200 transition hover:border-emerald-400/60 hover:text-emerald-200 disabled:cursor-not-allowed disabled:border-slate-800 disabled:text-slate-600"
+                    onClick={() =>
+                      setRecentPage((page) =>
+                        Math.min(recentTotalPages, page + 1)
+                      )
+                    }
+                    disabled={recentPage === recentTotalPages}
+                  >
+                    Next
+                  </button>
+                </div>
+              )}
             </div>
           </div>
 
@@ -410,68 +499,6 @@ export const GamePage = ({
             </div>
           </div>
 
-          <div className="rounded-3xl border border-slate-800 bg-slate-900/60 p-6">
-            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-300">
-              Recent sessions
-            </p>
-            <h2 className="mt-2 text-xl font-semibold text-white">
-              Latest play snapshots
-            </h2>
-
-            <div className="mt-6 space-y-4">
-              {gameError ? (
-                <p className="text-xs text-rose-300">{gameError}</p>
-              ) : isLoading ? (
-                [1, 2, 3].map((item) => (
-                  <div
-                    key={`recent-${item}`}
-                    className="flex items-center gap-3 rounded-2xl border border-slate-800 bg-slate-950/50 p-4"
-                  >
-                    <div className="h-14 w-10 rounded-xl bg-slate-800/60" />
-                    <div className="flex-1 space-y-2">
-                      <div className="h-3 w-32 rounded-full bg-slate-800/60" />
-                      <div className="h-2 w-24 rounded-full bg-slate-800/40" />
-                    </div>
-                    <div className="h-3 w-14 rounded-full bg-slate-800/60" />
-                  </div>
-                ))
-              ) : recentSessions.length === 0 ? (
-                <div className="rounded-2xl border border-dashed border-slate-800 bg-slate-950/50 p-4 text-sm text-slate-400">
-                  No sessions logged for this game yet.
-                </div>
-              ) : (
-                recentSessions.map((session) => (
-                  <div
-                    key={session.sessionId}
-                    className="flex items-center justify-between gap-3 rounded-2xl border border-slate-800 bg-slate-950/50 p-4"
-                  >
-                    <div className="flex items-center gap-3">
-                      <img
-                        src={session.capsuleUrl ?? capsuleUrl}
-                        alt={`${session.game} capsule art`}
-                        className="h-14 w-10 rounded-xl border border-slate-800 object-cover"
-                      />
-                      <div>
-                        <p className="text-sm font-semibold text-white">
-                          {formatDateLabel(new Date(session.startedAt))}
-                        </p>
-                        <p className="text-xs text-slate-400">
-                          {formatSessionPlatformLabel(session)} ·{" "}
-                          {formatTimeLabel(new Date(session.startedAt))}
-                        </p>
-                      </div>
-                    </div>
-                    <p className="text-sm font-semibold text-emerald-200">
-                      {formatDuration(
-                        getSessionDurationSeconds(session),
-                        "short"
-                      )}
-                    </p>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
         </section>
       </div>
     </main>

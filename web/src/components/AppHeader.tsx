@@ -15,14 +15,14 @@ export const AppHeader = ({
   onNavigate,
   onLogout,
 }: AppHeaderProps) => (
-  <header className="flex flex-wrap items-center justify-between gap-4 rounded-3xl border border-slate-800 bg-slate-900/70 px-6 py-4">
-    <div>
+  <header className="flex flex-wrap items-center justify-between gap-4 rounded-3xl border border-slate-800 bg-slate-900/70 px-6 py-4 md:flex-nowrap">
+    <div className="min-w-0 flex-1">
       <p className="text-xs font-semibold uppercase tracking-[0.5em] text-emerald-300">
         Playdex
       </p>
-      <h1 className="text-2xl font-semibold text-white">{title}</h1>
+      <h1 className="truncate text-2xl font-semibold text-white">{title}</h1>
     </div>
-    <nav className="flex flex-wrap items-center gap-3 text-sm">
+    <nav className="flex flex-wrap items-center gap-3 text-sm md:flex-nowrap">
       {navItems.map((item) => (
         <button
           key={item.path}
