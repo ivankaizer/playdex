@@ -1,11 +1,15 @@
 import type { Elysia } from "elysia";
 
+import { getOrCreatePlayniteKey, getProviders } from "./providers";
+import type {
+  PlayniteKeyResponseDto,
+  ProvidersResponseDto,
+} from "../../shared/http/types";
 import {
-  getOrCreatePlayniteKey,
-  getProviders,
-} from "../../application/providers";
-import type { PlayniteKeyResponseDto, ProvidersResponseDto } from "./types";
-import { ok, requireAuth, withApiErrorLogging } from "./utils";
+  ok,
+  requireAuth,
+  withApiErrorLogging,
+} from "../../shared/http/utils";
 
 export const registerProviderRoutes = (app: Elysia) =>
   app

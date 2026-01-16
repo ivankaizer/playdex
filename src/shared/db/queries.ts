@@ -2,7 +2,7 @@ import type postgres from "postgres";
 import type { JSONValue } from "postgres";
 
 import { getSql } from "./postgres";
-import type { NormalizedGame } from "../../domain/normalize-game";
+import type { NormalizedGame } from "../domain/normalize-game";
 
 type Sql = ReturnType<typeof postgres>;
 
@@ -151,16 +151,6 @@ export const storeResolvedAccountId = async (
   set account_id = ${accountId}, updated_at = now()
   where id = ${credentialId}
 `;
-
-export const healthCheck = async (sql: Sql = getSql()) => sql`select 1`;
-
-export const listAccounts = async (sql: Sql = getSql()) =>
-  sql<AccountRow[]>`
-    select pc.id, p.key as platform
-    from platform_credentials pc
-    join platforms p on p.id = pc.platform_id
-    order by pc.id
-  `;
 
 export const listAccountsForUser = async (
   userId: number,

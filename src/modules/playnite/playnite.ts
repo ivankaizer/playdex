@@ -1,11 +1,11 @@
-import { normalizeGame } from "../domain/normalize-game";
+import { normalizeGame } from "../../shared/domain/normalize-game";
 import {
   ensureGameId,
   endActiveSessionsForCredential,
   insertActivePlaySession,
   insertPlaySession,
   loadPlatformCredentialsByApiKey,
-} from "../infrastructure/db/queries";
+} from "../../shared/db/queries";
 
 export type PlayniteGameProvider = "steam" | "unknown";
 

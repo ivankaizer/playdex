@@ -1,9 +1,9 @@
-import { PsnClient } from "../infrastructure/clients/psn-client";
-import { SteamClient } from "../infrastructure/clients/steam-client";
+import { PsnClient } from "../providers/clients/psn-client";
+import { SteamClient } from "../providers/clients/steam-client";
 import {
   loadPlatformCredentials,
   storeResolvedAccountId,
-} from "../infrastructure/db/queries";
+} from "../../shared/db/queries";
 
 import type { PollingAccountEntry } from "./polling";
 

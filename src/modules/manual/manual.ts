@@ -1,4 +1,7 @@
-import { normalizeGame, normalizeGameTitle } from "../domain/normalize-game";
+import {
+  normalizeGame,
+  normalizeGameTitle,
+} from "../../shared/domain/normalize-game";
 import {
   createManualCredential,
   endActiveSessionsForCredential,
@@ -14,9 +17,9 @@ import {
   searchGamesByTitle,
   updateManualInputMapping,
   updateManualInputTitle,
-} from "../infrastructure/db/queries";
-import { searchIgdbGames } from "../infrastructure/clients/igdb-client";
-import { config } from "../config/env";
+} from "../../shared/db/queries";
+import { searchIgdbGames } from "../providers/clients/igdb-client";
+import { config } from "../../config/env";
 
 type ManualMappingSelection =
   | { type: "local"; gameId: number }

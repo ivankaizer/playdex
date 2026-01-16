@@ -13,7 +13,7 @@ import {
   getUserSessionsTotal,
   getUserStatsForRange,
   removeUserSession,
-} from "../../application/accounts";
+} from "./accounts";
 import type {
   AccountCurrentSessionResponseDto,
   AccountSessionsResponseDto,
@@ -22,7 +22,7 @@ import type {
   AccountSummaryDto,
   AccountTodaySessionsResponseDto,
   AccountStatsResponseDto,
-} from "./types";
+} from "../../shared/http/types";
 import {
   fail,
   ok,
@@ -30,7 +30,7 @@ import {
   parseSessionIdParam,
   requireAuth,
   withApiErrorLogging,
-} from "./utils";
+} from "../../shared/http/utils";
 
 export const registerAccountRoutes = (app: Elysia) =>
   app

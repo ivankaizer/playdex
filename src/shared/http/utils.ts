@@ -1,6 +1,6 @@
 import jwt from "jsonwebtoken";
 
-import { getErrorMessage, logEvent } from "../../shared/observability";
+import { getErrorMessage, logEvent } from "../observability";
 import type { ApiErrorResponse, ApiResponse } from "./types";
 
 type AccountIdParseResult =

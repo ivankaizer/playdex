@@ -2,16 +2,15 @@ import { Elysia } from "elysia";
 import { cors } from "@elysiajs/cors";
 import { swagger } from "@elysiajs/swagger";
 
-import { registerAccountRoutes } from "./routes/accounts";
-import { registerAuthRoutes } from "./routes/auth";
-import { registerHealthRoutes } from "./routes/health";
-import { registerMetricsRoutes } from "./routes/metrics";
-import { registerManualRoutes } from "./routes/manual";
-import { registerPlayniteRoutes } from "./routes/playnite";
-import { registerProviderRoutes } from "./routes/providers";
-import { registerRootRoutes } from "./routes/root";
-import type { PollingNotifier } from "../application/polling";
-import { config } from "../config/env";
+import { registerAccountRoutes } from "../accounts/routes";
+import { registerAuthRoutes } from "../auth/routes";
+import { registerMetricsRoutes } from "../metrics/routes";
+import { registerManualRoutes } from "../manual/routes";
+import { registerPlayniteRoutes } from "../playnite/routes";
+import { registerProviderRoutes } from "../providers/routes";
+import { registerRootRoutes } from "../root/routes";
+import type { PollingNotifier } from "../polling/polling";
+import { config } from "../../config/env";
 
 type ServerOptions = {
   notifier?: PollingNotifier;
@@ -27,7 +26,6 @@ export const createServer = (options: ServerOptions = {}) => {
   );
   registerRootRoutes(app);
   registerAuthRoutes(app);
-  registerHealthRoutes(app);
   registerMetricsRoutes(app);
   registerAccountRoutes(app);
   registerPlayniteRoutes(app, options.notifier);

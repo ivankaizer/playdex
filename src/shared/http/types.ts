@@ -1,4 +1,4 @@
-import type { MetricsSnapshot } from "../../shared/observability";
+import type { MetricsSnapshot } from "../observability";
 
 export type ApiErrorResponse = {
   error: string;

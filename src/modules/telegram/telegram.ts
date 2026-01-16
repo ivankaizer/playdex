@@ -5,15 +5,15 @@ import {
   loadGameById,
   loadNotificationTargetByCredential,
   loadUserByChatId,
-} from "../infrastructure/db/queries";
+} from "../../shared/db/queries";
 import {
   fetchTelegramUpdates,
   sendTelegramMessage,
-} from "../infrastructure/telegram/client";
-import { getErrorMessage, logEvent } from "../shared/observability";
+} from "./client";
+import { getErrorMessage, logEvent } from "../../shared/observability";
 
-import type { PollingNotifier } from "./polling";
-import { startManualSession } from "./manual";
+import type { PollingNotifier } from "../polling/polling";
+import { startManualSession } from "../manual/manual";
 
 type Sql = ReturnType<typeof postgres>;
 

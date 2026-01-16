@@ -5,14 +5,14 @@ import {
   recordPlayniteSession,
   startPlayniteSession,
   type PlayniteGameProvider,
-} from "../../application/playnite";
-import type { PollingNotifier } from "../../application/polling";
+} from "./playnite";
+import type { PollingNotifier } from "../polling/polling";
 import type {
   PlayniteSessionEndResponseDto,
   PlayniteSessionResponseDto,
   PlayniteSessionStartResponseDto,
-} from "./types";
-import { fail, ok, withApiErrorLogging } from "./utils";
+} from "../../shared/http/types";
+import { fail, ok, withApiErrorLogging } from "../../shared/http/utils";
 import { getErrorMessage, logEvent } from "../../shared/observability";
 
 type PlayniteSessionBody = {

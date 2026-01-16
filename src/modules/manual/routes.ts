@@ -7,7 +7,7 @@ import {
   searchManualMappingOptions,
   startManualSession,
   stopManualSession,
-} from "../../application/manual";
+} from "./manual";
 import type {
   ManualInputsResponseDto,
   ManualEntryCreateResponseDto,
@@ -15,9 +15,14 @@ import type {
   ManualMappingSearchResponseDto,
   ManualSessionStartResponseDto,
   ManualSessionStopResponseDto,
-} from "./types";
+} from "../../shared/http/types";
 import { config } from "../../config/env";
-import { fail, ok, requireAuth, withApiErrorLogging } from "./utils";
+import {
+  fail,
+  ok,
+  requireAuth,
+  withApiErrorLogging,
+} from "../../shared/http/utils";
 
 type ManualSessionStartBody = {
   title?: string;

@@ -3,7 +3,7 @@ import {
   listProvidersForUser,
   loadProviderByPlatform,
   updateProviderApiKey,
-} from "../infrastructure/db/queries";
+} from "../../shared/db/queries";
 
 const generateApiKey = () => {
   const bytes = new Uint8Array(16);

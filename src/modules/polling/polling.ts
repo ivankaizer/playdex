@@ -1,21 +1,24 @@
 import type postgres from "postgres";
 
-import { normalizeGame } from "../domain/normalize-game";
-import type { PlatformAccount, PlatformClient } from "../domain/platform";
+import { normalizeGame } from "../../shared/domain/normalize-game";
+import type {
+  PlatformAccount,
+  PlatformClient,
+} from "../../shared/domain/platform";
 import {
   endPlaySession,
   ensureGameId,
   fetchActivePlaySession,
   recordPollResult,
   startPlaySession,
-} from "../infrastructure/db/queries";
+} from "../../shared/db/queries";
 import {
   getErrorMessage,
   logEvent,
   recordPollCycle,
   recordPollFailure,
   recordPollSuccess,
-} from "../shared/observability";
+} from "../../shared/observability";
 
 type PollingConfig = {
   sql: ReturnType<typeof postgres>;

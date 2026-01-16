@@ -2,9 +2,14 @@ import type { Elysia } from "elysia";
 import { compare } from "bcryptjs";
 import jwt from "jsonwebtoken";
 
-import { loadUserByEmail } from "../../infrastructure/db/queries";
+import { loadUserByEmail } from "../../shared/db/queries";
 import { config } from "../../config/env";
-import { fail, ok, requireAuth, withApiErrorLogging } from "./utils";
+import {
+  fail,
+  ok,
+  requireAuth,
+  withApiErrorLogging,
+} from "../../shared/http/utils";
 
 const ACCESS_TOKEN_TTL = config.accessTokenTtl;
 const REFRESH_TOKEN_TTL = "30d";

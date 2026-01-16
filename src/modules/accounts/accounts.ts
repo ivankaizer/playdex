@@ -21,8 +21,8 @@ import {
   loadManualInputMappings,
   deleteUserSession,
   type AccountSessionFilters,
-} from "../infrastructure/db/queries";
-import { normalizeGameTitle } from "../domain/normalize-game";
+} from "../../shared/db/queries";
+import { normalizeGameTitle } from "../../shared/domain/normalize-game";
 
 type SessionRow = {
   sessionId: number;
@@ -99,10 +99,6 @@ const applyManualMappings = async (userId: number, sessions: SessionRow[]) => {
       mappedSource: mapping.source,
     });
   });
-};
-
-export const checkDatabaseHealth = async () => {
-  await healthCheck();
 };
 
 export const getAccountSummaries = async (userId: number) => {
