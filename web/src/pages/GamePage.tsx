@@ -23,6 +23,9 @@ type GamePageProps = {
   onLogout: () => void;
 };
 
+const ALL_TIME_START_YEAR = 2025;
+
+const formatYearLabel = (year: number) => String(year);
 const formatMonthLabel = (date: Date) =>
   new Intl.DateTimeFormat("en-US", { month: "short" }).format(date);
 
@@ -34,9 +37,12 @@ export const GamePage = ({
   onLogout,
 }: GamePageProps) => {
   const [recentSessions, setRecentSessions] = useState<AccountSession[]>([]);
-  const [yearSessions, setYearSessions] = useState<AccountSession[]>([]);
+  const [allSessions, setAllSessions] = useState<AccountSession[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [gameError, setGameError] = useState("");
+  const [selectedYear, setSelectedYear] = useState(
+    new Date().getUTCFullYear()
+  );
 
   useEffect(() => {
     if (!gameTitle) {
@@ -49,8 +55,7 @@ export const GamePage = ({
       setGameError("");
       try {
         const now = new Date();
-        const from = new Date(now);
-        from.setUTCFullYear(now.getUTCFullYear() - 1);
+        const from = new Date(Date.UTC(ALL_TIME_START_YEAR, 0, 1));
         const fromDate = formatUtcDateInput(from);
         const toDate = formatUtcDateInput(now);
         const baseParams = new URLSearchParams({
@@ -102,14 +107,14 @@ export const GamePage = ({
         }
 
         setRecentSessions(firstResponse.sessions);
-        setYearSessions(allSessions);
+        setAllSessions(allSessions);
         setIsLoading(false);
       } catch (err) {
         if (isCancelled) {
           return;
         }
         setRecentSessions([]);
-        setYearSessions([]);
+        setAllSessions([]);
         setIsLoading(false);
         setGameError(
           err instanceof Error ? err.message : "Failed to load game sessions."
@@ -129,42 +134,81 @@ export const GamePage = ({
 
   const totalSeconds = useMemo(
     () =>
-      yearSessions.reduce(
+      allSessions.reduce(
         (sum, session) => sum + getSessionDurationSeconds(session),
         0
       ),
-    [yearSessions]
+    [allSessions]
   );
 
   const lastPlayed = recentSessions[0]
     ? new Date(recentSessions[0].startedAt)
     : null;
 
-  const monthlyStats = useMemo(() => {
+  const yearlyStats = useMemo(() => {
     const now = new Date();
-    const startOfMonth = new Date(
-      Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)
+    const endYear = now.getUTCFullYear();
+    const buckets = Array.from(
+      { length: endYear - ALL_TIME_START_YEAR + 1 },
+      (_, index) => {
+        const year = ALL_TIME_START_YEAR + index;
+        const key = String(year);
+        return {
+          key,
+          label: formatYearLabel(year),
+          year,
+          seconds: 0,
+        };
+      }
     );
+
+    const bucketMap = new Map(buckets.map((item) => [item.key, item]));
+    allSessions.forEach((session) => {
+      const date = new Date(session.startedAt);
+      const year = date.getUTCFullYear();
+      if (year < ALL_TIME_START_YEAR) {
+        return;
+      }
+      const key = String(year);
+      const bucket = bucketMap.get(key);
+      if (bucket) {
+        bucket.seconds += getSessionDurationSeconds(session);
+      }
+    });
+
+    return buckets.map((bucket) => ({
+      ...bucket,
+      hours: bucket.seconds / 3600,
+    }));
+  }, [allSessions]);
+
+  const maxHours = Math.max(...yearlyStats.map((item) => item.hours), 1);
+  const availableYears = useMemo(
+    () => yearlyStats.map((item) => item.year),
+    [yearlyStats]
+  );
+  const activeYear = availableYears.includes(selectedYear)
+    ? selectedYear
+    : availableYears[availableYears.length - 1] ?? selectedYear;
+
+  const monthlyStats = useMemo(() => {
     const buckets = Array.from({ length: 12 }, (_, index) => {
-      const date = new Date(
-        Date.UTC(
-          startOfMonth.getUTCFullYear(),
-          startOfMonth.getUTCMonth() - (11 - index),
-          1
-        )
-      );
-      const key = `${date.getUTCFullYear()}-${date.getUTCMonth()}`;
+      const date = new Date(Date.UTC(activeYear, index, 1));
+      const key = `${activeYear}-${index}`;
       return {
         key,
         label: formatMonthLabel(date),
-        year: date.getUTCFullYear(),
+        month: index,
         seconds: 0,
       };
     });
 
     const bucketMap = new Map(buckets.map((item) => [item.key, item]));
-    yearSessions.forEach((session) => {
+    allSessions.forEach((session) => {
       const date = new Date(session.startedAt);
+      if (date.getUTCFullYear() !== activeYear) {
+        return;
+      }
       const key = `${date.getUTCFullYear()}-${date.getUTCMonth()}`;
       const bucket = bucketMap.get(key);
       if (bucket) {
@@ -176,9 +220,9 @@ export const GamePage = ({
       ...bucket,
       hours: bucket.seconds / 3600,
     }));
-  }, [yearSessions]);
+  }, [activeYear, allSessions]);
 
-  const maxHours = Math.max(
+  const maxMonthlyHours = Math.max(
     ...monthlyStats.map((item) => item.hours),
     1
   );
@@ -214,8 +258,7 @@ export const GamePage = ({
                 {gameTitle}
               </h1>
               <p className="mt-2 text-sm text-slate-400">
-                Last 12 months of play, tracking sessions, platforms, and play
-                time.
+                All-time play history since {ALL_TIME_START_YEAR}.
               </p>
 
               <div className="mt-6 grid gap-4 sm:grid-cols-3">
@@ -232,7 +275,7 @@ export const GamePage = ({
                     Sessions
                   </p>
                   <p className="mt-2 text-lg font-semibold text-white">
-                    {yearSessions.length}
+                    {allSessions.length}
                   </p>
                 </div>
                 <div className="rounded-2xl border border-slate-800 bg-slate-950/50 p-4">
@@ -247,16 +290,85 @@ export const GamePage = ({
             </div>
           </div>
 
-          <div className="grid gap-6 lg:grid-cols-[1.05fr_0.95fr]">
+          <div className="space-y-6">
             <div className="rounded-3xl border border-slate-800 bg-slate-900/60 p-6">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-300">
-                    Last 12 months
+                    All time since {ALL_TIME_START_YEAR}
+                  </p>
+                  <h2 className="mt-2 text-xl font-semibold text-white">
+                    Yearly play time
+                  </h2>
+                </div>
+              </div>
+
+              {gameError ? (
+                <p className="mt-4 text-xs text-rose-300">{gameError}</p>
+              ) : isLoading ? (
+                <div className="mt-6 grid grid-cols-[repeat(auto-fit,minmax(16px,1fr))] gap-2">
+                  {Array.from({ length: 12 }, (_, index) => (
+                    <div
+                      key={`skeleton-${index}`}
+                      className="h-32 rounded-full bg-slate-800/60"
+                    />
+                  ))}
+                </div>
+              ) : yearlyStats.every((item) => item.seconds === 0) ? (
+                <p className="mt-4 text-sm text-slate-400">
+                  No sessions recorded for this game since{" "}
+                  {ALL_TIME_START_YEAR}.
+                </p>
+              ) : (
+                <div className="mt-6 grid grid-cols-[repeat(auto-fit,minmax(16px,1fr))] items-end gap-2">
+                  {yearlyStats.map((year) => (
+                    <div key={year.key} className="flex flex-col gap-3">
+                      <div className="flex h-32 items-end">
+                        <div
+                          title={`${formatHours(year.seconds, 1)}`}
+                          className="w-full rounded-full bg-emerald-400/80"
+                          style={{
+                            height: `${(year.hours / maxHours) * 100}%`,
+                          }}
+                        />
+                      </div>
+                      <div className="text-center text-[10px] uppercase tracking-[0.2em] text-slate-400">
+                        {year.label}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="rounded-3xl border border-slate-800 bg-slate-900/60 p-6">
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-300">
+                    Year detail
                   </p>
                   <h2 className="mt-2 text-xl font-semibold text-white">
                     Monthly play time
                   </h2>
+                </div>
+                <div className="flex items-center gap-3 rounded-full border border-slate-800 bg-slate-950/50 px-4 py-2 text-xs uppercase tracking-[0.25em] text-slate-300">
+                  <span className="text-slate-500">Year</span>
+                  <select
+                    className="bg-transparent text-slate-100 outline-none"
+                    value={activeYear}
+                    onChange={(event) =>
+                      setSelectedYear(Number(event.target.value))
+                    }
+                  >
+                    {availableYears
+                      .slice()
+                      .reverse()
+                      .map((year) => (
+                        <option key={`year-${year}`} value={year}>
+                          {year}
+                        </option>
+                      ))}
+                  </select>
                 </div>
               </div>
 
@@ -266,14 +378,14 @@ export const GamePage = ({
                 <div className="mt-6 grid grid-cols-12 gap-2">
                   {Array.from({ length: 12 }, (_, index) => (
                     <div
-                      key={`skeleton-${index}`}
+                      key={`month-skeleton-${index}`}
                       className="h-32 rounded-full bg-slate-800/60"
                     />
                   ))}
                 </div>
               ) : monthlyStats.every((item) => item.seconds === 0) ? (
                 <p className="mt-4 text-sm text-slate-400">
-                  No sessions recorded for this game in the last year.
+                  No sessions recorded in {activeYear}.
                 </p>
               ) : (
                 <div className="mt-6 grid grid-cols-12 items-end gap-2">
@@ -284,7 +396,7 @@ export const GamePage = ({
                           title={`${formatHours(month.seconds, 1)}`}
                           className="w-full rounded-full bg-emerald-400/80"
                           style={{
-                            height: `${(month.hours / maxHours) * 100}%`,
+                            height: `${(month.hours / maxMonthlyHours) * 100}%`,
                           }}
                         />
                       </div>
@@ -296,68 +408,68 @@ export const GamePage = ({
                 </div>
               )}
             </div>
+          </div>
 
-            <div className="rounded-3xl border border-slate-800 bg-slate-900/60 p-6">
-              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-300">
-                Recent sessions
-              </p>
-              <h2 className="mt-2 text-xl font-semibold text-white">
-                Latest play snapshots
-              </h2>
+          <div className="rounded-3xl border border-slate-800 bg-slate-900/60 p-6">
+            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-300">
+              Recent sessions
+            </p>
+            <h2 className="mt-2 text-xl font-semibold text-white">
+              Latest play snapshots
+            </h2>
 
-              <div className="mt-6 space-y-4">
-                {gameError ? (
-                  <p className="text-xs text-rose-300">{gameError}</p>
-                ) : isLoading ? (
-                  [1, 2, 3].map((item) => (
-                    <div
-                      key={`recent-${item}`}
-                      className="flex items-center gap-3 rounded-2xl border border-slate-800 bg-slate-950/50 p-4"
-                    >
-                      <div className="h-14 w-10 rounded-xl bg-slate-800/60" />
-                      <div className="flex-1 space-y-2">
-                        <div className="h-3 w-32 rounded-full bg-slate-800/60" />
-                        <div className="h-2 w-24 rounded-full bg-slate-800/40" />
-                      </div>
-                      <div className="h-3 w-14 rounded-full bg-slate-800/60" />
+            <div className="mt-6 space-y-4">
+              {gameError ? (
+                <p className="text-xs text-rose-300">{gameError}</p>
+              ) : isLoading ? (
+                [1, 2, 3].map((item) => (
+                  <div
+                    key={`recent-${item}`}
+                    className="flex items-center gap-3 rounded-2xl border border-slate-800 bg-slate-950/50 p-4"
+                  >
+                    <div className="h-14 w-10 rounded-xl bg-slate-800/60" />
+                    <div className="flex-1 space-y-2">
+                      <div className="h-3 w-32 rounded-full bg-slate-800/60" />
+                      <div className="h-2 w-24 rounded-full bg-slate-800/40" />
                     </div>
-                  ))
-                ) : recentSessions.length === 0 ? (
-                  <div className="rounded-2xl border border-dashed border-slate-800 bg-slate-950/50 p-4 text-sm text-slate-400">
-                    No sessions logged for this game yet.
+                    <div className="h-3 w-14 rounded-full bg-slate-800/60" />
                   </div>
-                ) : (
-                  recentSessions.map((session) => (
-                    <div
-                      key={session.sessionId}
-                      className="flex items-center justify-between gap-3 rounded-2xl border border-slate-800 bg-slate-950/50 p-4"
-                    >
-                      <div className="flex items-center gap-3">
-                        <img
-                          src={session.capsuleUrl ?? capsuleUrl}
-                          alt={`${session.game} capsule art`}
-                          className="h-14 w-10 rounded-xl border border-slate-800 object-cover"
-                        />
-                        <div>
-                          <p className="text-sm font-semibold text-white">
-                            {formatDateLabel(new Date(session.startedAt))}
-                          </p>
-                          <p className="text-xs text-slate-400">
-                            {formatSessionPlatformLabel(session)} ·{" "}
-                            {formatTimeLabel(new Date(session.startedAt))}
-                          </p>
-                        </div>
+                ))
+              ) : recentSessions.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-slate-800 bg-slate-950/50 p-4 text-sm text-slate-400">
+                  No sessions logged for this game yet.
+                </div>
+              ) : (
+                recentSessions.map((session) => (
+                  <div
+                    key={session.sessionId}
+                    className="flex items-center justify-between gap-3 rounded-2xl border border-slate-800 bg-slate-950/50 p-4"
+                  >
+                    <div className="flex items-center gap-3">
+                      <img
+                        src={session.capsuleUrl ?? capsuleUrl}
+                        alt={`${session.game} capsule art`}
+                        className="h-14 w-10 rounded-xl border border-slate-800 object-cover"
+                      />
+                      <div>
+                        <p className="text-sm font-semibold text-white">
+                          {formatDateLabel(new Date(session.startedAt))}
+                        </p>
+                        <p className="text-xs text-slate-400">
+                          {formatSessionPlatformLabel(session)} ·{" "}
+                          {formatTimeLabel(new Date(session.startedAt))}
+                        </p>
                       </div>
-                      <p className="text-sm font-semibold text-emerald-200">
-                        {formatDuration(
-                          getSessionDurationSeconds(session),
-                          "short"
-                        )}
-                      </p>
                     </div>
-                  ))
-                )}
-              </div>
+                    <p className="text-sm font-semibold text-emerald-200">
+                      {formatDuration(
+                        getSessionDurationSeconds(session),
+                        "short"
+                      )}
+                    </p>
+                  </div>
+                ))
+              )}
             </div>
           </div>
         </section>
