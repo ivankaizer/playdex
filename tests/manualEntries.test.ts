@@ -61,8 +61,8 @@ const createManualCredential = async () => {
   }
 
   const rows = await db.sql<{ id: number }[]>`
-    insert into platform_credentials (user_id, platform, api_key, account_id)
-    values (${userId}, 'manual', null, null)
+    insert into platform_credentials (user_id, platform_id, api_key, account_id)
+    values (${userId}, (select id from platforms where key = 'manual'), null, null)
     returning id
   `;
   return rows[0].id;
@@ -109,7 +109,8 @@ requiresDb("startManualSession creates manual credential when missing", async ()
   await startManualSession(userId, "Stardew Valley");
   const rows = await db.sql<{ id: number }[]>`
     select id from platform_credentials
-    where user_id = ${userId} and platform = 'manual'
+    where user_id = ${userId}
+      and platform_id = (select id from platforms where key = 'manual')
   `;
 
   expect(rows.length).toBe(1);
@@ -175,7 +176,10 @@ requiresDb(
 
     await startManualSession(userId, "Mario Kart");
     const rows = await db.sql<{ title: string; platform: string }[]>`
-      select title, platform from games where title = 'Mario Kart'
+      select g.title, p.key as platform
+      from games g
+      join platforms p on p.id = g.platform_id
+      where g.title = 'Mario Kart'
     `;
 
     expect(rows.length).toBe(1);
@@ -220,9 +224,10 @@ requiresDb(
     await startManualSession(userId, "Old Mapped");
 
     const rows = await db.sql<{ platform: string }[]>`
-      select g.platform
+      select p.key as platform
       from play_sessions ps
       join games g on g.id = ps.game_id
+      join platforms p on p.id = g.platform_id
       order by ps.id desc limit 1
     `;
 
@@ -287,16 +292,20 @@ requiresDb("mapManualInput maps to an IGDB entry", async () => {
     type: "igdb",
     igdbId: "9999",
     title: "The Legend of Zelda",
-    platform: "switch",
+    platform: null,
     coverUrl: "https://example.com/cover.png",
+    platformId: 130,
   });
 
   expect(result?.mapped_game_id).toBeDefined();
 
   const rows = await db.sql<{ platform: string; external_id: string }[]>`
-    select platform, external_id from games where id = ${result?.mapped_game_id}
+    select p.key as platform, g.external_id
+    from games g
+    join platforms p on p.id = g.platform_id
+    where g.id = ${result?.mapped_game_id}
   `;
-  expect(rows[0].platform).toBe("switch");
+  expect(rows[0].platform).toBe("switch-1");
   expect(rows[0].external_id).toBe("9999");
 });
 
@@ -316,9 +325,12 @@ requiresDb("mapManualInput supports IGDB mapping without platform", async () => 
   });
 
   const rows = await db.sql<{ platform: string }[]>`
-    select platform from games where id = ${result?.mapped_game_id}
+    select p.key as platform
+    from games g
+    join platforms p on p.id = g.platform_id
+    where g.id = ${result?.mapped_game_id}
   `;
-  expect(rows[0].platform).toBe("igdb");
+  expect(rows[0].platform).toBe("unknown");
 });
 
 requiresDb("mapManualInput returns null for missing input id", async () => {

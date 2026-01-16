@@ -23,7 +23,8 @@ export const resetDatabase = async (sql: ReturnType<typeof postgres>) => {
   const tables = await sql<{ tablename: string }[]>`
     select tablename
     from pg_tables
-    where schemaname = 'public' and tablename <> 'schema_migrations'
+    where schemaname = 'public'
+      and tablename not in ('schema_migrations', 'platforms')
   `;
 
   if (tables.length === 0) {

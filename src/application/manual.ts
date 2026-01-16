@@ -7,6 +7,7 @@ import {
   insertActivePlaySession,
   insertManualInput,
   listManualInputs,
+  loadPlatformKeyByIgdbId,
   loadManualInputByCanonical,
   loadProviderByPlatform,
   searchGamesByTitle,
@@ -23,6 +24,7 @@ type ManualMappingSelection =
       igdbId: string;
       title: string;
       platform: string | null;
+      platformId?: number | null;
       coverUrl: string | null;
     };
 
@@ -114,6 +116,11 @@ export const getManualInputs = async (userId: number) => {
     input: row.raw_title,
     canonicalTitle: row.canonical_title,
     mappedGameId: row.mapped_game_id,
+    mappedSource: row.mapped_canonical_key?.startsWith("igdb:")
+      ? "igdb"
+      : row.mapped_game_id
+        ? "local"
+        : null,
     mappedGame: row.mapped_game_id
       ? {
           id: row.mapped_game_id,
@@ -130,13 +137,22 @@ export const mapManualInput = async (
   inputId: number,
   selection: ManualMappingSelection
 ) => {
+  let platformKey: string | null = null;
+  if (selection.type === "igdb") {
+    if (selection.platform) {
+      platformKey = selection.platform;
+    } else if (selection.platformId) {
+      platformKey = await loadPlatformKeyByIgdbId(selection.platformId);
+    }
+  }
+
   const gameId =
     selection.type === "local"
       ? selection.gameId
       : await ensureIgdbGame({
           igdbId: selection.igdbId,
           title: selection.title,
-          platform: selection.platform,
+          platform: platformKey,
           capsuleUrl: selection.coverUrl,
         });
 
@@ -171,6 +187,7 @@ export const searchManualMappingOptions = async (query: string) => {
       igdbId: game.id,
       title: game.title,
       platform: game.platform,
+      platformId: game.platformId,
       capsuleUrl: game.coverUrl,
     })),
   };

@@ -103,6 +103,7 @@ export type ManualInputDto = {
   input: string;
   canonicalTitle: string;
   mappedGameId: number | null;
+  mappedSource: "local" | "igdb" | null;
   mappedGame: {
     id: number;
     title: string;
@@ -129,6 +130,7 @@ export type ManualMappingSearchResultDto = {
   igdbId?: string;
   title: string;
   platform: string | null;
+  platformId?: number | null;
   capsuleUrl: string | null;
 };
 

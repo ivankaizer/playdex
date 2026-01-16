@@ -188,7 +188,7 @@ try {
         select id
         from platform_credentials
         where user_id = ${userId}
-          and platform = ${platform}
+          and platform_id = (select id from platforms where key = ${platform})
         limit 1
       `;
       const existingId = existingRows[0]?.id;
@@ -202,8 +202,14 @@ try {
       }
 
       const rows = await tx<{ id: number }[]>`
-        insert into platform_credentials (user_id, platform, api_key, account_id, active)
-        values (${userId}, ${platform}, ${null}, ${accountId}, ${false})
+        insert into platform_credentials (user_id, platform_id, api_key, account_id, active)
+        values (
+          ${userId},
+          (select id from platforms where key = ${platform}),
+          ${null},
+          ${accountId},
+          ${false}
+        )
         returning id
       `;
       return rows[0]?.id ?? null;

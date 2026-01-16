@@ -25,7 +25,8 @@ type ManualMappingBody = {
   gameId?: number;
   igdbId?: string;
   title?: string;
-  platform?: string | null;
+  platformKey?: string | null;
+  platformId?: number | null;
   capsuleUrl?: string | null;
 };
 
@@ -160,7 +161,11 @@ export const registerManualRoutes = (app: Elysia) =>
           type: "igdb",
           igdbId,
           title,
-          platform: payload?.platform ?? null,
+          platform: payload?.platformKey ?? null,
+          platformId:
+            typeof payload?.platformId === "number"
+              ? payload.platformId
+              : null,
           coverUrl: payload?.capsuleUrl ?? null,
         });
 

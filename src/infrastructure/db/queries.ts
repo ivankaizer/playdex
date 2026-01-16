@@ -103,6 +103,7 @@ export type ManualInputRow = {
   mapped_title: string | null;
   mapped_platform: string | null;
   mapped_capsule_url: string | null;
+  mapped_canonical_key: string | null;
 };
 
 export type ManualInputLookupRow = {
@@ -121,9 +122,10 @@ export type GameSearchRow = {
 
 export const loadPlatformCredentials = async (sql: Sql = getSql()) =>
   sql<PlatformCredentialRow[]>`
-    select id, platform, api_key, account_id
-    from platform_credentials
-    where active = true
+    select pc.id, p.key as platform, pc.api_key, pc.account_id
+    from platform_credentials pc
+    join platforms p on p.id = pc.platform_id
+    where pc.active = true
   `;
 
 export const loadPlatformCredentialsByApiKey = async (
@@ -132,11 +134,12 @@ export const loadPlatformCredentialsByApiKey = async (
   sql: Sql = getSql()
 ) =>
   sql<PlatformCredentialRow[]>`
-    select id, platform, api_key, account_id
-    from platform_credentials
-    where api_key = ${apiKey}
-      and platform = ${platform}
-      and active = true
+    select pc.id, p.key as platform, pc.api_key, pc.account_id
+    from platform_credentials pc
+    join platforms p on p.id = pc.platform_id
+    where pc.api_key = ${apiKey}
+      and p.key = ${platform}
+      and pc.active = true
   `;
 
 export const storeResolvedAccountId = async (
@@ -153,9 +156,10 @@ export const healthCheck = async (sql: Sql = getSql()) => sql`select 1`;
 
 export const listAccounts = async (sql: Sql = getSql()) =>
   sql<AccountRow[]>`
-    select id, platform
-    from platform_credentials
-    order by id
+    select pc.id, p.key as platform
+    from platform_credentials pc
+    join platforms p on p.id = pc.platform_id
+    order by pc.id
   `;
 
 export const listAccountsForUser = async (
@@ -163,10 +167,11 @@ export const listAccountsForUser = async (
   sql: Sql = getSql()
 ) =>
   sql<AccountRow[]>`
-    select id, platform
-    from platform_credentials
-    where user_id = ${userId}
-    order by id
+    select pc.id, p.key as platform
+    from platform_credentials pc
+    join platforms p on p.id = pc.platform_id
+    where pc.user_id = ${userId}
+    order by pc.id
   `;
 
 export const listAccountSessions = async (
@@ -199,14 +204,16 @@ export const listAccountSessions = async (
       ps.id,
       ps.started_at,
       ps.ended_at,
-      pc.platform,
+      pc_platform.key as platform,
       g.title,
       g.capsule_url,
-      g.platform as game_platform,
+      game_platform.key as game_platform,
       g.canonical_key as game_canonical_key
     from play_sessions ps
     join platform_credentials pc on pc.id = ps.platform_credential_id
     join games g on g.id = ps.game_id
+    join platforms pc_platform on pc_platform.id = pc.platform_id
+    join platforms game_platform on game_platform.id = g.platform_id
     where ps.platform_credential_id = ${accountId}
       and pc.user_id = ${userId}
       ${titleFilter}
@@ -247,14 +254,16 @@ export const listUserSessions = async (
       ps.id,
       ps.started_at,
       ps.ended_at,
-      pc.platform,
+      pc_platform.key as platform,
       g.title,
       g.capsule_url,
-      g.platform as game_platform,
+      game_platform.key as game_platform,
       g.canonical_key as game_canonical_key
     from play_sessions ps
     join platform_credentials pc on pc.id = ps.platform_credential_id
     join games g on g.id = ps.game_id
+    join platforms pc_platform on pc_platform.id = pc.platform_id
+    join platforms game_platform on game_platform.id = g.platform_id
     where pc.user_id = ${userId}
       ${titleFilter}
       ${fromFilter}
@@ -332,14 +341,16 @@ export const listAccountSessionsToday = async (
       ps.id,
       ps.started_at,
       ps.ended_at,
-      pc.platform,
+      pc_platform.key as platform,
       g.title,
       g.capsule_url,
-      g.platform as game_platform,
+      game_platform.key as game_platform,
       g.canonical_key as game_canonical_key
     from play_sessions ps
     join platform_credentials pc on pc.id = ps.platform_credential_id
     join games g on g.id = ps.game_id
+    join platforms pc_platform on pc_platform.id = pc.platform_id
+    join platforms game_platform on game_platform.id = g.platform_id
     where ps.platform_credential_id = ${accountId}
       and pc.user_id = ${userId}
       and (
@@ -363,14 +374,16 @@ export const listUserSessionsToday = async (
       ps.id,
       ps.started_at,
       ps.ended_at,
-      pc.platform,
+      pc_platform.key as platform,
       g.title,
       g.capsule_url,
-      g.platform as game_platform,
+      game_platform.key as game_platform,
       g.canonical_key as game_canonical_key
     from play_sessions ps
     join platform_credentials pc on pc.id = ps.platform_credential_id
     join games g on g.id = ps.game_id
+    join platforms pc_platform on pc_platform.id = pc.platform_id
+    join platforms game_platform on game_platform.id = g.platform_id
     where pc.user_id = ${userId}
       and (
         (ps.started_at >= (date_trunc('day', now() at time zone 'utc') at time zone 'utc')
@@ -393,14 +406,16 @@ export const loadAccountCurrentSession = async (
       ps.id,
       ps.started_at,
       ps.ended_at,
-      pc.platform,
+      pc_platform.key as platform,
       g.title,
       g.capsule_url,
-      g.platform as game_platform,
+      game_platform.key as game_platform,
       g.canonical_key as game_canonical_key
     from play_sessions ps
     join platform_credentials pc on pc.id = ps.platform_credential_id
     join games g on g.id = ps.game_id
+    join platforms pc_platform on pc_platform.id = pc.platform_id
+    join platforms game_platform on game_platform.id = g.platform_id
     where ps.platform_credential_id = ${accountId}
       and pc.user_id = ${userId}
       and ps.ended_at is null
@@ -419,12 +434,13 @@ export const loadUserCurrentSession = async (
       ps.id,
       ps.started_at,
       ps.ended_at,
-      pc.platform,
+      pc_platform.key as platform,
       g.title,
       g.capsule_url
     from play_sessions ps
     join platform_credentials pc on pc.id = ps.platform_credential_id
     join games g on g.id = ps.game_id
+    join platforms pc_platform on pc_platform.id = pc.platform_id
     where pc.user_id = ${userId}
       and ps.ended_at is null
     order by ps.started_at desc
@@ -480,15 +496,15 @@ export const loadAccountPlatformTotals = async (
   sql<AccountPlatformTotalsRow[]>`
     select
       case
-        when pc.platform = 'manual'
-          then coalesce(mapped_game.platform, g.platform)
-        else pc.platform
+        when pc_platform.key = 'manual'
+          then coalesce(mapped_platform.key, game_platform.key)
+        else pc_platform.key
       end as platform,
       case
-        when pc.platform = 'manual'
+        when pc_platform.key = 'manual'
           and coalesce(mapped_game.canonical_key, g.canonical_key) like 'igdb:%'
           then 'igdb'
-        when pc.platform = 'manual'
+        when pc_platform.key = 'manual'
           and coalesce(mapped_game.id, g.id) is not null
           then 'local'
         else null
@@ -500,11 +516,14 @@ export const loadAccountPlatformTotals = async (
     from play_sessions ps
     join platform_credentials pc on pc.id = ps.platform_credential_id
     join games g on g.id = ps.game_id
+    join platforms pc_platform on pc_platform.id = pc.platform_id
+    join platforms game_platform on game_platform.id = g.platform_id
     left join manual_game_inputs mgi
-      on pc.platform = 'manual'
+      on pc_platform.key = 'manual'
       and mgi.user_id = pc.user_id
       and mgi.canonical_title = split_part(g.canonical_key, ':', 2)
     left join games mapped_game on mapped_game.id = mgi.mapped_game_id
+    left join platforms mapped_platform on mapped_platform.id = mapped_game.platform_id
     where ps.platform_credential_id = ${accountId}
       and pc.user_id = ${userId}
       and ps.started_at >= ${startedAt}
@@ -520,15 +539,15 @@ export const loadUserPlatformTotals = async (
   sql<AccountPlatformTotalsRow[]>`
     select
       case
-        when pc.platform = 'manual'
-          then coalesce(mapped_game.platform, g.platform)
-        else pc.platform
+        when pc_platform.key = 'manual'
+          then coalesce(mapped_platform.key, game_platform.key)
+        else pc_platform.key
       end as platform,
       case
-        when pc.platform = 'manual'
+        when pc_platform.key = 'manual'
           and coalesce(mapped_game.canonical_key, g.canonical_key) like 'igdb:%'
           then 'igdb'
-        when pc.platform = 'manual'
+        when pc_platform.key = 'manual'
           and coalesce(mapped_game.id, g.id) is not null
           then 'local'
         else null
@@ -540,11 +559,14 @@ export const loadUserPlatformTotals = async (
     from play_sessions ps
     join platform_credentials pc on pc.id = ps.platform_credential_id
     join games g on g.id = ps.game_id
+    join platforms pc_platform on pc_platform.id = pc.platform_id
+    join platforms game_platform on game_platform.id = g.platform_id
     left join manual_game_inputs mgi
-      on pc.platform = 'manual'
+      on pc_platform.key = 'manual'
       and mgi.user_id = pc.user_id
       and mgi.canonical_title = split_part(g.canonical_key, ':', 2)
     left join games mapped_game on mapped_game.id = mgi.mapped_game_id
+    left join platforms mapped_platform on mapped_platform.id = mapped_game.platform_id
     where pc.user_id = ${userId}
       and ps.started_at >= ${startedAt}
     group by 1, 2
@@ -560,15 +582,15 @@ export const loadUserPlatformTotalsForRange = async (
   sql<AccountPlatformTotalsRow[]>`
     select
       case
-        when pc.platform = 'manual'
-          then coalesce(mapped_game.platform, g.platform)
-        else pc.platform
+        when pc_platform.key = 'manual'
+          then coalesce(mapped_platform.key, game_platform.key)
+        else pc_platform.key
       end as platform,
       case
-        when pc.platform = 'manual'
+        when pc_platform.key = 'manual'
           and coalesce(mapped_game.canonical_key, g.canonical_key) like 'igdb:%'
           then 'igdb'
-        when pc.platform = 'manual'
+        when pc_platform.key = 'manual'
           and coalesce(mapped_game.id, g.id) is not null
           then 'local'
         else null
@@ -580,11 +602,14 @@ export const loadUserPlatformTotalsForRange = async (
     from play_sessions ps
     join platform_credentials pc on pc.id = ps.platform_credential_id
     join games g on g.id = ps.game_id
+    join platforms pc_platform on pc_platform.id = pc.platform_id
+    join platforms game_platform on game_platform.id = g.platform_id
     left join manual_game_inputs mgi
-      on pc.platform = 'manual'
+      on pc_platform.key = 'manual'
       and mgi.user_id = pc.user_id
       and mgi.canonical_title = split_part(g.canonical_key, ':', 2)
     left join games mapped_game on mapped_game.id = mgi.mapped_game_id
+    left join platforms mapped_platform on mapped_platform.id = mapped_game.platform_id
     where pc.user_id = ${userId}
       and ps.started_at >= ${startedAt}
       and ps.started_at < ${endedAt}
@@ -645,10 +670,11 @@ export const listProvidersForUser = async (
   sql: Sql = getSql()
 ) =>
   sql<ProviderStatusRow[]>`
-    select id, platform, account_id, active, api_key
-    from platform_credentials
-    where user_id = ${userId}
-    order by id
+    select pc.id, p.key as platform, pc.account_id, pc.active, pc.api_key
+    from platform_credentials pc
+    join platforms p on p.id = pc.platform_id
+    where pc.user_id = ${userId}
+    order by pc.id
   `;
 
 export const loadProviderByPlatform = async (
@@ -657,10 +683,11 @@ export const loadProviderByPlatform = async (
   sql: Sql = getSql()
 ) => {
   const rows = await sql<ProviderStatusRow[]>`
-    select id, platform, account_id, active, api_key
-    from platform_credentials
-    where user_id = ${userId}
-      and platform = ${platform}
+    select pc.id, p.key as platform, pc.account_id, pc.active, pc.api_key
+    from platform_credentials pc
+    join platforms p on p.id = pc.platform_id
+    where pc.user_id = ${userId}
+      and p.key = ${platform}
     limit 1
   `;
   return rows[0] ?? null;
@@ -672,10 +699,12 @@ export const updateProviderApiKey = async (
   sql: Sql = getSql()
 ) => {
   const rows = await sql<ProviderStatusRow[]>`
-    update platform_credentials
+    update platform_credentials pc
     set api_key = ${apiKey}, updated_at = now()
-    where id = ${credentialId}
-    returning id, platform, account_id, active, api_key
+    from platforms p
+    where pc.id = ${credentialId}
+      and p.id = pc.platform_id
+    returning pc.id, p.key as platform, pc.account_id, pc.active, pc.api_key
   `;
   return rows[0] ?? null;
 };
@@ -686,9 +715,20 @@ export const createPlayniteCredential = async (
   sql: Sql = getSql()
 ) =>
   sql<ProviderStatusRow[]>`
-    insert into platform_credentials (user_id, platform, api_key, account_id, active)
-    values (${userId}, 'playnite', ${apiKey}, 'local', true)
-    returning id, platform, account_id, active, api_key
+    insert into platform_credentials (user_id, platform_id, api_key, account_id, active)
+    values (
+      ${userId},
+      (select id from platforms where key = 'playnite'),
+      ${apiKey},
+      'local',
+      true
+    )
+    returning
+      id,
+      (select key from platforms where key = 'playnite') as platform,
+      account_id,
+      active,
+      api_key
   `;
 
 export const createManualCredential = async (
@@ -696,9 +736,20 @@ export const createManualCredential = async (
   sql: Sql = getSql()
 ) =>
   sql<ProviderStatusRow[]>`
-    insert into platform_credentials (user_id, platform, api_key, account_id, active)
-    values (${userId}, 'manual', 'manual', 'manual', true)
-    returning id, platform, account_id, active, api_key
+    insert into platform_credentials (user_id, platform_id, api_key, account_id, active)
+    values (
+      ${userId},
+      (select id from platforms where key = 'manual'),
+      'manual',
+      'manual',
+      true
+    )
+    returning
+      id,
+      (select key from platforms where key = 'manual') as platform,
+      account_id,
+      active,
+      api_key
   `;
 
 export const loadUserByEmail = async (
@@ -732,9 +783,10 @@ export const loadNotificationTargetByCredential = async (
   sql: Sql = getSql()
 ) => {
   const rows = await sql<NotificationTargetRow[]>`
-    select u.id as user_id, u.chat_id, pc.platform
+    select u.id as user_id, u.chat_id, p.key as platform
     from platform_credentials pc
     join users u on u.id = pc.user_id
+    join platforms p on p.id = pc.platform_id
     where pc.id = ${platformCredentialId}
     limit 1
   `;
@@ -743,9 +795,10 @@ export const loadNotificationTargetByCredential = async (
 
 export const loadGameById = async (gameId: number, sql: Sql = getSql()) => {
   const rows = await sql<GameRow[]>`
-    select id, title, platform
-    from games
-    where id = ${gameId}
+    select g.id, g.title, p.key as platform
+    from games g
+    join platforms p on p.id = g.platform_id
+    where g.id = ${gameId}
     limit 1
   `;
   return rows[0] ?? null;
@@ -762,10 +815,12 @@ export const listManualInputs = async (
       mgi.canonical_title,
       mgi.mapped_game_id,
       g.title as mapped_title,
-      g.platform as mapped_platform,
-      g.capsule_url as mapped_capsule_url
+      gp.key as mapped_platform,
+      g.capsule_url as mapped_capsule_url,
+      g.canonical_key as mapped_canonical_key
     from manual_game_inputs mgi
     left join games g on g.id = mgi.mapped_game_id
+    left join platforms gp on gp.id = g.platform_id
     where mgi.user_id = ${userId}
     order by mgi.updated_at desc
   `;
@@ -789,11 +844,12 @@ export const loadManualInputMappings = async (
       mgi.canonical_title,
       mgi.mapped_game_id,
       g.title as mapped_title,
-      g.platform as mapped_platform,
+      gp.key as mapped_platform,
       g.capsule_url as mapped_capsule_url,
       g.canonical_key as mapped_canonical_key
     from manual_game_inputs mgi
     left join games g on g.id = mgi.mapped_game_id
+    left join platforms gp on gp.id = g.platform_id
     where mgi.user_id = ${userId}
       and mgi.canonical_title = any(${sql.array(canonicalTitles)})
   `;
@@ -859,12 +915,26 @@ export const searchGamesByTitle = async (
   sql: Sql = getSql()
 ) =>
   sql<GameSearchRow[]>`
-    select id, title, platform, capsule_url
-    from games
-    where title ilike ${`%${title}%`}
-    order by updated_at desc
+    select g.id, g.title, p.key as platform, g.capsule_url
+    from games g
+    join platforms p on p.id = g.platform_id
+    where g.title ilike ${`%${title}%`}
+    order by g.updated_at desc
     limit ${limit}
   `;
+
+export const loadPlatformKeyByIgdbId = async (
+  igdbPlatformId: number,
+  sql: Sql = getSql()
+) => {
+  const rows = await sql<{ key: string }[]>`
+    select key
+    from platforms
+    where igdb_platform_id = ${igdbPlatformId}
+    limit 1
+  `;
+  return rows[0]?.key ?? null;
+};
 
 export const ensureIgdbGame = async (
   game: {
@@ -877,9 +947,12 @@ export const ensureIgdbGame = async (
 ) => {
   const canonicalKey = `igdb:${game.igdbId}`;
   const rows = await sql<{ id: number }[]>`
-    insert into games (platform, title, external_id, canonical_key, capsule_url)
+    insert into games (platform_id, title, external_id, canonical_key, capsule_url)
     values (
-      ${game.platform ?? "igdb"},
+      coalesce(
+        (select id from platforms where key = ${game.platform ?? "unknown"}),
+        (select id from platforms where key = 'unknown')
+      ),
       ${game.title},
       ${game.igdbId},
       ${canonicalKey},
@@ -888,7 +961,7 @@ export const ensureIgdbGame = async (
     on conflict (canonical_key)
     do update set
       title = excluded.title,
-      platform = excluded.platform,
+      platform_id = excluded.platform_id,
       external_id = excluded.external_id,
       capsule_url = coalesce(excluded.capsule_url, games.capsule_url),
       updated_at = now()
@@ -905,12 +978,13 @@ export const endActiveSessionsForUser = async (
   sql<{ id: number; platform: string; title: string }[]>`
     update play_sessions as ps
     set ended_at = ${endedAt}, updated_at = now()
-    from platform_credentials pc, games g
+    from platform_credentials pc, games g, platforms p
     where ps.platform_credential_id = pc.id
       and g.id = ps.game_id
+      and p.id = pc.platform_id
       and pc.user_id = ${userId}
       and ps.ended_at is null
-    returning ps.id, pc.platform, g.title
+    returning ps.id, p.key as platform, g.title
   `;
 
 export const endActiveSessionsForCredential = async (
@@ -931,9 +1005,12 @@ export const ensureGameId = async (
   sql: Sql = getSql()
 ) => {
   const rows = await sql<{ id: number }[]>`
-    insert into games (platform, title, external_id, canonical_key, capsule_url)
+    insert into games (platform_id, title, external_id, canonical_key, capsule_url)
     values (
-      ${game.platform},
+      coalesce(
+        (select id from platforms where key = ${game.platform}),
+        (select id from platforms where key = 'unknown')
+      ),
       ${game.title},
       ${game.externalId ?? null},
       ${game.canonicalKey},
@@ -942,6 +1019,7 @@ export const ensureGameId = async (
     on conflict (canonical_key)
     do update set
       title = excluded.title,
+      platform_id = excluded.platform_id,
       external_id = excluded.external_id,
       capsule_url = coalesce(excluded.capsule_url, games.capsule_url),
       updated_at = now()
@@ -1055,10 +1133,11 @@ export const exampleListPlatformCredentialsForUser = (
   userId: number,
   sql: Sql = getSql()
 ) => sql`
-      select id, platform, api_key, account_id
-      from platform_credentials
-      where user_id = ${userId}
-      order by id
+      select pc.id, p.key as platform, pc.api_key, pc.account_id
+      from platform_credentials pc
+      join platforms p on p.id = pc.platform_id
+      where pc.user_id = ${userId}
+      order by pc.id
     `;
 
 export const calculateTotalPlaySessions = (sql: Sql = getSql()) =>

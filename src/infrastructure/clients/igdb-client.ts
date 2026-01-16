@@ -7,13 +7,14 @@ type IgdbGame = {
   id: number;
   name: string;
   cover?: { image_id?: string };
-  platforms?: { name?: string }[];
+  platforms?: { id?: number; name?: string }[];
 };
 
 type IgdbSearchResult = {
   id: string;
   title: string;
   platform: string | null;
+  platformId: number | null;
   coverUrl: string | null;
 };
 
@@ -76,7 +77,7 @@ export const searchIgdbGames = async (
       Authorization: `Bearer ${token}`,
       "Content-Type": "text/plain",
     },
-    body: `search "${trimmed.replace(/"/g, "")}"; fields id,name,cover.image_id,platforms.name; limit 10;`,
+    body: `search "${trimmed.replace(/"/g, "")}"; fields id,name,cover.image_id,platforms.id,platforms.name; limit 10;`,
   });
 
   if (!response.ok) {
@@ -85,12 +86,12 @@ export const searchIgdbGames = async (
 
   const payload = (await response.json()) as IgdbGame[];
   return payload.map((game) => {
-    const platformName =
-      game.platforms?.find((platform) => platform?.name)?.name ?? null;
+    const platformInfo = game.platforms?.find((platform) => platform?.id);
     return {
       id: String(game.id),
       title: game.name,
-      platform: platformName,
+      platform: platformInfo?.name ?? null,
+      platformId: platformInfo?.id ?? null,
       coverUrl: formatIgdbCover(game.cover?.image_id),
     };
   });

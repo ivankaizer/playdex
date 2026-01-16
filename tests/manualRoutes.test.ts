@@ -94,7 +94,7 @@ requiresDb(
   async () => {
     const response = await sendMapRequest({
       title: "Missing IGDB",
-      platform: "switch",
+      platformKey: "switch-1",
     });
 
     expect(response.status).toBe(400);
@@ -110,7 +110,7 @@ requiresDb(
   async () => {
     const response = await sendMapRequest({
       igdbId: "12345",
-      platform: "switch",
+      platformKey: "switch-1",
     });
 
     expect(response.status).toBe(400);

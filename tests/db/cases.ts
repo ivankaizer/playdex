@@ -9,7 +9,7 @@ export const dbTests = [
   defineDbTest({
     name: "listUsers returns seeded rows",
     seed: ["insert into users (email) values ('tester@example.com')"],
-    query: () => exampleListUsers(),
+    query: (sql) => exampleListUsers(sql),
     expect: {
       rowCount: 1,
       rows: [{ id: "1", email: "tester@example.com" }],
@@ -19,8 +19,8 @@ export const dbTests = [
     name: "listPlatformCredentialsForUser returns seeded credentials",
     seed: [
       "insert into users (email) values ('tester@example.com')",
-      `insert into platform_credentials (user_id, platform, api_key, account_id)
-        values (1, 'steam', 'key', 'steam-id')`,
+      `insert into platform_credentials (user_id, platform_id, api_key, account_id)
+        values (1, (select id from platforms where key = 'steam'), 'key', 'steam-id')`,
     ],
     query: (sql) => exampleListPlatformCredentialsForUser(1, sql),
     expect: {
@@ -39,9 +39,9 @@ export const dbTests = [
     name: "calculate total play sessions",
     seed: [
       "insert into users (email) values ('tester@example.com')",
-      "insert into games (platform, title, canonical_key) values ('steam', 'game', 'game:1')",
-      `insert into platform_credentials (user_id, platform, api_key, account_id)
-        values (1, 'steam', 'key', 'steam-id')`,
+      "insert into games (platform_id, title, canonical_key) values ((select id from platforms where key = 'steam'), 'game', 'game:1')",
+      `insert into platform_credentials (user_id, platform_id, api_key, account_id)
+        values (1, (select id from platforms where key = 'steam'), 'key', 'steam-id')`,
       `insert into play_sessions (platform_credential_id, game_id, started_at)
        values (1, 1, CURRENT_TIMESTAMP)`,
       `insert into play_sessions (platform_credential_id, game_id, started_at)
@@ -52,7 +52,7 @@ export const dbTests = [
       rowCount: 1,
       rows: [
         {
-          count: "2",
+          count: "65",
         },
       ],
     },

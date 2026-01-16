@@ -71,6 +71,7 @@ type ManualInput = {
   input: string;
   canonicalTitle: string;
   mappedGameId: number | null;
+  mappedSource: "local" | "igdb" | null;
   mappedGame: {
     id: number;
     title: string;
@@ -97,6 +98,7 @@ type ManualMappingSearchResult = {
   igdbId?: string;
   title: string;
   platform: string | null;
+  platformId?: number | null;
   capsuleUrl: string | null;
 };
 
@@ -184,13 +186,16 @@ export const App = () => {
   const [mappingIgdbAvailable, setMappingIgdbAvailable] = useState(true);
   const [isMappingUpdateLoading, setIsMappingUpdateLoading] = useState(false);
   const [mappingPlatformOverride, setMappingPlatformOverride] =
-    useState("PS5");
+    useState("auto");
   const manualPlatformOptions = [
-    "PS5",
-    "Steam",
-    "Playnite",
-    "Nintendo Switch 2",
-    "Xbox Series X|S",
+    { key: "auto", label: "Use IGDB platform" },
+    { key: "ps5", label: "PS5" },
+    { key: "pc", label: "PC" },
+    { key: "steam", label: "Steam" },
+    { key: "playnite", label: "Playnite" },
+    { key: "switch-1", label: "Nintendo Switch 1" },
+    { key: "switch-2", label: "Nintendo Switch 2" },
+    { key: "xbox-series-xs", label: "Xbox Series X|S" },
   ];
   const sessionsLimit = 10;
   const capsuleUrl =
@@ -451,6 +456,8 @@ export const App = () => {
           }
         );
       } else if (result.source === "igdb" && result.igdbId) {
+        const platformKey =
+          mappingPlatformOverride === "auto" ? null : mappingPlatformOverride;
         await apiRequest<ManualMappingResponse>(
           `/manual/inputs/${inputId}/map`,
           {
@@ -458,7 +465,8 @@ export const App = () => {
             body: {
               igdbId: result.igdbId,
               title: result.title,
-              platform: mappingPlatformOverride,
+              platformId: result.platformId ?? null,
+              platformKey,
               capsuleUrl: result.capsuleUrl,
             },
           }
@@ -471,7 +479,7 @@ export const App = () => {
       setActiveMappingInputId(null);
       setMappingSearchQuery("");
       setMappingSearchResults([]);
-      setMappingPlatformOverride("PS5");
+      setMappingPlatformOverride("auto");
       await loadManualInputs();
     } catch (err) {
       setMappingSearchError(
@@ -488,7 +496,7 @@ export const App = () => {
     setMappingSearchResults([]);
     setMappingSearchError("");
     setMappingPlatformOverride(
-      input.mappedGame?.platform?.trim() ? input.mappedGame.platform : "PS5"
+      input.mappedGame?.platform?.trim() ? input.mappedGame.platform : "auto"
     );
   };
 
@@ -777,10 +785,16 @@ export const App = () => {
     );
   };
   const platformLabels: Record<string, string> = {
+    ps5: "PS5",
+    "xbox-series-xs": "Xbox Series X|S",
+    pc: "PC",
+    "switch-1": "Nintendo Switch 1",
+    "switch-2": "Nintendo Switch 2",
     steam: "Steam",
     psn: "PS5",
     playnite: "Playnite",
     manual: "Manual",
+    unknown: "Unknown",
   };
   const providerNames: Record<string, string> = {
     steam: "Steam",
@@ -810,8 +824,9 @@ export const App = () => {
       label,
     };
   };
-  const formatManualMappingType = (platform?: string | null) =>
-    platform === "igdb" ? "IGDB" : "Local";
+  const formatManualMappingType = (
+    source?: "local" | "igdb" | null
+  ) => (source === "igdb" ? "IGDB" : "Local");
   const formatManualInputLabel = (input: ManualInput) => {
     if (!input.mappedGame) {
       return input.input;
@@ -819,7 +834,7 @@ export const App = () => {
     const platformLabel = input.mappedGame.platform
       ? formatPlatformLabel(input.mappedGame.platform)
       : "Unknown platform";
-    const typeLabel = formatManualMappingType(input.mappedGame.platform);
+    const typeLabel = formatManualMappingType(input.mappedSource);
     return `${platformLabel} · ${typeLabel} · ${input.mappedGame.title}`;
   };
   const formatDateLabel = (date: Date) =>
@@ -1790,10 +1805,10 @@ export const App = () => {
                                       >
                                         {manualPlatformOptions.map((platform) => (
                                           <option
-                                            key={platform}
-                                            value={platform}
+                                            key={platform.key}
+                                            value={platform.key}
                                           >
-                                            {platform}
+                                            {platform.label}
                                           </option>
                                         ))}
                                       </select>
@@ -1808,14 +1823,14 @@ export const App = () => {
                                       ? "Searching..."
                                       : "Search"}
                                   </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setActiveMappingInputId(null);
-                                      setMappingPlatformOverride("PS5");
-                                    }}
-                                    className="rounded-full border border-slate-700 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-slate-200"
-                                  >
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setActiveMappingInputId(null);
+                                        setMappingPlatformOverride("auto");
+                                      }}
+                                      className="rounded-full border border-slate-700 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-slate-200"
+                                    >
                                     Close
                                   </button>
                                 </div>
@@ -1858,9 +1873,13 @@ export const App = () => {
                                             </p>
                                             <p className="text-xs text-slate-400">
                                               {result.source === "igdb"
-                                                ? formatPlatformLabel(
-                                                    mappingPlatformOverride
-                                                  )
+                                                ? mappingPlatformOverride ===
+                                                  "auto"
+                                                  ? result.platform ??
+                                                    "Unknown platform"
+                                                  : formatPlatformLabel(
+                                                      mappingPlatformOverride
+                                                    )
                                                 : result.platform
                                                   ? formatPlatformLabel(
                                                       result.platform

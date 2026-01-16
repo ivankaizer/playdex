@@ -1,4 +1,15 @@
-export type Platform = "psn" | "steam" | "unknown" | "manual";
+export type Platform =
+  | "ps5"
+  | "xbox-series-xs"
+  | "pc"
+  | "switch-1"
+  | "switch-2"
+  | "steam"
+  | "psn"
+  | "playnite"
+  | "manual"
+  | "unknown"
+  ;
 
 export type PlatformAccount = {
   platform: Platform;
