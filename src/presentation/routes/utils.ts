@@ -82,7 +82,12 @@ export const requireAuth = (request: Request): AuthResult => {
     const decoded = jwt.verify(token, jwtSecret) as {
       sub: number;
       email: string;
+      type?: string;
     };
+
+    if (decoded.type !== "access") {
+      return { ok: false, status: 401, response: fail("Invalid token.") };
+    }
 
     return { ok: true, userId: decoded.sub, email: decoded.email };
   } catch (error) {

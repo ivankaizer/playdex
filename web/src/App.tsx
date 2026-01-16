@@ -236,6 +236,7 @@ export const App = () => {
   );
   const handleLogout = () => {
     localStorage.removeItem("playdex.token");
+    localStorage.removeItem("playdex.refresh");
     localStorage.removeItem("playdex.email");
     window.location.assign("/");
   };
@@ -269,14 +270,16 @@ export const App = () => {
       const payload = await apiRequest<{
         userId: number;
         email: string;
-        token: string;
+        accessToken: string;
+        refreshToken: string;
       }>("/login", {
         method: "POST",
         body: { email, password },
         auth: false,
       });
 
-      localStorage.setItem("playdex.token", payload.token);
+      localStorage.setItem("playdex.token", payload.accessToken);
+      localStorage.setItem("playdex.refresh", payload.refreshToken);
       localStorage.setItem("playdex.email", payload.email);
       setSessionEmail(payload.email);
       setStatus("success");
@@ -309,11 +312,18 @@ export const App = () => {
       const [todaySessionsResponse, stats, current, todayTotalsResponse] =
         await Promise.all([
           apiRequest<AccountSessionsResponse>(
-            `/sessions?${todaySessionsParams.toString()}`
+            `/sessions?${todaySessionsParams.toString()}`,
+            { onAuthFailure: handleLogout }
           ),
-          apiRequest<AccountStatsResponse>("/stats"),
-          apiRequest<AccountCurrentSessionResponse>("/sessions/current"),
-          apiRequest<AccountTodayPlatformTotalsResponse>("/stats/today"),
+          apiRequest<AccountStatsResponse>("/stats", {
+            onAuthFailure: handleLogout,
+          }),
+          apiRequest<AccountCurrentSessionResponse>("/sessions/current", {
+            onAuthFailure: handleLogout,
+          }),
+          apiRequest<AccountTodayPlatformTotalsResponse>("/stats/today", {
+            onAuthFailure: handleLogout,
+          }),
         ]);
 
       if (options?.isCancelled?.()) {

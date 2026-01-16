@@ -10,6 +10,7 @@ type RequestOptions = {
   method?: string;
   body?: unknown;
   auth?: boolean;
+  onAuthFailure?: () => void;
 };
 
 // @ts-ignore
@@ -40,21 +41,72 @@ const buildApiUrl = (path: string) => {
   return `${apiBaseUrl}${normalizedPath}`;
 };
 
-export const apiRequest = async <T>(
-  path: string,
-  { method = "GET", body, auth = true }: RequestOptions = {}
-): Promise<T> => {
-  const response = await fetch(buildApiUrl(path), {
-    method,
-    headers: buildHeaders(auth),
-    body: body === undefined ? undefined : JSON.stringify(body),
-  });
+type RefreshResponse = {
+  accessToken: string;
+  refreshToken?: string;
+};
 
-  const payload = (await response.json()) as ApiResponse<T>;
+type RefreshResult =
+  | { ok: true; token: string }
+  | { ok: false; reason: "missing" | "failed" };
 
-  if (!response.ok || payload.error) {
-    throw new Error(payload.error?.error ?? "Request failed.");
+const refreshAccessToken = async (): Promise<RefreshResult> => {
+  const refreshToken = localStorage.getItem("playdex.refresh");
+  if (!refreshToken) {
+    return { ok: false, reason: "missing" };
   }
 
-  return payload.data;
+  try {
+    const response = await fetch(buildApiUrl("/refresh"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ refreshToken }),
+    });
+    const payload = (await response.json()) as ApiResponse<RefreshResponse>;
+
+    if (!response.ok || payload.error) {
+      return { ok: false, reason: "failed" };
+    }
+
+    localStorage.setItem("playdex.token", payload.data.accessToken);
+    if (payload.data.refreshToken) {
+      localStorage.setItem("playdex.refresh", payload.data.refreshToken);
+    }
+
+    return { ok: true, token: payload.data.accessToken };
+  } catch {
+    return { ok: false, reason: "failed" };
+  }
+};
+
+export const apiRequest = async <T>(
+  path: string,
+  { method = "GET", body, auth = true, onAuthFailure }: RequestOptions = {}
+): Promise<T> => {
+  const execute = async (isRetry: boolean): Promise<T> => {
+    const response = await fetch(buildApiUrl(path), {
+      method,
+      headers: buildHeaders(auth),
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+
+    const payload = (await response.json()) as ApiResponse<T>;
+
+    if (!response.ok || payload.error) {
+      if (response.status === 401 && auth && !isRetry) {
+        const refreshed = await refreshAccessToken();
+        if (refreshed.ok) {
+          return execute(true);
+        }
+        if (onAuthFailure) {
+          onAuthFailure();
+        }
+      }
+      throw new Error(payload.error?.error ?? "Request failed.");
+    }
+
+    return payload.data;
+  };
+
+  return execute(false);
 };

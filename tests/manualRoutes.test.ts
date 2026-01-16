@@ -61,7 +61,10 @@ beforeEach(async () => {
     insert into users (email) values ('manual-route@test.com') returning id
   `;
   userId = userRows[0].id;
-  token = jwt.sign({ sub: userId, email: "manual-route@test.com" }, jwtSecret);
+  token = jwt.sign(
+    { sub: userId, email: "manual-route@test.com", type: "access" },
+    jwtSecret
+  );
 
   const canonicalTitle = normalizeGameTitle("Map Target");
   const inputRows = await db.sql<{ id: number }[]>`

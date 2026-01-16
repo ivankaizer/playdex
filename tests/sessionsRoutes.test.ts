@@ -60,7 +60,10 @@ beforeEach(async () => {
     insert into users (email) values ('sessions@test.com') returning id
   `;
   userId = userRows[0].id;
-  token = jwt.sign({ sub: userId, email: "sessions@test.com" }, jwtSecret);
+  token = jwt.sign(
+    { sub: userId, email: "sessions@test.com", type: "access" },
+    jwtSecret
+  );
 
   const credentialRows = await db.sql<{ id: number }[]>`
     insert into platform_credentials (user_id, platform_id, api_key, account_id)

@@ -58,6 +58,7 @@ export const config = {
   pollIntervalSeconds: resolvePollIntervalSeconds(
     Bun.env.POLL_INTERVAL_SECONDS
   ),
+  accessTokenTtl: Bun.env.ACCESS_TOKEN_TTL?.trim() || "15m",
   telegramBotToken: Bun.env.TELEGRAM_BOT_TOKEN?.trim() ?? "",
   corsOrigins: resolveCorsOrigins(Bun.env.CORS_ORIGINS),
   igdbClientId: Bun.env.IGDB_CLIENT_ID?.trim() ?? "",
