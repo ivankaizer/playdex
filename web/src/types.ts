@@ -35,14 +35,9 @@ export type AccountStatsPeriod = {
   topGames: { title: string; totalSeconds: number }[];
 };
 
-export type AccountStatsResponse = {
+export type AccountStatsRangeResponse = {
   accountId: number | null;
-  monthly: AccountStatsPeriod;
-  yearly: AccountStatsPeriod;
-};
-
-export type AccountTodayPlatformTotalsResponse = {
-  platforms: { platform: string; totalSeconds: number; source?: string | null }[];
+  stats: AccountStatsPeriod;
 };
 
 export type ProviderStatus = {

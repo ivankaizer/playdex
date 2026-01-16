@@ -6,8 +6,7 @@ import type {
   AccountCurrentSessionResponse,
   AccountSessionsResponse,
   AccountStatsPeriod,
-  AccountStatsResponse,
-  AccountTodayPlatformTotalsResponse,
+  AccountStatsRangeResponse,
   AccountSession,
   ManualInputsResponse,
   ManualInput,
@@ -76,7 +75,14 @@ export const DashboardPage = ({
     setDashboardError("");
 
     try {
-      const todayDate = formatUtcDateInput(new Date());
+      const now = new Date();
+      const todayDate = formatUtcDateInput(now);
+      const monthStart = formatUtcDateInput(
+        new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1))
+      );
+      const yearStart = formatUtcDateInput(
+        new Date(Date.UTC(now.getUTCFullYear(), 0, 1))
+      );
       const todaySessionsParams = new URLSearchParams({
         limit: "10",
         offset: "0",
@@ -85,32 +91,45 @@ export const DashboardPage = ({
         sort: "date",
         direction: "desc",
       });
-      const [todaySessionsResponse, stats, current, todayTotalsResponse] =
-        await Promise.all([
-          apiRequest<AccountSessionsResponse>(
-            `/sessions?${todaySessionsParams.toString()}`,
-            { onAuthFailure: onLogout }
-          ),
-          apiRequest<AccountStatsResponse>("/stats", {
-            onAuthFailure: onLogout,
-          }),
-          apiRequest<AccountCurrentSessionResponse>("/sessions/current", {
-            onAuthFailure: onLogout,
-          }),
-          apiRequest<AccountTodayPlatformTotalsResponse>("/stats/today", {
-            onAuthFailure: onLogout,
-          }),
-        ]);
+      const statsParams = (from: string, to: string) =>
+        new URLSearchParams({ from, to }).toString();
+      const [
+        todaySessionsResponse,
+        todayStatsResponse,
+        monthlyStatsResponse,
+        yearlyStatsResponse,
+        current,
+      ] = await Promise.all([
+        apiRequest<AccountSessionsResponse>(
+          `/sessions?${todaySessionsParams.toString()}`,
+          { onAuthFailure: onLogout }
+        ),
+        apiRequest<AccountStatsRangeResponse>(
+          `/stats?${statsParams(todayDate, todayDate)}`,
+          { onAuthFailure: onLogout }
+        ),
+        apiRequest<AccountStatsRangeResponse>(
+          `/stats?${statsParams(monthStart, todayDate)}`,
+          { onAuthFailure: onLogout }
+        ),
+        apiRequest<AccountStatsRangeResponse>(
+          `/stats?${statsParams(yearStart, todayDate)}`,
+          { onAuthFailure: onLogout }
+        ),
+        apiRequest<AccountCurrentSessionResponse>("/sessions/current", {
+          onAuthFailure: onLogout,
+        }),
+      ]);
 
       if (options?.isCancelled?.()) {
         return;
       }
 
       setTodaySessions(todaySessionsResponse.sessions);
-      setMonthlyStats(stats.monthly);
-      setYearlyStats(stats.yearly);
+      setMonthlyStats(monthlyStatsResponse.stats);
+      setYearlyStats(yearlyStatsResponse.stats);
       setCurrentSession(current.session);
-      setTodayPlatformTotals(todayTotalsResponse.platforms);
+      setTodayPlatformTotals(todayStatsResponse.stats.platforms);
       setIsDashboardLoading(false);
     } catch (err) {
       if (options?.isCancelled?.()) {

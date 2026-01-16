@@ -64,8 +64,9 @@ export type AccountStatsResponseDto = {
   yearly: AccountStatsPeriodDto;
 };
 
-export type AccountTodayPlatformTotalsResponseDto = {
-  platforms: { platform: string; totalSeconds: number; source?: string | null }[];
+export type AccountStatsRangeResponseDto = {
+  accountId: number | null;
+  stats: AccountStatsPeriodDto;
 };
 
 export type ProviderStatusDto = {

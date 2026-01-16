@@ -11,17 +11,15 @@ import {
   getUserSessions,
   getUserSessionsToday,
   getUserSessionsTotal,
-  getUserStats,
-  getUserTodayPlatformTotals,
+  getUserStatsForRange,
   removeUserSession,
 } from "../../application/accounts";
 import type {
   AccountCurrentSessionResponseDto,
   AccountSessionsResponseDto,
   AccountSessionDeleteResponseDto,
-  AccountStatsResponseDto,
+  AccountStatsRangeResponseDto,
   AccountSummaryDto,
-  AccountTodayPlatformTotalsResponseDto,
   AccountTodaySessionsResponseDto,
 } from "./types";
 import {
@@ -222,26 +220,47 @@ export const registerAccountRoutes = (app: Elysia) =>
           return auth.response;
         }
 
-        const stats = await getUserStats(auth.userId);
-        const response: AccountStatsResponseDto = {
-          accountId: null,
-          monthly: stats.monthly,
-          yearly: stats.yearly,
-        };
-        return ok(response);
-      })
-    )
-    .get(
-      "/api/stats/today",
-      withApiErrorLogging(async ({ request, set }) => {
-        const auth = requireAuth(request);
-        if (!auth.ok) {
-          set.status = auth.status;
-          return auth.response;
+        const url = new URL(request.url);
+        const fromRaw = url.searchParams.get("from");
+        const toRaw = url.searchParams.get("to");
+        const parsedFrom = fromRaw ? new Date(fromRaw) : null;
+        const parsedTo = toRaw ? new Date(toRaw) : null;
+
+        if (!parsedFrom || !parsedTo) {
+          set.status = 400;
+          return fail("from and to are required.");
         }
 
-        const platforms = await getUserTodayPlatformTotals(auth.userId);
-        const response: AccountTodayPlatformTotalsResponseDto = { platforms };
+        if (
+          Number.isNaN(parsedFrom.getTime()) ||
+          Number.isNaN(parsedTo.getTime())
+        ) {
+          set.status = 400;
+          return fail("from and to must be valid dates.");
+        }
+
+        if (parsedFrom > parsedTo) {
+          set.status = 400;
+          return fail("from must be before to.");
+        }
+
+        const toExclusive = new Date(
+          Date.UTC(
+            parsedTo.getUTCFullYear(),
+            parsedTo.getUTCMonth(),
+            parsedTo.getUTCDate() + 1
+          )
+        );
+
+        const stats = await getUserStatsForRange(
+          auth.userId,
+          parsedFrom,
+          toExclusive
+        );
+        const response: AccountStatsRangeResponseDto = {
+          accountId: null,
+          stats,
+        };
         return ok(response);
       })
     )

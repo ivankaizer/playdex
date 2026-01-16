@@ -487,6 +487,26 @@ export const loadUserPlaytimeSummary = async (
       and ps.started_at >= ${startedAt}
   `;
 
+export const loadUserPlaytimeSummaryForRange = async (
+  userId: number,
+  startedAt: Date,
+  endedAt: Date,
+  sql: Sql = getSql()
+) =>
+  sql<AccountPlaytimeSummaryRow[]>`
+    select
+      coalesce(
+        sum(extract(epoch from (coalesce(ps.ended_at, now()) - ps.started_at))),
+        0
+      )::float as total_seconds,
+      count(*)::int as session_count
+    from play_sessions ps
+    join platform_credentials pc on pc.id = ps.platform_credential_id
+    where pc.user_id = ${userId}
+      and ps.started_at >= ${startedAt}
+      and ps.started_at < ${endedAt}
+  `;
+
 export const loadAccountPlatformTotals = async (
   accountId: number,
   userId: number,
@@ -660,6 +680,31 @@ export const loadUserTopGames = async (
     join games g on g.id = ps.game_id
     where pc.user_id = ${userId}
       and ps.started_at >= ${startedAt}
+    group by g.title
+    order by total_seconds desc
+    limit ${limit}
+  `;
+
+export const loadUserTopGamesForRange = async (
+  userId: number,
+  startedAt: Date,
+  endedAt: Date,
+  limit: number,
+  sql: Sql = getSql()
+) =>
+  sql<AccountTopGameRow[]>`
+    select
+      g.title,
+      coalesce(
+        sum(extract(epoch from (coalesce(ps.ended_at, now()) - ps.started_at))),
+        0
+      )::float as total_seconds
+    from play_sessions ps
+    join platform_credentials pc on pc.id = ps.platform_credential_id
+    join games g on g.id = ps.game_id
+    where pc.user_id = ${userId}
+      and ps.started_at >= ${startedAt}
+      and ps.started_at < ${endedAt}
     group by g.title
     order by total_seconds desc
     limit ${limit}

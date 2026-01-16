@@ -16,6 +16,8 @@ import {
   loadUserPlatformTotalsForRange,
   loadUserPlaytimeSummary,
   loadUserTopGames,
+  loadUserPlaytimeSummaryForRange,
+  loadUserTopGamesForRange,
   loadManualInputMappings,
   deleteUserSession,
   type AccountSessionFilters,
@@ -306,6 +308,34 @@ const buildUserStatsPeriod = async (userId: number, startedAt: Date) => {
   };
 };
 
+const buildUserStatsRange = async (
+  userId: number,
+  startedAt: Date,
+  endedAt: Date
+) => {
+  const [summaryRows, platformRows, topGameRows] = await Promise.all([
+    loadUserPlaytimeSummaryForRange(userId, startedAt, endedAt),
+    loadUserPlatformTotalsForRange(userId, startedAt, endedAt),
+    loadUserTopGamesForRange(userId, startedAt, endedAt, 5),
+  ]);
+
+  const summary = summaryRows[0] ?? { total_seconds: 0, session_count: 0 };
+  return {
+    totalSeconds: summary.total_seconds ?? 0,
+    sessionCount: summary.session_count ?? 0,
+    topGameTitle: topGameRows[0]?.title ?? null,
+    platforms: platformRows.map((row) => ({
+      platform: row.platform,
+      source: row.source,
+      totalSeconds: row.total_seconds ?? 0,
+    })),
+    topGames: topGameRows.map((row) => ({
+      title: row.title,
+      totalSeconds: row.total_seconds ?? 0,
+    })),
+  };
+};
+
 export const getAccountStats = async (accountId: number, userId: number) => {
   const now = new Date();
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -332,18 +362,8 @@ export const getUserStats = async (userId: number) => {
   return { monthly, yearly };
 };
 
-export const getUserTodayPlatformTotals = async (userId: number) => {
-  const now = new Date();
-  const start = new Date(
-    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())
-  );
-  const end = new Date(
-    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1)
-  );
-  const rows = await loadUserPlatformTotalsForRange(userId, start, end);
-  return rows.map((row) => ({
-    platform: row.platform,
-    source: row.source,
-    totalSeconds: row.total_seconds ?? 0,
-  }));
-};
+export const getUserStatsForRange = async (
+  userId: number,
+  startedAt: Date,
+  endedAt: Date
+) => buildUserStatsRange(userId, startedAt, endedAt);
