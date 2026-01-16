@@ -7,6 +7,10 @@ type AccountIdParseResult =
   | { ok: true; accountId: number }
   | { ok: false; response: ApiResponse<never> };
 
+type SessionIdParseResult =
+  | { ok: true; sessionId: number }
+  | { ok: false; response: ApiResponse<never> };
+
 export const ok = <T>(data: T): ApiResponse<T> => ({ data, error: null });
 
 export const fail = (message: string): ApiResponse<never> => ({
@@ -53,6 +57,21 @@ export const parseAccountIdParam = (
   }
 
   return { ok: true, accountId };
+};
+
+export const parseSessionIdParam = (
+  params: Record<string, string> | undefined
+): SessionIdParseResult => {
+  const raw = params?.sessionId?.trim() ?? "";
+  const sessionId = Number(raw);
+  if (!raw || !Number.isInteger(sessionId)) {
+    return {
+      ok: false,
+      response: fail("sessionId must be a number."),
+    };
+  }
+
+  return { ok: true, sessionId };
 };
 
 type AuthResult =

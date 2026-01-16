@@ -46,6 +46,10 @@ export type AccountCurrentSessionResponseDto = {
   session: AccountSessionDto | null;
 };
 
+export type AccountSessionDeleteResponseDto = {
+  sessionId: number;
+};
+
 export type AccountStatsPeriodDto = {
   totalSeconds: number;
   sessionCount: number;
@@ -143,4 +147,8 @@ export type ManualMappingSearchResponseDto = {
 export type ManualMappingResponseDto = {
   inputId: number;
   mappedGameId: number | null;
+};
+
+export type ManualEntryCreateResponseDto = {
+  sessionId: number;
 };

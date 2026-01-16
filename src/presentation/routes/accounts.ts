@@ -13,10 +13,12 @@ import {
   getUserSessionsTotal,
   getUserStats,
   getUserTodayPlatformTotals,
+  removeUserSession,
 } from "../../application/accounts";
 import type {
   AccountCurrentSessionResponseDto,
   AccountSessionsResponseDto,
+  AccountSessionDeleteResponseDto,
   AccountStatsResponseDto,
   AccountSummaryDto,
   AccountTodayPlatformTotalsResponseDto,
@@ -26,6 +28,7 @@ import {
   fail,
   ok,
   parseAccountIdParam,
+  parseSessionIdParam,
   requireAuth,
   withApiErrorLogging,
 } from "./utils";
@@ -143,6 +146,33 @@ export const registerAccountRoutes = (app: Elysia) =>
           total,
           limit: safeLimit,
           offset: safeOffset,
+        };
+        return ok(response);
+      })
+    )
+    .delete(
+      "/api/sessions/:sessionId",
+      withApiErrorLogging(async ({ request, params = {}, set }) => {
+        const auth = requireAuth(request);
+        if (!auth.ok) {
+          set.status = auth.status;
+          return auth.response;
+        }
+
+        const parsed = parseSessionIdParam(params);
+        if (!parsed.ok) {
+          set.status = 400;
+          return parsed.response;
+        }
+
+        const result = await removeUserSession(auth.userId, parsed.sessionId);
+        if (!result.deleted) {
+          set.status = 404;
+          return fail("Session not found.");
+        }
+
+        const response: AccountSessionDeleteResponseDto = {
+          sessionId: parsed.sessionId,
         };
         return ok(response);
       })

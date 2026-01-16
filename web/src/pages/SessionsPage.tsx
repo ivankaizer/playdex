@@ -70,6 +70,7 @@ export const SessionsPage = ({
   );
   const [manualEntryHours, setManualEntryHours] = useState("1");
   const [manualEntryMinutes, setManualEntryMinutes] = useState("0");
+  const [deletingSessionIds, setDeletingSessionIds] = useState<number[]>([]);
 
   const sessionsLimit = 10;
 
@@ -195,6 +196,26 @@ export const SessionsPage = ({
       );
     } finally {
       setIsManualEntrySaving(false);
+    }
+  };
+
+  const handleSessionRemove = async (sessionId: number) => {
+    if (!window.confirm("Remove this session entry?")) {
+      return;
+    }
+    setDeletingSessionIds((current) => [...current, sessionId]);
+    setSessionsError("");
+    try {
+      await apiRequest(`/sessions/${sessionId}`, { method: "DELETE" });
+      refreshSessions();
+    } catch (err) {
+      setSessionsError(
+        err instanceof Error ? err.message : "Failed to remove session."
+      );
+    } finally {
+      setDeletingSessionIds((current) =>
+        current.filter((id) => id !== sessionId)
+      );
     }
   };
 
@@ -438,6 +459,7 @@ export const SessionsPage = ({
                       {renderSessionSortIcon("duration")}
                     </button>
                   </th>
+                  <th className="px-4 py-3 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800 bg-slate-900/60">
@@ -459,12 +481,15 @@ export const SessionsPage = ({
                       <td className="px-4 py-4">
                         <div className="ml-auto h-3 w-12 rounded-full bg-slate-800/50" />
                       </td>
+                      <td className="px-4 py-4">
+                        <div className="ml-auto h-3 w-16 rounded-full bg-slate-800/40" />
+                      </td>
                     </tr>
                   ))
                 ) : sessionRowsView.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={4}
+                      colSpan={5}
                       className="px-4 py-10 text-center text-sm text-slate-400"
                     >
                       {hasSessionFilters
@@ -498,6 +523,16 @@ export const SessionsPage = ({
                       </td>
                       <td className="px-4 py-3 text-right text-emerald-200">
                         {session.duration}
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <button
+                          type="button"
+                          onClick={() => handleSessionRemove(session.sessionId)}
+                          disabled={deletingSessionIds.includes(session.sessionId)}
+                          className="rounded-full border border-rose-500/60 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.3em] text-rose-200 transition hover:border-rose-400 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          Remove
+                        </button>
                       </td>
                     </tr>
                   ))

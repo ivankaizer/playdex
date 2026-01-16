@@ -17,6 +17,7 @@ import {
   loadUserPlaytimeSummary,
   loadUserTopGames,
   loadManualInputMappings,
+  deleteUserSession,
   type AccountSessionFilters,
 } from "../infrastructure/db/queries";
 import { normalizeGameTitle } from "../domain/normalize-game";
@@ -246,6 +247,11 @@ export const getUserCurrentSession = async (userId: number) => {
   };
   const [mapped] = await applyManualMappings(userId, [session]);
   return mapped ?? null;
+};
+
+export const removeUserSession = async (userId: number, sessionId: number) => {
+  const deletedId = await deleteUserSession(sessionId, userId);
+  return { deleted: Boolean(deletedId), sessionId: deletedId };
 };
 
 const buildStatsPeriod = async (

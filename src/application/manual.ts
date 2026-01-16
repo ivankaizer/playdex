@@ -1,10 +1,12 @@
 import { normalizeGame, normalizeGameTitle } from "../domain/normalize-game";
+import type { Platform } from "../domain/platform";
 import {
   createManualCredential,
   endActiveSessionsForCredential,
   ensureGameId,
   ensureIgdbGame,
   insertActivePlaySession,
+  insertPlaySession,
   insertManualInput,
   listManualInputs,
   loadPlatformKeyByIgdbId,
@@ -25,6 +27,16 @@ type ManualMappingSelection =
       title: string;
       platform: string | null;
       platformId?: number | null;
+      coverUrl: string | null;
+    };
+
+type ManualEntrySelection =
+  | { type: "local"; gameId: number }
+  | {
+      type: "igdb";
+      igdbId: string;
+      title: string;
+      platform: Platform;
       coverUrl: string | null;
     };
 
@@ -92,6 +104,47 @@ export const startManualSession = async (userId: number, title: string) => {
     platformCredentialId: credential.id,
     startedAt,
   };
+};
+
+export const createManualEntry = async (payload: {
+  userId: number;
+  startedAt: Date;
+  durationSeconds: number;
+  selection: ManualEntrySelection;
+}) => {
+  if (!Number.isFinite(payload.durationSeconds) || payload.durationSeconds <= 0) {
+    throw new Error("Duration must be a positive number.");
+  }
+
+  const credential = await getOrCreateManualCredential(payload.userId);
+
+  const gameId =
+    payload.selection.type === "local"
+      ? payload.selection.gameId
+      : await ensureGameId(
+          normalizeGame({
+            platform: payload.selection.platform,
+            title: payload.selection.title,
+            externalId: payload.selection.igdbId,
+            capsuleUrl: payload.selection.coverUrl ?? undefined,
+          })
+        );
+
+  const endedAt = new Date(
+    payload.startedAt.getTime() + payload.durationSeconds * 1000
+  );
+
+  const sessionId = await insertPlaySession(
+    credential.id,
+    gameId,
+    payload.startedAt,
+    endedAt
+  );
+  if (!sessionId) {
+    throw new Error("Failed to create manual entry.");
+  }
+
+  return { sessionId };
 };
 
 export const stopManualSession = async (userId: number) => {

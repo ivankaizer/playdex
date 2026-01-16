@@ -1,14 +1,17 @@
 import type { Elysia } from "elysia";
 
 import {
+  createManualEntry,
   getManualInputs,
   mapManualInput,
   searchManualMappingOptions,
   startManualSession,
   stopManualSession,
 } from "../../application/manual";
+import type { Platform } from "../../domain/platform";
 import type {
   ManualInputsResponseDto,
+  ManualEntryCreateResponseDto,
   ManualMappingResponseDto,
   ManualMappingSearchResponseDto,
   ManualSessionStartResponseDto,
@@ -28,6 +31,28 @@ type ManualMappingBody = {
   platformKey?: string | null;
   platformId?: number | null;
   capsuleUrl?: string | null;
+};
+
+type ManualEntryBody = {
+  date?: string;
+  durationMinutes?: number;
+  gameId?: number;
+  igdbId?: string;
+  title?: string;
+  platformKey?: string | null;
+  capsuleUrl?: string | null;
+};
+
+const parseDateInput = (raw: string) => {
+  const [year, month, day] = raw.split("-").map(Number);
+  if (!year || !month || !day) {
+    return null;
+  }
+  const parsed = new Date(Date.UTC(year, month - 1, day));
+  if (Number.isNaN(parsed.getTime())) {
+    return null;
+  }
+  return parsed;
 };
 
 export const registerManualRoutes = (app: Elysia) =>
@@ -110,6 +135,82 @@ export const registerManualRoutes = (app: Elysia) =>
           query,
           igdbAvailable,
           results: [...results.local, ...results.igdb],
+        };
+        return ok(response);
+      })
+    )
+    .post(
+      "/api/manual/entries",
+      withApiErrorLogging(async ({ request, body, set }) => {
+        const auth = requireAuth(request);
+        if (!auth.ok) {
+          set.status = auth.status;
+          return auth.response;
+        }
+
+        const payload = body as ManualEntryBody | null;
+        const rawDate = payload?.date?.trim() ?? "";
+        const startedAt = rawDate ? parseDateInput(rawDate) : null;
+        if (!startedAt) {
+          set.status = 400;
+          return fail("date is required.");
+        }
+
+        const durationRaw = payload?.durationMinutes;
+        const durationMinutes =
+          typeof durationRaw === "number" ? durationRaw : Number(durationRaw);
+        if (
+          !Number.isFinite(durationMinutes) ||
+          durationMinutes <= 0 ||
+          !Number.isInteger(durationMinutes)
+        ) {
+          set.status = 400;
+          return fail("durationMinutes must be a positive integer.");
+        }
+
+        const durationSeconds = durationMinutes * 60;
+
+        const gameIdRaw = payload?.gameId;
+        const gameId =
+          typeof gameIdRaw === "number" ? gameIdRaw : Number(gameIdRaw);
+
+        if (Number.isInteger(gameId) && gameId > 0) {
+          const result = await createManualEntry({
+            userId: auth.userId,
+            startedAt,
+            durationSeconds,
+            selection: { type: "local", gameId },
+          });
+          const response: ManualEntryCreateResponseDto = {
+            sessionId: result.sessionId,
+          };
+          return ok(response);
+        }
+
+        const igdbId = payload?.igdbId?.trim() ?? "";
+        const title = payload?.title?.trim() ?? "";
+        const platformKey = payload?.platformKey?.trim() ?? "";
+
+        if (!igdbId || !title || !platformKey) {
+          set.status = 400;
+          return fail("igdbId, title, and platformKey are required.");
+        }
+
+        const result = await createManualEntry({
+          userId: auth.userId,
+          startedAt,
+          durationSeconds,
+          selection: {
+            type: "igdb",
+            igdbId,
+            title,
+            platform: platformKey as Platform,
+            coverUrl: payload?.capsuleUrl ?? null,
+          },
+        });
+
+        const response: ManualEntryCreateResponseDto = {
+          sessionId: result.sessionId,
         };
         return ok(response);
       })

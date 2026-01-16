@@ -1068,6 +1068,22 @@ export const endPlaySession = async (
   where id = ${sessionId}
 `;
 
+export const deleteUserSession = async (
+  sessionId: number,
+  userId: number,
+  sql: Sql = getSql()
+) => {
+  const rows = await sql<{ id: number }[]>`
+    delete from play_sessions ps
+    using platform_credentials pc
+    where ps.platform_credential_id = pc.id
+      and pc.user_id = ${userId}
+      and ps.id = ${sessionId}
+    returning ps.id
+  `;
+  return rows[0]?.id ?? null;
+};
+
 export const startPlaySession = async (
   platformCredentialId: number,
   gameId: number,
