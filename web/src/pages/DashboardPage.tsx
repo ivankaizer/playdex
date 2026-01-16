@@ -1,0 +1,839 @@
+import { useEffect, useMemo, useState } from "react";
+
+import { apiRequest } from "../api";
+import { capsuleUrl, navItems as defaultNavItems } from "../constants";
+import type {
+  AccountCurrentSessionResponse,
+  AccountSessionsResponse,
+  AccountStatsPeriod,
+  AccountStatsResponse,
+  AccountTodayPlatformTotalsResponse,
+  AccountSession,
+  ManualInputsResponse,
+  ManualInput,
+  ManualSessionStartResponse,
+  ManualSessionStopResponse,
+  NavItem,
+} from "../types";
+import {
+  formatDuration,
+  formatHours,
+  formatSessionPlatformLabel,
+  formatStatsPlatformLabel,
+  formatTimeLabel,
+  formatUtcDateInput,
+} from "../utils/formatters";
+import { getSessionDurationSeconds } from "../utils/sessions";
+import { AppHeader } from "../components/AppHeader";
+import { Background } from "../components/Background";
+import { ManualSessionModal } from "../components/ManualSessionModal";
+
+type DashboardPageProps = {
+  path: string;
+  navItems?: NavItem[];
+  onNavigate: (path: string) => void;
+  onLogout: () => void;
+};
+
+export const DashboardPage = ({
+  path,
+  navItems = defaultNavItems,
+  onNavigate,
+  onLogout,
+}: DashboardPageProps) => {
+  const [todaySessions, setTodaySessions] = useState<AccountSession[]>([]);
+  const [todayPlatformTotals, setTodayPlatformTotals] = useState<
+    { platform: string; totalSeconds: number; source?: string | null }[]
+  >([]);
+  const [currentSession, setCurrentSession] = useState<AccountSession | null>(
+    null
+  );
+  const [monthlyStats, setMonthlyStats] = useState<AccountStatsPeriod | null>(
+    null
+  );
+  const [yearlyStats, setYearlyStats] = useState<AccountStatsPeriod | null>(
+    null
+  );
+  const [isDashboardLoading, setIsDashboardLoading] = useState(false);
+  const [dashboardError, setDashboardError] = useState("");
+  const [manualInputs, setManualInputs] = useState<ManualInput[]>([]);
+  const [isManualInputsLoading, setIsManualInputsLoading] = useState(false);
+  const [manualInputsError, setManualInputsError] = useState("");
+  const [isManualModalOpen, setIsManualModalOpen] = useState(false);
+  const [manualInputSelection, setManualInputSelection] = useState("");
+  const [manualInputText, setManualInputText] = useState("");
+  const [manualStartError, setManualStartError] = useState("");
+  const [isManualStartLoading, setIsManualStartLoading] = useState(false);
+  const [isManualStopLoading, setIsManualStopLoading] = useState(false);
+
+  const refreshDashboard = async (options?: {
+    silent?: boolean;
+    isCancelled?: () => boolean;
+  }) => {
+    if (!options?.silent) {
+      setIsDashboardLoading(true);
+    }
+    setDashboardError("");
+
+    try {
+      const todayDate = formatUtcDateInput(new Date());
+      const todaySessionsParams = new URLSearchParams({
+        limit: "10",
+        offset: "0",
+        from: todayDate,
+        to: todayDate,
+        sort: "date",
+        direction: "desc",
+      });
+      const [todaySessionsResponse, stats, current, todayTotalsResponse] =
+        await Promise.all([
+          apiRequest<AccountSessionsResponse>(
+            `/sessions?${todaySessionsParams.toString()}`,
+            { onAuthFailure: onLogout }
+          ),
+          apiRequest<AccountStatsResponse>("/stats", {
+            onAuthFailure: onLogout,
+          }),
+          apiRequest<AccountCurrentSessionResponse>("/sessions/current", {
+            onAuthFailure: onLogout,
+          }),
+          apiRequest<AccountTodayPlatformTotalsResponse>("/stats/today", {
+            onAuthFailure: onLogout,
+          }),
+        ]);
+
+      if (options?.isCancelled?.()) {
+        return;
+      }
+
+      setTodaySessions(todaySessionsResponse.sessions);
+      setMonthlyStats(stats.monthly);
+      setYearlyStats(stats.yearly);
+      setCurrentSession(current.session);
+      setTodayPlatformTotals(todayTotalsResponse.platforms);
+      setIsDashboardLoading(false);
+    } catch (err) {
+      if (options?.isCancelled?.()) {
+        return;
+      }
+
+      setTodaySessions([]);
+      setMonthlyStats(null);
+      setYearlyStats(null);
+      setCurrentSession(null);
+      setTodayPlatformTotals([]);
+      setIsDashboardLoading(false);
+      setDashboardError(
+        err instanceof Error ? err.message : "Failed to load dashboard data."
+      );
+    }
+  };
+
+  const loadManualInputs = async () => {
+    setIsManualInputsLoading(true);
+    setManualInputsError("");
+    try {
+      const response = await apiRequest<ManualInputsResponse>("/manual/inputs");
+      setManualInputs(response.inputs);
+      setIsManualInputsLoading(false);
+    } catch (err) {
+      setManualInputs([]);
+      setIsManualInputsLoading(false);
+      setManualInputsError(
+        err instanceof Error ? err.message : "Failed to load manual inputs."
+      );
+    }
+  };
+
+  const handleManualSessionStart = async () => {
+    const title = manualInputText.trim();
+    if (!title) {
+      setManualStartError("Enter a title to start a session.");
+      return;
+    }
+
+    setIsManualStartLoading(true);
+    setManualStartError("");
+    try {
+      await apiRequest<ManualSessionStartResponse>("/manual/sessions/start", {
+        method: "POST",
+        body: { title },
+      });
+      closeManualModal();
+      await loadManualInputs();
+      await refreshDashboard({ silent: true });
+    } catch (err) {
+      setManualStartError(
+        err instanceof Error ? err.message : "Failed to start session."
+      );
+    } finally {
+      setIsManualStartLoading(false);
+    }
+  };
+
+  const handleManualSessionStop = async () => {
+    setIsManualStopLoading(true);
+    setDashboardError("");
+    try {
+      await apiRequest<ManualSessionStopResponse>("/manual/sessions/stop", {
+        method: "POST",
+      });
+      await refreshDashboard({ silent: true });
+    } catch (err) {
+      setDashboardError(
+        err instanceof Error ? err.message : "Failed to stop session."
+      );
+    } finally {
+      setIsManualStopLoading(false);
+    }
+  };
+
+  const closeManualModal = () => {
+    setIsManualModalOpen(false);
+    setManualInputSelection("");
+    setManualInputText("");
+    setManualStartError("");
+  };
+
+  useEffect(() => {
+    let cancelled = false;
+    void refreshDashboard({ isCancelled: () => cancelled });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isManualModalOpen) {
+      return;
+    }
+
+    void loadManualInputs();
+  }, [isManualModalOpen]);
+
+  const renderPieChart = (
+    segments: { label: string; value: number }[],
+    colors: string[],
+    size = 150
+  ) => {
+    const strokeWidth = 18;
+    const radius = (size - strokeWidth) / 2;
+    const circumference = 2 * Math.PI * radius;
+    const total = Math.max(
+      segments.reduce((sum, segment) => sum + segment.value, 0),
+      1
+    );
+    let offset = 0;
+
+    return (
+      <svg
+        aria-hidden="true"
+        width={size}
+        height={size}
+        viewBox={`0 0 ${size} ${size}`}
+        className="shrink-0"
+      >
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          fill="transparent"
+          stroke="rgba(30,41,59,0.8)"
+          strokeWidth={strokeWidth}
+        />
+        {segments.map((segment, index) => {
+          const dash = (segment.value / total) * circumference;
+          const gap = circumference - dash;
+          const strokeDasharray = `${dash} ${gap}`;
+          const strokeDashoffset = -offset;
+          offset += dash;
+          return (
+            <circle
+              key={segment.label}
+              cx={size / 2}
+              cy={size / 2}
+              r={radius}
+              fill="transparent"
+              stroke={colors[index % colors.length]}
+              strokeWidth={strokeWidth}
+              strokeDasharray={strokeDasharray}
+              strokeDashoffset={strokeDashoffset}
+              transform={`rotate(-90 ${size / 2} ${size / 2})`}
+            />
+          );
+        })}
+      </svg>
+    );
+  };
+
+  const currentSessionStartedAt = currentSession
+    ? new Date(currentSession.startedAt)
+    : null;
+  const currentSessionElapsed = currentSession
+    ? formatDuration(getSessionDurationSeconds(currentSession), "long")
+    : "0 min";
+
+  const todaySessionCards = useMemo(
+    () =>
+      todaySessions.map((session) => ({
+        sessionId: session.sessionId,
+        title: session.game,
+        time: formatDuration(getSessionDurationSeconds(session), "long"),
+        platform: formatSessionPlatformLabel(session),
+        image: session.capsuleUrl ?? capsuleUrl,
+      })),
+    [todaySessions]
+  );
+  const todayTotals = useMemo(() => {
+    const totalSeconds = todayPlatformTotals.reduce(
+      (sum, item) => sum + item.totalSeconds,
+      0
+    );
+    return {
+      seconds: totalSeconds,
+      hours: formatHours(totalSeconds, 1),
+    };
+  }, [todayPlatformTotals]);
+  const todayPlatforms = useMemo(() => {
+    if (todayPlatformTotals.length === 0) {
+      return [];
+    }
+    const totalSeconds = Math.max(todayTotals.seconds, 1);
+    return todayPlatformTotals.map((item) => ({
+      label: formatStatsPlatformLabel(item.platform),
+      value: Math.round((item.totalSeconds / totalSeconds) * 100),
+      hours: formatHours(item.totalSeconds, 1),
+    }));
+  }, [todayPlatformTotals, todayTotals.seconds]);
+  const monthlyPlatforms = useMemo(() => {
+    if (!monthlyStats) {
+      return [];
+    }
+    const total = Math.max(monthlyStats.totalSeconds, 1);
+    return monthlyStats.platforms.map((item) => ({
+      label: formatStatsPlatformLabel(item.platform),
+      value: Math.round((item.totalSeconds / total) * 100),
+      hours: formatHours(item.totalSeconds, 1),
+    }));
+  }, [monthlyStats]);
+  const monthlyTopGames = useMemo(() => {
+    if (!monthlyStats) {
+      return [];
+    }
+    return monthlyStats.topGames.map((game) => ({
+      title: game.title,
+      hours: formatHours(game.totalSeconds, 1),
+    }));
+  }, [monthlyStats]);
+  const monthlySummary = useMemo(() => {
+    if (!monthlyStats) {
+      return {
+        hours: "0h",
+        sessions: "0",
+        topTitle: "—",
+      };
+    }
+    return {
+      hours: formatHours(monthlyStats.totalSeconds, 1),
+      sessions: String(monthlyStats.sessionCount),
+      topTitle: monthlyStats.topGameTitle ?? "—",
+    };
+  }, [monthlyStats]);
+  const monthlyHighlightsLabel = useMemo(() => {
+    const monthName = new Intl.DateTimeFormat("en-US", {
+      month: "long",
+    }).format(new Date());
+    return `${monthName} highlights`;
+  }, []);
+  const yearlyPlatforms = useMemo(() => {
+    if (!yearlyStats) {
+      return [];
+    }
+    const total = Math.max(yearlyStats.totalSeconds, 1);
+    return yearlyStats.platforms.map((item) => ({
+      label: formatStatsPlatformLabel(item.platform),
+      value: Math.round((item.totalSeconds / total) * 100),
+      hours: formatHours(item.totalSeconds, 0),
+    }));
+  }, [yearlyStats]);
+  const yearlyTopGames = useMemo(() => {
+    if (!yearlyStats) {
+      return [];
+    }
+    return yearlyStats.topGames.map((game) => ({
+      title: game.title,
+      hours: formatHours(game.totalSeconds, 0),
+    }));
+  }, [yearlyStats]);
+  const yearlySummary = useMemo(() => {
+    if (!yearlyStats) {
+      return {
+        hours: "0h",
+        sessions: "0",
+        topTitle: "—",
+      };
+    }
+    return {
+      hours: formatHours(yearlyStats.totalSeconds, 0),
+      sessions: String(yearlyStats.sessionCount),
+      topTitle: yearlyStats.topGameTitle ?? "—",
+    };
+  }, [yearlyStats]);
+  const yearlyRecapLabel = useMemo(() => {
+    return `${new Date().getFullYear()} recap`;
+  }, []);
+
+  return (
+    <main className="relative min-h-screen overflow-hidden bg-slate-950 text-slate-100">
+      <Background />
+      <div className="relative mx-auto w-full max-w-6xl px-6 py-12">
+        <AppHeader
+          title="Dashboard"
+          navItems={navItems}
+          path={path}
+          onNavigate={onNavigate}
+          onLogout={onLogout}
+        />
+
+        <section className="mt-10 space-y-6">
+          <div className="rounded-3xl border border-slate-800 bg-slate-900/60 px-6 py-4">
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-300">
+                Current session
+              </p>
+              <div className="flex flex-wrap items-center gap-3">
+                {currentSession?.platform === "manual" ? (
+                  <button
+                    type="button"
+                    onClick={handleManualSessionStop}
+                    disabled={isManualStopLoading}
+                    className="rounded-full border border-rose-500/60 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.3em] text-rose-200 transition hover:border-rose-400 hover:text-rose-100 disabled:cursor-not-allowed disabled:border-rose-500/40"
+                  >
+                    {isManualStopLoading ? "Stopping..." : "Stop session"}
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setIsManualModalOpen(true)}
+                    className="rounded-full border border-emerald-400/60 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.3em] text-emerald-200 transition hover:border-emerald-300"
+                  >
+                    Start session
+                  </button>
+                )}
+                <span className="rounded-full border border-emerald-400/40 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.3em] text-emerald-200">
+                  {currentSession ? "Live" : "Idle"}
+                </span>
+              </div>
+            </div>
+            {isDashboardLoading ? (
+              <div className="mt-3 flex flex-wrap items-center justify-between gap-5">
+                <div className="h-6 w-40 rounded-full bg-slate-800/60" />
+                <div className="flex flex-wrap items-center justify-end gap-4">
+                  <div className="h-3 w-24 rounded-full bg-slate-800/60" />
+                  <div className="h-3 w-32 rounded-full bg-slate-800/60" />
+                  <div className="h-3 w-28 rounded-full bg-slate-800/60" />
+                </div>
+              </div>
+            ) : (
+              <div className="mt-3 flex flex-wrap items-center justify-between gap-5 text-sm font-semibold text-slate-300">
+                {currentSession ? (
+                  <>
+                    <h2 className="text-lg font-semibold text-white normal-case tracking-normal">
+                      {currentSession.game}
+                    </h2>
+                    <div className="flex flex-wrap items-center justify-end gap-4 text-sm font-semibold normal-case tracking-normal text-slate-300">
+                      <span className="inline-flex items-center gap-2 text-slate-200">
+                        <svg
+                          aria-hidden="true"
+                          viewBox="0 0 20 20"
+                          className="h-3.5 w-3.5 text-emerald-300"
+                          fill="currentColor"
+                        >
+                          <path d="M3 5a2 2 0 012-2h10a2 2 0 012 2v2H3V5zm0 4h14v6a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                        </svg>
+                        {formatSessionPlatformLabel(currentSession)}
+                      </span>
+                      <span className="inline-flex items-center gap-2 text-slate-300">
+                        <svg
+                          aria-hidden="true"
+                          viewBox="0 0 20 20"
+                          className="h-3.5 w-3.5 text-slate-400"
+                          fill="currentColor"
+                        >
+                          <path d="M10 2a8 8 0 100 16 8 8 0 000-16zm1 4v4.59l3.3 3.3-1.42 1.42L9 11V6h2z" />
+                        </svg>
+                        Started{" "}
+                        {currentSessionStartedAt
+                          ? formatTimeLabel(currentSessionStartedAt)
+                          : "--"}
+                      </span>
+                      <span className="inline-flex items-center gap-2 text-emerald-200">
+                        <svg
+                          aria-hidden="true"
+                          viewBox="0 0 20 20"
+                          className="h-3.5 w-3.5 text-emerald-300"
+                          fill="currentColor"
+                        >
+                          <path d="M10 2a8 8 0 100 16 8 8 0 000-16zm-1 3h2v6h4v2H9V5z" />
+                        </svg>
+                        Elapsed {currentSessionElapsed}
+                      </span>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <h2 className="text-sm font-semibold text-slate-200">
+                      No session running right now.
+                    </h2>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+
+          <div className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
+            <div className="rounded-3xl border border-slate-800 bg-slate-900/60 p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-300">
+                    Today stats
+                  </p>
+                  <h2 className="text-xl font-semibold text-white">
+                    {todayTotals.hours} played
+                  </h2>
+                </div>
+              </div>
+              <div className="mt-5 rounded-2xl border border-slate-800 bg-slate-950/50 p-4">
+                <p className="text-xs uppercase tracking-[0.3em] text-slate-400">
+                  Platform distribution
+                </p>
+                {todayPlatforms.length === 0 ? (
+                  <p className="mt-3 text-xs text-slate-400">
+                    No sessions logged today yet.
+                  </p>
+                ) : (
+                  <div className="mt-4 flex flex-wrap items-center gap-4">
+                    {renderPieChart(
+                      todayPlatforms,
+                      ["#34d399", "#22d3ee", "#a78bfa", "#f59e0b"],
+                      140
+                    )}
+                    <div className="flex-1 space-y-2 text-xs text-slate-300">
+                      {todayPlatforms.map((item, index) => (
+                        <div
+                          key={item.label}
+                          className="flex items-center justify-between gap-3"
+                        >
+                          <div className="flex items-center gap-2">
+                            <span
+                              className="h-2 w-2 rounded-full"
+                              style={{
+                                backgroundColor: [
+                                  "#34d399",
+                                  "#22d3ee",
+                                  "#a78bfa",
+                                  "#f59e0b",
+                                ][index % 4],
+                              }}
+                            />
+                            <span>{item.label}</span>
+                          </div>
+                          <span>
+                            {item.value}% · {item.hours}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="rounded-3xl border border-slate-800 bg-slate-900/60 p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-300">
+                    Today sessions
+                  </p>
+                  <h2 className="text-xl font-semibold text-white">
+                    {todaySessionCards.length}{" "}
+                    {todaySessionCards.length === 1 ? "session" : "sessions"}{" "}
+                    logged
+                  </h2>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => onNavigate("/sessions")}
+                  className="rounded-full border border-slate-700 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-slate-200 transition hover:border-emerald-400/60"
+                >
+                  View all
+                </button>
+              </div>
+              <div className="mt-5 space-y-4">
+                {dashboardError ? (
+                  <div className="rounded-2xl border border-rose-500/30 bg-rose-500/10 p-4 text-xs text-rose-200">
+                    {dashboardError}
+                  </div>
+                ) : isDashboardLoading ? (
+                  [1, 2, 3].map((item) => (
+                    <div
+                      key={item}
+                      className="flex items-center justify-between gap-4 rounded-2xl border border-slate-800 bg-slate-950/50 p-4"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="h-14 w-10 rounded-xl bg-slate-800/60" />
+                        <div className="space-y-2">
+                          <div className="h-3 w-28 rounded-full bg-slate-800/70" />
+                          <div className="h-2 w-16 rounded-full bg-slate-800/50" />
+                        </div>
+                      </div>
+                      <div className="h-3 w-12 rounded-full bg-slate-800/60" />
+                    </div>
+                  ))
+                ) : todaySessionCards.length === 0 ? (
+                  <div className="rounded-2xl border border-dashed border-slate-800 bg-slate-950/40 p-4 text-xs text-slate-400">
+                    No sessions logged today yet.
+                  </div>
+                ) : (
+                  todaySessionCards.map((session) => (
+                    <div
+                      key={session.sessionId}
+                      className="relative flex flex-wrap items-center justify-between gap-4 overflow-hidden rounded-2xl border border-slate-800 bg-slate-950/50 p-4"
+                      style={{
+                        backgroundImage: `url(${session.image})`,
+                        backgroundSize: "cover",
+                        backgroundPosition: "center",
+                      }}
+                    >
+                      <div className="absolute inset-0 bg-slate-950/80" />
+                      <div className="relative z-10">
+                        <p className="text-sm font-semibold text-white">
+                          {session.title}
+                        </p>
+                      </div>
+                      <div className="relative z-10 flex items-center gap-4">
+                        <p className="text-xs text-slate-400">
+                          {session.platform}
+                        </p>
+                        <p className="text-sm font-semibold text-emerald-200">
+                          {session.time}
+                        </p>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-3xl border border-slate-800 bg-slate-900/60 p-6">
+            <div className="flex flex-wrap items-baseline gap-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-300">
+                Monthly stats
+              </p>
+              <p className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-200">
+                {monthlyHighlightsLabel}
+              </p>
+            </div>
+            <div className="mt-5 grid gap-4 sm:grid-cols-3">
+              {[
+                { label: "Hours played", value: monthlySummary.hours },
+                { label: "Sessions", value: monthlySummary.sessions },
+                { label: "Top title", value: monthlySummary.topTitle },
+              ].map((stat) => (
+                <div
+                  key={stat.label}
+                  className="rounded-2xl border border-slate-800 bg-slate-950/50 p-4"
+                >
+                  <p className="text-xs uppercase tracking-[0.3em] text-slate-400">
+                    {stat.label}
+                  </p>
+                  <p className="mt-2 text-lg font-semibold text-white">
+                    {stat.value}
+                  </p>
+                </div>
+              ))}
+            </div>
+            <div className="mt-5 grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
+              <div className="rounded-2xl border border-slate-800 bg-slate-950/50 p-4">
+                <p className="text-xs uppercase tracking-[0.3em] text-slate-400">
+                  Platform distribution
+                </p>
+                <div className="mt-4 flex flex-wrap items-center gap-4">
+                  {renderPieChart(
+                    monthlyPlatforms,
+                    ["#34d399", "#22d3ee", "#a78bfa", "#f59e0b"],
+                    168
+                  )}
+                  <div className="flex-1 space-y-2 text-xs text-slate-300">
+                    {monthlyPlatforms.map((item, index) => (
+                      <div
+                        key={item.label}
+                        className="flex items-center justify-between gap-3"
+                      >
+                        <div className="flex items-center gap-2">
+                          <span
+                            className="h-2 w-2 rounded-full"
+                            style={{
+                              backgroundColor: [
+                                "#34d399",
+                                "#22d3ee",
+                                "#a78bfa",
+                                "#f59e0b",
+                              ][index % 4],
+                            }}
+                          />
+                          <span>{item.label}</span>
+                        </div>
+                        <span>
+                          {item.value}% · {item.hours}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+              <div className="rounded-2xl border border-slate-800 bg-slate-950/50 p-4">
+                <p className="text-xs uppercase tracking-[0.3em] text-slate-400">
+                  Top 5 games
+                </p>
+                <div className="mt-4 space-y-3">
+                  {monthlyTopGames.map((game, index) => (
+                    <div
+                      key={game.title}
+                      className="flex items-center justify-between text-sm"
+                    >
+                      <div className="flex items-center gap-3">
+                        <span className="text-xs font-semibold text-slate-400">
+                          {String(index + 1).padStart(2, "0")}
+                        </span>
+                        <span className="font-semibold text-white">
+                          {game.title}
+                        </span>
+                      </div>
+                      <span className="text-xs font-semibold text-emerald-200">
+                        {game.hours}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-3xl border border-slate-800 bg-slate-900/60 p-6">
+            <div className="flex flex-wrap items-baseline gap-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-300">
+                Yearly stats
+              </p>
+              <p className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-200">
+                {yearlyRecapLabel}
+              </p>
+            </div>
+            <div className="mt-5 grid gap-4 sm:grid-cols-3">
+              {[
+                { label: "Hours played", value: yearlySummary.hours },
+                { label: "Sessions", value: yearlySummary.sessions },
+                { label: "Top title", value: yearlySummary.topTitle },
+              ].map((stat) => (
+                <div
+                  key={stat.label}
+                  className="rounded-2xl border border-slate-800 bg-slate-950/50 p-4"
+                >
+                  <p className="text-xs uppercase tracking-[0.3em] text-slate-400">
+                    {stat.label}
+                  </p>
+                  <p className="mt-2 text-lg font-semibold text-white">
+                    {stat.value}
+                  </p>
+                </div>
+              ))}
+            </div>
+            <div className="mt-5 grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
+              <div className="rounded-2xl border border-slate-800 bg-slate-950/50 p-4">
+                <p className="text-xs uppercase tracking-[0.3em] text-slate-400">
+                  Platform distribution
+                </p>
+                <div className="mt-4 flex flex-wrap items-center gap-4">
+                  {renderPieChart(
+                    yearlyPlatforms,
+                    ["#34d399", "#22d3ee", "#a78bfa", "#f59e0b"],
+                    168
+                  )}
+                  <div className="flex-1 space-y-2 text-xs text-slate-300">
+                    {yearlyPlatforms.map((item, index) => (
+                      <div
+                        key={item.label}
+                        className="flex items-center justify-between gap-3"
+                      >
+                        <div className="flex items-center gap-2">
+                          <span
+                            className="h-2 w-2 rounded-full"
+                            style={{
+                              backgroundColor: [
+                                "#34d399",
+                                "#22d3ee",
+                                "#a78bfa",
+                                "#f59e0b",
+                              ][index % 4],
+                            }}
+                          />
+                          <span>{item.label}</span>
+                        </div>
+                        <span>
+                          {item.value}% · {item.hours}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+              <div className="rounded-2xl border border-slate-800 bg-slate-950/50 p-4">
+                <p className="text-xs uppercase tracking-[0.3em] text-slate-400">
+                  Top 5 games
+                </p>
+                <div className="mt-4 space-y-3">
+                  {yearlyTopGames.map((game, index) => (
+                    <div
+                      key={game.title}
+                      className="flex items-center justify-between text-sm"
+                    >
+                      <div className="flex items-center gap-3">
+                        <span className="text-xs font-semibold text-slate-400">
+                          {String(index + 1).padStart(2, "0")}
+                        </span>
+                        <span className="font-semibold text-white">
+                          {game.title}
+                        </span>
+                      </div>
+                      <span className="text-xs font-semibold text-emerald-200">
+                        {game.hours}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+      <ManualSessionModal
+        isOpen={isManualModalOpen}
+        manualInputs={manualInputs}
+        manualInputsError={manualInputsError}
+        manualInputSelection={manualInputSelection}
+        manualInputText={manualInputText}
+        manualStartError={manualStartError}
+        isManualInputsLoading={isManualInputsLoading}
+        isManualStartLoading={isManualStartLoading}
+        onClose={closeManualModal}
+        onSelectInput={(value) => {
+          setManualInputSelection(value);
+          setManualInputText(value);
+        }}
+        onInputTextChange={(value) => setManualInputText(value)}
+        onStart={handleManualSessionStart}
+      />
+    </main>
+  );
+};

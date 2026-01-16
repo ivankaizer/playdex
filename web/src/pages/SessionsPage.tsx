@@ -1,0 +1,589 @@
+import { useEffect, useMemo, useState } from "react";
+
+import { apiRequest } from "../api";
+import { capsuleUrl, navItems as defaultNavItems, platformOptions } from "../constants";
+import type {
+  AccountSessionsResponse,
+  ManualEntryCreateResponse,
+  ManualMappingSearchResponse,
+  ManualMappingSearchResult,
+  NavItem,
+} from "../types";
+import {
+  formatDateLabel,
+  formatDuration,
+  formatSessionPlatformLabel,
+} from "../utils/formatters";
+import { getSessionDurationSeconds } from "../utils/sessions";
+import { AppHeader } from "../components/AppHeader";
+import { Background } from "../components/Background";
+import { ManualEntryModal } from "../components/ManualEntryModal";
+
+type SessionsPageProps = {
+  path: string;
+  navItems?: NavItem[];
+  onNavigate: (path: string) => void;
+  onLogout: () => void;
+};
+
+export const SessionsPage = ({
+  path,
+  navItems = defaultNavItems,
+  onNavigate,
+  onLogout,
+}: SessionsPageProps) => {
+  const [sessionRows, setSessionRows] = useState<AccountSessionsResponse["sessions"]>(
+    []
+  );
+  const [sessionsTotal, setSessionsTotal] = useState(0);
+  const [sessionsOffset, setSessionsOffset] = useState(0);
+  const [isSessionsLoading, setIsSessionsLoading] = useState(false);
+  const [sessionsError, setSessionsError] = useState("");
+  const [sessionsTitle, setSessionsTitle] = useState("");
+  const [sessionsTitleDebounced, setSessionsTitleDebounced] = useState("");
+  const [sessionsFrom, setSessionsFrom] = useState("");
+  const [sessionsTo, setSessionsTo] = useState("");
+  const [sessionsSortKey, setSessionsSortKey] = useState<"date" | "duration">(
+    "date"
+  );
+  const [sessionsSortDirection, setSessionsSortDirection] = useState<
+    "asc" | "desc"
+  >("desc");
+  const [manualEntrySearchQuery, setManualEntrySearchQuery] = useState("");
+  const [manualEntrySearchResults, setManualEntrySearchResults] = useState<
+    ManualMappingSearchResult[]
+  >([]);
+  const [manualEntrySearchError, setManualEntrySearchError] = useState("");
+  const [isManualEntrySearchLoading, setIsManualEntrySearchLoading] =
+    useState(false);
+  const [manualEntrySelection, setManualEntrySelection] =
+    useState<ManualMappingSearchResult | null>(null);
+  const [manualEntryPlatformKey, setManualEntryPlatformKey] = useState("");
+  const [manualEntryError, setManualEntryError] = useState("");
+  const [isManualEntrySaving, setIsManualEntrySaving] = useState(false);
+  const [manualEntryIgdbAvailable, setManualEntryIgdbAvailable] =
+    useState(true);
+  const [sessionsReloadToken, setSessionsReloadToken] = useState(0);
+  const [isManualEntryModalOpen, setIsManualEntryModalOpen] = useState(false);
+  const [manualEntryDate, setManualEntryDate] = useState(
+    () => new Date().toISOString().slice(0, 10)
+  );
+  const [manualEntryHours, setManualEntryHours] = useState("1");
+  const [manualEntryMinutes, setManualEntryMinutes] = useState("0");
+
+  const sessionsLimit = 10;
+
+  const refreshSessions = () => {
+    setSessionsReloadToken((current) => current + 1);
+  };
+
+  const openManualEntryModal = () => {
+    setManualEntryDate(new Date().toISOString().slice(0, 10));
+    setIsManualEntryModalOpen(true);
+  };
+
+  const closeManualEntryModal = () => {
+    setIsManualEntryModalOpen(false);
+    setManualEntrySearchQuery("");
+    setManualEntrySearchResults([]);
+    setManualEntrySearchError("");
+    setManualEntrySelection(null);
+    setManualEntryPlatformKey("");
+    setManualEntryError("");
+    setManualEntryHours("1");
+    setManualEntryMinutes("0");
+  };
+
+  const handleManualEntrySearch = async () => {
+    const query = manualEntrySearchQuery.trim();
+    if (!query) {
+      setManualEntrySearchError("Enter a search query.");
+      return;
+    }
+
+    setIsManualEntrySearchLoading(true);
+    setManualEntrySearchError("");
+    try {
+      const response = await apiRequest<ManualMappingSearchResponse>(
+        `/manual/search?query=${encodeURIComponent(query)}`
+      );
+      setManualEntryIgdbAvailable(response.igdbAvailable);
+      setManualEntrySearchResults(response.results);
+    } catch (err) {
+      setManualEntrySearchResults([]);
+      setManualEntrySearchError(
+        err instanceof Error ? err.message : "Failed to search games."
+      );
+    } finally {
+      setIsManualEntrySearchLoading(false);
+    }
+  };
+
+  const handleManualEntryCreate = async () => {
+    setManualEntryError("");
+    const hours = Number(manualEntryHours);
+    const minutes = Number(manualEntryMinutes);
+    if (
+      !Number.isFinite(hours) ||
+      !Number.isFinite(minutes) ||
+      hours < 0 ||
+      minutes < 0
+    ) {
+      setManualEntryError("Duration must be a positive number.");
+      return;
+    }
+
+    const durationMinutes = Math.floor(hours * 60 + minutes);
+    if (durationMinutes <= 0) {
+      setManualEntryError("Duration must be at least 1 minute.");
+      return;
+    }
+
+    if (!manualEntryDate) {
+      setManualEntryError("Select a date for this entry.");
+      return;
+    }
+
+    if (!manualEntrySelection) {
+      setManualEntryError("Select a game to log.");
+      return;
+    }
+
+    if (manualEntrySelection.source === "igdb" && !manualEntryPlatformKey.trim()) {
+      setManualEntryError("Select a platform for the IGDB result.");
+      return;
+    }
+
+    setIsManualEntrySaving(true);
+    try {
+      if (manualEntrySelection.source === "local") {
+        if (!manualEntrySelection.gameId) {
+          setManualEntryError("Select a saved game.");
+          return;
+        }
+        await apiRequest<ManualEntryCreateResponse>("/manual/entries", {
+          method: "POST",
+          body: {
+            date: manualEntryDate,
+            durationMinutes,
+            gameId: manualEntrySelection.gameId,
+          },
+        });
+      } else {
+        if (!manualEntrySelection.igdbId) {
+          setManualEntryError("Select an IGDB game.");
+          return;
+        }
+        await apiRequest<ManualEntryCreateResponse>("/manual/entries", {
+          method: "POST",
+          body: {
+            date: manualEntryDate,
+            durationMinutes,
+            igdbId: manualEntrySelection.igdbId,
+            title: manualEntrySelection.title,
+            platformKey: manualEntryPlatformKey,
+            capsuleUrl: manualEntrySelection.capsuleUrl,
+          },
+        });
+      }
+
+      closeManualEntryModal();
+      refreshSessions();
+    } catch (err) {
+      setManualEntryError(
+        err instanceof Error ? err.message : "Failed to create entry."
+      );
+    } finally {
+      setIsManualEntrySaving(false);
+    }
+  };
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setSessionsTitleDebounced(sessionsTitle.trim());
+    }, 300);
+
+    return () => window.clearTimeout(timer);
+  }, [sessionsTitle]);
+
+  useEffect(() => {
+    setSessionsOffset(0);
+  }, [sessionsFrom, sessionsTo]);
+
+  useEffect(() => {
+    setSessionsOffset(0);
+  }, [sessionsTitleDebounced]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setIsSessionsLoading(true);
+    setSessionsError("");
+
+    const loadSessions = async () => {
+      try {
+        const params = new URLSearchParams({
+          limit: String(sessionsLimit),
+          offset: String(sessionsOffset),
+        });
+
+        if (sessionsTitleDebounced) {
+          params.set("title", sessionsTitleDebounced);
+        }
+
+        if (sessionsFrom) {
+          params.set("from", sessionsFrom);
+        }
+
+        if (sessionsTo) {
+          params.set("to", sessionsTo);
+        }
+
+        params.set("sort", sessionsSortKey);
+        params.set("direction", sessionsSortDirection);
+
+        const data = await apiRequest<AccountSessionsResponse>(
+          `/sessions?${params.toString()}`
+        );
+        if (cancelled) {
+          return;
+        }
+        setSessionRows(data.sessions);
+        setSessionsTotal(data.total);
+        setIsSessionsLoading(false);
+      } catch (err) {
+        if (!cancelled) {
+          setSessionRows([]);
+          setSessionsTotal(0);
+          setIsSessionsLoading(false);
+          setSessionsError(
+            err instanceof Error ? err.message : "Failed to load sessions."
+          );
+        }
+      }
+    };
+
+    loadSessions();
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    sessionsOffset,
+    sessionsLimit,
+    sessionsTitleDebounced,
+    sessionsFrom,
+    sessionsTo,
+    sessionsSortKey,
+    sessionsSortDirection,
+    sessionsReloadToken,
+  ]);
+
+  const hasSessionFilters =
+    Boolean(sessionsTitle.trim()) ||
+    Boolean(sessionsFrom) ||
+    Boolean(sessionsTo);
+  const sessionsStart = sessionsTotal === 0 ? 0 : sessionsOffset + 1;
+  const sessionsEnd = Math.min(sessionsOffset + sessionsLimit, sessionsTotal);
+  const totalPages = Math.max(1, Math.ceil(sessionsTotal / sessionsLimit));
+  const currentPage = Math.min(
+    totalPages,
+    Math.floor(sessionsOffset / sessionsLimit) + 1
+  );
+  const maxPages = 4;
+  const startPage = Math.max(
+    1,
+    Math.min(currentPage - 1, totalPages - maxPages + 1)
+  );
+  const pageNumbers = Array.from(
+    { length: Math.min(totalPages, maxPages) },
+    (_, index) => startPage + index
+  );
+
+  const handleSessionSort = (key: "date" | "duration") => {
+    if (sessionsSortKey === key) {
+      setSessionsSortDirection((current) =>
+        current === "asc" ? "desc" : "asc"
+      );
+      setSessionsOffset(0);
+      return;
+    }
+    setSessionsSortKey(key);
+    setSessionsSortDirection("desc");
+    setSessionsOffset(0);
+  };
+
+  const renderSessionSortIcon = (key: "date" | "duration") => {
+    const isActive = sessionsSortKey === key;
+    const direction = sessionsSortDirection;
+    return (
+      <svg
+        aria-hidden="true"
+        viewBox="0 0 20 20"
+        className={`h-3 w-3 ${isActive ? "text-emerald-200" : ""}`}
+        fill="currentColor"
+      >
+        {isActive ? (
+          direction === "asc" ? (
+            <path d="M10 4l4 4H6l4-4z" />
+          ) : (
+            <path d="M10 16l-4-4h8l-4 4z" />
+          )
+        ) : (
+          <path d="M6 8l4-4 4 4H6zM14 12l-4 4-4-4h8z" />
+        )}
+      </svg>
+    );
+  };
+
+  const sessionRowsView = useMemo(
+    () =>
+      sessionRows.map((session) => ({
+        sessionId: session.sessionId,
+        title: session.game,
+        platform: formatSessionPlatformLabel(session),
+        date: formatDateLabel(new Date(session.startedAt)),
+        duration: formatDuration(getSessionDurationSeconds(session), "short"),
+        image: session.capsuleUrl ?? capsuleUrl,
+      })),
+    [sessionRows]
+  );
+
+  return (
+    <main className="relative min-h-screen overflow-hidden bg-slate-950 text-slate-100">
+      <Background />
+      <div className="relative mx-auto w-full max-w-6xl px-6 py-12">
+        <AppHeader
+          title="Sessions"
+          navItems={navItems}
+          path={path}
+          onNavigate={onNavigate}
+          onLogout={onLogout}
+        />
+
+        <section className="mt-10 rounded-3xl border border-slate-800 bg-slate-900/60 p-6">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-300">
+                Sessions log
+              </p>
+              <h2 className="mt-2 text-xl font-semibold text-white">
+                Every session tracked
+              </h2>
+            </div>
+            <button
+              type="button"
+              onClick={openManualEntryModal}
+              className="rounded-full border border-emerald-400/60 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-emerald-200 transition hover:border-emerald-300"
+            >
+              Add entry
+            </button>
+          </div>
+
+          <div className="mt-6 grid gap-3 md:grid-cols-[1.2fr_0.6fr_0.6fr]">
+            <label className="text-xs font-medium text-slate-300">
+              Title
+              <input
+                type="text"
+                placeholder="Search by game title"
+                value={sessionsTitle}
+                onChange={(event) => setSessionsTitle(event.target.value)}
+                className="mt-2 w-full rounded-xl border border-slate-700 bg-slate-950/80 px-3 py-2 text-sm text-white outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/30"
+              />
+            </label>
+            <label className="text-xs font-medium text-slate-300">
+              From
+              <input
+                type="date"
+                value={sessionsFrom}
+                onChange={(event) => setSessionsFrom(event.target.value)}
+                className="mt-2 w-full rounded-xl border border-slate-700 bg-slate-950/80 px-3 py-2 text-sm text-white outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/30"
+              />
+            </label>
+            <label className="text-xs font-medium text-slate-300">
+              To
+              <input
+                type="date"
+                value={sessionsTo}
+                onChange={(event) => setSessionsTo(event.target.value)}
+                className="mt-2 w-full rounded-xl border border-slate-700 bg-slate-950/80 px-3 py-2 text-sm text-white outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/30"
+              />
+            </label>
+          </div>
+          {sessionsError ? (
+            <p className="mt-4 text-xs text-rose-300">{sessionsError}</p>
+          ) : null}
+
+          <div className="mt-6 overflow-hidden rounded-2xl border border-slate-800">
+            <table className="w-full text-left text-sm">
+              <thead className="bg-slate-950/70 text-xs uppercase tracking-[0.3em] text-slate-400">
+                <tr>
+                  <th className="px-4 py-3 text-left">Title</th>
+                  <th className="px-4 py-3 text-left">Platform</th>
+                  <th className="px-4 py-3 text-left">
+                    <button
+                      type="button"
+                      onClick={() => handleSessionSort("date")}
+                      className="inline-flex items-center gap-2 text-xs uppercase tracking-[0.3em] text-slate-400 transition hover:text-slate-200"
+                    >
+                      Date
+                      {renderSessionSortIcon("date")}
+                    </button>
+                  </th>
+                  <th className="px-4 py-3 text-right">
+                    <button
+                      type="button"
+                      onClick={() => handleSessionSort("duration")}
+                      className="inline-flex items-center gap-2 text-xs uppercase tracking-[0.3em] text-slate-400 transition hover:text-slate-200"
+                    >
+                      Duration
+                      {renderSessionSortIcon("duration")}
+                    </button>
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800 bg-slate-900/60">
+                {isSessionsLoading ? (
+                  [1, 2, 3, 4].map((row) => (
+                    <tr key={row}>
+                      <td className="px-4 py-4">
+                        <div className="flex items-center gap-3">
+                          <div className="h-12 w-9 rounded-lg bg-slate-800/60" />
+                          <div className="h-3 w-28 rounded-full bg-slate-800/60" />
+                        </div>
+                      </td>
+                      <td className="px-4 py-4">
+                        <div className="h-3 w-16 rounded-full bg-slate-800/50" />
+                      </td>
+                      <td className="px-4 py-4">
+                        <div className="h-3 w-12 rounded-full bg-slate-800/50" />
+                      </td>
+                      <td className="px-4 py-4">
+                        <div className="ml-auto h-3 w-12 rounded-full bg-slate-800/50" />
+                      </td>
+                    </tr>
+                  ))
+                ) : sessionRowsView.length === 0 ? (
+                  <tr>
+                    <td
+                      colSpan={4}
+                      className="px-4 py-10 text-center text-sm text-slate-400"
+                    >
+                      {hasSessionFilters
+                        ? "No sessions match your filters."
+                        : "No sessions yet. Sync a provider to populate this list."}
+                    </td>
+                  </tr>
+                ) : (
+                  sessionRowsView.map((session) => (
+                    <tr
+                      key={`${session.sessionId}`}
+                      className="transition hover:bg-slate-900/70"
+                    >
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-3">
+                          <img
+                            src={session.image}
+                            alt={`${session.title} capsule art`}
+                            className="h-12 w-9 rounded-lg border border-slate-800 object-cover"
+                          />
+                          <span className="font-semibold text-white">
+                            {session.title}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-slate-300">
+                        {session.platform}
+                      </td>
+                      <td className="px-4 py-3 text-slate-300">
+                        {session.date}
+                      </td>
+                      <td className="px-4 py-3 text-right text-emerald-200">
+                        {session.duration}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="mt-6 flex flex-wrap items-center justify-between gap-4 text-xs text-slate-300">
+            <p>
+              Showing {sessionsStart}-{sessionsEnd} of {sessionsTotal} sessions
+            </p>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                disabled={sessionsOffset === 0 || isSessionsLoading}
+                onClick={() =>
+                  setSessionsOffset((current) =>
+                    Math.max(0, current - sessionsLimit)
+                  )
+                }
+                className="rounded-full border border-slate-700 px-3 py-2 font-semibold uppercase tracking-[0.3em] text-slate-200"
+              >
+                Prev
+              </button>
+              {pageNumbers.map((page) => (
+                <button
+                  key={page}
+                  type="button"
+                  onClick={() => setSessionsOffset((page - 1) * sessionsLimit)}
+                  className={`flex h-9 w-9 items-center justify-center rounded-full text-xs font-semibold leading-none ${
+                    page === currentPage
+                      ? "bg-emerald-400 text-slate-900"
+                      : "border border-slate-700 text-slate-200"
+                  }`}
+                >
+                  {page}
+                </button>
+              ))}
+              <button
+                type="button"
+                disabled={
+                  sessionsOffset + sessionsLimit >= sessionsTotal ||
+                  isSessionsLoading
+                }
+                onClick={() =>
+                  setSessionsOffset((current) => current + sessionsLimit)
+                }
+                className="rounded-full border border-slate-700 px-3 py-2 font-semibold uppercase tracking-[0.3em] text-slate-200"
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <ManualEntryModal
+        isOpen={isManualEntryModalOpen}
+        manualEntryDate={manualEntryDate}
+        manualEntryHours={manualEntryHours}
+        manualEntryMinutes={manualEntryMinutes}
+        manualEntrySearchQuery={manualEntrySearchQuery}
+        manualEntrySearchResults={manualEntrySearchResults}
+        manualEntrySelection={manualEntrySelection}
+        manualEntryPlatformKey={manualEntryPlatformKey}
+        manualEntryError={manualEntryError}
+        manualEntrySearchError={manualEntrySearchError}
+        manualEntryIgdbAvailable={manualEntryIgdbAvailable}
+        isManualEntrySearchLoading={isManualEntrySearchLoading}
+        isManualEntrySaving={isManualEntrySaving}
+        platformOptions={platformOptions}
+        onClose={closeManualEntryModal}
+        onSearch={handleManualEntrySearch}
+        onSave={handleManualEntryCreate}
+        onDateChange={setManualEntryDate}
+        onHoursChange={setManualEntryHours}
+        onMinutesChange={setManualEntryMinutes}
+        onSearchQueryChange={setManualEntrySearchQuery}
+        onSelectResult={(result) => {
+          setManualEntrySelection(result);
+          setManualEntryPlatformKey("");
+          setManualEntryError("");
+        }}
+        onPlatformKeyChange={setManualEntryPlatformKey}
+      />
+    </main>
+  );
+};
