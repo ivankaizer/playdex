@@ -44,6 +44,42 @@ export const sendTelegramMessage = async (
   }
 };
 
+export const sendTelegramImage = async (
+  token: string,
+  chatId: string,
+  image: Uint8Array,
+  filename = "notification.webp",
+  caption?: string
+) => {
+  const form = new FormData();
+  form.append("chat_id", chatId);
+  if (caption) {
+    form.append("caption", caption);
+  }
+  form.append(
+    "photo",
+    new Blob([image], { type: "image/webp" }),
+    filename
+  );
+
+  const response = await fetch(buildTelegramUrl(token, "sendPhoto"), {
+    method: "POST",
+    body: form,
+  });
+
+  if (!response.ok) {
+    throw new Error(
+      `Telegram sendPhoto failed: ${response.status} ${response.statusText}`
+    );
+  }
+
+  const payload =
+    (await response.json()) as TelegramApiResponse<TelegramMessage>;
+  if (!payload.ok) {
+    throw new Error(payload.description ?? "Telegram sendPhoto failed.");
+  }
+};
+
 export const fetchTelegramUpdates = async (
   token: string,
   offset: number

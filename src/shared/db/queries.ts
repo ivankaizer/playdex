@@ -68,6 +68,7 @@ export type AccountTopGameRow = {
 export type ActiveSessionRow = {
   id: number;
   game_id: number;
+  started_at: Date;
 };
 
 export type UserAuthRow = {
@@ -87,6 +88,7 @@ export type GameRow = {
   id: number;
   title: string;
   platform: string;
+  capsule_url: string | null;
 };
 
 export type UserChatRow = {
@@ -822,7 +824,7 @@ export const loadNotificationTargetByCredential = async (
 
 export const loadGameById = async (gameId: number, sql: Sql = getSql()) => {
   const rows = await sql<GameRow[]>`
-    select g.id, g.title, p.key as platform
+    select g.id, g.title, p.key as platform, g.capsule_url
     from games g
     join platforms p on p.id = g.platform_id
     where g.id = ${gameId}
@@ -1016,12 +1018,12 @@ export const endActiveSessionsForCredential = async (
   endedAt: Date,
   sql: Sql = getSql()
 ) =>
-  sql<{ id: number; game_id: number }[]>`
+  sql<{ id: number; game_id: number; started_at: Date }[]>`
     update play_sessions
     set ended_at = ${endedAt}, updated_at = now()
     where platform_credential_id = ${platformCredentialId}
       and ended_at is null
-    returning id, game_id
+    returning id, game_id, started_at
   `;
 
 export const ensureGameId = async (
@@ -1072,7 +1074,7 @@ export const fetchActivePlaySession = async (
   sql: Sql = getSql()
 ) => {
   const rows = await sql<ActiveSessionRow[]>`
-    select id, game_id
+    select id, game_id, started_at
     from play_sessions
     where platform_credential_id = ${platformCredentialId}
       and ended_at is null

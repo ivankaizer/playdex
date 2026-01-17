@@ -9,12 +9,13 @@ import {
 import {
   fetchTelegramUpdates,
   sendTelegramMessage,
+  sendTelegramImage,
 } from "./client";
 import {
   getErrorMessage,
   logEvent,
-  logEvent,
 } from "../../shared/observability";
+import { renderNotificationWebp } from "./notification-image";
 
 import type { PollingNotifier } from "../polling/polling";
 import { startManualSession } from "../manual/manual";
@@ -26,11 +27,44 @@ type TelegramBotConfig = {
   sql: Sql;
 };
 
+const FALLBACK_IMAGE_DATA_URL = `data:image/svg+xml;utf8,${encodeURIComponent(
+  `<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720"><rect width="100%" height="100%" fill="#0a0d12"/></svg>`
+)}`;
+
 const formatGameLabel = (game: { title: string; platform: string } | null) => {
   if (!game) {
     return "Unknown game";
   }
   return `${game.title} (${game.platform})`;
+};
+
+const formatDuration = (totalSeconds: number) => {
+  const clamped = Math.max(0, Math.floor(totalSeconds));
+  const hours = Math.floor(clamped / 3600);
+  const minutes = Math.floor((clamped % 3600) / 60);
+  const seconds = clamped % 60;
+
+  if (hours > 0) {
+    return `${hours}h ${minutes}m`;
+  }
+  if (minutes > 0) {
+    return `${minutes}m ${seconds}s`;
+  }
+  return `${seconds}s`;
+};
+
+const buildSessionCaption = (
+  kind: "started" | "ended",
+  title: string,
+  platform: string,
+  duration?: string
+) => {
+  const headline = kind === "ended" ? "Session ended" : "Session started";
+  const lines = [`${headline}: ${title} ${platform}`];
+  if (duration) {
+    lines.push(`Duration: ${duration}`);
+  }
+  return lines.join("\n");
 };
 
 const sendNotification = async (
@@ -39,6 +73,51 @@ const sendNotification = async (
   text: string
 ) => {
   await sendTelegramMessage(token, chatId, text);
+};
+
+const sendSessionImage = async ({
+  token,
+  chatId,
+  kind,
+  game,
+  duration,
+}: {
+  token: string;
+  chatId: string;
+  kind: "started" | "ended";
+  game: { title: string; platform: string; capsule_url: string | null } | null;
+  duration?: string;
+}) => {
+  const title = game?.title ?? "Unknown game";
+  const platform = game?.platform ?? "unknown";
+  const caption = buildSessionCaption(kind, title, platform, duration);
+
+  if (!game?.capsule_url) {
+    await sendNotification(token, chatId, `${caption}.`);
+    return;
+  }
+
+  const image = game.capsule_url;
+  try {
+    const buffer = await renderNotificationWebp({
+      title,
+      platform,
+      image,
+      kind,
+      duration,
+    });
+
+    await sendTelegramImage(token, chatId, buffer, undefined, caption);
+  } catch (error) {
+    logEvent("error", "telegram.image.failed", {
+      message: getErrorMessage(error),
+      chatId,
+      title,
+      platform,
+      kind,
+    });
+    await sendNotification(token, chatId, `${caption}.`);
+  }
 };
 
 export const createTelegramNotifier = ({
@@ -80,10 +159,14 @@ export const createTelegramNotifier = ({
     }
 
     const game = await loadGameById(gameId, sql);
-    const text = `Session started: ${formatGameLabel(game)}.`;
-    await sendNotification(token, target.chat_id, text);
+    await sendSessionImage({
+      token,
+      chatId: target.chat_id,
+      kind: "started",
+      game,
+    });
   },
-  onSessionEnded: async ({ platformCredentialId, gameId }) => {
+  onSessionEnded: async ({ platformCredentialId, gameId, durationSeconds }) => {
     const target = await loadNotificationTargetByCredential(
       platformCredentialId,
       sql
@@ -93,8 +176,14 @@ export const createTelegramNotifier = ({
     }
 
     const game = await loadGameById(gameId, sql);
-    const text = `Session ended: ${formatGameLabel(game)}.`;
-    await sendNotification(token, target.chat_id, text);
+    const duration = formatDuration(durationSeconds);
+    await sendSessionImage({
+      token,
+      chatId: target.chat_id,
+      kind: "ended",
+      game,
+      duration,
+    });
   },
 });
 

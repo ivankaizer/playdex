@@ -168,12 +168,20 @@ export const registerPlayniteRoutes = (
         }
 
         for (const session of result.endedSessions) {
+          const durationSeconds = Math.max(
+            0,
+            Math.round(
+              (result.startedAt.getTime() - session.startedAt.getTime()) / 1000
+            )
+          );
           await safeNotify(
             notifier?.onSessionEnded,
             {
               platformCredentialId: result.platformCredentialId,
               gameId: session.gameId,
+              startedAt: session.startedAt,
               endedAt: result.startedAt,
+              durationSeconds,
             },
             "session.ended"
           );
@@ -211,12 +219,20 @@ export const registerPlayniteRoutes = (
         }
 
         for (const session of result.endedSessions) {
+          const durationSeconds = Math.max(
+            0,
+            Math.round(
+              (result.endedAt.getTime() - session.startedAt.getTime()) / 1000
+            )
+          );
           await safeNotify(
             notifier?.onSessionEnded,
             {
               platformCredentialId: result.platformCredentialId,
               gameId: session.gameId,
+              startedAt: session.startedAt,
               endedAt: result.endedAt,
+              durationSeconds,
             },
             "session.ended"
           );

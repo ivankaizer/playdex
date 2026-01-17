@@ -343,19 +343,6 @@ export const getAccountStats = async (accountId: number, userId: number) => {
   return { monthly, yearly };
 };
 
-export const getUserStats = async (userId: number) => {
-  const now = new Date();
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-  const yearStart = new Date(now.getFullYear(), 0, 1);
-
-  const [monthly, yearly] = await Promise.all([
-    buildUserStatsPeriod(userId, monthStart),
-    buildUserStatsPeriod(userId, yearStart),
-  ]);
-
-  return { monthly, yearly };
-};
-
 export const getUserStatsForRange = async (
   userId: number,
   startedAt: Date,

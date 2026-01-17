@@ -2,7 +2,7 @@ import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
 
 import type { TestDatabase } from "./helpers/db";
 import { createTestDatabase } from "./helpers/db";
-import { normalizeGame } from "../src/domain/normalize-game";
+import { normalizeGame } from "../src/shared/domain/normalize-game";
 import {
   endPlaySession,
   ensureGameId,
@@ -10,7 +10,7 @@ import {
   listAccountSessions,
   recordPollResult,
   startPlaySession,
-} from "../src/infrastructure/db/queries";
+} from "../src/shared/db/queries";
 
 const hasDatabase = Boolean(Bun.env.DATABASE_URL);
 const requiresDb = hasDatabase ? test : test.skip;

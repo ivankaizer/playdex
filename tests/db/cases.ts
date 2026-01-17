@@ -3,7 +3,7 @@ import {
   exampleListUsers,
   exampleListPlatformCredentialsForUser,
   calculateTotalPlaySessions,
-} from "../../src/infrastructure/db/queries";
+} from "../../src/shared/db/queries";
 
 export const dbTests = [
   defineDbTest({
