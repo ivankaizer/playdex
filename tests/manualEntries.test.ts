@@ -5,14 +5,14 @@ import { createTestDatabase } from "./helpers/db";
 import {
   normalizeGame,
   normalizeGameTitle,
-} from "../src/domain/normalize-game";
+} from "../src/shared/domain/normalize-game";
 import {
   getManualInputs,
   mapManualInput,
   startManualSession,
   stopManualSession,
-} from "../src/application/manual";
-import { ensureGameId } from "../src/infrastructure/db/queries";
+} from "../src/modules/manual/manual";
+import { ensureGameId } from "../src/shared/db/queries";
 
 const baseDatabaseUrl = Bun.env.DATABASE_URL;
 const hasDatabase = Boolean(baseDatabaseUrl);

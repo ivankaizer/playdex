@@ -31,7 +31,7 @@ export type PlayniteSessionStartResult = {
   platformCredentialId: number;
   gameId: number;
   startedAt: Date;
-  endedSessions: { id: number; gameId: number }[];
+  endedSessions: { id: number; gameId: number; startedAt: Date }[];
 };
 
 export type PlayniteSessionEndInput = {
@@ -41,7 +41,7 @@ export type PlayniteSessionEndInput = {
 export type PlayniteSessionEndResult = {
   platformCredentialId: number;
   endedAt: Date;
-  endedSessions: { id: number; gameId: number }[];
+  endedSessions: { id: number; gameId: number; startedAt: Date }[];
 };
 
 export const recordPlayniteSession = async (
@@ -124,6 +124,7 @@ export const startPlayniteSession = async (
     endedSessions: endedSessions.map((session) => ({
       id: session.id,
       gameId: session.game_id,
+      startedAt: session.started_at,
     })),
   };
 };
@@ -152,6 +153,7 @@ export const endPlayniteSessions = async (
     endedSessions: endedSessions.map((session) => ({
       id: session.id,
       gameId: session.game_id,
+      startedAt: session.started_at,
     })),
   };
 };

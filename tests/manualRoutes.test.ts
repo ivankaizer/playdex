@@ -1,10 +1,10 @@
 import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
 import jwt from "jsonwebtoken";
 
-import { createServer } from "../src/presentation/server";
+import { createServer } from "../src/modules/server/server";
 import type { TestDatabase } from "./helpers/db";
 import { createTestDatabase } from "./helpers/db";
-import { normalizeGameTitle } from "../src/domain/normalize-game";
+import { normalizeGameTitle } from "../src/shared/domain/normalize-game";
 
 const baseDatabaseUrl = Bun.env.DATABASE_URL;
 const baseJwtSecret = Bun.env.JWT_SECRET;

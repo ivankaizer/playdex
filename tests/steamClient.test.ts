@@ -2,7 +2,7 @@ import { afterEach, expect, test } from "bun:test";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 
-import { SteamClient } from "../src/infrastructure/clients/steam-client";
+import { SteamClient } from "../src/modules/providers/clients/steam-client";
 
 const originalFetch = globalThis.fetch;
 

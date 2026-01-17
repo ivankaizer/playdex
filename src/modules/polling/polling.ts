@@ -53,7 +53,9 @@ export type PollingNotifier = {
   onSessionEnded?: (payload: {
     platformCredentialId: number;
     gameId: number;
+    startedAt: Date;
     endedAt: Date;
+    durationSeconds: number;
   }) => Promise<void>;
 };
 
@@ -124,12 +126,18 @@ export const syncPlaySession = async (
         platformCredentialId,
         endedAt: polledAt.toISOString(),
       });
+      const durationSeconds = Math.max(
+        0,
+        Math.round((polledAt.getTime() - activeSession.started_at.getTime()) / 1000)
+      );
       await safeNotify(
         notifier?.onSessionEnded,
         {
           platformCredentialId,
           gameId: activeSession.game_id,
+          startedAt: activeSession.started_at,
           endedAt: polledAt,
+          durationSeconds,
         },
         "session.ended"
       );
@@ -162,12 +170,18 @@ export const syncPlaySession = async (
     platformCredentialId,
     endedAt: polledAt.toISOString(),
   });
+  const durationSeconds = Math.max(
+    0,
+    Math.round((polledAt.getTime() - activeSession.started_at.getTime()) / 1000)
+  );
   await safeNotify(
     notifier?.onSessionEnded,
     {
       platformCredentialId,
       gameId: activeSession.game_id,
+      startedAt: activeSession.started_at,
       endedAt: polledAt,
+      durationSeconds,
     },
     "session.ended"
   );

@@ -2,9 +2,9 @@ import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
 
 import type { TestDatabase } from "./helpers/db";
 import { createTestDatabase } from "./helpers/db";
-import { normalizeGame } from "../src/domain/normalize-game";
-import { ensureGameId } from "../src/infrastructure/db/queries";
-import { syncPlaySession } from "../src/application/polling";
+import { normalizeGame } from "../src/shared/domain/normalize-game";
+import { ensureGameId } from "../src/shared/db/queries";
+import { syncPlaySession } from "../src/modules/polling/polling";
 
 const hasDatabase = Boolean(Bun.env.DATABASE_URL);
 const requiresDb = hasDatabase ? test : test.skip;

@@ -43,6 +43,9 @@ Open `http://localhost:3000/` in your browser.
 bun run dev
 bun run format
 bun run format:check
+bun run telegram:notify-image --type started --title "Game Title" --platform "steam" \
+  --image "/path/to/cover.jpg" \
+  --chat-id 123456
 ```
 
 ## Notes
