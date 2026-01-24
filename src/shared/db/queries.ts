@@ -92,6 +92,11 @@ export type GameRow = {
   capsule_url: string | null;
 };
 
+export type GameRatingRow = {
+  game_id: number;
+  rating: number;
+};
+
 export type UserChatRow = {
   id: number;
   email: string;
@@ -994,6 +999,51 @@ export const isGameIgnoredForCredential = async (
     where pc.id = ${platformCredentialId}
       and ig.game_id = ${gameId}
     limit 1
+  `;
+  return rows.length > 0;
+};
+
+export const loadGameRatingForUser = async (
+  userId: number,
+  gameId: number,
+  sql: Sql = getSql()
+) => {
+  const rows = await sql<GameRatingRow[]>`
+    select game_id, rating
+    from game_ratings
+    where user_id = ${userId}
+      and game_id = ${gameId}
+    limit 1
+  `;
+  return rows[0] ?? null;
+};
+
+export const upsertGameRatingForUser = async (
+  userId: number,
+  gameId: number,
+  rating: number,
+  sql: Sql = getSql()
+) => {
+  const rows = await sql<GameRatingRow[]>`
+    insert into game_ratings (user_id, game_id, rating)
+    values (${userId}, ${gameId}, ${rating})
+    on conflict (user_id, game_id)
+    do update set rating = excluded.rating, updated_at = now()
+    returning game_id, rating
+  `;
+  return rows[0] ?? null;
+};
+
+export const deleteGameRatingForUser = async (
+  userId: number,
+  gameId: number,
+  sql: Sql = getSql()
+) => {
+  const rows = await sql<{ game_id: number }[]>`
+    delete from game_ratings
+    where user_id = ${userId}
+      and game_id = ${gameId}
+    returning game_id
   `;
   return rows.length > 0;
 };

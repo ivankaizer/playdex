@@ -56,6 +56,11 @@ export type GameIgnoreResponseDto = {
   ignored: boolean;
 };
 
+export type GameRatingResponseDto = {
+  gameId: number;
+  rating: number | null;
+};
+
 export type AccountStatsPeriodDto = {
   totalSeconds: number;
   sessionCount: number;
