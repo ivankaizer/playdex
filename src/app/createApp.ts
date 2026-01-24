@@ -23,11 +23,17 @@ export const createApp = (options: AppOptions = {}) => {
 
   registerErrorHandling(app);
 
-  app.use(
-    cors({
-      origin: config.corsOrigins.length > 0 ? config.corsOrigins : true,
-    })
-  );
+  if (config.corsOrigins.length > 0) {
+    app.use(
+      cors({
+        origin: config.corsOrigins,
+      })
+    );
+  } else {
+    console.warn(
+      "CORS_ORIGINS not configured; cross-origin requests are disabled."
+    );
+  }
 
   registerRootRoutes(app);
   registerAuthRoutes(app);
@@ -77,4 +83,3 @@ export const createApp = (options: AppOptions = {}) => {
 
   return app;
 };
-

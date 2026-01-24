@@ -41,13 +41,20 @@ const resolveCorsOrigins = (raw: string | undefined) => {
     return [];
   }
 
-  const origins = raw
-    .split(",")
-    .map((origin) => origin.trim())
-    .filter(Boolean);
+  const origins = Array.from(
+    new Set(
+      raw
+        .split(",")
+        .map((origin) => origin.trim())
+        .filter(Boolean)
+    )
+  );
 
   if (origins.includes("*")) {
-    return ["*"];
+    console.warn(
+      "CORS_ORIGINS contains '*' which is not allowed; configure explicit origins to enable CORS."
+    );
+    return origins.filter((origin) => origin !== "*");
   }
 
   return origins;
@@ -64,4 +71,3 @@ export const config = {
   igdbClientId: Bun.env.IGDB_CLIENT_ID?.trim() ?? "",
   igdbClientSecret: Bun.env.IGDB_CLIENT_SECRET?.trim() ?? "",
 };
-

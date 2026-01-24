@@ -1,17 +1,9 @@
+import { randomBytes } from "node:crypto";
+
 import { providersRepository } from "./providers.repository";
 
 const generateApiKey = () => {
-  const bytes = new Uint8Array(16);
-  if (globalThis.crypto?.getRandomValues) {
-    globalThis.crypto.getRandomValues(bytes);
-  } else {
-    for (let index = 0; index < bytes.length; index += 1) {
-      bytes[index] = Math.floor(Math.random() * 256);
-    }
-  }
-  const token = Array.from(bytes)
-    .map((byte) => byte.toString(16).padStart(2, "0"))
-    .join("");
+  const token = randomBytes(16).toString("hex");
   return `plx_${token}`;
 };
 
@@ -52,4 +44,3 @@ export const providersService = {
     return created[0]?.api_key ?? apiKey;
   },
 };
-
