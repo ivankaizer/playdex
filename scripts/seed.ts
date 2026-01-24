@@ -1,11 +1,11 @@
 import postgres from "postgres";
 
-import { runMigrations } from "../src/shared/db/migrations";
+import { runMigrations } from "../src/common/db/migrations";
 import {
   ensureGameId,
   insertPlaySession,
-} from "../src/infrastructure/db/queries";
-import { normalizeGame } from "../src/domain/normalize-game";
+} from "../src/shared/db/queries";
+import { normalizeGame } from "../src/modules/games";
 
 const databaseUrl = Bun.env.DATABASE_URL;
 if (!databaseUrl?.trim()) {

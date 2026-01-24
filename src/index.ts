@@ -1,13 +1,9 @@
-import { config } from "./config/env";
-import { loadPollingAccounts } from "./modules/polling/polling-accounts";
-import { startPolling } from "./modules/polling/polling";
-import {
-  createTelegramNotifier,
-  startTelegramBot,
-} from "./modules/telegram/telegram";
-import { getSql } from "./shared/db/postgres";
-import { runMigrations } from "./shared/db/migrations";
-import { createServer } from "./modules/server/server";
+import { createApp } from "./app/createApp";
+import { config } from "./common/config";
+import { getSql } from "./common/db/postgres";
+import { runMigrations } from "./common/db/migrations";
+import { loadPollingAccounts, startPolling } from "./modules/polling";
+import { createTelegramNotifier, startTelegramBot } from "./modules/telegram";
 
 const startServer = async () => {
   await runMigrations();
@@ -18,7 +14,7 @@ const startServer = async () => {
     ? createTelegramNotifier({ token: telegramToken, sql })
     : undefined;
 
-  const app = createServer({ notifier }).listen(3000);
+  const app = createApp({ notifier }).listen(3000);
 
   console.log(
     `🦊 Elysia is running at ${app.server?.hostname}:${app.server?.port}`

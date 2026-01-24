@@ -1,4 +1,4 @@
-import { PsnClient } from "../src/infrastructure/clients/psn-client";
+import { PsnClient } from "../src/modules/providers/clients/psn-client";
 
 const npsso = Bun.env.PSN_NPSSO;
 const accountId = Bun.env.PSN_ACCOUNT_ID;

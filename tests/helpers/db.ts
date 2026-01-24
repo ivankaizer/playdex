@@ -1,6 +1,6 @@
 import postgres from "postgres";
 
-import { runMigrations } from "../../src/shared/db/migrations";
+import { runMigrations } from "../../src/common/db/migrations";
 
 export type TestDatabase = {
   sql: ReturnType<typeof postgres>;

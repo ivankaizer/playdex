@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
 import jwt from "jsonwebtoken";
 
-import { createServer } from "../src/modules/server/server";
+import { createApp } from "../src/app/createApp";
 import type { TestDatabase } from "./helpers/db";
 import { createTestDatabase } from "./helpers/db";
 
@@ -12,7 +12,7 @@ const requiresDb = hasDatabase ? test : test.skip;
 const jwtSecret = "sessions-test-secret";
 
 let db: TestDatabase | null = null;
-let app: ReturnType<typeof createServer> | null = null;
+let app: ReturnType<typeof createApp> | null = null;
 let token = "";
 let userId = 0;
 let credentialId = 0;
@@ -25,7 +25,7 @@ beforeAll(async () => {
   db = await createTestDatabase();
   Bun.env.DATABASE_URL = db.databaseUrl;
   Bun.env.JWT_SECRET = jwtSecret;
-  app = createServer();
+  app = createApp();
 });
 
 afterAll(async () => {
