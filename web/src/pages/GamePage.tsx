@@ -490,7 +490,7 @@ export const GamePage = ({
   return (
     <main className="relative min-h-screen overflow-hidden bg-slate-950 text-slate-100">
       <Background />
-      <div className="relative mx-auto w-full max-w-6xl px-6 py-12">
+      <div className="relative mx-auto w-full max-w-6xl px-4 py-10 sm:px-6 sm:py-12">
         <AppHeader
           title={gameTitle}
         navItems={navItems}
@@ -501,7 +501,7 @@ export const GamePage = ({
 
       <section className="mt-10 space-y-6">
         <div className="grid gap-6 lg:grid-cols-[1fr_2fr]">
-          <div className="rounded-3xl border border-slate-800 bg-slate-900/60 p-6">
+          <div className="rounded-3xl border border-slate-800 bg-slate-900/60 p-5 sm:p-6">
             <div className="aspect-[9/14] overflow-hidden rounded-2xl border border-slate-800 bg-slate-950/60">
               <img
                 src={gameImage}
@@ -570,7 +570,7 @@ export const GamePage = ({
               )}
             </div>
           </div>
-          <div className="rounded-3xl border border-slate-800 bg-slate-900/60 p-6">
+          <div className="rounded-3xl border border-slate-800 bg-slate-900/60 p-5 sm:p-6">
             <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-300">
               Recent sessions
               </p>
@@ -661,7 +661,7 @@ export const GamePage = ({
             </div>
           </div>
 
-        <div className="rounded-3xl border border-slate-800 bg-slate-900/60 px-6 py-5">
+        <div className="rounded-3xl border border-slate-800 bg-slate-900/60 px-4 py-4 sm:px-6 sm:py-5">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-300">
@@ -721,35 +721,35 @@ export const GamePage = ({
           )}
         </div>
 
-        <div className="grid grid-flow-col auto-cols-fr gap-6 overflow-x-auto pb-2">
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
-            <p className="text-xs uppercase tracking-[0.3em] text-slate-400">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-6">
+          <div className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-900/70 px-4 py-3 sm:block sm:space-y-2 sm:px-5">
+            <p className="text-[11px] uppercase tracking-[0.3em] text-slate-400">
               Hours played
             </p>
-            <p className="mt-2 text-lg font-semibold text-white">
+            <p className="text-lg font-semibold text-white">
               {formatHours(totalSeconds, 1)}
             </p>
           </div>
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
-            <p className="text-xs uppercase tracking-[0.3em] text-slate-400">
+          <div className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-900/70 px-4 py-3 sm:block sm:space-y-2 sm:px-5">
+            <p className="text-[11px] uppercase tracking-[0.3em] text-slate-400">
               Sessions
             </p>
-            <p className="mt-2 text-lg font-semibold text-white">
+            <p className="text-lg font-semibold text-white">
               {allSessions.length}
             </p>
           </div>
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
-            <p className="text-xs uppercase tracking-[0.3em] text-slate-400">
+          <div className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-900/70 px-4 py-3 sm:block sm:space-y-2 sm:px-5">
+            <p className="text-[11px] uppercase tracking-[0.3em] text-slate-400">
               Last played
             </p>
-            <p className="mt-2 text-lg font-semibold text-white">
+            <p className="text-lg font-semibold text-white">
               {lastPlayed ? formatDateLabel(lastPlayed) : "—"}
             </p>
           </div>
         </div>
 
         <div className="space-y-6">
-          <div className="rounded-3xl border border-slate-800 bg-slate-900/60 p-6">
+          <div className="rounded-3xl border border-slate-800 bg-slate-900/60 p-5 sm:p-6">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-300">
@@ -768,7 +768,7 @@ export const GamePage = ({
                   {Array.from({ length: 12 }, (_, index) => (
                     <div
                       key={`skeleton-${index}`}
-                      className="h-32 rounded-full bg-slate-800/60"
+                      className="mx-auto h-32 w-2 rounded-md bg-slate-800/60"
                     />
                   ))}
                 </div>
@@ -786,11 +786,11 @@ export const GamePage = ({
                         <div className="pointer-events-none absolute left-1/2 top-[-6px] z-10 -translate-x-1/2 -translate-y-full rounded-md bg-slate-900/90 px-3 py-1 text-[10px] font-semibold text-slate-100 opacity-0 shadow-lg ring-1 ring-slate-700/60 transition duration-150 group-hover:opacity-100">
                           {hoursLabel}
                         </div>
-                        <div className="flex h-32 items-end">
+                        <div className="flex h-32 items-end justify-center">
                           <div
                             aria-label={`${hoursLabel} in ${year.label}`}
                             title={hoursLabel}
-                            className="w-full rounded-full bg-emerald-400/80"
+                            className="w-2 rounded-md bg-emerald-400/80"
                             style={{
                               height: `${(year.hours / maxHours) * 100}%`,
                             }}
@@ -806,7 +806,7 @@ export const GamePage = ({
               )}
             </div>
 
-            <div className="rounded-3xl border border-slate-800 bg-slate-900/60 p-6">
+            <div className="rounded-3xl border border-slate-800 bg-slate-900/60 p-5 sm:p-6">
               <div className="flex flex-wrap items-center justify-between gap-4">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-300">

@@ -36,7 +36,7 @@ export const StatsRecapSection = ({
   onGameSelect,
 }: StatsRecapSectionProps) => {
   return (
-    <div className="rounded-3xl border border-slate-800 bg-slate-900/60 p-6">
+    <div className="rounded-3xl border border-slate-800 bg-slate-900/60 p-5 sm:p-6">
       <div className="flex flex-wrap items-baseline gap-3">
         <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-300">
           {title}

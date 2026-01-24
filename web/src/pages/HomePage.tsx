@@ -98,7 +98,7 @@ export const HomePage = ({
     <main className="relative min-h-screen overflow-hidden bg-slate-950 text-slate-100">
       <Background />
 
-      <div className="relative mx-auto w-full max-w-6xl px-6 py-16">
+      <div className="relative mx-auto w-full max-w-6xl px-4 py-12 sm:px-6 sm:py-16">
         <div className="grid gap-12 lg:grid-cols-[1.1fr_0.9fr]">
           <section className="flex flex-col justify-center gap-8">
             <div className="flex items-center gap-3">
@@ -123,7 +123,7 @@ export const HomePage = ({
           </section>
 
           <section className="flex items-center justify-center">
-            <div className="w-full max-w-md rounded-3xl border border-slate-800 bg-slate-900/70 p-8 shadow-[0_25px_80px_rgba(15,23,42,0.65)]">
+            <div className="w-full max-w-md rounded-3xl border border-slate-800 bg-slate-900/70 p-6 shadow-[0_25px_80px_rgba(15,23,42,0.65)] sm:p-8">
               {isLoggedIn ? (
                 <div className="space-y-5 text-center">
                   <p className="text-xs font-semibold uppercase tracking-[0.4em] text-emerald-300">

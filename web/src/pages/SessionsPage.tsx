@@ -573,7 +573,7 @@ export const SessionsPage = ({
   return (
     <main className="relative min-h-screen overflow-hidden bg-slate-950 text-slate-100">
       <Background />
-      <div className="relative mx-auto w-full max-w-6xl px-6 py-12">
+      <div className="relative mx-auto w-full max-w-6xl px-4 py-10 sm:px-6 sm:py-12">
         <AppHeader
           title="Sessions"
           navItems={navItems}
@@ -582,7 +582,7 @@ export const SessionsPage = ({
           onLogout={onLogout}
         />
 
-        <section className="mt-10 rounded-3xl border border-slate-800 bg-slate-900/60 p-6">
+        <section className="mt-10 rounded-3xl border border-slate-800 bg-slate-900/60 p-5 sm:p-6">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-300">
@@ -680,7 +680,107 @@ export const SessionsPage = ({
             ) : null}
           </div>
 
-          <div className="mt-6 overflow-hidden rounded-2xl border border-slate-800">
+          <div className="mt-6 space-y-3 md:hidden">
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-800 bg-slate-950/60 px-4 py-3 text-[11px] uppercase tracking-[0.25em] text-slate-400">
+              <span>Sort</span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleSessionSort("date")}
+                  className="inline-flex items-center gap-2 rounded-full border border-slate-700 px-3 py-1 font-semibold transition hover:border-emerald-400/60 hover:text-emerald-100"
+                >
+                  Date
+                  {renderSessionSortIcon("date")}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSessionSort("duration")}
+                  className="inline-flex items-center gap-2 rounded-full border border-slate-700 px-3 py-1 font-semibold transition hover:border-emerald-400/60 hover:text-emerald-100"
+                >
+                  Duration
+                  {renderSessionSortIcon("duration")}
+                </button>
+              </div>
+            </div>
+
+            <div className="grid gap-3">
+              {isSessionsLoading ? (
+                [1, 2, 3, 4].map((row) => (
+                  <div
+                    key={row}
+                    className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4"
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className="h-14 w-10 rounded-xl bg-slate-800/60" />
+                      <div className="flex-1 space-y-2">
+                        <div className="h-3 w-32 rounded-full bg-slate-800/60" />
+                        <div className="h-3 w-20 rounded-full bg-slate-800/50" />
+                        <div className="h-3 w-16 rounded-full bg-slate-800/50" />
+                      </div>
+                      <div className="h-3 w-12 rounded-full bg-slate-800/50" />
+                    </div>
+                    <div className="mt-3 h-8 w-20 rounded-full bg-slate-800/50" />
+                  </div>
+                ))
+              ) : sessionRowsView.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-slate-800 bg-slate-950/50 p-4 text-sm text-slate-400">
+                  {hasSessionFilters
+                    ? "No sessions match your filters."
+                    : "No sessions yet. Sync a provider to populate this list."}
+                </div>
+              ) : (
+                sessionRowsView.map((session) => (
+                  <div
+                    key={session.sessionId}
+                    className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4"
+                  >
+                    <div className="flex items-start gap-3">
+                      <img
+                        src={session.image}
+                        alt={`${session.title} capsule art`}
+                        className="h-14 w-10 rounded-xl border border-slate-800 object-cover"
+                      />
+                      <div className="flex-1 space-y-1">
+                        <button
+                          type="button"
+                          onClick={() => handleGameSelect(session.title)}
+                          className="text-left font-semibold text-white transition hover:text-emerald-200"
+                    >
+                      {session.title}
+                    </button>
+                    <p className="text-xs text-slate-400">
+                      {session.platform}
+                    </p>
+                    <p className="text-xs text-slate-400">
+                      {session.date}
+                    </p>
+                  </div>
+                  <span className="text-sm font-semibold text-emerald-200">
+                    {session.duration}
+                  </span>
+                </div>
+                <div className="mt-3 flex items-center justify-between">
+                  <span className="text-[11px] uppercase tracking-[0.3em] text-slate-500">
+                    {session.platform}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => handleSessionRemove(session.sessionId)}
+                    disabled={deletingSessionIds.includes(
+                      session.sessionId
+                        )}
+                        className="rounded-full border border-rose-500/60 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.3em] text-rose-200 transition hover:border-rose-400 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+
+          <div className="mt-6 hidden overflow-hidden rounded-2xl border border-slate-800 md:block">
             <table className="w-full text-left text-sm">
               <thead className="bg-slate-950/70 text-xs uppercase tracking-[0.3em] text-slate-400">
                 <tr>

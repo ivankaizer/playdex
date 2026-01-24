@@ -15,7 +15,7 @@ export const AppHeader = ({
   onNavigate,
   onLogout,
 }: AppHeaderProps) => (
-  <header className="flex flex-wrap items-center justify-between gap-4 rounded-3xl border border-slate-800 bg-slate-900/70 px-6 py-4 md:flex-nowrap">
+  <header className="flex flex-wrap items-center justify-between gap-4 rounded-3xl border border-slate-800 bg-slate-900/70 px-4 py-3 sm:px-6 sm:py-4 md:flex-nowrap">
     <div className="min-w-0 flex-1">
       <p className="text-xs font-semibold uppercase tracking-[0.5em] text-emerald-300">
         Playdex

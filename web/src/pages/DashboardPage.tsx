@@ -362,7 +362,7 @@ export const DashboardPage = ({
   return (
     <main className="relative min-h-screen overflow-hidden bg-slate-950 text-slate-100">
       <Background />
-      <div className="relative mx-auto w-full max-w-6xl px-6 py-12">
+      <div className="relative mx-auto w-full max-w-6xl px-4 py-10 sm:px-6 sm:py-12">
         <AppHeader
           title="Dashboard"
           navItems={navItems}
@@ -372,7 +372,7 @@ export const DashboardPage = ({
         />
 
         <section className="mt-10 space-y-6">
-          <div className="rounded-3xl border border-slate-800 bg-slate-900/60 px-6 py-4">
+          <div className="rounded-3xl border border-slate-800 bg-slate-900/60 px-4 py-3 sm:px-6 sm:py-4">
             <div className="flex flex-wrap items-center justify-between gap-4">
               <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-300">
                 Current session
@@ -472,7 +472,7 @@ export const DashboardPage = ({
           </div>
 
           <div className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
-            <div className="rounded-3xl border border-slate-800 bg-slate-900/60 p-6">
+            <div className="rounded-3xl border border-slate-800 bg-slate-900/60 p-5 sm:p-6">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-300">
@@ -527,7 +527,7 @@ export const DashboardPage = ({
               </div>
             </div>
 
-            <div className="rounded-3xl border border-slate-800 bg-slate-900/60 p-6">
+            <div className="rounded-3xl border border-slate-800 bg-slate-900/60 p-5 sm:p-6">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-300">
