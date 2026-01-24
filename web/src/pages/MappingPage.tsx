@@ -221,9 +221,9 @@ export const MappingPage = ({
           mappingSearchResults.map((result) => (
             <div
               key={`${result.source}-${result.igdbId ?? result.gameId}-${result.title}`}
-              className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-800 bg-slate-950/40 p-3"
+              className="grid grid-cols-[auto,1fr] items-start gap-x-3 gap-y-2 rounded-2xl border border-slate-800 bg-slate-950/40 p-3"
             >
-              <div className="flex items-center gap-3">
+              <div className="pt-1">
                 {result.capsuleUrl ? (
                   <img
                     src={result.capsuleUrl}
@@ -233,34 +233,36 @@ export const MappingPage = ({
                 ) : (
                   <div className="h-12 w-9 rounded-lg border border-slate-800 bg-slate-900/60" />
                 )}
-                <div>
-                  <button
-                    type="button"
-                    onClick={() => handleGameSelect(result.title)}
-                    className="text-left text-sm font-semibold text-white transition hover:text-emerald-200"
-                  >
-                    {result.title}
-                  </button>
-                  <p className="text-xs text-slate-400">
-                    {result.source === "igdb"
-                      ? mappingPlatformOverride === "auto"
-                        ? result.platform ?? "Unknown platform"
-                        : formatPlatformLabel(mappingPlatformOverride)
-                      : result.platform
-                        ? formatPlatformLabel(result.platform)
-                        : "Unknown platform"}{" "}
-                    · {result.source.toUpperCase()}
-                  </p>
-                </div>
               </div>
-              <button
-                type="button"
-                onClick={() => handleMappingSelection(input.id, result)}
-                disabled={isMappingUpdateLoading}
-                className="rounded-full border border-emerald-400/60 px-3 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-emerald-200 transition hover:border-emerald-300 disabled:cursor-not-allowed"
-              >
-                {isMappingUpdateLoading ? "Mapping..." : "Map"}
-              </button>
+              <div className="space-y-1">
+                <button
+                  type="button"
+                  onClick={() => handleGameSelect(result.title)}
+                  className="text-left text-sm font-semibold text-white transition hover:text-emerald-200"
+                >
+                  {result.title}
+                </button>
+                <p className="text-xs text-slate-400">
+                  {result.source === "igdb"
+                    ? mappingPlatformOverride === "auto"
+                      ? result.platform ?? "Unknown platform"
+                      : formatPlatformLabel(mappingPlatformOverride)
+                    : result.platform
+                      ? formatPlatformLabel(result.platform)
+                      : "Unknown platform"}{" "}
+                  · {result.source.toUpperCase()}
+                </p>
+              </div>
+              <div className="col-span-2">
+                <button
+                  type="button"
+                  onClick={() => handleMappingSelection(input.id, result)}
+                  disabled={isMappingUpdateLoading}
+                  className="w-full rounded-full border border-emerald-400/60 px-3 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-emerald-200 transition hover:border-emerald-300 disabled:cursor-not-allowed sm:w-auto"
+                >
+                  {isMappingUpdateLoading ? "Mapping..." : "Map"}
+                </button>
+              </div>
             </div>
           ))
         )}
@@ -271,7 +273,7 @@ export const MappingPage = ({
   return (
     <main className="relative min-h-screen overflow-hidden bg-slate-950 text-slate-100">
       <Background />
-      <div className="relative mx-auto w-full max-w-6xl px-4 py-10 sm:px-6 sm:py-12">
+      <div className="relative mx-auto w-full max-w-6xl p-3 sm:px-6 sm:py-12">
         <AppHeader
           title="Mapping"
           navItems={navItems}
@@ -304,20 +306,20 @@ export const MappingPage = ({
             <p className="mt-4 text-xs text-rose-300">{manualInputsError}</p>
           ) : null}
 
-          <div className="mt-6 grid gap-3 md:hidden">
+          <div className="mt-6 grid gap-4 md:hidden">
             {isManualInputsLoading ? (
               [1, 2, 3].map((row) => (
                 <div
                   key={row}
                   className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4"
                 >
-                  <div className="flex items-start gap-3">
+                  <div className="grid grid-cols-[auto,1fr] items-start gap-x-3 gap-y-3">
                     <div className="h-14 w-10 rounded-xl bg-slate-800/60" />
                     <div className="flex-1 space-y-2">
                       <div className="h-3 w-32 rounded-full bg-slate-800/60" />
                       <div className="h-3 w-40 rounded-full bg-slate-800/40" />
                     </div>
-                    <div className="h-8 w-24 rounded-full bg-slate-800/40" />
+                    <div className="col-span-2 h-9 rounded-full bg-slate-800/40" />
                   </div>
                 </div>
               ))
@@ -331,24 +333,24 @@ export const MappingPage = ({
                   key={input.id}
                   className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4"
                 >
-                  <div className="flex items-start gap-3">
-                    {input.mappedGame?.capsuleUrl ? (
-                      <img
-                        src={input.mappedGame.capsuleUrl}
-                        alt={`${input.mappedGame.title} cover`}
-                        className="h-14 w-10 rounded-xl border border-slate-800 object-cover"
-                      />
-                    ) : (
-                      <div className="h-14 w-10 rounded-xl border border-slate-800 bg-slate-900/70" />
-                    )}
-                    <div className="flex-1 space-y-1">
+                  <div className="grid grid-cols-[auto,1fr] items-start gap-x-3 gap-y-3">
+                    <div className="pt-1">
+                      {input.mappedGame?.capsuleUrl ? (
+                        <img
+                          src={input.mappedGame.capsuleUrl}
+                          alt={`${input.mappedGame.title} cover`}
+                          className="h-14 w-10 rounded-xl border border-slate-800 object-cover"
+                        />
+                      ) : (
+                        <div className="h-14 w-10 rounded-xl border border-slate-800 bg-slate-900/70" />
+                      )}
+                    </div>
+                    <div className="flex-1 space-y-2">
                       <p className="text-[11px] uppercase tracking-[0.3em] text-slate-400">
                         Input
                       </p>
-                      <p className="text-sm font-semibold text-white">
-                        {input.input}
-                      </p>
-                      <div className="text-xs text-slate-400">
+                      <p className="text-sm font-semibold text-white">{input.input}</p>
+                      <div className="text-xs text-slate-300">
                         {input.mappedGame ? (
                           <button
                             type="button"
@@ -367,17 +369,19 @@ export const MappingPage = ({
                         )}
                       </div>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => openMappingRow(input)}
-                      className={`rounded-full px-3 py-2 text-xs font-semibold uppercase tracking-[0.3em] transition ${
-                        input.mappedGame
-                          ? "border border-slate-700 text-slate-200 hover:border-emerald-400/60 hover:text-emerald-100"
-                          : "border border-emerald-400/60 text-emerald-200 hover:border-emerald-300"
-                      }`}
-                    >
-                      {input.mappedGame ? "Edit mapping" : "Map"}
-                    </button>
+                    <div className="col-span-2">
+                      <button
+                        type="button"
+                        onClick={() => openMappingRow(input)}
+                        className={`w-full rounded-full px-3 py-2 text-xs font-semibold uppercase tracking-[0.3em] transition sm:w-auto ${
+                          input.mappedGame
+                            ? "border border-slate-700 text-slate-200 hover:border-emerald-400/60 hover:text-emerald-100"
+                            : "border border-emerald-400/60 text-emerald-200 hover:border-emerald-300"
+                        }`}
+                      >
+                        {input.mappedGame ? "Edit mapping" : "Map"}
+                      </button>
+                    </div>
                   </div>
 
                   {activeMappingInputId === input.id ? (
