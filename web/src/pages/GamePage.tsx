@@ -2,7 +2,12 @@ import { useEffect, useMemo, useState } from "react";
 
 import { apiRequest } from "../api";
 import { capsuleUrl, navItems as defaultNavItems } from "../constants";
-import type { AccountSession, AccountSessionsResponse, NavItem } from "../types";
+import type {
+  AccountSession,
+  AccountSessionsResponse,
+  GameIgnoreResponse,
+  NavItem,
+} from "../types";
 import {
   formatDateLabel,
   formatDuration,
@@ -40,11 +45,20 @@ export const GamePage = ({
   const [allSessions, setAllSessions] = useState<AccountSession[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [gameError, setGameError] = useState("");
+  const [isIgnoreChecking, setIsIgnoreChecking] = useState(false);
+  const [isIgnoreSaving, setIsIgnoreSaving] = useState(false);
+  const [isIgnored, setIsIgnored] = useState(false);
+  const [ignoreError, setIgnoreError] = useState("");
+  const [sessionsLoaded, setSessionsLoaded] = useState(false);
   const [selectedYear, setSelectedYear] = useState(
     new Date().getUTCFullYear()
   );
   const [recentPage, setRecentPage] = useState(1);
   const recentPageSize = 5;
+  const currentGameId = useMemo(
+    () => allSessions[0]?.gameId ?? null,
+    [allSessions]
+  );
 
   useEffect(() => {
     if (!gameTitle) {
@@ -55,6 +69,7 @@ export const GamePage = ({
     const loadGameSessions = async () => {
       setIsLoading(true);
       setGameError("");
+      setSessionsLoaded(false);
       try {
         const now = new Date();
         const from = new Date(Date.UTC(ALL_TIME_START_YEAR, 0, 1));
@@ -112,6 +127,7 @@ export const GamePage = ({
         setAllSessions(allSessions);
         setRecentPage(1);
         setIsLoading(false);
+        setSessionsLoaded(true);
       } catch (err) {
         if (isCancelled) {
           return;
@@ -119,6 +135,7 @@ export const GamePage = ({
         setRecentSessions([]);
         setAllSessions([]);
         setIsLoading(false);
+        setSessionsLoaded(true);
         setGameError(
           err instanceof Error ? err.message : "Failed to load game sessions."
         );
@@ -130,6 +147,106 @@ export const GamePage = ({
       isCancelled = true;
     };
   }, [gameTitle, onLogout]);
+
+  useEffect(() => {
+    if (!sessionsLoaded) {
+      setIsIgnoreChecking(true);
+      setIgnoreError("");
+      return;
+    }
+
+    if (!currentGameId) {
+      setIsIgnoreChecking(false);
+      setIsIgnored(false);
+      setIgnoreError(
+        allSessions.length === 0
+          ? "No sessions found yet to identify this game."
+          : "Unable to resolve game id for this game."
+      );
+      return;
+    }
+
+    let isCancelled = false;
+
+    const loadIgnoreStatus = async () => {
+      setIsIgnoreChecking(true);
+      setIsIgnored(false);
+      setIgnoreError("");
+      try {
+        const params = new URLSearchParams({ gameId: String(currentGameId) });
+        const response = await apiRequest<GameIgnoreResponse>(
+          `/games/ignored?${params.toString()}`,
+          { onAuthFailure: onLogout }
+        );
+
+        if (isCancelled) {
+          return;
+        }
+
+        setIsIgnored(response.ignored);
+        setIgnoreError("");
+      } catch (err) {
+        if (isCancelled) {
+          return;
+        }
+        setIsIgnored(false);
+        setIgnoreError(
+          err instanceof Error
+            ? err.message
+            : "Failed to load ignore status."
+        );
+      } finally {
+        if (!isCancelled) {
+          setIsIgnoreChecking(false);
+        }
+      }
+    };
+
+    void loadIgnoreStatus();
+    return () => {
+      isCancelled = true;
+    };
+  }, [allSessions.length, currentGameId, onLogout, sessionsLoaded]);
+
+  const handleToggleIgnore = async () => {
+    if (!currentGameId) {
+      setIgnoreError("Cannot toggle without a game id.");
+      return;
+    }
+    setIsIgnoreSaving(true);
+    setIgnoreError("");
+    try {
+      if (isIgnored) {
+        const response = await apiRequest<GameIgnoreResponse>(
+          "/games/ignored",
+          {
+            method: "DELETE",
+            body: { gameId: currentGameId },
+            onAuthFailure: onLogout,
+          }
+        );
+        setIsIgnored(response.ignored);
+      } else {
+        const response = await apiRequest<GameIgnoreResponse>(
+          "/games/ignored",
+          {
+            method: "POST",
+            body: { gameId: currentGameId },
+            onAuthFailure: onLogout,
+          }
+        );
+        setIsIgnored(response.ignored);
+      }
+    } catch (err) {
+      setIgnoreError(
+        err instanceof Error
+          ? err.message
+          : "Failed to update ignore status."
+      );
+    } finally {
+      setIsIgnoreSaving(false);
+    }
+  };
 
   const gameImage =
     recentSessions.find((session) => session.capsuleUrl)?.capsuleUrl ??
@@ -245,22 +362,82 @@ export const GamePage = ({
       <div className="relative mx-auto w-full max-w-6xl px-6 py-12">
         <AppHeader
           title={gameTitle}
-          navItems={navItems}
-          path={path}
-          onNavigate={onNavigate}
-          onLogout={onLogout}
-        />
+        navItems={navItems}
+        path={path}
+        onNavigate={onNavigate}
+        onLogout={onLogout}
+      />
 
-        <section className="mt-10 space-y-6">
-          <div className="grid gap-6 lg:grid-cols-[0.25fr_0.75fr]">
-            <div className="rounded-3xl border border-slate-800 bg-slate-900/60 p-6">
-              <div className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-950/60">
-                <img
-                  src={gameImage}
+      <section className="mt-10 space-y-6">
+        <div className="rounded-3xl border border-slate-800 bg-slate-900/60 px-6 py-5">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-300">
+                Tracking
+              </p>
+              <p className="mt-2 text-sm text-slate-300">
+                {!currentGameId
+                  ? "Add a session for this game to enable tracking controls."
+                  : isIgnored
+                    ? "Scheduler will skip new sessions for this game."
+                    : "Scheduler will capture new sessions for this game."}
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-3">
+              <span
+                className={`rounded-full px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.25em] ${
+                  isIgnored
+                    ? "border border-rose-400/70 text-rose-100"
+                    : "border border-emerald-400/70 text-emerald-100"
+                }`}
+              >
+                {!currentGameId
+                  ? "Unknown"
+                  : isIgnoreChecking
+                    ? "Checking..."
+                    : isIgnored
+                      ? "Ignored"
+                      : "Active"}
+              </span>
+              <button
+                type="button"
+                className={`rounded-full px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.2em] transition disabled:cursor-not-allowed disabled:opacity-60 ${
+                  isIgnored
+                    ? "border border-emerald-300/70 text-emerald-100 hover:border-emerald-200"
+                    : "border border-rose-400/70 text-rose-100 hover:border-rose-300"
+                }`}
+                disabled={
+                  isIgnoreChecking || isIgnoreSaving || !currentGameId
+                }
+                onClick={handleToggleIgnore}
+              >
+                {isIgnoreSaving
+                  ? "Saving..."
+                  : isIgnored
+                    ? "Resume tracking"
+                    : "Ignore game"}
+              </button>
+            </div>
+          </div>
+          {ignoreError && (
+            <p className="mt-3 text-xs text-rose-300">{ignoreError}</p>
+          )}
+          {!ignoreError && !currentGameId && sessionsLoaded && (
+            <p className="mt-3 text-xs text-slate-400">
+              Add a session for this game to enable tracking controls.
+            </p>
+          )}
+        </div>
+
+        <div className="grid gap-6 lg:grid-cols-[0.25fr_0.75fr]">
+          <div className="rounded-3xl border border-slate-800 bg-slate-900/60 p-6">
+            <div className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-950/60">
+              <img
+                src={gameImage}
                   alt={`${gameTitle} cover`}
-                  className="h-80 w-full object-cover"
-                />
-              </div>
+              className="h-80 w-full object-cover"
+            />
+          </div>
               <div className="mt-6 grid gap-4 sm:grid-cols-3 lg:grid-cols-1">
                 <div className="rounded-2xl border border-slate-800 bg-slate-950/50 p-4">
                   <p className="text-xs uppercase tracking-[0.3em] text-slate-400">
@@ -286,11 +463,11 @@ export const GamePage = ({
                     {lastPlayed ? formatDateLabel(lastPlayed) : "—"}
                   </p>
                 </div>
-              </div>
             </div>
-            <div className="rounded-3xl border border-slate-800 bg-slate-900/60 p-6">
-              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-300">
-                Recent sessions
+          </div>
+          <div className="rounded-3xl border border-slate-800 bg-slate-900/60 p-6">
+            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-300">
+              Recent sessions
               </p>
               <h2 className="mt-2 text-xl font-semibold text-white">
                 Latest play snapshots

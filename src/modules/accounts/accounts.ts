@@ -28,6 +28,7 @@ type SessionRow = {
   sessionId: number;
   startedAt: Date;
   endedAt: Date | null;
+  gameId: number;
   platform: string;
   game: string;
   capsuleUrl: string | null;
@@ -124,6 +125,7 @@ export const getAccountSessions = async (
     sessionId: +row.id,
     startedAt: row.started_at,
     endedAt: row.ended_at,
+    gameId: row.game_id,
     platform: row.platform,
     game: row.title,
     capsuleUrl: row.capsule_url,
@@ -144,6 +146,7 @@ export const getUserSessions = async (
     sessionId: +row.id,
     startedAt: row.started_at,
     endedAt: row.ended_at,
+    gameId: row.game_id,
     platform: row.platform,
     game: row.title,
     capsuleUrl: row.capsule_url,
@@ -180,6 +183,7 @@ export const getAccountSessionsToday = async (
     sessionId: +row.id,
     startedAt: row.started_at,
     endedAt: row.ended_at,
+    gameId: row.game_id,
     platform: row.platform,
     game: row.title,
     capsuleUrl: row.capsule_url,
@@ -195,6 +199,7 @@ export const getUserSessionsToday = async (userId: number, limit: number) => {
     sessionId: +row.id,
     startedAt: row.started_at,
     endedAt: row.ended_at,
+    gameId: row.game_id,
     platform: row.platform,
     game: row.title,
     capsuleUrl: row.capsule_url,
@@ -216,6 +221,7 @@ export const getAccountCurrentSession = async (
     sessionId: +row.id,
     startedAt: row.started_at,
     endedAt: row.ended_at,
+    gameId: row.game_id,
     platform: row.platform,
     game: row.title,
     capsuleUrl: row.capsule_url,
@@ -235,6 +241,7 @@ export const getUserCurrentSession = async (userId: number) => {
     sessionId: +row.id,
     startedAt: row.started_at,
     endedAt: row.ended_at,
+    gameId: row.game_id,
     platform: row.platform,
     game: row.title,
     capsuleUrl: row.capsule_url,

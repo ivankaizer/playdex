@@ -6,6 +6,7 @@ import { registerAccountRoutes } from "../accounts/routes";
 import { registerAuthRoutes } from "../auth/routes";
 import { registerMetricsRoutes } from "../metrics/routes";
 import { registerManualRoutes } from "../manual/routes";
+import { registerGameRoutes } from "../games/routes";
 import { registerPlayniteRoutes } from "../playnite/routes";
 import { registerProviderRoutes } from "../providers/routes";
 import { registerRootRoutes } from "../root/routes";
@@ -28,6 +29,7 @@ export const createServer = (options: ServerOptions = {}) => {
   registerAuthRoutes(app);
   registerMetricsRoutes(app);
   registerAccountRoutes(app);
+  registerGameRoutes(app);
   registerPlayniteRoutes(app, options.notifier);
   registerProviderRoutes(app);
   registerManualRoutes(app);

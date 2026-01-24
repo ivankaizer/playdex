@@ -8,6 +8,7 @@ import type {
 import {
   endPlaySession,
   ensureGameId,
+  isGameIgnoredForCredential,
   fetchActivePlaySession,
   recordPollResult,
   startPlaySession,
@@ -263,10 +264,25 @@ export const startPolling = async ({
         const result = await entry.client.getCurrentlyPlaying(entry.account);
         const polledAt = new Date();
         let gameId: number | null = null;
+        let ignored = false;
 
         if (result.game) {
           const normalized = normalizeGame(result.game);
           gameId = await ensureGameId(normalized, sql);
+          ignored = await isGameIgnoredForCredential(
+            entry.platformCredentialId,
+            gameId,
+            sql
+          );
+          if (ignored) {
+            logEvent("info", "poll.game.ignored", {
+              platform: entry.account.platform,
+              platformCredentialId: entry.platformCredentialId,
+              gameId,
+              canonicalTitle: normalized.canonicalTitle,
+              title: normalized.title,
+            });
+          }
         }
 
         await recordPollResult(
@@ -278,15 +294,16 @@ export const startPolling = async ({
         );
         logEvent("info", "db.poll_result.inserted", {
           platformCredentialId: entry.platformCredentialId,
-          gameId,
+          gameId: gameId ?? null,
           polledAt: polledAt.toISOString(),
         });
+        const sessionGameId = ignored ? null : gameId;
         await syncPlaySession(
           sql,
           entry.platformCredentialId,
-          gameId,
+          sessionGameId,
           polledAt,
-          notifier
+          ignored ? undefined : notifier
         );
 
         backoffState.set(entry.platformCredentialId, {

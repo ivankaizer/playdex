@@ -2,6 +2,7 @@ export type AccountSession = {
   sessionId: number;
   startedAt: string;
   endedAt: string | null;
+  gameId: number;
   platform: string;
   game: string;
   capsuleUrl: string | null;
@@ -25,6 +26,11 @@ export type AccountTodaySessionsResponse = {
 export type AccountCurrentSessionResponse = {
   accountId: number | null;
   session: AccountSession | null;
+};
+
+export type GameIgnoreResponse = {
+  gameId: number;
+  ignored: boolean;
 };
 
 export type AccountStatsPeriod = {

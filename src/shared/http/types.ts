@@ -21,6 +21,7 @@ export type AccountSessionDto = {
   sessionId: number;
   startedAt: Date;
   endedAt: Date | null;
+  gameId: number;
   platform: string;
   game: string;
   capsuleUrl: string | null;
@@ -48,6 +49,11 @@ export type AccountCurrentSessionResponseDto = {
 
 export type AccountSessionDeleteResponseDto = {
   sessionId: number;
+};
+
+export type GameIgnoreResponseDto = {
+  gameId: number;
+  ignored: boolean;
 };
 
 export type AccountStatsPeriodDto = {
