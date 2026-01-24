@@ -18,7 +18,7 @@ const DEFAULT_FONT_URL =
   "https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap";
 
 const IMAGE_WIDTH = 1280;
-const IMAGE_HEIGHT = 720;
+const IMAGE_HEIGHT = 1024;
 const isRemoteSource = (source: string) =>
   source.startsWith("http://") || source.startsWith("https://");
 

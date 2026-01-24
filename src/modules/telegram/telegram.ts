@@ -28,7 +28,7 @@ type TelegramBotConfig = {
 };
 
 const FALLBACK_IMAGE_DATA_URL = `data:image/svg+xml;utf8,${encodeURIComponent(
-  `<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720"><rect width="100%" height="100%" fill="#0a0d12"/></svg>`
+  `<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="1024"><rect width="100%" height="100%" fill="#0a0d12"/></svg>`
 )}`;
 
 const formatGameLabel = (game: { title: string; platform: string } | null) => {
@@ -55,12 +55,10 @@ const formatDuration = (totalSeconds: number) => {
 
 const buildSessionCaption = (
   kind: "started" | "ended",
-  title: string,
-  platform: string,
   duration?: string
 ) => {
   const headline = kind === "ended" ? "Session ended" : "Session started";
-  const lines = [`${headline}: ${title} ${platform}`];
+  const lines = [headline];
   if (duration) {
     lines.push(`Duration: ${duration}`);
   }
@@ -89,8 +87,7 @@ const sendSessionImage = async ({
   duration?: string;
 }) => {
   const title = game?.title ?? "Unknown game";
-  const platform = game?.platform ?? "unknown";
-  const caption = buildSessionCaption(kind, title, platform, duration);
+  const caption = buildSessionCaption(kind, duration);
 
   if (!game?.capsule_url) {
     await sendNotification(token, chatId, `${caption}.`);
@@ -101,7 +98,7 @@ const sendSessionImage = async ({
   try {
     const buffer = await renderNotificationWebp({
       title,
-      platform,
+      platform: game?.platform ?? "unknown",
       image,
       kind,
       duration,
@@ -113,7 +110,6 @@ const sendSessionImage = async ({
       message: getErrorMessage(error),
       chatId,
       title,
-      platform,
       kind,
     });
     await sendNotification(token, chatId, `${caption}.`);

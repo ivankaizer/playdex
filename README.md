@@ -43,9 +43,9 @@ Open `http://localhost:3000/` in your browser.
 bun run dev
 bun run format
 bun run format:check
-bun run telegram:notify-image --type started --title "Game Title" --platform "steam" \
-  --image "/path/to/cover.jpg" \
-  --chat-id 123456
+bun run telegram:notify-image --type started --title "Like a Dragon Gaiden: The Man Who Erased His Name" --platform "Steam" \
+  --image "https://shared.steamstatic.com/store_item_assets/steam/apps/2375550/library_600x900_2x.jpg" \
+  --chat-id 77434259
 ```
 
 ## Notes
