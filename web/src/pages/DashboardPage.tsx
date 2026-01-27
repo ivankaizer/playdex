@@ -324,7 +324,7 @@ export const DashboardPage = ({
     return yearlyStats.platforms.map((item) => ({
       label: formatStatsPlatformLabel(item.platform),
       value: Math.round((item.totalSeconds / total) * 100),
-      hours: formatHours(item.totalSeconds, 0),
+      hours: formatHours(item.totalSeconds, 1),
     }));
   }, [yearlyStats]);
   const yearlyTopGames = useMemo(() => {
@@ -333,7 +333,7 @@ export const DashboardPage = ({
     }
     return yearlyStats.topGames.map((game) => ({
       title: game.title,
-      hours: formatHours(game.totalSeconds, 0),
+      hours: formatHours(game.totalSeconds, 1),
     }));
   }, [yearlyStats]);
   const yearlySummary = useMemo(() => {
@@ -345,7 +345,7 @@ export const DashboardPage = ({
       };
     }
     return {
-      hours: formatHours(yearlyStats.totalSeconds, 0),
+      hours: formatHours(yearlyStats.totalSeconds, 1),
       sessions: String(yearlyStats.sessionCount),
       topTitle: yearlyStats.topGameTitle ?? "—",
     };

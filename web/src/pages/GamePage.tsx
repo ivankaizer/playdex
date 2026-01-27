@@ -851,7 +851,7 @@ export const GamePage = ({
                   {Array.from({ length: 12 }, (_, index) => (
                     <div
                       key={`month-skeleton-${index}`}
-                      className="h-32 rounded-full bg-slate-800/60"
+                      className="mx-auto h-32 w-2 rounded-md bg-slate-800/60"
                     />
                   ))}
                 </div>
@@ -868,11 +868,11 @@ export const GamePage = ({
                         <div className="pointer-events-none absolute left-1/2 top-[-6px] z-10 -translate-x-1/2 -translate-y-full rounded-md bg-slate-900/90 px-3 py-1 text-[10px] font-semibold text-slate-100 opacity-0 shadow-lg ring-1 ring-slate-700/60 transition duration-150 group-hover:opacity-100">
                           {hoursLabel}
                         </div>
-                        <div className="flex h-32 items-end">
+                        <div className="flex h-32 items-end justify-center">
                           <div
                             aria-label={`${hoursLabel} in ${month.label}`}
                             title={hoursLabel}
-                            className="w-full rounded-full bg-emerald-400/80"
+                            className="w-2 rounded-md bg-emerald-400/80"
                             style={{
                               height: `${(month.hours / maxMonthlyHours) * 100}%`,
                             }}
