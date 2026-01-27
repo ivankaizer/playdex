@@ -3,7 +3,6 @@ import { useEffect, useMemo, useState } from "react";
 import { apiRequest } from "../api";
 import {
   buildGamePath,
-  capsuleUrl,
   navItems as defaultNavItems,
   platformOptions,
 } from "../constants";
@@ -497,7 +496,7 @@ export const SessionsPage = ({
         platform: formatSessionPlatformLabel(session),
         date: formatDateLabel(new Date(session.startedAt)),
         duration: formatDuration(getSessionDurationSeconds(session), "short"),
-        image: session.capsuleUrl ?? capsuleUrl,
+        imageUrl: session.capsuleUrl ?? null,
       })),
     [sessionRows]
   );
@@ -735,11 +734,15 @@ export const SessionsPage = ({
                     className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4"
                   >
                     <div className="flex items-start gap-3">
-                      <img
-                        src={session.image}
-                        alt={`${session.title} capsule art`}
-                        className="h-14 w-10 rounded-xl border border-slate-800 object-cover"
-                      />
+                      {session.imageUrl ? (
+                        <img
+                          src={session.imageUrl}
+                          alt={`${session.title} capsule art`}
+                          className="h-14 w-10 rounded-xl border border-slate-800 object-cover"
+                        />
+                      ) : (
+                        <div className="h-14 w-10 rounded-xl border border-slate-800 bg-slate-800/60" />
+                      )}
                       <div className="flex-1 space-y-1">
                         <button
                           type="button"
@@ -852,11 +855,15 @@ export const SessionsPage = ({
                     >
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-3">
-                          <img
-                            src={session.image}
-                            alt={`${session.title} capsule art`}
-                            className="h-12 w-9 rounded-lg border border-slate-800 object-cover"
-                          />
+                          {session.imageUrl ? (
+                            <img
+                              src={session.imageUrl}
+                              alt={`${session.title} capsule art`}
+                              className="h-12 w-9 rounded-lg border border-slate-800 object-cover"
+                            />
+                          ) : (
+                            <div className="h-12 w-9 rounded-lg border border-slate-800 bg-slate-800/60" />
+                          )}
                           <button
                             type="button"
                             onClick={() => handleGameSelect(session.title)}

@@ -251,40 +251,21 @@ try {
     };
 
     const sessions: SessionSeed[] = [];
+    const now = new Date();
+    const seedYear = now.getUTCFullYear();
+    const seedMonth = now.getUTCMonth();
+    const seedDay = now.getUTCDate();
+    const sessionCount = randomInt(6, 10);
 
-    const decemberDays = Array.from({ length: 31 }, (_, index) => index + 1);
-    const extraDays = new Set<number>();
-    while (extraDays.size < 19) {
-      extraDays.add(pick(decemberDays));
-    }
-
-    for (const day of decemberDays) {
-      const count = extraDays.has(day) ? 2 : 1;
-      for (let index = 0; index < count; index += 1) {
-        const game = pick(games);
-        sessions.push(
-          buildSession(game.id, pickCredentialId(game.platform), 2025, 11, day)
-        );
-      }
-    }
-
-    const juneDay = randomInt(1, 30);
-    for (let index = 0; index < 5; index += 1) {
-      const game = pick(games);
-      sessions.push(
-        buildSession(game.id, pickCredentialId(game.platform), 2025, 5, juneDay)
-      );
-    }
-
-    for (let index = 0; index < 3; index += 1) {
+    for (let index = 0; index < sessionCount; index += 1) {
       const game = pick(games);
       sessions.push(
         buildSession(
           game.id,
           pickCredentialId(game.platform),
-          2024,
-          11,
-          randomInt(1, 31)
+          seedYear,
+          seedMonth,
+          seedDay
         )
       );
     }

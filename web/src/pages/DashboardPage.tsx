@@ -3,7 +3,6 @@ import { useEffect, useMemo, useState } from "react";
 import { apiRequest } from "../api";
 import {
   buildGamePath,
-  capsuleUrl,
   navItems as defaultNavItems,
 } from "../constants";
 import type {
@@ -252,7 +251,7 @@ export const DashboardPage = ({
         title: session.game,
         time: formatDuration(getSessionDurationSeconds(session), "long"),
         platform: formatSessionPlatformLabel(session),
-        image: session.capsuleUrl ?? capsuleUrl,
+        imageUrl: session.capsuleUrl ?? null,
       })),
     [todaySessions]
   );
@@ -577,14 +576,27 @@ export const DashboardPage = ({
                     <div
                       key={session.sessionId}
                       className="relative flex flex-wrap items-center justify-between gap-4 overflow-hidden rounded-2xl border border-slate-800 bg-slate-950/50 p-4"
-                      style={{
-                        backgroundImage: `url(${session.image})`,
-                        backgroundSize: "cover",
-                        backgroundPosition: "center",
-                      }}
+                      style={
+                        session.imageUrl
+                          ? {
+                              backgroundImage: `url(${session.imageUrl})`,
+                              backgroundSize: "cover",
+                              backgroundPosition: "center",
+                            }
+                          : undefined
+                      }
                     >
-                      <div className="absolute inset-0 bg-slate-950/80" />
-                      <div className="relative z-10">
+                      <div
+                        className={`absolute inset-0 ${
+                          session.imageUrl
+                            ? "bg-slate-950/80"
+                            : "bg-slate-900/70"
+                        }`}
+                      />
+                      <div className="relative z-10 flex items-center gap-3">
+                        {!session.imageUrl ? (
+                          <div className="h-14 w-10 rounded-xl bg-slate-800/60" />
+                        ) : null}
                         <button
                           type="button"
                           onClick={() => handleGameSelect(session.title)}

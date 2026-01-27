@@ -32,9 +32,6 @@ export const manualPlatformOptions = [
   ...platformOptions,
 ];
 
-export const capsuleUrl =
-  "https://shared.steamstatic.com/store_item_assets/steam/apps/2186680/library_600x900_2x.jpg";
-
 export const platformLabels: Record<string, string> = {
   ps5: "PS5",
   "xbox-series-xs": "Xbox Series X|S",

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 
 import { apiRequest } from "../api";
-import { capsuleUrl, navItems as defaultNavItems } from "../constants";
+import { navItems as defaultNavItems } from "../constants";
 import type {
   AccountSession,
   AccountSessionsResponse,
@@ -378,8 +378,7 @@ export const GamePage = ({
   };
 
   const gameImage =
-    recentSessions.find((session) => session.capsuleUrl)?.capsuleUrl ??
-    capsuleUrl;
+    recentSessions.find((session) => session.capsuleUrl)?.capsuleUrl ?? null;
 
   const totalSeconds = useMemo(
     () =>
@@ -503,11 +502,15 @@ export const GamePage = ({
         <div className="grid gap-6 lg:grid-cols-[1fr_2fr]">
           <div className="rounded-3xl border border-slate-800 bg-slate-900/60 p-5 sm:p-6">
             <div className="aspect-[9/14] overflow-hidden rounded-2xl border border-slate-800 bg-slate-950/60">
-              <img
-                src={gameImage}
-                alt={`${gameTitle} cover`}
-                className="h-full w-full object-cover"
-              />
+              {gameImage ? (
+                <img
+                  src={gameImage}
+                  alt={`${gameTitle} cover`}
+                  className="h-full w-full object-cover"
+                />
+              ) : (
+                <div className="h-full w-full bg-slate-800/60" />
+              )}
             </div>
             <div className="mt-6 rounded-2xl border border-slate-800 bg-gradient-to-br from-amber-400/10 via-slate-950/70 to-emerald-500/10 p-4">
               <div className="flex flex-wrap items-center justify-between gap-3">
@@ -606,11 +609,15 @@ export const GamePage = ({
                       className="flex items-center justify-between gap-3 rounded-2xl border border-slate-800 bg-slate-950/50 p-4"
                     >
                       <div className="flex items-center gap-3">
-                        <img
-                          src={session.capsuleUrl ?? capsuleUrl}
-                          alt={`${session.game} capsule art`}
-                          className="h-14 w-10 rounded-xl border border-slate-800 object-cover"
-                        />
+                        {session.capsuleUrl ? (
+                          <img
+                            src={session.capsuleUrl}
+                            alt={`${session.game} capsule art`}
+                            className="h-14 w-10 rounded-xl border border-slate-800 object-cover"
+                          />
+                        ) : (
+                          <div className="h-14 w-10 rounded-xl border border-slate-800 bg-slate-800/60" />
+                        )}
                         <div>
                           <p className="text-sm font-semibold text-white">
                             {formatDateLabel(new Date(session.startedAt))}
