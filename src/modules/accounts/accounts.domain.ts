@@ -31,7 +31,7 @@ export const toDomainSession = (
   sessionId: +row.id,
   startedAt: row.started_at,
   endedAt: row.ended_at,
-  gameId: row.game_id,
+  gameId: Number(row.game_id),
   platform: row.platform,
   game: row.title,
   capsuleUrl: row.capsule_url,
@@ -80,6 +80,7 @@ export const applyManualMappings = (
       .map((row) => [
         row.canonical_title,
         {
+          gameId: row.mapped_game_id ? Number(row.mapped_game_id) : null,
           title: row.mapped_title ?? "",
           platform: row.mapped_platform ?? "manual",
           capsuleUrl: row.mapped_capsule_url,
@@ -107,6 +108,7 @@ export const applyManualMappings = (
 
     return stripSessionMetadata({
       ...session,
+      gameId: mapping.gameId ?? session.gameId,
       game: mapping.title,
       capsuleUrl: mapping.capsuleUrl ?? session.capsuleUrl,
       mappedPlatform: mapping.platform,
@@ -120,7 +122,7 @@ export type AccountStatsPeriod = {
   sessionCount: number;
   topGameTitle: string | null;
   platforms: { platform: string; source: string | null; totalSeconds: number }[];
-  topGames: { title: string; totalSeconds: number }[];
+  topGames: { gameId: number; title: string; totalSeconds: number }[];
 };
 
 const buildStatsPeriod = (
@@ -139,6 +141,7 @@ const buildStatsPeriod = (
       totalSeconds: row.total_seconds ?? 0,
     })),
     topGames: topGameRows.map((row) => ({
+      gameId: Number(row.game_id),
       title: row.title,
       totalSeconds: row.total_seconds ?? 0,
     })),

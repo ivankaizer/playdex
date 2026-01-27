@@ -2,7 +2,7 @@ export type AccountSession = {
   sessionId: number;
   startedAt: string;
   endedAt: string | null;
-  gameId: number;
+  gameId: string;
   platform: string;
   game: string;
   capsuleUrl: string | null;
@@ -30,12 +30,12 @@ export type AccountCurrentSessionResponse = {
 };
 
 export type GameIgnoreResponse = {
-  gameId: number;
+  gameId: string;
   ignored: boolean;
 };
 
 export type GameRatingResponse = {
-  gameId: number;
+  gameId: string;
   rating: number | null;
 };
 
@@ -52,7 +52,7 @@ export type AccountStatsPeriod = {
     totalSeconds: number;
     source?: string | null;
   }[];
-  topGames: { title: string; totalSeconds: number }[];
+  topGames: { gameId: string; title: string; totalSeconds: number }[];
 };
 
 export type AccountStatsRangeResponse = {
@@ -80,10 +80,10 @@ export type ManualInput = {
   id: number;
   input: string;
   canonicalTitle: string;
-  mappedGameId: number | null;
+  mappedGameId: string | null;
   mappedSource: "local" | "igdb" | null;
   mappedGame: {
-    id: number;
+    id: string;
     title: string;
     platform: string;
     capsuleUrl: string | null;
@@ -104,7 +104,7 @@ export type ManualSessionStopResponse = {
 
 export type ManualMappingSearchResult = {
   source: "local" | "igdb";
-  gameId?: number;
+  gameId?: string;
   igdbId?: string;
   title: string;
   platform: string | null;
@@ -120,11 +120,48 @@ export type ManualMappingSearchResponse = {
 
 export type ManualMappingResponse = {
   inputId: number;
-  mappedGameId: number | null;
+  mappedGameId: string | null;
 };
 
 export type ManualEntryCreateResponse = {
   sessionId: number;
+};
+
+export type Game = {
+  id: string;
+  title: string;
+  platform: string;
+  capsuleUrl: string | null;
+};
+
+export type GameSearchResult = {
+  gameId: string;
+  title: string;
+  platform: string;
+  capsuleUrl: string | null;
+};
+
+export type GameSearchResponse = {
+  query: string;
+  results: GameSearchResult[];
+};
+
+export type GameConnectionsResponse = {
+  connections: {
+    gameId: string;
+    title: string;
+    platform: string;
+    capsuleUrl: string | null;
+    connectedGameId: string;
+    connectedTitle: string;
+    connectedPlatform: string;
+    connectedCapsuleUrl: string | null;
+  }[];
+};
+
+export type GameConnectionChangeResponse = {
+  gameId: string;
+  connectedGameId: string;
 };
 
 export type NavItem = {

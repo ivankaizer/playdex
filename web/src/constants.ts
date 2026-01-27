@@ -1,4 +1,5 @@
 import type { NavItem } from "./types";
+import { encodeGameId } from "./utils/gameHash";
 
 export const protectedPaths = new Set([
   "/dashboard",
@@ -13,8 +14,8 @@ export const navItems: NavItem[] = [
   { label: "Mapping", path: "/mapping" },
 ];
 
-export const buildGamePath = (title: string) =>
-  `/games/${encodeURIComponent(title)}`;
+export const buildGamePath = (gameId: number | string) =>
+  `/games/${encodeGameId(gameId)}`;
 
 export const platformOptions = [
   { key: "ps5", label: "PS5" },

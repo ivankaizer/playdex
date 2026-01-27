@@ -7,6 +7,7 @@ import { HomePage } from "./pages/HomePage";
 import { MappingPage } from "./pages/MappingPage";
 import { SessionsPage } from "./pages/SessionsPage";
 import { SettingsPage } from "./pages/SettingsPage";
+import { decodeGameHash, encodeGameId } from "./utils/gameHash";
 
 export const App = () => {
   const [path, setPath] = useState(() => window.location.pathname);
@@ -98,12 +99,15 @@ export const App = () => {
   }
 
   if (path.startsWith("/games/")) {
-    const title = decodeURIComponent(path.replace("/games/", ""));
+    const raw = decodeURIComponent(path.replace("/games/", ""));
+    const hash = raw.replace(/\/+$/, "").trim();
+    const normalizedHash = /^\d+$/.test(hash) ? encodeGameId(hash) : hash;
+    const gameId = decodeGameHash(normalizedHash) ? normalizedHash : null;
     return (
       <GamePage
         path={path}
         navItems={navItems}
-        gameTitle={title}
+        gameId={gameId}
         onNavigate={navigate}
         onLogout={handleLogout}
       />

@@ -6,7 +6,12 @@ import {
   manualPlatformOptions,
   navItems as defaultNavItems,
 } from "../constants";
+import { encodeGameId } from "../utils/gameHash";
 import type {
+  GameConnectionChangeResponse,
+  GameConnectionsResponse,
+  GameSearchResponse,
+  GameSearchResult,
   ManualInput,
   ManualInputsResponse,
   ManualMappingResponse,
@@ -47,6 +52,30 @@ export const MappingPage = ({
   const [isMappingUpdateLoading, setIsMappingUpdateLoading] = useState(false);
   const [mappingPlatformOverride, setMappingPlatformOverride] =
     useState("auto");
+  const [gameConnections, setGameConnections] = useState<
+    GameConnectionsResponse["connections"]
+  >([]);
+  const [gameConnectionsError, setGameConnectionsError] = useState("");
+  const [isGameConnectionsLoading, setIsGameConnectionsLoading] =
+    useState(false);
+  const [primaryGameQuery, setPrimaryGameQuery] = useState("");
+  const [primaryGameResults, setPrimaryGameResults] = useState<
+    GameSearchResult[]
+  >([]);
+  const [primaryGameError, setPrimaryGameError] = useState("");
+  const [isPrimaryGameLoading, setIsPrimaryGameLoading] = useState(false);
+  const [selectedPrimaryGame, setSelectedPrimaryGame] =
+    useState<GameSearchResult | null>(null);
+  const [secondaryGameQuery, setSecondaryGameQuery] = useState("");
+  const [secondaryGameResults, setSecondaryGameResults] = useState<
+    GameSearchResult[]
+  >([]);
+  const [secondaryGameError, setSecondaryGameError] = useState("");
+  const [isSecondaryGameLoading, setIsSecondaryGameLoading] = useState(false);
+  const [selectedSecondaryGame, setSelectedSecondaryGame] =
+    useState<GameSearchResult | null>(null);
+  const [isConnectionSaving, setIsConnectionSaving] = useState(false);
+  const [connectionSaveError, setConnectionSaveError] = useState("");
 
   const loadManualInputs = async () => {
     setIsManualInputsLoading(true);
@@ -89,6 +118,144 @@ export const MappingPage = ({
     }
   };
 
+  const loadGameConnections = async () => {
+    setIsGameConnectionsLoading(true);
+    setGameConnectionsError("");
+    try {
+      const response =
+        await apiRequest<GameConnectionsResponse>("/games/connections");
+      setGameConnections(response.connections);
+    } catch (err) {
+      setGameConnections([]);
+      setGameConnectionsError(
+        err instanceof Error ? err.message : "Failed to load game connections."
+      );
+    } finally {
+      setIsGameConnectionsLoading(false);
+    }
+  };
+
+  const searchGames = async (
+    query: string,
+    setResults: (results: GameSearchResult[]) => void,
+    setError: (error: string) => void,
+    setLoading: (loading: boolean) => void
+  ) => {
+    const trimmed = query.trim();
+    if (!trimmed) {
+      setError("Enter a search query.");
+      return;
+    }
+
+    setLoading(true);
+    setError("");
+    try {
+      const response = await apiRequest<GameSearchResponse>(
+        `/games/search?query=${encodeURIComponent(trimmed)}`
+      );
+      setResults(response.results);
+    } catch (err) {
+      setResults([]);
+      setError(err instanceof Error ? err.message : "Failed to search games.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handlePrimarySearch = () =>
+    searchGames(
+      primaryGameQuery,
+      setPrimaryGameResults,
+      setPrimaryGameError,
+      setIsPrimaryGameLoading
+    );
+
+  const handleSecondarySearch = () =>
+    searchGames(
+      secondaryGameQuery,
+      setSecondaryGameResults,
+      setSecondaryGameError,
+      setIsSecondaryGameLoading
+    );
+
+  const selectPrimaryGame = (game: GameSearchResult) => {
+    setSelectedPrimaryGame(game);
+    setPrimaryGameQuery(game.title);
+    setPrimaryGameResults([]);
+    setPrimaryGameError("");
+  };
+
+  const selectSecondaryGame = (game: GameSearchResult) => {
+    setSelectedSecondaryGame(game);
+    setSecondaryGameQuery(game.title);
+    setSecondaryGameResults([]);
+    setSecondaryGameError("");
+  };
+
+  const handleConnectGames = async () => {
+    if (!selectedPrimaryGame || !selectedSecondaryGame) {
+      setConnectionSaveError("Select two games to connect.");
+      return;
+    }
+    if (selectedPrimaryGame.gameId === selectedSecondaryGame.gameId) {
+      setConnectionSaveError("Pick two different games to connect.");
+      return;
+    }
+
+    setIsConnectionSaving(true);
+    setConnectionSaveError("");
+    try {
+      await apiRequest<GameConnectionChangeResponse>("/games/connections", {
+        method: "POST",
+        body: {
+          gameId: encodeGameId(selectedPrimaryGame.gameId),
+          connectedGameId: encodeGameId(selectedSecondaryGame.gameId),
+        },
+      });
+      setSelectedPrimaryGame(null);
+      setSelectedSecondaryGame(null);
+      setPrimaryGameQuery("");
+      setSecondaryGameQuery("");
+      setPrimaryGameResults([]);
+      setSecondaryGameResults([]);
+      await loadGameConnections();
+    } catch (err) {
+      setConnectionSaveError(
+        err instanceof Error
+          ? err.message
+          : "Failed to connect selected games."
+      );
+    } finally {
+      setIsConnectionSaving(false);
+    }
+  };
+
+  const handleDisconnectGames = async (
+    gameId: string,
+    connectedGameId: string
+  ) => {
+    setIsConnectionSaving(true);
+    setConnectionSaveError("");
+    try {
+      await apiRequest<GameConnectionChangeResponse>("/games/connections", {
+        method: "DELETE",
+        body: {
+          gameId: encodeGameId(gameId),
+          connectedGameId: encodeGameId(connectedGameId),
+        },
+      });
+      await loadGameConnections();
+    } catch (err) {
+      setConnectionSaveError(
+        err instanceof Error
+          ? err.message
+          : "Failed to remove game connection."
+      );
+    } finally {
+      setIsConnectionSaving(false);
+    }
+  };
+
   const handleMappingSelection = async (
     inputId: number,
     result: ManualMappingSearchResult
@@ -101,7 +268,7 @@ export const MappingPage = ({
           `/manual/inputs/${inputId}/map`,
           {
             method: "POST",
-            body: { gameId: result.gameId },
+            body: { gameId: encodeGameId(result.gameId) },
           }
         );
       } else if (result.source === "igdb" && result.igdbId) {
@@ -151,10 +318,11 @@ export const MappingPage = ({
 
   useEffect(() => {
     void loadManualInputs();
+    void loadGameConnections();
   }, []);
 
-  const handleGameSelect = (title: string) => {
-    onNavigate(buildGamePath(title));
+  const handleGameSelect = (gameId: string) => {
+    onNavigate(buildGamePath(gameId));
   };
 
   const renderMappingEditor = (input: ManualInput) => (
@@ -237,7 +405,10 @@ export const MappingPage = ({
               <div className="space-y-1">
                 <button
                   type="button"
-                  onClick={() => handleGameSelect(result.title)}
+                  onClick={() =>
+                    result.gameId ? handleGameSelect(result.gameId) : null
+                  }
+                  disabled={!result.gameId}
                   className="text-left text-sm font-semibold text-white transition hover:text-emerald-200"
                 >
                   {result.title}
@@ -354,7 +525,7 @@ export const MappingPage = ({
                         {input.mappedGame ? (
                           <button
                             type="button"
-                            onClick={() => handleGameSelect(input.mappedGame.title)}
+                            onClick={() => handleGameSelect(input.mappedGame.id)}
                             className="font-semibold text-white transition hover:text-emerald-200"
                           >
                             {input.mappedGame.title}
@@ -446,7 +617,7 @@ export const MappingPage = ({
                               <button
                                 type="button"
                                 onClick={() =>
-                                  handleGameSelect(input.mappedGame.title)
+                                  handleGameSelect(input.mappedGame.id)
                                 }
                                 className="text-left text-sm font-semibold text-white transition hover:text-emerald-200"
                               >
@@ -494,6 +665,355 @@ export const MappingPage = ({
                 )}
               </tbody>
             </table>
+          </div>
+        </section>
+
+        <section className="mt-10 rounded-3xl border border-slate-800 bg-slate-900/60 p-5 sm:p-6">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-300">
+                Game connections
+              </p>
+              <h2 className="mt-2 text-xl font-semibold text-white">
+                Merge stats across editions
+              </h2>
+            </div>
+            <button
+              type="button"
+              onClick={loadGameConnections}
+              disabled={isGameConnectionsLoading}
+              className="rounded-full border border-slate-700 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-slate-200 transition hover:border-emerald-400/60 disabled:cursor-not-allowed"
+            >
+              {isGameConnectionsLoading ? "Refreshing..." : "Refresh"}
+            </button>
+          </div>
+
+          {gameConnectionsError ? (
+            <p className="mt-4 text-xs text-rose-300">{gameConnectionsError}</p>
+          ) : null}
+
+          <div className="mt-6 grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
+            <div className="rounded-2xl border border-slate-800 bg-slate-950/50 p-4 sm:p-5">
+              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-400">
+                Connect games
+              </p>
+              <p className="mt-2 text-sm text-slate-300">
+                Pick two games to combine their playtime into a single entry.
+              </p>
+
+              <div className="mt-4 grid gap-4">
+                <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
+                  <p className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-400">
+                    Primary game
+                  </p>
+                  <div className="mt-3 flex flex-wrap items-center gap-3">
+                    <input
+                      type="text"
+                      value={primaryGameQuery}
+                      onChange={(event) => setPrimaryGameQuery(event.target.value)}
+                      className="flex-1 rounded-xl border border-slate-700 bg-slate-950/80 px-3 py-2 text-sm text-white outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/30"
+                      placeholder="Search games"
+                    />
+                    <button
+                      type="button"
+                      onClick={handlePrimarySearch}
+                      disabled={isPrimaryGameLoading}
+                      className="rounded-full bg-emerald-400 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-slate-900 transition hover:bg-emerald-300 disabled:cursor-not-allowed disabled:bg-emerald-300/60"
+                    >
+                      {isPrimaryGameLoading ? "Searching..." : "Search"}
+                    </button>
+                  </div>
+                  {primaryGameError ? (
+                    <p className="mt-3 text-xs text-rose-300">
+                      {primaryGameError}
+                    </p>
+                  ) : null}
+                  {selectedPrimaryGame ? (
+                    <div className="mt-3 flex items-center gap-3 rounded-xl border border-emerald-400/40 bg-emerald-500/10 p-3 text-sm text-emerald-100">
+                      {selectedPrimaryGame.capsuleUrl ? (
+                        <img
+                          src={selectedPrimaryGame.capsuleUrl}
+                          alt={`${selectedPrimaryGame.title} cover`}
+                          className="h-10 w-8 rounded-lg border border-emerald-400/40 object-cover"
+                        />
+                      ) : (
+                        <div className="h-10 w-8 rounded-lg border border-emerald-400/40 bg-emerald-500/10" />
+                      )}
+                      <div>
+                        <p className="font-semibold">
+                          {selectedPrimaryGame.title}
+                        </p>
+                        <p className="text-xs text-emerald-200">
+                          {selectedPrimaryGame.platform
+                            ? formatPlatformLabel(selectedPrimaryGame.platform)
+                            : "Unknown platform"}
+                        </p>
+                      </div>
+                    </div>
+                  ) : null}
+                  <div className="mt-3 grid gap-2">
+                    {primaryGameResults.length === 0 ? (
+                      <p className="text-xs text-slate-500">
+                        Search to find the primary game.
+                      </p>
+                    ) : (
+                      primaryGameResults.map((result) => (
+                        <button
+                          key={result.gameId}
+                          type="button"
+                          onClick={() => selectPrimaryGame(result)}
+                          className="flex items-center gap-3 rounded-xl border border-slate-800 bg-slate-950/40 p-3 text-left text-sm text-white transition hover:border-emerald-400/60"
+                        >
+                          {result.capsuleUrl ? (
+                            <img
+                              src={result.capsuleUrl}
+                              alt={`${result.title} cover`}
+                              className="h-10 w-8 rounded-lg border border-slate-800 object-cover"
+                            />
+                          ) : (
+                            <div className="h-10 w-8 rounded-lg border border-slate-800 bg-slate-900/60" />
+                          )}
+                          <div>
+                            <p className="font-semibold">{result.title}</p>
+                            <p className="text-xs text-slate-400">
+                              {result.platform
+                                ? formatPlatformLabel(result.platform)
+                                : "Unknown platform"}
+                            </p>
+                          </div>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
+                  <p className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-400">
+                    Connected game
+                  </p>
+                  <div className="mt-3 flex flex-wrap items-center gap-3">
+                    <input
+                      type="text"
+                      value={secondaryGameQuery}
+                      onChange={(event) => setSecondaryGameQuery(event.target.value)}
+                      className="flex-1 rounded-xl border border-slate-700 bg-slate-950/80 px-3 py-2 text-sm text-white outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/30"
+                      placeholder="Search games"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleSecondarySearch}
+                      disabled={isSecondaryGameLoading}
+                      className="rounded-full bg-emerald-400 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-slate-900 transition hover:bg-emerald-300 disabled:cursor-not-allowed disabled:bg-emerald-300/60"
+                    >
+                      {isSecondaryGameLoading ? "Searching..." : "Search"}
+                    </button>
+                  </div>
+                  {secondaryGameError ? (
+                    <p className="mt-3 text-xs text-rose-300">
+                      {secondaryGameError}
+                    </p>
+                  ) : null}
+                  {selectedSecondaryGame ? (
+                    <div className="mt-3 flex items-center gap-3 rounded-xl border border-emerald-400/40 bg-emerald-500/10 p-3 text-sm text-emerald-100">
+                      {selectedSecondaryGame.capsuleUrl ? (
+                        <img
+                          src={selectedSecondaryGame.capsuleUrl}
+                          alt={`${selectedSecondaryGame.title} cover`}
+                          className="h-10 w-8 rounded-lg border border-emerald-400/40 object-cover"
+                        />
+                      ) : (
+                        <div className="h-10 w-8 rounded-lg border border-emerald-400/40 bg-emerald-500/10" />
+                      )}
+                      <div>
+                        <p className="font-semibold">
+                          {selectedSecondaryGame.title}
+                        </p>
+                        <p className="text-xs text-emerald-200">
+                          {selectedSecondaryGame.platform
+                            ? formatPlatformLabel(selectedSecondaryGame.platform)
+                            : "Unknown platform"}
+                        </p>
+                      </div>
+                    </div>
+                  ) : null}
+                  <div className="mt-3 grid gap-2">
+                    {secondaryGameResults.length === 0 ? (
+                      <p className="text-xs text-slate-500">
+                        Search to find the connected game.
+                      </p>
+                    ) : (
+                      secondaryGameResults.map((result) => (
+                        <button
+                          key={result.gameId}
+                          type="button"
+                          onClick={() => selectSecondaryGame(result)}
+                          className="flex items-center gap-3 rounded-xl border border-slate-800 bg-slate-950/40 p-3 text-left text-sm text-white transition hover:border-emerald-400/60"
+                        >
+                          {result.capsuleUrl ? (
+                            <img
+                              src={result.capsuleUrl}
+                              alt={`${result.title} cover`}
+                              className="h-10 w-8 rounded-lg border border-slate-800 object-cover"
+                            />
+                          ) : (
+                            <div className="h-10 w-8 rounded-lg border border-slate-800 bg-slate-900/60" />
+                          )}
+                          <div>
+                            <p className="font-semibold">{result.title}</p>
+                            <p className="text-xs text-slate-400">
+                              {result.platform
+                                ? formatPlatformLabel(result.platform)
+                                : "Unknown platform"}
+                            </p>
+                          </div>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {connectionSaveError ? (
+                <p className="mt-4 text-xs text-rose-300">
+                  {connectionSaveError}
+                </p>
+              ) : null}
+
+              <div className="mt-4 flex flex-wrap gap-3">
+                <button
+                  type="button"
+                  onClick={handleConnectGames}
+                  disabled={isConnectionSaving}
+                  className="rounded-full bg-emerald-400 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-slate-900 transition hover:bg-emerald-300 disabled:cursor-not-allowed disabled:bg-emerald-300/60"
+                >
+                  {isConnectionSaving ? "Saving..." : "Connect games"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedPrimaryGame(null);
+                    setSelectedSecondaryGame(null);
+                    setPrimaryGameQuery("");
+                    setSecondaryGameQuery("");
+                    setPrimaryGameResults([]);
+                    setSecondaryGameResults([]);
+                    setPrimaryGameError("");
+                    setSecondaryGameError("");
+                    setConnectionSaveError("");
+                  }}
+                  className="rounded-full border border-slate-700 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-slate-200 transition hover:border-emerald-400/60"
+                >
+                  Clear
+                </button>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-slate-800 bg-slate-950/50 p-4 sm:p-5">
+              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-400">
+                Connected pairs
+              </p>
+              <div className="mt-4 space-y-3">
+                {isGameConnectionsLoading ? (
+                  [1, 2, 3].map((row) => (
+                    <div
+                      key={`connection-${row}`}
+                      className="rounded-2xl border border-slate-800 bg-slate-950/40 p-3"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="h-10 w-8 rounded-lg bg-slate-800/60" />
+                        <div className="h-3 w-24 rounded-full bg-slate-800/60" />
+                      </div>
+                    </div>
+                  ))
+                ) : gameConnections.length === 0 ? (
+                  <div className="rounded-2xl border border-dashed border-slate-800 bg-slate-950/40 p-4 text-xs text-slate-400">
+                    No game connections yet.
+                  </div>
+                ) : (
+                  gameConnections.map((connection) => (
+                    <div
+                      key={`${connection.gameId}-${connection.connectedGameId}`}
+                      className="rounded-2xl border border-slate-800 bg-slate-950/40 p-3"
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-3">
+                          {connection.capsuleUrl ? (
+                            <img
+                              src={connection.capsuleUrl}
+                              alt={`${connection.title} cover`}
+                              className="h-10 w-8 rounded-lg border border-slate-800 object-cover"
+                            />
+                          ) : (
+                            <div className="h-10 w-8 rounded-lg border border-slate-800 bg-slate-900/60" />
+                          )}
+                          <div>
+                            <button
+                              type="button"
+                              onClick={() => handleGameSelect(connection.gameId)}
+                              className="text-left text-sm font-semibold text-white transition hover:text-emerald-200"
+                            >
+                              {connection.title}
+                            </button>
+                            <p className="text-xs text-slate-400">
+                              {connection.platform
+                                ? formatPlatformLabel(connection.platform)
+                                : "Unknown platform"}
+                            </p>
+                          </div>
+                        </div>
+                        <span className="text-xs uppercase tracking-[0.3em] text-slate-500">
+                          + +
+                        </span>
+                        <div className="flex items-center gap-3">
+                          {connection.connectedCapsuleUrl ? (
+                            <img
+                              src={connection.connectedCapsuleUrl}
+                              alt={`${connection.connectedTitle} cover`}
+                              className="h-10 w-8 rounded-lg border border-slate-800 object-cover"
+                            />
+                          ) : (
+                            <div className="h-10 w-8 rounded-lg border border-slate-800 bg-slate-900/60" />
+                          )}
+                          <div>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                handleGameSelect(connection.connectedGameId)
+                              }
+                              className="text-left text-sm font-semibold text-white transition hover:text-emerald-200"
+                            >
+                              {connection.connectedTitle}
+                            </button>
+                            <p className="text-xs text-slate-400">
+                              {connection.connectedPlatform
+                                ? formatPlatformLabel(
+                                    connection.connectedPlatform
+                                  )
+                                : "Unknown platform"}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="mt-3 flex justify-end">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            handleDisconnectGames(
+                              connection.gameId,
+                              connection.connectedGameId
+                            )
+                          }
+                          disabled={isConnectionSaving}
+                          className="rounded-full border border-rose-400/60 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.3em] text-rose-200 transition hover:border-rose-300 hover:text-rose-100 disabled:cursor-not-allowed"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
           </div>
         </section>
       </div>

@@ -37,6 +37,8 @@ export type AccountSessionCountRow = {
 
 export type AccountSessionFilters = {
   title?: string | null;
+  gameId?: number | null;
+  gameIds?: number[] | null;
   startedFrom?: Date | null;
   startedTo?: Date | null;
   sortKey?: "date" | "duration";
@@ -63,6 +65,7 @@ export type AccountPlatformTotalsRow = {
 };
 
 export type AccountTopGameRow = {
+  game_id: number;
   title: string;
   total_seconds: number;
 };
@@ -134,6 +137,22 @@ export type GameSearchRow = {
   capsule_url: string | null;
 };
 
+export type GameConnectionEdgeRow = {
+  game_id: number;
+  connected_game_id: number;
+};
+
+export type GameConnectionRow = {
+  game_id: number;
+  game_title: string;
+  game_platform: string;
+  game_capsule_url: string | null;
+  connected_game_id: number;
+  connected_title: string;
+  connected_platform: string;
+  connected_capsule_url: string | null;
+};
+
 const buildIgnoreShortSessionsFilter = (sql: Sql) => sql`
   and not (
     coalesce(us.ignore_short_sessions_minutes, 0) > 0
@@ -142,6 +161,48 @@ const buildIgnoreShortSessionsFilter = (sql: Sql) => sql`
       (coalesce(us.ignore_short_sessions_minutes, 0) * 60)
   )
 `;
+
+const normalizeGameIds = (value: unknown) => {
+  if (Array.isArray(value)) {
+    return value
+      .map((id) => Number(id))
+      .filter((id) => Number.isInteger(id) && id > 0);
+  }
+  if (typeof value === "number") {
+    if (Number.isInteger(value) && value > 0) {
+      return [value];
+    }
+    return [] as number[];
+  }
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return [] as number[];
+    }
+    if (trimmed.includes(",")) {
+      return trimmed
+        .split(",")
+        .map((entry) => Number(entry.trim()))
+        .filter((id) => Number.isInteger(id) && id > 0);
+    }
+    const numeric = Number(trimmed);
+    if (Number.isInteger(numeric) && numeric > 0) {
+      return [numeric];
+    }
+  }
+  return [] as number[];
+};
+
+const buildGameIdFilter = (sql: Sql, gameIds: unknown) => {
+  const normalizedGameIds = normalizeGameIds(gameIds);
+  if (normalizedGameIds.length === 1) {
+    return sql`and ps.game_id = ${normalizedGameIds[0]}`;
+  }
+  if (normalizedGameIds.length > 1) {
+    return sql`and ps.game_id = any(${sql.array(normalizedGameIds, 20)})`;
+  }
+  return sql``;
+};
 
 export const loadPlatformCredentials = async (sql: Sql = getSql()) =>
   sql<PlatformCredentialRow[]>`
@@ -198,6 +259,7 @@ export const listAccountSessions = async (
   const titleFilter = filters.title
     ? sql`and g.title ilike ${`%${filters.title}%`}`
     : sql``;
+  const gameIdFilter = buildGameIdFilter(sql, filters.gameIds);
   const fromFilter = filters.startedFrom
     ? sql`and ps.started_at >= ${filters.startedFrom}`
     : sql``;
@@ -236,10 +298,10 @@ export const listAccountSessions = async (
     join games g on g.id = ps.game_id
     join platforms pc_platform on pc_platform.id = pc.platform_id
     join platforms game_platform on game_platform.id = g.platform_id
-    left join user_settings us on us.user_id = pc.user_id
     where ps.platform_credential_id = ${accountId}
       and pc.user_id = ${userId}
       ${titleFilter}
+      ${gameIdFilter}
       ${fromFilter}
       ${toFilter}
     order by ${orderBy} ${sortDirection}
@@ -258,6 +320,7 @@ export const listUserSessions = async (
   const titleFilter = filters.title
     ? sql`and g.title ilike ${`%${filters.title}%`}`
     : sql``;
+  const gameIdFilter = buildGameIdFilter(sql, filters.gameIds);
   const fromFilter = filters.startedFrom
     ? sql`and ps.started_at >= ${filters.startedFrom}`
     : sql``;
@@ -296,9 +359,9 @@ export const listUserSessions = async (
     join games g on g.id = ps.game_id
     join platforms pc_platform on pc_platform.id = pc.platform_id
     join platforms game_platform on game_platform.id = g.platform_id
-    left join user_settings us on us.user_id = pc.user_id
     where pc.user_id = ${userId}
       ${titleFilter}
+      ${gameIdFilter}
       ${fromFilter}
       ${toFilter}
     order by ${orderBy} ${sortDirection}
@@ -316,6 +379,7 @@ export const countAccountSessions = async (
   const titleFilter = filters.title
     ? sql`and g.title ilike ${`%${filters.title}%`}`
     : sql``;
+  const gameIdFilter = buildGameIdFilter(sql, filters.gameIds);
   const fromFilter = filters.startedFrom
     ? sql`and ps.started_at >= ${filters.startedFrom}`
     : sql``;
@@ -327,10 +391,12 @@ export const countAccountSessions = async (
     select count(*)::int as total
     from play_sessions ps
     join platform_credentials pc on pc.id = ps.platform_credential_id
+    left join user_settings us on us.user_id = pc.user_id
     join games g on g.id = ps.game_id
     where ps.platform_credential_id = ${accountId}
       and pc.user_id = ${userId}
       ${titleFilter}
+      ${gameIdFilter}
       ${fromFilter}
       ${toFilter}
   `;
@@ -344,6 +410,7 @@ export const countUserSessions = async (
   const titleFilter = filters.title
     ? sql`and g.title ilike ${`%${filters.title}%`}`
     : sql``;
+  const gameIdFilter = buildGameIdFilter(sql, filters.gameIds);
   const fromFilter = filters.startedFrom
     ? sql`and ps.started_at >= ${filters.startedFrom}`
     : sql``;
@@ -355,9 +422,11 @@ export const countUserSessions = async (
     select count(*)::int as total
     from play_sessions ps
     join platform_credentials pc on pc.id = ps.platform_credential_id
+    left join user_settings us on us.user_id = pc.user_id
     join games g on g.id = ps.game_id
     where pc.user_id = ${userId}
       ${titleFilter}
+      ${gameIdFilter}
       ${fromFilter}
       ${toFilter}
   `;
@@ -394,7 +463,6 @@ export const listAccountSessionsToday = async (
     join games g on g.id = ps.game_id
     join platforms pc_platform on pc_platform.id = pc.platform_id
     join platforms game_platform on game_platform.id = g.platform_id
-    left join user_settings us on us.user_id = pc.user_id
     where ps.platform_credential_id = ${accountId}
       and pc.user_id = ${userId}
       and (
@@ -618,6 +686,7 @@ export const loadAccountPlatformTotals = async (
       )::float as total_seconds
     from play_sessions ps
     join platform_credentials pc on pc.id = ps.platform_credential_id
+    left join user_settings us on us.user_id = pc.user_id
     join games g on g.id = ps.game_id
     join platforms pc_platform on pc_platform.id = pc.platform_id
     join platforms game_platform on game_platform.id = g.platform_id
@@ -715,6 +784,7 @@ export const loadUserPlatformTotalsForRange = async (
       and mgi.canonical_title = split_part(g.canonical_key, ':', 2)
     left join games mapped_game on mapped_game.id = mgi.mapped_game_id
     left join platforms mapped_platform on mapped_platform.id = mapped_game.platform_id
+    left join user_settings us on us.user_id = pc.user_id
     where pc.user_id = ${userId}
       and ps.started_at >= ${startedAt}
       and ps.started_at < ${endedAt}
@@ -723,15 +793,15 @@ export const loadUserPlatformTotalsForRange = async (
     order by 1, 2
   `;
 
-export const loadAccountTopGames = async (
+export const loadAccountGameTotals = async (
   accountId: number,
   userId: number,
   startedAt: Date,
-  limit: number,
   sql: Sql = getSql()
 ) =>
   sql<AccountTopGameRow[]>`
     select
+      g.id as game_id,
       g.title,
       coalesce(
         sum(extract(epoch from (coalesce(ps.ended_at, now()) - ps.started_at))),
@@ -745,19 +815,18 @@ export const loadAccountTopGames = async (
       and pc.user_id = ${userId}
       and ps.started_at >= ${startedAt}
       ${buildIgnoreShortSessionsFilter(sql)}
-    group by g.title
+    group by g.id, g.title
     order by total_seconds desc
-    limit ${limit}
   `;
 
-export const loadUserTopGames = async (
+export const loadUserGameTotals = async (
   userId: number,
   startedAt: Date,
-  limit: number,
   sql: Sql = getSql()
 ) =>
   sql<AccountTopGameRow[]>`
     select
+      g.id as game_id,
       g.title,
       coalesce(
         sum(extract(epoch from (coalesce(ps.ended_at, now()) - ps.started_at))),
@@ -770,20 +839,19 @@ export const loadUserTopGames = async (
     where pc.user_id = ${userId}
       and ps.started_at >= ${startedAt}
       ${buildIgnoreShortSessionsFilter(sql)}
-    group by g.title
+    group by g.id, g.title
     order by total_seconds desc
-    limit ${limit}
   `;
 
-export const loadUserTopGamesForRange = async (
+export const loadUserGameTotalsForRange = async (
   userId: number,
   startedAt: Date,
   endedAt: Date,
-  limit: number,
   sql: Sql = getSql()
 ) =>
   sql<AccountTopGameRow[]>`
     select
+      g.id as game_id,
       g.title,
       coalesce(
         sum(extract(epoch from (coalesce(ps.ended_at, now()) - ps.started_at))),
@@ -797,9 +865,8 @@ export const loadUserTopGamesForRange = async (
       and ps.started_at >= ${startedAt}
       and ps.started_at < ${endedAt}
       ${buildIgnoreShortSessionsFilter(sql)}
-    group by g.title
+    group by g.id, g.title
     order by total_seconds desc
-    limit ${limit}
   `;
 
 export const listProvidersForUser = async (
@@ -961,6 +1028,71 @@ export const loadGameById = async (gameId: number, sql: Sql = getSql()) => {
     join platforms p on p.id = g.platform_id
     where g.id = ${gameId}
     limit 1
+  `;
+  return rows[0] ?? null;
+};
+
+export const listGameConnections = async (
+  userId: number,
+  sql: Sql = getSql()
+) =>
+  sql<GameConnectionRow[]>`
+    select
+      gc.game_id,
+      g.title as game_title,
+      gp.key as game_platform,
+      g.capsule_url as game_capsule_url,
+      gc.connected_game_id,
+      cg.title as connected_title,
+      cgp.key as connected_platform,
+      cg.capsule_url as connected_capsule_url
+    from game_connections gc
+    join games g on g.id = gc.game_id
+    join platforms gp on gp.id = g.platform_id
+    join games cg on cg.id = gc.connected_game_id
+    join platforms cgp on cgp.id = cg.platform_id
+    where gc.user_id = ${userId}
+    order by g.title, cg.title
+  `;
+
+export const listGameConnectionEdges = async (
+  userId: number,
+  sql: Sql = getSql()
+) =>
+  sql<GameConnectionEdgeRow[]>`
+    select game_id, connected_game_id
+    from game_connections
+    where user_id = ${userId}
+  `;
+
+export const insertGameConnection = async (
+  userId: number,
+  gameId: number,
+  connectedGameId: number,
+  sql: Sql = getSql()
+) => {
+  const rows = await sql<GameConnectionEdgeRow[]>`
+    insert into game_connections (user_id, game_id, connected_game_id)
+    values (${userId}, ${gameId}, ${connectedGameId})
+    on conflict (user_id, game_id, connected_game_id)
+    do update set updated_at = now()
+    returning game_id, connected_game_id
+  `;
+  return rows[0] ?? null;
+};
+
+export const deleteGameConnection = async (
+  userId: number,
+  gameId: number,
+  connectedGameId: number,
+  sql: Sql = getSql()
+) => {
+  const rows = await sql<GameConnectionEdgeRow[]>`
+    delete from game_connections
+    where user_id = ${userId}
+      and game_id = ${gameId}
+      and connected_game_id = ${connectedGameId}
+    returning game_id, connected_game_id
   `;
   return rows[0] ?? null;
 };

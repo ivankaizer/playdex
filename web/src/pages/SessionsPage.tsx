@@ -24,6 +24,7 @@ import {
   formatUtcDateInput,
 } from "../utils/formatters";
 import { getSessionDurationSeconds } from "../utils/sessions";
+import { encodeGameId } from "../utils/gameHash";
 import { AppHeader } from "../components/AppHeader";
 import { Background } from "../components/Background";
 import { ManualEntryModal } from "../components/ManualEntryModal";
@@ -258,7 +259,7 @@ export const SessionsPage = ({
           body: {
             date: manualEntryDate,
             durationMinutes,
-            gameId: manualEntrySelection.gameId,
+            gameId: encodeGameId(manualEntrySelection.gameId),
           },
         });
       } else {
@@ -512,6 +513,7 @@ export const SessionsPage = ({
     () =>
       sessionRows.map((session) => ({
         sessionId: session.sessionId,
+        gameId: session.gameId,
         title: session.game,
         platform: formatSessionPlatformLabel(session),
         date: formatDateLabel(new Date(session.startedAt)),
@@ -535,8 +537,8 @@ export const SessionsPage = ({
     { key: "last-year", label: "Last year" },
   ];
 
-  const handleGameSelect = (title: string) => {
-    onNavigate(buildGamePath(title));
+  const handleGameSelect = (gameId: string) => {
+    onNavigate(buildGamePath(gameId));
   };
 
   const platformPieColors = ["#34d399", "#22d3ee", "#a78bfa", "#f59e0b"];
@@ -571,6 +573,7 @@ export const SessionsPage = ({
       return [];
     }
     return rangeStats.topGames.map((game) => ({
+      gameId: game.gameId,
       title: game.title,
       hours: formatHours(game.totalSeconds, 1),
     }));
@@ -767,7 +770,7 @@ export const SessionsPage = ({
                       <div className="flex-1 space-y-1">
                         <button
                           type="button"
-                          onClick={() => handleGameSelect(session.title)}
+                          onClick={() => handleGameSelect(session.gameId)}
                           className="text-left font-semibold text-white transition hover:text-emerald-200"
                     >
                       {session.title}
@@ -890,7 +893,7 @@ export const SessionsPage = ({
                           )}
                           <button
                             type="button"
-                            onClick={() => handleGameSelect(session.title)}
+                            onClick={() => handleGameSelect(session.gameId)}
                             className="text-left font-semibold text-white transition hover:text-emerald-200"
                           >
                             {session.title}

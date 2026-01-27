@@ -12,6 +12,7 @@ type PlatformStat = {
 };
 
 type TopGameStat = {
+  gameId: string;
   title: string;
   hours: string;
 };
@@ -23,7 +24,7 @@ type StatsRecapSectionProps = {
   platforms: PlatformStat[];
   topGames: TopGameStat[];
   colors: string[];
-  onGameSelect?: (title: string) => void;
+  onGameSelect?: (gameId: string) => void;
 };
 
 export const StatsRecapSection = ({
@@ -97,7 +98,7 @@ export const StatsRecapSection = ({
           <div className="mt-4 space-y-3">
             {topGames.map((game, index) => (
               <div
-                key={game.title}
+                key={`${game.gameId}-${game.title}`}
                 className="flex items-center justify-between text-sm"
               >
                 <div className="flex items-center gap-3">
@@ -107,7 +108,7 @@ export const StatsRecapSection = ({
                   {onGameSelect ? (
                     <button
                       type="button"
-                      onClick={() => onGameSelect(game.title)}
+                      onClick={() => onGameSelect(game.gameId)}
                       className="text-left font-semibold text-white transition hover:text-emerald-200"
                     >
                       {game.title}

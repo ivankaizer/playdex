@@ -3,7 +3,9 @@ import { ok } from "../../app/http/responses";
 import type {
   AccountCurrentSessionResponseDto,
   AccountSessionDeleteResponseDto,
+  AccountSessionDto,
   AccountSessionsResponseDto,
+  AccountStatsPeriodDto,
   AccountStatsRangeResponseDto,
   AccountStatsResponseDto,
   AccountSummaryDto,
@@ -11,7 +13,10 @@ import type {
   ApiResponse,
 } from "../../app/http/types";
 import { AppError } from "../../common/errors/AppError";
+import { parseGameId } from "../../common/utils/gameId";
+import { encodeGameId } from "../../common/utils/gameHash";
 import { accountsService } from "./accounts.service";
+import type { AccountSession, AccountStatsPeriod } from "./accounts.domain";
 import type { RawAccountSessionFilters } from "./accounts.repository";
 
 const parseAccountId = (params: Record<string, string> | undefined) => {
@@ -40,6 +45,7 @@ const parsePaginationAndFilters = (
   const sortRaw = url.searchParams.get("sort");
   const directionRaw = url.searchParams.get("direction");
   const title = url.searchParams.get("title")?.trim() || null;
+  const gameIdRaw = url.searchParams.get("gameId");
   const fromRaw = url.searchParams.get("from");
   const toRaw = url.searchParams.get("to");
 
@@ -80,6 +86,8 @@ const parsePaginationAndFilters = (
     throw new AppError("direction must be one of: asc, desc.", 400);
   }
 
+  const parsedGameId = gameIdRaw ? parseGameId(gameIdRaw, "gameId") : null;
+
   if (parsedFrom && parsedTo && parsedFrom > parsedTo) {
     throw new AppError("from must be before to.", 400);
   }
@@ -96,6 +104,7 @@ const parsePaginationAndFilters = (
 
   const filters: RawAccountSessionFilters = {
     title: title ?? undefined,
+    gameId: parsedGameId ?? undefined,
     startedFrom: parsedFrom ?? undefined,
     startedTo: startedTo ?? undefined,
     sortKey: sortKey ?? undefined,
@@ -104,6 +113,19 @@ const parsePaginationAndFilters = (
 
   return { limit: safeLimit, offset: safeOffset, filters };
 };
+
+const toSessionDto = (session: AccountSession): AccountSessionDto => ({
+  ...session,
+  gameId: encodeGameId(session.gameId),
+});
+
+const toStatsDto = (period: AccountStatsPeriod): AccountStatsPeriodDto => ({
+  ...period,
+  topGames: period.topGames.map((game) => ({
+    ...game,
+    gameId: encodeGameId(game.gameId),
+  })),
+});
 
 const parseStatsRange = (url: URL) => {
   const fromRaw = url.searchParams.get("from");
@@ -158,10 +180,11 @@ export const listUserSessionsHandler = async (ctx: {
     offset,
     filters
   );
+  const responseSessions = sessions.map(toSessionDto);
 
   const response: AccountSessionsResponseDto = {
     accountId: null,
-    sessions,
+    sessions: responseSessions,
     total,
     limit,
     offset,
@@ -192,7 +215,7 @@ export const listUserSessionsTodayHandler = async (ctx: {
 }): Promise<ApiResponse<AccountTodaySessionsResponseDto>> => {
   const auth = requireAuth(ctx.request);
   const sessions = await accountsService.fetchUserSessionsToday(auth.userId, 10);
-  return ok({ accountId: null, sessions });
+  return ok({ accountId: null, sessions: sessions.map(toSessionDto) });
 };
 
 export const getUserCurrentSessionHandler = async (ctx: {
@@ -200,7 +223,7 @@ export const getUserCurrentSessionHandler = async (ctx: {
 }): Promise<ApiResponse<AccountCurrentSessionResponseDto>> => {
   const auth = requireAuth(ctx.request);
   const session = await accountsService.fetchUserCurrentSession(auth.userId);
-  return ok({ accountId: null, session });
+  return ok({ accountId: null, session: session ? toSessionDto(session) : null });
 };
 
 export const getUserStatsHandler = async (ctx: {
@@ -213,7 +236,7 @@ export const getUserStatsHandler = async (ctx: {
     startedAt,
     endedAt
   );
-  return ok({ accountId: null, stats });
+  return ok({ accountId: null, stats: toStatsDto(stats) });
 };
 
 export const listAccountSessionsHandler = async (ctx: {
@@ -232,10 +255,11 @@ export const listAccountSessionsHandler = async (ctx: {
     offset,
     filters
   );
+  const responseSessions = sessions.map(toSessionDto);
 
   const response: AccountSessionsResponseDto = {
     accountId,
-    sessions,
+    sessions: responseSessions,
     total,
     limit,
     offset,
@@ -254,7 +278,7 @@ export const listAccountSessionsTodayHandler = async (ctx: {
     auth.userId,
     10
   );
-  return ok({ accountId, sessions });
+  return ok({ accountId, sessions: sessions.map(toSessionDto) });
 };
 
 export const getAccountCurrentSessionHandler = async (ctx: {
@@ -267,7 +291,7 @@ export const getAccountCurrentSessionHandler = async (ctx: {
     accountId,
     auth.userId
   );
-  return ok({ accountId, session });
+  return ok({ accountId, session: session ? toSessionDto(session) : null });
 };
 
 export const getAccountStatsHandler = async (ctx: {
@@ -277,6 +301,9 @@ export const getAccountStatsHandler = async (ctx: {
   const auth = requireAuth(ctx.request);
   const accountId = parseAccountId(ctx.params);
   const stats = await accountsService.fetchAccountStats(accountId, auth.userId);
-  return ok({ accountId, monthly: stats.monthly, yearly: stats.yearly });
+  return ok({
+    accountId,
+    monthly: toStatsDto(stats.monthly),
+    yearly: toStatsDto(stats.yearly),
+  });
 };
-

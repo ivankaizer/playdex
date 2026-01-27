@@ -3,6 +3,7 @@ import { AppError } from "../../common/errors/AppError";
 import { normalizeGame, normalizeGameTitle } from "../games";
 import { searchIgdbGames } from "../providers/clients/igdb-client";
 import { manualRepository } from "./manual.repository";
+import { encodeGameId } from "../../common/utils/gameHash";
 
 type ManualMappingSelection =
   | { type: "local"; gameId: number }
@@ -170,10 +171,12 @@ export const manualService = {
   getManualInputs: async (userId: number) => {
     const rows = await manualRepository.listManualInputs(userId);
     return rows.map((row) => ({
-      id: row.id,
+      id: Number(row.id),
       input: row.raw_title,
       canonicalTitle: row.canonical_title,
-      mappedGameId: row.mapped_game_id,
+      mappedGameId: row.mapped_game_id
+        ? encodeGameId(Number(row.mapped_game_id))
+        : null,
       mappedSource: row.mapped_canonical_key?.startsWith("igdb:")
         ? "igdb"
         : row.mapped_game_id
@@ -181,7 +184,7 @@ export const manualService = {
           : null,
       mappedGame: row.mapped_game_id
         ? {
-            id: row.mapped_game_id,
+            id: encodeGameId(Number(row.mapped_game_id)),
             title: row.mapped_title ?? "",
             platform: row.mapped_platform ?? "",
             capsuleUrl: row.mapped_capsule_url,
@@ -238,7 +241,7 @@ export const manualService = {
     return {
       local: local.map((game) => ({
         source: "local" as const,
-        gameId: game.id,
+        gameId: encodeGameId(Number(game.id)),
         title: game.title,
         platform: game.platform,
         capsuleUrl: game.capsule_url,

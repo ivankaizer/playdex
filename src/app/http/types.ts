@@ -21,7 +21,7 @@ export type AccountSessionDto = {
   sessionId: number;
   startedAt: Date;
   endedAt: Date | null;
-  gameId: number;
+  gameId: string;
   platform: string;
   game: string;
   capsuleUrl: string | null;
@@ -53,12 +53,12 @@ export type AccountSessionDeleteResponseDto = {
 };
 
 export type GameIgnoreResponseDto = {
-  gameId: number;
+  gameId: string;
   ignored: boolean;
 };
 
 export type GameRatingResponseDto = {
-  gameId: number;
+  gameId: string;
   rating: number | null;
 };
 
@@ -75,7 +75,7 @@ export type AccountStatsPeriodDto = {
     totalSeconds: number;
     source?: string | null;
   }[];
-  topGames: { title: string; totalSeconds: number }[];
+  topGames: { gameId: string; title: string; totalSeconds: number }[];
 };
 
 export type AccountStatsResponseDto = {
@@ -127,10 +127,10 @@ export type ManualInputDto = {
   id: number;
   input: string;
   canonicalTitle: string;
-  mappedGameId: number | null;
+  mappedGameId: string | null;
   mappedSource: "local" | "igdb" | null;
   mappedGame: {
-    id: number;
+    id: string;
     title: string;
     platform: string;
     capsuleUrl: string | null;
@@ -151,7 +151,7 @@ export type ManualSessionStopResponseDto = {
 
 export type ManualMappingSearchResultDto = {
   source: "local" | "igdb";
-  gameId?: number;
+  gameId?: string;
   igdbId?: string;
   title: string;
   platform: string | null;
@@ -167,9 +167,48 @@ export type ManualMappingSearchResponseDto = {
 
 export type ManualMappingResponseDto = {
   inputId: number;
-  mappedGameId: number | null;
+  mappedGameId: string | null;
 };
 
 export type ManualEntryCreateResponseDto = {
   sessionId: number;
+};
+
+export type GameResponseDto = {
+  id: string;
+  title: string;
+  platform: string;
+  capsuleUrl: string | null;
+};
+
+export type GameSearchResultDto = {
+  gameId: string;
+  title: string;
+  platform: string;
+  capsuleUrl: string | null;
+};
+
+export type GameSearchResponseDto = {
+  query: string;
+  results: GameSearchResultDto[];
+};
+
+export type GameConnectionDto = {
+  gameId: string;
+  title: string;
+  platform: string;
+  capsuleUrl: string | null;
+  connectedGameId: string;
+  connectedTitle: string;
+  connectedPlatform: string;
+  connectedCapsuleUrl: string | null;
+};
+
+export type GameConnectionListResponseDto = {
+  connections: GameConnectionDto[];
+};
+
+export type GameConnectionChangeResponseDto = {
+  gameId: string;
+  connectedGameId: string;
 };

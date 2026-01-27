@@ -7,6 +7,7 @@ import type {
   AccountSessionsResponse,
   GameIgnoreResponse,
   GameRatingResponse,
+  Game,
   NavItem,
 } from "../types";
 import {
@@ -18,13 +19,14 @@ import {
   formatUtcDateInput,
 } from "../utils/formatters";
 import { getSessionDurationSeconds } from "../utils/sessions";
+import { encodeGameId } from "../utils/gameHash";
 import { AppHeader } from "../components/AppHeader";
 import { Background } from "../components/Background";
 
 type GamePageProps = {
   path: string;
   navItems?: NavItem[];
-  gameTitle: string;
+  gameId: string | null;
   onNavigate: (path: string) => void;
   onLogout: () => void;
 };
@@ -63,10 +65,12 @@ const RatingStar = ({ filled }: { filled: boolean }) => (
 export const GamePage = ({
   path,
   navItems = defaultNavItems,
-  gameTitle,
+  gameId,
   onNavigate,
   onLogout,
 }: GamePageProps) => {
+  const [gameDetails, setGameDetails] = useState<Game | null>(null);
+  const [gameDetailsError, setGameDetailsError] = useState("");
   const [recentSessions, setRecentSessions] = useState<AccountSession[]>([]);
   const [allSessions, setAllSessions] = useState<AccountSession[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -85,13 +89,58 @@ export const GamePage = ({
   );
   const [recentPage, setRecentPage] = useState(1);
   const recentPageSize = 5;
-  const currentGameId = useMemo(
-    () => allSessions[0]?.gameId ?? null,
-    [allSessions]
-  );
+  const currentGameId = gameId;
+  const currentGameHash = currentGameId ? encodeGameId(currentGameId) : "";
 
   useEffect(() => {
-    if (!gameTitle) {
+    if (!gameId) {
+      setGameDetails(null);
+      setGameDetailsError("Invalid game link.");
+      return;
+    }
+
+    let isCancelled = false;
+
+    const loadGameDetails = async () => {
+      setGameDetailsError("");
+      try {
+        const response = await apiRequest<Game>(
+          `/games/${encodeGameId(gameId)}`,
+          {
+            onAuthFailure: onLogout,
+          }
+        );
+        if (isCancelled) {
+          return;
+        }
+        setGameDetails(response);
+      } catch (err) {
+        if (isCancelled) {
+          return;
+        }
+        setGameDetails(null);
+        setGameDetailsError(
+          err instanceof Error ? err.message : "Failed to load game details."
+        );
+      }
+    };
+
+    void loadGameDetails();
+    return () => {
+      isCancelled = true;
+    };
+  }, [gameId, onLogout]);
+
+  useEffect(() => {
+    if (!gameId) {
+      setRecentSessions([]);
+      setAllSessions([]);
+      setIsLoading(false);
+      setSessionsLoaded(true);
+      setGameError("Invalid game link.");
+      setRating(null);
+      setRatingError("");
+      setIsRatingLoading(false);
       return;
     }
     let isCancelled = false;
@@ -109,7 +158,7 @@ export const GamePage = ({
         const fromDate = formatUtcDateInput(from);
         const toDate = formatUtcDateInput(now);
         const baseParams = new URLSearchParams({
-          title: gameTitle,
+          gameId: currentGameHash,
           from: fromDate,
           to: toDate,
           sort: "date",
@@ -179,23 +228,25 @@ export const GamePage = ({
     return () => {
       isCancelled = true;
     };
-  }, [gameTitle, onLogout]);
+  }, [gameId, onLogout]);
 
   useEffect(() => {
-    if (!sessionsLoaded) {
-      setIsIgnoreChecking(true);
-      setIgnoreError("");
-      return;
-    }
-
     if (!currentGameId) {
       setIsIgnoreChecking(false);
       setIsIgnored(false);
       setIgnoreError(
-        allSessions.length === 0
-          ? "No sessions found yet to identify this game."
-          : "Unable to resolve game id for this game."
+        gameId
+          ? allSessions.length === 0
+            ? "No sessions found yet to identify this game."
+            : "Unable to resolve game id for this game."
+          : "Invalid game link."
       );
+      return;
+    }
+
+    if (!sessionsLoaded) {
+      setIsIgnoreChecking(true);
+      setIgnoreError("");
       return;
     }
 
@@ -206,7 +257,7 @@ export const GamePage = ({
       setIsIgnored(false);
       setIgnoreError("");
       try {
-        const params = new URLSearchParams({ gameId: String(currentGameId) });
+        const params = new URLSearchParams({ gameId: currentGameHash });
         const response = await apiRequest<GameIgnoreResponse>(
           `/games/ignored?${params.toString()}`,
           { onAuthFailure: onLogout }
@@ -242,20 +293,22 @@ export const GamePage = ({
   }, [allSessions.length, currentGameId, onLogout, sessionsLoaded]);
 
   useEffect(() => {
-    if (!sessionsLoaded) {
-      setIsRatingLoading(true);
-      setRatingError("");
-      return;
-    }
-
     if (!currentGameId) {
       setIsRatingLoading(false);
       setRating(null);
       setRatingError(
-        allSessions.length === 0
-          ? "Log a session to start rating this game."
-          : "Unable to resolve game id for this game."
+        gameId
+          ? allSessions.length === 0
+            ? "Log a session to start rating this game."
+            : "Unable to resolve game id for this game."
+          : "Invalid game link."
       );
+      return;
+    }
+
+    if (!sessionsLoaded) {
+      setIsRatingLoading(true);
+      setRatingError("");
       return;
     }
 
@@ -265,7 +318,7 @@ export const GamePage = ({
       setIsRatingLoading(true);
       setRatingError("");
       try {
-        const params = new URLSearchParams({ gameId: String(currentGameId) });
+        const params = new URLSearchParams({ gameId: currentGameHash });
         const response = await apiRequest<GameRatingResponse>(
           `/games/rating?${params.toString()}`,
           { onAuthFailure: onLogout }
@@ -310,7 +363,7 @@ export const GamePage = ({
           "/games/ignored",
           {
             method: "DELETE",
-            body: { gameId: currentGameId },
+            body: { gameId: currentGameHash },
             onAuthFailure: onLogout,
           }
         );
@@ -320,7 +373,7 @@ export const GamePage = ({
           "/games/ignored",
           {
             method: "POST",
-            body: { gameId: currentGameId },
+            body: { gameId: currentGameHash },
             onAuthFailure: onLogout,
           }
         );
@@ -350,7 +403,7 @@ export const GamePage = ({
           "/games/rating",
           {
             method: "DELETE",
-            body: { gameId: currentGameId },
+            body: { gameId: currentGameHash },
             onAuthFailure: onLogout,
           }
         );
@@ -360,7 +413,7 @@ export const GamePage = ({
           "/games/rating",
           {
             method: "POST",
-            body: { gameId: currentGameId, rating: value },
+            body: { gameId: currentGameHash, rating: value },
             onAuthFailure: onLogout,
           }
         );
@@ -378,7 +431,9 @@ export const GamePage = ({
   };
 
   const gameImage =
-    recentSessions.find((session) => session.capsuleUrl)?.capsuleUrl ?? null;
+    recentSessions.find((session) => session.capsuleUrl)?.capsuleUrl ??
+    gameDetails?.capsuleUrl ??
+    null;
 
   const statsSessions = useMemo(
     () => allSessions.filter((session) => !session.ignored),
@@ -494,27 +549,34 @@ export const GamePage = ({
   );
   const ratingLabel = rating ? ratingLabels[rating] ?? "" : "Not rated";
   const ratingDisabled = isRatingSaving || isRatingLoading || !currentGameId;
+  const displayTitle =
+    gameDetails?.title ??
+    (gameDetailsError ? "Unknown game" : "Loading game...");
 
   return (
     <main className="relative min-h-screen overflow-hidden bg-slate-950 text-slate-100">
       <Background />
       <div className="relative mx-auto w-full max-w-6xl p-3 sm:px-6 sm:py-12">
         <AppHeader
-          title={gameTitle}
-        navItems={navItems}
-        path={path}
-        onNavigate={onNavigate}
-        onLogout={onLogout}
-      />
+          title={displayTitle}
+          navItems={navItems}
+          path={path}
+          onNavigate={onNavigate}
+          onLogout={onLogout}
+        />
+
+      {gameDetailsError ? (
+        <p className="mt-4 text-xs text-rose-300">{gameDetailsError}</p>
+      ) : null}
 
       <section className="mt-10 space-y-6">
         <div className="grid gap-6 lg:grid-cols-[1fr_2fr]">
           <div className="rounded-3xl border border-slate-800 bg-slate-900/60 p-5 sm:p-6">
             <div className="aspect-[9/14] overflow-hidden rounded-2xl border border-slate-800 bg-slate-950/60">
-              {gameImage ? (
+                  {gameImage ? (
                 <img
                   src={gameImage}
-                  alt={`${gameTitle} cover`}
+                  alt={`${displayTitle} cover`}
                   className="h-full w-full object-cover"
                 />
               ) : (

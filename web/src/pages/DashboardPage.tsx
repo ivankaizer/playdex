@@ -248,6 +248,7 @@ export const DashboardPage = ({
     () =>
       todaySessions.map((session) => ({
         sessionId: session.sessionId,
+        gameId: session.gameId,
         title: session.game,
         time: formatDuration(getSessionDurationSeconds(session), "long"),
         platform: formatSessionPlatformLabel(session),
@@ -292,6 +293,7 @@ export const DashboardPage = ({
       return [];
     }
     return monthlyStats.topGames.map((game) => ({
+      gameId: game.gameId,
       title: game.title,
       hours: formatHours(game.totalSeconds, 1),
     }));
@@ -332,6 +334,7 @@ export const DashboardPage = ({
       return [];
     }
     return yearlyStats.topGames.map((game) => ({
+      gameId: game.gameId,
       title: game.title,
       hours: formatHours(game.totalSeconds, 1),
     }));
@@ -354,8 +357,8 @@ export const DashboardPage = ({
     return `${new Date().getFullYear()} recap`;
   }, []);
 
-  const handleGameSelect = (title: string) => {
-    onNavigate(buildGamePath(title));
+  const handleGameSelect = (gameId: string) => {
+    onNavigate(buildGamePath(gameId));
   };
 
   return (
@@ -415,7 +418,7 @@ export const DashboardPage = ({
                   <>
                     <button
                       type="button"
-                      onClick={() => handleGameSelect(currentSession.game)}
+                      onClick={() => handleGameSelect(currentSession.gameId)}
                       className="text-left text-lg font-semibold text-white transition hover:text-emerald-200"
                     >
                       {currentSession.game}
@@ -599,7 +602,7 @@ export const DashboardPage = ({
                         ) : null}
                         <button
                           type="button"
-                          onClick={() => handleGameSelect(session.title)}
+                          onClick={() => handleGameSelect(session.gameId)}
                           className="text-left text-sm font-semibold text-white transition hover:text-emerald-200"
                         >
                           {session.title}

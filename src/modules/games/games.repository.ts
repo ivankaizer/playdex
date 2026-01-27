@@ -1,8 +1,14 @@
 import {
   deleteGameRatingForUser,
+  deleteGameConnection,
   ignoreGameForUser,
   isGameIgnoredForUser,
+  listGameConnectionEdges,
+  listGameConnections,
   loadGameRatingForUser,
+  loadGameById,
+  searchGamesByTitle,
+  insertGameConnection,
   unignoreGameForUser,
   upsertGameRatingForUser,
 } from "../../shared/db/queries";
@@ -25,5 +31,25 @@ export const gamesRepository = {
 
   deleteRating: (userId: number, gameId: number) =>
     deleteGameRatingForUser(userId, gameId),
-};
 
+  getGameById: (gameId: number) => loadGameById(gameId),
+
+  searchGames: (query: string, limit: number) =>
+    searchGamesByTitle(query, limit),
+
+  listGameConnections: (userId: number) => listGameConnections(userId),
+
+  listConnectionEdges: (userId: number) => listGameConnectionEdges(userId),
+
+  createGameConnection: (
+    userId: number,
+    gameId: number,
+    connectedGameId: number
+  ) => insertGameConnection(userId, gameId, connectedGameId),
+
+  deleteGameConnection: (
+    userId: number,
+    gameId: number,
+    connectedGameId: number
+  ) => deleteGameConnection(userId, gameId, connectedGameId),
+};
