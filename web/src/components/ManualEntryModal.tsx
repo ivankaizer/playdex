@@ -66,7 +66,7 @@ export const ManualEntryModal = ({
 
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 px-4 py-8">
-      <div className="w-full max-w-2xl rounded-3xl border border-slate-800 bg-slate-900/90 p-6 shadow-[0_30px_80px_rgba(15,23,42,0.7)]">
+      <div className="w-full max-w-2xl rounded-3xl border border-slate-800 bg-slate-900/90 p-5 shadow-[0_30px_80px_rgba(15,23,42,0.7)] sm:p-6">
         <div className="flex items-center justify-between gap-4">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-300">

@@ -88,7 +88,7 @@ export const SettingsPage = ({
   return (
     <main className="relative min-h-screen overflow-hidden bg-slate-950 text-slate-100">
       <Background />
-      <div className="relative mx-auto w-full max-w-6xl px-6 py-12">
+      <div className="relative mx-auto w-full max-w-6xl p-3 sm:px-6 sm:py-12">
         <AppHeader
           title="Settings"
           navItems={navItems}
@@ -99,7 +99,7 @@ export const SettingsPage = ({
 
         <section className="mt-10 grid gap-6 lg:grid-cols-[1.05fr_0.95fr]">
           <div className="space-y-6">
-            <div className="rounded-3xl border border-slate-800 bg-slate-900/60 p-6">
+            <div className="rounded-3xl border border-slate-800 bg-slate-900/60 p-5 sm:p-6">
               <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-300">
                 Add provider
               </p>
@@ -182,7 +182,7 @@ export const SettingsPage = ({
             </div>
           </div>
 
-          <div className="rounded-3xl border border-slate-800 bg-slate-900/60 p-6">
+          <div className="rounded-3xl border border-slate-800 bg-slate-900/60 p-5 sm:p-6">
             <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-300">
               Manage providers
             </p>

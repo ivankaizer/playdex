@@ -2,19 +2,17 @@ import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
 
 import type { TestDatabase } from "./helpers/db";
 import { createTestDatabase } from "./helpers/db";
-import {
-  normalizeGame,
-  normalizeGameTitle,
-} from "../src/shared/domain/normalize-game";
-import {
-  getManualInputs,
-  mapManualInput,
-  startManualSession,
-  stopManualSession,
-} from "../src/modules/manual/manual";
+import { normalizeGame, normalizeGameTitle } from "../src/modules/games";
+import { manualService } from "../src/modules/manual";
 import { ensureGameId } from "../src/shared/db/queries";
 
 const baseDatabaseUrl = Bun.env.DATABASE_URL;
+const {
+  startManualSession,
+  stopManualSession,
+  mapManualInput,
+  getManualInputs,
+} = manualService;
 const hasDatabase = Boolean(baseDatabaseUrl);
 const requiresDb = hasDatabase ? test : test.skip;
 

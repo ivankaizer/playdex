@@ -102,7 +102,7 @@ const run = async () => {
 
   const headline = options.type === "ended" ? "Session ended" : "Session started";
   const caption = [
-    `${headline}: ${options.title} ${options.platform}`,
+    headline,
     options.type === "ended" && options.duration
       ? `Duration: ${options.duration}`
       : null,

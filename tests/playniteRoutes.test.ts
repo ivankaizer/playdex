@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
 
-import { createServer } from "../src/modules/server/server";
+import { createApp } from "../src/app/createApp";
 import type { TestDatabase } from "./helpers/db";
 import { createTestDatabase } from "./helpers/db";
 
@@ -9,7 +9,7 @@ const hasDatabase = Boolean(baseDatabaseUrl);
 const requiresDb = hasDatabase ? test : test.skip;
 
 let db: TestDatabase | null = null;
-let app: ReturnType<typeof createServer> | null = null;
+let app: ReturnType<typeof createApp> | null = null;
 let credentialId = 0;
 const apiKey = "playnite-key";
 
@@ -20,7 +20,7 @@ beforeAll(async () => {
 
   db = await createTestDatabase();
   Bun.env.DATABASE_URL = db.databaseUrl;
-  app = createServer();
+  app = createApp();
 });
 
 afterAll(async () => {

@@ -3,7 +3,7 @@ import type {
   PlatformClient,
   PlatformGame,
   PlatformPollResult,
-} from "../../../shared/domain/platform";
+} from "../../../common/domain/platform";
 
 type PsnAuthTokens = {
   accessToken: string;

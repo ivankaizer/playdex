@@ -1,0 +1,32 @@
+name: Test
+on:
+  pull_request:
+jobs:
+  db-test:
+    name: Run test
+    runs-on: ubuntu-latest
+    services:
+      db:
+        image: postgres:16
+        env:
+          POSTGRES_USER: playdex
+          POSTGRES_PASSWORD: playdex
+          POSTGRES_DB: playdex_db_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U playdex"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - name: Install dependencies
+        run: bun install
+      - name: Run tests
+        run: DATABASE_URL=postgresql://playdex:playdex@127.0.0.1:5432/playdex_db_test bun test

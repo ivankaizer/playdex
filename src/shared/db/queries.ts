@@ -2,7 +2,7 @@ import type postgres from "postgres";
 import type { JSONValue } from "postgres";
 
 import { getSql } from "./postgres";
-import type { NormalizedGame } from "../domain/normalize-game";
+import type { NormalizedGame } from "../../common/domain/game";
 
 type Sql = ReturnType<typeof postgres>;
 
@@ -22,6 +22,7 @@ export type AccountSessionRow = {
   id: number;
   started_at: Date;
   ended_at: Date | null;
+  game_id: number;
   platform: string;
   title: string;
   capsule_url: string | null;
@@ -89,6 +90,11 @@ export type GameRow = {
   title: string;
   platform: string;
   capsule_url: string | null;
+};
+
+export type GameRatingRow = {
+  game_id: number;
+  rating: number;
 };
 
 export type UserChatRow = {
@@ -195,6 +201,7 @@ export const listAccountSessions = async (
       ps.id,
       ps.started_at,
       ps.ended_at,
+      g.id as game_id,
       pc_platform.key as platform,
       g.title,
       g.capsule_url,
@@ -244,6 +251,7 @@ export const listUserSessions = async (
       ps.id,
       ps.started_at,
       ps.ended_at,
+      g.id as game_id,
       pc_platform.key as platform,
       g.title,
       g.capsule_url,
@@ -331,6 +339,7 @@ export const listAccountSessionsToday = async (
       ps.id,
       ps.started_at,
       ps.ended_at,
+      g.id as game_id,
       pc_platform.key as platform,
       g.title,
       g.capsule_url,
@@ -364,6 +373,7 @@ export const listUserSessionsToday = async (
       ps.id,
       ps.started_at,
       ps.ended_at,
+      g.id as game_id,
       pc_platform.key as platform,
       g.title,
       g.capsule_url,
@@ -396,6 +406,7 @@ export const loadAccountCurrentSession = async (
       ps.id,
       ps.started_at,
       ps.ended_at,
+      g.id as game_id,
       pc_platform.key as platform,
       g.title,
       g.capsule_url,
@@ -424,13 +435,17 @@ export const loadUserCurrentSession = async (
       ps.id,
       ps.started_at,
       ps.ended_at,
+      g.id as game_id,
       pc_platform.key as platform,
       g.title,
-      g.capsule_url
+      g.capsule_url,
+      game_platform.key as game_platform,
+      g.canonical_key as game_canonical_key
     from play_sessions ps
     join platform_credentials pc on pc.id = ps.platform_credential_id
     join games g on g.id = ps.game_id
     join platforms pc_platform on pc_platform.id = pc.platform_id
+    join platforms game_platform on game_platform.id = g.platform_id
     where pc.user_id = ${userId}
       and ps.ended_at is null
     order by ps.started_at desc
@@ -933,6 +948,104 @@ export const updateManualInputMapping = async (
     returning id, raw_title, canonical_title, mapped_game_id
   `;
   return rows[0] ?? null;
+};
+
+export const ignoreGameForUser = async (
+  userId: number,
+  gameId: number,
+  sql: Sql = getSql()
+) =>
+  sql`
+    insert into ignored_games (user_id, game_id)
+    values (${userId}, ${gameId})
+    on conflict (user_id, game_id)
+    do update set updated_at = now()
+  `;
+
+export const unignoreGameForUser = async (
+  userId: number,
+  gameId: number,
+  sql: Sql = getSql()
+) => sql`
+  delete from ignored_games
+  where user_id = ${userId}
+    and game_id = ${gameId}
+`;
+
+export const isGameIgnoredForUser = async (
+  userId: number,
+  gameId: number,
+  sql: Sql = getSql()
+) => {
+  const rows = await sql`
+    select 1
+    from ignored_games
+    where user_id = ${userId}
+      and game_id = ${gameId}
+    limit 1
+  `;
+  return rows.length > 0;
+};
+
+export const isGameIgnoredForCredential = async (
+  platformCredentialId: number,
+  gameId: number,
+  sql: Sql = getSql()
+) => {
+  const rows = await sql`
+    select 1
+    from ignored_games ig
+    join platform_credentials pc on pc.user_id = ig.user_id
+    where pc.id = ${platformCredentialId}
+      and ig.game_id = ${gameId}
+    limit 1
+  `;
+  return rows.length > 0;
+};
+
+export const loadGameRatingForUser = async (
+  userId: number,
+  gameId: number,
+  sql: Sql = getSql()
+) => {
+  const rows = await sql<GameRatingRow[]>`
+    select game_id, rating
+    from game_ratings
+    where user_id = ${userId}
+      and game_id = ${gameId}
+    limit 1
+  `;
+  return rows[0] ?? null;
+};
+
+export const upsertGameRatingForUser = async (
+  userId: number,
+  gameId: number,
+  rating: number,
+  sql: Sql = getSql()
+) => {
+  const rows = await sql<GameRatingRow[]>`
+    insert into game_ratings (user_id, game_id, rating)
+    values (${userId}, ${gameId}, ${rating})
+    on conflict (user_id, game_id)
+    do update set rating = excluded.rating, updated_at = now()
+    returning game_id, rating
+  `;
+  return rows[0] ?? null;
+};
+
+export const deleteGameRatingForUser = async (
+  userId: number,
+  gameId: number,
+  sql: Sql = getSql()
+) => {
+  const rows = await sql<{ game_id: number }[]>`
+    delete from game_ratings
+    where user_id = ${userId}
+      and game_id = ${gameId}
+    returning game_id
+  `;
+  return rows.length > 0;
 };
 
 export const searchGamesByTitle = async (

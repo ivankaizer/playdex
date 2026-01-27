@@ -1,34 +1,24 @@
-import type postgres from "postgres";
-
-import {
-  endActiveSessionsForUser,
-  loadGameById,
-  loadNotificationTargetByCredential,
-  loadUserByChatId,
-} from "../../shared/db/queries";
 import {
   fetchTelegramUpdates,
-  sendTelegramMessage,
   sendTelegramImage,
+  sendTelegramMessage,
 } from "./client";
-import {
-  getErrorMessage,
-  logEvent,
-} from "../../shared/observability";
+import { getErrorMessage, logEvent } from "../../common/observability";
 import { renderNotificationWebp } from "./notification-image";
+import type { PollingNotifier } from "../polling";
+import { manualService } from "../manual";
+import {
+  telegramRepository,
+  type SqlClient,
+} from "./telegram.repository";
 
-import type { PollingNotifier } from "../polling/polling";
-import { startManualSession } from "../manual/manual";
-
-type Sql = ReturnType<typeof postgres>;
-
-type TelegramBotConfig = {
+export type TelegramBotConfig = {
   token: string;
-  sql: Sql;
+  sql: SqlClient;
 };
 
 const FALLBACK_IMAGE_DATA_URL = `data:image/svg+xml;utf8,${encodeURIComponent(
-  `<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720"><rect width="100%" height="100%" fill="#0a0d12"/></svg>`
+  `<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="1024"><rect width="100%" height="100%" fill="#0a0d12"/></svg>`
 )}`;
 
 const formatGameLabel = (game: { title: string; platform: string } | null) => {
@@ -55,12 +45,10 @@ const formatDuration = (totalSeconds: number) => {
 
 const buildSessionCaption = (
   kind: "started" | "ended",
-  title: string,
-  platform: string,
   duration?: string
 ) => {
   const headline = kind === "ended" ? "Session ended" : "Session started";
-  const lines = [`${headline}: ${title} ${platform}`];
+  const lines = [headline];
   if (duration) {
     lines.push(`Duration: ${duration}`);
   }
@@ -89,8 +77,7 @@ const sendSessionImage = async ({
   duration?: string;
 }) => {
   const title = game?.title ?? "Unknown game";
-  const platform = game?.platform ?? "unknown";
-  const caption = buildSessionCaption(kind, title, platform, duration);
+  const caption = buildSessionCaption(kind, duration);
 
   if (!game?.capsule_url) {
     await sendNotification(token, chatId, `${caption}.`);
@@ -101,7 +88,7 @@ const sendSessionImage = async ({
   try {
     const buffer = await renderNotificationWebp({
       title,
-      platform,
+      platform: game?.platform ?? "unknown",
       image,
       kind,
       duration,
@@ -113,7 +100,6 @@ const sendSessionImage = async ({
       message: getErrorMessage(error),
       chatId,
       title,
-      platform,
       kind,
     });
     await sendNotification(token, chatId, `${caption}.`);
@@ -130,7 +116,7 @@ export const createTelegramNotifier = ({
     message,
     backoffMs,
   }) => {
-    const target = await loadNotificationTargetByCredential(
+    const target = await telegramRepository.loadNotificationTargetByCredential(
       platformCredentialId,
       sql
     );
@@ -150,7 +136,7 @@ export const createTelegramNotifier = ({
     await sendNotification(token, target.chat_id, text);
   },
   onSessionStarted: async ({ platformCredentialId, gameId }) => {
-    const target = await loadNotificationTargetByCredential(
+    const target = await telegramRepository.loadNotificationTargetByCredential(
       platformCredentialId,
       sql
     );
@@ -158,7 +144,7 @@ export const createTelegramNotifier = ({
       return;
     }
 
-    const game = await loadGameById(gameId, sql);
+    const game = await telegramRepository.loadGameById(gameId, sql);
     await sendSessionImage({
       token,
       chatId: target.chat_id,
@@ -167,7 +153,7 @@ export const createTelegramNotifier = ({
     });
   },
   onSessionEnded: async ({ platformCredentialId, gameId, durationSeconds }) => {
-    const target = await loadNotificationTargetByCredential(
+    const target = await telegramRepository.loadNotificationTargetByCredential(
       platformCredentialId,
       sql
     );
@@ -175,7 +161,7 @@ export const createTelegramNotifier = ({
       return;
     }
 
-    const game = await loadGameById(gameId, sql);
+    const game = await telegramRepository.loadGameById(gameId, sql);
     const duration = formatDuration(durationSeconds);
     await sendSessionImage({
       token,
@@ -202,14 +188,18 @@ const summarizeStoppedSessions = (
 
 const summarizeStartedSession = async (
   gameId: number,
-  sql: Sql
+  sql: SqlClient
 ): Promise<string> => {
-  const game = await loadGameById(gameId, sql);
+  const game = await telegramRepository.loadGameById(gameId, sql);
   return `Session started: ${formatGameLabel(game)}.`;
 };
 
-const handleStopCommand = async (token: string, sql: Sql, chatId: string) => {
-  const user = await loadUserByChatId(chatId, sql);
+const handleStopCommand = async (
+  token: string,
+  sql: SqlClient,
+  chatId: string
+) => {
+  const user = await telegramRepository.loadUserByChatId(chatId, sql);
   if (!user) {
     await sendNotification(
       token,
@@ -220,17 +210,21 @@ const handleStopCommand = async (token: string, sql: Sql, chatId: string) => {
   }
 
   const endedAt = new Date();
-  const sessions = await endActiveSessionsForUser(user.id, endedAt, sql);
+  const sessions = await telegramRepository.endActiveSessionsForUser(
+    user.id,
+    endedAt,
+    sql
+  );
   await sendNotification(token, chatId, summarizeStoppedSessions(sessions));
 };
 
 const handleStartCommand = async (
   token: string,
-  sql: Sql,
+  sql: SqlClient,
   chatId: string,
   title: string
 ) => {
-  const user = await loadUserByChatId(chatId, sql);
+  const user = await telegramRepository.loadUserByChatId(chatId, sql);
   if (!user) {
     await sendNotification(
       token,
@@ -241,7 +235,7 @@ const handleStartCommand = async (
   }
 
   try {
-    const result = await startManualSession(user.id, title);
+    const result = await manualService.startManualSession(user.id, title);
     const message = await summarizeStartedSession(result.gameId, sql);
     await sendNotification(token, chatId, message);
   } catch (error) {

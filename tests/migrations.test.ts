@@ -5,7 +5,7 @@ import { join } from "node:path";
 
 import type { TestDatabase } from "./helpers/db";
 import { createTestDatabase } from "./helpers/db";
-import { runMigrations } from "../src/shared/db/migrations";
+import { runMigrations } from "../src/common/db/migrations";
 
 const hasDatabase = Boolean(Bun.env.DATABASE_URL);
 const requiresDb = hasDatabase ? test : test.skip;
