@@ -2,7 +2,7 @@ import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
 
 import type { TestDatabase } from "./helpers/db";
 import { createTestDatabase } from "./helpers/db";
-import { normalizeGame } from "../src/shared/domain/normalize-game";
+import { normalizeGame } from "../src/modules/games";
 import {
   endPlaySession,
   ensureGameId,

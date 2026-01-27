@@ -1,28 +1,22 @@
-import type postgres from "postgres";
-
-import { normalizeGame } from "../../shared/domain/normalize-game";
+import { normalizeGame } from "../games";
 import type {
   PlatformAccount,
   PlatformClient,
-} from "../../shared/domain/platform";
-import {
-  endPlaySession,
-  ensureGameId,
-  isGameIgnoredForCredential,
-  fetchActivePlaySession,
-  recordPollResult,
-  startPlaySession,
-} from "../../shared/db/queries";
+} from "../../common/domain/platform";
 import {
   getErrorMessage,
   logEvent,
   recordPollCycle,
   recordPollFailure,
   recordPollSuccess,
-} from "../../shared/observability";
+} from "../../common/observability";
+import {
+  pollingRepository,
+  type SqlClient,
+} from "./polling.repository";
 
 type PollingConfig = {
-  sql: ReturnType<typeof postgres>;
+  sql: SqlClient;
   loadAccounts: () => Promise<PollingAccountEntry[]>;
   pollIntervalSeconds: number;
   maxCycles?: number;
@@ -112,16 +106,19 @@ const safeNotify = async <T>(
 };
 
 export const syncPlaySession = async (
-  sql: ReturnType<typeof postgres>,
+  sql: SqlClient,
   platformCredentialId: number,
   gameId: number | null,
   polledAt: Date,
   notifier?: PollingNotifier
 ) => {
-  const activeSession = await fetchActivePlaySession(platformCredentialId, sql);
+  const activeSession = await pollingRepository.fetchActivePlaySession(
+    platformCredentialId,
+    sql
+  );
   if (!gameId) {
     if (activeSession) {
-      await endPlaySession(activeSession.id, polledAt, sql);
+      await pollingRepository.endPlaySession(activeSession.id, polledAt, sql);
       logEvent("info", "db.play_session.ended", {
         sessionId: activeSession.id,
         platformCredentialId,
@@ -147,7 +144,12 @@ export const syncPlaySession = async (
   }
 
   if (!activeSession) {
-    await startPlaySession(platformCredentialId, gameId, polledAt, sql);
+    await pollingRepository.startPlaySession(
+      platformCredentialId,
+      gameId,
+      polledAt,
+      sql
+    );
     logEvent("info", "db.play_session.started", {
       platformCredentialId,
       gameId,
@@ -165,7 +167,7 @@ export const syncPlaySession = async (
     return;
   }
 
-  await endPlaySession(activeSession.id, polledAt, sql);
+  await pollingRepository.endPlaySession(activeSession.id, polledAt, sql);
   logEvent("info", "db.play_session.ended", {
     sessionId: activeSession.id,
     platformCredentialId,
@@ -186,7 +188,12 @@ export const syncPlaySession = async (
     },
     "session.ended"
   );
-  await startPlaySession(platformCredentialId, gameId, polledAt, sql);
+  await pollingRepository.startPlaySession(
+    platformCredentialId,
+    gameId,
+    polledAt,
+    sql
+  );
   logEvent("info", "db.play_session.started", {
     platformCredentialId,
     gameId,
@@ -268,8 +275,8 @@ export const startPolling = async ({
 
         if (result.game) {
           const normalized = normalizeGame(result.game);
-          gameId = await ensureGameId(normalized, sql);
-          ignored = await isGameIgnoredForCredential(
+          gameId = await pollingRepository.ensureGameId(normalized, sql);
+          ignored = await pollingRepository.isGameIgnoredForCredential(
             entry.platformCredentialId,
             gameId,
             sql
@@ -285,7 +292,7 @@ export const startPolling = async ({
           }
         }
 
-        await recordPollResult(
+        await pollingRepository.recordPollResult(
           entry.platformCredentialId,
           gameId,
           polledAt,
