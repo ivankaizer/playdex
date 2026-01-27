@@ -7,6 +7,7 @@ import type {
   ProviderStatus,
   ProvidersResponse,
   NavItem,
+  UserSettingsResponse,
 } from "../types";
 import { formatProviderName } from "../utils/formatters";
 import { AppHeader } from "../components/AppHeader";
@@ -30,6 +31,11 @@ export const SettingsPage = ({
   const [providerStatus, setProviderStatus] = useState<ProviderStatus[]>([]);
   const [isProvidersLoading, setIsProvidersLoading] = useState(false);
   const [providersError, setProvidersError] = useState("");
+  const [ignoreShortSessionsMinutes, setIgnoreShortSessionsMinutes] =
+    useState("0");
+  const [isSettingsLoading, setIsSettingsLoading] = useState(false);
+  const [isSettingsSaving, setIsSettingsSaving] = useState(false);
+  const [settingsError, setSettingsError] = useState("");
 
   const generatePlayniteKey = async () => {
     setIsPlayniteKeyLoading(true);
@@ -85,6 +91,63 @@ export const SettingsPage = ({
     };
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+    setIsSettingsLoading(true);
+    setSettingsError("");
+
+    const loadSettings = async () => {
+      try {
+        const data = await apiRequest<UserSettingsResponse>("/settings");
+        if (cancelled) {
+          return;
+        }
+        setIgnoreShortSessionsMinutes(
+          String(data.ignoreShortSessionsMinutes ?? 0)
+        );
+        setIsSettingsLoading(false);
+      } catch (err) {
+        if (!cancelled) {
+          setIsSettingsLoading(false);
+          setSettingsError(
+            err instanceof Error ? err.message : "Failed to load settings."
+          );
+        }
+      }
+    };
+
+    loadSettings();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const handleSettingsSave = async () => {
+    const parsed = Number(ignoreShortSessionsMinutes);
+    if (!Number.isInteger(parsed) || parsed < 0) {
+      setSettingsError("Enter a non-negative number of minutes.");
+      return;
+    }
+
+    setIsSettingsSaving(true);
+    setSettingsError("");
+    try {
+      const response = await apiRequest<UserSettingsResponse>("/settings", {
+        method: "PUT",
+        body: { ignoreShortSessionsMinutes: parsed },
+      });
+      setIgnoreShortSessionsMinutes(
+        String(response.ignoreShortSessionsMinutes ?? parsed)
+      );
+    } catch (err) {
+      setSettingsError(
+        err instanceof Error ? err.message : "Failed to save settings."
+      );
+    } finally {
+      setIsSettingsSaving(false);
+    }
+  };
+
   return (
     <main className="relative min-h-screen overflow-hidden bg-slate-950 text-slate-100">
       <Background />
@@ -99,6 +162,50 @@ export const SettingsPage = ({
 
         <section className="mt-10 grid gap-6 lg:grid-cols-[1.05fr_0.95fr]">
           <div className="space-y-6">
+            <div className="rounded-3xl border border-slate-800 bg-slate-900/60 p-5 sm:p-6">
+              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-300">
+                Session filters
+              </p>
+              <h2 className="mt-2 text-xl font-semibold text-white">
+                Ignore short sessions
+              </h2>
+              <p className="mt-2 text-xs text-slate-400">
+                Sessions shorter than this duration are marked ignored and
+                excluded from stats. Set to 0 to disable.
+              </p>
+              <div className="mt-5 flex flex-wrap items-end gap-4">
+                <label className="text-xs font-medium text-slate-300">
+                  Minimum minutes
+                  <input
+                    type="number"
+                    min="0"
+                    step="1"
+                    inputMode="numeric"
+                    value={ignoreShortSessionsMinutes}
+                    onChange={(event) =>
+                      setIgnoreShortSessionsMinutes(event.target.value)
+                    }
+                    disabled={isSettingsLoading || isSettingsSaving}
+                    className="mt-2 w-32 rounded-xl border border-slate-700 bg-slate-950/80 px-3 py-2 text-sm text-white outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/30 disabled:cursor-not-allowed disabled:opacity-60"
+                  />
+                </label>
+                <button
+                  type="button"
+                  onClick={handleSettingsSave}
+                  disabled={isSettingsLoading || isSettingsSaving}
+                  className="rounded-full bg-emerald-400 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-slate-900 transition hover:bg-emerald-300 disabled:cursor-not-allowed disabled:bg-emerald-300/60"
+                >
+                  {isSettingsSaving
+                    ? "Saving..."
+                    : isSettingsLoading
+                      ? "Loading..."
+                      : "Save"}
+                </button>
+              </div>
+              {settingsError ? (
+                <p className="mt-3 text-xs text-rose-300">{settingsError}</p>
+              ) : null}
+            </div>
             <div className="rounded-3xl border border-slate-800 bg-slate-900/60 p-5 sm:p-6">
               <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-300">
                 Add provider

@@ -28,6 +28,7 @@ export type AccountSessionRow = {
   capsule_url: string | null;
   game_platform: string;
   game_canonical_key: string;
+  ignored: boolean;
 };
 
 export type AccountSessionCountRow = {
@@ -103,6 +104,11 @@ export type UserChatRow = {
   chat_id: string | null;
 };
 
+export type UserSettingsRow = {
+  user_id: number;
+  ignore_short_sessions_minutes: number;
+};
+
 export type ManualInputRow = {
   id: number;
   raw_title: string;
@@ -127,6 +133,15 @@ export type GameSearchRow = {
   platform: string;
   capsule_url: string | null;
 };
+
+const buildIgnoreShortSessionsFilter = (sql: Sql) => sql`
+  and not (
+    coalesce(us.ignore_short_sessions_minutes, 0) > 0
+    and ps.ended_at is not null
+    and extract(epoch from (ps.ended_at - ps.started_at)) <
+      (coalesce(us.ignore_short_sessions_minutes, 0) * 60)
+  )
+`;
 
 export const loadPlatformCredentials = async (sql: Sql = getSql()) =>
   sql<PlatformCredentialRow[]>`
@@ -206,12 +221,22 @@ export const listAccountSessions = async (
       g.title,
       g.capsule_url,
       game_platform.key as game_platform,
-      g.canonical_key as game_canonical_key
+      g.canonical_key as game_canonical_key,
+      case
+        when coalesce(us.ignore_short_sessions_minutes, 0) > 0
+          and ps.ended_at is not null
+          and extract(epoch from (ps.ended_at - ps.started_at)) <
+            (coalesce(us.ignore_short_sessions_minutes, 0) * 60)
+          then true
+        else false
+      end as ignored
     from play_sessions ps
     join platform_credentials pc on pc.id = ps.platform_credential_id
+    left join user_settings us on us.user_id = pc.user_id
     join games g on g.id = ps.game_id
     join platforms pc_platform on pc_platform.id = pc.platform_id
     join platforms game_platform on game_platform.id = g.platform_id
+    left join user_settings us on us.user_id = pc.user_id
     where ps.platform_credential_id = ${accountId}
       and pc.user_id = ${userId}
       ${titleFilter}
@@ -256,12 +281,22 @@ export const listUserSessions = async (
       g.title,
       g.capsule_url,
       game_platform.key as game_platform,
-      g.canonical_key as game_canonical_key
+      g.canonical_key as game_canonical_key,
+      case
+        when coalesce(us.ignore_short_sessions_minutes, 0) > 0
+          and ps.ended_at is not null
+          and extract(epoch from (ps.ended_at - ps.started_at)) <
+            (coalesce(us.ignore_short_sessions_minutes, 0) * 60)
+          then true
+        else false
+      end as ignored
     from play_sessions ps
     join platform_credentials pc on pc.id = ps.platform_credential_id
+    left join user_settings us on us.user_id = pc.user_id
     join games g on g.id = ps.game_id
     join platforms pc_platform on pc_platform.id = pc.platform_id
     join platforms game_platform on game_platform.id = g.platform_id
+    left join user_settings us on us.user_id = pc.user_id
     where pc.user_id = ${userId}
       ${titleFilter}
       ${fromFilter}
@@ -344,12 +379,22 @@ export const listAccountSessionsToday = async (
       g.title,
       g.capsule_url,
       game_platform.key as game_platform,
-      g.canonical_key as game_canonical_key
+      g.canonical_key as game_canonical_key,
+      case
+        when coalesce(us.ignore_short_sessions_minutes, 0) > 0
+          and ps.ended_at is not null
+          and extract(epoch from (ps.ended_at - ps.started_at)) <
+            (coalesce(us.ignore_short_sessions_minutes, 0) * 60)
+          then true
+        else false
+      end as ignored
     from play_sessions ps
     join platform_credentials pc on pc.id = ps.platform_credential_id
+    left join user_settings us on us.user_id = pc.user_id
     join games g on g.id = ps.game_id
     join platforms pc_platform on pc_platform.id = pc.platform_id
     join platforms game_platform on game_platform.id = g.platform_id
+    left join user_settings us on us.user_id = pc.user_id
     where ps.platform_credential_id = ${accountId}
       and pc.user_id = ${userId}
       and (
@@ -378,12 +423,21 @@ export const listUserSessionsToday = async (
       g.title,
       g.capsule_url,
       game_platform.key as game_platform,
-      g.canonical_key as game_canonical_key
+      g.canonical_key as game_canonical_key,
+      case
+        when coalesce(us.ignore_short_sessions_minutes, 0) > 0
+          and ps.ended_at is not null
+          and extract(epoch from (ps.ended_at - ps.started_at)) <
+            (coalesce(us.ignore_short_sessions_minutes, 0) * 60)
+          then true
+        else false
+      end as ignored
     from play_sessions ps
     join platform_credentials pc on pc.id = ps.platform_credential_id
     join games g on g.id = ps.game_id
     join platforms pc_platform on pc_platform.id = pc.platform_id
     join platforms game_platform on game_platform.id = g.platform_id
+    left join user_settings us on us.user_id = pc.user_id
     where pc.user_id = ${userId}
       and (
         (ps.started_at >= (date_trunc('day', now() at time zone 'utc') at time zone 'utc')
@@ -411,12 +465,21 @@ export const loadAccountCurrentSession = async (
       g.title,
       g.capsule_url,
       game_platform.key as game_platform,
-      g.canonical_key as game_canonical_key
+      g.canonical_key as game_canonical_key,
+      case
+        when coalesce(us.ignore_short_sessions_minutes, 0) > 0
+          and ps.ended_at is not null
+          and extract(epoch from (ps.ended_at - ps.started_at)) <
+            (coalesce(us.ignore_short_sessions_minutes, 0) * 60)
+          then true
+        else false
+      end as ignored
     from play_sessions ps
     join platform_credentials pc on pc.id = ps.platform_credential_id
     join games g on g.id = ps.game_id
     join platforms pc_platform on pc_platform.id = pc.platform_id
     join platforms game_platform on game_platform.id = g.platform_id
+    left join user_settings us on us.user_id = pc.user_id
     where ps.platform_credential_id = ${accountId}
       and pc.user_id = ${userId}
       and ps.ended_at is null
@@ -440,12 +503,21 @@ export const loadUserCurrentSession = async (
       g.title,
       g.capsule_url,
       game_platform.key as game_platform,
-      g.canonical_key as game_canonical_key
+      g.canonical_key as game_canonical_key,
+      case
+        when coalesce(us.ignore_short_sessions_minutes, 0) > 0
+          and ps.ended_at is not null
+          and extract(epoch from (ps.ended_at - ps.started_at)) <
+            (coalesce(us.ignore_short_sessions_minutes, 0) * 60)
+          then true
+        else false
+      end as ignored
     from play_sessions ps
     join platform_credentials pc on pc.id = ps.platform_credential_id
     join games g on g.id = ps.game_id
     join platforms pc_platform on pc_platform.id = pc.platform_id
     join platforms game_platform on game_platform.id = g.platform_id
+    left join user_settings us on us.user_id = pc.user_id
     where pc.user_id = ${userId}
       and ps.ended_at is null
     order by ps.started_at desc
@@ -469,9 +541,11 @@ export const loadAccountPlaytimeSummary = async (
       count(*)::int as session_count
     from play_sessions ps
     join platform_credentials pc on pc.id = ps.platform_credential_id
+    left join user_settings us on us.user_id = pc.user_id
     where ps.platform_credential_id = ${accountId}
       and pc.user_id = ${userId}
       and ps.started_at >= ${startedAt}
+      ${buildIgnoreShortSessionsFilter(sql)}
   `;
 
 export const loadUserPlaytimeSummary = async (
@@ -488,8 +562,10 @@ export const loadUserPlaytimeSummary = async (
       count(*)::int as session_count
     from play_sessions ps
     join platform_credentials pc on pc.id = ps.platform_credential_id
+    left join user_settings us on us.user_id = pc.user_id
     where pc.user_id = ${userId}
       and ps.started_at >= ${startedAt}
+      ${buildIgnoreShortSessionsFilter(sql)}
   `;
 
 export const loadUserPlaytimeSummaryForRange = async (
@@ -507,9 +583,11 @@ export const loadUserPlaytimeSummaryForRange = async (
       count(*)::int as session_count
     from play_sessions ps
     join platform_credentials pc on pc.id = ps.platform_credential_id
+    left join user_settings us on us.user_id = pc.user_id
     where pc.user_id = ${userId}
       and ps.started_at >= ${startedAt}
       and ps.started_at < ${endedAt}
+      ${buildIgnoreShortSessionsFilter(sql)}
   `;
 
 export const loadAccountPlatformTotals = async (
@@ -552,6 +630,7 @@ export const loadAccountPlatformTotals = async (
     where ps.platform_credential_id = ${accountId}
       and pc.user_id = ${userId}
       and ps.started_at >= ${startedAt}
+      ${buildIgnoreShortSessionsFilter(sql)}
     group by 1, 2
     order by 1, 2
   `;
@@ -594,6 +673,7 @@ export const loadUserPlatformTotals = async (
     left join platforms mapped_platform on mapped_platform.id = mapped_game.platform_id
     where pc.user_id = ${userId}
       and ps.started_at >= ${startedAt}
+      ${buildIgnoreShortSessionsFilter(sql)}
     group by 1, 2
     order by 1, 2
   `;
@@ -638,6 +718,7 @@ export const loadUserPlatformTotalsForRange = async (
     where pc.user_id = ${userId}
       and ps.started_at >= ${startedAt}
       and ps.started_at < ${endedAt}
+      ${buildIgnoreShortSessionsFilter(sql)}
     group by 1, 2
     order by 1, 2
   `;
@@ -658,10 +739,12 @@ export const loadAccountTopGames = async (
       )::float as total_seconds
     from play_sessions ps
     join platform_credentials pc on pc.id = ps.platform_credential_id
+    left join user_settings us on us.user_id = pc.user_id
     join games g on g.id = ps.game_id
     where ps.platform_credential_id = ${accountId}
       and pc.user_id = ${userId}
       and ps.started_at >= ${startedAt}
+      ${buildIgnoreShortSessionsFilter(sql)}
     group by g.title
     order by total_seconds desc
     limit ${limit}
@@ -682,9 +765,11 @@ export const loadUserTopGames = async (
       )::float as total_seconds
     from play_sessions ps
     join platform_credentials pc on pc.id = ps.platform_credential_id
+    left join user_settings us on us.user_id = pc.user_id
     join games g on g.id = ps.game_id
     where pc.user_id = ${userId}
       and ps.started_at >= ${startedAt}
+      ${buildIgnoreShortSessionsFilter(sql)}
     group by g.title
     order by total_seconds desc
     limit ${limit}
@@ -706,10 +791,12 @@ export const loadUserTopGamesForRange = async (
       )::float as total_seconds
     from play_sessions ps
     join platform_credentials pc on pc.id = ps.platform_credential_id
+    left join user_settings us on us.user_id = pc.user_id
     join games g on g.id = ps.game_id
     where pc.user_id = ${userId}
       and ps.started_at >= ${startedAt}
       and ps.started_at < ${endedAt}
+      ${buildIgnoreShortSessionsFilter(sql)}
     group by g.title
     order by total_seconds desc
     limit ${limit}
@@ -818,6 +905,36 @@ export const loadUserByChatId = async (chatId: string, sql: Sql = getSql()) => {
     from users
     where chat_id = ${chatId}
     limit 1
+  `;
+  return rows[0] ?? null;
+};
+
+export const loadUserSettings = async (
+  userId: number,
+  sql: Sql = getSql()
+) => {
+  const rows = await sql<UserSettingsRow[]>`
+    select user_id, ignore_short_sessions_minutes
+    from user_settings
+    where user_id = ${userId}
+    limit 1
+  `;
+  return rows[0] ?? null;
+};
+
+export const upsertUserSettings = async (
+  userId: number,
+  ignoreShortSessionsMinutes: number,
+  sql: Sql = getSql()
+) => {
+  const rows = await sql<UserSettingsRow[]>`
+    insert into user_settings (user_id, ignore_short_sessions_minutes)
+    values (${userId}, ${ignoreShortSessionsMinutes})
+    on conflict (user_id)
+    do update
+      set ignore_short_sessions_minutes = excluded.ignore_short_sessions_minutes,
+          updated_at = now()
+    returning user_id, ignore_short_sessions_minutes
   `;
   return rows[0] ?? null;
 };

@@ -380,17 +380,26 @@ export const GamePage = ({
   const gameImage =
     recentSessions.find((session) => session.capsuleUrl)?.capsuleUrl ?? null;
 
+  const statsSessions = useMemo(
+    () => allSessions.filter((session) => !session.ignored),
+    [allSessions]
+  );
+  const recentStatsSessions = useMemo(
+    () => recentSessions.filter((session) => !session.ignored),
+    [recentSessions]
+  );
+
   const totalSeconds = useMemo(
     () =>
-      allSessions.reduce(
+      statsSessions.reduce(
         (sum, session) => sum + getSessionDurationSeconds(session),
         0
       ),
-    [allSessions]
+    [statsSessions]
   );
 
-  const lastPlayed = recentSessions[0]
-    ? new Date(recentSessions[0].startedAt)
+  const lastPlayed = recentStatsSessions[0]
+    ? new Date(recentStatsSessions[0].startedAt)
     : null;
 
   const yearlyStats = useMemo(() => {
@@ -411,7 +420,7 @@ export const GamePage = ({
     );
 
     const bucketMap = new Map(buckets.map((item) => [item.key, item]));
-    allSessions.forEach((session) => {
+    statsSessions.forEach((session) => {
       const date = new Date(session.startedAt);
       const year = date.getUTCFullYear();
       if (year < ALL_TIME_START_YEAR) {
@@ -428,7 +437,7 @@ export const GamePage = ({
       ...bucket,
       hours: bucket.seconds / 3600,
     }));
-  }, [allSessions]);
+  }, [statsSessions]);
 
   const maxHours = Math.max(...yearlyStats.map((item) => item.hours), 1);
   const availableYears = useMemo(
@@ -452,7 +461,7 @@ export const GamePage = ({
     });
 
     const bucketMap = new Map(buckets.map((item) => [item.key, item]));
-    allSessions.forEach((session) => {
+    statsSessions.forEach((session) => {
       const date = new Date(session.startedAt);
       if (date.getUTCFullYear() !== activeYear) {
         return;
@@ -468,7 +477,7 @@ export const GamePage = ({
       ...bucket,
       hours: bucket.seconds / 3600,
     }));
-  }, [activeYear, allSessions]);
+  }, [activeYear, statsSessions]);
 
   const maxMonthlyHours = Math.max(
     ...monthlyStats.map((item) => item.hours),
@@ -742,7 +751,7 @@ export const GamePage = ({
               Sessions
             </p>
             <p className="text-lg font-semibold text-white">
-              {allSessions.length}
+              {statsSessions.length}
             </p>
           </div>
           <div className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-900/70 px-4 py-3 sm:block sm:space-y-2 sm:px-5">

@@ -6,6 +6,7 @@ export type AccountSession = {
   platform: string;
   game: string;
   capsuleUrl: string | null;
+  ignored: boolean;
   mappedPlatform?: string;
   mappedSource?: "local" | "igdb";
 };
@@ -36,6 +37,10 @@ export type GameIgnoreResponse = {
 export type GameRatingResponse = {
   gameId: number;
   rating: number | null;
+};
+
+export type UserSettingsResponse = {
+  ignoreShortSessionsMinutes: number;
 };
 
 export type AccountStatsPeriod = {

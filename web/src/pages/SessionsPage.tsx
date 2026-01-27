@@ -488,6 +488,26 @@ export const SessionsPage = ({
     );
   };
 
+  const renderIgnoredIcon = () => (
+    <span
+      className="inline-flex h-5 w-5 items-center justify-center text-slate-400"
+      title="Ignored from stats"
+      aria-label="Ignored from stats"
+    >
+      <svg
+        aria-hidden="true"
+        viewBox="0 0 24 24"
+        className="h-4 w-4"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+      >
+        <circle cx="12" cy="12" r="8" />
+        <path strokeLinecap="round" d="M8 8l8 8" />
+      </svg>
+    </span>
+  );
+
   const sessionRowsView = useMemo(
     () =>
       sessionRows.map((session) => ({
@@ -497,6 +517,7 @@ export const SessionsPage = ({
         date: formatDateLabel(new Date(session.startedAt)),
         duration: formatDuration(getSessionDurationSeconds(session), "short"),
         imageUrl: session.capsuleUrl ?? null,
+        ignored: session.ignored,
       })),
     [sessionRows]
   );
@@ -758,9 +779,12 @@ export const SessionsPage = ({
                       {session.date}
                     </p>
                   </div>
-                  <span className="text-sm font-semibold text-emerald-200">
-                    {session.duration}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    {session.ignored ? renderIgnoredIcon() : null}
+                    <span className="text-sm font-semibold text-emerald-200">
+                      {session.duration}
+                    </span>
+                  </div>
                 </div>
                 <div className="mt-3 flex items-center justify-between">
                   <span className="text-[11px] uppercase tracking-[0.3em] text-slate-500">
@@ -880,7 +904,10 @@ export const SessionsPage = ({
                         {session.date}
                       </td>
                       <td className="px-4 py-3 text-right text-emerald-200">
-                        {session.duration}
+                        <div className="inline-flex items-center justify-end gap-2">
+                          {session.ignored ? renderIgnoredIcon() : null}
+                          <span>{session.duration}</span>
+                        </div>
                       </td>
                       <td className="px-4 py-3 text-right">
                         <button

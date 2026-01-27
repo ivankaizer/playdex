@@ -15,6 +15,7 @@ export type AccountSession = {
   platform: string;
   game: string;
   capsuleUrl: string | null;
+  ignored: boolean;
   mappedPlatform?: string;
   mappedSource?: "local" | "igdb";
 };
@@ -34,6 +35,7 @@ export const toDomainSession = (
   platform: row.platform,
   game: row.title,
   capsuleUrl: row.capsule_url,
+  ignored: row.ignored,
   gamePlatform: row.game_platform,
   gameCanonicalKey: row.game_canonical_key,
 });

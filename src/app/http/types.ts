@@ -25,6 +25,7 @@ export type AccountSessionDto = {
   platform: string;
   game: string;
   capsuleUrl: string | null;
+  ignored: boolean;
   mappedPlatform?: string;
   mappedSource?: "local" | "igdb";
 };
@@ -59,6 +60,10 @@ export type GameIgnoreResponseDto = {
 export type GameRatingResponseDto = {
   gameId: number;
   rating: number | null;
+};
+
+export type UserSettingsResponseDto = {
+  ignoreShortSessionsMinutes: number;
 };
 
 export type AccountStatsPeriodDto = {
@@ -168,4 +173,3 @@ export type ManualMappingResponseDto = {
 export type ManualEntryCreateResponseDto = {
   sessionId: number;
 };
-
