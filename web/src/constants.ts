@@ -57,16 +57,24 @@ export const providerMeta: Record<
   string,
   { label: string; color: string; accent: string }
 > = {
-  steam: { label: "S", color: "bg-slate-800", accent: "text-slate-100" },
-  psn: { label: "P", color: "bg-indigo-500/30", accent: "text-indigo-200" },
+  steam: {
+    label: "S",
+    color: "bg-slate-200 dark:bg-slate-800",
+    accent: "text-slate-900 dark:text-slate-100",
+  },
+  psn: {
+    label: "P",
+    color: "bg-indigo-500/30",
+    accent: "text-indigo-700 dark:text-indigo-200",
+  },
   playnite: {
     label: "PL",
     color: "bg-amber-500/30",
-    accent: "text-amber-200",
+    accent: "text-amber-700 dark:text-amber-200",
   },
   manual: {
     label: "M",
     color: "bg-teal-500/30",
-    accent: "text-teal-200",
+    accent: "text-teal-700 dark:text-teal-200",
   },
 };

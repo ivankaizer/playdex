@@ -18,6 +18,8 @@ type SettingsPageProps = {
   navItems?: NavItem[];
   onNavigate: (path: string) => void;
   onLogout: () => void;
+  theme: "light" | "dark";
+  onToggleTheme: () => void;
 };
 
 export const SettingsPage = ({
@@ -25,6 +27,8 @@ export const SettingsPage = ({
   navItems = defaultNavItems,
   onNavigate,
   onLogout,
+  theme,
+  onToggleTheme,
 }: SettingsPageProps) => {
   const [playniteKey, setPlayniteKey] = useState("");
   const [isPlayniteKeyLoading, setIsPlayniteKeyLoading] = useState(false);
@@ -149,7 +153,7 @@ export const SettingsPage = ({
   };
 
   return (
-    <main className="relative min-h-screen overflow-hidden bg-slate-950 text-slate-100">
+    <main className="relative min-h-screen overflow-hidden bg-slate-200 dark:bg-slate-950 text-slate-900 dark:text-slate-100">
       <Background />
       <div className="relative mx-auto w-full max-w-6xl p-3 sm:px-6 sm:py-12">
         <AppHeader
@@ -158,23 +162,25 @@ export const SettingsPage = ({
           path={path}
           onNavigate={onNavigate}
           onLogout={onLogout}
+          theme={theme}
+          onToggleTheme={onToggleTheme}
         />
 
         <section className="mt-10 grid gap-6 lg:grid-cols-[1.05fr_0.95fr]">
           <div className="space-y-6">
-            <div className="rounded-3xl border border-slate-800 bg-slate-900/60 p-5 sm:p-6">
-              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-300">
+            <div className="rounded-3xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/60 p-5 sm:p-6">
+              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-700 dark:text-emerald-300">
                 Session filters
               </p>
-              <h2 className="mt-2 text-xl font-semibold text-white">
+              <h2 className="mt-2 text-xl font-semibold text-slate-900 dark:text-white">
                 Ignore short sessions
               </h2>
-              <p className="mt-2 text-xs text-slate-400">
+              <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
                 Sessions shorter than this duration are marked ignored and
                 excluded from stats. Set to 0 to disable.
               </p>
               <div className="mt-5 flex flex-wrap items-end gap-4">
-                <label className="text-xs font-medium text-slate-300">
+                <label className="text-xs font-medium text-slate-600 dark:text-slate-300">
                   Minimum minutes
                   <input
                     type="number"
@@ -186,7 +192,7 @@ export const SettingsPage = ({
                       setIgnoreShortSessionsMinutes(event.target.value)
                     }
                     disabled={isSettingsLoading || isSettingsSaving}
-                    className="mt-2 w-32 rounded-xl border border-slate-700 bg-slate-950/80 px-3 py-2 text-sm text-white outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/30 disabled:cursor-not-allowed disabled:opacity-60"
+                    className="mt-2 w-32 rounded-xl border border-slate-300 dark:border-slate-700 bg-white/90 dark:bg-slate-950/80 px-3 py-2 text-sm text-slate-900 dark:text-white outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/30 disabled:cursor-not-allowed disabled:opacity-60"
                   />
                 </label>
                 <button
@@ -203,34 +209,34 @@ export const SettingsPage = ({
                 </button>
               </div>
               {settingsError ? (
-                <p className="mt-3 text-xs text-rose-300">{settingsError}</p>
+                <p className="mt-3 text-xs text-rose-700 dark:text-rose-300">{settingsError}</p>
               ) : null}
             </div>
-            <div className="rounded-3xl border border-slate-800 bg-slate-900/60 p-5 sm:p-6">
-              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-300">
+            <div className="rounded-3xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/60 p-5 sm:p-6">
+              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-700 dark:text-emerald-300">
                 Add provider
               </p>
-              <h2 className="mt-2 text-xl font-semibold text-white">
+              <h2 className="mt-2 text-xl font-semibold text-slate-900 dark:text-white">
                 Connect new accounts
               </h2>
               <div className="mt-6 grid gap-4">
-                <div className="rounded-2xl border border-slate-800 bg-slate-950/50 p-4">
-                  <p className="text-sm font-semibold text-white">Steam</p>
+                <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-200/50 dark:bg-slate-950/50 p-4">
+                  <p className="text-sm font-semibold text-slate-900 dark:text-white">Steam</p>
                   <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                    <label className="text-xs font-medium text-slate-300">
+                    <label className="text-xs font-medium text-slate-600 dark:text-slate-300">
                       API Key
                       <input
                         type="text"
                         placeholder="STEAM_API_KEY"
-                        className="mt-2 w-full rounded-xl border border-slate-700 bg-slate-950/80 px-3 py-2 text-sm text-white outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/30"
+                        className="mt-2 w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white/90 dark:bg-slate-950/80 px-3 py-2 text-sm text-slate-900 dark:text-white outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/30"
                       />
                     </label>
-                    <label className="text-xs font-medium text-slate-300">
+                    <label className="text-xs font-medium text-slate-600 dark:text-slate-300">
                       Account ID
                       <input
                         type="text"
                         placeholder="7656119..."
-                        className="mt-2 w-full rounded-xl border border-slate-700 bg-slate-950/80 px-3 py-2 text-sm text-white outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/30"
+                        className="mt-2 w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white/90 dark:bg-slate-950/80 px-3 py-2 text-sm text-slate-900 dark:text-white outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/30"
                       />
                     </label>
                   </div>
@@ -242,14 +248,14 @@ export const SettingsPage = ({
                   </button>
                 </div>
 
-                <div className="rounded-2xl border border-slate-800 bg-slate-950/50 p-4">
-                  <p className="text-sm font-semibold text-white">PSN</p>
-                  <label className="mt-4 block text-xs font-medium text-slate-300">
+                <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-200/50 dark:bg-slate-950/50 p-4">
+                  <p className="text-sm font-semibold text-slate-900 dark:text-white">PSN</p>
+                  <label className="mt-4 block text-xs font-medium text-slate-600 dark:text-slate-300">
                     NPSSO Code
                     <input
                       type="text"
                       placeholder="NPSSO..."
-                      className="mt-2 w-full rounded-xl border border-slate-700 bg-slate-950/80 px-3 py-2 text-sm text-white outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/30"
+                      className="mt-2 w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white/90 dark:bg-slate-950/80 px-3 py-2 text-sm text-slate-900 dark:text-white outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/30"
                     />
                   </label>
                   <button
@@ -260,9 +266,9 @@ export const SettingsPage = ({
                   </button>
                 </div>
 
-                <div className="rounded-2xl border border-slate-800 bg-slate-950/50 p-4">
-                  <p className="text-sm font-semibold text-white">Playnite</p>
-                  <p className="mt-2 text-xs text-slate-400">
+                <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-200/50 dark:bg-slate-950/50 p-4">
+                  <p className="text-sm font-semibold text-slate-900 dark:text-white">Playnite</p>
+                  <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
                     Generate an API key for the local Playnite client.
                   </p>
                   <div className="mt-4 flex flex-wrap items-center gap-3">
@@ -270,11 +276,11 @@ export const SettingsPage = ({
                       type="button"
                       onClick={generatePlayniteKey}
                       disabled={isPlayniteKeyLoading}
-                      className="rounded-full border border-emerald-400/60 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-emerald-200 transition hover:border-emerald-300"
+                      className="rounded-full border border-emerald-400/60 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-emerald-700 dark:text-emerald-200 transition hover:border-emerald-300"
                     >
                       {isPlayniteKeyLoading ? "Generating..." : "Generate key"}
                     </button>
-                    <span className="rounded-full border border-slate-700 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-slate-200">
+                    <span className="rounded-full border border-slate-300 dark:border-slate-700 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-slate-700 dark:text-slate-200">
                       {playniteKey || "Not generated yet"}
                     </span>
                   </div>
@@ -289,54 +295,54 @@ export const SettingsPage = ({
             </div>
           </div>
 
-          <div className="rounded-3xl border border-slate-800 bg-slate-900/60 p-5 sm:p-6">
-            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-300">
+          <div className="rounded-3xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/60 p-5 sm:p-6">
+            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-700 dark:text-emerald-300">
               Manage providers
             </p>
-            <h2 className="mt-2 text-xl font-semibold text-white">
+            <h2 className="mt-2 text-xl font-semibold text-slate-900 dark:text-white">
               Active connections
             </h2>
             {providersError ? (
-              <p className="mt-4 text-xs text-rose-300">{providersError}</p>
+              <p className="mt-4 text-xs text-rose-700 dark:text-rose-300">{providersError}</p>
             ) : null}
             <div className="mt-6 space-y-4">
               {isProvidersLoading ? (
                 [1, 2].map((item) => (
                   <div
                     key={item}
-                    className="flex items-center justify-between gap-4 rounded-2xl border border-slate-800 bg-slate-950/50 p-4"
+                    className="flex items-center justify-between gap-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-200/50 dark:bg-slate-950/50 p-4"
                   >
                     <div className="flex items-center gap-3">
-                      <div className="h-10 w-10 rounded-full bg-slate-800/60" />
+                      <div className="h-10 w-10 rounded-full bg-slate-200/70 dark:bg-slate-800/60" />
                       <div className="space-y-2">
-                        <div className="h-3 w-24 rounded-full bg-slate-800/60" />
-                        <div className="h-2 w-16 rounded-full bg-slate-800/50" />
+                        <div className="h-3 w-24 rounded-full bg-slate-200/70 dark:bg-slate-800/60" />
+                        <div className="h-2 w-16 rounded-full bg-slate-200/50 dark:bg-slate-800/50" />
                       </div>
                     </div>
-                    <div className="h-6 w-20 rounded-full bg-slate-800/60" />
+                    <div className="h-6 w-20 rounded-full bg-slate-200/70 dark:bg-slate-800/60" />
                   </div>
                 ))
               ) : providerStatus.length === 0 ? (
-                <div className="rounded-2xl border border-dashed border-slate-800 bg-slate-950/40 p-4 text-xs text-slate-400">
+                <div className="rounded-2xl border border-dashed border-slate-200 dark:border-slate-800 bg-slate-200/40 dark:bg-slate-950/40 p-4 text-xs text-slate-500 dark:text-slate-400">
                   No providers connected yet. Add one to start syncing playtime.
                 </div>
               ) : (
                 providerStatus.map((provider) => (
                   <div
                     key={provider.id}
-                    className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-slate-800 bg-slate-950/50 p-4"
+                    className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-200/50 dark:bg-slate-950/50 p-4"
                   >
                     <div className="flex items-center gap-3">
                       <div
                         className={`flex h-10 w-10 items-center justify-center rounded-full ${
                           providerMeta[provider.platform]?.color ??
-                          "bg-slate-800"
+                          "bg-slate-200 dark:bg-slate-800"
                         }`}
                       >
                         <span
                           className={`text-xs font-semibold uppercase ${
                             providerMeta[provider.platform]?.accent ??
-                            "text-slate-200"
+                            "text-slate-700 dark:text-slate-200"
                           }`}
                         >
                           {providerMeta[provider.platform]?.label ?? "PX"}
@@ -344,11 +350,11 @@ export const SettingsPage = ({
                       </div>
                       <div>
                         <div className="flex items-center gap-2">
-                          <p className="text-sm font-semibold text-white">
+                          <p className="text-sm font-semibold text-slate-900 dark:text-white">
                             {formatProviderName(provider.platform)}
                           </p>
                         </div>
-                        <p className="text-xs text-slate-400">
+                        <p className="text-xs text-slate-500 dark:text-slate-400">
                           {provider.accountId ?? "Local"}
                         </p>
                       </div>
@@ -374,20 +380,20 @@ export const SettingsPage = ({
                         className={`rounded-full px-3 py-2 font-semibold uppercase tracking-[0.3em] ${
                           provider.status === "active"
                             ? "bg-emerald-400 text-slate-900"
-                            : "border border-slate-700 text-slate-200"
+                            : "border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200"
                         }`}
                       >
                         {provider.status === "active" ? "Active" : "Paused"}
                       </button>
                       <button
                         type="button"
-                        className="rounded-full border border-slate-700 px-3 py-2 font-semibold uppercase tracking-[0.3em] text-slate-200"
+                        className="rounded-full border border-slate-300 dark:border-slate-700 px-3 py-2 font-semibold uppercase tracking-[0.3em] text-slate-700 dark:text-slate-200"
                       >
                         Edit
                       </button>
                       <button
                         type="button"
-                        className="rounded-full border border-rose-500/50 px-3 py-2 font-semibold uppercase tracking-[0.3em] text-rose-300"
+                        className="rounded-full border border-rose-500/50 px-3 py-2 font-semibold uppercase tracking-[0.3em] text-rose-700 dark:text-rose-300"
                       >
                         Remove
                       </button>

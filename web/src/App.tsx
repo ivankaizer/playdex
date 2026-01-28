@@ -11,6 +11,20 @@ import { decodeGameHash, encodeGameId } from "./utils/gameHash";
 
 export const App = () => {
   const [path, setPath] = useState(() => window.location.pathname);
+  const [theme, setTheme] = useState<"light" | "dark">(() => {
+    const stored = localStorage.getItem("playdex.theme");
+    if (stored === "light" || stored === "dark") {
+      return stored;
+    }
+    const prefersDark = window.matchMedia
+      ? window.matchMedia("(prefers-color-scheme: dark)").matches
+      : false;
+    return prefersDark ? "dark" : "light";
+  });
+
+  const toggleTheme = () => {
+    setTheme((current) => (current === "dark" ? "light" : "dark"));
+  };
 
   const navigate = (target: string) => {
     if (target === path) {
@@ -38,6 +52,13 @@ export const App = () => {
     return () => window.removeEventListener("popstate", handlePopState);
   }, []);
 
+  useEffect(() => {
+    const root = document.documentElement;
+    root.classList.toggle("dark", theme === "dark");
+    root.dataset.theme = theme;
+    localStorage.setItem("playdex.theme", theme);
+  }, [theme]);
+
   const isLoggedIn = Boolean(localStorage.getItem("playdex.token"));
   const isProtectedPath = (target: string) =>
     protectedPaths.has(target) || target.startsWith("/games/");
@@ -61,6 +82,8 @@ export const App = () => {
         navItems={navItems}
         onNavigate={navigate}
         onLogout={handleLogout}
+        theme={theme}
+        onToggleTheme={toggleTheme}
       />
     );
   }
@@ -72,6 +95,8 @@ export const App = () => {
         navItems={navItems}
         onNavigate={navigate}
         onLogout={handleLogout}
+        theme={theme}
+        onToggleTheme={toggleTheme}
       />
     );
   }
@@ -83,6 +108,8 @@ export const App = () => {
         navItems={navItems}
         onNavigate={navigate}
         onLogout={handleLogout}
+        theme={theme}
+        onToggleTheme={toggleTheme}
       />
     );
   }
@@ -94,6 +121,8 @@ export const App = () => {
         navItems={navItems}
         onNavigate={navigate}
         onLogout={handleLogout}
+        theme={theme}
+        onToggleTheme={toggleTheme}
       />
     );
   }
@@ -110,6 +139,8 @@ export const App = () => {
         gameId={gameId}
         onNavigate={navigate}
         onLogout={handleLogout}
+        theme={theme}
+        onToggleTheme={toggleTheme}
       />
     );
   }
@@ -119,6 +150,8 @@ export const App = () => {
       isLoggedIn={isLoggedIn}
       onDashboardRedirect={handleDashboardRedirect}
       onLogout={handleLogout}
+      theme={theme}
+      onToggleTheme={toggleTheme}
     />
   );
 };

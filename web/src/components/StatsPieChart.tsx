@@ -36,8 +36,9 @@ export const StatsPieChart = ({
         cy={size / 2}
         r={radius}
         fill="transparent"
-        stroke="rgba(30,41,59,0.8)"
+        stroke="currentColor"
         strokeWidth={strokeWidth}
+        className="text-slate-200 dark:text-slate-800"
       />
       {segments.map((segment, index) => {
         const dash = (segment.value / total) * circumference;

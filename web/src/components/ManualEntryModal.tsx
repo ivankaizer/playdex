@@ -65,21 +65,21 @@ export const ManualEntryModal = ({
   );
 
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 px-4 py-8">
-      <div className="w-full max-w-2xl rounded-3xl border border-slate-800 bg-slate-900/90 p-5 shadow-[0_30px_80px_rgba(15,23,42,0.7)] sm:p-6">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/30 dark:bg-slate-950/80 px-4 py-8">
+      <div className="w-full max-w-2xl rounded-3xl border border-slate-200 dark:border-slate-800 bg-white/90 dark:bg-slate-900/90 p-5 shadow-[0_30px_80px_rgba(15,23,42,0.7)] sm:p-6">
         <div className="flex items-center justify-between gap-4">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-300">
+            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-700 dark:text-emerald-300">
               Manual entry
             </p>
-            <h2 className="mt-2 text-xl font-semibold text-white">
+            <h2 className="mt-2 text-xl font-semibold text-slate-900 dark:text-white">
               Log a time entry
             </h2>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="rounded-full border border-slate-700 px-3 py-1 text-xs font-semibold uppercase tracking-[0.3em] text-slate-200"
+            className="rounded-full border border-slate-300 dark:border-slate-700 px-3 py-1 text-xs font-semibold uppercase tracking-[0.3em] text-slate-700 dark:text-slate-200"
           >
             Close
           </button>
@@ -87,17 +87,17 @@ export const ManualEntryModal = ({
 
         <div className="mt-6 grid gap-4">
           <div className="grid gap-3 sm:grid-cols-[0.7fr_0.3fr]">
-            <label className="text-xs font-medium text-slate-300">
+            <label className="text-xs font-medium text-slate-600 dark:text-slate-300">
               Date
               <input
                 type="date"
                 value={manualEntryDate}
                 onChange={(event) => onDateChange(event.target.value)}
-                className="mt-2 w-full rounded-xl border border-slate-700 bg-slate-950/80 px-3 py-2 text-sm text-white outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/30"
+                className="mt-2 w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white/90 dark:bg-slate-950/80 px-3 py-2 text-sm text-slate-900 dark:text-white outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/30"
               />
             </label>
             <div className="grid grid-cols-2 gap-3">
-              <label className="text-xs font-medium text-slate-300">
+              <label className="text-xs font-medium text-slate-600 dark:text-slate-300">
                 Hours
                 <input
                   type="number"
@@ -105,10 +105,10 @@ export const ManualEntryModal = ({
                   step="1"
                   value={manualEntryHours}
                   onChange={(event) => onHoursChange(event.target.value)}
-                  className="mt-2 w-full rounded-xl border border-slate-700 bg-slate-950/80 px-3 py-2 text-sm text-white outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/30"
+                  className="mt-2 w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white/90 dark:bg-slate-950/80 px-3 py-2 text-sm text-slate-900 dark:text-white outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/30"
                 />
               </label>
-              <label className="text-xs font-medium text-slate-300">
+              <label className="text-xs font-medium text-slate-600 dark:text-slate-300">
                 Minutes
                 <input
                   type="number"
@@ -116,21 +116,21 @@ export const ManualEntryModal = ({
                   step="1"
                   value={manualEntryMinutes}
                   onChange={(event) => onMinutesChange(event.target.value)}
-                  className="mt-2 w-full rounded-xl border border-slate-700 bg-slate-950/80 px-3 py-2 text-sm text-white outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/30"
+                  className="mt-2 w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white/90 dark:bg-slate-950/80 px-3 py-2 text-sm text-slate-900 dark:text-white outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/30"
                 />
               </label>
             </div>
           </div>
 
           <div className="flex flex-wrap items-end gap-3">
-            <label className="flex-1 text-xs font-medium text-slate-300">
+            <label className="flex-1 text-xs font-medium text-slate-600 dark:text-slate-300">
               Search by name
               <input
                 type="text"
                 value={manualEntrySearchQuery}
                 onChange={(event) => onSearchQueryChange(event.target.value)}
                 placeholder="Search games"
-                className="mt-2 w-full rounded-xl border border-slate-700 bg-slate-950/80 px-3 py-2 text-sm text-white outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/30"
+                className="mt-2 w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white/90 dark:bg-slate-950/80 px-3 py-2 text-sm text-slate-900 dark:text-white outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/30"
               />
             </label>
             <button
@@ -144,23 +144,23 @@ export const ManualEntryModal = ({
           </div>
 
           {!manualEntryIgdbAvailable ? (
-            <p className="text-xs text-amber-200">
+            <p className="text-xs text-amber-700 dark:text-amber-200">
               IGDB is not configured on the server.
             </p>
           ) : null}
 
           {manualEntrySearchError ? (
-            <p className="text-xs text-rose-300">{manualEntrySearchError}</p>
+            <p className="text-xs text-rose-700 dark:text-rose-300">{manualEntrySearchError}</p>
           ) : null}
 
           <div className="grid gap-3 lg:grid-cols-2">
-            <div className="rounded-2xl border border-slate-800 bg-slate-950/50 p-4">
-              <p className="text-xs uppercase tracking-[0.3em] text-slate-400">
+            <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-200/50 dark:bg-slate-950/50 p-4">
+              <p className="text-xs uppercase tracking-[0.3em] text-slate-500 dark:text-slate-400">
                 Existing games
               </p>
               <div className="mt-3 max-h-64 space-y-2 overflow-y-auto pr-1">
                 {localResults.length === 0 ? (
-                  <p className="text-xs text-slate-400">
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
                     Search to see saved games.
                   </p>
                 ) : (
@@ -171,12 +171,12 @@ export const ManualEntryModal = ({
                       onClick={() => onSelectResult(result)}
                       className={`flex w-full items-center justify-between gap-3 rounded-xl border px-3 py-2 text-left text-sm transition ${
                         manualEntrySelection?.gameId === result.gameId
-                          ? "border-emerald-400/60 bg-emerald-400/10 text-emerald-100"
-                          : "border-slate-800 bg-slate-950/40 text-slate-200 hover:border-emerald-400/40"
+                          ? "border-emerald-400/60 bg-emerald-400/10 text-emerald-700 dark:text-emerald-100"
+                          : "border-slate-200 dark:border-slate-800 bg-slate-200/40 dark:bg-slate-950/40 text-slate-700 dark:text-slate-200 hover:border-emerald-400/40"
                       }`}
                     >
                       <span>{formatEntryResultLabel(result)}</span>
-                      <span className="text-[10px] uppercase tracking-[0.3em] text-slate-400">
+                      <span className="text-[10px] uppercase tracking-[0.3em] text-slate-500 dark:text-slate-400">
                         Local
                       </span>
                     </button>
@@ -185,13 +185,13 @@ export const ManualEntryModal = ({
               </div>
             </div>
 
-            <div className="rounded-2xl border border-slate-800 bg-slate-950/50 p-4">
-              <p className="text-xs uppercase tracking-[0.3em] text-slate-400">
+            <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-200/50 dark:bg-slate-950/50 p-4">
+              <p className="text-xs uppercase tracking-[0.3em] text-slate-500 dark:text-slate-400">
                 IGDB results
               </p>
               <div className="mt-3 max-h-64 space-y-2 overflow-y-auto pr-1">
                 {igdbResults.length === 0 ? (
-                  <p className="text-xs text-slate-400">
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
                     Search to see IGDB matches.
                   </p>
                 ) : (
@@ -202,8 +202,8 @@ export const ManualEntryModal = ({
                       onClick={() => onSelectResult(result)}
                       className={`flex w-full items-center justify-between gap-3 rounded-xl border px-3 py-2 text-left text-sm transition ${
                         manualEntrySelection?.igdbId === result.igdbId
-                          ? "border-emerald-400/60 bg-emerald-400/10 text-emerald-100"
-                          : "border-slate-800 bg-slate-950/40 text-slate-200 hover:border-emerald-400/40"
+                          ? "border-emerald-400/60 bg-emerald-400/10 text-emerald-700 dark:text-emerald-100"
+                          : "border-slate-200 dark:border-slate-800 bg-slate-200/40 dark:bg-slate-950/40 text-slate-700 dark:text-slate-200 hover:border-emerald-400/40"
                       }`}
                     >
                       <span>{formatEntryResultLabel(result)}</span>
@@ -215,22 +215,22 @@ export const ManualEntryModal = ({
           </div>
 
           {manualEntrySelection ? (
-            <div className="rounded-2xl border border-slate-800 bg-slate-950/50 p-4">
-              <p className="text-xs uppercase tracking-[0.3em] text-slate-400">
+            <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-200/50 dark:bg-slate-950/50 p-4">
+              <p className="text-xs uppercase tracking-[0.3em] text-slate-500 dark:text-slate-400">
                 Selected game
               </p>
-              <p className="mt-2 text-sm font-semibold text-white">
+              <p className="mt-2 text-sm font-semibold text-slate-900 dark:text-white">
                 {formatEntryResultLabel(manualEntrySelection)}
               </p>
               {manualEntrySelection.source === "igdb" ? (
-                <label className="mt-4 block text-xs font-medium text-slate-300">
+                <label className="mt-4 block text-xs font-medium text-slate-600 dark:text-slate-300">
                   Choose platform
                   <select
                     value={manualEntryPlatformKey}
                     onChange={(event) =>
                       onPlatformKeyChange(event.target.value)
                     }
-                    className="mt-2 w-full rounded-xl border border-slate-700 bg-slate-950/80 px-3 py-2 text-sm text-white outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/30"
+                    className="mt-2 w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white/90 dark:bg-slate-950/80 px-3 py-2 text-sm text-slate-900 dark:text-white outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/30"
                   >
                     <option value="">Select a platform</option>
                     {platformOptions.map((platform) => (
@@ -245,7 +245,7 @@ export const ManualEntryModal = ({
           ) : null}
 
           {manualEntryError ? (
-            <p className="text-xs text-rose-300">{manualEntryError}</p>
+            <p className="text-xs text-rose-700 dark:text-rose-300">{manualEntryError}</p>
           ) : null}
         </div>
 
@@ -253,7 +253,7 @@ export const ManualEntryModal = ({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-full border border-slate-700 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-slate-200"
+            className="rounded-full border border-slate-300 dark:border-slate-700 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-slate-700 dark:text-slate-200"
           >
             Cancel
           </button>
