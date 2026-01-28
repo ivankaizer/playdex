@@ -243,6 +243,16 @@ export const DashboardPage = ({
     theme === "dark"
       ? ["#34d399", "#22d3ee", "#a78bfa", "#f59e0b"]
       : ["#059669", "#0e7490", "#7c3aed", "#d97706"];
+  const recapNow = new Date();
+  const recapToday = formatUtcDateInput(recapNow);
+  const recapMonthStart = formatUtcDateInput(
+    new Date(
+      Date.UTC(recapNow.getUTCFullYear(), recapNow.getUTCMonth(), 1)
+    )
+  );
+  const recapYearStart = formatUtcDateInput(
+    new Date(Date.UTC(recapNow.getUTCFullYear(), 0, 1))
+  );
 
   const currentSessionStartedAt = currentSession
     ? new Date(currentSession.startedAt)
@@ -493,6 +503,25 @@ export const DashboardPage = ({
                     {todayTotals.hours} played
                   </h2>
                 </div>
+                <button
+                  type="button"
+                  onClick={() =>
+                    onNavigate(`/recap?from=${recapToday}&to=${recapToday}`)
+                  }
+                  className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 dark:border-slate-800 bg-white/70 dark:bg-slate-950/60 text-slate-600 dark:text-slate-200 transition hover:border-emerald-300 hover:text-emerald-700 dark:hover:text-emerald-200"
+                  aria-label="Open recap"
+                  title="Open recap"
+                >
+                  <svg
+                    viewBox="0 0 20 20"
+                    className="h-4 w-4"
+                    fill="currentColor"
+                    aria-hidden="true"
+                  >
+                    <path d="M12.5 3.5a1 1 0 011.5.86v7.79l2.22-2.22a1 1 0 111.41 1.41l-3.93 3.93a1 1 0 01-1.7-.7V4.36a1 1 0 01.5-.86z" />
+                    <path d="M4 5a2 2 0 012-2h3a1 1 0 110 2H6v10h8v-3a1 1 0 112 0v3a2 2 0 01-2 2H6a2 2 0 01-2-2V5z" />
+                  </svg>
+                </button>
               </div>
               <div className="mt-5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-200/50 dark:bg-slate-950/50 p-4">
                 <p className="text-xs uppercase tracking-[0.3em] text-slate-500 dark:text-slate-400">
@@ -644,6 +673,9 @@ export const DashboardPage = ({
             topGames={monthlyTopGames}
             colors={platformPieColors}
             onGameSelect={handleGameSelect}
+            onOpenRecap={() =>
+              onNavigate(`/recap?from=${recapMonthStart}&to=${recapToday}`)
+            }
           />
 
           <StatsRecapSection
@@ -658,6 +690,9 @@ export const DashboardPage = ({
             topGames={yearlyTopGames}
             colors={platformPieColors}
             onGameSelect={handleGameSelect}
+            onOpenRecap={() =>
+              onNavigate(`/recap?from=${recapYearStart}&to=${recapToday}`)
+            }
           />
         </section>
       </div>

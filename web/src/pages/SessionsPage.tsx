@@ -706,6 +706,13 @@ export const SessionsPage = ({
               topGames={rangeTopGames}
               colors={platformPieColors}
               onGameSelect={handleGameSelect}
+              onOpenRecap={() => {
+                if (sessionsFrom && sessionsTo) {
+                  onNavigate(`/recap?from=${sessionsFrom}&to=${sessionsTo}`);
+                } else {
+                  onNavigate("/recap");
+                }
+              }}
             />
             {isRangeStatsLoading ? (
               <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">Loading stats...</p>

@@ -4,6 +4,7 @@ import { encodeGameId } from "./utils/gameHash";
 export const protectedPaths = new Set([
   "/dashboard",
   "/sessions",
+  "/recap",
   "/mapping",
   "/settings",
 ]);
@@ -11,6 +12,7 @@ export const protectedPaths = new Set([
 export const navItems: NavItem[] = [
   { label: "Dashboard", path: "/dashboard" },
   { label: "Sessions", path: "/sessions" },
+  { label: "Recap", path: "/recap" },
   { label: "Mapping", path: "/mapping" },
 ];
 

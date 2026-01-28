@@ -25,6 +25,7 @@ type StatsRecapSectionProps = {
   topGames: TopGameStat[];
   colors: string[];
   onGameSelect?: (gameId: string) => void;
+  onOpenRecap?: () => void;
 };
 
 export const StatsRecapSection = ({
@@ -35,16 +36,38 @@ export const StatsRecapSection = ({
   topGames,
   colors,
   onGameSelect,
+  onOpenRecap,
 }: StatsRecapSectionProps) => {
   return (
     <div className="rounded-3xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/60 p-5 sm:p-6">
-      <div className="flex flex-wrap items-baseline gap-3">
-        <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-700 dark:text-emerald-300">
-          {title}
-        </p>
-        <p className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-700 dark:text-slate-200">
-          {subtitle}
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="flex flex-wrap items-baseline gap-3">
+          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-700 dark:text-emerald-300">
+            {title}
+          </p>
+          <p className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-700 dark:text-slate-200">
+            {subtitle}
+          </p>
+        </div>
+        {onOpenRecap ? (
+          <button
+            type="button"
+            onClick={onOpenRecap}
+            className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 dark:border-slate-800 bg-white/70 dark:bg-slate-950/60 text-slate-600 dark:text-slate-200 transition hover:border-emerald-300 hover:text-emerald-700 dark:hover:text-emerald-200"
+            aria-label="Open recap"
+            title="Open recap"
+          >
+            <svg
+              viewBox="0 0 20 20"
+              className="h-4 w-4"
+              fill="currentColor"
+              aria-hidden="true"
+            >
+              <path d="M12.5 3.5a1 1 0 011.5.86v7.79l2.22-2.22a1 1 0 111.41 1.41l-3.93 3.93a1 1 0 01-1.7-.7V4.36a1 1 0 01.5-.86z" />
+              <path d="M4 5a2 2 0 012-2h3a1 1 0 110 2H6v10h8v-3a1 1 0 112 0v3a2 2 0 01-2 2H6a2 2 0 01-2-2V5z" />
+            </svg>
+          </button>
+        ) : null}
       </div>
       <div className="mt-5 grid gap-4 sm:grid-cols-3">
         {summary.map((stat) => (
