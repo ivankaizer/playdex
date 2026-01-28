@@ -935,7 +935,7 @@ export const MappingPage = ({
                       key={`${connection.gameId}-${connection.connectedGameId}`}
                       className="rounded-2xl border border-slate-800 bg-slate-950/40 p-3"
                     >
-                      <div className="flex items-center justify-between gap-3">
+                      <div className="flex flex-col gap-3">
                         <div className="flex items-center gap-3">
                           {connection.capsuleUrl ? (
                             <img
@@ -946,11 +946,11 @@ export const MappingPage = ({
                           ) : (
                             <div className="h-10 w-8 rounded-lg border border-slate-800 bg-slate-900/60" />
                           )}
-                          <div>
+                          <div className="min-w-0 flex-1">
                             <button
                               type="button"
                               onClick={() => handleGameSelect(connection.gameId)}
-                              className="text-left text-sm font-semibold text-white transition hover:text-emerald-200"
+                              className="block w-full break-words text-left text-sm font-semibold text-white transition hover:text-emerald-200"
                             >
                               {connection.title}
                             </button>
@@ -961,9 +961,11 @@ export const MappingPage = ({
                             </p>
                           </div>
                         </div>
-                        <span className="text-xs uppercase tracking-[0.3em] text-slate-500">
-                          + +
-                        </span>
+                        <div className="flex items-center gap-2 text-xs uppercase tracking-[0.3em] text-slate-500">
+                          <span className="h-px flex-1 bg-slate-800" />
+                          <span>+ +</span>
+                          <span className="h-px flex-1 bg-slate-800" />
+                        </div>
                         <div className="flex items-center gap-3">
                           {connection.connectedCapsuleUrl ? (
                             <img
@@ -974,13 +976,13 @@ export const MappingPage = ({
                           ) : (
                             <div className="h-10 w-8 rounded-lg border border-slate-800 bg-slate-900/60" />
                           )}
-                          <div>
+                          <div className="min-w-0 flex-1">
                             <button
                               type="button"
                               onClick={() =>
                                 handleGameSelect(connection.connectedGameId)
                               }
-                              className="text-left text-sm font-semibold text-white transition hover:text-emerald-200"
+                              className="block w-full break-words text-left text-sm font-semibold text-white transition hover:text-emerald-200"
                             >
                               {connection.connectedTitle}
                             </button>
