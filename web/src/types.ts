@@ -67,6 +67,7 @@ export type RecapYearsResponse = {
 export type RecapGameStat = {
   gameId: string;
   title: string;
+  capsuleUrl: string | null;
   totalSeconds: number;
   sessionCount: number;
   averageSessionSeconds: number;

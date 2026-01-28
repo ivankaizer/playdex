@@ -160,7 +160,12 @@ export const recapService = {
 
     const gameTotals = new Map<
       number,
-      { title: string; totalSeconds: number; sessionCount: number }
+      {
+        title: string;
+        capsuleUrl: string | null;
+        totalSeconds: number;
+        sessionCount: number;
+      }
     >();
 
     const groupSessionTimes = new Map<number, number[]>();
@@ -209,9 +214,13 @@ export const recapService = {
       if (gameEntry) {
         gameEntry.totalSeconds += durationSeconds;
         gameEntry.sessionCount += 1;
+        if (!gameEntry.capsuleUrl && session.capsuleUrl) {
+          gameEntry.capsuleUrl = session.capsuleUrl;
+        }
       } else {
         gameTotals.set(session.gameId, {
           title: session.game,
+          capsuleUrl: session.capsuleUrl,
           totalSeconds: durationSeconds,
           sessionCount: 1,
         });
@@ -335,6 +344,7 @@ export const recapService = {
       {
         representativeId: number;
         representativeTitle: string;
+        representativeCapsuleUrl: string | null;
         representativeSeconds: number;
         totalSeconds: number;
         sessionCount: number;
@@ -348,6 +358,7 @@ export const recapService = {
         groupTotals.set(root, {
           representativeId: gameId,
           representativeTitle: game.title,
+          representativeCapsuleUrl: game.capsuleUrl ?? null,
           representativeSeconds: game.totalSeconds,
           totalSeconds: game.totalSeconds,
           sessionCount: game.sessionCount,
@@ -359,6 +370,7 @@ export const recapService = {
       if (game.totalSeconds > entry.representativeSeconds) {
         entry.representativeId = gameId;
         entry.representativeTitle = game.title;
+        entry.representativeCapsuleUrl = game.capsuleUrl ?? null;
         entry.representativeSeconds = game.totalSeconds;
       }
     });
@@ -366,6 +378,7 @@ export const recapService = {
     const groupEntries = Array.from(groupTotals.values()).map((entry) => ({
       gameId: entry.representativeId,
       title: entry.representativeTitle,
+      capsuleUrl: entry.representativeCapsuleUrl,
       totalSeconds: entry.totalSeconds,
       sessionCount: entry.sessionCount,
       averageSessionSeconds:

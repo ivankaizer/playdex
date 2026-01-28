@@ -11,7 +11,6 @@ import {
 } from "../utils/formatters";
 import { AppHeader } from "../components/AppHeader";
 import { Background } from "../components/Background";
-import { StatsRecapSection } from "../components/StatsRecapSection";
 
 type RecapPageProps = {
   path: string;
@@ -170,33 +169,6 @@ export const RecapPage = ({
     return `${fromDate} — ${toDate}`;
   }, [recap]);
 
-  const recapSummary = useMemo(() => {
-    if (!recap) {
-      return {
-        hours: "0h",
-        sessions: "0",
-        topTitle: "—",
-      };
-    }
-    return {
-      hours: formatHours(recap.totalSeconds, 1),
-      sessions: String(recap.totalSessions),
-      topTitle: recap.topGameByTime?.title ?? "—",
-    };
-  }, [recap]);
-
-  const recapPlatforms = useMemo(() => {
-    if (!recap) {
-      return [];
-    }
-    const total = Math.max(recap.totalSeconds, 1);
-    return recap.platformTotals.map((item) => ({
-      label: formatStatsPlatformLabel(item.platform),
-      value: Math.round((item.totalSeconds / total) * 100),
-      hours: formatHours(item.totalSeconds, 1),
-    }));
-  }, [recap]);
-
   const recapTopGames = useMemo(() => {
     if (!recap) {
       return [];
@@ -204,6 +176,7 @@ export const RecapPage = ({
     return recap.topGamesByTime.map((game) => ({
       gameId: game.gameId,
       title: game.title,
+      capsuleUrl: game.capsuleUrl,
       hours: formatHours(game.totalSeconds, 1),
     }));
   }, [recap]);
@@ -217,9 +190,6 @@ export const RecapPage = ({
   const hourMax = Math.max(1, ...hourStats.map((item) => item.sessionCount));
 
   const totalDays = (recap?.daysPlayed ?? 0) + (recap?.daysNotPlayed ?? 0);
-  const playedPercent =
-    totalDays > 0 ? ((recap?.daysPlayed ?? 0) / totalDays) * 100 : 0;
-
   const platformRows = recap?.platformTotals ?? [];
 
   return (
@@ -311,23 +281,61 @@ export const RecapPage = ({
             ) : null}
 
             {recap ? (
-              <StatsRecapSection
-                title="Recap overview"
-                subtitle={rangeLabel}
-                summary={[
-                  { label: "Hours played", value: recapSummary.hours },
-                  { label: "Sessions", value: recapSummary.sessions },
-                  { label: "Top title", value: recapSummary.topTitle },
-                ]}
-                platforms={recapPlatforms}
-                topGames={recapTopGames}
-                colors={
-                  theme === "dark"
-                    ? ["#34d399", "#22d3ee", "#a78bfa", "#f59e0b"]
-                    : ["#059669", "#0e7490", "#7c3aed", "#d97706"]
-                }
-                onGameSelect={(gameId) => onNavigate(buildGamePath(gameId))}
-              />
+              <div className="rounded-3xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/60 p-5 sm:p-6">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-700 dark:text-emerald-300">
+                      Most popular
+                    </p>
+                    <h2 className="mt-2 text-xl font-semibold text-slate-900 dark:text-white">
+                      Top 5 games
+                    </h2>
+                  </div>
+                  <div className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-500 dark:text-slate-400">
+                    {rangeLabel}
+                  </div>
+                </div>
+                <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+                  {recapTopGames.length === 0 ? (
+                    <div className="rounded-2xl border border-dashed border-slate-200 dark:border-slate-800 bg-slate-200/50 dark:bg-slate-950/50 p-4 text-sm text-slate-500 dark:text-slate-400 lg:col-span-5">
+                      No game data available yet.
+                    </div>
+                  ) : (
+                    recapTopGames.map((game) => (
+                      <button
+                        key={`recap-top-game-${game.gameId}`}
+                        type="button"
+                        onClick={() => onNavigate(buildGamePath(game.gameId))}
+                        className="group text-left"
+                      >
+                        <div className="mx-auto w-4/5">
+                          <div className="overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-200/50 dark:bg-slate-950/50">
+                            {game.capsuleUrl ? (
+                              <img
+                                src={game.capsuleUrl}
+                                alt={`${game.title} capsule art`}
+                                className="aspect-[9/16] w-full object-cover"
+                              />
+                            ) : (
+                              <div className="flex aspect-[9/16] w-full items-center justify-center bg-slate-200/70 dark:bg-slate-900/70 text-xs uppercase tracking-[0.3em] text-slate-500 dark:text-slate-400">
+                                No art
+                              </div>
+                            )}
+                          </div>
+                          <div className="mt-3 grid grid-cols-[1fr_auto] items-start gap-3 text-sm">
+                            <span className="min-w-0 line-clamp-2 font-semibold leading-snug text-slate-900 dark:text-white group-hover:text-emerald-700 dark:group-hover:text-emerald-200">
+                              {game.title}
+                            </span>
+                            <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-200">
+                              {game.hours}
+                            </span>
+                          </div>
+                        </div>
+                      </button>
+                    ))
+                  )}
+                </div>
+              </div>
             ) : null}
 
             {isLoading ? (
@@ -436,29 +444,13 @@ export const RecapPage = ({
                       {recap.daysPlayed} / {totalDays} days played
                     </div>
                   </div>
-                  <div className="mt-5 h-3 w-full overflow-hidden rounded-full bg-slate-200/70 dark:bg-slate-800/60">
-                    <div
-                      className="h-full rounded-full bg-emerald-400/80"
-                      style={{ width: `${Math.min(100, playedPercent)}%` }}
-                    />
-                  </div>
-                  <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                    <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-200/50 dark:bg-slate-950/50 p-4">
-                      <p className="text-xs uppercase tracking-[0.3em] text-slate-500 dark:text-slate-400">
-                        Days played
-                      </p>
-                      <p className="mt-2 text-lg font-semibold text-slate-900 dark:text-white">
-                        {recap.daysPlayed}
-                      </p>
-                    </div>
-                    <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-200/50 dark:bg-slate-950/50 p-4">
-                      <p className="text-xs uppercase tracking-[0.3em] text-slate-500 dark:text-slate-400">
-                        Days not played
-                      </p>
-                      <p className="mt-2 text-lg font-semibold text-slate-900 dark:text-white">
-                        {recap.daysNotPlayed}
-                      </p>
-                    </div>
+                  <div className="mt-5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-200/50 dark:bg-slate-950/50 p-4">
+                    <p className="text-xs uppercase tracking-[0.3em] text-slate-500 dark:text-slate-400">
+                      Days played
+                    </p>
+                    <p className="mt-2 text-lg font-semibold text-slate-900 dark:text-white">
+                      {recap.daysPlayed} / {totalDays}
+                    </p>
                   </div>
                 </div>
 
@@ -560,25 +552,41 @@ export const RecapPage = ({
                       </h2>
                     </div>
                   </div>
-                  <div className="mt-5 space-y-3">
+                  <div className="mt-5">
                     {platformRows.length === 0 ? (
                       <p className="text-sm text-slate-500 dark:text-slate-400">
                         No platform data available yet.
                       </p>
                     ) : (
-                      platformRows.map((item) => (
-                        <div
-                          key={`platform-${item.platform}`}
-                          className="flex items-center justify-between rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-200/50 dark:bg-slate-950/50 px-4 py-3 text-sm"
-                        >
-                          <span className="font-semibold text-slate-900 dark:text-white">
-                            {formatStatsPlatformLabel(item.platform)}
-                          </span>
-                          <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-200">
-                            {item.sessionCount} sessions · {formatHours(item.totalSeconds, 1)}
-                          </span>
-                        </div>
-                      ))
+                      <div className="overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-800">
+                        <table className="w-full text-left text-sm">
+                          <thead className="bg-white/80 dark:bg-slate-950/70 text-xs uppercase tracking-[0.3em] text-slate-500 dark:text-slate-400">
+                            <tr>
+                              <th className="px-4 py-3 text-left">Platform</th>
+                              <th className="px-4 py-3 text-left">Sessions</th>
+                              <th className="px-4 py-3 text-left">Time</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {platformRows.map((item) => (
+                              <tr
+                                key={`platform-${item.platform}`}
+                                className="border-t border-slate-200/70 dark:border-slate-800/80 bg-slate-200/30 dark:bg-slate-950/40"
+                              >
+                                <td className="px-4 py-3 font-semibold text-slate-900 dark:text-white">
+                                  {formatStatsPlatformLabel(item.platform)}
+                                </td>
+                                <td className="px-4 py-3 text-slate-700 dark:text-slate-200">
+                                  {item.sessionCount}
+                                </td>
+                                <td className="px-4 py-3 font-semibold text-emerald-700 dark:text-emerald-200">
+                                  {formatHours(item.totalSeconds, 1)}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
                     )}
                   </div>
                 </div>
@@ -704,34 +712,52 @@ export const RecapPage = ({
                       </h2>
                     </div>
                   </div>
-                  <div className="mt-5 max-h-96 space-y-2 overflow-auto pr-1">
+                  <div className="mt-5 max-h-96 overflow-auto pr-1">
                     {recap.gamesTable.length === 0 ? (
                       <p className="text-sm text-slate-500 dark:text-slate-400">
                         No games logged yet.
                       </p>
                     ) : (
-                      recap.gamesTable.map((game, index) => (
-                        <div
-                          key={`recap-game-${game.gameId}`}
-                          className="flex items-center justify-between rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-200/50 dark:bg-slate-950/50 px-4 py-3 text-sm"
-                        >
-                          <div className="flex items-center gap-3">
-                            <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
-                              {String(index + 1).padStart(2, "0")}
-                            </span>
-                            <button
-                              type="button"
-                              onClick={() => onNavigate(buildGamePath(game.gameId))}
-                              className="text-left font-semibold text-slate-900 dark:text-white transition hover:text-emerald-700 dark:hover:text-emerald-200"
-                            >
-                              {game.title}
-                            </button>
-                          </div>
-                          <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-200">
-                            {formatHours(game.totalSeconds, 1)} · {game.sessionCount} sessions
-                          </span>
-                        </div>
-                      ))
+                      <div className="overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-800">
+                        <table className="w-full text-left text-sm">
+                          <thead className="bg-white/80 dark:bg-slate-950/70 text-xs uppercase tracking-[0.3em] text-slate-500 dark:text-slate-400">
+                            <tr>
+                              <th className="px-4 py-3 text-left">Game</th>
+                              <th className="px-4 py-3 text-left">Sessions</th>
+                              <th className="px-4 py-3 text-left">Time</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {recap.gamesTable.map((game, index) => (
+                              <tr
+                                key={`recap-game-${game.gameId}`}
+                                className="border-t border-slate-200/70 dark:border-slate-800/80 bg-slate-200/30 dark:bg-slate-950/40"
+                              >
+                                <td className="px-4 py-3">
+                                  <div className="flex items-center gap-3">
+                                    <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+                                      {String(index + 1).padStart(2, "0")}
+                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={() => onNavigate(buildGamePath(game.gameId))}
+                                      className="text-left font-semibold text-slate-900 dark:text-white transition hover:text-emerald-700 dark:hover:text-emerald-200"
+                                    >
+                                      {game.title}
+                                    </button>
+                                  </div>
+                                </td>
+                                <td className="px-4 py-3 text-slate-700 dark:text-slate-200">
+                                  {game.sessionCount}
+                                </td>
+                                <td className="px-4 py-3 font-semibold text-emerald-700 dark:text-emerald-200">
+                                  {formatHours(game.totalSeconds, 1)}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
                     )}
                   </div>
                 </div>

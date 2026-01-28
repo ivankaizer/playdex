@@ -6,6 +6,7 @@ export type RecapRange = {
 export type RecapGameStat = {
   gameId: number;
   title: string;
+  capsuleUrl: string | null;
   totalSeconds: number;
   sessionCount: number;
   averageSessionSeconds: number;
