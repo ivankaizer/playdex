@@ -239,7 +239,10 @@ export const DashboardPage = ({
     void loadManualInputs();
   }, [isManualModalOpen]);
 
-  const platformPieColors = ["#34d399", "#22d3ee", "#a78bfa", "#f59e0b"];
+  const platformPieColors =
+    theme === "dark"
+      ? ["#34d399", "#22d3ee", "#a78bfa", "#f59e0b"]
+      : ["#059669", "#0e7490", "#7c3aed", "#d97706"];
 
   const currentSessionStartedAt = currentSession
     ? new Date(currentSession.startedAt)

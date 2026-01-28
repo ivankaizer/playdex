@@ -20,7 +20,7 @@ export const ThemeToggle = ({
       className={`relative inline-flex h-9 w-16 items-center justify-between rounded-full border border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-900/70 px-2 text-slate-600 dark:text-slate-200 shadow-sm transition ${className}`.trim()}
     >
       <span
-        className={`absolute left-1 top-1 h-7 w-7 rounded-full bg-emerald-400 shadow-sm transition-transform ${
+        className={`absolute left-1 top-1 h-7 w-7 rounded-full bg-emerald-300 dark:bg-emerald-400 shadow-sm transition-transform ${
           theme === "dark" ? "translate-x-7" : ""
         }`}
       />

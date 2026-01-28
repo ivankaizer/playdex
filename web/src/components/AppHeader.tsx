@@ -35,7 +35,7 @@ export const AppHeader = ({
           onClick={() => onNavigate(item.path)}
           className={`rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] transition ${
             path === item.path
-              ? "bg-emerald-400 text-slate-900"
+              ? "bg-emerald-300 text-slate-900 dark:bg-emerald-400"
               : "border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:border-emerald-400/60"
           }`}
         >

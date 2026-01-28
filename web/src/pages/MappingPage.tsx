@@ -338,7 +338,7 @@ export const MappingPage = ({
             type="text"
             value={mappingSearchQuery}
             onChange={(event) => setMappingSearchQuery(event.target.value)}
-            className="mt-2 w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white/90 dark:bg-slate-950/80 px-3 py-2 text-sm text-slate-900 dark:text-white outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/30"
+            className="mt-2 w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white/90 dark:bg-slate-950/80 px-3 py-2 text-sm text-slate-900 dark:text-white outline-none transition focus:border-emerald-300 dark:focus:border-emerald-400 focus:ring-2 focus:ring-emerald-300/30 dark:focus:ring-emerald-400/30"
           />
         </label>
         <label className="text-xs font-medium text-slate-600 dark:text-slate-300">
@@ -346,7 +346,7 @@ export const MappingPage = ({
           <select
             value={mappingPlatformOverride}
             onChange={(event) => setMappingPlatformOverride(event.target.value)}
-            className="mt-2 w-full min-w-[180px] rounded-xl border border-slate-300 dark:border-slate-700 bg-white/90 dark:bg-slate-950/80 px-3 py-2 text-sm text-slate-900 dark:text-white outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/30 disabled:cursor-not-allowed"
+            className="mt-2 w-full min-w-[180px] rounded-xl border border-slate-300 dark:border-slate-700 bg-white/90 dark:bg-slate-950/80 px-3 py-2 text-sm text-slate-900 dark:text-white outline-none transition focus:border-emerald-300 dark:focus:border-emerald-400 focus:ring-2 focus:ring-emerald-300/30 dark:focus:ring-emerald-400/30 disabled:cursor-not-allowed"
           >
             {manualPlatformOptions.map((platform) => (
               <option key={platform.key} value={platform.key}>
@@ -359,7 +359,7 @@ export const MappingPage = ({
           type="button"
           onClick={handleMappingSearch}
           disabled={isMappingSearchLoading}
-          className="rounded-full bg-emerald-400 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-slate-900 transition hover:bg-emerald-300 disabled:cursor-not-allowed disabled:bg-emerald-300/60"
+          className="rounded-full bg-emerald-300 dark:bg-emerald-400 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-slate-900 transition hover:bg-emerald-200 dark:hover:bg-emerald-300 disabled:cursor-not-allowed disabled:bg-emerald-200/60 dark:disabled:bg-emerald-300/60"
         >
           {isMappingSearchLoading ? "Searching..." : "Search"}
         </button>
@@ -433,7 +433,7 @@ export const MappingPage = ({
                   type="button"
                   onClick={() => handleMappingSelection(input.id, result)}
                   disabled={isMappingUpdateLoading}
-                  className="w-full rounded-full border border-emerald-400/60 px-3 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-emerald-700 dark:text-emerald-200 transition hover:border-emerald-300 disabled:cursor-not-allowed sm:w-auto"
+                  className="w-full rounded-full border border-emerald-300/60 dark:border-emerald-400/60 px-3 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-emerald-700 dark:text-emerald-200 transition hover:border-emerald-300 dark:hover:border-emerald-400 disabled:cursor-not-allowed sm:w-auto"
                 >
                   {isMappingUpdateLoading ? "Mapping..." : "Map"}
                 </button>
@@ -473,7 +473,7 @@ export const MappingPage = ({
               type="button"
               onClick={loadManualInputs}
               disabled={isManualInputsLoading}
-              className="rounded-full border border-slate-300 dark:border-slate-700 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-slate-700 dark:text-slate-200 transition hover:border-emerald-400/60 disabled:cursor-not-allowed"
+              className="rounded-full border border-slate-300 dark:border-slate-700 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-slate-700 dark:text-slate-200 transition hover:border-emerald-300/60 dark:hover:border-emerald-400/60 disabled:cursor-not-allowed"
             >
               {isManualInputsLoading ? "Refreshing..." : "Refresh"}
             </button>
@@ -552,8 +552,8 @@ export const MappingPage = ({
                         onClick={() => openMappingRow(input)}
                         className={`w-full rounded-full px-3 py-2 text-xs font-semibold uppercase tracking-[0.3em] transition sm:w-auto ${
                           input.mappedGame
-                            ? "border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:border-emerald-400/60 hover:text-emerald-700 dark:hover:text-emerald-100"
-                            : "border border-emerald-400/60 text-emerald-700 dark:text-emerald-200 hover:border-emerald-300"
+                            ? "border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:border-emerald-300/60 dark:hover:border-emerald-400/60 hover:text-emerald-700 dark:hover:text-emerald-100"
+                            : "border border-emerald-300/60 dark:border-emerald-400/60 text-emerald-700 dark:text-emerald-200 hover:border-emerald-300 dark:hover:border-emerald-400"
                         }`}
                       >
                         {input.mappedGame ? "Edit mapping" : "Map"}
@@ -644,7 +644,7 @@ export const MappingPage = ({
                             <button
                               type="button"
                               onClick={() => openMappingRow(input)}
-                              className="rounded-full border border-slate-300 dark:border-slate-700 px-3 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-slate-700 dark:text-slate-200 transition hover:border-emerald-400/60 hover:text-emerald-700 dark:hover:text-emerald-100"
+                              className="rounded-full border border-slate-300 dark:border-slate-700 px-3 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-slate-700 dark:text-slate-200 transition hover:border-emerald-300/60 dark:hover:border-emerald-400/60 hover:text-emerald-700 dark:hover:text-emerald-100"
                             >
                               Edit mapping
                             </button>
@@ -652,7 +652,7 @@ export const MappingPage = ({
                             <button
                               type="button"
                               onClick={() => openMappingRow(input)}
-                              className="rounded-full border border-emerald-400/60 px-3 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-emerald-700 dark:text-emerald-200 transition hover:border-emerald-300"
+                              className="rounded-full border border-emerald-300/60 dark:border-emerald-400/60 px-3 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-emerald-700 dark:text-emerald-200 transition hover:border-emerald-300 dark:hover:border-emerald-400"
                             >
                               Map
                             </button>
@@ -688,7 +688,7 @@ export const MappingPage = ({
               type="button"
               onClick={loadGameConnections}
               disabled={isGameConnectionsLoading}
-              className="rounded-full border border-slate-300 dark:border-slate-700 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-slate-700 dark:text-slate-200 transition hover:border-emerald-400/60 disabled:cursor-not-allowed"
+              className="rounded-full border border-slate-300 dark:border-slate-700 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-slate-700 dark:text-slate-200 transition hover:border-emerald-300/60 dark:hover:border-emerald-400/60 disabled:cursor-not-allowed"
             >
               {isGameConnectionsLoading ? "Refreshing..." : "Refresh"}
             </button>
@@ -699,7 +699,7 @@ export const MappingPage = ({
           ) : null}
 
           <div className="mt-6 grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
-            <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-200/50 dark:bg-slate-950/50 p-4 sm:p-5">
+            <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/70 dark:bg-slate-950/50 p-4 sm:p-5">
               <p className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-500 dark:text-slate-400">
                 Connect games
               </p>
@@ -717,14 +717,14 @@ export const MappingPage = ({
                       type="text"
                       value={primaryGameQuery}
                       onChange={(event) => setPrimaryGameQuery(event.target.value)}
-                      className="flex-1 rounded-xl border border-slate-300 dark:border-slate-700 bg-white/90 dark:bg-slate-950/80 px-3 py-2 text-sm text-slate-900 dark:text-white outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/30"
+                      className="flex-1 rounded-xl border border-slate-300 dark:border-slate-700 bg-white/90 dark:bg-slate-950/80 px-3 py-2 text-sm text-slate-900 dark:text-white outline-none transition focus:border-emerald-300 dark:focus:border-emerald-400 focus:ring-2 focus:ring-emerald-300/30 dark:focus:ring-emerald-400/30"
                       placeholder="Search games"
                     />
                     <button
                       type="button"
                       onClick={handlePrimarySearch}
                       disabled={isPrimaryGameLoading}
-                      className="rounded-full bg-emerald-400 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-slate-900 transition hover:bg-emerald-300 disabled:cursor-not-allowed disabled:bg-emerald-300/60"
+                      className="rounded-full bg-emerald-300 dark:bg-emerald-400 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-slate-900 transition hover:bg-emerald-200 dark:hover:bg-emerald-300 disabled:cursor-not-allowed disabled:bg-emerald-200/60 dark:disabled:bg-emerald-300/60"
                     >
                       {isPrimaryGameLoading ? "Searching..." : "Search"}
                     </button>
@@ -735,15 +735,15 @@ export const MappingPage = ({
                     </p>
                   ) : null}
                   {selectedPrimaryGame ? (
-                    <div className="mt-3 flex items-center gap-3 rounded-xl border border-emerald-400/40 bg-emerald-500/10 p-3 text-sm text-emerald-700 dark:text-emerald-100">
+                    <div className="mt-3 flex items-center gap-3 rounded-xl border border-emerald-300/40 dark:border-emerald-400/40 bg-emerald-300/10 dark:bg-emerald-500/10 p-3 text-sm text-emerald-700 dark:text-emerald-100">
                       {selectedPrimaryGame.capsuleUrl ? (
                         <img
                           src={selectedPrimaryGame.capsuleUrl}
                           alt={`${selectedPrimaryGame.title} cover`}
-                          className="h-10 w-8 rounded-lg border border-emerald-400/40 object-cover"
+                          className="h-10 w-8 rounded-lg border border-emerald-300/40 dark:border-emerald-400/40 object-cover"
                         />
                       ) : (
-                        <div className="h-10 w-8 rounded-lg border border-emerald-400/40 bg-emerald-500/10" />
+                        <div className="h-10 w-8 rounded-lg border border-emerald-300/40 dark:border-emerald-400/40 bg-emerald-300/10 dark:bg-emerald-500/10" />
                       )}
                       <div>
                         <p className="font-semibold">
@@ -768,7 +768,7 @@ export const MappingPage = ({
                           key={result.gameId}
                           type="button"
                           onClick={() => selectPrimaryGame(result)}
-                          className="flex items-center gap-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-200/40 dark:bg-slate-950/40 p-3 text-left text-sm text-slate-900 dark:text-white transition hover:border-emerald-400/60"
+                          className="flex items-center gap-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-950/40 p-3 text-left text-sm text-slate-900 dark:text-white transition hover:border-emerald-300/60 dark:hover:border-emerald-400/60"
                         >
                           {result.capsuleUrl ? (
                             <img
@@ -802,14 +802,14 @@ export const MappingPage = ({
                       type="text"
                       value={secondaryGameQuery}
                       onChange={(event) => setSecondaryGameQuery(event.target.value)}
-                      className="flex-1 rounded-xl border border-slate-300 dark:border-slate-700 bg-white/90 dark:bg-slate-950/80 px-3 py-2 text-sm text-slate-900 dark:text-white outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/30"
+                      className="flex-1 rounded-xl border border-slate-300 dark:border-slate-700 bg-white/90 dark:bg-slate-950/80 px-3 py-2 text-sm text-slate-900 dark:text-white outline-none transition focus:border-emerald-300 dark:focus:border-emerald-400 focus:ring-2 focus:ring-emerald-300/30 dark:focus:ring-emerald-400/30"
                       placeholder="Search games"
                     />
                     <button
                       type="button"
                       onClick={handleSecondarySearch}
                       disabled={isSecondaryGameLoading}
-                      className="rounded-full bg-emerald-400 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-slate-900 transition hover:bg-emerald-300 disabled:cursor-not-allowed disabled:bg-emerald-300/60"
+                      className="rounded-full bg-emerald-300 dark:bg-emerald-400 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-slate-900 transition hover:bg-emerald-200 dark:hover:bg-emerald-300 disabled:cursor-not-allowed disabled:bg-emerald-200/60 dark:disabled:bg-emerald-300/60"
                     >
                       {isSecondaryGameLoading ? "Searching..." : "Search"}
                     </button>
@@ -820,15 +820,15 @@ export const MappingPage = ({
                     </p>
                   ) : null}
                   {selectedSecondaryGame ? (
-                    <div className="mt-3 flex items-center gap-3 rounded-xl border border-emerald-400/40 bg-emerald-500/10 p-3 text-sm text-emerald-700 dark:text-emerald-100">
+                    <div className="mt-3 flex items-center gap-3 rounded-xl border border-emerald-300/40 dark:border-emerald-400/40 bg-emerald-300/10 dark:bg-emerald-500/10 p-3 text-sm text-emerald-700 dark:text-emerald-100">
                       {selectedSecondaryGame.capsuleUrl ? (
                         <img
                           src={selectedSecondaryGame.capsuleUrl}
                           alt={`${selectedSecondaryGame.title} cover`}
-                          className="h-10 w-8 rounded-lg border border-emerald-400/40 object-cover"
+                          className="h-10 w-8 rounded-lg border border-emerald-300/40 dark:border-emerald-400/40 object-cover"
                         />
                       ) : (
-                        <div className="h-10 w-8 rounded-lg border border-emerald-400/40 bg-emerald-500/10" />
+                        <div className="h-10 w-8 rounded-lg border border-emerald-300/40 dark:border-emerald-400/40 bg-emerald-300/10 dark:bg-emerald-500/10" />
                       )}
                       <div>
                         <p className="font-semibold">
@@ -853,7 +853,7 @@ export const MappingPage = ({
                           key={result.gameId}
                           type="button"
                           onClick={() => selectSecondaryGame(result)}
-                          className="flex items-center gap-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-200/40 dark:bg-slate-950/40 p-3 text-left text-sm text-slate-900 dark:text-white transition hover:border-emerald-400/60"
+                          className="flex items-center gap-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-950/40 p-3 text-left text-sm text-slate-900 dark:text-white transition hover:border-emerald-300/60 dark:hover:border-emerald-400/60"
                         >
                           {result.capsuleUrl ? (
                             <img
@@ -890,7 +890,7 @@ export const MappingPage = ({
                   type="button"
                   onClick={handleConnectGames}
                   disabled={isConnectionSaving}
-                  className="rounded-full bg-emerald-400 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-slate-900 transition hover:bg-emerald-300 disabled:cursor-not-allowed disabled:bg-emerald-300/60"
+                  className="rounded-full bg-emerald-300 dark:bg-emerald-400 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-slate-900 transition hover:bg-emerald-200 dark:hover:bg-emerald-300 disabled:cursor-not-allowed disabled:bg-emerald-200/60 dark:disabled:bg-emerald-300/60"
                 >
                   {isConnectionSaving ? "Saving..." : "Connect games"}
                 </button>
@@ -907,14 +907,14 @@ export const MappingPage = ({
                     setSecondaryGameError("");
                     setConnectionSaveError("");
                   }}
-                  className="rounded-full border border-slate-300 dark:border-slate-700 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-slate-700 dark:text-slate-200 transition hover:border-emerald-400/60"
+                  className="rounded-full border border-slate-300 dark:border-slate-700 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-slate-700 dark:text-slate-200 transition hover:border-emerald-300/60 dark:hover:border-emerald-400/60"
                 >
                   Clear
                 </button>
               </div>
             </div>
 
-            <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-200/50 dark:bg-slate-950/50 p-4 sm:p-5">
+            <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/70 dark:bg-slate-950/50 p-4 sm:p-5">
               <p className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-500 dark:text-slate-400">
                 Connected pairs
               </p>
@@ -923,7 +923,7 @@ export const MappingPage = ({
                   [1, 2, 3].map((row) => (
                     <div
                       key={`connection-${row}`}
-                      className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-200/40 dark:bg-slate-950/40 p-3"
+                      className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/70 dark:bg-slate-950/40 p-3"
                     >
                       <div className="flex items-center gap-3">
                         <div className="h-10 w-8 rounded-lg bg-slate-200/70 dark:bg-slate-800/60" />
@@ -932,14 +932,14 @@ export const MappingPage = ({
                     </div>
                   ))
                 ) : gameConnections.length === 0 ? (
-                  <div className="rounded-2xl border border-dashed border-slate-200 dark:border-slate-800 bg-slate-200/40 dark:bg-slate-950/40 p-4 text-xs text-slate-500 dark:text-slate-400">
+                  <div className="rounded-2xl border border-dashed border-slate-200 dark:border-slate-800 bg-white/70 dark:bg-slate-950/40 p-4 text-xs text-slate-500 dark:text-slate-400">
                     No game connections yet.
                   </div>
                 ) : (
                   gameConnections.map((connection) => (
                     <div
                       key={`${connection.gameId}-${connection.connectedGameId}`}
-                      className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-200/40 dark:bg-slate-950/40 p-3"
+                      className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/70 dark:bg-slate-950/40 p-3"
                     >
                       <div className="flex flex-col gap-3">
                         <div className="flex items-center gap-3">

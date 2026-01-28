@@ -545,7 +545,10 @@ export const SessionsPage = ({
     onNavigate(buildGamePath(gameId));
   };
 
-  const platformPieColors = ["#34d399", "#22d3ee", "#a78bfa", "#f59e0b"];
+  const platformPieColors =
+    theme === "dark"
+      ? ["#34d399", "#22d3ee", "#a78bfa", "#f59e0b"]
+      : ["#059669", "#0e7490", "#7c3aed", "#d97706"];
   const statsRangeLabel = useMemo(() => {
     if (!sessionsFrom && !sessionsTo) {
       return "All time";
