@@ -528,8 +528,8 @@ export const RecapPage = ({
 
             {recap ? (
               <>
-                <div className="grid gap-6 lg:grid-cols-[1.15fr_0.85fr]">
-                  <div className="rounded-3xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/60 p-5 sm:p-6">
+                <div className="grid gap-6 lg:grid-cols-2 lg:items-stretch">
+                  <div className="h-full rounded-3xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/60 p-5 sm:p-6">
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <div>
                         <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-700 dark:text-emerald-300">
@@ -578,7 +578,7 @@ export const RecapPage = ({
                     </div>
                   </div>
 
-                  <div className="rounded-3xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/60 p-5 sm:p-6">
+                  <div className="h-full rounded-3xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/60 p-5 sm:p-6">
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <div>
                         <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-700 dark:text-emerald-300">
@@ -671,8 +671,8 @@ export const RecapPage = ({
                   </div>
                 </div>
 
-                <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
-                  <div className="rounded-3xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/60 p-5 sm:p-6">
+                <div className="grid gap-6 lg:grid-cols-2 lg:items-stretch">
+                  <div className="h-full rounded-3xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/60 p-5 sm:p-6">
                     <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-700 dark:text-emerald-300">
                       Weekly rhythm
                     </p>
@@ -728,7 +728,7 @@ export const RecapPage = ({
                     </div>
                   </div>
 
-                  <div className="rounded-3xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/60 p-5 sm:p-6">
+                  <div className="h-full rounded-3xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/60 p-5 sm:p-6">
                     <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-700 dark:text-emerald-300">
                       Hourly activity
                     </p>
@@ -763,8 +763,8 @@ export const RecapPage = ({
                   </div>
                 </div>
 
-                <div className="grid gap-6 lg:grid-cols-[1.05fr_0.95fr]">
-                  <div className="rounded-3xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/60 p-5 sm:p-6">
+                <div className="grid gap-6 lg:grid-cols-2 lg:items-stretch">
+                  <div className="h-full rounded-3xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/60 p-5 sm:p-6">
                     <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-700 dark:text-emerald-300">
                       Time split
                     </p>
@@ -821,7 +821,7 @@ export const RecapPage = ({
                     </div>
                   </div>
 
-                  <div className="rounded-3xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/60 p-5 sm:p-6">
+                  <div className="h-full rounded-3xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/60 p-5 sm:p-6">
                     <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-700 dark:text-emerald-300">
                       Platform mix
                     </p>
@@ -876,8 +876,8 @@ export const RecapPage = ({
                   </div>
                 </div>
 
-                <div className="grid gap-6 lg:grid-cols-[1.05fr_0.95fr]">
-                  <div className="rounded-3xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/60 p-5 sm:p-6">
+                <div className="grid gap-6 lg:grid-cols-2 lg:items-stretch">
+                  <div className="h-full rounded-3xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/60 p-5 sm:p-6">
                     <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-700 dark:text-emerald-300">
                       Library mix
                     </p>
@@ -901,7 +901,7 @@ export const RecapPage = ({
                     </div>
                   </div>
 
-                  <div className="rounded-3xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/60 p-5 sm:p-6">
+                  <div className="h-full rounded-3xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/60 p-5 sm:p-6">
                     <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-700 dark:text-emerald-300">
                       Highlights
                     </p>
@@ -944,12 +944,12 @@ export const RecapPage = ({
                       </p>
                     ) : (
                       <div className="overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-800">
-                        <table className="w-full text-left text-sm">
-                          <thead className="bg-white/80 dark:bg-slate-950/70 text-xs uppercase tracking-[0.3em] text-slate-500 dark:text-slate-400">
+                        <table className="w-full text-left text-xs">
+                          <thead className="bg-white/80 dark:bg-slate-950/70 text-[10px] uppercase tracking-[0.28em] text-slate-500 dark:text-slate-400">
                             <tr>
-                              <th className="px-4 py-3 text-left">Game</th>
-                              <th className="px-4 py-3 text-left">Sessions</th>
-                              <th className="px-4 py-3 text-left">Time</th>
+                              <th className="px-3 py-2 text-left">Game</th>
+                              <th className="px-3 py-2 text-left">Sessions</th>
+                              <th className="px-3 py-2 text-left">Time</th>
                             </tr>
                           </thead>
                           <tbody>
@@ -958,24 +958,25 @@ export const RecapPage = ({
                                 key={`recap-game-${game.gameId}`}
                                 className="border-t border-slate-200/70 dark:border-slate-800/80 bg-slate-200/30 dark:bg-slate-950/40"
                               >
-                                <td className="px-4 py-3">
-                                  <div className="flex items-center gap-3">
-                                    <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+                                <td className="px-3 py-2">
+                                  <div className="flex min-w-0 items-center gap-2">
+                                    <span className="text-[10px] font-semibold text-slate-500 dark:text-slate-400">
                                       {String(index + 1).padStart(2, "0")}
                                     </span>
                                     <button
                                       type="button"
                                       onClick={() => onNavigate(buildGamePath(game.gameId))}
-                                      className="text-left font-semibold text-slate-900 dark:text-white transition hover:text-emerald-700 dark:hover:text-emerald-200"
+                                      title={game.title}
+                                      className="min-w-0 truncate text-left text-sm font-semibold text-slate-900 dark:text-white transition hover:text-emerald-700 dark:hover:text-emerald-200"
                                     >
                                       {game.title}
                                     </button>
                                   </div>
                                 </td>
-                                <td className="px-4 py-3 text-slate-700 dark:text-slate-200">
+                                <td className="px-3 py-2 text-slate-700 dark:text-slate-200">
                                   {game.sessionCount}
                                 </td>
-                                <td className="px-4 py-3 font-semibold text-emerald-700 dark:text-emerald-200">
+                                <td className="px-3 py-2 font-semibold text-emerald-700 dark:text-emerald-200">
                                   {formatHours(game.totalSeconds, 1)}
                                 </td>
                               </tr>

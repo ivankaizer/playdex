@@ -65,8 +65,8 @@ export const ManualEntryModal = ({
   );
 
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/30 dark:bg-slate-950/80 px-4 py-8">
-      <div className="w-full max-w-2xl rounded-3xl border border-slate-200 dark:border-slate-800 bg-white/90 dark:bg-slate-900/90 p-5 shadow-[0_30px_80px_rgba(15,23,42,0.7)] sm:p-6">
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-900/30 px-4 py-4 dark:bg-slate-950/80 sm:items-center sm:py-8">
+      <div className="my-auto flex w-full max-w-2xl flex-col rounded-3xl border border-slate-200 bg-white/90 p-5 shadow-[0_30px_80px_rgba(15,23,42,0.7)] dark:border-slate-800 dark:bg-slate-900/90 sm:p-6 max-h-[calc(100dvh-2rem)]">
         <div className="flex items-center justify-between gap-4">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-700 dark:text-emerald-300">
@@ -85,7 +85,7 @@ export const ManualEntryModal = ({
           </button>
         </div>
 
-        <div className="mt-6 grid gap-4">
+        <div className="mt-6 grid min-h-0 gap-4 overflow-y-auto pr-1">
           <div className="grid gap-3 sm:grid-cols-[0.7fr_0.3fr]">
             <label className="text-xs font-medium text-slate-600 dark:text-slate-300">
               Date
@@ -249,7 +249,7 @@ export const ManualEntryModal = ({
           ) : null}
         </div>
 
-        <div className="mt-6 flex flex-wrap items-center justify-end gap-3">
+        <div className="mt-6 flex shrink-0 flex-wrap items-center justify-end gap-3">
           <button
             type="button"
             onClick={onClose}
