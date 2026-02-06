@@ -540,7 +540,7 @@ export const RecapPage = ({
                         </h2>
                       </div>
                     </div>
-                    <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                    <div className="mt-4 grid gap-4">
                       <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/70 dark:bg-slate-950/40 p-4">
                         <p className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-500 dark:text-slate-400">
                           Volume
