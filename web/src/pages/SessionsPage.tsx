@@ -3,7 +3,6 @@ import { useEffect, useMemo, useState } from "react";
 import { apiRequest } from "../api";
 import {
   buildGamePath,
-  capsuleUrl,
   navItems as defaultNavItems,
   platformOptions,
 } from "../constants";
@@ -25,6 +24,7 @@ import {
   formatUtcDateInput,
 } from "../utils/formatters";
 import { getSessionDurationSeconds } from "../utils/sessions";
+import { encodeGameId } from "../utils/gameHash";
 import { AppHeader } from "../components/AppHeader";
 import { Background } from "../components/Background";
 import { ManualEntryModal } from "../components/ManualEntryModal";
@@ -35,6 +35,8 @@ type SessionsPageProps = {
   navItems?: NavItem[];
   onNavigate: (path: string) => void;
   onLogout: () => void;
+  theme: "light" | "dark";
+  onToggleTheme: () => void;
 };
 
 type DateRangePreset =
@@ -107,6 +109,8 @@ export const SessionsPage = ({
   navItems = defaultNavItems,
   onNavigate,
   onLogout,
+  theme,
+  onToggleTheme,
 }: SessionsPageProps) => {
   const defaultRange = getPresetRange("this-week");
   const [sessionRows, setSessionRows] = useState<
@@ -259,7 +263,7 @@ export const SessionsPage = ({
           body: {
             date: manualEntryDate,
             durationMinutes,
-            gameId: manualEntrySelection.gameId,
+            gameId: encodeGameId(manualEntrySelection.gameId),
           },
         });
       } else {
@@ -473,7 +477,7 @@ export const SessionsPage = ({
       <svg
         aria-hidden="true"
         viewBox="0 0 20 20"
-        className={`h-3 w-3 ${isActive ? "text-emerald-200" : ""}`}
+        className={`h-3 w-3 ${isActive ? "text-emerald-700 dark:text-emerald-200" : ""}`}
         fill="currentColor"
       >
         {isActive ? (
@@ -489,15 +493,37 @@ export const SessionsPage = ({
     );
   };
 
+  const renderIgnoredIcon = () => (
+    <span
+      className="inline-flex h-5 w-5 items-center justify-center text-slate-500 dark:text-slate-400"
+      title="Ignored from stats"
+      aria-label="Ignored from stats"
+    >
+      <svg
+        aria-hidden="true"
+        viewBox="0 0 24 24"
+        className="h-4 w-4"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+      >
+        <circle cx="12" cy="12" r="8" />
+        <path strokeLinecap="round" d="M8 8l8 8" />
+      </svg>
+    </span>
+  );
+
   const sessionRowsView = useMemo(
     () =>
       sessionRows.map((session) => ({
         sessionId: session.sessionId,
+        gameId: session.gameId,
         title: session.game,
         platform: formatSessionPlatformLabel(session),
         date: formatDateLabel(new Date(session.startedAt)),
         duration: formatDuration(getSessionDurationSeconds(session), "short"),
-        image: session.capsuleUrl ?? capsuleUrl,
+        imageUrl: session.capsuleUrl ?? null,
+        ignored: session.ignored,
       })),
     [sessionRows]
   );
@@ -515,11 +541,14 @@ export const SessionsPage = ({
     { key: "last-year", label: "Last year" },
   ];
 
-  const handleGameSelect = (title: string) => {
-    onNavigate(buildGamePath(title));
+  const handleGameSelect = (gameId: string) => {
+    onNavigate(buildGamePath(gameId));
   };
 
-  const platformPieColors = ["#34d399", "#22d3ee", "#a78bfa", "#f59e0b"];
+  const platformPieColors =
+    theme === "dark"
+      ? ["#34d399", "#22d3ee", "#a78bfa", "#f59e0b"]
+      : ["#059669", "#0e7490", "#7c3aed", "#d97706"];
   const statsRangeLabel = useMemo(() => {
     if (!sessionsFrom && !sessionsTo) {
       return "All time";
@@ -551,6 +580,7 @@ export const SessionsPage = ({
       return [];
     }
     return rangeStats.topGames.map((game) => ({
+      gameId: game.gameId,
       title: game.title,
       hours: formatHours(game.totalSeconds, 1),
     }));
@@ -571,7 +601,7 @@ export const SessionsPage = ({
   }, [rangeStats]);
 
   return (
-    <main className="relative min-h-screen overflow-hidden bg-slate-950 text-slate-100">
+    <main className="relative min-h-screen overflow-hidden bg-slate-200 dark:bg-slate-950 text-slate-900 dark:text-slate-100">
       <Background />
       <div className="relative mx-auto w-full max-w-6xl p-3 sm:px-6 sm:py-12">
         <AppHeader
@@ -580,22 +610,24 @@ export const SessionsPage = ({
           path={path}
           onNavigate={onNavigate}
           onLogout={onLogout}
+          theme={theme}
+          onToggleTheme={onToggleTheme}
         />
 
-        <section className="mt-10 rounded-3xl border border-slate-800 bg-slate-900/60 p-5 sm:p-6">
+        <section className="mt-10 rounded-3xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/60 p-5 sm:p-6">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-300">
+              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-700 dark:text-emerald-300">
                 Sessions log
               </p>
-              <h2 className="mt-2 text-xl font-semibold text-white">
+              <h2 className="mt-2 text-xl font-semibold text-slate-900 dark:text-white">
                 Every session tracked
               </h2>
             </div>
             <button
               type="button"
               onClick={openManualEntryModal}
-              className="rounded-full border border-emerald-400/60 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-emerald-200 transition hover:border-emerald-300"
+              className="rounded-full border border-emerald-400/60 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-emerald-700 dark:text-emerald-200 transition hover:border-emerald-300"
             >
               Add entry
             </button>
@@ -610,7 +642,7 @@ export const SessionsPage = ({
                 className={`rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.3em] transition ${
                   sessionsPreset === preset.key
                     ? "border-emerald-300 bg-emerald-400 text-slate-900"
-                    : "border-slate-700 text-slate-200 hover:border-emerald-300/70"
+                    : "border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:border-emerald-300/70"
                 }`}
               >
                 {preset.label}
@@ -619,17 +651,17 @@ export const SessionsPage = ({
           </div>
 
           <div className="mt-6 grid gap-3 md:grid-cols-[1.2fr_0.6fr_0.6fr]">
-            <label className="text-xs font-medium text-slate-300">
+            <label className="text-xs font-medium text-slate-600 dark:text-slate-300">
               Title
               <input
                 type="text"
                 placeholder="Search by game title"
                 value={sessionsTitle}
                 onChange={(event) => setSessionsTitle(event.target.value)}
-                className="mt-2 w-full rounded-xl border border-slate-700 bg-slate-950/80 px-3 py-2 text-sm text-white outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/30"
+                className="mt-2 w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white/90 dark:bg-slate-950/80 px-3 py-2 text-sm text-slate-900 dark:text-white outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/30"
               />
             </label>
-            <label className="text-xs font-medium text-slate-300">
+            <label className="text-xs font-medium text-slate-600 dark:text-slate-300">
               From
               <input
                 type="date"
@@ -638,10 +670,10 @@ export const SessionsPage = ({
                   setSessionsFrom(event.target.value);
                   setSessionsPreset("custom");
                 }}
-                className="mt-2 w-full rounded-xl border border-slate-700 bg-slate-950/80 px-3 py-2 text-sm text-white outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/30"
+                className="mt-2 w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white/90 dark:bg-slate-950/80 px-3 py-2 text-sm text-slate-900 dark:text-white outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/30"
               />
             </label>
-            <label className="text-xs font-medium text-slate-300">
+            <label className="text-xs font-medium text-slate-600 dark:text-slate-300">
               To
               <input
                 type="date"
@@ -650,15 +682,15 @@ export const SessionsPage = ({
                   setSessionsTo(event.target.value);
                   setSessionsPreset("custom");
                 }}
-                className="mt-2 w-full rounded-xl border border-slate-700 bg-slate-950/80 px-3 py-2 text-sm text-white outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/30"
+                className="mt-2 w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white/90 dark:bg-slate-950/80 px-3 py-2 text-sm text-slate-900 dark:text-white outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/30"
               />
             </label>
           </div>
           {sessionsError ? (
-            <p className="mt-4 text-xs text-rose-300">{sessionsError}</p>
+            <p className="mt-4 text-xs text-rose-700 dark:text-rose-300">{sessionsError}</p>
           ) : null}
           {rangeStatsError ? (
-            <p className="mt-4 text-xs text-rose-300">{rangeStatsError}</p>
+            <p className="mt-4 text-xs text-rose-700 dark:text-rose-300">{rangeStatsError}</p>
           ) : null}
 
           <div className="mt-6">
@@ -674,20 +706,27 @@ export const SessionsPage = ({
               topGames={rangeTopGames}
               colors={platformPieColors}
               onGameSelect={handleGameSelect}
+              onOpenRecap={() => {
+                if (sessionsFrom && sessionsTo) {
+                  onNavigate(`/recap?from=${sessionsFrom}&to=${sessionsTo}`);
+                } else {
+                  onNavigate("/recap");
+                }
+              }}
             />
             {isRangeStatsLoading ? (
-              <p className="mt-3 text-xs text-slate-400">Loading stats...</p>
+              <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">Loading stats...</p>
             ) : null}
           </div>
 
           <div className="mt-6 space-y-3 md:hidden">
-            <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-800 bg-slate-950/60 px-4 py-3 text-[11px] uppercase tracking-[0.25em] text-slate-400">
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/70 dark:bg-slate-950/60 px-4 py-3 text-[11px] uppercase tracking-[0.25em] text-slate-500 dark:text-slate-400">
               <span>Sort</span>
               <div className="flex items-center gap-2">
                 <button
                   type="button"
                   onClick={() => handleSessionSort("date")}
-                  className="inline-flex items-center gap-2 rounded-full border border-slate-700 px-3 py-1 font-semibold transition hover:border-emerald-400/60 hover:text-emerald-100"
+                  className="inline-flex items-center gap-2 rounded-full border border-slate-300 dark:border-slate-700 px-3 py-1 font-semibold transition hover:border-emerald-400/60 hover:text-emerald-700 dark:hover:text-emerald-100"
                 >
                   Date
                   {renderSessionSortIcon("date")}
@@ -695,7 +734,7 @@ export const SessionsPage = ({
                 <button
                   type="button"
                   onClick={() => handleSessionSort("duration")}
-                  className="inline-flex items-center gap-2 rounded-full border border-slate-700 px-3 py-1 font-semibold transition hover:border-emerald-400/60 hover:text-emerald-100"
+                  className="inline-flex items-center gap-2 rounded-full border border-slate-300 dark:border-slate-700 px-3 py-1 font-semibold transition hover:border-emerald-400/60 hover:text-emerald-700 dark:hover:text-emerald-100"
                 >
                   Duration
                   {renderSessionSortIcon("duration")}
@@ -708,22 +747,22 @@ export const SessionsPage = ({
                 [1, 2, 3, 4].map((row) => (
                   <div
                     key={row}
-                    className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4"
+                    className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/70 dark:bg-slate-950/60 p-4"
                   >
                     <div className="flex items-start gap-3">
-                      <div className="h-14 w-10 rounded-xl bg-slate-800/60" />
+                      <div className="h-14 w-10 rounded-xl bg-slate-200/70 dark:bg-slate-800/60" />
                       <div className="flex-1 space-y-2">
-                        <div className="h-3 w-32 rounded-full bg-slate-800/60" />
-                        <div className="h-3 w-20 rounded-full bg-slate-800/50" />
-                        <div className="h-3 w-16 rounded-full bg-slate-800/50" />
+                        <div className="h-3 w-32 rounded-full bg-slate-200/70 dark:bg-slate-800/60" />
+                        <div className="h-3 w-20 rounded-full bg-slate-200/50 dark:bg-slate-800/50" />
+                        <div className="h-3 w-16 rounded-full bg-slate-200/50 dark:bg-slate-800/50" />
                       </div>
-                      <div className="h-3 w-12 rounded-full bg-slate-800/50" />
+                      <div className="h-3 w-12 rounded-full bg-slate-200/50 dark:bg-slate-800/50" />
                     </div>
-                    <div className="mt-3 h-8 w-20 rounded-full bg-slate-800/50" />
+                    <div className="mt-3 h-8 w-20 rounded-full bg-slate-200/50 dark:bg-slate-800/50" />
                   </div>
                 ))
               ) : sessionRowsView.length === 0 ? (
-                <div className="rounded-2xl border border-dashed border-slate-800 bg-slate-950/50 p-4 text-sm text-slate-400">
+                <div className="rounded-2xl border border-dashed border-slate-200 dark:border-slate-800 bg-slate-200/50 dark:bg-slate-950/50 p-4 text-sm text-slate-500 dark:text-slate-400">
                   {hasSessionFilters
                     ? "No sessions match your filters."
                     : "No sessions yet. Sync a provider to populate this list."}
@@ -732,32 +771,39 @@ export const SessionsPage = ({
                 sessionRowsView.map((session) => (
                   <div
                     key={session.sessionId}
-                    className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4"
+                    className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/70 dark:bg-slate-950/60 p-4"
                   >
                     <div className="flex items-start gap-3">
-                      <img
-                        src={session.image}
-                        alt={`${session.title} capsule art`}
-                        className="h-14 w-10 rounded-xl border border-slate-800 object-cover"
-                      />
+                      {session.imageUrl ? (
+                        <img
+                          src={session.imageUrl}
+                          alt={`${session.title} capsule art`}
+                          className="h-14 w-10 rounded-xl border border-slate-200 dark:border-slate-800 object-cover"
+                        />
+                      ) : (
+                        <div className="h-14 w-10 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-200/70 dark:bg-slate-800/60" />
+                      )}
                       <div className="flex-1 space-y-1">
                         <button
                           type="button"
-                          onClick={() => handleGameSelect(session.title)}
-                          className="text-left font-semibold text-white transition hover:text-emerald-200"
+                          onClick={() => handleGameSelect(session.gameId)}
+                          className="text-left font-semibold text-slate-900 dark:text-white transition hover:text-emerald-700 dark:hover:text-emerald-200"
                     >
                       {session.title}
                     </button>
-                    <p className="text-xs text-slate-400">
+                    <p className="text-xs text-slate-500 dark:text-slate-400">
                       {session.platform}
                     </p>
-                    <p className="text-xs text-slate-400">
+                    <p className="text-xs text-slate-500 dark:text-slate-400">
                       {session.date}
                     </p>
                   </div>
-                  <span className="text-sm font-semibold text-emerald-200">
-                    {session.duration}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    {session.ignored ? renderIgnoredIcon() : null}
+                    <span className="text-sm font-semibold text-emerald-700 dark:text-emerald-200">
+                      {session.duration}
+                    </span>
+                  </div>
                 </div>
                 <div className="mt-3 flex items-center justify-between">
                   <span className="text-[11px] uppercase tracking-[0.3em] text-slate-500">
@@ -769,7 +815,7 @@ export const SessionsPage = ({
                     disabled={deletingSessionIds.includes(
                       session.sessionId
                         )}
-                        className="rounded-full border border-rose-500/60 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.3em] text-rose-200 transition hover:border-rose-400 disabled:cursor-not-allowed disabled:opacity-60"
+                        className="rounded-full border border-rose-500/60 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.3em] text-rose-700 dark:text-rose-200 transition hover:border-rose-400 disabled:cursor-not-allowed disabled:opacity-60"
                       >
                         Remove
                       </button>
@@ -780,9 +826,9 @@ export const SessionsPage = ({
             </div>
           </div>
 
-          <div className="mt-6 hidden overflow-hidden rounded-2xl border border-slate-800 md:block">
+          <div className="mt-6 hidden overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-800 md:block">
             <table className="w-full text-left text-sm">
-              <thead className="bg-slate-950/70 text-xs uppercase tracking-[0.3em] text-slate-400">
+              <thead className="bg-white dark:bg-slate-950/70 text-xs uppercase tracking-[0.3em] text-slate-500 dark:text-slate-400">
                 <tr>
                   <th className="px-4 py-3 text-left">Title</th>
                   <th className="px-4 py-3 text-left">Platform</th>
@@ -790,7 +836,7 @@ export const SessionsPage = ({
                     <button
                       type="button"
                       onClick={() => handleSessionSort("date")}
-                      className="inline-flex items-center gap-2 text-xs uppercase tracking-[0.3em] text-slate-400 transition hover:text-slate-200"
+                      className="inline-flex items-center gap-2 text-xs uppercase tracking-[0.3em] text-slate-500 dark:text-slate-400 transition hover:text-slate-700 dark:hover:text-slate-200"
                     >
                       Date
                       {renderSessionSortIcon("date")}
@@ -800,7 +846,7 @@ export const SessionsPage = ({
                     <button
                       type="button"
                       onClick={() => handleSessionSort("duration")}
-                      className="inline-flex items-center gap-2 text-xs uppercase tracking-[0.3em] text-slate-400 transition hover:text-slate-200"
+                      className="inline-flex items-center gap-2 text-xs uppercase tracking-[0.3em] text-slate-500 dark:text-slate-400 transition hover:text-slate-700 dark:hover:text-slate-200"
                     >
                       Duration
                       {renderSessionSortIcon("duration")}
@@ -809,27 +855,27 @@ export const SessionsPage = ({
                   <th className="px-4 py-3 text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-800 bg-slate-900/60">
+              <tbody className="divide-y divide-slate-200 dark:divide-slate-800 bg-white/80 dark:bg-slate-900/60">
                 {isSessionsLoading ? (
                   [1, 2, 3, 4].map((row) => (
                     <tr key={row}>
                       <td className="px-4 py-4">
                         <div className="flex items-center gap-3">
-                          <div className="h-12 w-9 rounded-lg bg-slate-800/60" />
-                          <div className="h-3 w-28 rounded-full bg-slate-800/60" />
+                          <div className="h-12 w-9 rounded-lg bg-slate-200/70 dark:bg-slate-800/60" />
+                          <div className="h-3 w-28 rounded-full bg-slate-200/70 dark:bg-slate-800/60" />
                         </div>
                       </td>
                       <td className="px-4 py-4">
-                        <div className="h-3 w-16 rounded-full bg-slate-800/50" />
+                        <div className="h-3 w-16 rounded-full bg-slate-200/50 dark:bg-slate-800/50" />
                       </td>
                       <td className="px-4 py-4">
-                        <div className="h-3 w-12 rounded-full bg-slate-800/50" />
+                        <div className="h-3 w-12 rounded-full bg-slate-200/50 dark:bg-slate-800/50" />
                       </td>
                       <td className="px-4 py-4">
-                        <div className="ml-auto h-3 w-12 rounded-full bg-slate-800/50" />
+                        <div className="ml-auto h-3 w-12 rounded-full bg-slate-200/50 dark:bg-slate-800/50" />
                       </td>
                       <td className="px-4 py-4">
-                        <div className="ml-auto h-3 w-16 rounded-full bg-slate-800/40" />
+                        <div className="ml-auto h-3 w-16 rounded-full bg-slate-200/40 dark:bg-slate-800/40" />
                       </td>
                     </tr>
                   ))
@@ -837,7 +883,7 @@ export const SessionsPage = ({
                   <tr>
                     <td
                       colSpan={5}
-                      className="px-4 py-10 text-center text-sm text-slate-400"
+                      className="px-4 py-10 text-center text-sm text-slate-500 dark:text-slate-400"
                     >
                       {hasSessionFilters
                         ? "No sessions match your filters."
@@ -848,32 +894,39 @@ export const SessionsPage = ({
                   sessionRowsView.map((session) => (
                     <tr
                       key={`${session.sessionId}`}
-                      className="transition hover:bg-slate-900/70"
+                      className="transition hover:bg-slate-100 dark:hover:bg-slate-900/70"
                     >
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-3">
-                          <img
-                            src={session.image}
-                            alt={`${session.title} capsule art`}
-                            className="h-12 w-9 rounded-lg border border-slate-800 object-cover"
-                          />
+                          {session.imageUrl ? (
+                            <img
+                              src={session.imageUrl}
+                              alt={`${session.title} capsule art`}
+                              className="h-12 w-9 rounded-lg border border-slate-200 dark:border-slate-800 object-cover"
+                            />
+                          ) : (
+                            <div className="h-12 w-9 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-200/70 dark:bg-slate-800/60" />
+                          )}
                           <button
                             type="button"
-                            onClick={() => handleGameSelect(session.title)}
-                            className="text-left font-semibold text-white transition hover:text-emerald-200"
+                            onClick={() => handleGameSelect(session.gameId)}
+                            className="text-left font-semibold text-slate-900 dark:text-white transition hover:text-emerald-700 dark:hover:text-emerald-200"
                           >
                             {session.title}
                           </button>
                         </div>
                       </td>
-                      <td className="px-4 py-3 text-slate-300">
+                      <td className="px-4 py-3 text-slate-600 dark:text-slate-300">
                         {session.platform}
                       </td>
-                      <td className="px-4 py-3 text-slate-300">
+                      <td className="px-4 py-3 text-slate-600 dark:text-slate-300">
                         {session.date}
                       </td>
-                      <td className="px-4 py-3 text-right text-emerald-200">
-                        {session.duration}
+                      <td className="px-4 py-3 text-right text-emerald-700 dark:text-emerald-200">
+                        <div className="inline-flex items-center justify-end gap-2">
+                          {session.ignored ? renderIgnoredIcon() : null}
+                          <span>{session.duration}</span>
+                        </div>
                       </td>
                       <td className="px-4 py-3 text-right">
                         <button
@@ -882,7 +935,7 @@ export const SessionsPage = ({
                           disabled={deletingSessionIds.includes(
                             session.sessionId
                           )}
-                          className="rounded-full border border-rose-500/60 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.3em] text-rose-200 transition hover:border-rose-400 disabled:cursor-not-allowed disabled:opacity-60"
+                          className="rounded-full border border-rose-500/60 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.3em] text-rose-700 dark:text-rose-200 transition hover:border-rose-400 disabled:cursor-not-allowed disabled:opacity-60"
                         >
                           Remove
                         </button>
@@ -894,7 +947,7 @@ export const SessionsPage = ({
             </table>
           </div>
 
-          <div className="mt-6 flex flex-wrap items-center justify-between gap-4 text-xs text-slate-300">
+          <div className="mt-6 flex flex-wrap items-center justify-between gap-4 text-xs text-slate-600 dark:text-slate-300">
             <p>
               Showing {sessionsStart}-{sessionsEnd} of {sessionsTotal} sessions
             </p>
@@ -907,7 +960,7 @@ export const SessionsPage = ({
                     Math.max(0, current - sessionsLimit)
                   )
                 }
-                className="rounded-full border border-slate-700 px-3 py-2 font-semibold uppercase tracking-[0.3em] text-slate-200"
+                className="rounded-full border border-slate-300 dark:border-slate-700 px-3 py-2 font-semibold uppercase tracking-[0.3em] text-slate-700 dark:text-slate-200"
               >
                 Prev
               </button>
@@ -919,7 +972,7 @@ export const SessionsPage = ({
                   className={`flex h-9 w-9 items-center justify-center rounded-full text-xs font-semibold leading-none ${
                     page === currentPage
                       ? "bg-emerald-400 text-slate-900"
-                      : "border border-slate-700 text-slate-200"
+                      : "border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200"
                   }`}
                 >
                   {page}
@@ -934,7 +987,7 @@ export const SessionsPage = ({
                 onClick={() =>
                   setSessionsOffset((current) => current + sessionsLimit)
                 }
-                className="rounded-full border border-slate-700 px-3 py-2 font-semibold uppercase tracking-[0.3em] text-slate-200"
+                className="rounded-full border border-slate-300 dark:border-slate-700 px-3 py-2 font-semibold uppercase tracking-[0.3em] text-slate-700 dark:text-slate-200"
               >
                 Next
               </button>

@@ -10,15 +10,15 @@ import {
   loadAccountCurrentSession,
   loadAccountPlatformTotals,
   loadAccountPlaytimeSummary,
-  loadAccountTopGames,
+  loadAccountGameTotals,
   loadManualInputMappings,
   loadUserCurrentSession,
   loadUserPlatformTotals,
   loadUserPlatformTotalsForRange,
   loadUserPlaytimeSummary,
   loadUserPlaytimeSummaryForRange,
-  loadUserTopGames,
-  loadUserTopGamesForRange,
+  loadUserGameTotals,
+  loadUserGameTotalsForRange,
   type AccountPlaytimeSummaryRow,
   type AccountPlatformTotalsRow,
   type AccountSessionCountRow,
@@ -99,12 +99,8 @@ export const accountsRepository = {
     startedAt: Date
   ) => loadAccountPlatformTotals(accountId, userId, startedAt),
 
-  loadAccountTopGames: (
-    accountId: number,
-    userId: number,
-    startedAt: Date,
-    limit: number
-  ) => loadAccountTopGames(accountId, userId, startedAt, limit),
+  loadAccountGameTotals: (accountId: number, userId: number, startedAt: Date) =>
+    loadAccountGameTotals(accountId, userId, startedAt),
 
   loadUserPlaytimeSummary: (userId: number, startedAt: Date) =>
     loadUserPlaytimeSummary(userId, startedAt),
@@ -112,8 +108,8 @@ export const accountsRepository = {
   loadUserPlatformTotals: (userId: number, startedAt: Date) =>
     loadUserPlatformTotals(userId, startedAt),
 
-  loadUserTopGames: (userId: number, startedAt: Date, limit: number) =>
-    loadUserTopGames(userId, startedAt, limit),
+  loadUserGameTotals: (userId: number, startedAt: Date) =>
+    loadUserGameTotals(userId, startedAt),
 
   loadUserPlaytimeSummaryForRange: (
     userId: number,
@@ -127,11 +123,9 @@ export const accountsRepository = {
     endedAt: Date
   ) => loadUserPlatformTotalsForRange(userId, startedAt, endedAt),
 
-  loadUserTopGamesForRange: (
+  loadUserGameTotalsForRange: (
     userId: number,
     startedAt: Date,
-    endedAt: Date,
-    limit: number
-  ) => loadUserTopGamesForRange(userId, startedAt, endedAt, limit),
+    endedAt: Date
+  ) => loadUserGameTotalsForRange(userId, startedAt, endedAt),
 };
-

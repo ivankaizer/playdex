@@ -21,10 +21,11 @@ export type AccountSessionDto = {
   sessionId: number;
   startedAt: Date;
   endedAt: Date | null;
-  gameId: number;
+  gameId: string;
   platform: string;
   game: string;
   capsuleUrl: string | null;
+  ignored: boolean;
   mappedPlatform?: string;
   mappedSource?: "local" | "igdb";
 };
@@ -52,13 +53,17 @@ export type AccountSessionDeleteResponseDto = {
 };
 
 export type GameIgnoreResponseDto = {
-  gameId: number;
+  gameId: string;
   ignored: boolean;
 };
 
 export type GameRatingResponseDto = {
-  gameId: number;
+  gameId: string;
   rating: number | null;
+};
+
+export type UserSettingsResponseDto = {
+  ignoreShortSessionsMinutes: number;
 };
 
 export type AccountStatsPeriodDto = {
@@ -70,7 +75,7 @@ export type AccountStatsPeriodDto = {
     totalSeconds: number;
     source?: string | null;
   }[];
-  topGames: { title: string; totalSeconds: number }[];
+  topGames: { gameId: string; title: string; totalSeconds: number }[];
 };
 
 export type AccountStatsResponseDto = {
@@ -84,6 +89,71 @@ export type AccountStatsRangeResponseDto = {
   stats: AccountStatsPeriodDto;
 };
 
+export type RecapYearsResponseDto = {
+  years: number[];
+};
+
+export type RecapGameStatDto = {
+  gameId: string;
+  title: string;
+  capsuleUrl: string | null;
+  totalSeconds: number;
+  sessionCount: number;
+  averageSessionSeconds: number;
+};
+
+export type RecapPlatformStatDto = {
+  platform: string;
+  sessionCount: number;
+  totalSeconds: number;
+  source?: string | null;
+};
+
+export type RecapResponseDto = {
+  range: { from: string | null; to: string | null };
+  totalSessions: number;
+  totalSeconds: number;
+  averageSessionSeconds: number;
+  medianSessionSeconds: number;
+  longestSessionSeconds: number;
+  shortestSessionSeconds: number;
+  averageSessionsPerDay: number;
+  averageSessionsPerWeek: number;
+  averageSessionsPerMonth: number;
+  mostActiveDay: { date: string; sessionCount: number } | null;
+  mostActiveMonth: { month: string; sessionCount: number } | null;
+  longestStreakDays: number;
+  daysPlayed: number;
+  daysNotPlayed: number;
+  sessionsByWeekday: { weekday: number; sessionCount: number }[];
+  sessionsByHour: { hour: number; sessionCount: number }[];
+  peakHour: { hour: number; sessionCount: number } | null;
+  weekendSeconds: number;
+  weekdaySeconds: number;
+  uniqueGames: number;
+  topGameBySessions: RecapGameStatDto | null;
+  topGameByTime: RecapGameStatDto | null;
+  topGamesByTime: RecapGameStatDto[];
+  topGameByAverageSession: RecapGameStatDto | null;
+  gameWithLongestSession: {
+    gameId: string;
+    title: string;
+    sessionSeconds: number;
+  } | null;
+  newGamesTried: number;
+  abandonedGames: number;
+  returnRateGames: number;
+  timeOnTop3Percent: number;
+  mostBingedGame: { gameId: string; title: string; sessionCount: number } | null;
+  platformTotals: RecapPlatformStatDto[];
+  mostUsedPlatform: {
+    platform: string;
+    totalSeconds: number;
+    sessionCount: number;
+  } | null;
+  gamesTable: RecapGameStatDto[];
+};
+
 export type ProviderStatusDto = {
   id: number;
   platform: string;
@@ -94,6 +164,10 @@ export type ProviderStatusDto = {
 
 export type ProvidersResponseDto = {
   providers: ProviderStatusDto[];
+};
+
+export type ProviderUpdateResponseDto = {
+  provider: ProviderStatusDto;
 };
 
 export type PlayniteKeyResponseDto = {
@@ -122,10 +196,10 @@ export type ManualInputDto = {
   id: number;
   input: string;
   canonicalTitle: string;
-  mappedGameId: number | null;
+  mappedGameId: string | null;
   mappedSource: "local" | "igdb" | null;
   mappedGame: {
-    id: number;
+    id: string;
     title: string;
     platform: string;
     capsuleUrl: string | null;
@@ -146,7 +220,7 @@ export type ManualSessionStopResponseDto = {
 
 export type ManualMappingSearchResultDto = {
   source: "local" | "igdb";
-  gameId?: number;
+  gameId?: string;
   igdbId?: string;
   title: string;
   platform: string | null;
@@ -162,10 +236,48 @@ export type ManualMappingSearchResponseDto = {
 
 export type ManualMappingResponseDto = {
   inputId: number;
-  mappedGameId: number | null;
+  mappedGameId: string | null;
 };
 
 export type ManualEntryCreateResponseDto = {
   sessionId: number;
 };
 
+export type GameResponseDto = {
+  id: string;
+  title: string;
+  platform: string;
+  capsuleUrl: string | null;
+};
+
+export type GameSearchResultDto = {
+  gameId: string;
+  title: string;
+  platform: string;
+  capsuleUrl: string | null;
+};
+
+export type GameSearchResponseDto = {
+  query: string;
+  results: GameSearchResultDto[];
+};
+
+export type GameConnectionDto = {
+  gameId: string;
+  title: string;
+  platform: string;
+  capsuleUrl: string | null;
+  connectedGameId: string;
+  connectedTitle: string;
+  connectedPlatform: string;
+  connectedCapsuleUrl: string | null;
+};
+
+export type GameConnectionListResponseDto = {
+  connections: GameConnectionDto[];
+};
+
+export type GameConnectionChangeResponseDto = {
+  gameId: string;
+  connectedGameId: string;
+};

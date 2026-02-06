@@ -11,7 +11,9 @@ import { registerMetricsRoutes } from "../modules/metrics";
 import { registerPlayniteRoutes } from "../modules/playnite";
 import type { PollingNotifier } from "../modules/polling";
 import { registerProviderRoutes } from "../modules/providers";
+import { registerRecapRoutes } from "../modules/recap";
 import { registerRootRoutes } from "../modules/root";
+import { registerSettingsRoutes } from "../modules/settings";
 import { registerErrorHandling } from "./http/errorHandler";
 
 type AppOptions = {
@@ -40,9 +42,11 @@ export const createApp = (options: AppOptions = {}) => {
   registerMetricsRoutes(app);
   registerAccountRoutes(app);
   registerGameRoutes(app);
+  registerSettingsRoutes(app);
   registerPlayniteRoutes(app, options.notifier);
   registerProviderRoutes(app);
   registerManualRoutes(app);
+  registerRecapRoutes(app);
 
   app.use(
     swagger({

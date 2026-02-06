@@ -5,8 +5,12 @@
 @tailwind utilities;
 
 :root {
-  color-scheme: dark;
+  color-scheme: light;
   font-size: 16px;
+}
+
+:root.dark {
+  color-scheme: dark;
 }
 
 * {

@@ -5,18 +5,37 @@ import { DashboardPage } from "./pages/DashboardPage";
 import { GamePage } from "./pages/GamePage";
 import { HomePage } from "./pages/HomePage";
 import { MappingPage } from "./pages/MappingPage";
+import { RecapPage } from "./pages/RecapPage";
 import { SessionsPage } from "./pages/SessionsPage";
 import { SettingsPage } from "./pages/SettingsPage";
+import { decodeGameHash, encodeGameId } from "./utils/gameHash";
 
 export const App = () => {
   const [path, setPath] = useState(() => window.location.pathname);
+  const [search, setSearch] = useState(() => window.location.search);
+  const [theme, setTheme] = useState<"light" | "dark">(() => {
+    const stored = localStorage.getItem("playdex.theme");
+    if (stored === "light" || stored === "dark") {
+      return stored;
+    }
+    const prefersDark = window.matchMedia
+      ? window.matchMedia("(prefers-color-scheme: dark)").matches
+      : false;
+    return prefersDark ? "dark" : "light";
+  });
+
+  const toggleTheme = () => {
+    setTheme((current) => (current === "dark" ? "light" : "dark"));
+  };
 
   const navigate = (target: string) => {
-    if (target === path) {
+    const current = `${path}${search}`;
+    if (target === current) {
       return;
     }
     window.history.pushState({}, "", target);
-    setPath(target);
+    setPath(window.location.pathname);
+    setSearch(window.location.search);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
@@ -32,10 +51,20 @@ export const App = () => {
   };
 
   useEffect(() => {
-    const handlePopState = () => setPath(window.location.pathname);
+    const handlePopState = () => {
+      setPath(window.location.pathname);
+      setSearch(window.location.search);
+    };
     window.addEventListener("popstate", handlePopState);
     return () => window.removeEventListener("popstate", handlePopState);
   }, []);
+
+  useEffect(() => {
+    const root = document.documentElement;
+    root.classList.toggle("dark", theme === "dark");
+    root.dataset.theme = theme;
+    localStorage.setItem("playdex.theme", theme);
+  }, [theme]);
 
   const isLoggedIn = Boolean(localStorage.getItem("playdex.token"));
   const isProtectedPath = (target: string) =>
@@ -60,6 +89,8 @@ export const App = () => {
         navItems={navItems}
         onNavigate={navigate}
         onLogout={handleLogout}
+        theme={theme}
+        onToggleTheme={toggleTheme}
       />
     );
   }
@@ -71,6 +102,22 @@ export const App = () => {
         navItems={navItems}
         onNavigate={navigate}
         onLogout={handleLogout}
+        theme={theme}
+        onToggleTheme={toggleTheme}
+      />
+    );
+  }
+
+  if (path === "/recap") {
+    return (
+      <RecapPage
+        path={path}
+        search={search}
+        navItems={navItems}
+        onNavigate={navigate}
+        onLogout={handleLogout}
+        theme={theme}
+        onToggleTheme={toggleTheme}
       />
     );
   }
@@ -82,6 +129,8 @@ export const App = () => {
         navItems={navItems}
         onNavigate={navigate}
         onLogout={handleLogout}
+        theme={theme}
+        onToggleTheme={toggleTheme}
       />
     );
   }
@@ -93,19 +142,26 @@ export const App = () => {
         navItems={navItems}
         onNavigate={navigate}
         onLogout={handleLogout}
+        theme={theme}
+        onToggleTheme={toggleTheme}
       />
     );
   }
 
   if (path.startsWith("/games/")) {
-    const title = decodeURIComponent(path.replace("/games/", ""));
+    const raw = decodeURIComponent(path.replace("/games/", ""));
+    const hash = raw.replace(/\/+$/, "").trim();
+    const normalizedHash = /^\d+$/.test(hash) ? encodeGameId(hash) : hash;
+    const gameId = decodeGameHash(normalizedHash) ? normalizedHash : null;
     return (
       <GamePage
         path={path}
         navItems={navItems}
-        gameTitle={title}
+        gameId={gameId}
         onNavigate={navigate}
         onLogout={handleLogout}
+        theme={theme}
+        onToggleTheme={toggleTheme}
       />
     );
   }
@@ -115,6 +171,8 @@ export const App = () => {
       isLoggedIn={isLoggedIn}
       onDashboardRedirect={handleDashboardRedirect}
       onLogout={handleLogout}
+      theme={theme}
+      onToggleTheme={toggleTheme}
     />
   );
 };

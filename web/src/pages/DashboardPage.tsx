@@ -3,7 +3,6 @@ import { useEffect, useMemo, useState } from "react";
 import { apiRequest } from "../api";
 import {
   buildGamePath,
-  capsuleUrl,
   navItems as defaultNavItems,
 } from "../constants";
 import type {
@@ -38,6 +37,8 @@ type DashboardPageProps = {
   navItems?: NavItem[];
   onNavigate: (path: string) => void;
   onLogout: () => void;
+  theme: "light" | "dark";
+  onToggleTheme: () => void;
 };
 
 export const DashboardPage = ({
@@ -45,6 +46,8 @@ export const DashboardPage = ({
   navItems = defaultNavItems,
   onNavigate,
   onLogout,
+  theme,
+  onToggleTheme,
 }: DashboardPageProps) => {
   const [todaySessions, setTodaySessions] = useState<AccountSession[]>([]);
   const [todayPlatformTotals, setTodayPlatformTotals] = useState<
@@ -236,7 +239,20 @@ export const DashboardPage = ({
     void loadManualInputs();
   }, [isManualModalOpen]);
 
-  const platformPieColors = ["#34d399", "#22d3ee", "#a78bfa", "#f59e0b"];
+  const platformPieColors =
+    theme === "dark"
+      ? ["#34d399", "#22d3ee", "#a78bfa", "#f59e0b"]
+      : ["#059669", "#0e7490", "#7c3aed", "#d97706"];
+  const recapNow = new Date();
+  const recapToday = formatUtcDateInput(recapNow);
+  const recapMonthStart = formatUtcDateInput(
+    new Date(
+      Date.UTC(recapNow.getUTCFullYear(), recapNow.getUTCMonth(), 1)
+    )
+  );
+  const recapYearStart = formatUtcDateInput(
+    new Date(Date.UTC(recapNow.getUTCFullYear(), 0, 1))
+  );
 
   const currentSessionStartedAt = currentSession
     ? new Date(currentSession.startedAt)
@@ -249,10 +265,11 @@ export const DashboardPage = ({
     () =>
       todaySessions.map((session) => ({
         sessionId: session.sessionId,
+        gameId: session.gameId,
         title: session.game,
         time: formatDuration(getSessionDurationSeconds(session), "long"),
         platform: formatSessionPlatformLabel(session),
-        image: session.capsuleUrl ?? capsuleUrl,
+        imageUrl: session.capsuleUrl ?? null,
       })),
     [todaySessions]
   );
@@ -293,6 +310,7 @@ export const DashboardPage = ({
       return [];
     }
     return monthlyStats.topGames.map((game) => ({
+      gameId: game.gameId,
       title: game.title,
       hours: formatHours(game.totalSeconds, 1),
     }));
@@ -325,7 +343,7 @@ export const DashboardPage = ({
     return yearlyStats.platforms.map((item) => ({
       label: formatStatsPlatformLabel(item.platform),
       value: Math.round((item.totalSeconds / total) * 100),
-      hours: formatHours(item.totalSeconds, 0),
+      hours: formatHours(item.totalSeconds, 1),
     }));
   }, [yearlyStats]);
   const yearlyTopGames = useMemo(() => {
@@ -333,8 +351,9 @@ export const DashboardPage = ({
       return [];
     }
     return yearlyStats.topGames.map((game) => ({
+      gameId: game.gameId,
       title: game.title,
-      hours: formatHours(game.totalSeconds, 0),
+      hours: formatHours(game.totalSeconds, 1),
     }));
   }, [yearlyStats]);
   const yearlySummary = useMemo(() => {
@@ -346,7 +365,7 @@ export const DashboardPage = ({
       };
     }
     return {
-      hours: formatHours(yearlyStats.totalSeconds, 0),
+      hours: formatHours(yearlyStats.totalSeconds, 1),
       sessions: String(yearlyStats.sessionCount),
       topTitle: yearlyStats.topGameTitle ?? "—",
     };
@@ -355,12 +374,12 @@ export const DashboardPage = ({
     return `${new Date().getFullYear()} recap`;
   }, []);
 
-  const handleGameSelect = (title: string) => {
-    onNavigate(buildGamePath(title));
+  const handleGameSelect = (gameId: string) => {
+    onNavigate(buildGamePath(gameId));
   };
 
   return (
-    <main className="relative min-h-screen overflow-hidden bg-slate-950 text-slate-100">
+    <main className="relative min-h-screen overflow-hidden bg-slate-200 dark:bg-slate-950 text-slate-900 dark:text-slate-100">
       <Background />
       <div className="relative mx-auto w-full max-w-6xl p-3 sm:px-6 sm:py-12">
         <AppHeader
@@ -369,12 +388,14 @@ export const DashboardPage = ({
           path={path}
           onNavigate={onNavigate}
           onLogout={onLogout}
+          theme={theme}
+          onToggleTheme={onToggleTheme}
         />
 
         <section className="mt-10 space-y-6">
-          <div className="rounded-3xl border border-slate-800 bg-slate-900/60 px-4 py-3 sm:px-6 sm:py-4">
+          <div className="rounded-3xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/60 px-4 py-3 sm:px-6 sm:py-4">
             <div className="flex flex-wrap items-center justify-between gap-4">
-              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-300">
+              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-700 dark:text-emerald-300">
                 Current session
               </p>
               <div className="flex flex-wrap items-center gap-3">
@@ -383,7 +404,7 @@ export const DashboardPage = ({
                     type="button"
                     onClick={handleManualSessionStop}
                     disabled={isManualStopLoading}
-                    className="rounded-full border border-rose-500/60 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.3em] text-rose-200 transition hover:border-rose-400 hover:text-rose-100 disabled:cursor-not-allowed disabled:border-rose-500/40"
+                    className="rounded-full border border-rose-500/60 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.3em] text-rose-700 dark:text-rose-200 transition hover:border-rose-400 hover:text-rose-700 dark:hover:text-rose-100 disabled:cursor-not-allowed disabled:border-rose-500/40"
                   >
                     {isManualStopLoading ? "Stopping..." : "Stop session"}
                   </button>
@@ -391,53 +412,53 @@ export const DashboardPage = ({
                   <button
                     type="button"
                     onClick={() => setIsManualModalOpen(true)}
-                    className="rounded-full border border-emerald-400/60 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.3em] text-emerald-200 transition hover:border-emerald-300"
+                    className="rounded-full border border-emerald-400/60 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.3em] text-emerald-700 dark:text-emerald-200 transition hover:border-emerald-300"
                   >
                     Start session
                   </button>
                 )}
-                <span className="rounded-full border border-emerald-400/40 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.3em] text-emerald-200">
+                <span className="rounded-full border border-emerald-400/40 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.3em] text-emerald-700 dark:text-emerald-200">
                   {currentSession ? "Live" : "Idle"}
                 </span>
               </div>
             </div>
             {isDashboardLoading ? (
               <div className="mt-3 flex flex-wrap items-center justify-between gap-5">
-                <div className="h-6 w-40 rounded-full bg-slate-800/60" />
+                <div className="h-6 w-40 rounded-full bg-slate-200/70 dark:bg-slate-800/60" />
                 <div className="flex flex-wrap items-center justify-end gap-4">
-                  <div className="h-3 w-24 rounded-full bg-slate-800/60" />
-                  <div className="h-3 w-32 rounded-full bg-slate-800/60" />
-                  <div className="h-3 w-28 rounded-full bg-slate-800/60" />
+                  <div className="h-3 w-24 rounded-full bg-slate-200/70 dark:bg-slate-800/60" />
+                  <div className="h-3 w-32 rounded-full bg-slate-200/70 dark:bg-slate-800/60" />
+                  <div className="h-3 w-28 rounded-full bg-slate-200/70 dark:bg-slate-800/60" />
                 </div>
               </div>
             ) : (
-              <div className="mt-3 flex flex-wrap items-center justify-between gap-5 text-sm font-semibold text-slate-300">
+              <div className="mt-3 flex flex-wrap items-center justify-between gap-5 text-sm font-semibold text-slate-600 dark:text-slate-300">
                 {currentSession ? (
                   <>
                     <button
                       type="button"
-                      onClick={() => handleGameSelect(currentSession.game)}
-                      className="text-left text-lg font-semibold text-white transition hover:text-emerald-200"
+                      onClick={() => handleGameSelect(currentSession.gameId)}
+                      className="text-left text-lg font-semibold text-slate-900 dark:text-white transition hover:text-emerald-700 dark:hover:text-emerald-200"
                     >
                       {currentSession.game}
                     </button>
-                    <div className="flex flex-wrap items-center justify-end gap-4 text-sm font-semibold normal-case tracking-normal text-slate-300">
-                      <span className="inline-flex items-center gap-2 text-slate-200">
+                    <div className="flex flex-wrap items-center justify-end gap-4 text-sm font-semibold normal-case tracking-normal text-slate-600 dark:text-slate-300">
+                      <span className="inline-flex items-center gap-2 text-slate-700 dark:text-slate-200">
                         <svg
                           aria-hidden="true"
                           viewBox="0 0 20 20"
-                          className="h-3.5 w-3.5 text-emerald-300"
+                          className="h-3.5 w-3.5 text-emerald-700 dark:text-emerald-300"
                           fill="currentColor"
                         >
                           <path d="M3 5a2 2 0 012-2h10a2 2 0 012 2v2H3V5zm0 4h14v6a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
                         </svg>
                         {formatSessionPlatformLabel(currentSession)}
                       </span>
-                      <span className="inline-flex items-center gap-2 text-slate-300">
+                      <span className="inline-flex items-center gap-2 text-slate-600 dark:text-slate-300">
                         <svg
                           aria-hidden="true"
                           viewBox="0 0 20 20"
-                          className="h-3.5 w-3.5 text-slate-400"
+                          className="h-3.5 w-3.5 text-slate-500 dark:text-slate-400"
                           fill="currentColor"
                         >
                           <path d="M10 2a8 8 0 100 16 8 8 0 000-16zm1 4v4.59l3.3 3.3-1.42 1.42L9 11V6h2z" />
@@ -447,11 +468,11 @@ export const DashboardPage = ({
                           ? formatTimeLabel(currentSessionStartedAt)
                           : "--"}
                       </span>
-                      <span className="inline-flex items-center gap-2 text-emerald-200">
+                      <span className="inline-flex items-center gap-2 text-emerald-700 dark:text-emerald-200">
                         <svg
                           aria-hidden="true"
                           viewBox="0 0 20 20"
-                          className="h-3.5 w-3.5 text-emerald-300"
+                          className="h-3.5 w-3.5 text-emerald-700 dark:text-emerald-300"
                           fill="currentColor"
                         >
                           <path d="M10 2a8 8 0 100 16 8 8 0 000-16zm-1 3h2v6h4v2H9V5z" />
@@ -462,7 +483,7 @@ export const DashboardPage = ({
                   </>
                 ) : (
                   <>
-                    <h2 className="text-sm font-semibold text-slate-200">
+                    <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-200">
                       No session running right now.
                     </h2>
                   </>
@@ -472,23 +493,42 @@ export const DashboardPage = ({
           </div>
 
           <div className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
-            <div className="rounded-3xl border border-slate-800 bg-slate-900/60 p-5 sm:p-6">
+            <div className="rounded-3xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/60 p-5 sm:p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-300">
+                  <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-700 dark:text-emerald-300">
                     Today stats
                   </p>
-                  <h2 className="text-xl font-semibold text-white">
+                  <h2 className="text-xl font-semibold text-slate-900 dark:text-white">
                     {todayTotals.hours} played
                   </h2>
                 </div>
+                <button
+                  type="button"
+                  onClick={() =>
+                    onNavigate(`/recap?from=${recapToday}&to=${recapToday}`)
+                  }
+                  className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 dark:border-slate-800 bg-white/70 dark:bg-slate-950/60 text-slate-600 dark:text-slate-200 transition hover:border-emerald-300 hover:text-emerald-700 dark:hover:text-emerald-200"
+                  aria-label="Open recap"
+                  title="Open recap"
+                >
+                  <svg
+                    viewBox="0 0 20 20"
+                    className="h-4 w-4"
+                    fill="currentColor"
+                    aria-hidden="true"
+                  >
+                    <path d="M12.5 3.5a1 1 0 011.5.86v7.79l2.22-2.22a1 1 0 111.41 1.41l-3.93 3.93a1 1 0 01-1.7-.7V4.36a1 1 0 01.5-.86z" />
+                    <path d="M4 5a2 2 0 012-2h3a1 1 0 110 2H6v10h8v-3a1 1 0 112 0v3a2 2 0 01-2 2H6a2 2 0 01-2-2V5z" />
+                  </svg>
+                </button>
               </div>
-              <div className="mt-5 rounded-2xl border border-slate-800 bg-slate-950/50 p-4">
-                <p className="text-xs uppercase tracking-[0.3em] text-slate-400">
+              <div className="mt-5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-200/50 dark:bg-slate-950/50 p-4">
+                <p className="text-xs uppercase tracking-[0.3em] text-slate-500 dark:text-slate-400">
                   Platform distribution
                 </p>
                 {todayPlatforms.length === 0 ? (
-                  <p className="mt-3 text-xs text-slate-400">
+                  <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">
                     No sessions logged today yet.
                   </p>
                 ) : (
@@ -498,7 +538,7 @@ export const DashboardPage = ({
                       colors={platformPieColors}
                       size={140}
                     />
-                    <div className="flex-1 space-y-2 text-xs text-slate-300">
+                    <div className="flex-1 space-y-2 text-xs text-slate-600 dark:text-slate-300">
                       {todayPlatforms.map((item, index) => (
                         <div
                           key={item.label}
@@ -527,13 +567,13 @@ export const DashboardPage = ({
               </div>
             </div>
 
-            <div className="rounded-3xl border border-slate-800 bg-slate-900/60 p-5 sm:p-6">
+            <div className="rounded-3xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/60 p-5 sm:p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-300">
+                  <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-700 dark:text-emerald-300">
                     Today sessions
                   </p>
-                  <h2 className="text-xl font-semibold text-white">
+                  <h2 className="text-xl font-semibold text-slate-900 dark:text-white">
                     {todaySessionCards.length}{" "}
                     {todaySessionCards.length === 1 ? "session" : "sessions"}{" "}
                     logged
@@ -542,62 +582,75 @@ export const DashboardPage = ({
                 <button
                   type="button"
                   onClick={() => onNavigate("/sessions")}
-                  className="rounded-full border border-slate-700 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-slate-200 transition hover:border-emerald-400/60"
+                  className="rounded-full border border-slate-300 dark:border-slate-700 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-slate-700 dark:text-slate-200 transition hover:border-emerald-400/60"
                 >
                   View all
                 </button>
               </div>
               <div className="mt-5 space-y-4">
                 {dashboardError ? (
-                  <div className="rounded-2xl border border-rose-500/30 bg-rose-500/10 p-4 text-xs text-rose-200">
+                  <div className="rounded-2xl border border-rose-500/30 bg-rose-500/10 p-4 text-xs text-rose-700 dark:text-rose-200">
                     {dashboardError}
                   </div>
                 ) : isDashboardLoading ? (
                   [1, 2, 3].map((item) => (
                     <div
                       key={item}
-                      className="flex items-center justify-between gap-4 rounded-2xl border border-slate-800 bg-slate-950/50 p-4"
+                      className="flex items-center justify-between gap-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-200/50 dark:bg-slate-950/50 p-4"
                     >
                       <div className="flex items-center gap-3">
-                        <div className="h-14 w-10 rounded-xl bg-slate-800/60" />
+                        <div className="h-14 w-10 rounded-xl bg-slate-200/70 dark:bg-slate-800/60" />
                         <div className="space-y-2">
-                          <div className="h-3 w-28 rounded-full bg-slate-800/70" />
-                          <div className="h-2 w-16 rounded-full bg-slate-800/50" />
+                          <div className="h-3 w-28 rounded-full bg-slate-200/70 dark:bg-slate-800/70" />
+                          <div className="h-2 w-16 rounded-full bg-slate-200/50 dark:bg-slate-800/50" />
                         </div>
                       </div>
-                      <div className="h-3 w-12 rounded-full bg-slate-800/60" />
+                      <div className="h-3 w-12 rounded-full bg-slate-200/70 dark:bg-slate-800/60" />
                     </div>
                   ))
                 ) : todaySessionCards.length === 0 ? (
-                  <div className="rounded-2xl border border-dashed border-slate-800 bg-slate-950/40 p-4 text-xs text-slate-400">
+                  <div className="rounded-2xl border border-dashed border-slate-200 dark:border-slate-800 bg-slate-200/40 dark:bg-slate-950/40 p-4 text-xs text-slate-500 dark:text-slate-400">
                     No sessions logged today yet.
                   </div>
                 ) : (
                   todaySessionCards.map((session) => (
                     <div
                       key={session.sessionId}
-                      className="relative flex flex-wrap items-center justify-between gap-4 overflow-hidden rounded-2xl border border-slate-800 bg-slate-950/50 p-4"
-                      style={{
-                        backgroundImage: `url(${session.image})`,
-                        backgroundSize: "cover",
-                        backgroundPosition: "center",
-                      }}
+                      className="relative flex flex-wrap items-center justify-between gap-4 overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-200/50 dark:bg-slate-950/50 p-4"
+                      style={
+                        session.imageUrl
+                          ? {
+                              backgroundImage: `url(${session.imageUrl})`,
+                              backgroundSize: "cover",
+                              backgroundPosition: "center",
+                            }
+                          : undefined
+                      }
                     >
-                      <div className="absolute inset-0 bg-slate-950/80" />
-                      <div className="relative z-10">
+                      <div
+                        className={`absolute inset-0 ${
+                          session.imageUrl
+                            ? "bg-white/90 dark:bg-slate-950/80"
+                            : "bg-white/90 dark:bg-slate-900/70"
+                        }`}
+                      />
+                      <div className="relative z-10 flex items-center gap-3">
+                        {!session.imageUrl ? (
+                          <div className="h-14 w-10 rounded-xl bg-slate-200/70 dark:bg-slate-800/60" />
+                        ) : null}
                         <button
                           type="button"
-                          onClick={() => handleGameSelect(session.title)}
-                          className="text-left text-sm font-semibold text-white transition hover:text-emerald-200"
+                          onClick={() => handleGameSelect(session.gameId)}
+                          className="text-left text-sm font-semibold text-slate-900 dark:text-white transition hover:text-emerald-700 dark:hover:text-emerald-200"
                         >
                           {session.title}
                         </button>
                       </div>
                       <div className="relative z-10 flex items-center gap-4">
-                        <p className="text-xs text-slate-400">
+                        <p className="text-xs text-slate-500 dark:text-slate-400">
                           {session.platform}
                         </p>
-                        <p className="text-sm font-semibold text-emerald-200">
+                        <p className="text-sm font-semibold text-emerald-700 dark:text-emerald-200">
                           {session.time}
                         </p>
                       </div>
@@ -620,6 +673,9 @@ export const DashboardPage = ({
             topGames={monthlyTopGames}
             colors={platformPieColors}
             onGameSelect={handleGameSelect}
+            onOpenRecap={() =>
+              onNavigate(`/recap?from=${recapMonthStart}&to=${recapToday}`)
+            }
           />
 
           <StatsRecapSection
@@ -634,6 +690,9 @@ export const DashboardPage = ({
             topGames={yearlyTopGames}
             colors={platformPieColors}
             onGameSelect={handleGameSelect}
+            onOpenRecap={() =>
+              onNavigate(`/recap?from=${recapYearStart}&to=${recapToday}`)
+            }
           />
         </section>
       </div>

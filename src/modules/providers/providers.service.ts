@@ -1,5 +1,6 @@
 import { randomBytes } from "node:crypto";
 
+import { AppError } from "../../common/errors/AppError";
 import { providersRepository } from "./providers.repository";
 
 const generateApiKey = () => {
@@ -42,5 +43,28 @@ export const providersService = {
       apiKey
     );
     return created[0]?.api_key ?? apiKey;
+  },
+
+  updateProviderStatus: async (
+    userId: number,
+    providerId: number,
+    status: "active" | "paused"
+  ) => {
+    const updated = await providersRepository.updateProviderActive(
+      userId,
+      providerId,
+      status === "active"
+    );
+    if (!updated) {
+      throw new AppError("Provider not found.", 404);
+    }
+
+    return {
+      id: updated.id,
+      platform: updated.platform,
+      accountId: updated.account_id,
+      status: updated.active ? "active" : "paused",
+      apiKey: updated.api_key,
+    };
   },
 };

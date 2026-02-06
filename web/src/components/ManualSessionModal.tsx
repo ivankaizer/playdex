@@ -35,34 +35,34 @@ export const ManualSessionModal = ({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 px-4 py-8">
-      <div className="w-full max-w-lg rounded-3xl border border-slate-800 bg-slate-900/90 p-5 shadow-[0_30px_80px_rgba(15,23,42,0.7)] sm:p-6">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/30 dark:bg-slate-950/80 px-4 py-8">
+      <div className="w-full max-w-lg rounded-3xl border border-slate-200 dark:border-slate-800 bg-white/90 dark:bg-slate-900/90 p-5 shadow-[0_30px_80px_rgba(15,23,42,0.7)] sm:p-6">
         <div className="flex items-center justify-between gap-4">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-300">
+            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-700 dark:text-emerald-300">
               Manual tracking
             </p>
-            <h2 className="mt-2 text-xl font-semibold text-white">
+            <h2 className="mt-2 text-xl font-semibold text-slate-900 dark:text-white">
               Start a session
             </h2>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="rounded-full border border-slate-700 px-3 py-1 text-xs font-semibold uppercase tracking-[0.3em] text-slate-200"
+            className="rounded-full border border-slate-300 dark:border-slate-700 px-3 py-1 text-xs font-semibold uppercase tracking-[0.3em] text-slate-700 dark:text-slate-200"
           >
             Close
           </button>
         </div>
 
         <div className="mt-6 grid gap-4">
-          <label className="text-xs font-medium text-slate-300">
+          <label className="text-xs font-medium text-slate-600 dark:text-slate-300">
             Pick from history
             <select
               value={manualInputSelection}
               onChange={(event) => onSelectInput(event.target.value)}
               disabled={isManualInputsLoading}
-              className="mt-2 w-full rounded-xl border border-slate-700 bg-slate-950/80 px-3 py-2 text-sm text-white outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/30"
+              className="mt-2 w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white/90 dark:bg-slate-950/80 px-3 py-2 text-sm text-slate-900 dark:text-white outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/30"
             >
               <option value="">Choose a recent title</option>
               {manualInputs.map((input) => (
@@ -73,22 +73,22 @@ export const ManualSessionModal = ({
             </select>
           </label>
 
-          <label className="text-xs font-medium text-slate-300">
+          <label className="text-xs font-medium text-slate-600 dark:text-slate-300">
             Or enter a new title
             <input
               type="text"
               placeholder="Mario Kart"
               value={manualInputText}
               onChange={(event) => onInputTextChange(event.target.value)}
-              className="mt-2 w-full rounded-xl border border-slate-700 bg-slate-950/80 px-3 py-2 text-sm text-white outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/30"
+              className="mt-2 w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white/90 dark:bg-slate-950/80 px-3 py-2 text-sm text-slate-900 dark:text-white outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/30"
             />
           </label>
 
           {manualInputsError ? (
-            <p className="text-xs text-rose-300">{manualInputsError}</p>
+            <p className="text-xs text-rose-700 dark:text-rose-300">{manualInputsError}</p>
           ) : null}
           {manualStartError ? (
-            <p className="text-xs text-rose-300">{manualStartError}</p>
+            <p className="text-xs text-rose-700 dark:text-rose-300">{manualStartError}</p>
           ) : null}
         </div>
 
@@ -96,7 +96,7 @@ export const ManualSessionModal = ({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-full border border-slate-700 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-slate-200"
+            className="rounded-full border border-slate-300 dark:border-slate-700 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-slate-700 dark:text-slate-200"
           >
             Cancel
           </button>

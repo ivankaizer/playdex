@@ -11,6 +11,8 @@ import type {
 } from "../../app/http/types";
 import { AppError } from "../../common/errors/AppError";
 import { config } from "../../common/config";
+import { parseGameId } from "../../common/utils/gameId";
+import { encodeGameId } from "../../common/utils/gameHash";
 import { manualService } from "./manual.service";
 
 type ManualSessionStartBody = {
@@ -18,7 +20,7 @@ type ManualSessionStartBody = {
 };
 
 type ManualMappingBody = {
-  gameId?: number;
+  gameId?: number | string;
   igdbId?: string;
   title?: string;
   platformKey?: string | null;
@@ -29,7 +31,7 @@ type ManualMappingBody = {
 type ManualEntryBody = {
   date?: string;
   durationMinutes?: number;
-  gameId?: number;
+  gameId?: number | string;
   igdbId?: string;
   title?: string;
   platformKey?: string | null;
@@ -137,10 +139,12 @@ export const createManualEntryHandler = async (ctx: {
   const durationSeconds = durationMinutes * 60;
 
   const gameIdRaw = payload?.gameId;
-  const gameId =
-    typeof gameIdRaw === "number" ? gameIdRaw : Number(gameIdRaw);
+  const hasGameId =
+    typeof gameIdRaw === "number" ||
+    (typeof gameIdRaw === "string" && gameIdRaw.trim().length > 0);
+  const gameId = hasGameId ? parseGameId(gameIdRaw, "gameId") : null;
 
-  if (Number.isInteger(gameId) && gameId > 0) {
+  if (gameId) {
     const result = await manualService.createManualEntry({
       userId: auth.userId,
       startedAt,
@@ -184,12 +188,14 @@ export const mapManualInputHandler = async (ctx: {
   const payload = ctx.body as ManualMappingBody | null;
 
   const gameIdRaw = payload?.gameId;
-  const gameId =
-    typeof gameIdRaw === "number" ? gameIdRaw : Number(gameIdRaw);
+  const hasGameId =
+    typeof gameIdRaw === "number" ||
+    (typeof gameIdRaw === "string" && gameIdRaw.trim().length > 0);
+  const gameId = hasGameId ? parseGameId(gameIdRaw, "gameId") : null;
   const igdbId = payload?.igdbId?.trim() ?? "";
   const title = payload?.title?.trim() ?? "";
 
-  if (Number.isInteger(gameId) && gameId > 0) {
+  if (gameId) {
     const updated = await manualService.mapManualInput(auth.userId, inputId, {
       type: "local",
       gameId,
@@ -199,7 +205,9 @@ export const mapManualInputHandler = async (ctx: {
     }
     return ok({
       inputId: updated.id,
-      mappedGameId: updated.mapped_game_id ?? null,
+      mappedGameId: updated.mapped_game_id
+        ? encodeGameId(Number(updated.mapped_game_id))
+        : null,
     });
   }
 
@@ -223,6 +231,8 @@ export const mapManualInputHandler = async (ctx: {
 
   return ok({
     inputId: updated.id,
-    mappedGameId: updated.mapped_game_id ?? null,
+    mappedGameId: updated.mapped_game_id
+      ? encodeGameId(Number(updated.mapped_game_id))
+      : null,
   });
 };

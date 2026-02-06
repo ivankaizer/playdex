@@ -1,8 +1,10 @@
 import type { NavItem } from "./types";
+import { encodeGameId } from "./utils/gameHash";
 
 export const protectedPaths = new Set([
   "/dashboard",
   "/sessions",
+  "/recap",
   "/mapping",
   "/settings",
 ]);
@@ -10,11 +12,13 @@ export const protectedPaths = new Set([
 export const navItems: NavItem[] = [
   { label: "Dashboard", path: "/dashboard" },
   { label: "Sessions", path: "/sessions" },
+  { label: "Recap", path: "/recap" },
   { label: "Mapping", path: "/mapping" },
+  { label: "Settings", path: "/settings" },
 ];
 
-export const buildGamePath = (title: string) =>
-  `/games/${encodeURIComponent(title)}`;
+export const buildGamePath = (gameId: number | string) =>
+  `/games/${encodeGameId(gameId)}`;
 
 export const platformOptions = [
   { key: "ps5", label: "PS5" },
@@ -31,9 +35,6 @@ export const manualPlatformOptions = [
   { key: "auto", label: "Use IGDB platform" },
   ...platformOptions,
 ];
-
-export const capsuleUrl =
-  "https://shared.steamstatic.com/store_item_assets/steam/apps/2186680/library_600x900_2x.jpg";
 
 export const platformLabels: Record<string, string> = {
   ps5: "PS5",
@@ -59,16 +60,24 @@ export const providerMeta: Record<
   string,
   { label: string; color: string; accent: string }
 > = {
-  steam: { label: "S", color: "bg-slate-800", accent: "text-slate-100" },
-  psn: { label: "P", color: "bg-indigo-500/30", accent: "text-indigo-200" },
+  steam: {
+    label: "S",
+    color: "bg-slate-200 dark:bg-slate-800",
+    accent: "text-slate-900 dark:text-slate-100",
+  },
+  psn: {
+    label: "P",
+    color: "bg-indigo-500/30",
+    accent: "text-indigo-700 dark:text-indigo-200",
+  },
   playnite: {
     label: "PL",
     color: "bg-amber-500/30",
-    accent: "text-amber-200",
+    accent: "text-amber-700 dark:text-amber-200",
   },
   manual: {
     label: "M",
     color: "bg-teal-500/30",
-    accent: "text-teal-200",
+    accent: "text-teal-700 dark:text-teal-200",
   },
 };

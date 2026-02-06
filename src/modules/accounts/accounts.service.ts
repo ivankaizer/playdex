@@ -15,6 +15,11 @@ import {
   type RawAccountSessionRow,
   type RawAccountSessionFilters,
 } from "./accounts.repository";
+import { gamesService } from "../games";
+import {
+  mergeGameTotalsByConnections,
+  resolveConnectedGameIds,
+} from "../games/gameConnections";
 
 const mapSessionsForUser = async (
   userId: number,
@@ -36,6 +41,42 @@ const toAccountSessions = async (
   return mapSessionsForUser(userId, domainSessions);
 };
 
+const resolveSessionFilters = async (
+  userId: number,
+  filters: RawAccountSessionFilters
+) => {
+  if (!filters.gameId) {
+    return filters;
+  }
+
+  const edges = await gamesService.listConnectionEdges(userId);
+  const connectedIds = resolveConnectedGameIds(filters.gameId, edges);
+
+  return {
+    ...filters,
+    gameIds: connectedIds,
+  };
+};
+
+const mergeTopGames = (
+  rows: { game_id: number; title: string; total_seconds: number }[],
+  limit: number,
+  edges: { game_id: number; connected_game_id: number }[]
+) => {
+  if (rows.length === 0) {
+    return [];
+  }
+  const normalizedRows = rows.map((row) => ({
+    ...row,
+    game_id: Number(row.game_id),
+  }));
+  const merged =
+    edges.length === 0
+      ? normalizedRows
+      : mergeGameTotalsByConnections(normalizedRows, edges);
+  return merged.slice(0, limit);
+};
+
 export const accountsService = {
   listAccounts: async (userId: number) => {
     const rows = await accountsRepository.listAccounts(userId);
@@ -48,15 +89,16 @@ export const accountsService = {
     offset: number,
     filters: RawAccountSessionFilters
   ): Promise<{ sessions: AccountSession[]; total: number }> => {
+    const resolvedFilters = await resolveSessionFilters(userId, filters);
     const rows = await accountsRepository.listUserSessions(
       userId,
       limit,
       offset,
-      filters
+      resolvedFilters
     );
     const [sessions, total] = await Promise.all([
       toAccountSessions(userId, rows),
-      accountsRepository.countUserSessions(userId, filters),
+      accountsRepository.countUserSessions(userId, resolvedFilters),
     ]);
     return { sessions, total };
   },
@@ -68,16 +110,17 @@ export const accountsService = {
     offset: number,
     filters: RawAccountSessionFilters
   ): Promise<{ sessions: AccountSession[]; total: number }> => {
+    const resolvedFilters = await resolveSessionFilters(userId, filters);
     const rows = await accountsRepository.listAccountSessions(
       accountId,
       userId,
       limit,
       offset,
-      filters
+      resolvedFilters
     );
     const [sessions, total] = await Promise.all([
       toAccountSessions(userId, rows),
-      accountsRepository.countAccountSessions(accountId, userId, filters),
+      accountsRepository.countAccountSessions(accountId, userId, resolvedFilters),
     ]);
     return { sessions, total };
   },
@@ -157,12 +200,7 @@ export const accountsService = {
           userId,
           monthStart
         ),
-        accountsRepository.loadAccountTopGames(
-          accountId,
-          userId,
-          monthStart,
-          5
-        ),
+        accountsRepository.loadAccountGameTotals(accountId, userId, monthStart),
       ]),
       Promise.all([
         accountsRepository.loadAccountPlaytimeSummary(
@@ -175,18 +213,17 @@ export const accountsService = {
           userId,
           yearStart
         ),
-        accountsRepository.loadAccountTopGames(
-          accountId,
-          userId,
-          yearStart,
-          5
-        ),
+        accountsRepository.loadAccountGameTotals(accountId, userId, yearStart),
       ]),
     ]);
 
+    const connectionEdges = await gamesService.listConnectionEdges(userId);
+    const monthlyTopGames = mergeTopGames(monthly[2], 5, connectionEdges);
+    const yearlyTopGames = mergeTopGames(yearly[2], 5, connectionEdges);
+
     return {
-      monthly: buildAccountStatsPeriod(monthly[0], monthly[1], monthly[2]),
-      yearly: buildAccountStatsPeriod(yearly[0], yearly[1], yearly[2]),
+      monthly: buildAccountStatsPeriod(monthly[0], monthly[1], monthlyTopGames),
+      yearly: buildAccountStatsPeriod(yearly[0], yearly[1], yearlyTopGames),
     };
   },
 
@@ -206,9 +243,12 @@ export const accountsService = {
         startedAt,
         endedAt
       ),
-      accountsRepository.loadUserTopGamesForRange(userId, startedAt, endedAt, 5),
+      accountsRepository.loadUserGameTotalsForRange(userId, startedAt, endedAt),
     ]);
 
-    return buildUserStatsPeriod(summaryRows, platformRows, topGameRows);
+    const connectionEdges = await gamesService.listConnectionEdges(userId);
+    const mergedTopGames = mergeTopGames(topGameRows, 5, connectionEdges);
+
+    return buildUserStatsPeriod(summaryRows, platformRows, mergedTopGames);
   },
 };
