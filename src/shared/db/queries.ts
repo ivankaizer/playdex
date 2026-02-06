@@ -913,6 +913,24 @@ export const updateProviderApiKey = async (
   return rows[0] ?? null;
 };
 
+export const updateProviderActive = async (
+  userId: number,
+  credentialId: number,
+  active: boolean,
+  sql: Sql = getSql()
+) => {
+  const rows = await sql<ProviderStatusRow[]>`
+    update platform_credentials pc
+    set active = ${active}, updated_at = now()
+    from platforms p
+    where pc.id = ${credentialId}
+      and pc.user_id = ${userId}
+      and p.id = pc.platform_id
+    returning pc.id, p.key as platform, pc.account_id, pc.active, pc.api_key
+  `;
+  return rows[0] ?? null;
+};
+
 export const createPlayniteCredential = async (
   userId: number,
   apiKey: string,

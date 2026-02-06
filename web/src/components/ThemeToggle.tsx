@@ -21,7 +21,7 @@ export const ThemeToggle = ({
     >
       <span
         className={`absolute left-1 top-1 h-7 w-7 rounded-full bg-emerald-300 dark:bg-emerald-400 shadow-sm transition-transform ${
-          theme === "dark" ? "translate-x-7" : ""
+          theme === "dark" ? "translate-x-[26px]" : ""
         }`}
       />
       <span className="relative z-10 flex h-5 w-5 items-center justify-center text-amber-600 dark:text-amber-200">

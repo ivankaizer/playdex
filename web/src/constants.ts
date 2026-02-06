@@ -14,6 +14,7 @@ export const navItems: NavItem[] = [
   { label: "Sessions", path: "/sessions" },
   { label: "Recap", path: "/recap" },
   { label: "Mapping", path: "/mapping" },
+  { label: "Settings", path: "/settings" },
 ];
 
 export const buildGamePath = (gameId: number | string) =>

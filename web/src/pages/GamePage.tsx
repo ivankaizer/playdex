@@ -562,7 +562,7 @@ export const GamePage = ({
       <Background />
       <div className="relative mx-auto w-full max-w-6xl p-3 sm:px-6 sm:py-12">
         <AppHeader
-          title={displayTitle}
+          title="Game"
           navItems={navItems}
           path={path}
           onNavigate={onNavigate}
@@ -571,13 +571,19 @@ export const GamePage = ({
           onToggleTheme={onToggleTheme}
         />
 
+        <div className="mt-6 rounded-2xl border border-emerald-400/30 dark:border-emerald-300/20 bg-gradient-to-r from-emerald-400/10 via-amber-300/20 to-white/40 dark:from-emerald-500/10 dark:via-amber-500/10 dark:to-slate-900/40 px-4 py-4 sm:px-6">
+          <h2 className="bg-gradient-to-r from-slate-900 via-emerald-800 to-amber-700 bg-clip-text text-3xl font-semibold tracking-tight text-transparent dark:from-white dark:via-emerald-200 dark:to-amber-200 sm:text-4xl">
+            {displayTitle}
+          </h2>
+        </div>
+
         {gameDetailsError ? (
           <p className="mt-4 text-xs text-rose-700 dark:text-rose-300">
             {gameDetailsError}
           </p>
         ) : null}
 
-        <section className="mt-10 space-y-6">
+        <section className="mt-6 space-y-6">
           <div className="grid gap-6 lg:grid-cols-[1fr_2fr]">
             <div className="rounded-3xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/60 p-5 sm:p-6">
               <div className="aspect-[9/14] overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/70 dark:bg-slate-950/60">

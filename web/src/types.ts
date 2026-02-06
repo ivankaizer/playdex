@@ -137,6 +137,10 @@ export type ProvidersResponse = {
   providers: ProviderStatus[];
 };
 
+export type ProviderUpdateResponse = {
+  provider: ProviderStatus;
+};
+
 export type PlayniteKeyResponse = {
   apiKey: string;
 };
