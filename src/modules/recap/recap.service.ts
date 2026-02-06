@@ -383,6 +383,7 @@ export const recapService = {
       sessionCount: entry.sessionCount,
       averageSessionSeconds:
         entry.sessionCount > 0 ? entry.totalSeconds / entry.sessionCount : 0,
+      isAbandoned: entry.sessionCount === 1,
     }));
 
     const groupRepresentatives = new Map(
@@ -425,9 +426,7 @@ export const recapService = {
           100
         : 0;
 
-    const abandonedGames = groupEntries.filter(
-      (entry) => entry.sessionCount === 1
-    ).length;
+    const abandonedGames = groupEntries.filter((entry) => entry.isAbandoned).length;
 
     const returnRateGames = Array.from(groupMonths.values()).filter(
       (set) => set.size > 1

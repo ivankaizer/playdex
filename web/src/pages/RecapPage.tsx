@@ -963,14 +963,21 @@ export const RecapPage = ({
                                     <span className="text-[10px] font-semibold text-slate-500 dark:text-slate-400">
                                       {String(index + 1).padStart(2, "0")}
                                     </span>
-                                    <button
-                                      type="button"
-                                      onClick={() => onNavigate(buildGamePath(game.gameId))}
-                                      title={game.title}
-                                      className="min-w-0 truncate text-left text-sm font-semibold text-slate-900 dark:text-white transition hover:text-emerald-700 dark:hover:text-emerald-200"
-                                    >
-                                      {game.title}
-                                    </button>
+                                    <div className="flex min-w-0 items-center gap-2">
+                                      <button
+                                        type="button"
+                                        onClick={() => onNavigate(buildGamePath(game.gameId))}
+                                        title={game.title}
+                                        className="min-w-0 flex-1 truncate text-left text-sm font-semibold text-slate-900 dark:text-white transition hover:text-emerald-700 dark:hover:text-emerald-200"
+                                      >
+                                        {game.title}
+                                      </button>
+                                      {game.isAbandoned ? (
+                                        <span className="inline-flex items-center rounded-full border border-slate-300/70 bg-slate-200/40 px-1.5 py-px text-[8px] font-medium uppercase tracking-[0.14em] text-slate-500 dark:border-slate-700/80 dark:bg-slate-800/30 dark:text-slate-400">
+                                          abandoned
+                                        </span>
+                                      ) : null}
+                                    </div>
                                   </div>
                                 </td>
                                 <td className="px-3 py-2 text-slate-700 dark:text-slate-200">

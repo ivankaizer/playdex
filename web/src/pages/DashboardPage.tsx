@@ -31,6 +31,7 @@ import { Background } from "../components/Background";
 import { ManualSessionModal } from "../components/ManualSessionModal";
 import { StatsPieChart } from "../components/StatsPieChart";
 import { StatsRecapSection } from "../components/StatsRecapSection";
+import { BarChart3 } from "lucide-react";
 
 type DashboardPageProps = {
   path: string;
@@ -512,15 +513,7 @@ export const DashboardPage = ({
                   aria-label="Open recap"
                   title="Open recap"
                 >
-                  <svg
-                    viewBox="0 0 20 20"
-                    className="h-4 w-4"
-                    fill="currentColor"
-                    aria-hidden="true"
-                  >
-                    <path d="M12.5 3.5a1 1 0 011.5.86v7.79l2.22-2.22a1 1 0 111.41 1.41l-3.93 3.93a1 1 0 01-1.7-.7V4.36a1 1 0 01.5-.86z" />
-                    <path d="M4 5a2 2 0 012-2h3a1 1 0 110 2H6v10h8v-3a1 1 0 112 0v3a2 2 0 01-2 2H6a2 2 0 01-2-2V5z" />
-                  </svg>
+                  <BarChart3 className="h-4 w-4" aria-hidden="true" />
                 </button>
               </div>
               <div className="mt-5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-200/50 dark:bg-slate-950/50 p-4">
