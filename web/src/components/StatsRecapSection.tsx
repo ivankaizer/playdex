@@ -1,4 +1,5 @@
 import { StatsPieChart } from "./StatsPieChart";
+import { BarChart3 } from "lucide-react";
 
 type SummaryStat = {
   label: string;
@@ -57,15 +58,7 @@ export const StatsRecapSection = ({
             aria-label="Open recap"
             title="Open recap"
           >
-            <svg
-              viewBox="0 0 20 20"
-              className="h-4 w-4"
-              fill="currentColor"
-              aria-hidden="true"
-            >
-              <path d="M12.5 3.5a1 1 0 011.5.86v7.79l2.22-2.22a1 1 0 111.41 1.41l-3.93 3.93a1 1 0 01-1.7-.7V4.36a1 1 0 01.5-.86z" />
-              <path d="M4 5a2 2 0 012-2h3a1 1 0 110 2H6v10h8v-3a1 1 0 112 0v3a2 2 0 01-2 2H6a2 2 0 01-2-2V5z" />
-            </svg>
+            <BarChart3 className="h-4 w-4" aria-hidden="true" />
           </button>
         ) : null}
       </div>

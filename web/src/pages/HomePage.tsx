@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 
 import { apiRequest } from "../api";
 import { Background } from "../components/Background";
+import { StatsRecapSection } from "../components/StatsRecapSection";
 import { ThemeToggle } from "../components/ThemeToggle";
 
 type HomePageProps = {
@@ -12,6 +13,67 @@ type HomePageProps = {
   theme: "light" | "dark";
   onToggleTheme: () => void;
 };
+
+const previewPlatformColors = ["#34d399", "#38bdf8", "#f59e0b", "#a78bfa"];
+
+const previewRecapSummary = [
+  { label: "Hours played", value: "124.8h" },
+  { label: "Sessions", value: "93" },
+  { label: "Top title", value: "Hades II" },
+];
+
+const previewRecapPlatforms = [
+  { label: "Steam", value: 52, hours: "64.9h" },
+  { label: "PlayStation", value: 30, hours: "37.4h" },
+  { label: "Xbox", value: 12, hours: "14.9h" },
+  { label: "Switch", value: 6, hours: "7.6h" },
+];
+
+const previewRecapTopGames = [
+  { gameId: "hades-2", title: "Hades II", hours: "26.4h" },
+  { gameId: "bg3", title: "Baldur's Gate 3", hours: "18.2h" },
+  { gameId: "re4", title: "Resident Evil 4", hours: "14.7h" },
+  { gameId: "helldivers-2", title: "Helldivers 2", hours: "12.6h" },
+  { gameId: "fh5", title: "Forza Horizon 5", hours: "10.8h" },
+];
+
+const previewRecapCards = [
+  {
+    gameId: "hades-2",
+    title: "Hades II",
+    hours: "26.4h",
+    artClass:
+      "bg-gradient-to-br from-rose-400/60 via-fuchsia-500/40 to-slate-950/70",
+  },
+  {
+    gameId: "bg3",
+    title: "Baldur's Gate 3",
+    hours: "18.2h",
+    artClass:
+      "bg-gradient-to-br from-amber-300/60 via-orange-500/40 to-slate-950/70",
+  },
+  {
+    gameId: "re4",
+    title: "Resident Evil 4",
+    hours: "14.7h",
+    artClass:
+      "bg-gradient-to-br from-emerald-300/60 via-teal-500/40 to-slate-950/70",
+  },
+  {
+    gameId: "helldivers-2",
+    title: "Helldivers 2",
+    hours: "12.6h",
+    artClass:
+      "bg-gradient-to-br from-sky-300/60 via-cyan-500/40 to-slate-950/70",
+  },
+  {
+    gameId: "fh5",
+    title: "Forza Horizon 5",
+    hours: "10.8h",
+    artClass:
+      "bg-gradient-to-br from-violet-300/60 via-indigo-500/40 to-slate-950/70",
+  },
+];
 
 export const HomePage = ({
   isLoggedIn,
@@ -114,9 +176,6 @@ export const HomePage = ({
               <p className="text-xs font-semibold uppercase tracking-[0.5em] text-emerald-700 dark:text-emerald-300">
                 Playdex
               </p>
-              <span className="rounded-full border border-emerald-400/40 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.3em] text-emerald-700 dark:text-emerald-200">
-                Beta
-              </span>
             </div>
 
             <div className="space-y-4">
@@ -211,7 +270,7 @@ export const HomePage = ({
           </section>
         </div>
 
-        <section className="mt-12">
+        <section className="mt-12 space-y-6">
           <div>
             <h2 className="text-2xl font-semibold text-slate-900 dark:text-white">
               Everything in one place
@@ -221,7 +280,8 @@ export const HomePage = ({
               with a dashboard built for long-term tracking.
             </p>
           </div>
-          <div className="mt-6 grid gap-3 sm:grid-cols-3">
+
+          <div className="grid gap-3 sm:grid-cols-3">
             {[
               {
                 label: "Track Steam and PSN playtime",
@@ -292,6 +352,59 @@ export const HomePage = ({
                 <span>{feature.label}</span>
               </div>
             ))}
+          </div>
+
+          <div>
+            <h3 className="text-xl font-semibold text-slate-900 dark:text-white">
+              Interface preview
+            </h3>
+            <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
+              Rendered sections powered by prepared sample data.
+            </p>
+          </div>
+
+          <StatsRecapSection
+            title="Sessions recap"
+            subtitle="Preview"
+            summary={previewRecapSummary}
+            platforms={previewRecapPlatforms}
+            topGames={previewRecapTopGames}
+            colors={previewPlatformColors}
+          />
+
+          <div className="rounded-3xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/60 p-5 sm:p-6">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-700 dark:text-emerald-300">
+                  Most popular
+                </p>
+                <h3 className="mt-2 text-xl font-semibold text-slate-900 dark:text-white">
+                  Top 5 games from recap
+                </h3>
+              </div>
+              <div className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-500 dark:text-slate-400">
+                Jan 1 - Dec 31
+              </div>
+            </div>
+            <div className="mt-5 grid gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
+              {previewRecapCards.map((game) => (
+                <div key={game.gameId} className="group text-left">
+                  <div className="w-full">
+                    <div className="overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-200/50 dark:bg-slate-950/50">
+                      <div className={`aspect-[2/3] w-full ${game.artClass}`} />
+                    </div>
+                    <div className="mt-3 grid grid-cols-[1fr_auto] items-start gap-3 text-sm">
+                      <span className="min-w-0 line-clamp-2 font-semibold leading-snug text-slate-900 dark:text-white">
+                        {game.title}
+                      </span>
+                      <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-200">
+                        {game.hours}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         </section>
       </div>

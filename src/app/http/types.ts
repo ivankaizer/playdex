@@ -100,6 +100,7 @@ export type RecapGameStatDto = {
   totalSeconds: number;
   sessionCount: number;
   averageSessionSeconds: number;
+  isAbandoned: boolean;
 };
 
 export type RecapPlatformStatDto = {
