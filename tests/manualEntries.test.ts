@@ -6,14 +6,13 @@ import { normalizeGame, normalizeGameTitle } from "../src/modules/games";
 import { manualService } from "../src/modules/manual";
 import { pollingRepository } from "../src/modules/polling/polling.repository";
 
-const baseDatabaseUrl = Bun.env.DATABASE_URL;
 const {
   startManualSession,
   stopManualSession,
   mapManualInput,
   getManualInputs,
 } = manualService;
-const hasDatabase = Boolean(baseDatabaseUrl);
+const hasDatabase = Boolean(Bun.env.DATABASE_URL);
 const requiresDb = hasDatabase ? test : test.skip;
 
 let db: TestDatabase | null = null;
@@ -25,16 +24,9 @@ beforeAll(async () => {
   }
 
   db = await createTestDatabase();
-  Bun.env.DATABASE_URL = db.databaseUrl;
 });
 
 afterAll(async () => {
-  if (baseDatabaseUrl) {
-    Bun.env.DATABASE_URL = baseDatabaseUrl;
-  } else {
-    delete Bun.env.DATABASE_URL;
-  }
-
   if (db) {
     await db.cleanup();
   }

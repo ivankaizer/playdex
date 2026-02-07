@@ -4,8 +4,7 @@ import { createApp } from "../src/app/createApp";
 import type { TestDatabase } from "./helpers/db";
 import { createTestDatabase } from "./helpers/db";
 
-const baseDatabaseUrl = Bun.env.DATABASE_URL;
-const hasDatabase = Boolean(baseDatabaseUrl);
+const hasDatabase = Boolean(Bun.env.DATABASE_URL);
 const requiresDb = hasDatabase ? test : test.skip;
 
 let db: TestDatabase | null = null;
@@ -19,17 +18,10 @@ beforeAll(async () => {
   }
 
   db = await createTestDatabase();
-  Bun.env.DATABASE_URL = db.databaseUrl;
   app = createApp();
 });
 
 afterAll(async () => {
-  if (baseDatabaseUrl) {
-    Bun.env.DATABASE_URL = baseDatabaseUrl;
-  } else {
-    delete Bun.env.DATABASE_URL;
-  }
-
   if (db) {
     await db.cleanup();
   }

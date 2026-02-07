@@ -8,7 +8,6 @@ import { pollingRepository } from "../src/modules/polling/polling.repository";
 
 const hasDatabase = Boolean(Bun.env.DATABASE_URL);
 const requiresDb = hasDatabase ? test : test.skip;
-const baseDatabaseUrl = Bun.env.DATABASE_URL;
 
 let db: TestDatabase | null = null;
 let credentialId = 0;
@@ -19,16 +18,9 @@ beforeAll(async () => {
     return;
   }
   db = await createTestDatabase();
-  Bun.env.DATABASE_URL = db.databaseUrl;
 });
 
 afterAll(async () => {
-  if (baseDatabaseUrl) {
-    Bun.env.DATABASE_URL = baseDatabaseUrl;
-  } else {
-    delete Bun.env.DATABASE_URL;
-  }
-
   if (db) {
     await db.cleanup();
   }
