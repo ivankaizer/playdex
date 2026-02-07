@@ -1,6 +1,6 @@
 import type { Elysia } from "elysia";
 
-import { AppError, isAppError } from "../../common/errors/AppError";
+import { isAppError } from "../../common/errors/AppError";
 import { getErrorMessage, logEvent } from "../../common/observability";
 import { fail } from "./responses";
 

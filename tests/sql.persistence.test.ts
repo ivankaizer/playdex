@@ -3,14 +3,8 @@ import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
 import type { TestDatabase } from "./helpers/db";
 import { createTestDatabase } from "./helpers/db";
 import { normalizeGame } from "../src/modules/games";
-import {
-  endPlaySession,
-  ensureGameId,
-  fetchActivePlaySession,
-  listAccountSessions,
-  recordPollResult,
-  startPlaySession,
-} from "../src/shared/db/queries";
+import { accountsRepository } from "../src/modules/accounts/accounts.repository";
+import { pollingRepository } from "../src/modules/polling/polling.repository";
 
 const hasDatabase = Boolean(Bun.env.DATABASE_URL);
 const requiresDb = hasDatabase ? test : test.skip;
@@ -70,8 +64,8 @@ requiresDb("ensureGameId and recordPollResult persist data", async () => {
     title: "Half-Life",
     externalId: "456",
   });
-  const gameId = await ensureGameId(normalized, db.sql);
-  await recordPollResult(
+  const gameId = await pollingRepository.ensureGameId(normalized, db.sql);
+  await pollingRepository.recordPollResult(
     credentialId,
     gameId,
     new Date("2024-01-01T00:00:00Z"),
@@ -95,22 +89,21 @@ requiresDb("play sessions are persisted and listed", async () => {
     title: "Half-Life 2",
     externalId: "789",
   });
-  const gameId = await ensureGameId(normalized, db.sql);
+  const gameId = await pollingRepository.ensureGameId(normalized, db.sql);
 
   const startedAt = new Date("2024-01-01T01:00:00Z");
-  await startPlaySession(credentialId, gameId, startedAt, db.sql);
-  const active = await fetchActivePlaySession(credentialId, db.sql);
+  await pollingRepository.startPlaySession(credentialId, gameId, startedAt, db.sql);
+  const active = await pollingRepository.fetchActivePlaySession(credentialId, db.sql);
   expect(active?.game_id).toBe(gameId);
 
   const endedAt = new Date("2024-01-01T02:00:00Z");
-  await endPlaySession(active!.id, endedAt, db.sql);
-  const sessions = await listAccountSessions(
+  await pollingRepository.endPlaySession(active!.id, endedAt, db.sql);
+  const sessions = await accountsRepository.listAccountSessions(
     credentialId,
     userId,
     10,
     0,
-    undefined,
-    db.sql
+    {}
   );
 
   expect(sessions.length).toBe(1);
@@ -134,8 +127,8 @@ requiresDb("ensureGameId de-duplicates by canonical key", async () => {
     externalId: "400",
   });
 
-  const firstId = await ensureGameId(first, db.sql);
-  const secondId = await ensureGameId(second, db.sql);
+  const firstId = await pollingRepository.ensureGameId(first, db.sql);
+  const secondId = await pollingRepository.ensureGameId(second, db.sql);
 
   const rows = await db.sql<{ title: string }[]>`
     select title from games where id = ${firstId}
@@ -152,13 +145,12 @@ requiresDb(
       throw new Error("Test database not initialized.");
     }
 
-    const sessions = await listAccountSessions(
+    const sessions = await accountsRepository.listAccountSessions(
       credentialId,
       userId,
       10,
       0,
-      undefined,
-      db.sql
+      {}
     );
     expect(sessions).toEqual([]);
   }
@@ -174,26 +166,28 @@ requiresDb("listAccountSessions enforces the 10-session limit", async () => {
     title: "Limit Test",
     externalId: "limit-1",
   });
-  const gameId = await ensureGameId(normalized, db.sql);
+  const gameId = await pollingRepository.ensureGameId(normalized, db.sql);
 
   const baseTime = Date.parse("2024-01-01T00:00:00Z");
   for (let index = 0; index < 12; index += 1) {
     const startedAt = new Date(baseTime + index * 60_000);
     const endedAt = new Date(baseTime + (index + 1) * 60_000);
-    await startPlaySession(credentialId, gameId, startedAt, db.sql);
-    const active = await fetchActivePlaySession(credentialId, db.sql);
+    await pollingRepository.startPlaySession(credentialId, gameId, startedAt, db.sql);
+    const active = await pollingRepository.fetchActivePlaySession(
+      credentialId,
+      db.sql
+    );
     if (active) {
-      await endPlaySession(active.id, endedAt, db.sql);
+      await pollingRepository.endPlaySession(active.id, endedAt, db.sql);
     }
   }
 
-  const sessions = await listAccountSessions(
+  const sessions = await accountsRepository.listAccountSessions(
     credentialId,
     userId,
     10,
     0,
-    undefined,
-    db.sql
+    {}
   );
   expect(sessions.length).toBe(10);
 });
@@ -208,17 +202,17 @@ requiresDb("play session timestamps survive DST transitions", async () => {
     title: "DST Test",
     externalId: "dst-1",
   });
-  const gameId = await ensureGameId(normalized, db.sql);
+  const gameId = await pollingRepository.ensureGameId(normalized, db.sql);
 
   const startedAt = new Date("2024-03-10T01:55:00-08:00");
-  await startPlaySession(credentialId, gameId, startedAt, db.sql);
-  const active = await fetchActivePlaySession(credentialId, db.sql);
+  await pollingRepository.startPlaySession(credentialId, gameId, startedAt, db.sql);
+  const active = await pollingRepository.fetchActivePlaySession(credentialId, db.sql);
   if (!active) {
     throw new Error("Expected active session after starting.");
   }
 
   const endedAt = new Date("2024-03-10T03:05:00-07:00");
-  await endPlaySession(active.id, endedAt, db.sql);
+  await pollingRepository.endPlaySession(active.id, endedAt, db.sql);
 
   const rows = await db.sql<{ started_at: Date; ended_at: Date | null }[]>`
     select started_at, ended_at from play_sessions where id = ${active.id}

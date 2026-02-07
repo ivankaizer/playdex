@@ -20,49 +20,85 @@ const buildAdminUrl = (baseUrl: URL) => {
 
 const isTestDatabaseName = (name: string) => /(^|_)test($|_)/.test(name);
 
-export const createTestDatabase = async (): Promise<TestDatabase> => {
-  const baseUrl = Bun.env.DATABASE_URL;
-  if (!baseUrl) {
-    throw new Error("DATABASE_URL is required to run integration tests.");
+const parseDotnetConnectionString = (raw: string): URL => {
+  const params = new Map<string, string>();
+  for (const part of raw.split(";")) {
+    const idx = part.indexOf("=");
+    if (idx === -1) continue;
+    params.set(part.slice(0, idx).trim().toLowerCase(), part.slice(idx + 1).trim());
+  }
+  const host = params.get("host") ?? params.get("server") ?? "localhost";
+  const port = params.get("port") ?? "5432";
+  const database = params.get("database") ?? "postgres";
+  const username = params.get("username") ?? params.get("user id") ?? "postgres";
+  const password = params.get("password") ?? "";
+  return new URL(`postgres://${encodeURIComponent(username)}:${encodeURIComponent(password)}@${host}:${port}/${database}`);
+};
+
+const parseConnectionUrl = (raw: string): URL => {
+  try {
+    return new URL(raw);
+  } catch {
+    return parseDotnetConnectionString(raw);
+  }
+};
+
+let sharedSetup: Promise<{ databaseUrl: string; dbName: string }> | null = null;
+
+const ensureTestDatabase = (): Promise<{ databaseUrl: string; dbName: string }> => {
+  if (sharedSetup) {
+    return sharedSetup;
   }
 
-  const parsed = new URL(baseUrl);
-  const baseName = parsed.pathname.replace(/^\//, "") || "postgres";
-  const normalizedBase = normalizeDbName(baseName);
-  const dbName = isTestDatabaseName(normalizedBase)
-    ? normalizedBase
-    : `${normalizedBase}_test`;
-
-  const adminUrl = buildAdminUrl(parsed);
-  const adminSql = postgres(adminUrl.toString(), { max: 1 });
-  const existing = await adminSql<{ exists: boolean }[]>`
-    select exists(select 1 from pg_database where datname = ${dbName})
-  `;
-  if (!existing[0]?.exists) {
-    await adminSql.unsafe(`create database "${dbName}"`);
-  }
-  await adminSql.end({ timeout: 5 });
-
-  const testUrl = new URL(baseUrl);
-  testUrl.pathname = `/${dbName}`;
-  const sql = postgres(testUrl.toString(), { max: 1 });
-  await runMigrations({ sql });
-
-  const cleanup = async () => {
-    await sql.end({ timeout: 5 });
-    const admin = postgres(adminUrl.toString(), { max: 1 });
-    try {
-      await admin.unsafe(`drop database if exists "${dbName}" with (force)`);
-    } catch {
-      await admin.unsafe(`drop database if exists "${dbName}"`);
+  sharedSetup = (async () => {
+    const baseUrl = Bun.env.DATABASE_URL;
+    if (!baseUrl) {
+      throw new Error("DATABASE_URL is required to run integration tests.");
     }
-    await admin.end({ timeout: 5 });
-  };
+
+    const parsed = parseConnectionUrl(baseUrl);
+    const baseName = parsed.pathname.replace(/^\//, "") || "postgres";
+    const normalizedBase = normalizeDbName(baseName);
+    const dbName = isTestDatabaseName(normalizedBase)
+      ? normalizedBase
+      : `${normalizedBase}_test`;
+
+    const adminUrl = buildAdminUrl(parsed);
+    const adminSql = postgres(adminUrl.toString(), { max: 1 });
+    const existing = await adminSql<{ exists: boolean }[]>`
+      select exists(select 1 from pg_database where datname = ${dbName})
+    `;
+    if (!existing[0]?.exists) {
+      await adminSql.unsafe(`create database "${dbName}"`);
+    }
+    await adminSql.end({ timeout: 5 });
+
+    const testUrl = new URL(parsed.toString());
+    testUrl.pathname = `/${dbName}`;
+    const databaseUrl = testUrl.toString();
+
+    Bun.env.DATABASE_URL = databaseUrl;
+
+    const migrationSql = postgres(databaseUrl, { max: 1 });
+    await runMigrations({ sql: migrationSql });
+    await migrationSql.end({ timeout: 5 });
+
+    return { databaseUrl, dbName };
+  })();
+
+  return sharedSetup;
+};
+
+export const createTestDatabase = async (): Promise<TestDatabase> => {
+  const { databaseUrl, dbName } = await ensureTestDatabase();
+  const sql = postgres(databaseUrl, { max: 1 });
 
   return {
     sql,
-    cleanup,
-    databaseUrl: testUrl.toString(),
+    cleanup: async () => {
+      await sql.end({ timeout: 5 });
+    },
+    databaseUrl,
     dbName,
   };
 };

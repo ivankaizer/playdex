@@ -3,7 +3,7 @@ import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
 import type { TestDatabase } from "./helpers/db";
 import { createTestDatabase } from "./helpers/db";
 import { normalizeGame } from "../src/modules/games";
-import { ensureGameId } from "../src/shared/db/queries";
+import { pollingRepository } from "../src/modules/polling/polling.repository";
 import { syncPlaySession } from "../src/modules/polling/polling";
 
 const hasDatabase = Boolean(Bun.env.DATABASE_URL);
@@ -52,7 +52,7 @@ beforeEach(async () => {
   `;
   credentialId = credentialRows[0].id;
 
-  gameIdA = await ensureGameId(
+  gameIdA = await pollingRepository.ensureGameId(
     normalizeGame({
       platform: "steam",
       title: "Game A",
@@ -60,7 +60,7 @@ beforeEach(async () => {
     }),
     db.sql
   );
-  gameIdB = await ensureGameId(
+  gameIdB = await pollingRepository.ensureGameId(
     normalizeGame({
       platform: "steam",
       title: "Game B",

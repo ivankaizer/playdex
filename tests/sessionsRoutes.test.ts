@@ -5,9 +5,7 @@ import { createApp } from "../src/app/createApp";
 import type { TestDatabase } from "./helpers/db";
 import { createTestDatabase } from "./helpers/db";
 
-const baseDatabaseUrl = Bun.env.DATABASE_URL;
-const baseJwtSecret = Bun.env.JWT_SECRET;
-const hasDatabase = Boolean(baseDatabaseUrl);
+const hasDatabase = Boolean(Bun.env.DATABASE_URL);
 const requiresDb = hasDatabase ? test : test.skip;
 const jwtSecret = "sessions-test-secret";
 
@@ -23,24 +21,11 @@ beforeAll(async () => {
   }
 
   db = await createTestDatabase();
-  Bun.env.DATABASE_URL = db.databaseUrl;
   Bun.env.JWT_SECRET = jwtSecret;
   app = createApp();
 });
 
 afterAll(async () => {
-  if (baseDatabaseUrl) {
-    Bun.env.DATABASE_URL = baseDatabaseUrl;
-  } else {
-    delete Bun.env.DATABASE_URL;
-  }
-
-  if (baseJwtSecret) {
-    Bun.env.JWT_SECRET = baseJwtSecret;
-  } else {
-    delete Bun.env.JWT_SECRET;
-  }
-
   if (db) {
     await db.cleanup();
   }

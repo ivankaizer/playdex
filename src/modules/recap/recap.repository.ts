@@ -1,7 +1,6 @@
 import type { Sql } from "postgres";
 
-import { getSql } from "../../shared/db/postgres";
-import { loadManualInputMappings } from "../../shared/db/queries";
+import { getSql } from "../../common/db/postgres";
 
 export type RecapSessionRow = {
   id: number;
@@ -29,6 +28,15 @@ export type RecapYearRow = {
   year: number;
 };
 
+type ManualInputMappingRow = {
+  canonical_title: string;
+  mapped_game_id: number | null;
+  mapped_title: string | null;
+  mapped_platform: string | null;
+  mapped_capsule_url: string | null;
+  mapped_canonical_key: string | null;
+};
+
 const buildIgnoreShortSessionsFilter = (sql: Sql) => sql`
   and not (
     coalesce(us.ignore_short_sessions_minutes, 0) > 0
@@ -47,6 +55,26 @@ const buildRangeFilters = (
   const toFilter = endedAt ? sql`and ps.started_at < ${endedAt}` : sql``;
   return { fromFilter, toFilter };
 };
+
+const loadManualInputMappings = async (
+  userId: number,
+  canonicalTitles: string[],
+  sql: Sql = getSql()
+) =>
+  sql<ManualInputMappingRow[]>`
+    select
+      mgi.canonical_title,
+      mgi.mapped_game_id,
+      g.title as mapped_title,
+      gp.key as mapped_platform,
+      g.capsule_url as mapped_capsule_url,
+      g.canonical_key as mapped_canonical_key
+    from manual_game_inputs mgi
+    left join games g on g.id = mgi.mapped_game_id
+    left join platforms gp on gp.id = g.platform_id
+    where mgi.user_id = ${userId}
+      and mgi.canonical_title = any(${sql.array(canonicalTitles)})
+  `;
 
 export const recapRepository = {
   listRecapSessions: async (
