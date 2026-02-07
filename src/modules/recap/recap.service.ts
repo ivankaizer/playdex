@@ -172,7 +172,7 @@ export const recapService = {
     const groupMonths = new Map<number, Set<string>>();
     let longestSession: { root: number; seconds: number } | null = null;
 
-    sessions.forEach((session) => {
+    for (const session of sessions) {
       const started = session.startedAt.getTime();
       const ended = session.endedAt ? session.endedAt.getTime() : nowMs;
       const durationSeconds = Math.max(0, Math.floor((ended - started) / 1000));
@@ -244,7 +244,7 @@ export const recapService = {
       if (!longestSession || durationSeconds > longestSession.seconds) {
         longestSession = { root, seconds: durationSeconds };
       }
-    });
+    }
 
     const totalSessions = sessions.length;
     const averageSessionSeconds =
@@ -434,9 +434,9 @@ export const recapService = {
 
     const mostBingedGame = (() => {
       let best: { root: number; sessionCount: number } | null = null;
-      groupSessionTimes.forEach((times, root) => {
+      for (const [root, times] of groupSessionTimes.entries()) {
         if (times.length === 0) {
-          return;
+          continue;
         }
         const sorted = times.slice().sort((a, b) => a - b);
         let maxCount = 1;
@@ -450,7 +450,7 @@ export const recapService = {
         if (!best || maxCount > best.sessionCount) {
           best = { root, sessionCount: maxCount };
         }
-      });
+      }
       if (!best) {
         return null;
       }
