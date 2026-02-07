@@ -1,6 +1,6 @@
 import type postgres from "postgres";
 
-import { getSql } from "../../shared/db/postgres";
+import { getSql } from "../../common/db/postgres";
 import type { NormalizedGame } from "../../common/domain/game";
 
 type Sql = ReturnType<typeof postgres>;

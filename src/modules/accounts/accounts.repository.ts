@@ -1,6 +1,6 @@
 import type postgres from "postgres";
 
-import { getSql } from "../../shared/db/postgres";
+import { getSql } from "../../common/db/postgres";
 
 export type AccountSessionFilters = {
   title?: string | null;

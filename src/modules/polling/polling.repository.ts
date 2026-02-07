@@ -1,7 +1,7 @@
 import type postgres from "postgres";
 import type { JSONValue } from "postgres";
 
-import { getSql } from "../../shared/db/postgres";
+import { getSql } from "../../common/db/postgres";
 import type { NormalizedGame } from "../../common/domain/game";
 
 export type SqlClient = ReturnType<typeof postgres>;
