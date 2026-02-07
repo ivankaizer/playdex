@@ -4,7 +4,7 @@ import type { TestDatabase } from "./helpers/db";
 import { createTestDatabase } from "./helpers/db";
 import { normalizeGame, normalizeGameTitle } from "../src/modules/games";
 import { manualService } from "../src/modules/manual";
-import { ensureGameId } from "../src/shared/db/queries";
+import { pollingRepository } from "../src/modules/polling/polling.repository";
 
 const baseDatabaseUrl = Bun.env.DATABASE_URL;
 const {
@@ -92,7 +92,7 @@ const createGame = async (
     throw new Error("Test database not initialized.");
   }
 
-  return ensureGameId(
+  return pollingRepository.ensureGameId(
     normalizeGame({
       platform,
       title,
