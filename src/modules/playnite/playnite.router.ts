@@ -3,6 +3,7 @@ import type { Elysia } from "elysia";
 import type { PollingNotifier } from "../polling";
 import {
   endPlayniteSessionsHandler,
+  pingPlayniteSessionHandler,
   recordPlayniteSessionHandler,
   startPlayniteSessionHandler,
 } from "./playnite.handlers";
@@ -17,5 +18,8 @@ export const registerPlayniteRoutes = (
       "/api/playnite/sessions/start",
       startPlayniteSessionHandler(notifier)
     )
+    .post(
+      "/api/playnite/sessions/ping",
+      pingPlayniteSessionHandler(notifier)
+    )
     .post("/api/playnite/sessions/end", endPlayniteSessionsHandler(notifier));
-

@@ -1,4 +1,5 @@
 import { normalizeGame } from "../games";
+import { playniteService } from "../playnite/playnite.service";
 import type {
   PlatformAccount,
   PlatformClient,
@@ -102,6 +103,27 @@ const safeNotify = async <T>(
       event: eventName,
       message: getErrorMessage(error),
     });
+  }
+};
+
+const endTimedOutPlayniteSessions = async (notifier?: PollingNotifier) => {
+  const endedSessions = await playniteService.endTimedOutSessions();
+  for (const session of endedSessions) {
+    const durationSeconds = Math.max(
+      0,
+      Math.round((session.endedAt.getTime() - session.startedAt.getTime()) / 1000)
+    );
+    await safeNotify(
+      notifier?.onSessionEnded,
+      {
+        platformCredentialId: session.platformCredentialId,
+        gameId: session.gameId,
+        startedAt: session.startedAt,
+        endedAt: session.endedAt,
+        durationSeconds,
+      },
+      "session.ended"
+    );
   }
 };
 
@@ -223,6 +245,15 @@ export const startPolling = async ({
     logEvent("info", "poll.cycle.started", {
       pollIntervalSeconds,
     });
+
+    try {
+      await endTimedOutPlayniteSessions(notifier);
+    } catch (error) {
+      logEvent("error", "playnite.timeout_cleanup.failed", {
+        message: getErrorMessage(error),
+      });
+    }
+
     let accounts: PollingAccountEntry[] = [];
     try {
       accounts = await loadAccounts();

@@ -53,23 +53,6 @@ beforeEach(async () => {
   credentialId = credentialRows[0].id;
 });
 
-const sendRequest = async (body: Record<string, unknown>, token?: string) => {
-  if (!app) {
-    throw new Error("Server not initialized.");
-  }
-
-  return await app.handle(
-    new Request("http://localhost/playnite/sessions", {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        ...(token ? { authorization: `Bearer ${token}` } : {}),
-      },
-      body: JSON.stringify(body),
-    })
-  );
-};
-
 const sendStartRequest = async (
   body: Record<string, unknown>,
   token?: string
@@ -101,6 +84,26 @@ const sendEndRequest = async (token?: string) => {
       headers: {
         ...(token ? { authorization: `Bearer ${token}` } : {}),
       },
+    })
+  );
+};
+
+const sendPingRequest = async (
+  body: Record<string, unknown>,
+  token?: string
+) => {
+  if (!app) {
+    throw new Error("Server not initialized.");
+  }
+
+  return await app.handle(
+    new Request("http://localhost/api/playnite/sessions/ping", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        ...(token ? { authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify(body),
     })
   );
 };
@@ -152,17 +155,204 @@ const createGame = async (
 const createActiveSession = async (
   platformCredentialId: number,
   gameId: number,
-  startedAt = new Date("2024-01-01T00:00:00Z")
+  startedAt = new Date("2024-01-01T00:00:00Z"),
+  updatedAt = startedAt
 ) => {
   if (!db) {
     throw new Error("Test database not initialized.");
   }
 
   await db.sql`
-    insert into play_sessions (platform_credential_id, game_id, started_at)
-    values (${platformCredentialId}, ${gameId}, ${startedAt})
+    insert into play_sessions (platform_credential_id, game_id, started_at, updated_at)
+    values (${platformCredentialId}, ${gameId}, ${startedAt}, ${updatedAt})
   `;
 };
+
+requiresDb(
+  "Playnite session ping endpoint starts a session when there is no active session",
+  async () => {
+    if (!db) {
+      throw new Error("Test database not initialized.");
+    }
+
+    const response = await sendPingRequest(
+      {
+        gameTitle: "Hades",
+        gameId: "123",
+        gameProvider: "steam",
+      },
+      apiKey
+    );
+
+    expect(response.status).toBe(200);
+    const payload = (await response.json()) as {
+      data: {
+        sessionId: string | number;
+        started: boolean;
+        endedSessionCount: number;
+      } | null;
+      error: { error: string } | null;
+    };
+    expect(payload.error).toBeNull();
+    expect(payload.data?.sessionId).toBeDefined();
+    expect(payload.data?.started).toBe(true);
+    expect(payload.data?.endedSessionCount).toBe(0);
+
+    const rows = await db.sql<{ ended_at: Date | null }[]>`
+      select ended_at from play_sessions
+    `;
+    expect(rows.length).toBe(1);
+    expect(rows[0].ended_at).toBeNull();
+  }
+);
+
+requiresDb(
+  "Playnite session ping endpoint keeps the same session for the same game",
+  async () => {
+    if (!db) {
+      throw new Error("Test database not initialized.");
+    }
+
+    const gameId = await createGame("steam", "Hades", "123");
+    const startedAt = new Date(Date.now() - 60_000);
+    await createActiveSession(credentialId, gameId, startedAt, startedAt);
+
+    const response = await sendPingRequest(
+      {
+        gameTitle: "Hades",
+        gameId: "123",
+        gameProvider: "steam",
+      },
+      apiKey
+    );
+
+    expect(response.status).toBe(200);
+    const payload = (await response.json()) as {
+      data: {
+        sessionId: string | number;
+        started: boolean;
+        endedSessionCount: number;
+      } | null;
+      error: { error: string } | null;
+    };
+    expect(payload.error).toBeNull();
+    expect(payload.data?.started).toBe(false);
+    expect(payload.data?.endedSessionCount).toBe(0);
+
+    const rows = await db.sql<
+      { started_at: Date; updated_at: Date; ended_at: Date | null }[]
+    >`
+      select started_at, updated_at, ended_at
+      from play_sessions
+      order by id
+    `;
+
+    expect(rows.length).toBe(1);
+    expect(rows[0].started_at.toISOString()).toBe(startedAt.toISOString());
+    expect(rows[0].ended_at).toBeNull();
+    expect(rows[0].updated_at.getTime()).toBeGreaterThan(startedAt.getTime());
+  }
+);
+
+requiresDb(
+  "Playnite session ping endpoint switches active session when game changes",
+  async () => {
+    if (!db) {
+      throw new Error("Test database not initialized.");
+    }
+
+    const oldGameId = await createGame("steam", "Old Game", "old-1");
+    const startedAt = new Date(Date.now() - 60_000);
+    await createActiveSession(credentialId, oldGameId, startedAt, startedAt);
+
+    const response = await sendPingRequest(
+      {
+        gameTitle: "New Game",
+        gameId: "new-1",
+        gameProvider: "steam",
+      },
+      apiKey
+    );
+
+    expect(response.status).toBe(200);
+    const payload = (await response.json()) as {
+      data: { started: boolean; endedSessionCount: number } | null;
+      error: { error: string } | null;
+    };
+    expect(payload.error).toBeNull();
+    expect(payload.data?.started).toBe(true);
+    expect(payload.data?.endedSessionCount).toBe(1);
+
+    const rows = await db.sql<{ game_id: number; ended_at: Date | null }[]>`
+      select game_id, ended_at
+      from play_sessions
+      where platform_credential_id = ${credentialId}
+      order by id
+    `;
+
+    expect(rows.length).toBe(2);
+    expect(rows[0].game_id).toBe(oldGameId);
+    expect(rows[0].ended_at).not.toBeNull();
+    expect(rows[1].game_id).not.toBe(oldGameId);
+    expect(rows[1].ended_at).toBeNull();
+  }
+);
+
+requiresDb(
+  "Playnite session ping endpoint ends timed out sessions before starting a new one",
+  async () => {
+    if (!db) {
+      throw new Error("Test database not initialized.");
+    }
+
+    const gameId = await createGame("steam", "Crashed Game", "crashed-1");
+    const now = new Date();
+    const startedAt = new Date(now.getTime() - 25 * 60_000);
+    const lastPingAt = new Date(now.getTime() - 20 * 60_000);
+    await createActiveSession(credentialId, gameId, startedAt, lastPingAt);
+    const pingSentAt = new Date();
+
+    const response = await sendPingRequest(
+      {
+        gameTitle: "Crashed Game",
+        gameId: "crashed-1",
+        gameProvider: "steam",
+      },
+      apiKey
+    );
+
+    expect(response.status).toBe(200);
+    const payload = (await response.json()) as {
+      data: { started: boolean; endedSessionCount: number } | null;
+      error: { error: string } | null;
+    };
+    expect(payload.error).toBeNull();
+    expect(payload.data?.started).toBe(true);
+    expect(payload.data?.endedSessionCount).toBe(1);
+
+    const rows = await db.sql<
+      { started_at: Date; updated_at: Date; ended_at: Date | null }[]
+    >`
+      select started_at, updated_at, ended_at
+      from play_sessions
+      where platform_credential_id = ${credentialId}
+      order by id
+    `;
+
+    expect(rows.length).toBe(2);
+    expect(rows[0].started_at.toISOString()).toBe(startedAt.toISOString());
+    expect(rows[0].ended_at).not.toBeNull();
+    const endedAt = rows[0].ended_at as Date;
+    const timeoutCutoffAt = new Date(lastPingAt.getTime() + 3 * 60_000);
+    expect(endedAt.getTime()).toBeLessThanOrEqual(timeoutCutoffAt.getTime());
+    expect(endedAt.getTime()).toBeLessThanOrEqual(pingSentAt.getTime());
+    expect(endedAt.getTime()).toBeGreaterThanOrEqual(startedAt.getTime());
+    expect(rows[1].ended_at).toBeNull();
+    expect(rows[1].updated_at.getTime()).toBeGreaterThanOrEqual(
+      rows[0].updated_at.getTime()
+    );
+  }
+);
 
 requiresDb(
   "Playnite session start endpoint ends existing sessions and creates a new one",

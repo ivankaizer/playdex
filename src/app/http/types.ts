@@ -193,6 +193,12 @@ export type PlayniteSessionEndResponseDto = {
   endedSessionCount: number;
 };
 
+export type PlayniteSessionPingResponseDto = {
+  sessionId: number;
+  started: boolean;
+  endedSessionCount: number;
+};
+
 export type ManualInputDto = {
   id: number;
   input: string;

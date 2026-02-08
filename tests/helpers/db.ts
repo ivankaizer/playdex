@@ -9,6 +9,13 @@ export type TestDatabase = {
   dbName: string;
 };
 
+const testSqlOptions = {
+  max: 1,
+  onnotice: (_notice: unknown) => {
+    // Keep integration test output clean.
+  },
+};
+
 const normalizeDbName = (name: string) =>
   name.toLowerCase().replace(/[^a-z0-9_]/g, "_");
 
@@ -64,7 +71,7 @@ const ensureTestDatabase = (): Promise<{ databaseUrl: string; dbName: string }> 
       : `${normalizedBase}_test`;
 
     const adminUrl = buildAdminUrl(parsed);
-    const adminSql = postgres(adminUrl.toString(), { max: 1 });
+    const adminSql = postgres(adminUrl.toString(), testSqlOptions);
     const existing = await adminSql<{ exists: boolean }[]>`
       select exists(select 1 from pg_database where datname = ${dbName})
     `;
@@ -79,7 +86,7 @@ const ensureTestDatabase = (): Promise<{ databaseUrl: string; dbName: string }> 
 
     Bun.env.DATABASE_URL = databaseUrl;
 
-    const migrationSql = postgres(databaseUrl, { max: 1 });
+    const migrationSql = postgres(databaseUrl, testSqlOptions);
     await runMigrations({ sql: migrationSql });
     await migrationSql.end({ timeout: 5 });
 
@@ -91,7 +98,7 @@ const ensureTestDatabase = (): Promise<{ databaseUrl: string; dbName: string }> 
 
 export const createTestDatabase = async (): Promise<TestDatabase> => {
   const { databaseUrl, dbName } = await ensureTestDatabase();
-  const sql = postgres(databaseUrl, { max: 1 });
+  const sql = postgres(databaseUrl, testSqlOptions);
 
   return {
     sql,
