@@ -2,6 +2,7 @@ import { ok } from "../../app/http/responses";
 import type {
   ApiResponse,
   PlayniteSessionEndResponseDto,
+  PlayniteSessionPingResponseDto,
   PlayniteSessionResponseDto,
   PlayniteSessionStartResponseDto,
 } from "../../app/http/types";
@@ -87,6 +88,34 @@ const safeNotify = async <T>(
   }
 };
 
+const notifyEndedSessions = async (
+  notifier: PollingNotifier | undefined,
+  payload: {
+    platformCredentialId: number;
+    gameId: number;
+    startedAt: Date;
+    endedAt: Date;
+  }[]
+) => {
+  for (const session of payload) {
+    const durationSeconds = Math.max(
+      0,
+      Math.round((session.endedAt.getTime() - session.startedAt.getTime()) / 1000)
+    );
+    await safeNotify(
+      notifier?.onSessionEnded,
+      {
+        platformCredentialId: session.platformCredentialId,
+        gameId: session.gameId,
+        startedAt: session.startedAt,
+        endedAt: session.endedAt,
+        durationSeconds,
+      },
+      "session.ended"
+    );
+  }
+};
+
 export const recordPlayniteSessionHandler = async (ctx: {
   request: Request;
   body?: unknown;
@@ -141,25 +170,15 @@ export const startPlayniteSessionHandler =
       throw new AppError("Invalid api key.", 401);
     }
 
-    for (const session of result.endedSessions) {
-      const durationSeconds = Math.max(
-        0,
-        Math.round(
-          (result.startedAt.getTime() - session.startedAt.getTime()) / 1000
-        )
-      );
-      await safeNotify(
-        notifier?.onSessionEnded,
-        {
-          platformCredentialId: result.platformCredentialId,
-          gameId: session.gameId,
-          startedAt: session.startedAt,
-          endedAt: result.startedAt,
-          durationSeconds,
-        },
-        "session.ended"
-      );
-    }
+    await notifyEndedSessions(
+      notifier,
+      result.endedSessions.map((session) => ({
+        platformCredentialId: result.platformCredentialId,
+        gameId: session.gameId,
+        startedAt: session.startedAt,
+        endedAt: result.startedAt,
+      }))
+    );
 
     await safeNotify(
       notifier?.onSessionStarted,
@@ -186,26 +205,64 @@ export const endPlayniteSessionsHandler =
       throw new AppError("Invalid api key.", 401);
     }
 
-    for (const session of result.endedSessions) {
-      const durationSeconds = Math.max(
-        0,
-        Math.round(
-          (result.endedAt.getTime() - session.startedAt.getTime()) / 1000
-        )
-      );
-      await safeNotify(
-        notifier?.onSessionEnded,
-        {
-          platformCredentialId: result.platformCredentialId,
-          gameId: session.gameId,
-          startedAt: session.startedAt,
-          endedAt: result.endedAt,
-          durationSeconds,
-        },
-        "session.ended"
-      );
-    }
+    await notifyEndedSessions(
+      notifier,
+      result.endedSessions.map((session) => ({
+        platformCredentialId: result.platformCredentialId,
+        gameId: session.gameId,
+        startedAt: session.startedAt,
+        endedAt: result.endedAt,
+      }))
+    );
 
     return ok({ endedSessionCount: result.endedSessions.length });
   };
 
+export const pingPlayniteSessionHandler =
+  (notifier?: PollingNotifier) =>
+  async (ctx: {
+    request: Request;
+    body?: unknown;
+  }): Promise<ApiResponse<PlayniteSessionPingResponseDto>> => {
+    const token = parseApiKey(ctx.request);
+    const parsed = parseGamePayload(ctx.body);
+
+    const result = await playniteService.pingSession({
+      apiKey: token,
+      gameTitle: parsed.gameTitle,
+      gameId: parsed.gameId,
+      gameProvider: parsed.gameProvider,
+    });
+
+    if (!result) {
+      throw new AppError("Invalid api key.", 401);
+    }
+
+    await notifyEndedSessions(
+      notifier,
+      result.endedSessions.map((session) => ({
+        platformCredentialId: session.platformCredentialId,
+        gameId: session.gameId,
+        startedAt: session.startedAt,
+        endedAt: session.endedAt,
+      }))
+    );
+
+    if (result.sessionStarted) {
+      await safeNotify(
+        notifier?.onSessionStarted,
+        {
+          platformCredentialId: result.platformCredentialId,
+          gameId: result.gameId,
+          startedAt: result.startedAt,
+        },
+        "session.started"
+      );
+    }
+
+    return ok({
+      sessionId: result.sessionId,
+      started: result.sessionStarted,
+      endedSessionCount: result.endedSessions.length,
+    });
+  };

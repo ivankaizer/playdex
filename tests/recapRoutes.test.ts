@@ -1,7 +1,6 @@
-import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
+import { afterAll, beforeAll, beforeEach, expect, mock, test } from "bun:test";
 import jwt from "jsonwebtoken";
 
-import { createApp } from "../src/app/createApp";
 import { decodeGameHash } from "../src/common/utils/gameHash";
 import type { TestDatabase } from "./helpers/db";
 import { createTestDatabase } from "./helpers/db";
@@ -11,7 +10,7 @@ const requiresDb = hasDatabase ? test : test.skip;
 const jwtSecret = "recap-routes-test-secret";
 
 let db: TestDatabase | null = null;
-let app: ReturnType<typeof createApp> | null = null;
+let app: { handle: (request: Request) => Promise<Response> } | null = null;
 let token = "";
 let userId = 0;
 let credentialId = 0;
@@ -23,6 +22,8 @@ beforeAll(async () => {
 
   db = await createTestDatabase();
   Bun.env.JWT_SECRET = jwtSecret;
+  mock.restore();
+  const { createApp } = await import("../src/app/createApp");
   app = createApp();
 });
 

@@ -274,3 +274,72 @@ requiresDb("startPolling backs off after failures", async () => {
 
   expect(attempts).toBe(1);
 });
+
+requiresDb(
+  "startPolling ends timed out playnite sessions even without incoming pings",
+  async () => {
+    if (!db) {
+      throw new Error("Test database not initialized.");
+    }
+
+    const userRows = await db.sql<{ id: number }[]>`
+      insert into users (email) values ('playnite-timeout@test.com') returning id
+    `;
+    const playniteCredentialRows = await db.sql<{ id: number }[]>`
+      insert into platform_credentials (user_id, platform_id, api_key, account_id)
+      values (
+        ${userRows[0].id},
+        (select id from platforms where key = 'playnite'),
+        'playnite-key',
+        null
+      )
+      returning id
+    `;
+    const gameRows = await db.sql<{ id: number }[]>`
+      insert into games (platform_id, title, external_id, canonical_key)
+      values (
+        (select id from platforms where key = 'steam'),
+        'Timeout Game',
+        'timeout-1',
+        'steam:timeout-1'
+      )
+      returning id
+    `;
+
+    const startedAt = new Date("2024-01-01T00:00:00Z");
+    const lastPingAt = new Date("2024-01-01T00:01:00Z");
+    const sessionRows = await db.sql<{ id: number }[]>`
+      insert into play_sessions (platform_credential_id, game_id, started_at, updated_at)
+      values (
+        ${playniteCredentialRows[0].id},
+        ${gameRows[0].id},
+        ${startedAt},
+        ${lastPingAt}
+      )
+      returning id
+    `;
+
+    const loadAccounts = async () => [];
+
+    await new Promise<void>((resolve) => {
+      void startPolling({
+        sql: db.sql,
+        loadAccounts,
+        pollIntervalSeconds: 60,
+        maxCycles: 1,
+        onCycleComplete: () => resolve(),
+      });
+    });
+
+    const rows = await db.sql<{ ended_at: Date | null }[]>`
+      select ended_at
+      from play_sessions
+      where id = ${sessionRows[0].id}
+    `;
+
+    expect(rows[0].ended_at).not.toBeNull();
+    expect(rows[0].ended_at?.toISOString()).toBe(
+      new Date(lastPingAt.getTime() + 3 * 60_000).toISOString()
+    );
+  }
+);
