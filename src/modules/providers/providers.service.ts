@@ -8,16 +8,24 @@ const generateApiKey = () => {
   return `plx_${token}`;
 };
 
+const toProviderResponse = (row: {
+  id: number;
+  platform: string;
+  account_id: string | null;
+  active: boolean;
+  api_key: string | null;
+}) => ({
+  id: row.id,
+  platform: row.platform,
+  accountId: row.account_id,
+  status: row.active ? "active" : "paused",
+  apiKey: row.platform === "playnite" ? row.api_key : null,
+});
+
 export const providersService = {
   getProviders: async (userId: number) => {
     const rows = await providersRepository.listProviders(userId);
-    return rows.map((row) => ({
-      id: row.id,
-      platform: row.platform,
-      accountId: row.account_id,
-      status: row.active ? "active" : "paused",
-      apiKey: row.api_key,
-    }));
+    return rows.map(toProviderResponse);
   },
 
   getOrCreatePlayniteKey: async (userId: number) => {
@@ -59,12 +67,6 @@ export const providersService = {
       throw new AppError("Provider not found.", 404);
     }
 
-    return {
-      id: updated.id,
-      platform: updated.platform,
-      accountId: updated.account_id,
-      status: updated.active ? "active" : "paused",
-      apiKey: updated.api_key,
-    };
+    return toProviderResponse(updated);
   },
 };

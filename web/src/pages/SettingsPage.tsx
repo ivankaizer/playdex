@@ -39,6 +39,9 @@ export const SettingsPage = ({
   const [isSettingsSaving, setIsSettingsSaving] = useState(false);
   const [settingsError, setSettingsError] = useState("");
   const [updatingProviderIds, setUpdatingProviderIds] = useState<number[]>([]);
+  const visibleProviders = providerStatus.filter(
+    (provider) => provider.platform !== "manual" && provider.platform !== "local"
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -248,12 +251,12 @@ export const SettingsPage = ({
                     <div className="h-6 w-20 rounded-full bg-slate-200/70 dark:bg-slate-800/60" />
                   </div>
                 ))
-              ) : providerStatus.length === 0 ? (
+              ) : visibleProviders.length === 0 ? (
                 <div className="rounded-2xl border border-dashed border-slate-200 dark:border-slate-800 bg-slate-200/40 dark:bg-slate-950/40 p-4 text-xs text-slate-500 dark:text-slate-400">
                   No providers connected yet. Add one to start syncing playtime.
                 </div>
               ) : (
-                providerStatus.map((provider) => {
+                visibleProviders.map((provider) => {
                   const isUpdating = updatingProviderIds.includes(provider.id);
                   return (
                     <div
@@ -283,7 +286,9 @@ export const SettingsPage = ({
                             </p>
                           </div>
                           <p className="text-xs text-slate-500 dark:text-slate-400">
-                            {provider.accountId ?? "Local"}
+                            {provider.platform === "playnite"
+                              ? (provider.apiKey ?? "Local")
+                              : (provider.accountId ?? "Local")}
                           </p>
                         </div>
                       </div>
