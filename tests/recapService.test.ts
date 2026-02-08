@@ -1,4 +1,4 @@
-import { beforeEach, expect, mock, test } from "bun:test";
+import { afterAll, beforeEach, expect, mock, test } from "bun:test";
 
 type SessionRow = {
   id: number;
@@ -160,9 +160,14 @@ beforeEach(() => {
   repoMock.loadManualMappings.mockReset();
   gamesMock.listConnectionEdges.mockReset();
 
+  repoMock.listRecapYears.mockResolvedValue([]);
   repoMock.listFirstSessionsByGame.mockResolvedValue([]);
   repoMock.loadManualMappings.mockResolvedValue([]);
   gamesMock.listConnectionEdges.mockResolvedValue([]);
+});
+
+afterAll(() => {
+  mock.restore();
 });
 
 test("empty recap returns zeroed stats", async () => {

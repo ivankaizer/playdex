@@ -117,9 +117,6 @@ const computeMedianSeconds = (values: number[]) => {
 export const recapService = {
   fetchRecapYears: async (userId: number) => {
     const rows = await recapRepository.listRecapYears(userId);
-    if (!Array.isArray(rows)) {
-      return [];
-    }
     return rows.map((row) => row.year).filter((year) => Number.isFinite(year));
   },
 
