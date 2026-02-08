@@ -1,5 +1,9 @@
 import { afterAll, beforeEach, expect, mock, test } from "bun:test";
 
+import { recapRepository } from "../src/modules/recap/recap.repository";
+import { gamesService } from "../src/modules/games";
+import { recapService } from "../src/modules/recap/recap.service";
+
 type SessionRow = {
   id: number;
   started_at: Date;
@@ -33,6 +37,9 @@ type Mapping = {
   mapped_canonical_key: string | null;
 };
 
+const origRepo = { ...recapRepository };
+const origGames = { ...gamesService };
+
 const repoMock = {
   listRecapSessions: mock(async (): Promise<SessionRow[]> => []),
   listRecapYears: mock(async (): Promise<{ year: number }[]> => []),
@@ -40,48 +47,9 @@ const repoMock = {
   loadManualMappings: mock(async (): Promise<Mapping[]> => []),
 };
 
-mock.module("../src/modules/recap/recap.repository", () => ({
-  recapRepository: repoMock,
-}));
-
 const gamesMock = {
   listConnectionEdges: mock(async (): Promise<Edge[]> => []),
 };
-
-const normalizeGameTitleImpl = (title: string) =>
-  title
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-
-mock.module("../src/modules/games", () => ({
-  gamesService: gamesMock,
-  normalizeGameTitle: normalizeGameTitleImpl,
-  normalizeGame: (raw: {
-    platform: string;
-    title: string;
-    externalId?: string;
-    capsuleUrl?: string;
-  }) => {
-    const platform = raw.platform.toLowerCase();
-    const canonicalTitle = normalizeGameTitleImpl(raw.title);
-    const canonicalKey = raw.externalId
-      ? `${platform}:${raw.externalId}`
-      : `${platform}:${canonicalTitle}`;
-    return {
-      platform,
-      title: raw.title,
-      externalId: raw.externalId ?? null,
-      canonicalKey,
-      canonicalTitle,
-      capsuleUrl: raw.capsuleUrl ?? null,
-    };
-  },
-}));
-
-const { recapService } = await import("../src/modules/recap/recap.service");
 
 let nextId = 0;
 
@@ -164,10 +132,14 @@ beforeEach(() => {
   repoMock.listFirstSessionsByGame.mockResolvedValue([]);
   repoMock.loadManualMappings.mockResolvedValue([]);
   gamesMock.listConnectionEdges.mockResolvedValue([]);
+
+  Object.assign(recapRepository, repoMock);
+  Object.assign(gamesService, { listConnectionEdges: gamesMock.listConnectionEdges });
 });
 
 afterAll(() => {
-  mock.restore();
+  Object.assign(recapRepository, origRepo);
+  Object.assign(gamesService, origGames);
 });
 
 test("empty recap returns zeroed stats", async () => {
