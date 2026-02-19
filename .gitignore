@@ -45,5 +45,6 @@ package-lock.json
 .env
 
 dist/
-web/dist/
+apps/api/dist/
+apps/web/dist/
 todo.md

@@ -17,7 +17,7 @@ services:
       retries: 10
 
   app:
-    build: .
+    build: ./apps/api
     restart: "no"
     command: ["bun", "run", "dev"]
     env_file:
@@ -29,7 +29,7 @@ services:
       JWT_SECRET: dev-only-jwt-secret-do-not-use-in-production
       ACCESS_TOKEN_TTL: 30m
     volumes:
-      - .:/app
+      - ./apps/api:/app
       - /app/node_modules
     ports:
       - "3000:3000"
@@ -38,7 +38,7 @@ services:
         condition: service_healthy
   ui:
     build:
-      context: ./web
+      context: ./apps/web
       args:
         VITE_API_URL: https://app.playdex.orb.local/api
       dockerfile: Dockerfile.dev
@@ -47,7 +47,7 @@ services:
       CHOKIDAR_USEPOLLING: "true"
       DATABASE_URL: postgresql://playdex:playdex@db:5432/playdex
     volumes:
-      - ./web:/app
+      - ./apps/web:/app
       - /app/node_modules
     ports:
       - "5173:5173"

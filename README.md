@@ -26,20 +26,31 @@ TELEGRAM_BOT_TOKEN=your-telegram-bot-token
 3. Install dependencies:
 
 ```bash
+cd apps/api
 bun install
 ```
 
 4. Start the server:
 
 ```bash
+cd apps/api
 bun run dev
 ```
 
 Open `http://localhost:3000/` in your browser.
 
+5. (Optional) Run the web app:
+
+```bash
+cd apps/web
+bun install
+bun run dev
+```
+
 ## Useful commands
 
 ```bash
+cd apps/api
 bun run dev
 bun run format
 bun run format:check
