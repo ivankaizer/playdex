@@ -46,9 +46,10 @@ export const updateProviderStatusHandler = async (ctx: {
   body?: unknown;
 }): Promise<ApiResponse<ProviderUpdateResponseDto>> => {
   const auth = requireAuth(ctx.request);
-  const payload = ctx.body as
-    | { providerId?: number | string; status?: unknown }
-    | null;
+  const payload = ctx.body as {
+    providerId?: number | string;
+    status?: unknown;
+  } | null;
 
   const providerId = parseProviderId(payload?.providerId ?? null);
   const status = parseProviderStatus(payload?.status ?? null);

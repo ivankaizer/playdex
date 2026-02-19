@@ -85,10 +85,14 @@ export const ManualSessionModal = ({
           </label>
 
           {manualInputsError ? (
-            <p className="text-xs text-rose-700 dark:text-rose-300">{manualInputsError}</p>
+            <p className="text-xs text-rose-700 dark:text-rose-300">
+              {manualInputsError}
+            </p>
           ) : null}
           {manualStartError ? (
-            <p className="text-xs text-rose-700 dark:text-rose-300">{manualStartError}</p>
+            <p className="text-xs text-rose-700 dark:text-rose-300">
+              {manualStartError}
+            </p>
           ) : null}
         </div>
 

@@ -74,8 +74,7 @@ const parsePaginationAndFilters = (
     throw new AppError("from and to must be valid dates.", 400);
   }
 
-  const sortKey =
-    sortRaw === "date" || sortRaw === "duration" ? sortRaw : null;
+  const sortKey = sortRaw === "date" || sortRaw === "duration" ? sortRaw : null;
   if (sortRaw && !sortKey) {
     throw new AppError("sort must be one of: date, duration.", 400);
   }
@@ -137,10 +136,7 @@ const parseStatsRange = (url: URL) => {
     throw new AppError("from and to are required.", 400);
   }
 
-  if (
-    Number.isNaN(parsedFrom.getTime()) ||
-    Number.isNaN(parsedTo.getTime())
-  ) {
+  if (Number.isNaN(parsedFrom.getTime()) || Number.isNaN(parsedTo.getTime())) {
     throw new AppError("from and to must be valid dates.", 400);
   }
 
@@ -214,7 +210,10 @@ export const listUserSessionsTodayHandler = async (ctx: {
   request: Request;
 }): Promise<ApiResponse<AccountTodaySessionsResponseDto>> => {
   const auth = requireAuth(ctx.request);
-  const sessions = await accountsService.fetchUserSessionsToday(auth.userId, 10);
+  const sessions = await accountsService.fetchUserSessionsToday(
+    auth.userId,
+    10
+  );
   return ok({ accountId: null, sessions: sessions.map(toSessionDto) });
 };
 
@@ -223,7 +222,10 @@ export const getUserCurrentSessionHandler = async (ctx: {
 }): Promise<ApiResponse<AccountCurrentSessionResponseDto>> => {
   const auth = requireAuth(ctx.request);
   const session = await accountsService.fetchUserCurrentSession(auth.userId);
-  return ok({ accountId: null, session: session ? toSessionDto(session) : null });
+  return ok({
+    accountId: null,
+    session: session ? toSessionDto(session) : null,
+  });
 };
 
 export const getUserStatsHandler = async (ctx: {

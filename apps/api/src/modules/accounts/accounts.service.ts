@@ -120,7 +120,11 @@ export const accountsService = {
     );
     const [sessions, total] = await Promise.all([
       toAccountSessions(userId, rows),
-      accountsRepository.countAccountSessions(accountId, userId, resolvedFilters),
+      accountsRepository.countAccountSessions(
+        accountId,
+        userId,
+        resolvedFilters
+      ),
     ]);
     return { sessions, total };
   },

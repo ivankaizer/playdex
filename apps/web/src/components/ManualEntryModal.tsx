@@ -150,7 +150,9 @@ export const ManualEntryModal = ({
           ) : null}
 
           {manualEntrySearchError ? (
-            <p className="text-xs text-rose-700 dark:text-rose-300">{manualEntrySearchError}</p>
+            <p className="text-xs text-rose-700 dark:text-rose-300">
+              {manualEntrySearchError}
+            </p>
           ) : null}
 
           <div className="grid gap-3 lg:grid-cols-2">
@@ -245,7 +247,9 @@ export const ManualEntryModal = ({
           ) : null}
 
           {manualEntryError ? (
-            <p className="text-xs text-rose-700 dark:text-rose-300">{manualEntryError}</p>
+            <p className="text-xs text-rose-700 dark:text-rose-300">
+              {manualEntryError}
+            </p>
           ) : null}
         </div>
 

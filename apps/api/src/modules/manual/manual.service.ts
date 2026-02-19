@@ -4,6 +4,7 @@ import { normalizeGame, normalizeGameTitle } from "../games";
 import { searchIgdbGames } from "../providers/clients/igdb-client";
 import { manualRepository } from "./manual.repository";
 import { encodeGameId } from "../../common/utils/gameHash";
+import type { ManualInputDto } from "../../app/http/types";
 
 type ManualMappingSelection =
   | { type: "local"; gameId: number }
@@ -168,7 +169,7 @@ export const manualService = {
     return { endedSessionCount: endedSessions.length };
   },
 
-  getManualInputs: async (userId: number) => {
+  getManualInputs: async (userId: number): Promise<ManualInputDto[]> => {
     const rows = await manualRepository.listManualInputs(userId);
     return rows.map((row) => ({
       id: Number(row.id),

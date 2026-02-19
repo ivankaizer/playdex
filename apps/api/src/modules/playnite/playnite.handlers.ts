@@ -9,10 +9,7 @@ import type {
 import { AppError } from "../../common/errors/AppError";
 import { getErrorMessage, logEvent } from "../../common/observability";
 import type { PollingNotifier } from "../polling";
-import {
-  playniteService,
-  type PlayniteGameProvider,
-} from "./playnite.service";
+import { playniteService, type PlayniteGameProvider } from "./playnite.service";
 
 type PlayniteSessionBody = {
   durationInSeconds?: number;
@@ -100,7 +97,9 @@ const notifyEndedSessions = async (
   for (const session of payload) {
     const durationSeconds = Math.max(
       0,
-      Math.round((session.endedAt.getTime() - session.startedAt.getTime()) / 1000)
+      Math.round(
+        (session.endedAt.getTime() - session.startedAt.getTime()) / 1000
+      )
     );
     await safeNotify(
       notifier?.onSessionEnded,
@@ -128,10 +127,7 @@ export const recordPlayniteSessionHandler = async (ctx: {
     typeof durationRaw === "number" ? durationRaw : Number(durationRaw);
 
   if (!Number.isFinite(durationInSeconds) || durationInSeconds <= 0) {
-    throw new AppError(
-      "durationInSeconds must be a positive number.",
-      400
-    );
+    throw new AppError("durationInSeconds must be a positive number.", 400);
   }
 
   const parsed = parseGamePayload(ctx.body);

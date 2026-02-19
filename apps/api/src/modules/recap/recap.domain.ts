@@ -55,7 +55,11 @@ export type RecapStats = {
   abandonedGames: number;
   returnRateGames: number;
   timeOnTop3Percent: number;
-  mostBingedGame: { gameId: number; title: string; sessionCount: number } | null;
+  mostBingedGame: {
+    gameId: number;
+    title: string;
+    sessionCount: number;
+  } | null;
   platformTotals: RecapPlatformStat[];
   mostUsedPlatform: {
     platform: string;

@@ -145,7 +145,11 @@ export type RecapResponseDto = {
   abandonedGames: number;
   returnRateGames: number;
   timeOnTop3Percent: number;
-  mostBingedGame: { gameId: string; title: string; sessionCount: number } | null;
+  mostBingedGame: {
+    gameId: string;
+    title: string;
+    sessionCount: number;
+  } | null;
   platformTotals: RecapPlatformStatDto[];
   mostUsedPlatform: {
     platform: string;

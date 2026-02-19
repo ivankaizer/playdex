@@ -687,10 +687,14 @@ export const SessionsPage = ({
             </label>
           </div>
           {sessionsError ? (
-            <p className="mt-4 text-xs text-rose-700 dark:text-rose-300">{sessionsError}</p>
+            <p className="mt-4 text-xs text-rose-700 dark:text-rose-300">
+              {sessionsError}
+            </p>
           ) : null}
           {rangeStatsError ? (
-            <p className="mt-4 text-xs text-rose-700 dark:text-rose-300">{rangeStatsError}</p>
+            <p className="mt-4 text-xs text-rose-700 dark:text-rose-300">
+              {rangeStatsError}
+            </p>
           ) : null}
 
           <div className="mt-6">
@@ -715,7 +719,9 @@ export const SessionsPage = ({
               }}
             />
             {isRangeStatsLoading ? (
-              <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">Loading stats...</p>
+              <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">
+                Loading stats...
+              </p>
             ) : null}
           </div>
 
@@ -788,32 +794,32 @@ export const SessionsPage = ({
                           type="button"
                           onClick={() => handleGameSelect(session.gameId)}
                           className="text-left font-semibold text-slate-900 dark:text-white transition hover:text-emerald-700 dark:hover:text-emerald-200"
-                    >
-                      {session.title}
-                    </button>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">
-                      {session.platform}
-                    </p>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">
-                      {session.date}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {session.ignored ? renderIgnoredIcon() : null}
-                    <span className="text-sm font-semibold text-emerald-700 dark:text-emerald-200">
-                      {session.duration}
-                    </span>
-                  </div>
-                </div>
-                <div className="mt-3 flex items-center justify-between">
-                  <span className="text-[11px] uppercase tracking-[0.3em] text-slate-500">
-                    {session.platform}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => handleSessionRemove(session.sessionId)}
-                    disabled={deletingSessionIds.includes(
-                      session.sessionId
+                        >
+                          {session.title}
+                        </button>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">
+                          {session.platform}
+                        </p>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">
+                          {session.date}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {session.ignored ? renderIgnoredIcon() : null}
+                        <span className="text-sm font-semibold text-emerald-700 dark:text-emerald-200">
+                          {session.duration}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="mt-3 flex items-center justify-between">
+                      <span className="text-[11px] uppercase tracking-[0.3em] text-slate-500">
+                        {session.platform}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => handleSessionRemove(session.sessionId)}
+                        disabled={deletingSessionIds.includes(
+                          session.sessionId
                         )}
                         className="rounded-full border border-rose-500/60 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.3em] text-rose-700 dark:text-rose-200 transition hover:border-rose-400 disabled:cursor-not-allowed disabled:opacity-60"
                       >

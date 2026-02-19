@@ -21,4 +21,3 @@ export class AppError extends Error {
 
 export const isAppError = (error: unknown): error is AppError =>
   error instanceof AppError;
-

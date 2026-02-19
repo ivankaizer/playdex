@@ -92,8 +92,16 @@ requiresDb("play sessions are persisted and listed", async () => {
   const gameId = await pollingRepository.ensureGameId(normalized, db.sql);
 
   const startedAt = new Date("2024-01-01T01:00:00Z");
-  await pollingRepository.startPlaySession(credentialId, gameId, startedAt, db.sql);
-  const active = await pollingRepository.fetchActivePlaySession(credentialId, db.sql);
+  await pollingRepository.startPlaySession(
+    credentialId,
+    gameId,
+    startedAt,
+    db.sql
+  );
+  const active = await pollingRepository.fetchActivePlaySession(
+    credentialId,
+    db.sql
+  );
   expect(active?.game_id).toBe(gameId);
 
   const endedAt = new Date("2024-01-01T02:00:00Z");
@@ -172,7 +180,12 @@ requiresDb("listAccountSessions enforces the 10-session limit", async () => {
   for (let index = 0; index < 12; index += 1) {
     const startedAt = new Date(baseTime + index * 60_000);
     const endedAt = new Date(baseTime + (index + 1) * 60_000);
-    await pollingRepository.startPlaySession(credentialId, gameId, startedAt, db.sql);
+    await pollingRepository.startPlaySession(
+      credentialId,
+      gameId,
+      startedAt,
+      db.sql
+    );
     const active = await pollingRepository.fetchActivePlaySession(
       credentialId,
       db.sql
@@ -205,8 +218,16 @@ requiresDb("play session timestamps survive DST transitions", async () => {
   const gameId = await pollingRepository.ensureGameId(normalized, db.sql);
 
   const startedAt = new Date("2024-03-10T01:55:00-08:00");
-  await pollingRepository.startPlaySession(credentialId, gameId, startedAt, db.sql);
-  const active = await pollingRepository.fetchActivePlaySession(credentialId, db.sql);
+  await pollingRepository.startPlaySession(
+    credentialId,
+    gameId,
+    startedAt,
+    db.sql
+  );
+  const active = await pollingRepository.fetchActivePlaySession(
+    credentialId,
+    db.sql
+  );
   if (!active) {
     throw new Error("Expected active session after starting.");
   }

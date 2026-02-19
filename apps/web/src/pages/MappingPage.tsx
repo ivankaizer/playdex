@@ -225,9 +225,7 @@ export const MappingPage = ({
       await loadGameConnections();
     } catch (err) {
       setConnectionSaveError(
-        err instanceof Error
-          ? err.message
-          : "Failed to connect selected games."
+        err instanceof Error ? err.message : "Failed to connect selected games."
       );
     } finally {
       setIsConnectionSaving(false);
@@ -251,9 +249,7 @@ export const MappingPage = ({
       await loadGameConnections();
     } catch (err) {
       setConnectionSaveError(
-        err instanceof Error
-          ? err.message
-          : "Failed to remove game connection."
+        err instanceof Error ? err.message : "Failed to remove game connection."
       );
     } finally {
       setIsConnectionSaving(false);
@@ -381,7 +377,9 @@ export const MappingPage = ({
         </p>
       ) : null}
       {mappingSearchError ? (
-        <p className="mt-3 text-xs text-rose-700 dark:text-rose-300">{mappingSearchError}</p>
+        <p className="mt-3 text-xs text-rose-700 dark:text-rose-300">
+          {mappingSearchError}
+        </p>
       ) : null}
 
       <div className="mt-4 grid gap-3">
@@ -420,7 +418,7 @@ export const MappingPage = ({
                 <p className="text-xs text-slate-500 dark:text-slate-400">
                   {result.source === "igdb"
                     ? mappingPlatformOverride === "auto"
-                      ? result.platform ?? "Unknown platform"
+                      ? (result.platform ?? "Unknown platform")
                       : formatPlatformLabel(mappingPlatformOverride)
                     : result.platform
                       ? formatPlatformLabel(result.platform)
@@ -480,7 +478,9 @@ export const MappingPage = ({
           </div>
 
           {manualInputsError ? (
-            <p className="mt-4 text-xs text-rose-700 dark:text-rose-300">{manualInputsError}</p>
+            <p className="mt-4 text-xs text-rose-700 dark:text-rose-300">
+              {manualInputsError}
+            </p>
           ) : null}
 
           <div className="mt-6 grid gap-4 md:hidden">
@@ -526,12 +526,17 @@ export const MappingPage = ({
                       <p className="text-[11px] uppercase tracking-[0.3em] text-slate-500 dark:text-slate-400">
                         Input
                       </p>
-                      <p className="text-sm font-semibold text-slate-900 dark:text-white">{input.input}</p>
+                      <p className="text-sm font-semibold text-slate-900 dark:text-white">
+                        {input.input}
+                      </p>
                       <div className="text-xs text-slate-600 dark:text-slate-300">
                         {input.mappedGame ? (
                           <button
                             type="button"
-                            onClick={() => handleGameSelect(input.mappedGame.id)}
+                            onClick={() =>
+                              input.mappedGame &&
+                              handleGameSelect(input.mappedGame.id)
+                            }
                             className="font-semibold text-slate-900 dark:text-white transition hover:text-emerald-700 dark:hover:text-emerald-200"
                           >
                             {input.mappedGame.title}
@@ -623,6 +628,7 @@ export const MappingPage = ({
                               <button
                                 type="button"
                                 onClick={() =>
+                                  input.mappedGame &&
                                   handleGameSelect(input.mappedGame.id)
                                 }
                                 className="text-left text-sm font-semibold text-slate-900 dark:text-white transition hover:text-emerald-700 dark:hover:text-emerald-200"
@@ -695,7 +701,9 @@ export const MappingPage = ({
           </div>
 
           {gameConnectionsError ? (
-            <p className="mt-4 text-xs text-rose-700 dark:text-rose-300">{gameConnectionsError}</p>
+            <p className="mt-4 text-xs text-rose-700 dark:text-rose-300">
+              {gameConnectionsError}
+            </p>
           ) : null}
 
           <div className="mt-6 grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
@@ -716,7 +724,9 @@ export const MappingPage = ({
                     <input
                       type="text"
                       value={primaryGameQuery}
-                      onChange={(event) => setPrimaryGameQuery(event.target.value)}
+                      onChange={(event) =>
+                        setPrimaryGameQuery(event.target.value)
+                      }
                       className="flex-1 rounded-xl border border-slate-300 dark:border-slate-700 bg-white/90 dark:bg-slate-950/80 px-3 py-2 text-sm text-slate-900 dark:text-white outline-none transition focus:border-emerald-300 dark:focus:border-emerald-400 focus:ring-2 focus:ring-emerald-300/30 dark:focus:ring-emerald-400/30"
                       placeholder="Search games"
                     />
@@ -801,7 +811,9 @@ export const MappingPage = ({
                     <input
                       type="text"
                       value={secondaryGameQuery}
-                      onChange={(event) => setSecondaryGameQuery(event.target.value)}
+                      onChange={(event) =>
+                        setSecondaryGameQuery(event.target.value)
+                      }
                       className="flex-1 rounded-xl border border-slate-300 dark:border-slate-700 bg-white/90 dark:bg-slate-950/80 px-3 py-2 text-sm text-slate-900 dark:text-white outline-none transition focus:border-emerald-300 dark:focus:border-emerald-400 focus:ring-2 focus:ring-emerald-300/30 dark:focus:ring-emerald-400/30"
                       placeholder="Search games"
                     />
@@ -836,7 +848,9 @@ export const MappingPage = ({
                         </p>
                         <p className="text-xs text-emerald-700 dark:text-emerald-200">
                           {selectedSecondaryGame.platform
-                            ? formatPlatformLabel(selectedSecondaryGame.platform)
+                            ? formatPlatformLabel(
+                                selectedSecondaryGame.platform
+                              )
                             : "Unknown platform"}
                         </p>
                       </div>
@@ -955,7 +969,9 @@ export const MappingPage = ({
                           <div className="min-w-0 flex-1">
                             <button
                               type="button"
-                              onClick={() => handleGameSelect(connection.gameId)}
+                              onClick={() =>
+                                handleGameSelect(connection.gameId)
+                              }
                               className="block w-full break-words text-left text-sm font-semibold text-slate-900 dark:text-white transition hover:text-emerald-700 dark:hover:text-emerald-200"
                             >
                               {connection.title}

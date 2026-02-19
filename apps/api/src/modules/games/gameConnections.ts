@@ -9,7 +9,10 @@ export type GameTotalsRow = {
   total_seconds: number;
 };
 
-export const normalizeGameConnection = (gameId: number, connectedGameId: number) => {
+export const normalizeGameConnection = (
+  gameId: number,
+  connectedGameId: number
+) => {
   if (gameId === connectedGameId) {
     return null;
   }

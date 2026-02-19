@@ -37,7 +37,10 @@ const storeResolvedAccountId = async (
   where id = ${credentialId}
 `;
 
-const ensureGameId = async (game: NormalizedGame, sql: SqlClient = getSql()) => {
+const ensureGameId = async (
+  game: NormalizedGame,
+  sql: SqlClient = getSql()
+) => {
   const rows = await sql<{ id: number }[]>`
     insert into games (platform_id, title, external_id, canonical_key, capsule_url)
     values (
@@ -142,7 +145,8 @@ export const pollingRepository = {
     sql?: SqlClient
   ) => startPlaySession(platformCredentialId, gameId, startedAt, sql),
 
-  ensureGameId: (game: NormalizedGame, sql?: SqlClient) => ensureGameId(game, sql),
+  ensureGameId: (game: NormalizedGame, sql?: SqlClient) =>
+    ensureGameId(game, sql),
 
   isGameIgnoredForCredential: (
     platformCredentialId: number,
@@ -156,7 +160,8 @@ export const pollingRepository = {
     polledAt: Date,
     rawPayload: unknown,
     sql?: SqlClient
-  ) => recordPollResult(platformCredentialId, gameId, polledAt, rawPayload, sql),
+  ) =>
+    recordPollResult(platformCredentialId, gameId, polledAt, rawPayload, sql),
 
   loadPlatformCredentials: () => loadPlatformCredentials(),
 

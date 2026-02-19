@@ -88,9 +88,7 @@ export const RecapPage = ({
         params.set("from", range.from);
         params.set("to", range.to);
       }
-      const path = params.toString()
-        ? `/recap?${params.toString()}`
-        : "/recap";
+      const path = params.toString() ? `/recap?${params.toString()}` : "/recap";
       const data = await apiRequest<RecapResponse>(path, {
         onAuthFailure: onLogout,
       });
@@ -235,8 +233,7 @@ export const RecapPage = ({
     if (weekdayStats.length === 0) {
       return { width, height, linePoints: "", areaPath: "", points: [] };
     }
-    const step =
-      (width - padding * 2) / Math.max(1, weekdayStats.length - 1);
+    const step = (width - padding * 2) / Math.max(1, weekdayStats.length - 1);
     const points = weekdayStats.map((item, index) => {
       const x = padding + index * step;
       const y =
@@ -459,7 +456,9 @@ export const RecapPage = ({
             ) : null}
 
             {error ? (
-              <p className="text-xs text-rose-700 dark:text-rose-300">{error}</p>
+              <p className="text-xs text-rose-700 dark:text-rose-300">
+                {error}
+              </p>
             ) : null}
 
             {recap ? (
@@ -547,7 +546,10 @@ export const RecapPage = ({
                         </p>
                         <div className="mt-3 grid gap-2 text-sm">
                           {volumeStats.map((item) => (
-                            <div key={item.label} className="flex items-center justify-between">
+                            <div
+                              key={item.label}
+                              className="flex items-center justify-between"
+                            >
                               <span className="text-[10px] uppercase tracking-[0.3em] text-slate-500 dark:text-slate-400">
                                 {item.label}
                               </span>
@@ -564,7 +566,10 @@ export const RecapPage = ({
                         </p>
                         <div className="mt-3 grid gap-2 text-sm">
                           {sessionLengthStats.map((item) => (
-                            <div key={item.label} className="flex items-center justify-between">
+                            <div
+                              key={item.label}
+                              className="flex items-center justify-between"
+                            >
                               <span className="text-[10px] uppercase tracking-[0.3em] text-slate-500 dark:text-slate-400">
                                 {item.label}
                               </span>
@@ -594,7 +599,10 @@ export const RecapPage = ({
                     </div>
                     <div className="mt-4 grid gap-4 sm:grid-cols-[auto_1fr] items-center">
                       <div className="relative flex h-36 w-36 items-center justify-center">
-                        <svg className="h-full w-full -rotate-90" viewBox="0 0 120 120">
+                        <svg
+                          className="h-full w-full -rotate-90"
+                          viewBox="0 0 120 120"
+                        >
                           <circle
                             cx="60"
                             cy="60"
@@ -686,9 +694,21 @@ export const RecapPage = ({
                         preserveAspectRatio="none"
                       >
                         <defs>
-                          <linearGradient id="weekdayGradient" x1="0" x2="0" y1="0" y2="1">
-                            <stop offset="0%" stopColor="rgba(52, 211, 153, 0.4)" />
-                            <stop offset="100%" stopColor="rgba(52, 211, 153, 0)" />
+                          <linearGradient
+                            id="weekdayGradient"
+                            x1="0"
+                            x2="0"
+                            y1="0"
+                            y2="1"
+                          >
+                            <stop
+                              offset="0%"
+                              stopColor="rgba(52, 211, 153, 0.4)"
+                            />
+                            <stop
+                              offset="100%"
+                              stopColor="rgba(52, 211, 153, 0)"
+                            />
                           </linearGradient>
                         </defs>
                         {weekdayChart.areaPath ? (
@@ -720,7 +740,10 @@ export const RecapPage = ({
                       </svg>
                       <div className="mt-3 grid grid-cols-7 text-[10px] uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">
                         {weekdayLabels.map((label) => (
-                          <span key={`weekday-label-${label}`} className="text-center">
+                          <span
+                            key={`weekday-label-${label}`}
+                            className="text-center"
+                          >
                             {label}
                           </span>
                         ))}
@@ -737,10 +760,14 @@ export const RecapPage = ({
                     </h2>
                     <div className="mt-4 grid grid-cols-12 gap-2">
                       {hourStats.map((item) => {
-                        const intensity = hourMax > 0 ? item.sessionCount / hourMax : 0;
+                        const intensity =
+                          hourMax > 0 ? item.sessionCount / hourMax : 0;
                         const opacity = 0.2 + intensity * 0.8;
                         return (
-                          <div key={`hour-${item.hour}`} className="flex flex-col items-center gap-2">
+                          <div
+                            key={`hour-${item.hour}`}
+                            className="flex flex-col items-center gap-2"
+                          >
                             <span
                               className="h-3 w-3 rounded-full bg-emerald-400"
                               style={{ opacity }}
@@ -775,7 +802,8 @@ export const RecapPage = ({
                       <div className="flex items-center justify-between text-xs uppercase tracking-[0.3em] text-slate-500 dark:text-slate-400">
                         <span>Weekend</span>
                         <span className="font-semibold text-slate-900 dark:text-white">
-                          {formatHours(recap.weekendSeconds, 1)} · {weekendSharePercent}%
+                          {formatHours(recap.weekendSeconds, 1)} ·{" "}
+                          {weekendSharePercent}%
                         </span>
                       </div>
                       <div className="flex h-3 w-full overflow-hidden rounded-full bg-slate-200/70 dark:bg-slate-800/70">
@@ -791,7 +819,8 @@ export const RecapPage = ({
                       <div className="flex items-center justify-between text-xs uppercase tracking-[0.3em] text-slate-500 dark:text-slate-400">
                         <span>Weekday</span>
                         <span className="font-semibold text-slate-900 dark:text-white">
-                          {formatHours(recap.weekdaySeconds, 1)} · {weekdaySharePercent}%
+                          {formatHours(recap.weekdaySeconds, 1)} ·{" "}
+                          {weekdaySharePercent}%
                         </span>
                       </div>
                     </div>
@@ -814,7 +843,9 @@ export const RecapPage = ({
                         </p>
                         <p className="mt-2 text-sm font-semibold text-slate-900 dark:text-white">
                           {recap.mostUsedPlatform
-                            ? formatStatsPlatformLabel(recap.mostUsedPlatform.platform)
+                            ? formatStatsPlatformLabel(
+                                recap.mostUsedPlatform.platform
+                              )
                             : "—"}
                         </p>
                       </div>
@@ -840,14 +871,23 @@ export const RecapPage = ({
                               ? (item.totalSeconds / platformTotalSeconds) * 100
                               : 0;
                           const barClass =
-                            platformBarClasses[index % platformBarClasses.length];
+                            platformBarClasses[
+                              index % platformBarClasses.length
+                            ];
                           const dotClass =
-                            platformDotClasses[index % platformDotClasses.length];
+                            platformDotClasses[
+                              index % platformDotClasses.length
+                            ];
                           return (
-                            <div key={`platform-${item.platform}`} className="space-y-2">
+                            <div
+                              key={`platform-${item.platform}`}
+                              className="space-y-2"
+                            >
                               <div className="flex items-center justify-between text-sm">
                                 <div className="flex items-center gap-2">
-                                  <span className={`h-2.5 w-2.5 rounded-full ${dotClass}`} />
+                                  <span
+                                    className={`h-2.5 w-2.5 rounded-full ${dotClass}`}
+                                  />
                                   <span className="font-semibold text-slate-900 dark:text-white">
                                     {formatStatsPlatformLabel(item.platform)}
                                   </span>
@@ -966,7 +1006,9 @@ export const RecapPage = ({
                                     <div className="flex min-w-0 items-center gap-2">
                                       <button
                                         type="button"
-                                        onClick={() => onNavigate(buildGamePath(game.gameId))}
+                                        onClick={() =>
+                                          onNavigate(buildGamePath(game.gameId))
+                                        }
                                         title={game.title}
                                         className="min-w-0 flex-1 truncate text-left text-sm font-semibold text-slate-900 dark:text-white transition hover:text-emerald-700 dark:hover:text-emerald-200"
                                       >

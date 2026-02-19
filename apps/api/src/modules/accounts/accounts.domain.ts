@@ -52,7 +52,11 @@ export const collectManualCanonicalTitles = (
 const stripSessionMetadata = (
   session: AccountSessionWithMetadata
 ): AccountSession => {
-  const { gamePlatform, gameCanonicalKey, ...rest } = session;
+  const {
+    gamePlatform: _gamePlatform,
+    gameCanonicalKey: _gameCanonicalKey,
+    ...rest
+  } = session;
   return rest;
 };
 
@@ -121,7 +125,11 @@ export type AccountStatsPeriod = {
   totalSeconds: number;
   sessionCount: number;
   topGameTitle: string | null;
-  platforms: { platform: string; source: string | null; totalSeconds: number }[];
+  platforms: {
+    platform: string;
+    source: string | null;
+    totalSeconds: number;
+  }[];
   topGames: { gameId: number; title: string; totalSeconds: number }[];
 };
 

@@ -37,29 +37,29 @@ export const loadPollingAccounts = async (): Promise<PollingAccountEntry[]> => {
     }
 
     if (credential.platform === "psn") {
-          if (!credential.api_key?.trim()) {
-            console.warn(
-              `Missing PSN credentials; skipping PSN polling (credential ${credential.id}).`
-            );
-            continue;
+      if (!credential.api_key?.trim()) {
+        console.warn(
+          `Missing PSN credentials; skipping PSN polling (credential ${credential.id}).`
+        );
+        continue;
       }
 
       const psnClient = new PsnClient({ npsso: credential.api_key });
       let psnAccountId = credential.account_id?.trim() ?? "";
-        if (!psnAccountId) {
-          const resolved = await psnClient.resolveAccountId();
-          if (resolved) {
-            psnAccountId = resolved;
-            console.log(`Resolved PSN account ID: ${psnAccountId}`);
-            await pollingRepository.storeResolvedAccountId(
-              credential.id,
-              psnAccountId
-            );
-          } else {
-            console.warn(
-              `Could not resolve PSN account ID; skipping PSN polling (credential ${credential.id}).`
-            );
-          }
+      if (!psnAccountId) {
+        const resolved = await psnClient.resolveAccountId();
+        if (resolved) {
+          psnAccountId = resolved;
+          console.log(`Resolved PSN account ID: ${psnAccountId}`);
+          await pollingRepository.storeResolvedAccountId(
+            credential.id,
+            psnAccountId
+          );
+        } else {
+          console.warn(
+            `Could not resolve PSN account ID; skipping PSN polling (credential ${credential.id}).`
+          );
+        }
       }
 
       if (psnAccountId) {

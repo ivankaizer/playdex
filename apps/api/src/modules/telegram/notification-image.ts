@@ -49,7 +49,10 @@ const loadImageDataUrl = async (source: string) => {
       );
     }
     const buffer = await response.arrayBuffer();
-    const mimeType = resolveMimeType(source, response.headers.get("content-type"));
+    const mimeType = resolveMimeType(
+      source,
+      response.headers.get("content-type")
+    );
     const base64 = Buffer.from(buffer).toString("base64");
     return `data:${mimeType};base64,${base64}`;
   }
@@ -225,7 +228,7 @@ const parseFontFaces = (css: string) => {
         : "Custom";
       const weightRaw = weightMatch?.[1].trim() ?? "400";
       const weight = Number.parseInt(weightRaw, 10) || 400;
-      const style =
+      const style: FontDefinition["style"] =
         styleMatch?.[1].trim().toLowerCase() === "italic" ? "italic" : "normal";
       const url = urlMatch
         ? urlMatch[1].trim().replace(/^["']|["']$/g, "")
@@ -282,7 +285,7 @@ const loadFontData = async (fontUrl: string): Promise<FontDefinition[]> => {
     return fonts;
   }
 
-  const fonts = [
+  const fonts: FontDefinition[] = [
     {
       name: "Custom",
       data: await response.arrayBuffer(),
@@ -294,9 +297,7 @@ const loadFontData = async (fontUrl: string): Promise<FontDefinition[]> => {
   return fonts;
 };
 
-export const renderNotificationWebp = async (
-  input: NotificationImageInput
-) => {
+export const renderNotificationWebp = async (input: NotificationImageInput) => {
   const [imageDataUrl, fonts] = await Promise.all([
     loadImageDataUrl(input.image),
     loadFontData(input.fontUrl ?? DEFAULT_FONT_URL),
@@ -307,7 +308,7 @@ export const renderNotificationWebp = async (
     {
       width: IMAGE_WIDTH,
       height: IMAGE_HEIGHT,
-      fonts,
+      fonts: fonts as Parameters<typeof satori>[1]["fonts"],
     }
   );
 
@@ -319,9 +320,7 @@ export const renderNotificationWebp = async (
   });
 
   const pngBuffer = resvg.render().asPng();
-  const webpBuffer = await sharp(pngBuffer)
-    .webp({ quality: 92 })
-    .toBuffer();
+  const webpBuffer = await sharp(pngBuffer).webp({ quality: 92 }).toBuffer();
 
   return new Uint8Array(webpBuffer);
 };

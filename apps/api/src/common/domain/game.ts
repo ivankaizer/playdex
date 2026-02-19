@@ -6,4 +6,3 @@ export type NormalizedGame = {
   canonicalTitle: string;
   canonicalKey: string;
 };
-

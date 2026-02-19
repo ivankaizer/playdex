@@ -133,7 +133,10 @@ const listAccountSessions = async (
   const titleFilter = filters.title
     ? sql`and g.title ilike ${`%${filters.title}%`}`
     : sql``;
-  const gameIdFilter = buildGameIdFilter(sql, filters.gameIds ?? filters.gameId);
+  const gameIdFilter = buildGameIdFilter(
+    sql,
+    filters.gameIds ?? filters.gameId
+  );
   const fromFilter = filters.startedFrom
     ? sql`and ps.started_at >= ${filters.startedFrom}`
     : sql``;
@@ -194,7 +197,10 @@ const listUserSessions = async (
   const titleFilter = filters.title
     ? sql`and g.title ilike ${`%${filters.title}%`}`
     : sql``;
-  const gameIdFilter = buildGameIdFilter(sql, filters.gameIds ?? filters.gameId);
+  const gameIdFilter = buildGameIdFilter(
+    sql,
+    filters.gameIds ?? filters.gameId
+  );
   const fromFilter = filters.startedFrom
     ? sql`and ps.started_at >= ${filters.startedFrom}`
     : sql``;
@@ -253,7 +259,10 @@ const countAccountSessions = async (
   const titleFilter = filters.title
     ? sql`and g.title ilike ${`%${filters.title}%`}`
     : sql``;
-  const gameIdFilter = buildGameIdFilter(sql, filters.gameIds ?? filters.gameId);
+  const gameIdFilter = buildGameIdFilter(
+    sql,
+    filters.gameIds ?? filters.gameId
+  );
   const fromFilter = filters.startedFrom
     ? sql`and ps.started_at >= ${filters.startedFrom}`
     : sql``;
@@ -284,7 +293,10 @@ const countUserSessions = async (
   const titleFilter = filters.title
     ? sql`and g.title ilike ${`%${filters.title}%`}`
     : sql``;
-  const gameIdFilter = buildGameIdFilter(sql, filters.gameIds ?? filters.gameId);
+  const gameIdFilter = buildGameIdFilter(
+    sql,
+    filters.gameIds ?? filters.gameId
+  );
   const fromFilter = filters.startedFrom
     ? sql`and ps.started_at >= ${filters.startedFrom}`
     : sql``;

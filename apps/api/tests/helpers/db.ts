@@ -32,14 +32,20 @@ const parseDotnetConnectionString = (raw: string): URL => {
   for (const part of raw.split(";")) {
     const idx = part.indexOf("=");
     if (idx === -1) continue;
-    params.set(part.slice(0, idx).trim().toLowerCase(), part.slice(idx + 1).trim());
+    params.set(
+      part.slice(0, idx).trim().toLowerCase(),
+      part.slice(idx + 1).trim()
+    );
   }
   const host = params.get("host") ?? params.get("server") ?? "localhost";
   const port = params.get("port") ?? "5432";
   const database = params.get("database") ?? "postgres";
-  const username = params.get("username") ?? params.get("user id") ?? "postgres";
+  const username =
+    params.get("username") ?? params.get("user id") ?? "postgres";
   const password = params.get("password") ?? "";
-  return new URL(`postgres://${encodeURIComponent(username)}:${encodeURIComponent(password)}@${host}:${port}/${database}`);
+  return new URL(
+    `postgres://${encodeURIComponent(username)}:${encodeURIComponent(password)}@${host}:${port}/${database}`
+  );
 };
 
 const parseConnectionUrl = (raw: string): URL => {
@@ -52,7 +58,10 @@ const parseConnectionUrl = (raw: string): URL => {
 
 let sharedSetup: Promise<{ databaseUrl: string; dbName: string }> | null = null;
 
-const ensureTestDatabase = (): Promise<{ databaseUrl: string; dbName: string }> => {
+const ensureTestDatabase = (): Promise<{
+  databaseUrl: string;
+  dbName: string;
+}> => {
   if (sharedSetup) {
     return sharedSetup;
   }

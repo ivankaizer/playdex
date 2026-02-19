@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto";
 
 import { AppError } from "../../common/errors/AppError";
+import type { ProviderStatusDto } from "../../app/http/types";
 import { providersRepository } from "./providers.repository";
 
 const generateApiKey = () => {
@@ -14,7 +15,7 @@ const toProviderResponse = (row: {
   account_id: string | null;
   active: boolean;
   api_key: string | null;
-}) => ({
+}): ProviderStatusDto => ({
   id: row.id,
   platform: row.platform,
   accountId: row.account_id,

@@ -1,10 +1,7 @@
 import postgres from "postgres";
 
 import { runMigrations } from "../src/common/db/migrations";
-import {
-  ensureGameId,
-  insertPlaySession,
-} from "../src/shared/db/queries";
+import { ensureGameId, insertPlaySession } from "../src/shared/db/queries";
 import { normalizeGame } from "../src/modules/games";
 
 const databaseUrl = Bun.env.DATABASE_URL;

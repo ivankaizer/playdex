@@ -7,7 +7,9 @@ export type UserSettings = {
   ignoreShortSessionsMinutes: number;
 };
 
-const mapSettings = (row: RawUserSettingsRow | null | undefined): UserSettings => ({
+const mapSettings = (
+  row: RawUserSettingsRow | null | undefined
+): UserSettings => ({
   ignoreShortSessionsMinutes: row?.ignore_short_sessions_minutes ?? 0,
 });
 

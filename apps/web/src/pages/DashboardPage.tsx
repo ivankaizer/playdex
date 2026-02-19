@@ -1,10 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 
 import { apiRequest } from "../api";
-import {
-  buildGamePath,
-  navItems as defaultNavItems,
-} from "../constants";
+import { buildGamePath, navItems as defaultNavItems } from "../constants";
 import type {
   AccountCurrentSessionResponse,
   AccountSessionsResponse,
@@ -247,9 +244,7 @@ export const DashboardPage = ({
   const recapNow = new Date();
   const recapToday = formatUtcDateInput(recapNow);
   const recapMonthStart = formatUtcDateInput(
-    new Date(
-      Date.UTC(recapNow.getUTCFullYear(), recapNow.getUTCMonth(), 1)
-    )
+    new Date(Date.UTC(recapNow.getUTCFullYear(), recapNow.getUTCMonth(), 1))
   );
   const recapYearStart = formatUtcDateInput(
     new Date(Date.UTC(recapNow.getUTCFullYear(), 0, 1))

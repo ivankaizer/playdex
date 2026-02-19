@@ -38,14 +38,7 @@ const ALL_TIME_START_YEAR = 2025;
 const formatYearLabel = (year: number) => String(year);
 const formatMonthLabel = (date: Date) =>
   new Intl.DateTimeFormat("en-US", { month: "short" }).format(date);
-const ratingLabels = [
-  "",
-  "Rough",
-  "Okay",
-  "Good",
-  "Great",
-  "Legendary",
-];
+const ratingLabels = ["", "Rough", "Okay", "Good", "Great", "Legendary"];
 
 const RatingStar = ({ filled }: { filled: boolean }) => (
   <svg
@@ -88,9 +81,7 @@ export const GamePage = ({
   const [isRatingSaving, setIsRatingSaving] = useState(false);
   const [ratingError, setRatingError] = useState("");
   const [sessionsLoaded, setSessionsLoaded] = useState(false);
-  const [selectedYear, setSelectedYear] = useState(
-    new Date().getUTCFullYear()
-  );
+  const [selectedYear, setSelectedYear] = useState(new Date().getUTCFullYear());
   const [recentPage, setRecentPage] = useState(1);
   const recentPageSize = 5;
   const currentGameId = gameId;
@@ -279,9 +270,7 @@ export const GamePage = ({
         }
         setIsIgnored(false);
         setIgnoreError(
-          err instanceof Error
-            ? err.message
-            : "Failed to load ignore status."
+          err instanceof Error ? err.message : "Failed to load ignore status."
         );
       } finally {
         if (!isCancelled) {
@@ -385,9 +374,7 @@ export const GamePage = ({
       }
     } catch (err) {
       setIgnoreError(
-        err instanceof Error
-          ? err.message
-          : "Failed to update ignore status."
+        err instanceof Error ? err.message : "Failed to update ignore status."
       );
     } finally {
       setIsIgnoreSaving(false);
@@ -403,31 +390,23 @@ export const GamePage = ({
     setRatingError("");
     try {
       if (value === null) {
-        const response = await apiRequest<GameRatingResponse>(
-          "/games/rating",
-          {
-            method: "DELETE",
-            body: { gameId: currentGameHash },
-            onAuthFailure: onLogout,
-          }
-        );
+        const response = await apiRequest<GameRatingResponse>("/games/rating", {
+          method: "DELETE",
+          body: { gameId: currentGameHash },
+          onAuthFailure: onLogout,
+        });
         setRating(response.rating);
       } else {
-        const response = await apiRequest<GameRatingResponse>(
-          "/games/rating",
-          {
-            method: "POST",
-            body: { gameId: currentGameHash, rating: value },
-            onAuthFailure: onLogout,
-          }
-        );
+        const response = await apiRequest<GameRatingResponse>("/games/rating", {
+          method: "POST",
+          body: { gameId: currentGameHash, rating: value },
+          onAuthFailure: onLogout,
+        });
         setRating(response.rating);
       }
     } catch (err) {
       setRatingError(
-        err instanceof Error
-          ? err.message
-          : "Failed to update rating."
+        err instanceof Error ? err.message : "Failed to update rating."
       );
     } finally {
       setIsRatingSaving(false);
@@ -505,7 +484,7 @@ export const GamePage = ({
   );
   const activeYear = availableYears.includes(selectedYear)
     ? selectedYear
-    : availableYears[availableYears.length - 1] ?? selectedYear;
+    : (availableYears[availableYears.length - 1] ?? selectedYear);
 
   const monthlyStats = useMemo(() => {
     const buckets = Array.from({ length: 12 }, (_, index) => {
@@ -551,7 +530,7 @@ export const GamePage = ({
     recentStartIndex,
     recentStartIndex + recentPageSize
   );
-  const ratingLabel = rating ? ratingLabels[rating] ?? "" : "Not rated";
+  const ratingLabel = rating ? (ratingLabels[rating] ?? "") : "Not rated";
   const ratingDisabled = isRatingSaving || isRatingLoading || !currentGameId;
   const displayTitle =
     gameDetails?.title ??
@@ -597,70 +576,72 @@ export const GamePage = ({
                   <div className="h-full w-full bg-slate-200/70 dark:bg-slate-800/60" />
                 )}
               </div>
-            <div className="mt-6 rounded-2xl border border-slate-200 dark:border-slate-800 bg-gradient-to-br from-amber-400/10 via-slate-200/70 dark:via-slate-950/70 to-emerald-500/10 p-4">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <p className="text-xs uppercase tracking-[0.3em] text-amber-700 dark:text-amber-300">
-                    Your score
-                  </p>
-                  {isRatingLoading && (
-                    <p className="mt-1 text-sm text-slate-700 dark:text-slate-200">
-                      Loading rating...
+              <div className="mt-6 rounded-2xl border border-slate-200 dark:border-slate-800 bg-gradient-to-br from-amber-400/10 via-slate-200/70 dark:via-slate-950/70 to-emerald-500/10 p-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.3em] text-amber-700 dark:text-amber-300">
+                      Your score
                     </p>
-                  )}
+                    {isRatingLoading && (
+                      <p className="mt-1 text-sm text-slate-700 dark:text-slate-200">
+                        Loading rating...
+                      </p>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    className="rounded-full border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-950/70 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.25em] text-slate-700 dark:text-slate-200 transition hover:border-amber-300/70 hover:text-amber-700 dark:hover:text-amber-200 disabled:cursor-not-allowed disabled:border-slate-200 dark:disabled:border-slate-800 disabled:text-slate-600"
+                    onClick={() => handleRateGame(null)}
+                    disabled={ratingDisabled || rating === null}
+                  >
+                    {isRatingSaving ? "Clearing..." : "Clear"}
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  className="rounded-full border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-950/70 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.25em] text-slate-700 dark:text-slate-200 transition hover:border-amber-300/70 hover:text-amber-700 dark:hover:text-amber-200 disabled:cursor-not-allowed disabled:border-slate-200 dark:disabled:border-slate-800 disabled:text-slate-600"
-                  onClick={() => handleRateGame(null)}
-                  disabled={ratingDisabled || rating === null}
-                >
-                  {isRatingSaving ? "Clearing..." : "Clear"}
-                </button>
-              </div>
-              <div className="mt-4 flex flex-wrap items-center gap-3">
-                <div className="flex items-center gap-2">
-                  {[1, 2, 3, 4, 5].map((value) => {
-                    const filled = rating !== null && value <= rating;
-                    return (
-                      <button
-                        key={`rating-${value}`}
-                        type="button"
-                        className={`flex h-11 w-11 items-center justify-center rounded-xl border text-sm font-semibold transition ${
-                          filled
-                            ? "border-amber-200 bg-amber-400/15 text-amber-700 dark:text-amber-100 shadow-[0_10px_40px_-20px_rgba(251,191,36,0.6)]"
-                            : "border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-950/70 text-slate-500 hover:border-amber-200/60 hover:text-amber-700 dark:hover:text-amber-200"
-                        } ${ratingDisabled ? "cursor-not-allowed opacity-60" : "hover:-translate-y-0.5"}`}
-                        disabled={ratingDisabled}
-                        onClick={() => handleRateGame(value)}
-                      >
-                        <RatingStar filled={filled} />
-                        <span className="sr-only">Rate {value} out of 5</span>
-                      </button>
-                    );
-                  })}
+                <div className="mt-4 flex flex-wrap items-center gap-3">
+                  <div className="flex items-center gap-2">
+                    {[1, 2, 3, 4, 5].map((value) => {
+                      const filled = rating !== null && value <= rating;
+                      return (
+                        <button
+                          key={`rating-${value}`}
+                          type="button"
+                          className={`flex h-11 w-11 items-center justify-center rounded-xl border text-sm font-semibold transition ${
+                            filled
+                              ? "border-amber-200 bg-amber-400/15 text-amber-700 dark:text-amber-100 shadow-[0_10px_40px_-20px_rgba(251,191,36,0.6)]"
+                              : "border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-950/70 text-slate-500 hover:border-amber-200/60 hover:text-amber-700 dark:hover:text-amber-200"
+                          } ${ratingDisabled ? "cursor-not-allowed opacity-60" : "hover:-translate-y-0.5"}`}
+                          disabled={ratingDisabled}
+                          onClick={() => handleRateGame(value)}
+                        >
+                          <RatingStar filled={filled} />
+                          <span className="sr-only">Rate {value} out of 5</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <span className="text-xs uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">
+                    {isRatingLoading
+                      ? "Loading rating..."
+                      : rating === null
+                        ? "Not rated"
+                        : `${rating}/5 · ${ratingLabel}`}
+                  </span>
                 </div>
-                <span className="text-xs uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">
-                  {isRatingLoading
-                    ? "Loading rating..."
-                    : rating === null
-                      ? "Not rated"
-                      : `${rating}/5 · ${ratingLabel}`}
-                </span>
+                {ratingError && (
+                  <p className="mt-3 text-xs text-rose-700 dark:text-rose-300">
+                    {ratingError}
+                  </p>
+                )}
+                {!ratingError && !currentGameId && sessionsLoaded && (
+                  <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">
+                    Add a session for this game to unlock ratings.
+                  </p>
+                )}
               </div>
-              {ratingError && (
-                <p className="mt-3 text-xs text-rose-700 dark:text-rose-300">{ratingError}</p>
-              )}
-              {!ratingError && !currentGameId && sessionsLoaded && (
-                <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">
-                  Add a session for this game to unlock ratings.
-                </p>
-              )}
             </div>
-          </div>
-          <div className="rounded-3xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/60 p-5 sm:p-6">
-            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-700 dark:text-emerald-300">
-              Recent sessions
+            <div className="rounded-3xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/60 p-5 sm:p-6">
+              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-700 dark:text-emerald-300">
+                Recent sessions
               </p>
               <h2 className="mt-2 text-xl font-semibold text-slate-900 dark:text-white">
                 Latest play snapshots
@@ -668,7 +649,9 @@ export const GamePage = ({
 
               <div className="mt-6 space-y-4">
                 {gameError ? (
-                  <p className="text-xs text-rose-700 dark:text-rose-300">{gameError}</p>
+                  <p className="text-xs text-rose-700 dark:text-rose-300">
+                    {gameError}
+                  </p>
                 ) : isLoading ? (
                   [1, 2, 3].map((item) => (
                     <div
@@ -728,7 +711,9 @@ export const GamePage = ({
                   <button
                     type="button"
                     className="rounded-full border border-slate-200 dark:border-slate-800 px-4 py-2 text-slate-700 dark:text-slate-200 transition hover:border-emerald-400/60 hover:text-emerald-700 dark:hover:text-emerald-200 disabled:cursor-not-allowed disabled:border-slate-200 dark:disabled:border-slate-800 disabled:text-slate-600"
-                    onClick={() => setRecentPage((page) => Math.max(1, page - 1))}
+                    onClick={() =>
+                      setRecentPage((page) => Math.max(1, page - 1))
+                    }
                     disabled={recentPage === 1}
                   >
                     Prev
@@ -753,98 +738,100 @@ export const GamePage = ({
             </div>
           </div>
 
-        <div className="rounded-3xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/60 px-4 py-4 sm:px-6 sm:py-5">
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-700 dark:text-emerald-300">
-                Tracking
-              </p>
-              <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
-                {!currentGameId
-                  ? "Add a session for this game to enable tracking controls."
-                  : isIgnored
-                    ? "Scheduler will skip new sessions for this game."
-                    : "Scheduler will capture new sessions for this game."}
-              </p>
-            </div>
-            <div className="flex flex-wrap items-center gap-3">
-              <span
-                className={`rounded-full px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.25em] ${
-                  isIgnored
-                    ? "border border-rose-400/70 text-rose-700 dark:text-rose-100"
-                    : "border border-emerald-400/70 text-emerald-700 dark:text-emerald-100"
-                }`}
-              >
-                {!currentGameId
-                  ? "Unknown"
-                  : isIgnoreChecking
-                    ? "Checking..."
-                    : isIgnored
-                      ? "Ignored"
-                      : "Active"}
-              </span>
-              <button
-                type="button"
-                className={`rounded-full px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.2em] transition disabled:cursor-not-allowed disabled:opacity-60 ${
-                  isIgnored
-                    ? "border border-emerald-300/70 text-emerald-700 dark:text-emerald-100 hover:border-emerald-200"
-                    : "border border-rose-400/70 text-rose-700 dark:text-rose-100 hover:border-rose-300"
-                }`}
-                disabled={
-                  isIgnoreChecking || isIgnoreSaving || !currentGameId
-                }
-                onClick={handleToggleIgnore}
-              >
-                {isIgnoreSaving
-                  ? "Saving..."
-                  : isIgnored
-                    ? "Resume tracking"
-                    : "Ignore game"}
-              </button>
-            </div>
-          </div>
-          {ignoreError && (
-            <p className="mt-3 text-xs text-rose-700 dark:text-rose-300">{ignoreError}</p>
-          )}
-          {!ignoreError && !currentGameId && sessionsLoaded && (
-            <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">
-              Add a session for this game to enable tracking controls.
-            </p>
-          )}
-        </div>
-
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-6">
-          <div className="flex items-center justify-between rounded-xl border border-slate-200 dark:border-slate-800 bg-white/90 dark:bg-slate-900/70 px-4 py-3 sm:block sm:space-y-2 sm:px-5">
-            <p className="text-[11px] uppercase tracking-[0.3em] text-slate-500 dark:text-slate-400">
-              Hours played
-            </p>
-            <p className="text-lg font-semibold text-slate-900 dark:text-white">
-              {formatHours(totalSeconds, 1)}
-            </p>
-          </div>
-          <div className="flex items-center justify-between rounded-xl border border-slate-200 dark:border-slate-800 bg-white/90 dark:bg-slate-900/70 px-4 py-3 sm:block sm:space-y-2 sm:px-5">
-            <p className="text-[11px] uppercase tracking-[0.3em] text-slate-500 dark:text-slate-400">
-              Sessions
-            </p>
-            <p className="text-lg font-semibold text-slate-900 dark:text-white">
-              {statsSessions.length}
-            </p>
-          </div>
-          <div className="flex items-center justify-between rounded-xl border border-slate-200 dark:border-slate-800 bg-white/90 dark:bg-slate-900/70 px-4 py-3 sm:block sm:space-y-2 sm:px-5">
-            <p className="text-[11px] uppercase tracking-[0.3em] text-slate-500 dark:text-slate-400">
-              Last played
-            </p>
-            <p className="text-lg font-semibold text-slate-900 dark:text-white">
-              {lastPlayed ? formatDateLabel(lastPlayed) : "—"}
-            </p>
-          </div>
-        </div>
-
-        <div className="space-y-6">
-          <div className="rounded-3xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/60 p-5 sm:p-6">
-            <div className="flex items-center justify-between">
+          <div className="rounded-3xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/60 px-4 py-4 sm:px-6 sm:py-5">
+            <div className="flex flex-wrap items-center justify-between gap-4">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-700 dark:text-emerald-300">
+                  Tracking
+                </p>
+                <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
+                  {!currentGameId
+                    ? "Add a session for this game to enable tracking controls."
+                    : isIgnored
+                      ? "Scheduler will skip new sessions for this game."
+                      : "Scheduler will capture new sessions for this game."}
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-3">
+                <span
+                  className={`rounded-full px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.25em] ${
+                    isIgnored
+                      ? "border border-rose-400/70 text-rose-700 dark:text-rose-100"
+                      : "border border-emerald-400/70 text-emerald-700 dark:text-emerald-100"
+                  }`}
+                >
+                  {!currentGameId
+                    ? "Unknown"
+                    : isIgnoreChecking
+                      ? "Checking..."
+                      : isIgnored
+                        ? "Ignored"
+                        : "Active"}
+                </span>
+                <button
+                  type="button"
+                  className={`rounded-full px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.2em] transition disabled:cursor-not-allowed disabled:opacity-60 ${
+                    isIgnored
+                      ? "border border-emerald-300/70 text-emerald-700 dark:text-emerald-100 hover:border-emerald-200"
+                      : "border border-rose-400/70 text-rose-700 dark:text-rose-100 hover:border-rose-300"
+                  }`}
+                  disabled={
+                    isIgnoreChecking || isIgnoreSaving || !currentGameId
+                  }
+                  onClick={handleToggleIgnore}
+                >
+                  {isIgnoreSaving
+                    ? "Saving..."
+                    : isIgnored
+                      ? "Resume tracking"
+                      : "Ignore game"}
+                </button>
+              </div>
+            </div>
+            {ignoreError && (
+              <p className="mt-3 text-xs text-rose-700 dark:text-rose-300">
+                {ignoreError}
+              </p>
+            )}
+            {!ignoreError && !currentGameId && sessionsLoaded && (
+              <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">
+                Add a session for this game to enable tracking controls.
+              </p>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-6">
+            <div className="flex items-center justify-between rounded-xl border border-slate-200 dark:border-slate-800 bg-white/90 dark:bg-slate-900/70 px-4 py-3 sm:block sm:space-y-2 sm:px-5">
+              <p className="text-[11px] uppercase tracking-[0.3em] text-slate-500 dark:text-slate-400">
+                Hours played
+              </p>
+              <p className="text-lg font-semibold text-slate-900 dark:text-white">
+                {formatHours(totalSeconds, 1)}
+              </p>
+            </div>
+            <div className="flex items-center justify-between rounded-xl border border-slate-200 dark:border-slate-800 bg-white/90 dark:bg-slate-900/70 px-4 py-3 sm:block sm:space-y-2 sm:px-5">
+              <p className="text-[11px] uppercase tracking-[0.3em] text-slate-500 dark:text-slate-400">
+                Sessions
+              </p>
+              <p className="text-lg font-semibold text-slate-900 dark:text-white">
+                {statsSessions.length}
+              </p>
+            </div>
+            <div className="flex items-center justify-between rounded-xl border border-slate-200 dark:border-slate-800 bg-white/90 dark:bg-slate-900/70 px-4 py-3 sm:block sm:space-y-2 sm:px-5">
+              <p className="text-[11px] uppercase tracking-[0.3em] text-slate-500 dark:text-slate-400">
+                Last played
+              </p>
+              <p className="text-lg font-semibold text-slate-900 dark:text-white">
+                {lastPlayed ? formatDateLabel(lastPlayed) : "—"}
+              </p>
+            </div>
+          </div>
+
+          <div className="space-y-6">
+            <div className="rounded-3xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/60 p-5 sm:p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-700 dark:text-emerald-300">
                     All time since {ALL_TIME_START_YEAR}
                   </p>
                   <h2 className="mt-2 text-xl font-semibold text-slate-900 dark:text-white">
@@ -854,7 +841,9 @@ export const GamePage = ({
               </div>
 
               {gameError ? (
-                <p className="mt-4 text-xs text-rose-700 dark:text-rose-300">{gameError}</p>
+                <p className="mt-4 text-xs text-rose-700 dark:text-rose-300">
+                  {gameError}
+                </p>
               ) : isLoading ? (
                 <div className="mt-6 grid grid-cols-[repeat(auto-fit,minmax(16px,1fr))] gap-2">
                   {Array.from({ length: 12 }, (_, index) => (
@@ -866,15 +855,18 @@ export const GamePage = ({
                 </div>
               ) : yearlyStats.every((item) => item.seconds === 0) ? (
                 <p className="mt-4 text-sm text-slate-500 dark:text-slate-400">
-                  No sessions recorded for this game since{" "}
-                  {ALL_TIME_START_YEAR}.
+                  No sessions recorded for this game since {ALL_TIME_START_YEAR}
+                  .
                 </p>
               ) : (
                 <div className="mt-6 grid grid-cols-[repeat(auto-fit,minmax(16px,1fr))] items-end gap-2">
                   {yearlyStats.map((year) => {
                     const hoursLabel = `${formatHours(year.seconds, 1)} played`;
                     return (
-                      <div key={year.key} className="group relative flex flex-col gap-3">
+                      <div
+                        key={year.key}
+                        className="group relative flex flex-col gap-3"
+                      >
                         <div className="pointer-events-none absolute left-1/2 top-[-6px] z-10 -translate-x-1/2 -translate-y-full rounded-md bg-white/90 dark:bg-slate-900/90 px-3 py-1 text-[10px] font-semibold text-slate-900 dark:text-slate-100 opacity-0 shadow-lg ring-1 ring-slate-300/60 dark:ring-slate-700/60 transition duration-150 group-hover:opacity-100">
                           {hoursLabel}
                         </div>
@@ -930,7 +922,9 @@ export const GamePage = ({
               </div>
 
               {gameError ? (
-                <p className="mt-4 text-xs text-rose-700 dark:text-rose-300">{gameError}</p>
+                <p className="mt-4 text-xs text-rose-700 dark:text-rose-300">
+                  {gameError}
+                </p>
               ) : isLoading ? (
                 <div className="mt-6 grid grid-cols-12 gap-2">
                   {Array.from({ length: 12 }, (_, index) => (
@@ -949,7 +943,10 @@ export const GamePage = ({
                   {monthlyStats.map((month) => {
                     const hoursLabel = `${formatHours(month.seconds, 1)} played`;
                     return (
-                      <div key={month.key} className="group relative flex flex-col gap-3">
+                      <div
+                        key={month.key}
+                        className="group relative flex flex-col gap-3"
+                      >
                         <div className="pointer-events-none absolute left-1/2 top-[-6px] z-10 -translate-x-1/2 -translate-y-full rounded-md bg-white/90 dark:bg-slate-900/90 px-3 py-1 text-[10px] font-semibold text-slate-900 dark:text-slate-100 opacity-0 shadow-lg ring-1 ring-slate-300/60 dark:ring-slate-700/60 transition duration-150 group-hover:opacity-100">
                           {hoursLabel}
                         </div>
@@ -973,7 +970,6 @@ export const GamePage = ({
               )}
             </div>
           </div>
-
         </section>
       </div>
     </main>

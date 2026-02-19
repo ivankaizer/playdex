@@ -134,7 +134,9 @@ beforeEach(() => {
   gamesMock.listConnectionEdges.mockResolvedValue([]);
 
   Object.assign(recapRepository, repoMock);
-  Object.assign(gamesService, { listConnectionEdges: gamesMock.listConnectionEdges });
+  Object.assign(gamesService, {
+    listConnectionEdges: gamesMock.listConnectionEdges,
+  });
 });
 
 afterAll(() => {

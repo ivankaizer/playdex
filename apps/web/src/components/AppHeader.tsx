@@ -25,7 +25,9 @@ export const AppHeader = ({
       <p className="text-xs font-semibold uppercase tracking-[0.5em] text-emerald-700 dark:text-emerald-300">
         Playdex
       </p>
-      <h1 className="truncate text-2xl font-semibold text-slate-900 dark:text-white">{title}</h1>
+      <h1 className="truncate text-2xl font-semibold text-slate-900 dark:text-white">
+        {title}
+      </h1>
     </div>
     <nav className="flex flex-wrap items-center gap-3 text-sm md:flex-nowrap">
       {navItems.map((item) => (

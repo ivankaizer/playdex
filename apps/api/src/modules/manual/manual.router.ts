@@ -17,4 +17,3 @@ export const registerManualRoutes = (app: Elysia) =>
     .get("/api/manual/search", searchManualMappingsHandler)
     .post("/api/manual/entries", createManualEntryHandler)
     .post("/api/manual/inputs/:inputId/map", mapManualInputHandler);
-

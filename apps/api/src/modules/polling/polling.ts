@@ -11,10 +11,7 @@ import {
   recordPollFailure,
   recordPollSuccess,
 } from "../../common/observability";
-import {
-  pollingRepository,
-  type SqlClient,
-} from "./polling.repository";
+import { pollingRepository, type SqlClient } from "./polling.repository";
 
 type PollingConfig = {
   sql: SqlClient;
@@ -111,7 +108,9 @@ const endTimedOutPlayniteSessions = async (notifier?: PollingNotifier) => {
   for (const session of endedSessions) {
     const durationSeconds = Math.max(
       0,
-      Math.round((session.endedAt.getTime() - session.startedAt.getTime()) / 1000)
+      Math.round(
+        (session.endedAt.getTime() - session.startedAt.getTime()) / 1000
+      )
     );
     await safeNotify(
       notifier?.onSessionEnded,
@@ -148,7 +147,9 @@ export const syncPlaySession = async (
       });
       const durationSeconds = Math.max(
         0,
-        Math.round((polledAt.getTime() - activeSession.started_at.getTime()) / 1000)
+        Math.round(
+          (polledAt.getTime() - activeSession.started_at.getTime()) / 1000
+        )
       );
       await safeNotify(
         notifier?.onSessionEnded,

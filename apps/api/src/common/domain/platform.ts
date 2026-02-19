@@ -23,4 +23,3 @@ export interface PlatformClient {
   platform: string;
   getCurrentlyPlaying(account: PlatformAccount): Promise<PlatformPollResult>;
 }
-

@@ -67,9 +67,10 @@ export const upsertRatingHandler = async (ctx: {
   body?: unknown;
 }): Promise<ApiResponse<unknown>> => {
   const auth = requireAuth(ctx.request);
-  const payload = ctx.body as
-    | { gameId?: number | string; rating?: number }
-    | null;
+  const payload = ctx.body as {
+    gameId?: number | string;
+    rating?: number;
+  } | null;
   const gameId = parseGameId(payload?.gameId ?? null, "gameId");
   const rating = parseRating(payload?.rating ?? null);
 
@@ -128,9 +129,10 @@ export const createConnectionHandler = async (ctx: {
   body?: unknown;
 }): Promise<ApiResponse<unknown>> => {
   const auth = requireAuth(ctx.request);
-  const payload = ctx.body as
-    | { gameId?: number | string; connectedGameId?: number | string }
-    | null;
+  const payload = ctx.body as {
+    gameId?: number | string;
+    connectedGameId?: number | string;
+  } | null;
   const gameId = parseGameId(payload?.gameId ?? null, "gameId");
   const connectedGameId = parseGameId(
     payload?.connectedGameId ?? null,
@@ -150,9 +152,10 @@ export const deleteConnectionHandler = async (ctx: {
   body?: unknown;
 }): Promise<ApiResponse<unknown>> => {
   const auth = requireAuth(ctx.request);
-  const payload = ctx.body as
-    | { gameId?: number | string; connectedGameId?: number | string }
-    | null;
+  const payload = ctx.body as {
+    gameId?: number | string;
+    connectedGameId?: number | string;
+  } | null;
   const gameId = parseGameId(payload?.gameId ?? null, "gameId");
   const connectedGameId = parseGameId(
     payload?.connectedGameId ?? null,

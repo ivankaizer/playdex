@@ -31,4 +31,3 @@ export const registerAccountRoutes = (app: Elysia) =>
       getAccountCurrentSessionHandler
     )
     .get("/api/accounts/:accountId/stats", getAccountStatsHandler);
-

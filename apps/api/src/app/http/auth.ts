@@ -26,7 +26,7 @@ export const requireAuth = (request: Request): AuthContext => {
   }
 
   try {
-    const decoded = jwt.verify(token, getJwtSecret()) as {
+    const decoded = jwt.verify(token, getJwtSecret()) as unknown as {
       sub: number;
       email: string;
       type?: string;

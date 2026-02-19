@@ -304,8 +304,11 @@ export const manualRepository = {
     endedAt: Date
   ) => insertPlaySession(credentialId, gameId, startedAt, endedAt),
 
-  insertManualInput: (userId: number, rawTitle: string, canonicalTitle: string) =>
-    insertManualInput(userId, rawTitle, canonicalTitle),
+  insertManualInput: (
+    userId: number,
+    rawTitle: string,
+    canonicalTitle: string
+  ) => insertManualInput(userId, rawTitle, canonicalTitle),
 
   updateManualInputTitle: (inputId: number, rawTitle: string) =>
     updateManualInputTitle(inputId, rawTitle),
@@ -318,7 +321,8 @@ export const manualRepository = {
 
   listManualInputs: (userId: number) => listManualInputs(userId),
 
-  loadPlatformKeyByIgdbId: (platformId: number) => loadPlatformKeyByIgdbId(platformId),
+  loadPlatformKeyByIgdbId: (platformId: number) =>
+    loadPlatformKeyByIgdbId(platformId),
 
   searchGamesByTitle: (title: string, limit: number) =>
     searchGamesByTitle(title, limit),

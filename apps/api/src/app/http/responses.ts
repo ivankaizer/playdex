@@ -6,4 +6,3 @@ export const fail = (message: string): ApiResponse<never> => ({
   data: null,
   error: { error: message },
 });
-

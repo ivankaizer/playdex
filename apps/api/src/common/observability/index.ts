@@ -77,4 +77,3 @@ export const getMetrics = (): MetricsSnapshot => ({
   lastPollFailureAt: metrics.lastPollFailureAt,
   lastCycleDurationMs: metrics.lastCycleDurationMs,
 });
-

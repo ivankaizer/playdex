@@ -101,9 +101,7 @@ export const searchManualMappingsHandler = async (ctx: {
     throw new AppError("query is required.", 400);
   }
 
-  const igdbAvailable = Boolean(
-    config.igdbClientId && config.igdbClientSecret
-  );
+  const igdbAvailable = Boolean(config.igdbClientId && config.igdbClientSecret);
 
   const results = await manualService.searchManualMappingOptions(query);
   return ok({

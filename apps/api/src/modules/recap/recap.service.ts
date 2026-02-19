@@ -5,13 +5,19 @@ import {
 } from "../accounts/accounts.domain";
 import { gamesService } from "../games";
 import type { GameConnectionEdge } from "../games/gameConnections";
-import { recapRepository, type RecapFirstSessionRow, type RecapSessionRow } from "./recap.repository";
+import {
+  recapRepository,
+  type RecapFirstSessionRow,
+  type RecapSessionRow,
+} from "./recap.repository";
 import type { RecapStats } from "./recap.domain";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 const startOfUtcDay = (date: Date) =>
-  new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+  new Date(
+    Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate())
+  );
 
 const toUtcDateKey = (date: Date) => date.toISOString().slice(0, 10);
 
@@ -60,9 +66,7 @@ const createConnectionIndex = (edges: GameConnectionEdge[]) => {
   return { find };
 };
 
-const toDomainSession = (
-  row: RecapSessionRow
-): AccountSessionWithMetadata => ({
+const toDomainSession = (row: RecapSessionRow): AccountSessionWithMetadata => ({
   sessionId: Number(row.id),
   startedAt: row.started_at,
   endedAt: row.ended_at,
@@ -250,9 +254,7 @@ export const recapService = {
     const averageSessionSeconds =
       totalSessions > 0 ? totalSeconds / totalSessions : 0;
     const medianSessionSeconds = computeMedianSeconds(durations);
-    const longestSessionSeconds = durations.length
-      ? Math.max(...durations)
-      : 0;
+    const longestSessionSeconds = durations.length ? Math.max(...durations) : 0;
     const shortestSessionSeconds = durations.length
       ? Math.min(...durations)
       : 0;
@@ -294,9 +296,7 @@ export const recapService = {
 
     const rangeStart = startedAt
       ? startOfUtcDay(startedAt)
-      : startOfUtcDay(
-          sessions[0]?.startedAt ? sessions[0].startedAt : now
-        );
+      : startOfUtcDay(sessions[0]?.startedAt ? sessions[0].startedAt : now);
     const rangeEndExclusive = endedAt
       ? startOfUtcDay(endedAt)
       : new Date(startOfUtcDay(now).getTime() + DAY_MS);
@@ -399,21 +399,23 @@ export const recapService = {
 
     const topGameByTime = topGamesByTime[0] ?? null;
 
-    const topGameBySessions = groupEntries
-      .slice()
-      .sort((a, b) =>
-        b.sessionCount === a.sessionCount
-          ? b.totalSeconds - a.totalSeconds
-          : b.sessionCount - a.sessionCount
-      )[0] ?? null;
+    const topGameBySessions =
+      groupEntries
+        .slice()
+        .sort((a, b) =>
+          b.sessionCount === a.sessionCount
+            ? b.totalSeconds - a.totalSeconds
+            : b.sessionCount - a.sessionCount
+        )[0] ?? null;
 
-    const topGameByAverageSession = groupEntries
-      .slice()
-      .sort((a, b) =>
-        b.averageSessionSeconds === a.averageSessionSeconds
-          ? b.totalSeconds - a.totalSeconds
-          : b.averageSessionSeconds - a.averageSessionSeconds
-      )[0] ?? null;
+    const topGameByAverageSession =
+      groupEntries
+        .slice()
+        .sort((a, b) =>
+          b.averageSessionSeconds === a.averageSessionSeconds
+            ? b.totalSeconds - a.totalSeconds
+            : b.averageSessionSeconds - a.averageSessionSeconds
+        )[0] ?? null;
 
     const uniqueGames = groupEntries.length;
 
@@ -426,7 +428,9 @@ export const recapService = {
           100
         : 0;
 
-    const abandonedGames = groupEntries.filter((entry) => entry.isAbandoned).length;
+    const abandonedGames = groupEntries.filter(
+      (entry) => entry.isAbandoned
+    ).length;
 
     const returnRateGames = Array.from(groupMonths.values()).filter(
       (set) => set.size > 1
@@ -458,7 +462,11 @@ export const recapService = {
       if (!rep) {
         return null;
       }
-      return { gameId: rep.gameId, title: rep.title, sessionCount: best.sessionCount };
+      return {
+        gameId: rep.gameId,
+        title: rep.title,
+        sessionCount: best.sessionCount,
+      };
     })();
 
     const gameWithLongestSession = (() => {
@@ -476,7 +484,8 @@ export const recapService = {
       };
     })();
 
-    const firstSessionRows = await recapRepository.listFirstSessionsByGame(userId);
+    const firstSessionRows =
+      await recapRepository.listFirstSessionsByGame(userId);
     const firstSessions = await mapSessionsForUser(
       userId,
       firstSessionRows.map(toDomainFirstSession)

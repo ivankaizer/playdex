@@ -31,4 +31,3 @@ export const registerErrorHandling = (app: Elysia) =>
     set.status = 500;
     return fail("Internal server error.");
   });
-

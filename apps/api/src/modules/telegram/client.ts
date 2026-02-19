@@ -52,13 +52,14 @@ export const sendTelegramImage = async (
   caption?: string
 ) => {
   const form = new FormData();
+  const imageBytes = new Uint8Array(image);
   form.append("chat_id", chatId);
   if (caption) {
     form.append("caption", caption);
   }
   form.append(
     "photo",
-    new Blob([image], { type: "image/webp" }),
+    new Blob([imageBytes], { type: "image/webp" }),
     filename
   );
 

@@ -7,19 +7,12 @@ import { getErrorMessage, logEvent } from "../../common/observability";
 import { renderNotificationWebp } from "./notification-image";
 import type { PollingNotifier } from "../polling";
 import { manualService } from "../manual";
-import {
-  telegramRepository,
-  type SqlClient,
-} from "./telegram.repository";
+import { telegramRepository, type SqlClient } from "./telegram.repository";
 
 export type TelegramBotConfig = {
   token: string;
   sql: SqlClient;
 };
-
-const FALLBACK_IMAGE_DATA_URL = `data:image/svg+xml;utf8,${encodeURIComponent(
-  `<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="1024"><rect width="100%" height="100%" fill="#0a0d12"/></svg>`
-)}`;
 
 const formatGameLabel = (game: { title: string; platform: string } | null) => {
   if (!game) {
@@ -43,10 +36,7 @@ const formatDuration = (totalSeconds: number) => {
   return `${seconds}s`;
 };
 
-const buildSessionCaption = (
-  kind: "started" | "ended",
-  duration?: string
-) => {
+const buildSessionCaption = (kind: "started" | "ended", duration?: string) => {
   const headline = kind === "ended" ? "Session ended" : "Session started";
   const lines = [headline];
   if (duration) {

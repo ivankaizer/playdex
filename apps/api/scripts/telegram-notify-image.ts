@@ -100,7 +100,8 @@ const run = async () => {
     fontUrl: options.fontUrl,
   });
 
-  const headline = options.type === "ended" ? "Session ended" : "Session started";
+  const headline =
+    options.type === "ended" ? "Session ended" : "Session started";
   const caption = [
     headline,
     options.type === "ended" && options.duration
@@ -110,7 +111,13 @@ const run = async () => {
     .filter(Boolean)
     .join("\n");
 
-  await sendTelegramImage(options.token, options.chatId, imageBuffer, undefined, caption);
+  await sendTelegramImage(
+    options.token,
+    options.chatId,
+    imageBuffer,
+    undefined,
+    caption
+  );
   console.log("Notification image sent.");
 };
 

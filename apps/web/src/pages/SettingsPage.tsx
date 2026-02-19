@@ -40,7 +40,8 @@ export const SettingsPage = ({
   const [settingsError, setSettingsError] = useState("");
   const [updatingProviderIds, setUpdatingProviderIds] = useState<number[]>([]);
   const visibleProviders = providerStatus.filter(
-    (provider) => provider.platform !== "manual" && provider.platform !== "local"
+    (provider) =>
+      provider.platform !== "manual" && provider.platform !== "local"
   );
 
   useEffect(() => {
@@ -219,7 +220,9 @@ export const SettingsPage = ({
                 </button>
               </div>
               {settingsError ? (
-                <p className="mt-3 text-xs text-rose-700 dark:text-rose-300">{settingsError}</p>
+                <p className="mt-3 text-xs text-rose-700 dark:text-rose-300">
+                  {settingsError}
+                </p>
               ) : null}
             </div>
           </div>
@@ -232,7 +235,9 @@ export const SettingsPage = ({
               Active connections
             </h2>
             {providersError ? (
-              <p className="mt-4 text-xs text-rose-700 dark:text-rose-300">{providersError}</p>
+              <p className="mt-4 text-xs text-rose-700 dark:text-rose-300">
+                {providersError}
+              </p>
             ) : null}
             <div className="mt-6 space-y-4">
               {isProvidersLoading ? (

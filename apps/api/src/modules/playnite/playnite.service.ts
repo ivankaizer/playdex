@@ -125,10 +125,11 @@ export const playniteService = {
     const gameId = await playniteRepository.ensureGameId(normalized);
     const startedAt = new Date();
 
-    const endedSessions = await playniteRepository.endActiveSessionsForCredential(
-      credentials[0].id,
-      startedAt
-    );
+    const endedSessions =
+      await playniteRepository.endActiveSessionsForCredential(
+        credentials[0].id,
+        startedAt
+      );
 
     const sessionId = await playniteRepository.insertActivePlaySession(
       credentials[0].id,
@@ -166,10 +167,11 @@ export const playniteService = {
     }
 
     const endedAt = new Date();
-    const endedSessions = await playniteRepository.endActiveSessionsForCredential(
-      credentials[0].id,
-      endedAt
-    );
+    const endedSessions =
+      await playniteRepository.endActiveSessionsForCredential(
+        credentials[0].id,
+        endedAt
+      );
 
     return {
       platformCredentialId: credentials[0].id,
@@ -234,15 +236,16 @@ export const playniteService = {
         platformCredentialId,
         gameId,
         startedAt: activeSession.started_at,
-        endedSessions: [...endedTimedOutSessions, ...endedMismatchedSessions].map(
-          (session) => ({
-            id: session.id,
-            platformCredentialId: session.platform_credential_id,
-            gameId: session.game_id,
-            startedAt: session.started_at,
-            endedAt: session.ended_at,
-          })
-        ),
+        endedSessions: [
+          ...endedTimedOutSessions,
+          ...endedMismatchedSessions,
+        ].map((session) => ({
+          id: session.id,
+          platformCredentialId: session.platform_credential_id,
+          gameId: session.game_id,
+          startedAt: session.started_at,
+          endedAt: session.ended_at,
+        })),
       };
     }
 

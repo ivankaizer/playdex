@@ -1,6 +1,9 @@
 import { requireAuth } from "../../app/http/auth";
 import { ok } from "../../app/http/responses";
-import type { ApiResponse, UserSettingsResponseDto } from "../../app/http/types";
+import type {
+  ApiResponse,
+  UserSettingsResponseDto,
+} from "../../app/http/types";
 import { AppError } from "../../common/errors/AppError";
 import { settingsService } from "./settings.service";
 
@@ -35,6 +38,9 @@ export const updateUserSettingsHandler = async (ctx: {
     payload?.ignoreShortSessionsMinutes,
     "ignoreShortSessionsMinutes"
   );
-  const settings = await settingsService.updateUserSettings(auth.userId, minutes);
+  const settings = await settingsService.updateUserSettings(
+    auth.userId,
+    minutes
+  );
   return ok(settings);
 };

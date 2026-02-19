@@ -7,6 +7,8 @@
     "build": "bun build src/index.ts --target=bun --outdir dist",
     "lint": "eslint src tests scripts",
     "lint:fix": "eslint src tests scripts --fix",
+    "typecheck": "tsc --noEmit",
+    "check": "bun run lint && bun run typecheck && bun run format:check",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "user:create": "bun run scripts/create-user.ts",
@@ -35,6 +37,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@types/react": "^18.3.3",
     "bun-types": "latest",
     "eslint": "9",
     "eslint-config-prettier": "^10.1.8",

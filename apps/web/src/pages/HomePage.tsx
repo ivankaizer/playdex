@@ -257,11 +257,15 @@ export const HomePage = ({
 
               <div className="mt-6 text-center text-xs text-slate-500 dark:text-slate-400">
                 {isLoggedIn ? (
-                  <p className="text-emerald-700 dark:text-emerald-300">Session active.</p>
+                  <p className="text-emerald-700 dark:text-emerald-300">
+                    Session active.
+                  </p>
                 ) : error ? (
                   <p className="text-rose-700 dark:text-rose-300">{error}</p>
                 ) : status === "success" ? (
-                  <p className="text-emerald-700 dark:text-emerald-300">Signed in successfully.</p>
+                  <p className="text-emerald-700 dark:text-emerald-300">
+                    Signed in successfully.
+                  </p>
                 ) : (
                   <p>Need access? Ask an admin to invite you.</p>
                 )}

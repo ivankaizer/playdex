@@ -226,7 +226,8 @@ export const gamesRepository = {
 
   getGameById: (gameId: number) => loadGameById(gameId),
 
-  searchGames: (query: string, limit: number) => searchGamesByTitle(query, limit),
+  searchGames: (query: string, limit: number) =>
+    searchGamesByTitle(query, limit),
 
   listGameConnections: (userId: number) => listGameConnections(userId),
 

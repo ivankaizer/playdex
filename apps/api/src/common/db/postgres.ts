@@ -40,4 +40,3 @@ export const getSql = () => {
   currentDatabaseUrl = databaseUrl;
   return sql;
 };
-

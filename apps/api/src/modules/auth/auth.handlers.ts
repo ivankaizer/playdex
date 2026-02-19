@@ -39,4 +39,3 @@ export const meHandler = async (ctx: {
   const auth = requireAuth(ctx.request);
   return ok({ userId: auth.userId, email: auth.email });
 };
-

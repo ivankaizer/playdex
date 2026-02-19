@@ -25,10 +25,7 @@ const parseRecapRange = (url: URL) => {
   const parsedFrom = new Date(fromRaw);
   const parsedTo = new Date(toRaw);
 
-  if (
-    Number.isNaN(parsedFrom.getTime()) ||
-    Number.isNaN(parsedTo.getTime())
-  ) {
+  if (Number.isNaN(parsedFrom.getTime()) || Number.isNaN(parsedTo.getTime())) {
     throw new AppError("from and to must be valid dates.", 400);
   }
 
@@ -61,7 +58,10 @@ const toRecapDto = (stats: RecapStats): RecapResponseDto => ({
       }
     : null,
   topGameByTime: stats.topGameByTime
-    ? { ...stats.topGameByTime, gameId: encodeGameId(stats.topGameByTime.gameId) }
+    ? {
+        ...stats.topGameByTime,
+        gameId: encodeGameId(stats.topGameByTime.gameId),
+      }
     : null,
   topGamesByTime: stats.topGamesByTime.map((game) => ({
     ...game,

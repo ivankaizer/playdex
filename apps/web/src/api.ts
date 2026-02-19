@@ -13,7 +13,6 @@ type RequestOptions = {
   onAuthFailure?: () => void;
 };
 
-// @ts-ignore
 const apiBaseUrl = (import.meta.env.VITE_API_URL ?? "").trim();
 
 const buildHeaders = (auth: boolean) => {

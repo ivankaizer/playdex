@@ -7,4 +7,3 @@ export const registerAuthRoutes = (app: Elysia) =>
     .post("/api/login", loginHandler)
     .post("/api/refresh", refreshHandler)
     .get("/api/me", meHandler);
-

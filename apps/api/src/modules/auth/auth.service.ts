@@ -14,8 +14,10 @@ type TokenPayload = {
   type: "access" | "refresh";
 };
 
-const signToken = (payload: TokenPayload, expiresIn: string) =>
-  jwt.sign(payload, getJwtSecret(), { expiresIn });
+const signToken = (
+  payload: TokenPayload,
+  expiresIn: jwt.SignOptions["expiresIn"]
+) => jwt.sign(payload, getJwtSecret(), { expiresIn });
 
 export const authService = {
   login: async (email: string, password: string) => {
@@ -33,7 +35,7 @@ export const authService = {
 
     const accessToken = signToken(
       { sub: user.id, email: user.email, type: "access" },
-      config.accessTokenTtl
+      config.accessTokenTtl as jwt.SignOptions["expiresIn"]
     );
     const refreshToken = signToken(
       { sub: user.id, email: user.email, type: "refresh" },
@@ -50,14 +52,17 @@ export const authService = {
 
   refresh: async (token: string) => {
     try {
-      const decoded = jwt.verify(token, getJwtSecret()) as TokenPayload;
+      const decoded = jwt.verify(
+        token,
+        getJwtSecret()
+      ) as unknown as TokenPayload;
       if (decoded.type !== "refresh") {
         throw new AppError("Invalid token.", 401);
       }
 
       const accessToken = signToken(
         { sub: decoded.sub, email: decoded.email, type: "access" },
-        config.accessTokenTtl
+        config.accessTokenTtl as jwt.SignOptions["expiresIn"]
       );
       const nextRefreshToken = signToken(
         { sub: decoded.sub, email: decoded.email, type: "refresh" },
@@ -73,4 +78,3 @@ export const authService = {
     }
   },
 };
-
