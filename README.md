@@ -26,23 +26,35 @@ TELEGRAM_BOT_TOKEN=your-telegram-bot-token
 3. Install dependencies:
 
 ```bash
+cd apps/api
 bun install
 ```
 
 4. Start the server:
 
 ```bash
+cd apps/api
 bun run dev
 ```
 
 Open `http://localhost:3000/` in your browser.
 
+5. (Optional) Run the web app:
+
+```bash
+cd apps/web
+bun install
+bun run dev
+```
+
 ## Useful commands
 
 ```bash
+cd apps/api
 bun run dev
 bun run format
 bun run format:check
+bun run check
 bun run telegram:notify-image --type started --title "Like a Dragon Gaiden: The Man Who Erased His Name" --platform "Steam" \
   --image "https://shared.steamstatic.com/store_item_assets/steam/apps/2375550/library_600x900_2x.jpg" \
   --chat-id 77434259
