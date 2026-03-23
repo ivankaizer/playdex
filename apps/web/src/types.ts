@@ -242,3 +242,113 @@ export type NavItem = {
   label: string;
   path: string;
 };
+
+export type LoginResponse = {
+  userId: number;
+  email: string;
+  isAdmin: boolean;
+  accessToken: string;
+  refreshToken: string;
+};
+
+export type MeResponse = {
+  userId: number;
+  email: string;
+  isAdmin: boolean;
+};
+
+export type AdminRecentSession = {
+  sessionId: number;
+  gameName: string;
+  startedAt: string;
+  durationSeconds: number;
+  live: boolean;
+};
+
+export type AdminRecentSessionsUser = {
+  userId: number;
+  email: string;
+  sessions: AdminRecentSession[];
+};
+
+export type AdminRecentSessionsResponse = {
+  users: AdminRecentSessionsUser[];
+};
+
+export type AdminMovableSession = {
+  sessionId: number;
+  sourceCredentialId: number;
+  userEmail: string;
+  platform: string;
+  accountUser: string | null;
+  gameName: string;
+  startedAt: string;
+  endedAt: string | null;
+  durationSeconds: number;
+  live: boolean;
+};
+
+export type AdminSessionsListResponse = {
+  query: string;
+  sessions: AdminMovableSession[];
+  total: number;
+  limit: number;
+  offset: number;
+};
+
+export type AdminPlatformStatus = {
+  platform: string;
+  totalCredentials: number;
+  activeCredentials: number;
+  enabled: boolean;
+};
+
+export type AdminPlatformStatusesResponse = {
+  platforms: AdminPlatformStatus[];
+};
+
+export type AdminPlatformStatusUpdateResponse = {
+  platform: string;
+  enabled: boolean;
+  updatedCredentials: number;
+};
+
+export type AdminCredential = {
+  id: number;
+  userEmail: string;
+  platform: string;
+  apiKey: string | null;
+  user: string | null;
+  active: boolean;
+};
+
+export type AdminCredentialsResponse = {
+  credentials: AdminCredential[];
+};
+
+export type AdminCredentialUpdateResponse = {
+  credential: AdminCredential;
+};
+
+export type AdminSessionMoveResponse = {
+  movedSessions: number;
+  targetCredentialId: number;
+};
+
+export type AdminGame = {
+  id: string;
+  title: string;
+  titleLocked: boolean;
+  platform: string;
+  imageUrl: string | null;
+  imageLocked: boolean;
+};
+
+export type AdminGameSearchResponse = {
+  query: string;
+  games: AdminGame[];
+};
+
+export type AdminGameUpdateResponse = {
+  game: AdminGame;
+};

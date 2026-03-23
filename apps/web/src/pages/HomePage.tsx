@@ -5,6 +5,7 @@ import { apiRequest } from "../api";
 import { Background } from "../components/Background";
 import { StatsRecapSection } from "../components/StatsRecapSection";
 import { ThemeToggle } from "../components/ThemeToggle";
+import type { LoginResponse, MeResponse } from "../types";
 
 type HomePageProps = {
   isLoggedIn: boolean;
@@ -97,12 +98,7 @@ export const HomePage = ({
     setStatus("loading");
 
     try {
-      const payload = await apiRequest<{
-        userId: number;
-        email: string;
-        accessToken: string;
-        refreshToken: string;
-      }>("/login", {
+      const payload = await apiRequest<LoginResponse>("/login", {
         method: "POST",
         body: { email, password },
         auth: false,
@@ -111,6 +107,7 @@ export const HomePage = ({
       localStorage.setItem("playdex.token", payload.accessToken);
       localStorage.setItem("playdex.refresh", payload.refreshToken);
       localStorage.setItem("playdex.email", payload.email);
+      localStorage.setItem("playdex.isAdmin", payload.isAdmin ? "1" : "0");
       setSessionEmail(payload.email);
       setStatus("success");
       onDashboardRedirect();
@@ -134,15 +131,14 @@ export const HomePage = ({
     setIsProfileLoading(true);
     const loadProfile = async () => {
       try {
-        const profile = await apiRequest<{ userId: number; email: string }>(
-          "/me"
-        );
+        const profile = await apiRequest<MeResponse>("/me");
 
         if (cancelled) {
           return;
         }
 
         localStorage.setItem("playdex.email", profile.email);
+        localStorage.setItem("playdex.isAdmin", profile.isAdmin ? "1" : "0");
         setSessionEmail(profile.email);
         setIsProfileLoading(false);
       } catch {

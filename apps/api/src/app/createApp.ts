@@ -3,6 +3,7 @@ import { swagger } from "@elysiajs/swagger";
 import { Elysia } from "elysia";
 
 import { config } from "../common/config";
+import { registerAdminRoutes } from "../modules/admin";
 import { registerAccountRoutes } from "../modules/accounts";
 import { registerAuthRoutes } from "../modules/auth";
 import { registerGameRoutes } from "../modules/games";
@@ -39,6 +40,7 @@ export const createApp = (options: AppOptions = {}) => {
 
   registerRootRoutes(app);
   registerAuthRoutes(app);
+  registerAdminRoutes(app);
   registerMetricsRoutes(app);
   registerAccountRoutes(app);
   registerGameRoutes(app);

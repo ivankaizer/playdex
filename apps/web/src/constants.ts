@@ -7,6 +7,7 @@ export const protectedPaths = new Set([
   "/recap",
   "/mapping",
   "/settings",
+  "/admin",
 ]);
 
 export const navItems: NavItem[] = [
@@ -16,6 +17,8 @@ export const navItems: NavItem[] = [
   { label: "Mapping", path: "/mapping" },
   { label: "Settings", path: "/settings" },
 ];
+
+export const adminNavItem: NavItem = { label: "Admin", path: "/admin" };
 
 export const buildGamePath = (gameId: number | string) =>
   `/games/${encodeGameId(gameId)}`;

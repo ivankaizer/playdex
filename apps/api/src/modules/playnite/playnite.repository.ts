@@ -56,10 +56,16 @@ const ensureGameId = async (game: NormalizedGame, sql: Sql = getSql()) => {
     )
     on conflict (canonical_key)
     do update set
-      title = excluded.title,
+      title = case
+        when games.title_locked then games.title
+        else excluded.title
+      end,
       platform_id = excluded.platform_id,
       external_id = excluded.external_id,
-      capsule_url = coalesce(excluded.capsule_url, games.capsule_url),
+      capsule_url = case
+        when games.capsule_url_locked then games.capsule_url
+        else coalesce(excluded.capsule_url, games.capsule_url)
+      end,
       updated_at = now()
     returning id
   `;

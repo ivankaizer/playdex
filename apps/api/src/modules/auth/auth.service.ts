@@ -45,6 +45,7 @@ export const authService = {
     return {
       userId: user.id,
       email: user.email,
+      isAdmin: user.is_admin,
       accessToken,
       refreshToken,
     };

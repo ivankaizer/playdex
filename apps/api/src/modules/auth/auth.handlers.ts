@@ -1,12 +1,18 @@
 import { requireAuth } from "../../app/http/auth";
 import { ok } from "../../app/http/responses";
-import type { ApiResponse } from "../../app/http/types";
+import type {
+  ApiResponse,
+  LoginResponseDto,
+  MeResponseDto,
+  RefreshResponseDto,
+} from "../../app/http/types";
 import { AppError } from "../../common/errors/AppError";
+import { authRepository } from "./auth.repository";
 import { authService } from "./auth.service";
 
 export const loginHandler = async (ctx: {
   body?: unknown;
-}): Promise<ApiResponse<unknown>> => {
+}): Promise<ApiResponse<LoginResponseDto>> => {
   const payload = ctx.body as { email?: string; password?: string } | null;
   const email = payload?.email?.trim() ?? "";
   const password = payload?.password ?? "";
@@ -21,7 +27,7 @@ export const loginHandler = async (ctx: {
 
 export const refreshHandler = async (ctx: {
   body?: unknown;
-}): Promise<ApiResponse<unknown>> => {
+}): Promise<ApiResponse<RefreshResponseDto>> => {
   const payload = ctx.body as { refreshToken?: string } | null;
   const refreshToken = payload?.refreshToken?.trim() ?? "";
 
@@ -35,7 +41,11 @@ export const refreshHandler = async (ctx: {
 
 export const meHandler = async (ctx: {
   request: Request;
-}): Promise<ApiResponse<unknown>> => {
+}): Promise<ApiResponse<MeResponseDto>> => {
   const auth = requireAuth(ctx.request);
-  return ok({ userId: auth.userId, email: auth.email });
+  const user = await authRepository.loadUserById(auth.userId);
+  if (!user) {
+    throw new AppError("User not found.", 404);
+  }
+  return ok({ userId: auth.userId, email: auth.email, isAdmin: user.is_admin });
 };

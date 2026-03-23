@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 
-import { navItems, protectedPaths } from "./constants";
+import { apiRequest } from "./api";
+import { adminNavItem, navItems, protectedPaths } from "./constants";
+import { AdminPage } from "./pages/AdminPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { GamePage } from "./pages/GamePage";
 import { HomePage } from "./pages/HomePage";
@@ -8,11 +10,18 @@ import { MappingPage } from "./pages/MappingPage";
 import { RecapPage } from "./pages/RecapPage";
 import { SessionsPage } from "./pages/SessionsPage";
 import { SettingsPage } from "./pages/SettingsPage";
+import type { MeResponse } from "./types";
 import { decodeGameHash, encodeGameId } from "./utils/gameHash";
 
 export const App = () => {
   const [path, setPath] = useState(() => window.location.pathname);
   const [search, setSearch] = useState(() => window.location.search);
+  const [isAdmin, setIsAdmin] = useState(
+    () => localStorage.getItem("playdex.isAdmin") === "1"
+  );
+  const [isProfileResolved, setIsProfileResolved] = useState(
+    () => !localStorage.getItem("playdex.token")
+  );
   const [theme, setTheme] = useState<"light" | "dark">(() => {
     const stored = localStorage.getItem("playdex.theme");
     if (stored === "light" || stored === "dark") {
@@ -43,6 +52,7 @@ export const App = () => {
     localStorage.removeItem("playdex.token");
     localStorage.removeItem("playdex.refresh");
     localStorage.removeItem("playdex.email");
+    localStorage.removeItem("playdex.isAdmin");
     window.location.assign("/");
   };
 
@@ -67,8 +77,45 @@ export const App = () => {
   }, [theme]);
 
   const isLoggedIn = Boolean(localStorage.getItem("playdex.token"));
+  const resolvedNavItems = isAdmin ? [...navItems, adminNavItem] : navItems;
   const isProtectedPath = (target: string) =>
     protectedPaths.has(target) || target.startsWith("/games/");
+
+  useEffect(() => {
+    if (!isLoggedIn) {
+      setIsAdmin(false);
+      setIsProfileResolved(true);
+      return;
+    }
+
+    let cancelled = false;
+    setIsProfileResolved(false);
+
+    const loadProfile = async () => {
+      try {
+        const profile = await apiRequest<MeResponse>("/me");
+        if (cancelled) {
+          return;
+        }
+        setIsAdmin(profile.isAdmin);
+        localStorage.setItem("playdex.isAdmin", profile.isAdmin ? "1" : "0");
+      } catch {
+        if (!cancelled) {
+          setIsAdmin(false);
+          localStorage.removeItem("playdex.isAdmin");
+        }
+      } finally {
+        if (!cancelled) {
+          setIsProfileResolved(true);
+        }
+      }
+    };
+
+    void loadProfile();
+    return () => {
+      cancelled = true;
+    };
+  }, [isLoggedIn]);
 
   useEffect(() => {
     if (isLoggedIn || !isProtectedPath(path)) {
@@ -78,6 +125,15 @@ export const App = () => {
     setPath("/");
   }, [isLoggedIn, path]);
 
+  useEffect(() => {
+    if (path !== "/admin" || !isLoggedIn || !isProfileResolved || isAdmin) {
+      return;
+    }
+    window.history.replaceState({}, "", "/dashboard");
+    setPath("/dashboard");
+    setSearch("");
+  }, [isAdmin, isLoggedIn, isProfileResolved, path]);
+
   if (!isLoggedIn && isProtectedPath(path)) {
     return null;
   }
@@ -86,7 +142,7 @@ export const App = () => {
     return (
       <DashboardPage
         path={path}
-        navItems={navItems}
+        navItems={resolvedNavItems}
         onNavigate={navigate}
         onLogout={handleLogout}
         theme={theme}
@@ -99,7 +155,7 @@ export const App = () => {
     return (
       <SessionsPage
         path={path}
-        navItems={navItems}
+        navItems={resolvedNavItems}
         onNavigate={navigate}
         onLogout={handleLogout}
         theme={theme}
@@ -113,7 +169,7 @@ export const App = () => {
       <RecapPage
         path={path}
         search={search}
-        navItems={navItems}
+        navItems={resolvedNavItems}
         onNavigate={navigate}
         onLogout={handleLogout}
         theme={theme}
@@ -126,7 +182,7 @@ export const App = () => {
     return (
       <MappingPage
         path={path}
-        navItems={navItems}
+        navItems={resolvedNavItems}
         onNavigate={navigate}
         onLogout={handleLogout}
         theme={theme}
@@ -139,7 +195,23 @@ export const App = () => {
     return (
       <SettingsPage
         path={path}
-        navItems={navItems}
+        navItems={resolvedNavItems}
+        onNavigate={navigate}
+        onLogout={handleLogout}
+        theme={theme}
+        onToggleTheme={toggleTheme}
+      />
+    );
+  }
+
+  if (path === "/admin") {
+    if (!isProfileResolved || !isAdmin) {
+      return null;
+    }
+    return (
+      <AdminPage
+        path={path}
+        navItems={resolvedNavItems}
         onNavigate={navigate}
         onLogout={handleLogout}
         theme={theme}
@@ -156,7 +228,7 @@ export const App = () => {
     return (
       <GamePage
         path={path}
-        navItems={navItems}
+        navItems={resolvedNavItems}
         gameId={gameId}
         onNavigate={navigate}
         onLogout={handleLogout}
