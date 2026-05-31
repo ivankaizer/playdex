@@ -6,3 +6,11 @@
 - Rule:
   - Normalize any DB `id` field with `Number(...)` and validate positive integer before use in tests.
   - Do this at helper boundaries (`create*` helpers and assertion mapping), not ad hoc in individual assertions.
+
+## 2026-05-31 - Keep SDD artifacts in numbered feature directories
+- Pattern: A requirements draft was written to the repository root even though feature specifications need stable, isolated locations.
+- Failure mode: Root-level `requirements.md`, `design.md`, or `tasks.md` files lose feature identity and allow later SDD stages to drift across unrelated work.
+- Rule:
+  - Create each feature under `specs/<NNN>-<feature-slug>/` using a three-digit sequence and kebab-case slug.
+  - Keep `requirements.md`, `design.md`, and `tasks.md` together in that same directory.
+  - Allocate the next available sequence for a new feature; reuse a directory only when revising the same feature.

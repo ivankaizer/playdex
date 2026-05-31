@@ -1,0 +1,4 @@
+- migrations using lib
+- orm instead of raw queries
+- defined project structure
+- plugins inside of apps
