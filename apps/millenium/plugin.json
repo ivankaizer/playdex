@@ -1,0 +1,7 @@
+{
+  "$schema": "https://raw.githubusercontent.com/shdwmtr/millennium/main/src/sys/plugin-schema.json",
+  "name": "playdex",
+  "common_name": "Playdex",
+  "description": "Track playtime for non-Steam games",
+  "version": "1.2.0"
+}
