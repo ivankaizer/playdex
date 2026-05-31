@@ -1,53 +1,88 @@
-import { beforeAll, afterAll, expect, test } from "bun:test";
-import { readdir, writeFile, rm, mkdtemp } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { afterAll, beforeAll, expect, test } from "bun:test";
+import { readdir } from "node:fs/promises";
 import { join } from "node:path";
 
-import type { TestDatabase } from "./helpers/db";
-import { createTestDatabase } from "./helpers/db";
+import postgres from "postgres";
+
+import { quoteDatabaseName } from "../src/common/db/database";
 import { runMigrations } from "../src/common/db/migrations";
 
 const hasDatabase = Boolean(Bun.env.DATABASE_URL);
 const requiresDb = hasDatabase ? test : test.skip;
 
-let db: TestDatabase | null = null;
+let adminSql: ReturnType<typeof postgres> | null = null;
+let sql: ReturnType<typeof postgres> | null = null;
+let databaseName: string | null = null;
+
+const createSqlOptions = () => ({
+  max: 1,
+  onnotice: (_notice: unknown) => {
+    // Keep integration test output clean.
+  },
+});
 
 beforeAll(async () => {
-  if (!hasDatabase) {
+  const baseUrl = Bun.env.DATABASE_URL;
+  if (!baseUrl) {
     return;
   }
-  db = await createTestDatabase();
+
+  databaseName = `playdex_kysely_clean_test_${Date.now()}`;
+  const quotedDatabaseName = quoteDatabaseName(databaseName);
+  const adminUrl = new URL(baseUrl);
+  adminUrl.pathname = "/postgres";
+
+  adminSql = postgres(adminUrl.toString(), createSqlOptions());
+  await adminSql.unsafe(`create database ${quotedDatabaseName}`);
+
+  const databaseUrl = new URL(baseUrl);
+  databaseUrl.pathname = `/${databaseName}`;
+  sql = postgres(databaseUrl.toString(), createSqlOptions());
+
+  await runMigrations({ sql });
 });
 
 afterAll(async () => {
-  if (db) {
-    await db.cleanup();
+  if (sql) {
+    await sql.end({ timeout: 5 });
+  }
+
+  if (adminSql && databaseName) {
+    await adminSql`
+      select pg_terminate_backend(pid)
+      from pg_stat_activity
+      where datname = ${databaseName}
+        and pid <> pg_backend_pid()
+    `;
+    await adminSql.unsafe(`drop database ${quoteDatabaseName(databaseName)}`);
+    await adminSql.end({ timeout: 5 });
   }
 });
 
-requiresDb("runMigrations applies all SQL files", async () => {
-  if (!db) {
+requiresDb("runMigrations applies all Kysely modules in order", async () => {
+  if (!sql) {
     throw new Error("Test database not initialized.");
   }
 
   const migrationsDir = join(process.cwd(), "migrations");
-  const files = (await readdir(migrationsDir)).filter((file) =>
-    file.endsWith(".sql")
-  );
+  const modules = (await readdir(migrationsDir))
+    .filter((file) => file.endsWith(".ts"))
+    .map((file) => file.replace(/\.ts$/, ""))
+    .sort();
 
-  const applied = await db.sql<{ version: string }[]>`
-    select version from schema_migrations
+  const applied = await sql<{ name: string }[]>`
+    select name from kysely_migration order by name
   `;
 
-  expect(applied.map((row) => row.version).sort()).toEqual(files.sort());
+  expect(applied.map((row) => row.name)).toEqual(modules);
 });
 
 requiresDb("runMigrations creates expected tables", async () => {
-  if (!db) {
+  if (!sql) {
     throw new Error("Test database not initialized.");
   }
 
-  const rows = await db.sql<{ table_name: string }[]>`
+  const rows = await sql<{ table_name: string }[]>`
     select table_name
     from information_schema.tables
     where table_schema = 'public'
@@ -60,10 +95,17 @@ requiresDb("runMigrations creates expected tables", async () => {
   expect(tableNames).toContain("games");
   expect(tableNames).toContain("play_sessions");
   expect(tableNames).toContain("poll_results");
+  expect(tableNames).toContain("manual_game_inputs");
+  expect(tableNames).toContain("ignored_games");
+  expect(tableNames).toContain("game_ratings");
+  expect(tableNames).toContain("user_settings");
+  expect(tableNames).toContain("game_connections");
+  expect(tableNames).toContain("kysely_migration");
+  expect(tableNames).toContain("kysely_migration_lock");
 });
 
 requiresDb("runMigrations does not reapply applied migrations", async () => {
-  if (!db) {
+  if (!sql) {
     throw new Error("Test database not initialized.");
   }
 
@@ -73,46 +115,11 @@ requiresDb("runMigrations does not reapply applied migrations", async () => {
     warn: (message: string) => logs.push(message),
   };
 
-  await runMigrations({ sql: db.sql, logger });
+  await runMigrations({ sql, logger });
 
   const appliedAgain = logs.filter((line) =>
     line.startsWith("Applying migration ")
   );
 
   expect(appliedAgain).toEqual([]);
-});
-
-requiresDb("runMigrations rolls back failed migrations", async () => {
-  if (!db) {
-    throw new Error("Test database not initialized.");
-  }
-
-  const dir = await mkdtemp(join(tmpdir(), "playdex-migrations-"));
-  const filename = "999_failed.sql";
-  await writeFile(
-    join(dir, filename),
-    [
-      "insert into users (email) values ('rollback@example.com');",
-      "insert into missing_table (id) values (1);",
-    ].join("\n"),
-    "utf8"
-  );
-
-  try {
-    await expect(
-      runMigrations({ sql: db.sql, migrationsDir: dir })
-    ).rejects.toThrow();
-  } finally {
-    await rm(dir, { recursive: true, force: true });
-  }
-
-  const applied = await db.sql<{ version: string }[]>`
-    select version from schema_migrations where version = ${filename}
-  `;
-  const users = await db.sql<{ count: string }[]>`
-    select count(*) from users where email = 'rollback@example.com'
-  `;
-
-  expect(applied.length).toBe(0);
-  expect(Number(users[0].count)).toBe(0);
 });

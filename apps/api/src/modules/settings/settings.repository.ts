@@ -1,8 +1,5 @@
-import type postgres from "postgres";
-
-import { getSql } from "../../common/db/postgres";
-
-type Sql = ReturnType<typeof postgres>;
+import { getDb, type DbExecutor } from "../../common/db/database";
+import { toDomainId } from "../../common/db/ids";
 
 export type UserSettingsRow = {
   user_id: number;
@@ -11,31 +8,47 @@ export type UserSettingsRow = {
 
 export type RawUserSettingsRow = UserSettingsRow;
 
-const loadUserSettings = async (userId: number, sql: Sql = getSql()) => {
-  const rows = await sql<UserSettingsRow[]>`
-    select user_id, ignore_short_sessions_minutes
-    from user_settings
-    where user_id = ${userId}
-    limit 1
-  `;
-  return rows[0] ?? null;
+const normalizeUserSettingsRow = (row: {
+  user_id: string;
+  ignore_short_sessions_minutes: number;
+}): UserSettingsRow => ({
+  ...row,
+  user_id: toDomainId(row.user_id, "user_settings.user_id"),
+});
+
+const loadUserSettings = async (userId: number, db: DbExecutor = getDb()) => {
+  const row = await db
+    .selectFrom("user_settings")
+    .select(["user_id", "ignore_short_sessions_minutes"])
+    .where("user_id", "=", String(userId))
+    .executeTakeFirst();
+
+  return row ? normalizeUserSettingsRow(row) : null;
 };
 
 const upsertUserSettings = async (
   userId: number,
   ignoreShortSessionsMinutes: number,
-  sql: Sql = getSql()
+  db: DbExecutor = getDb()
 ) => {
-  const rows = await sql<UserSettingsRow[]>`
-    insert into user_settings (user_id, ignore_short_sessions_minutes)
-    values (${userId}, ${ignoreShortSessionsMinutes})
-    on conflict (user_id)
-    do update
-      set ignore_short_sessions_minutes = excluded.ignore_short_sessions_minutes,
-          updated_at = now()
-    returning user_id, ignore_short_sessions_minutes
-  `;
-  return rows[0] ?? null;
+  const row = await db
+    .insertInto("user_settings")
+    .values({
+      user_id: userId,
+      ignore_short_sessions_minutes: ignoreShortSessionsMinutes,
+    })
+    .onConflict((oc) =>
+      oc.column("user_id").doUpdateSet((eb) => ({
+        ignore_short_sessions_minutes: eb.ref(
+          "excluded.ignore_short_sessions_minutes"
+        ),
+        updated_at: eb.fn<Date>("now"),
+      }))
+    )
+    .returning(["user_id", "ignore_short_sessions_minutes"])
+    .executeTakeFirst();
+
+  return row ? normalizeUserSettingsRow(row) : null;
 };
 
 export const settingsRepository = {

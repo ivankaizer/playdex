@@ -1,6 +1,15 @@
-import type postgres from "postgres";
+import { sql } from "kysely";
 
-import { getSql } from "../../common/db/postgres";
+import { getDb, type DbExecutor } from "../../common/db/database";
+import {
+  durationSortExpression,
+  ignoredCaseExpression,
+  ignoreShortSessionsFilter,
+  sessionCountExpression,
+  totalSecondsExpression,
+  utcDayEndExpression,
+  utcDayStartExpression,
+} from "../../common/db/expressions";
 
 export type AccountSessionFilters = {
   title?: string | null;
@@ -23,11 +32,6 @@ export type AccountSessionRow = {
   game_platform: string;
   game_canonical_key: string;
   ignored: boolean;
-};
-
-type AccountRow = {
-  id: number;
-  platform: string;
 };
 
 type AccountSessionCountRow = {
@@ -60,8 +64,6 @@ export type ManualInputMappingRow = {
   mapped_canonical_key: string | null;
 };
 
-type Sql = ReturnType<typeof postgres>;
-
 export type RawAccountSessionRow = AccountSessionRow;
 export type RawAccountSessionFilters = AccountSessionFilters;
 export type RawManualInputMappingRow = ManualInputMappingRow;
@@ -69,16 +71,20 @@ export type RawAccountPlaytimeSummaryRow = AccountPlaytimeSummaryRow;
 export type RawAccountPlatformTotalsRow = AccountPlatformTotalsRow;
 export type RawAccountTopGameRow = AccountTopGameRow;
 
-const mapCount = (rows: AccountSessionCountRow[]) => rows[0]?.total ?? 0;
+const baseSessionSelects = [
+  "ps.id",
+  "ps.started_at",
+  "ps.ended_at",
+  "g.id as game_id",
+  "pc_platform.key as platform",
+  "g.title",
+  "g.capsule_url",
+  "game_platform.key as game_platform",
+  "g.canonical_key as game_canonical_key",
+  ignoredCaseExpression().as("ignored"),
+] as const;
 
-const buildIgnoreShortSessionsFilter = (sql: Sql) => sql`
-  and not (
-    coalesce(us.ignore_short_sessions_minutes, 0) > 0
-    and ps.ended_at is not null
-    and extract(epoch from (ps.ended_at - ps.started_at)) <
-      (coalesce(us.ignore_short_sessions_minutes, 0) * 60)
-  )
-`;
+const mapCount = (rows: AccountSessionCountRow[]) => rows[0]?.total ?? 0;
 
 const normalizeGameIds = (value: unknown) => {
   if (Array.isArray(value)) {
@@ -111,498 +117,374 @@ const normalizeGameIds = (value: unknown) => {
   return [] as number[];
 };
 
-const buildGameIdFilter = (sql: Sql, gameIds: unknown) => {
-  const normalizedGameIds = normalizeGameIds(gameIds);
-  if (normalizedGameIds.length === 1) {
-    return sql`and ps.game_id = ${normalizedGameIds[0]}`;
-  }
-  if (normalizedGameIds.length > 1) {
-    return sql`and ps.game_id = any(${sql.array(normalizedGameIds, 20)})`;
-  }
-  return sql``;
-};
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const mapSessionRows = (rows: any[]): RawAccountSessionRow[] =>
+  rows.map((row) => ({
+    ...row,
+    id: Number(row.id),
+    game_id: Number(row.game_id),
+    ignored: Boolean(row.ignored),
+  }));
 
-const listAccountSessions = async (
-  accountId: number,
+const listSessions = async (
+  accountId: number | undefined,
   userId: number,
   limit: number,
   offset: number,
   filters: AccountSessionFilters = {},
-  sql: Sql = getSql()
-) => {
-  const titleFilter = filters.title
-    ? sql`and g.title ilike ${`%${filters.title}%`}`
-    : sql``;
-  const gameIdFilter = buildGameIdFilter(
-    sql,
-    filters.gameIds ?? filters.gameId
-  );
-  const fromFilter = filters.startedFrom
-    ? sql`and ps.started_at >= ${filters.startedFrom}`
-    : sql``;
-  const toFilter = filters.startedTo
-    ? sql`and ps.started_at < ${filters.startedTo}`
-    : sql``;
+  db: DbExecutor = getDb()
+): Promise<RawAccountSessionRow[]> => {
   const sortKey = filters.sortKey ?? "date";
-  const sortDirection = filters.sortDirection === "asc" ? sql`asc` : sql`desc`;
-  const orderBy =
-    sortKey === "duration"
-      ? sql`extract(epoch from (coalesce(ps.ended_at, now()) - ps.started_at))`
-      : sql`ps.started_at`;
+  const sortDirection = filters.sortDirection ?? "desc";
+  const orderByRef =
+    sortKey === "duration" ? durationSortExpression() : sql`ps.started_at`;
 
-  return sql<AccountSessionRow[]>`
-    select
-      ps.id,
-      ps.started_at,
-      ps.ended_at,
-      g.id as game_id,
-      pc_platform.key as platform,
-      g.title,
-      g.capsule_url,
-      game_platform.key as game_platform,
-      g.canonical_key as game_canonical_key,
-      case
-        when coalesce(us.ignore_short_sessions_minutes, 0) > 0
-          and ps.ended_at is not null
-          and extract(epoch from (ps.ended_at - ps.started_at)) <
-            (coalesce(us.ignore_short_sessions_minutes, 0) * 60)
-          then true
-        else false
-      end as ignored
-    from play_sessions ps
-    join platform_credentials pc on pc.id = ps.platform_credential_id
-    left join user_settings us on us.user_id = pc.user_id
-    join games g on g.id = ps.game_id
-    join platforms pc_platform on pc_platform.id = pc.platform_id
-    join platforms game_platform on game_platform.id = g.platform_id
-    where ps.platform_credential_id = ${accountId}
-      and pc.user_id = ${userId}
-      ${titleFilter}
-      ${gameIdFilter}
-      ${fromFilter}
-      ${toFilter}
-    order by ${orderBy} ${sortDirection}
-    limit ${limit}
-    offset ${offset}
-  `;
+  const resolvedGameIds = normalizeGameIds(filters.gameIds ?? filters.gameId);
+
+  let query = db
+    .selectFrom("play_sessions as ps")
+    .innerJoin(
+      "platform_credentials as pc",
+      "pc.id",
+      "ps.platform_credential_id"
+    )
+    .leftJoin("user_settings as us", "us.user_id", "pc.user_id")
+    .innerJoin("games as g", "g.id", "ps.game_id")
+    .innerJoin("platforms as pc_platform", "pc_platform.id", "pc.platform_id")
+    .innerJoin(
+      "platforms as game_platform",
+      "game_platform.id",
+      "g.platform_id"
+    )
+    .$castTo<{
+      id: string;
+      started_at: Date;
+      ended_at: Date | null;
+      game_id: string;
+      platform: string;
+      title: string;
+      capsule_url: string | null;
+      game_platform: string;
+      game_canonical_key: string;
+      ignored: unknown;
+    }>()
+    .where("pc.user_id", "=", String(userId));
+
+  if (accountId !== undefined) {
+    query = query.where("ps.platform_credential_id", "=", String(accountId));
+  }
+
+  if (filters.title) {
+    query = query.where("g.title", "ilike", `%${filters.title}%`);
+  }
+
+  if (resolvedGameIds.length === 1) {
+    query = query.where("ps.game_id", "=", String(resolvedGameIds[0]));
+  } else if (resolvedGameIds.length > 1) {
+    query = query.where("ps.game_id", "in", resolvedGameIds.map(String));
+  }
+
+  if (filters.startedFrom) {
+    query = query.where("ps.started_at", ">=", filters.startedFrom);
+  }
+
+  if (filters.startedTo) {
+    query = query.where("ps.started_at", "<", filters.startedTo);
+  }
+
+  const rows = await query
+    .select(baseSessionSelects)
+    .orderBy(orderByRef, sortDirection)
+    .limit(limit)
+    .offset(offset)
+    .execute();
+
+  return mapSessionRows(rows);
 };
 
-const listUserSessions = async (
-  userId: number,
-  limit: number,
-  offset: number,
-  filters: AccountSessionFilters = {},
-  sql: Sql = getSql()
-) => {
-  const titleFilter = filters.title
-    ? sql`and g.title ilike ${`%${filters.title}%`}`
-    : sql``;
-  const gameIdFilter = buildGameIdFilter(
-    sql,
-    filters.gameIds ?? filters.gameId
-  );
-  const fromFilter = filters.startedFrom
-    ? sql`and ps.started_at >= ${filters.startedFrom}`
-    : sql``;
-  const toFilter = filters.startedTo
-    ? sql`and ps.started_at < ${filters.startedTo}`
-    : sql``;
-  const sortKey = filters.sortKey ?? "date";
-  const sortDirection = filters.sortDirection === "asc" ? sql`asc` : sql`desc`;
-  const orderBy =
-    sortKey === "duration"
-      ? sql`extract(epoch from (coalesce(ps.ended_at, now()) - ps.started_at))`
-      : sql`ps.started_at`;
-
-  return sql<AccountSessionRow[]>`
-    select
-      ps.id,
-      ps.started_at,
-      ps.ended_at,
-      g.id as game_id,
-      pc_platform.key as platform,
-      g.title,
-      g.capsule_url,
-      game_platform.key as game_platform,
-      g.canonical_key as game_canonical_key,
-      case
-        when coalesce(us.ignore_short_sessions_minutes, 0) > 0
-          and ps.ended_at is not null
-          and extract(epoch from (ps.ended_at - ps.started_at)) <
-            (coalesce(us.ignore_short_sessions_minutes, 0) * 60)
-          then true
-        else false
-      end as ignored
-    from play_sessions ps
-    join platform_credentials pc on pc.id = ps.platform_credential_id
-    left join user_settings us on us.user_id = pc.user_id
-    join games g on g.id = ps.game_id
-    join platforms pc_platform on pc_platform.id = pc.platform_id
-    join platforms game_platform on game_platform.id = g.platform_id
-    where pc.user_id = ${userId}
-      ${titleFilter}
-      ${gameIdFilter}
-      ${fromFilter}
-      ${toFilter}
-    order by ${orderBy} ${sortDirection}
-    limit ${limit}
-    offset ${offset}
-  `;
-};
-
-const countAccountSessions = async (
-  accountId: number,
+const countSessions = async (
+  accountId: number | undefined,
   userId: number,
   filters: AccountSessionFilters = {},
-  sql: Sql = getSql()
-) => {
-  const titleFilter = filters.title
-    ? sql`and g.title ilike ${`%${filters.title}%`}`
-    : sql``;
-  const gameIdFilter = buildGameIdFilter(
-    sql,
-    filters.gameIds ?? filters.gameId
-  );
-  const fromFilter = filters.startedFrom
-    ? sql`and ps.started_at >= ${filters.startedFrom}`
-    : sql``;
-  const toFilter = filters.startedTo
-    ? sql`and ps.started_at < ${filters.startedTo}`
-    : sql``;
+  db: DbExecutor = getDb()
+): Promise<AccountSessionCountRow[]> => {
+  const resolvedGameIds = normalizeGameIds(filters.gameIds ?? filters.gameId);
 
-  return sql<AccountSessionCountRow[]>`
-    select count(*)::int as total
-    from play_sessions ps
-    join platform_credentials pc on pc.id = ps.platform_credential_id
-    left join user_settings us on us.user_id = pc.user_id
-    join games g on g.id = ps.game_id
-    where ps.platform_credential_id = ${accountId}
-      and pc.user_id = ${userId}
-      ${titleFilter}
-      ${gameIdFilter}
-      ${fromFilter}
-      ${toFilter}
-  `;
+  let query = db
+    .selectFrom("play_sessions as ps")
+    .innerJoin(
+      "platform_credentials as pc",
+      "pc.id",
+      "ps.platform_credential_id"
+    )
+    .leftJoin("user_settings as us", "us.user_id", "pc.user_id")
+    .innerJoin("games as g", "g.id", "ps.game_id")
+    .innerJoin("platforms as pc_platform", "pc_platform.id", "pc.platform_id")
+    .innerJoin(
+      "platforms as game_platform",
+      "game_platform.id",
+      "g.platform_id"
+    )
+    .$castTo<{ total: number }>()
+    .where("pc.user_id", "=", String(userId));
+
+  if (accountId !== undefined) {
+    query = query.where("ps.platform_credential_id", "=", String(accountId));
+  }
+
+  if (filters.title) {
+    query = query.where("g.title", "ilike", `%${filters.title}%`);
+  }
+
+  if (resolvedGameIds.length === 1) {
+    query = query.where("ps.game_id", "=", String(resolvedGameIds[0]));
+  } else if (resolvedGameIds.length > 1) {
+    query = query.where("ps.game_id", "in", resolvedGameIds.map(String));
+  }
+
+  if (filters.startedFrom) {
+    query = query.where("ps.started_at", ">=", filters.startedFrom);
+  }
+
+  if (filters.startedTo) {
+    query = query.where("ps.started_at", "<", filters.startedTo);
+  }
+
+  const rows = await query
+    .select(sessionCountExpression().as("total"))
+    .execute();
+
+  return rows as unknown as AccountSessionCountRow[];
 };
 
-const countUserSessions = async (
-  userId: number,
-  filters: AccountSessionFilters = {},
-  sql: Sql = getSql()
-) => {
-  const titleFilter = filters.title
-    ? sql`and g.title ilike ${`%${filters.title}%`}`
-    : sql``;
-  const gameIdFilter = buildGameIdFilter(
-    sql,
-    filters.gameIds ?? filters.gameId
-  );
-  const fromFilter = filters.startedFrom
-    ? sql`and ps.started_at >= ${filters.startedFrom}`
-    : sql``;
-  const toFilter = filters.startedTo
-    ? sql`and ps.started_at < ${filters.startedTo}`
-    : sql``;
-
-  return sql<AccountSessionCountRow[]>`
-    select count(*)::int as total
-    from play_sessions ps
-    join platform_credentials pc on pc.id = ps.platform_credential_id
-    left join user_settings us on us.user_id = pc.user_id
-    join games g on g.id = ps.game_id
-    where pc.user_id = ${userId}
-      ${titleFilter}
-      ${gameIdFilter}
-      ${fromFilter}
-      ${toFilter}
-  `;
-};
-
-const listAccountSessionsToday = async (
-  accountId: number,
+const listSessionsToday = async (
+  accountId: number | undefined,
   userId: number,
   limit: number,
-  sql: Sql = getSql()
-) =>
-  sql<AccountSessionRow[]>`
-    select
-      ps.id,
-      ps.started_at,
-      ps.ended_at,
-      g.id as game_id,
-      pc_platform.key as platform,
-      g.title,
-      g.capsule_url,
-      game_platform.key as game_platform,
-      g.canonical_key as game_canonical_key,
-      case
-        when coalesce(us.ignore_short_sessions_minutes, 0) > 0
-          and ps.ended_at is not null
-          and extract(epoch from (ps.ended_at - ps.started_at)) <
-            (coalesce(us.ignore_short_sessions_minutes, 0) * 60)
-          then true
-        else false
-      end as ignored
-    from play_sessions ps
-    join platform_credentials pc on pc.id = ps.platform_credential_id
-    left join user_settings us on us.user_id = pc.user_id
-    join games g on g.id = ps.game_id
-    join platforms pc_platform on pc_platform.id = pc.platform_id
-    join platforms game_platform on game_platform.id = g.platform_id
-    where ps.platform_credential_id = ${accountId}
-      and pc.user_id = ${userId}
-      and (
-        (ps.started_at >= (date_trunc('day', now() at time zone 'utc') at time zone 'utc')
-          and ps.started_at < (date_trunc('day', now() at time zone 'utc') at time zone 'utc') + interval '1 day')
-        or (ps.ended_at is not null
-          and ps.ended_at >= (date_trunc('day', now() at time zone 'utc') at time zone 'utc')
-          and ps.ended_at < (date_trunc('day', now() at time zone 'utc') at time zone 'utc') + interval '1 day')
-      )
-    order by ps.started_at desc
-    limit ${limit}
-  `;
+  db: DbExecutor = getDb()
+): Promise<RawAccountSessionRow[]> => {
+  let query = db
+    .selectFrom("play_sessions as ps")
+    .innerJoin(
+      "platform_credentials as pc",
+      "pc.id",
+      "ps.platform_credential_id"
+    )
+    .leftJoin("user_settings as us", "us.user_id", "pc.user_id")
+    .innerJoin("games as g", "g.id", "ps.game_id")
+    .innerJoin("platforms as pc_platform", "pc_platform.id", "pc.platform_id")
+    .innerJoin(
+      "platforms as game_platform",
+      "game_platform.id",
+      "g.platform_id"
+    )
+    .$castTo<{
+      id: string;
+      started_at: Date;
+      ended_at: Date | null;
+      game_id: string;
+      platform: string;
+      title: string;
+      capsule_url: string | null;
+      game_platform: string;
+      game_canonical_key: string;
+      ignored: unknown;
+    }>()
+    .where("pc.user_id", "=", String(userId))
+    .where((eb) =>
+      eb.or([
+        eb.and([
+          eb("ps.started_at", ">=", utcDayStartExpression()),
+          eb("ps.started_at", "<", utcDayEndExpression()),
+        ]),
+        eb.and([
+          eb("ps.ended_at", "is not", null),
+          eb("ps.ended_at", ">=", utcDayStartExpression()),
+          eb("ps.ended_at", "<", utcDayEndExpression()),
+        ]),
+      ])
+    );
 
-const listUserSessionsToday = async (
-  userId: number,
-  limit: number,
-  sql: Sql = getSql()
-) =>
-  sql<AccountSessionRow[]>`
-    select
-      ps.id,
-      ps.started_at,
-      ps.ended_at,
-      g.id as game_id,
-      pc_platform.key as platform,
-      g.title,
-      g.capsule_url,
-      game_platform.key as game_platform,
-      g.canonical_key as game_canonical_key,
-      case
-        when coalesce(us.ignore_short_sessions_minutes, 0) > 0
-          and ps.ended_at is not null
-          and extract(epoch from (ps.ended_at - ps.started_at)) <
-            (coalesce(us.ignore_short_sessions_minutes, 0) * 60)
-          then true
-        else false
-      end as ignored
-    from play_sessions ps
-    join platform_credentials pc on pc.id = ps.platform_credential_id
-    join games g on g.id = ps.game_id
-    join platforms pc_platform on pc_platform.id = pc.platform_id
-    join platforms game_platform on game_platform.id = g.platform_id
-    left join user_settings us on us.user_id = pc.user_id
-    where pc.user_id = ${userId}
-      and (
-        (ps.started_at >= (date_trunc('day', now() at time zone 'utc') at time zone 'utc')
-          and ps.started_at < (date_trunc('day', now() at time zone 'utc') at time zone 'utc') + interval '1 day')
-        or (ps.ended_at is not null
-          and ps.ended_at >= (date_trunc('day', now() at time zone 'utc') at time zone 'utc')
-          and ps.ended_at < (date_trunc('day', now() at time zone 'utc') at time zone 'utc') + interval '1 day')
-      )
-    order by ps.started_at desc
-    limit ${limit}
-  `;
+  if (accountId !== undefined) {
+    query = query.where("ps.platform_credential_id", "=", String(accountId));
+  }
 
-const loadAccountCurrentSession = async (
-  accountId: number,
-  userId: number,
-  sql: Sql = getSql()
-) => {
-  const rows = await sql<AccountSessionRow[]>`
-    select
-      ps.id,
-      ps.started_at,
-      ps.ended_at,
-      g.id as game_id,
-      pc_platform.key as platform,
-      g.title,
-      g.capsule_url,
-      game_platform.key as game_platform,
-      g.canonical_key as game_canonical_key,
-      case
-        when coalesce(us.ignore_short_sessions_minutes, 0) > 0
-          and ps.ended_at is not null
-          and extract(epoch from (ps.ended_at - ps.started_at)) <
-            (coalesce(us.ignore_short_sessions_minutes, 0) * 60)
-          then true
-        else false
-      end as ignored
-    from play_sessions ps
-    join platform_credentials pc on pc.id = ps.platform_credential_id
-    join games g on g.id = ps.game_id
-    join platforms pc_platform on pc_platform.id = pc.platform_id
-    join platforms game_platform on game_platform.id = g.platform_id
-    left join user_settings us on us.user_id = pc.user_id
-    where ps.platform_credential_id = ${accountId}
-      and pc.user_id = ${userId}
-      and ps.ended_at is null
-    order by ps.started_at desc
-    limit 1
-  `;
-  return rows[0] ?? null;
+  const rows = await query
+    .select(baseSessionSelects)
+    .orderBy("ps.started_at", "desc")
+    .limit(limit)
+    .execute();
+
+  return mapSessionRows(rows);
 };
 
-const loadUserCurrentSession = async (userId: number, sql: Sql = getSql()) => {
-  const rows = await sql<AccountSessionRow[]>`
-    select
-      ps.id,
-      ps.started_at,
-      ps.ended_at,
-      g.id as game_id,
-      pc_platform.key as platform,
-      g.title,
-      g.capsule_url,
-      game_platform.key as game_platform,
-      g.canonical_key as game_canonical_key,
-      case
-        when coalesce(us.ignore_short_sessions_minutes, 0) > 0
-          and ps.ended_at is not null
-          and extract(epoch from (ps.ended_at - ps.started_at)) <
-            (coalesce(us.ignore_short_sessions_minutes, 0) * 60)
-          then true
-        else false
-      end as ignored
-    from play_sessions ps
-    join platform_credentials pc on pc.id = ps.platform_credential_id
-    join games g on g.id = ps.game_id
-    join platforms pc_platform on pc_platform.id = pc.platform_id
-    join platforms game_platform on game_platform.id = g.platform_id
-    left join user_settings us on us.user_id = pc.user_id
-    where pc.user_id = ${userId}
-      and ps.ended_at is null
-    order by ps.started_at desc
-    limit 1
-  `;
-  return rows[0] ?? null;
+const loadCurrentSession = async (
+  accountId: number | undefined,
+  userId: number,
+  db: DbExecutor = getDb()
+): Promise<RawAccountSessionRow | null> => {
+  let query = db
+    .selectFrom("play_sessions as ps")
+    .innerJoin(
+      "platform_credentials as pc",
+      "pc.id",
+      "ps.platform_credential_id"
+    )
+    .leftJoin("user_settings as us", "us.user_id", "pc.user_id")
+    .innerJoin("games as g", "g.id", "ps.game_id")
+    .innerJoin("platforms as pc_platform", "pc_platform.id", "pc.platform_id")
+    .innerJoin(
+      "platforms as game_platform",
+      "game_platform.id",
+      "g.platform_id"
+    )
+    .$castTo<{
+      id: string;
+      started_at: Date;
+      ended_at: Date | null;
+      game_id: string;
+      platform: string;
+      title: string;
+      capsule_url: string | null;
+      game_platform: string;
+      game_canonical_key: string;
+      ignored: unknown;
+    }>()
+    .where("pc.user_id", "=", String(userId))
+    .where("ps.ended_at", "is", null);
+
+  if (accountId !== undefined) {
+    query = query.where("ps.platform_credential_id", "=", String(accountId));
+  }
+
+  const rows = await query
+    .select(baseSessionSelects)
+    .orderBy("ps.started_at", "desc")
+    .limit(1)
+    .execute();
+
+  if (rows.length === 0) {
+    return null;
+  }
+
+  return mapSessionRows(rows)[0];
 };
 
 const deleteUserSession = async (
   sessionId: number,
   userId: number,
-  sql: Sql = getSql()
+  db: DbExecutor = getDb()
 ) => {
-  const rows = await sql<{ id: number }[]>`
+  // Kysely does not support DELETE ... USING, so use a sql fragment for the
+  // join-condition delete where the user must own the session's credential.
+  const result = await sql<{ id: string }>`
     delete from play_sessions ps
     using platform_credentials pc
     where ps.platform_credential_id = pc.id
       and pc.user_id = ${userId}
       and ps.id = ${sessionId}
     returning ps.id
-  `;
-  return rows[0]?.id ?? null;
+  `.execute(db);
+
+  const id = result.rows[0]?.id;
+  return id ? Number(id) : null;
 };
 
 const loadManualInputMappings = async (
   userId: number,
   canonicalTitles: string[],
-  sql: Sql = getSql()
-) =>
-  sql<ManualInputMappingRow[]>`
-    select
-      mgi.canonical_title,
-      mgi.mapped_game_id,
-      g.title as mapped_title,
-      gp.key as mapped_platform,
-      g.capsule_url as mapped_capsule_url,
-      g.canonical_key as mapped_canonical_key
-    from manual_game_inputs mgi
-    left join games g on g.id = mgi.mapped_game_id
-    left join platforms gp on gp.id = g.platform_id
-    where mgi.user_id = ${userId}
-      and mgi.canonical_title = any(${sql.array(canonicalTitles)})
-  `;
+  db: DbExecutor = getDb()
+): Promise<ManualInputMappingRow[]> => {
+  if (canonicalTitles.length === 0) {
+    return [];
+  }
 
-const loadAccountPlaytimeSummary = async (
-  accountId: number,
+  const rows = await db
+    .selectFrom("manual_game_inputs as mgi")
+    .leftJoin("games as g", "g.id", "mgi.mapped_game_id")
+    .leftJoin("platforms as gp", "gp.id", "g.platform_id")
+    .select([
+      "mgi.canonical_title",
+      "mgi.mapped_game_id",
+      "g.title as mapped_title",
+      "gp.key as mapped_platform",
+      "g.capsule_url as mapped_capsule_url",
+      "g.canonical_key as mapped_canonical_key",
+    ])
+    .where("mgi.user_id", "=", String(userId))
+    .where("mgi.canonical_title", "in", canonicalTitles)
+    .execute();
+
+  return rows.map((row) => ({
+    ...row,
+    mapped_game_id: row.mapped_game_id ? Number(row.mapped_game_id) : null,
+  })) as ManualInputMappingRow[];
+};
+
+const loadPlaytimeSummary = async (
+  accountId: number | undefined,
   userId: number,
   startedAt: Date,
-  sql: Sql = getSql()
-) =>
-  sql<AccountPlaytimeSummaryRow[]>`
-    select
-      coalesce(
-        sum(extract(epoch from (coalesce(ps.ended_at, now()) - ps.started_at))),
-        0
-      )::float as total_seconds,
-      count(*)::int as session_count
-    from play_sessions ps
-    join platform_credentials pc on pc.id = ps.platform_credential_id
-    left join user_settings us on us.user_id = pc.user_id
-    where ps.platform_credential_id = ${accountId}
-      and pc.user_id = ${userId}
-      and ps.started_at >= ${startedAt}
-      ${buildIgnoreShortSessionsFilter(sql)}
-  `;
+  endedAt: Date | undefined,
+  db: DbExecutor = getDb()
+): Promise<AccountPlaytimeSummaryRow[]> => {
+  let query = db
+    .selectFrom("play_sessions as ps")
+    .innerJoin(
+      "platform_credentials as pc",
+      "pc.id",
+      "ps.platform_credential_id"
+    )
+    .leftJoin("user_settings as us", "us.user_id", "pc.user_id")
+    .innerJoin("games as g", "g.id", "ps.game_id")
+    .innerJoin("platforms as pc_platform", "pc_platform.id", "pc.platform_id")
+    .innerJoin(
+      "platforms as game_platform",
+      "game_platform.id",
+      "g.platform_id"
+    )
+    .$castTo<AccountPlaytimeSummaryRow>()
+    .where("pc.user_id", "=", String(userId))
+    .where("ps.started_at", ">=", startedAt)
+    .where(ignoreShortSessionsFilter());
 
-const loadUserPlaytimeSummary = async (
+  if (accountId !== undefined) {
+    query = query.where("ps.platform_credential_id", "=", String(accountId));
+  }
+
+  if (endedAt) {
+    query = query.where("ps.started_at", "<", endedAt);
+  }
+
+  const rows = await query
+    .select([
+      totalSecondsExpression().as("total_seconds"),
+      sessionCountExpression().as("session_count"),
+    ])
+    .execute();
+
+  return rows as unknown as AccountPlaytimeSummaryRow[];
+};
+
+const loadPlatformTotals = async (
+  accountId: number | undefined,
   userId: number,
   startedAt: Date,
-  sql: Sql = getSql()
-) =>
-  sql<AccountPlaytimeSummaryRow[]>`
-    select
-      coalesce(
-        sum(extract(epoch from (coalesce(ps.ended_at, now()) - ps.started_at))),
-        0
-      )::float as total_seconds,
-      count(*)::int as session_count
-    from play_sessions ps
-    join platform_credentials pc on pc.id = ps.platform_credential_id
-    left join user_settings us on us.user_id = pc.user_id
-    where pc.user_id = ${userId}
-      and ps.started_at >= ${startedAt}
-      ${buildIgnoreShortSessionsFilter(sql)}
-  `;
+  endedAt: Date | undefined,
+  db: DbExecutor = getDb()
+): Promise<AccountPlatformTotalsRow[]> => {
+  // PostgreSQL split_part in manual-mapping join has no clear typed-builder equivalent.
+  const platformCase = sql<string>`case
+    when ${sql.ref("pc_platform.key")} = 'manual'
+      then coalesce(${sql.ref("mapped_platform.key")}, ${sql.ref("game_platform.key")})
+    else ${sql.ref("pc_platform.key")}
+  end`;
 
-const loadUserPlaytimeSummaryForRange = async (
-  userId: number,
-  startedAt: Date,
-  endedAt: Date,
-  sql: Sql = getSql()
-) =>
-  sql<AccountPlaytimeSummaryRow[]>`
+  const result = await sql<AccountPlatformTotalsRow>`
     select
-      coalesce(
-        sum(extract(epoch from (coalesce(ps.ended_at, now()) - ps.started_at))),
-        0
-      )::float as total_seconds,
-      count(*)::int as session_count
-    from play_sessions ps
-    join platform_credentials pc on pc.id = ps.platform_credential_id
-    left join user_settings us on us.user_id = pc.user_id
-    where pc.user_id = ${userId}
-      and ps.started_at >= ${startedAt}
-      and ps.started_at < ${endedAt}
-      ${buildIgnoreShortSessionsFilter(sql)}
-  `;
-
-const loadAccountPlatformTotals = async (
-  accountId: number,
-  userId: number,
-  startedAt: Date,
-  sql: Sql = getSql()
-) =>
-  sql<AccountPlatformTotalsRow[]>`
-    select
-      case
-        when pc_platform.key = 'manual'
-          then coalesce(mapped_platform.key, game_platform.key)
-        else pc_platform.key
-      end as platform,
-      case
-        when pc_platform.key = 'manual'
-          and coalesce(mapped_game.canonical_key, g.canonical_key) like 'igdb:%'
-          then 'igdb'
-        when pc_platform.key = 'manual'
-          and coalesce(mapped_game.id, g.id) is not null
-          then 'local'
-        else null
-      end as source,
-      coalesce(
-        sum(extract(epoch from (coalesce(ps.ended_at, now()) - ps.started_at))),
-        0
-      )::float as total_seconds
+      ${platformCase} as platform,
+      null as source,
+      ${totalSecondsExpression()} as total_seconds
     from play_sessions ps
     join platform_credentials pc on pc.id = ps.platform_credential_id
     left join user_settings us on us.user_id = pc.user_id
@@ -615,188 +497,81 @@ const loadAccountPlatformTotals = async (
       and mgi.canonical_title = split_part(g.canonical_key, ':', 2)
     left join games mapped_game on mapped_game.id = mgi.mapped_game_id
     left join platforms mapped_platform on mapped_platform.id = mapped_game.platform_id
-    where ps.platform_credential_id = ${accountId}
-      and pc.user_id = ${userId}
+    where ${
+      accountId !== undefined
+        ? sql`ps.platform_credential_id = ${accountId} and`
+        : sql``
+    }
+      pc.user_id = ${userId}
       and ps.started_at >= ${startedAt}
-      ${buildIgnoreShortSessionsFilter(sql)}
+      ${endedAt ? sql`and ps.started_at < ${endedAt}` : sql``}
+      and ${ignoreShortSessionsFilter()}
     group by 1, 2
     order by 1, 2
-  `;
+  `.execute(db);
 
-const loadUserPlatformTotals = async (
+  return result.rows;
+};
+
+const loadGameTotals = async (
+  accountId: number | undefined,
   userId: number,
   startedAt: Date,
-  sql: Sql = getSql()
-) =>
-  sql<AccountPlatformTotalsRow[]>`
-    select
-      case
-        when pc_platform.key = 'manual'
-          then coalesce(mapped_platform.key, game_platform.key)
-        else pc_platform.key
-      end as platform,
-      case
-        when pc_platform.key = 'manual'
-          and coalesce(mapped_game.canonical_key, g.canonical_key) like 'igdb:%'
-          then 'igdb'
-        when pc_platform.key = 'manual'
-          and coalesce(mapped_game.id, g.id) is not null
-          then 'local'
-        else null
-      end as source,
-      coalesce(
-        sum(extract(epoch from (coalesce(ps.ended_at, now()) - ps.started_at))),
-        0
-      )::float as total_seconds
-    from play_sessions ps
-    join platform_credentials pc on pc.id = ps.platform_credential_id
-    join games g on g.id = ps.game_id
-    join platforms pc_platform on pc_platform.id = pc.platform_id
-    join platforms game_platform on game_platform.id = g.platform_id
-    left join manual_game_inputs mgi
-      on pc_platform.key = 'manual'
-      and mgi.user_id = pc.user_id
-      and mgi.canonical_title = split_part(g.canonical_key, ':', 2)
-    left join games mapped_game on mapped_game.id = mgi.mapped_game_id
-    left join platforms mapped_platform on mapped_platform.id = mapped_game.platform_id
-    left join user_settings us on us.user_id = pc.user_id
-    where pc.user_id = ${userId}
-      and ps.started_at >= ${startedAt}
-      ${buildIgnoreShortSessionsFilter(sql)}
-    group by 1, 2
-    order by 1, 2
-  `;
+  endedAt: Date | undefined,
+  db: DbExecutor = getDb()
+): Promise<AccountTopGameRow[]> => {
+  let query = db
+    .selectFrom("play_sessions as ps")
+    .innerJoin(
+      "platform_credentials as pc",
+      "pc.id",
+      "ps.platform_credential_id"
+    )
+    .leftJoin("user_settings as us", "us.user_id", "pc.user_id")
+    .innerJoin("games as g", "g.id", "ps.game_id")
+    .innerJoin("platforms as pc_platform", "pc_platform.id", "pc.platform_id")
+    .innerJoin(
+      "platforms as game_platform",
+      "game_platform.id",
+      "g.platform_id"
+    )
+    .$castTo<{ game_id: string; title: string; total_seconds: number }>()
+    .where("pc.user_id", "=", String(userId))
+    .where("ps.started_at", ">=", startedAt)
+    .where(ignoreShortSessionsFilter());
 
-const loadUserPlatformTotalsForRange = async (
-  userId: number,
-  startedAt: Date,
-  endedAt: Date,
-  sql: Sql = getSql()
-) =>
-  sql<AccountPlatformTotalsRow[]>`
-    select
-      case
-        when pc_platform.key = 'manual'
-          then coalesce(mapped_platform.key, game_platform.key)
-        else pc_platform.key
-      end as platform,
-      case
-        when pc_platform.key = 'manual'
-          and coalesce(mapped_game.canonical_key, g.canonical_key) like 'igdb:%'
-          then 'igdb'
-        when pc_platform.key = 'manual'
-          and coalesce(mapped_game.id, g.id) is not null
-          then 'local'
-        else null
-      end as source,
-      coalesce(
-        sum(extract(epoch from (coalesce(ps.ended_at, now()) - ps.started_at))),
-        0
-      )::float as total_seconds
-    from play_sessions ps
-    join platform_credentials pc on pc.id = ps.platform_credential_id
-    join games g on g.id = ps.game_id
-    join platforms pc_platform on pc_platform.id = pc.platform_id
-    join platforms game_platform on game_platform.id = g.platform_id
-    left join manual_game_inputs mgi
-      on pc_platform.key = 'manual'
-      and mgi.user_id = pc.user_id
-      and mgi.canonical_title = split_part(g.canonical_key, ':', 2)
-    left join games mapped_game on mapped_game.id = mgi.mapped_game_id
-    left join platforms mapped_platform on mapped_platform.id = mapped_game.platform_id
-    left join user_settings us on us.user_id = pc.user_id
-    where pc.user_id = ${userId}
-      and ps.started_at >= ${startedAt}
-      and ps.started_at < ${endedAt}
-      ${buildIgnoreShortSessionsFilter(sql)}
-    group by 1, 2
-    order by 1, 2
-  `;
+  if (accountId !== undefined) {
+    query = query.where("ps.platform_credential_id", "=", String(accountId));
+  }
 
-const loadAccountGameTotals = async (
-  accountId: number,
-  userId: number,
-  startedAt: Date,
-  sql: Sql = getSql()
-) =>
-  sql<AccountTopGameRow[]>`
-    select
-      g.id as game_id,
-      g.title,
-      coalesce(
-        sum(extract(epoch from (coalesce(ps.ended_at, now()) - ps.started_at))),
-        0
-      )::float as total_seconds
-    from play_sessions ps
-    join platform_credentials pc on pc.id = ps.platform_credential_id
-    left join user_settings us on us.user_id = pc.user_id
-    join games g on g.id = ps.game_id
-    where ps.platform_credential_id = ${accountId}
-      and pc.user_id = ${userId}
-      and ps.started_at >= ${startedAt}
-      ${buildIgnoreShortSessionsFilter(sql)}
-    group by g.id, g.title
-    order by total_seconds desc
-  `;
+  if (endedAt) {
+    query = query.where("ps.started_at", "<", endedAt);
+  }
 
-const loadUserGameTotals = async (
-  userId: number,
-  startedAt: Date,
-  sql: Sql = getSql()
-) =>
-  sql<AccountTopGameRow[]>`
-    select
-      g.id as game_id,
-      g.title,
-      coalesce(
-        sum(extract(epoch from (coalesce(ps.ended_at, now()) - ps.started_at))),
-        0
-      )::float as total_seconds
-    from play_sessions ps
-    join platform_credentials pc on pc.id = ps.platform_credential_id
-    left join user_settings us on us.user_id = pc.user_id
-    join games g on g.id = ps.game_id
-    where pc.user_id = ${userId}
-      and ps.started_at >= ${startedAt}
-      ${buildIgnoreShortSessionsFilter(sql)}
-    group by g.id, g.title
-    order by total_seconds desc
-  `;
+  const rows = await query
+    .select([
+      "g.id as game_id",
+      "g.title",
+      totalSecondsExpression().as("total_seconds"),
+    ])
+    .groupBy(["g.id", "g.title"])
+    .orderBy("total_seconds", "desc")
+    .execute();
 
-const loadUserGameTotalsForRange = async (
-  userId: number,
-  startedAt: Date,
-  endedAt: Date,
-  sql: Sql = getSql()
-) =>
-  sql<AccountTopGameRow[]>`
-    select
-      g.id as game_id,
-      g.title,
-      coalesce(
-        sum(extract(epoch from (coalesce(ps.ended_at, now()) - ps.started_at))),
-        0
-      )::float as total_seconds
-    from play_sessions ps
-    join platform_credentials pc on pc.id = ps.platform_credential_id
-    left join user_settings us on us.user_id = pc.user_id
-    join games g on g.id = ps.game_id
-    where pc.user_id = ${userId}
-      and ps.started_at >= ${startedAt}
-      and ps.started_at < ${endedAt}
-      ${buildIgnoreShortSessionsFilter(sql)}
-    group by g.id, g.title
-    order by total_seconds desc
-  `;
+  return rows.map((row) => ({
+    ...row,
+    game_id: Number(row.game_id),
+  })) as unknown as AccountTopGameRow[];
+};
 
-const listAccountsForUser = async (userId: number, sql: Sql = getSql()) =>
-  sql<AccountRow[]>`
-    select pc.id, p.key as platform
-    from platform_credentials pc
-    join platforms p on p.id = pc.platform_id
-    where pc.user_id = ${userId}
-    order by pc.id
-  `;
+const listAccountsForUser = async (userId: number, db: DbExecutor = getDb()) =>
+  db
+    .selectFrom("platform_credentials as pc")
+    .innerJoin("platforms as p", "p.id", "pc.platform_id")
+    .select(["pc.id", "p.key as platform"])
+    .where("pc.user_id", "=", String(userId))
+    .orderBy("pc.id")
+    .execute();
 
 export const accountsRepository = {
   listAccounts: (userId: number) => listAccountsForUser(userId),
@@ -807,40 +582,38 @@ export const accountsRepository = {
     limit: number,
     offset: number,
     filters: RawAccountSessionFilters
-  ) => listAccountSessions(accountId, userId, limit, offset, filters),
+  ) => listSessions(accountId, userId, limit, offset, filters),
 
   listUserSessions: (
     userId: number,
     limit: number,
     offset: number,
     filters: RawAccountSessionFilters
-  ) => listUserSessions(userId, limit, offset, filters),
+  ) => listSessions(undefined, userId, limit, offset, filters),
 
   countAccountSessions: (
     accountId: number,
     userId: number,
     filters: RawAccountSessionFilters
-  ) =>
-    countAccountSessions(accountId, userId, filters).then((rows) =>
-      mapCount(rows)
-    ),
+  ) => countSessions(accountId, userId, filters).then((rows) => mapCount(rows)),
 
   countUserSessions: (userId: number, filters: RawAccountSessionFilters) =>
-    countUserSessions(userId, filters).then((rows) => mapCount(rows)),
+    countSessions(undefined, userId, filters).then((rows) => mapCount(rows)),
 
   listAccountSessionsToday: (
     accountId: number,
     userId: number,
     limit: number
-  ) => listAccountSessionsToday(accountId, userId, limit),
+  ) => listSessionsToday(accountId, userId, limit),
 
   listUserSessionsToday: (userId: number, limit: number) =>
-    listUserSessionsToday(userId, limit),
+    listSessionsToday(undefined, userId, limit),
 
   getAccountCurrentSession: (accountId: number, userId: number) =>
-    loadAccountCurrentSession(accountId, userId),
+    loadCurrentSession(accountId, userId),
 
-  getUserCurrentSession: (userId: number) => loadUserCurrentSession(userId),
+  getUserCurrentSession: (userId: number) =>
+    loadCurrentSession(undefined, userId),
 
   deleteUserSession: (sessionId: number, userId: number) =>
     deleteUserSession(sessionId, userId),
@@ -852,41 +625,41 @@ export const accountsRepository = {
     accountId: number,
     userId: number,
     startedAt: Date
-  ) => loadAccountPlaytimeSummary(accountId, userId, startedAt),
+  ) => loadPlaytimeSummary(accountId, userId, startedAt, undefined),
 
   loadAccountPlatformTotals: (
     accountId: number,
     userId: number,
     startedAt: Date
-  ) => loadAccountPlatformTotals(accountId, userId, startedAt),
+  ) => loadPlatformTotals(accountId, userId, startedAt, undefined),
 
   loadAccountGameTotals: (accountId: number, userId: number, startedAt: Date) =>
-    loadAccountGameTotals(accountId, userId, startedAt),
+    loadGameTotals(accountId, userId, startedAt, undefined),
 
   loadUserPlaytimeSummary: (userId: number, startedAt: Date) =>
-    loadUserPlaytimeSummary(userId, startedAt),
+    loadPlaytimeSummary(undefined, userId, startedAt, undefined),
 
   loadUserPlatformTotals: (userId: number, startedAt: Date) =>
-    loadUserPlatformTotals(userId, startedAt),
+    loadPlatformTotals(undefined, userId, startedAt, undefined),
 
   loadUserGameTotals: (userId: number, startedAt: Date) =>
-    loadUserGameTotals(userId, startedAt),
+    loadGameTotals(undefined, userId, startedAt, undefined),
 
   loadUserPlaytimeSummaryForRange: (
     userId: number,
     startedAt: Date,
     endedAt: Date
-  ) => loadUserPlaytimeSummaryForRange(userId, startedAt, endedAt),
+  ) => loadPlaytimeSummary(undefined, userId, startedAt, endedAt),
 
   loadUserPlatformTotalsForRange: (
     userId: number,
     startedAt: Date,
     endedAt: Date
-  ) => loadUserPlatformTotalsForRange(userId, startedAt, endedAt),
+  ) => loadPlatformTotals(undefined, userId, startedAt, endedAt),
 
   loadUserGameTotalsForRange: (
     userId: number,
     startedAt: Date,
     endedAt: Date
-  ) => loadUserGameTotalsForRange(userId, startedAt, endedAt),
+  ) => loadGameTotals(undefined, userId, startedAt, endedAt),
 };

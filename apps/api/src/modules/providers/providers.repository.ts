@@ -1,8 +1,5 @@
-import type postgres from "postgres";
-
-import { getSql } from "../../common/db/postgres";
-
-type Sql = ReturnType<typeof postgres>;
+import { getDb, type DbExecutor } from "../../common/db/database";
+import { toDomainId } from "../../common/db/ids";
 
 type ProviderStatusRow = {
   id: number;
@@ -12,86 +9,130 @@ type ProviderStatusRow = {
   api_key: string | null;
 };
 
-const listProvidersForUser = async (userId: number, sql: Sql = getSql()) =>
-  sql<ProviderStatusRow[]>`
-    select pc.id, p.key as platform, pc.account_id, pc.active, pc.api_key
-    from platform_credentials pc
-    join platforms p on p.id = pc.platform_id
-    where pc.user_id = ${userId}
-    order by pc.id
-  `;
+const normalizeProviderStatusRow = (
+  row: Omit<ProviderStatusRow, "id"> & { id: string }
+): ProviderStatusRow => ({
+  ...row,
+  id: toDomainId(row.id, "platform_credentials.id"),
+});
+
+const listProvidersForUser = async (
+  userId: number,
+  db: DbExecutor = getDb()
+) => {
+  const rows = await db
+    .selectFrom("platform_credentials as pc")
+    .innerJoin("platforms as p", "p.id", "pc.platform_id")
+    .select([
+      "pc.id",
+      "p.key as platform",
+      "pc.account_id",
+      "pc.active",
+      "pc.api_key",
+    ])
+    .where("pc.user_id", "=", String(userId))
+    .orderBy("pc.id")
+    .execute();
+
+  return rows.map(normalizeProviderStatusRow);
+};
 
 const loadProviderByPlatform = async (
   userId: number,
   platform: string,
-  sql: Sql = getSql()
+  db: DbExecutor = getDb()
 ) => {
-  const rows = await sql<ProviderStatusRow[]>`
-    select pc.id, p.key as platform, pc.account_id, pc.active, pc.api_key
-    from platform_credentials pc
-    join platforms p on p.id = pc.platform_id
-    where pc.user_id = ${userId}
-      and p.key = ${platform}
-    limit 1
-  `;
-  return rows[0] ?? null;
+  const row = await db
+    .selectFrom("platform_credentials as pc")
+    .innerJoin("platforms as p", "p.id", "pc.platform_id")
+    .select([
+      "pc.id",
+      "p.key as platform",
+      "pc.account_id",
+      "pc.active",
+      "pc.api_key",
+    ])
+    .where("pc.user_id", "=", String(userId))
+    .where("p.key", "=", platform)
+    .executeTakeFirst();
+
+  return row ? normalizeProviderStatusRow(row) : null;
 };
 
 const updateProviderApiKey = async (
   credentialId: number,
   apiKey: string,
-  sql: Sql = getSql()
+  db: DbExecutor = getDb()
 ) => {
-  const rows = await sql<ProviderStatusRow[]>`
-    update platform_credentials pc
-    set api_key = ${apiKey}, updated_at = now()
-    from platforms p
-    where pc.id = ${credentialId}
-      and p.id = pc.platform_id
-    returning pc.id, p.key as platform, pc.account_id, pc.active, pc.api_key
-  `;
-  return rows[0] ?? null;
+  const row = await db
+    .updateTable("platform_credentials as pc")
+    .set((eb) => ({ api_key: apiKey, updated_at: eb.fn<Date>("now") }))
+    .from("platforms as p")
+    .where("pc.id", "=", String(credentialId))
+    .whereRef("p.id", "=", "pc.platform_id")
+    .returning([
+      "pc.id",
+      "p.key as platform",
+      "pc.account_id",
+      "pc.active",
+      "pc.api_key",
+    ])
+    .executeTakeFirst();
+
+  return row ? normalizeProviderStatusRow(row) : null;
 };
 
 const updateProviderActive = async (
   userId: number,
   credentialId: number,
   active: boolean,
-  sql: Sql = getSql()
+  db: DbExecutor = getDb()
 ) => {
-  const rows = await sql<ProviderStatusRow[]>`
-    update platform_credentials pc
-    set active = ${active}, updated_at = now()
-    from platforms p
-    where pc.id = ${credentialId}
-      and pc.user_id = ${userId}
-      and p.id = pc.platform_id
-    returning pc.id, p.key as platform, pc.account_id, pc.active, pc.api_key
-  `;
-  return rows[0] ?? null;
+  const row = await db
+    .updateTable("platform_credentials as pc")
+    .set((eb) => ({ active, updated_at: eb.fn<Date>("now") }))
+    .from("platforms as p")
+    .where("pc.id", "=", String(credentialId))
+    .where("pc.user_id", "=", String(userId))
+    .whereRef("p.id", "=", "pc.platform_id")
+    .returning([
+      "pc.id",
+      "p.key as platform",
+      "pc.account_id",
+      "pc.active",
+      "pc.api_key",
+    ])
+    .executeTakeFirst();
+
+  return row ? normalizeProviderStatusRow(row) : null;
 };
 
 const createPlayniteCredential = async (
   userId: number,
   apiKey: string,
-  sql: Sql = getSql()
-) =>
-  sql<ProviderStatusRow[]>`
-    insert into platform_credentials (user_id, platform_id, api_key, account_id, active)
-    values (
-      ${userId},
-      (select id from platforms where key = 'playnite'),
-      ${apiKey},
-      'local',
-      true
-    )
-    returning
-      id,
-      (select key from platforms where key = 'playnite') as platform,
-      account_id,
-      active,
-      api_key
-  `;
+  db: DbExecutor = getDb()
+) => {
+  const playnitePlatformId = db
+    .selectFrom("platforms")
+    .select("id")
+    .where("key", "=", "playnite");
+
+  const rows = await db
+    .insertInto("platform_credentials")
+    .values({
+      user_id: userId,
+      platform_id: playnitePlatformId,
+      api_key: apiKey,
+      account_id: "local",
+      active: true,
+    })
+    .returning(["id", "account_id", "active", "api_key"])
+    .execute();
+
+  return rows.map((row) =>
+    normalizeProviderStatusRow({ ...row, platform: "playnite" })
+  );
+};
 
 export const providersRepository = {
   listProviders: (userId: number) => listProvidersForUser(userId),

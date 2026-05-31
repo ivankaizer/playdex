@@ -354,15 +354,6 @@ export const HomePage = ({
             ))}
           </div>
 
-          <div>
-            <h3 className="text-xl font-semibold text-slate-900 dark:text-white">
-              Interface preview
-            </h3>
-            <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
-              Rendered sections powered by prepared sample data.
-            </p>
-          </div>
-
           <StatsRecapSection
             title="Sessions recap"
             subtitle="Preview"

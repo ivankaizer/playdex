@@ -1,8 +1,10 @@
-import postgres from "postgres";
+import { sql } from "kysely";
 
+import { createDb, ensureDatabaseExists } from "../src/common/db/database";
 import { runMigrations } from "../src/common/db/migrations";
-import { ensureGameId, insertPlaySession } from "../src/shared/db/queries";
+import { upsertGame } from "../src/common/db/queries/games";
 import { normalizeGame } from "../src/modules/games";
+import type { DbExecutor } from "../src/common/db/database";
 
 const databaseUrl = Bun.env.DATABASE_URL;
 if (!databaseUrl?.trim()) {
@@ -139,40 +141,63 @@ const buildSession = (
   };
 };
 
-const sql = postgres(databaseUrl, {
-  max: 1,
-  onnotice: (notice) => {
-    if (notice.code === "42P07") {
-      return;
-    }
-    console.warn(notice);
-  },
-});
+const loadPlatformId = async (db: DbExecutor, key: string) => {
+  const row = await db
+    .selectFrom("platforms")
+    .select("id")
+    .where("key", "=", key)
+    .limit(1)
+    .executeTakeFirst();
+  return row?.id;
+};
 
 try {
-  await runMigrations({ sql });
+  await ensureDatabaseExists(databaseUrl);
+} catch (error) {
+  console.error("Database setup failed.");
+  console.error(error);
+  process.exit(1);
+}
+
+const db = createDb(databaseUrl, { max: 1 });
+
+try {
+  await runMigrations({ db });
 
   const seedGames = SEED_GAMES;
   if (!seedGames.length) {
     throw new Error("No seed games provided.");
   }
 
-  await sql.begin(async (tx) => {
-    await tx`
-      select setval(
-        pg_get_serial_sequence('platform_credentials', 'id'),
-        coalesce((select max(id) from platform_credentials), 0),
-        true
+  await db.transaction().execute(async (trx) => {
+    const platformCredentialsId = await loadPlatformId(
+      trx,
+      "platform_credentials"
+    );
+
+    // Align the platform_credentials sequence to avoid id conflicts.
+    if (platformCredentialsId) {
+      await sql`
+        select setval(
+          pg_get_serial_sequence('platform_credentials', 'id'),
+          coalesce((select max(id) from platform_credentials), 0),
+          true
+        )
+      `.execute(trx);
+    }
+
+    const userRow = await trx
+      .insertInto("users")
+      .values({ email: SEED_EMAIL })
+      .onConflict((oc) =>
+        oc.column("email").doUpdateSet({
+          updated_at: sql<Date>`now()`,
+        })
       )
-    `;
-    const userRows = await tx<{ id: number }[]>`
-      insert into users (email)
-      values (${SEED_EMAIL})
-      on conflict (email)
-      do update set updated_at = now()
-      returning id
-    `;
-    const userId = userRows[0]?.id;
+      .returning("id")
+      .executeTakeFirst();
+
+    const userId = userRow?.id;
     if (!userId) {
       throw new Error("Failed to create or load seed user.");
     }
@@ -181,35 +206,42 @@ try {
       platform: "steam" | "psn" | "playnite",
       accountId: string | null
     ) => {
-      const existingRows = await tx<{ id: number }[]>`
-        select id
-        from platform_credentials
-        where user_id = ${userId}
-          and platform_id = (select id from platforms where key = ${platform})
-        limit 1
-      `;
-      const existingId = existingRows[0]?.id;
+      const platformId = await loadPlatformId(trx, platform);
+
+      const existingRow = await trx
+        .selectFrom("platform_credentials")
+        .select("id")
+        .where("user_id", "=", String(userId))
+        .where("platform_id", "=", String(platformId!))
+        .limit(1)
+        .executeTakeFirst();
+
+      const existingId = existingRow?.id;
       if (existingId) {
-        await tx`
-          update platform_credentials
-          set active = false, updated_at = now()
-          where id = ${existingId}
-        `;
-        return existingId;
+        await trx
+          .updateTable("platform_credentials")
+          .set({
+            active: false,
+            updated_at: sql<Date>`now()`,
+          })
+          .where("id", "=", String(existingId))
+          .execute();
+        return Number(existingId);
       }
 
-      const rows = await tx<{ id: number }[]>`
-        insert into platform_credentials (user_id, platform_id, api_key, account_id, active)
-        values (
-          ${userId},
-          (select id from platforms where key = ${platform}),
-          ${null},
-          ${accountId},
-          ${false}
-        )
-        returning id
-      `;
-      return rows[0]?.id ?? null;
+      const rows = await trx
+        .insertInto("platform_credentials")
+        .values({
+          user_id: userId,
+          platform_id: platformId!,
+          api_key: null,
+          account_id: accountId,
+          active: false,
+        })
+        .returning("id")
+        .execute();
+
+      return rows[0]?.id ? Number(rows[0].id) : null;
     };
 
     const steamId = await ensureCredential("steam", null);
@@ -220,12 +252,17 @@ try {
       throw new Error("Failed to create platform credentials.");
     }
 
-    await tx`
-      delete from play_sessions
-      where platform_credential_id in (${steamId}, ${psnId}, ${playniteId})
-    `;
+    // Delete existing play sessions for the seed credentials.
+    await trx
+      .deleteFrom("play_sessions")
+      .where(
+        "platform_credential_id",
+        "in",
+        [steamId, psnId, playniteId].map(String)
+      )
+      .execute();
 
-    const games = [];
+    const games: { id: number; platform: string }[] = [];
     for (const seed of seedGames) {
       const normalized = normalizeGame({
         platform: seed.platform,
@@ -233,7 +270,7 @@ try {
         externalId: seed.externalId,
         capsuleUrl: seed.capsuleUrl,
       });
-      const id = await ensureGameId(normalized, tx);
+      const id = await upsertGame(trx, normalized);
       games.push({ id, platform: normalized.platform });
     }
 
@@ -268,13 +305,15 @@ try {
     }
 
     for (const session of sessions) {
-      await insertPlaySession(
-        session.platformCredentialId,
-        session.gameId,
-        session.startedAt,
-        session.endedAt,
-        tx
-      );
+      await trx
+        .insertInto("play_sessions")
+        .values({
+          platform_credential_id: session.platformCredentialId,
+          game_id: session.gameId,
+          started_at: session.startedAt,
+          ended_at: session.endedAt,
+        })
+        .execute();
     }
   });
 
@@ -284,5 +323,5 @@ try {
   console.error(error);
   process.exitCode = 1;
 } finally {
-  await sql.end();
+  await db.destroy();
 }

@@ -501,7 +501,7 @@ requiresDb("admin game image update is preserved on poll upsert", async () => {
     capsuleUrl: "https://images.example.com/original.jpg",
   });
   const gameId = normalizeId(
-    await pollingRepository.ensureGameId(initial, db.sql),
+    await pollingRepository.ensureGameId(initial, db.db),
     "games.id"
   );
 
@@ -521,7 +521,7 @@ requiresDb("admin game image update is preserved on poll upsert", async () => {
     externalId: "portal-1",
     capsuleUrl: "https://images.example.com/from-poll.jpg",
   });
-  await pollingRepository.ensureGameId(nextPoll, db.sql);
+    await pollingRepository.ensureGameId(nextPoll, db.db);
 
   const rows = await db.sql<
     { capsule_url: string | null; capsule_url_locked: boolean }[]
@@ -549,7 +549,7 @@ requiresDb("admin game title update is preserved on poll upsert", async () => {
     capsuleUrl: "https://images.example.com/title-original.jpg",
   });
   const gameId = normalizeId(
-    await pollingRepository.ensureGameId(initial, db.sql),
+    await pollingRepository.ensureGameId(initial, db.db),
     "games.id"
   );
 
@@ -570,7 +570,7 @@ requiresDb("admin game title update is preserved on poll upsert", async () => {
     externalId: "title-1",
     capsuleUrl: "https://images.example.com/title-poll.jpg",
   });
-  await pollingRepository.ensureGameId(nextPoll, db.sql);
+    await pollingRepository.ensureGameId(nextPoll, db.db);
 
   const rows = await db.sql<{ title: string; title_locked: boolean }[]>`
     select title, title_locked

@@ -1,5 +1,6 @@
 import { normalizeGame } from "../games";
 import { playniteService } from "../playnite/playnite.service";
+import type { Db, DbExecutor } from "../../common/db/database";
 import type {
   PlatformAccount,
   PlatformClient,
@@ -11,11 +12,11 @@ import {
   recordPollFailure,
   recordPollSuccess,
 } from "../../common/observability";
-import { pollingRepository, type SqlClient } from "./polling.repository";
+import { pollingRepository } from "./polling.repository";
 
 type PollingConfig = {
-  sql: SqlClient;
-  loadAccounts: () => Promise<PollingAccountEntry[]>;
+  db: Db;
+  loadAccounts: (db: DbExecutor) => Promise<PollingAccountEntry[]>;
   pollIntervalSeconds: number;
   maxCycles?: number;
   notifier?: PollingNotifier;
@@ -103,8 +104,11 @@ const safeNotify = async <T>(
   }
 };
 
-const endTimedOutPlayniteSessions = async (notifier?: PollingNotifier) => {
-  const endedSessions = await playniteService.endTimedOutSessions();
+const endTimedOutPlayniteSessions = async (
+  db: DbExecutor,
+  notifier?: PollingNotifier
+) => {
+  const endedSessions = await playniteService.endTimedOutSessions(db);
   for (const session of endedSessions) {
     const durationSeconds = Math.max(
       0,
@@ -127,7 +131,7 @@ const endTimedOutPlayniteSessions = async (notifier?: PollingNotifier) => {
 };
 
 export const syncPlaySession = async (
-  sql: SqlClient,
+  db: DbExecutor,
   platformCredentialId: number,
   gameId: number | null,
   polledAt: Date,
@@ -135,11 +139,11 @@ export const syncPlaySession = async (
 ) => {
   const activeSession = await pollingRepository.fetchActivePlaySession(
     platformCredentialId,
-    sql
+    db
   );
   if (!gameId) {
     if (activeSession) {
-      await pollingRepository.endPlaySession(activeSession.id, polledAt, sql);
+      await pollingRepository.endPlaySession(activeSession.id, polledAt, db);
       logEvent("info", "db.play_session.ended", {
         sessionId: activeSession.id,
         platformCredentialId,
@@ -171,7 +175,7 @@ export const syncPlaySession = async (
       platformCredentialId,
       gameId,
       polledAt,
-      sql
+      db
     );
     logEvent("info", "db.play_session.started", {
       platformCredentialId,
@@ -190,7 +194,7 @@ export const syncPlaySession = async (
     return;
   }
 
-  await pollingRepository.endPlaySession(activeSession.id, polledAt, sql);
+  await pollingRepository.endPlaySession(activeSession.id, polledAt, db);
   logEvent("info", "db.play_session.ended", {
     sessionId: activeSession.id,
     platformCredentialId,
@@ -215,7 +219,7 @@ export const syncPlaySession = async (
     platformCredentialId,
     gameId,
     polledAt,
-    sql
+    db
   );
   logEvent("info", "db.play_session.started", {
     platformCredentialId,
@@ -230,7 +234,7 @@ export const syncPlaySession = async (
 };
 
 export const startPolling = async ({
-  sql,
+  db,
   loadAccounts,
   pollIntervalSeconds,
   maxCycles,
@@ -248,7 +252,7 @@ export const startPolling = async ({
     });
 
     try {
-      await endTimedOutPlayniteSessions(notifier);
+      await endTimedOutPlayniteSessions(db, notifier);
     } catch (error) {
       logEvent("error", "playnite.timeout_cleanup.failed", {
         message: getErrorMessage(error),
@@ -257,7 +261,7 @@ export const startPolling = async ({
 
     let accounts: PollingAccountEntry[] = [];
     try {
-      accounts = await loadAccounts();
+      accounts = await loadAccounts(db);
     } catch (error) {
       logEvent("error", "poll.load_accounts.failed", {
         message: getErrorMessage(error),
@@ -302,48 +306,56 @@ export const startPolling = async ({
       try {
         const result = await entry.client.getCurrentlyPlaying(entry.account);
         const polledAt = new Date();
-        let gameId: number | null = null;
-        let ignored = false;
+        const gameId = await db.transaction().execute(async (trx) => {
+          let gameId: number | null = null;
+          let ignored = false;
 
-        if (result.game) {
-          const normalized = normalizeGame(result.game);
-          gameId = await pollingRepository.ensureGameId(normalized, sql);
-          ignored = await pollingRepository.isGameIgnoredForCredential(
+          if (result.game) {
+            const normalized = normalizeGame(result.game);
+            const resolvedGameId = await pollingRepository.ensureGameId(
+              normalized,
+              trx
+            );
+            gameId = resolvedGameId;
+            ignored = await pollingRepository.isGameIgnoredForCredential(
+              entry.platformCredentialId,
+              resolvedGameId,
+              trx
+            );
+            if (ignored) {
+              logEvent("info", "poll.game.ignored", {
+                platform: entry.account.platform,
+                platformCredentialId: entry.platformCredentialId,
+                gameId,
+                canonicalTitle: normalized.canonicalTitle,
+                title: normalized.title,
+              });
+            }
+          }
+
+          await pollingRepository.recordPollResult(
             entry.platformCredentialId,
             gameId,
-            sql
+            polledAt,
+            result.raw,
+            trx
           );
-          if (ignored) {
-            logEvent("info", "poll.game.ignored", {
-              platform: entry.account.platform,
-              platformCredentialId: entry.platformCredentialId,
-              gameId,
-              canonicalTitle: normalized.canonicalTitle,
-              title: normalized.title,
-            });
-          }
-        }
+          logEvent("info", "db.poll_result.inserted", {
+            platformCredentialId: entry.platformCredentialId,
+            gameId: gameId ?? null,
+            polledAt: polledAt.toISOString(),
+          });
+          const sessionGameId = ignored ? null : gameId;
+          await syncPlaySession(
+            trx,
+            entry.platformCredentialId,
+            sessionGameId,
+            polledAt,
+            ignored ? undefined : notifier
+          );
 
-        await pollingRepository.recordPollResult(
-          entry.platformCredentialId,
-          gameId,
-          polledAt,
-          result.raw,
-          sql
-        );
-        logEvent("info", "db.poll_result.inserted", {
-          platformCredentialId: entry.platformCredentialId,
-          gameId: gameId ?? null,
-          polledAt: polledAt.toISOString(),
+          return gameId;
         });
-        const sessionGameId = ignored ? null : gameId;
-        await syncPlaySession(
-          sql,
-          entry.platformCredentialId,
-          sessionGameId,
-          polledAt,
-          ignored ? undefined : notifier
-        );
 
         backoffState.set(entry.platformCredentialId, {
           failures: 0,

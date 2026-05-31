@@ -1,8 +1,7 @@
-import type postgres from "postgres";
+import { sql } from "kysely";
 
-import { getSql } from "../../common/db/postgres";
-
-type Sql = ReturnType<typeof postgres>;
+import { getDb, type DbExecutor } from "../../common/db/database";
+import { durationSecondsExpression } from "../../common/db/expressions";
 
 type AdminRecentSessionRow = {
   user_id: number;
@@ -51,8 +50,12 @@ type AdminGameRow = {
   capsule_url_locked: boolean;
 };
 
-const listRecentSessions = async (sql: Sql = getSql()) =>
-  sql<AdminRecentSessionRow[]>`
+const listRecentSessions = async (
+  db: DbExecutor = getDb()
+): Promise<AdminRecentSessionRow[]> => {
+  // Row-number window function is kept as a sql fragment because Kysely
+  // does not have a typed builder for PostgreSQL window clauses.
+  const result = await sql<AdminRecentSessionRow>`
     with ranked as (
       select
         u.id as user_id,
@@ -60,15 +63,7 @@ const listRecentSessions = async (sql: Sql = getSql()) =>
         ps.id as session_id,
         g.title as game_name,
         ps.started_at,
-        greatest(
-          0,
-          floor(
-            extract(
-              epoch
-              from (coalesce(ps.ended_at, now()) - ps.started_at)
-            )
-          )
-        )::integer as duration_seconds,
+        ${durationSecondsExpression()} as duration_seconds,
         (ps.ended_at is null) as live,
         row_number() over (
           partition by u.id
@@ -90,28 +85,21 @@ const listRecentSessions = async (sql: Sql = getSql()) =>
     from ranked
     where session_rank <= 3
     order by email asc, started_at desc, session_id desc
-  `;
+  `.execute(db);
+
+  return result.rows;
+};
 
 const listSessions = async (
   query: string,
   limit: number,
   offset: number,
-  sql: Sql = getSql()
-) => {
+  db: DbExecutor = getDb()
+): Promise<AdminMovableSessionRow[]> => {
   const trimmed = query.trim();
   const wildcard = `%${trimmed}%`;
-  const queryFilter = trimmed
-    ? sql`
-        and (
-          u.email ilike ${wildcard}
-          or g.title ilike ${wildcard}
-          or coalesce(pc.account_id, '') ilike ${wildcard}
-          or p.key ilike ${wildcard}
-        )
-      `
-    : sql``;
 
-  return sql<AdminMovableSessionRow[]>`
+  const result = await sql<AdminMovableSessionRow>`
     select
       ps.id as session_id,
       pc.id as source_credential_id,
@@ -121,12 +109,7 @@ const listSessions = async (
       g.title as game_name,
       ps.started_at,
       ps.ended_at,
-      greatest(
-        0,
-        floor(
-          extract(epoch from (coalesce(ps.ended_at, now()) - ps.started_at))
-        )
-      )::integer as duration_seconds,
+      ${durationSecondsExpression()} as duration_seconds,
       (ps.ended_at is null) as live
     from play_sessions ps
     join platform_credentials pc on pc.id = ps.platform_credential_id
@@ -134,28 +117,31 @@ const listSessions = async (
     join platforms p on p.id = pc.platform_id
     join games g on g.id = ps.game_id
     where true
-      ${queryFilter}
+      ${
+        trimmed
+          ? sql`
+              and (
+                u.email ilike ${wildcard}
+                or g.title ilike ${wildcard}
+                or coalesce(pc.account_id, '') ilike ${wildcard}
+                or p.key ilike ${wildcard}
+              )
+            `
+          : sql``
+      }
     order by ps.started_at desc, ps.id desc
     limit ${limit}
     offset ${offset}
-  `;
+  `.execute(db);
+
+  return result.rows;
 };
 
-const countSessions = async (query: string, sql: Sql = getSql()) => {
+const countSessions = async (query: string, db: DbExecutor = getDb()) => {
   const trimmed = query.trim();
   const wildcard = `%${trimmed}%`;
-  const queryFilter = trimmed
-    ? sql`
-        and (
-          u.email ilike ${wildcard}
-          or g.title ilike ${wildcard}
-          or coalesce(pc.account_id, '') ilike ${wildcard}
-          or p.key ilike ${wildcard}
-        )
-      `
-    : sql``;
 
-  const rows = await sql<{ total: number }[]>`
+  const result = await sql<{ total: number }>`
     select count(*)::integer as total
     from play_sessions ps
     join platform_credentials pc on pc.id = ps.platform_credential_id
@@ -163,99 +149,137 @@ const countSessions = async (query: string, sql: Sql = getSql()) => {
     join platforms p on p.id = pc.platform_id
     join games g on g.id = ps.game_id
     where true
-      ${queryFilter}
-  `;
-  return rows[0]?.total ?? 0;
+      ${
+        trimmed
+          ? sql`
+              and (
+                u.email ilike ${wildcard}
+                or g.title ilike ${wildcard}
+                or coalesce(pc.account_id, '') ilike ${wildcard}
+                or p.key ilike ${wildcard}
+              )
+            `
+          : sql``
+      }
+  `.execute(db);
+
+  return result.rows[0]?.total ?? 0;
 };
 
-const listPlatformStatuses = async (sql: Sql = getSql()) =>
-  sql<AdminPlatformStatusRow[]>`
-    select
-      p.key as platform,
-      count(pc.id)::integer as total_credentials,
-      coalesce(sum(case when pc.active then 1 else 0 end), 0)::integer as active_credentials
-    from platform_credentials pc
-    join platforms p on p.id = pc.platform_id
-    group by p.key
-    order by p.key asc
-  `;
+const listPlatformStatuses = async (db: DbExecutor = getDb()) =>
+  db
+    .selectFrom("platform_credentials as pc")
+    .innerJoin("platforms as p", "p.id", "pc.platform_id")
+    .select([
+      "p.key as platform",
+      sql<number>`count(pc.id)::integer`.as("total_credentials"),
+      sql<number>`coalesce(sum(case when pc.active then 1 else 0 end), 0)::integer`.as(
+        "active_credentials"
+      ),
+    ])
+    .groupBy("p.key")
+    .orderBy("p.key", "asc")
+    .execute() as unknown as AdminPlatformStatusRow[];
 
-const loadPlatformByKey = async (platform: string, sql: Sql = getSql()) => {
-  const rows = await sql<{ id: number }[]>`
-    select id
-    from platforms
-    where key = ${platform}
-    limit 1
-  `;
-  return rows[0] ?? null;
+const loadPlatformByKey = async (
+  platform: string,
+  db: DbExecutor = getDb()
+) => {
+  const row = await db
+    .selectFrom("platforms")
+    .select("id")
+    .where("key", "=", platform)
+    .limit(1)
+    .executeTakeFirst();
+  return row ?? null;
 };
 
 const updatePlatformCredentialsActive = async (
   platform: string,
   enabled: boolean,
-  sql: Sql = getSql()
+  db: DbExecutor = getDb()
 ) => {
-  const rows = await sql<{ id: number }[]>`
+  // UPDATE ... FROM cannot be clearly expressed with Kysely's typed builders.
+  const result = await sql<{ id: string }>`
     update platform_credentials pc
     set active = ${enabled}, updated_at = now()
     from platforms p
     where p.id = pc.platform_id
       and p.key = ${platform}
     returning pc.id
-  `;
-  return rows.length;
+  `.execute(db);
+
+  return result.rows.length;
 };
 
-const listCredentials = async (sql: Sql = getSql()) =>
-  sql<AdminCredentialRow[]>`
-    select
-      pc.id,
-      u.email as user_email,
-      p.key as platform,
-      pc.api_key,
-      pc.account_id,
-      pc.active
-    from platform_credentials pc
-    join users u on u.id = pc.user_id
-    join platforms p on p.id = pc.platform_id
-    order by u.email asc, p.key asc, pc.id asc
-  `;
+const listCredentials = async (
+  db: DbExecutor = getDb()
+): Promise<AdminCredentialRow[]> => {
+  const rows = await db
+    .selectFrom("platform_credentials as pc")
+    .innerJoin("users as u", "u.id", "pc.user_id")
+    .innerJoin("platforms as p", "p.id", "pc.platform_id")
+    .select([
+      "pc.id",
+      "u.email as user_email",
+      "p.key as platform",
+      "pc.api_key",
+      "pc.account_id",
+      "pc.active",
+    ])
+    .orderBy("u.email", "asc")
+    .orderBy("p.key", "asc")
+    .orderBy("pc.id", "asc")
+    .execute();
+
+  return rows.map((row) => ({
+    ...row,
+    id: Number(row.id),
+  })) as unknown as AdminCredentialRow[];
+};
 
 const loadCredentialById = async (
   credentialId: number,
-  sql: Sql = getSql()
-) => {
-  const rows = await sql<AdminCredentialRow[]>`
-    select
-      pc.id,
-      u.email as user_email,
-      p.key as platform,
-      pc.api_key,
-      pc.account_id,
-      pc.active
-    from platform_credentials pc
-    join users u on u.id = pc.user_id
-    join platforms p on p.id = pc.platform_id
-    where pc.id = ${credentialId}
-    limit 1
-  `;
-  return rows[0] ?? null;
+  db: DbExecutor = getDb()
+): Promise<AdminCredentialRow | null> => {
+  const row = await db
+    .selectFrom("platform_credentials as pc")
+    .innerJoin("users as u", "u.id", "pc.user_id")
+    .innerJoin("platforms as p", "p.id", "pc.platform_id")
+    .select([
+      "pc.id",
+      "u.email as user_email",
+      "p.key as platform",
+      "pc.api_key",
+      "pc.account_id",
+      "pc.active",
+    ])
+    .where("pc.id", "=", String(credentialId))
+    .limit(1)
+    .executeTakeFirst();
+
+  return row
+    ? ({ ...row, id: Number(row.id) } as unknown as AdminCredentialRow)
+    : null;
 };
 
 const moveSessions = async (
   sessionIds: number[],
   targetCredentialId: number,
-  sql: Sql = getSql()
+  db: DbExecutor = getDb()
 ) => {
-  const rows = await sql<{ id: number }[]>`
+  const result = await sql<{ id: string }>`
     update play_sessions
     set platform_credential_id = ${targetCredentialId},
         updated_at = now()
-    where id = any(${sql.array(sessionIds, 20)})
+    where id = any(ARRAY[${sql.join(
+      sessionIds.map((id) => sql`${id}`)
+    )}]::INTEGER[])
       and platform_credential_id <> ${targetCredentialId}
     returning id
-  `;
-  return rows.length;
+  `.execute(db);
+
+  return result.rows.length;
 };
 
 const updateCredential = async (
@@ -266,9 +290,18 @@ const updateCredential = async (
     userChanged: boolean;
     user: string | null;
   },
-  sql: Sql = getSql()
-) => {
-  const rows = await sql<AdminCredentialRow[]>`
+  db: DbExecutor = getDb()
+): Promise<AdminCredentialRow | null> => {
+  // UPDATE ... FROM with conditional expressions cannot be clearly expressed
+  // with Kysely's typed builders.
+  const result = await sql<{
+    id: string;
+    user_email: string;
+    platform: string;
+    api_key: string | null;
+    account_id: string | null;
+    active: boolean;
+  }>`
     update platform_credentials pc
     set
       api_key = case
@@ -291,20 +324,23 @@ const updateCredential = async (
       pc.api_key,
       pc.account_id,
       pc.active
-  `;
-  return rows[0] ?? null;
+  `.execute(db);
+
+  const row = result.rows[0];
+  return row
+    ? ({ ...row, id: Number(row.id) } as unknown as AdminCredentialRow)
+    : null;
 };
 
 const searchGames = async (
   query: string,
   gameId: number | null,
   limit: number,
-  sql: Sql = getSql()
-) => {
+  db: DbExecutor = getDb()
+): Promise<AdminGameRow[]> => {
   const wildcard = `%${query}%`;
-  const gameIdFilter = gameId ? sql`or g.id = ${gameId}` : sql``;
 
-  return sql<AdminGameRow[]>`
+  const result = await sql<AdminGameRow>`
     select
       g.id,
       g.title,
@@ -316,10 +352,12 @@ const searchGames = async (
     join platforms p on p.id = g.platform_id
     where g.title ilike ${wildcard}
       or coalesce(g.capsule_url, '') ilike ${wildcard}
-      ${gameIdFilter}
+      ${gameId ? sql`or g.id = ${gameId}` : sql``}
     order by g.updated_at desc
     limit ${limit}
-  `;
+  `.execute(db);
+
+  return result.rows;
 };
 
 const updateGame = async (
@@ -334,9 +372,11 @@ const updateGame = async (
     lockImageChanged: boolean;
     lockImage: boolean;
   },
-  sql: Sql = getSql()
-) => {
-  const rows = await sql<AdminGameRow[]>`
+  db: DbExecutor = getDb()
+): Promise<AdminGameRow | null> => {
+  // UPDATE ... FROM with conditional CASE expressions cannot be clearly
+  // expressed with Kysely's typed builders.
+  const result = await sql<AdminGameRow>`
     update games g
     set
       title = case
@@ -368,8 +408,9 @@ const updateGame = async (
       p.key as platform,
       g.capsule_url,
       g.capsule_url_locked
-  `;
-  return rows[0] ?? null;
+  `.execute(db);
+
+  return result.rows[0] ?? null;
 };
 
 export const adminRepository = {

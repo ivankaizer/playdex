@@ -1,9 +1,15 @@
-import postgres from "postgres";
-
+import {
+  createDb,
+  ensureDatabaseExists,
+  getSqlClient,
+  type Db,
+  type SqlClient,
+} from "../../src/common/db/database";
 import { runMigrations } from "../../src/common/db/migrations";
 
 export type TestDatabase = {
-  sql: ReturnType<typeof postgres>;
+  db: Db;
+  sql: SqlClient;
   cleanup: () => Promise<void>;
   databaseUrl: string;
   dbName: string;
@@ -18,12 +24,6 @@ const createTestSqlOptions = () => ({
 
 const normalizeDbName = (name: string) =>
   name.toLowerCase().replace(/[^a-z0-9_]/g, "_");
-
-const buildAdminUrl = (baseUrl: URL) => {
-  const adminUrl = new URL(baseUrl.toString());
-  adminUrl.pathname = "/postgres";
-  return adminUrl;
-};
 
 const isTestDatabaseName = (name: string) => /(^|_)test($|_)/.test(name);
 
@@ -79,25 +79,20 @@ const ensureTestDatabase = (): Promise<{
       ? normalizedBase
       : `${normalizedBase}_test`;
 
-    const adminUrl = buildAdminUrl(parsed);
-    const adminSql = postgres(adminUrl.toString(), createTestSqlOptions());
-    const existing = await adminSql<{ exists: boolean }[]>`
-      select exists(select 1 from pg_database where datname = ${dbName})
-    `;
-    if (!existing[0]?.exists) {
-      await adminSql.unsafe(`create database "${dbName}"`);
-    }
-    await adminSql.end({ timeout: 5 });
-
     const testUrl = new URL(parsed.toString());
     testUrl.pathname = `/${dbName}`;
     const databaseUrl = testUrl.toString();
 
     Bun.env.DATABASE_URL = databaseUrl;
 
-    const migrationSql = postgres(databaseUrl, createTestSqlOptions());
-    await runMigrations({ sql: migrationSql });
-    await migrationSql.end({ timeout: 5 });
+    await ensureDatabaseExists(databaseUrl);
+
+    const migrationDb = createDb(databaseUrl, createTestSqlOptions());
+    try {
+      await runMigrations({ db: migrationDb });
+    } finally {
+      await migrationDb.destroy();
+    }
 
     return { databaseUrl, dbName };
   })();
@@ -107,12 +102,14 @@ const ensureTestDatabase = (): Promise<{
 
 export const createTestDatabase = async (): Promise<TestDatabase> => {
   const { databaseUrl, dbName } = await ensureTestDatabase();
-  const sql = postgres(databaseUrl, createTestSqlOptions());
+  const db = createDb(databaseUrl, createTestSqlOptions());
+  const sql = getSqlClient(db);
 
   return {
+    db,
     sql,
     cleanup: async () => {
-      await sql.end({ timeout: 5 });
+      await db.destroy();
     },
     databaseUrl,
     dbName,

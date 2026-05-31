@@ -1,6 +1,6 @@
 import { createApp } from "./app/createApp";
 import { config } from "./common/config";
-import { getSql } from "./common/db/postgres";
+import { getDb } from "./common/db/database";
 import { runMigrations } from "./common/db/migrations";
 import { loadPollingAccounts, startPolling } from "./modules/polling";
 import { createTelegramNotifier, startTelegramBot } from "./modules/telegram";
@@ -8,10 +8,10 @@ import { createTelegramNotifier, startTelegramBot } from "./modules/telegram";
 const startServer = async () => {
   await runMigrations();
 
-  const sql = getSql();
+  const db = getDb();
   const telegramToken = config.telegramBotToken;
   const notifier = telegramToken
-    ? createTelegramNotifier({ token: telegramToken, sql })
+    ? createTelegramNotifier({ token: telegramToken, db })
     : undefined;
 
   const app = createApp({ notifier }).listen(3000);
@@ -22,13 +22,13 @@ const startServer = async () => {
   console.log(`Polling interval: ${config.pollIntervalSeconds}s`);
 
   if (telegramToken) {
-    startTelegramBot({ token: telegramToken, sql });
+    startTelegramBot({ token: telegramToken, db });
   } else {
     console.log("Telegram bot token not set; notifications disabled.");
   }
 
   await startPolling({
-    sql,
+    db,
     loadAccounts: loadPollingAccounts,
     pollIntervalSeconds: config.pollIntervalSeconds,
     notifier,

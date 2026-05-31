@@ -1,5 +1,4 @@
-import postgres from "postgres";
-
+import { createDb, ensureDatabaseExists } from "../src/common/db/database";
 import { runMigrations } from "../src/common/db/migrations";
 
 const databaseUrl = Bun.env.DATABASE_URL;
@@ -36,30 +35,30 @@ if (!email || !passwordHash) {
   process.exit(1);
 }
 
-const sql = postgres(databaseUrl, {
-  max: 1,
-  onnotice: (notice) => {
-    if (notice.code === "42P07") {
-      return;
-    }
-    console.warn(notice);
-  },
-});
+try {
+  await ensureDatabaseExists(databaseUrl);
+} catch (error) {
+  console.error("Database setup failed.");
+  console.error(error);
+  process.exit(1);
+}
+
+const db = createDb(databaseUrl, { max: 1 });
 
 try {
-  await runMigrations({ sql });
+  await runMigrations({ db });
 
-  const rows = await sql<{ id: number }[]>`
-    insert into users (email, password)
-    values (${email}, ${passwordHash})
-    returning id
-  `;
+  const row = await db
+    .insertInto("users")
+    .values({ email, password: passwordHash })
+    .returning("id")
+    .executeTakeFirst();
 
-  console.log(`Created user ${rows[0]?.id ?? "?"} for ${email}`);
+  console.log(`Created user ${row?.id ?? "?"} for ${email}`);
 } catch (error) {
   console.error("Failed to create user.");
   console.error(error);
   process.exitCode = 1;
 } finally {
-  await sql.end();
+  await db.destroy();
 }

@@ -1,4 +1,5 @@
 import { normalizeGame } from "../games";
+import { getDb, type DbExecutor } from "../../common/db/database";
 import { playniteRepository } from "./playnite.repository";
 
 export type PlayniteGameProvider = "steam" | "unknown";
@@ -69,97 +70,106 @@ export type PlayniteTimedOutSession = {
 
 export const playniteService = {
   recordSession: async (
-    input: PlayniteSessionInput
+    input: PlayniteSessionInput,
+    db = getDb()
   ): Promise<PlayniteSessionResult | null> => {
-    const credentials = await playniteRepository.loadCredentialsByApiKey(
-      input.apiKey,
-      "playnite"
-    );
+    return db.transaction().execute(async (trx) => {
+      const credentials = await playniteRepository.loadCredentialsByApiKey(
+        input.apiKey,
+        "playnite",
+        trx
+      );
 
-    if (credentials.length !== 1) {
-      return null;
-    }
+      if (credentials.length !== 1) {
+        return null;
+      }
 
-    const normalized = normalizeGame({
-      platform: input.gameProvider,
-      title: input.gameTitle,
-      externalId: input.gameId,
+      const normalized = normalizeGame({
+        platform: input.gameProvider,
+        title: input.gameTitle,
+        externalId: input.gameId,
+      });
+      const gameId = await playniteRepository.ensureGameId(normalized, trx);
+      const endedAt = new Date();
+      const startedAt = new Date(
+        endedAt.getTime() - input.durationInSeconds * 1000
+      );
+
+      const sessionId = await playniteRepository.insertPlaySession(
+        credentials[0].id,
+        gameId,
+        startedAt,
+        endedAt,
+        trx
+      );
+
+      return sessionId ? { sessionId } : null;
     });
-    const gameId = await playniteRepository.ensureGameId(normalized);
-    const endedAt = new Date();
-    const startedAt = new Date(
-      endedAt.getTime() - input.durationInSeconds * 1000
-    );
-
-    const sessionId = await playniteRepository.insertPlaySession(
-      credentials[0].id,
-      gameId,
-      startedAt,
-      endedAt
-    );
-
-    if (!sessionId) {
-      return null;
-    }
-
-    return { sessionId };
   },
 
   startSession: async (
-    input: PlayniteSessionStartInput
+    input: PlayniteSessionStartInput,
+    db = getDb()
   ): Promise<PlayniteSessionStartResult | null> => {
-    const credentials = await playniteRepository.loadCredentialsByApiKey(
-      input.apiKey,
-      "playnite"
-    );
-
-    if (credentials.length !== 1) {
-      return null;
-    }
-
-    const normalized = normalizeGame({
-      platform: input.gameProvider,
-      title: input.gameTitle,
-      externalId: input.gameId,
-    });
-    const gameId = await playniteRepository.ensureGameId(normalized);
-    const startedAt = new Date();
-
-    const endedSessions =
-      await playniteRepository.endActiveSessionsForCredential(
-        credentials[0].id,
-        startedAt
+    return db.transaction().execute(async (trx) => {
+      const credentials = await playniteRepository.loadCredentialsByApiKey(
+        input.apiKey,
+        "playnite",
+        trx
       );
 
-    const sessionId = await playniteRepository.insertActivePlaySession(
-      credentials[0].id,
-      gameId,
-      startedAt
-    );
+      if (credentials.length !== 1) {
+        return null;
+      }
 
-    if (!sessionId) {
-      return null;
-    }
+      const normalized = normalizeGame({
+        platform: input.gameProvider,
+        title: input.gameTitle,
+        externalId: input.gameId,
+      });
+      const gameId = await playniteRepository.ensureGameId(normalized, trx);
+      const startedAt = new Date();
 
-    return {
-      sessionId,
-      platformCredentialId: credentials[0].id,
-      gameId,
-      startedAt,
-      endedSessions: endedSessions.map((session) => ({
-        id: session.id,
-        gameId: session.game_id,
-        startedAt: session.started_at,
-      })),
-    };
+      const endedSessions =
+        await playniteRepository.endActiveSessionsForCredential(
+          credentials[0].id,
+          startedAt,
+          trx
+        );
+
+      const sessionId = await playniteRepository.insertActivePlaySession(
+        credentials[0].id,
+        gameId,
+        startedAt,
+        trx
+      );
+
+      if (!sessionId) {
+        return null;
+      }
+
+      return {
+        sessionId,
+        platformCredentialId: credentials[0].id,
+        gameId,
+        startedAt,
+        endedSessions: endedSessions.map((session) => ({
+          id: session.id,
+          gameId: session.game_id,
+          startedAt: session.started_at,
+        })),
+      };
+    });
   },
 
   endSessions: async (
-    input: PlayniteSessionEndInput
+    input: PlayniteSessionEndInput,
+    db: DbExecutor = getDb()
   ): Promise<PlayniteSessionEndResult | null> => {
     const credentials = await playniteRepository.loadCredentialsByApiKey(
       input.apiKey,
-      "playnite"
+      "playnite",
+      db
     );
 
     if (credentials.length !== 1) {
@@ -170,7 +180,8 @@ export const playniteService = {
     const endedSessions =
       await playniteRepository.endActiveSessionsForCredential(
         credentials[0].id,
-        endedAt
+        endedAt,
+        db
       );
 
     return {
@@ -185,57 +196,93 @@ export const playniteService = {
   },
 
   pingSession: async (
-    input: PlayniteSessionPingInput
+    input: PlayniteSessionPingInput,
+    db = getDb()
   ): Promise<PlayniteSessionPingResult | null> => {
-    const credentials = await playniteRepository.loadCredentialsByApiKey(
-      input.apiKey,
-      "playnite"
-    );
+    return db.transaction().execute(async (trx) => {
+      const credentials = await playniteRepository.loadCredentialsByApiKey(
+        input.apiKey,
+        "playnite",
+        trx
+      );
 
-    if (credentials.length !== 1) {
-      return null;
-    }
+      if (credentials.length !== 1) {
+        return null;
+      }
 
-    const platformCredentialId = credentials[0].id;
-    const normalized = normalizeGame({
-      platform: input.gameProvider,
-      title: input.gameTitle,
-      externalId: input.gameId,
-    });
-    const gameId = await playniteRepository.ensureGameId(normalized);
-    const now = new Date();
-    const timeoutBefore = new Date(
-      now.getTime() - PLAYNITE_PING_TIMEOUT_MINUTES * 60_000
-    );
+      const platformCredentialId = credentials[0].id;
+      const normalized = normalizeGame({
+        platform: input.gameProvider,
+        title: input.gameTitle,
+        externalId: input.gameId,
+      });
+      const gameId = await playniteRepository.ensureGameId(normalized, trx);
+      const now = new Date();
+      const timeoutBefore = new Date(
+        now.getTime() - PLAYNITE_PING_TIMEOUT_MINUTES * 60_000
+      );
 
-    const endedTimedOutSessions =
-      await playniteRepository.endTimedOutActiveSessionsForCredential(
+      const endedTimedOutSessions =
+        await playniteRepository.endTimedOutActiveSessionsForCredential(
+          platformCredentialId,
+          timeoutBefore,
+          now,
+          PLAYNITE_PING_TIMEOUT_MINUTES,
+          trx
+        );
+
+      const endedMismatchedSessions =
+        await playniteRepository.endActiveSessionsForCredentialExceptGame(
+          platformCredentialId,
+          gameId,
+          now,
+          trx
+        );
+
+      const activeSession =
+        await playniteRepository.fetchActiveSessionForCredential(
+          platformCredentialId,
+          trx
+        );
+
+      if (activeSession && activeSession.game_id === gameId) {
+        await playniteRepository.touchActiveSession(activeSession.id, now, trx);
+        return {
+          sessionId: activeSession.id,
+          sessionStarted: false,
+          platformCredentialId,
+          gameId,
+          startedAt: activeSession.started_at,
+          endedSessions: [
+            ...endedTimedOutSessions,
+            ...endedMismatchedSessions,
+          ].map((session) => ({
+            id: session.id,
+            platformCredentialId: session.platform_credential_id,
+            gameId: session.game_id,
+            startedAt: session.started_at,
+            endedAt: session.ended_at,
+          })),
+        };
+      }
+
+      const sessionId = await playniteRepository.insertActivePlaySession(
         platformCredentialId,
-        timeoutBefore,
+        gameId,
         now,
-        PLAYNITE_PING_TIMEOUT_MINUTES
+        trx
       );
 
-    const endedMismatchedSessions =
-      await playniteRepository.endActiveSessionsForCredentialExceptGame(
-        platformCredentialId,
-        gameId,
-        now
-      );
+      if (!sessionId) {
+        return null;
+      }
 
-    const activeSession =
-      await playniteRepository.fetchActiveSessionForCredential(
-        platformCredentialId
-      );
-
-    if (activeSession && activeSession.game_id === gameId) {
-      await playniteRepository.touchActiveSession(activeSession.id, now);
       return {
-        sessionId: activeSession.id,
-        sessionStarted: false,
+        sessionId,
+        sessionStarted: true,
         platformCredentialId,
         gameId,
-        startedAt: activeSession.started_at,
+        startedAt: now,
         endedSessions: [
           ...endedTimedOutSessions,
           ...endedMismatchedSessions,
@@ -247,37 +294,12 @@ export const playniteService = {
           endedAt: session.ended_at,
         })),
       };
-    }
-
-    const sessionId = await playniteRepository.insertActivePlaySession(
-      platformCredentialId,
-      gameId,
-      now
-    );
-
-    if (!sessionId) {
-      return null;
-    }
-
-    return {
-      sessionId,
-      sessionStarted: true,
-      platformCredentialId,
-      gameId,
-      startedAt: now,
-      endedSessions: [...endedTimedOutSessions, ...endedMismatchedSessions].map(
-        (session) => ({
-          id: session.id,
-          platformCredentialId: session.platform_credential_id,
-          gameId: session.game_id,
-          startedAt: session.started_at,
-          endedAt: session.ended_at,
-        })
-      ),
-    };
+    });
   },
 
-  endTimedOutSessions: async (): Promise<PlayniteTimedOutSession[]> => {
+  endTimedOutSessions: async (
+    db: DbExecutor = getDb()
+  ): Promise<PlayniteTimedOutSession[]> => {
     const now = new Date();
     const timeoutBefore = new Date(
       now.getTime() - PLAYNITE_PING_TIMEOUT_MINUTES * 60_000
@@ -285,7 +307,8 @@ export const playniteService = {
     const endedSessions = await playniteRepository.endTimedOutActiveSessions(
       timeoutBefore,
       now,
-      PLAYNITE_PING_TIMEOUT_MINUTES
+      PLAYNITE_PING_TIMEOUT_MINUTES,
+      db
     );
 
     return endedSessions.map((session) => ({

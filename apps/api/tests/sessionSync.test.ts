@@ -58,7 +58,7 @@ beforeEach(async () => {
       title: "Game A",
       externalId: "111",
     }),
-    db.sql
+    db.db
   );
   gameIdB = await pollingRepository.ensureGameId(
     normalizeGame({
@@ -66,7 +66,7 @@ beforeEach(async () => {
       title: "Game B",
       externalId: "222",
     }),
-    db.sql
+    db.db
   );
 });
 
@@ -75,7 +75,7 @@ requiresDb("syncPlaySession starts a session when none exists", async () => {
     throw new Error("Test database not initialized.");
   }
 
-  await syncPlaySession(db.sql, credentialId, gameIdA, new Date());
+  await syncPlaySession(db.db, credentialId, gameIdA, new Date());
   const rows = await db.sql<{ ended_at: Date | null }[]>`
     select ended_at from play_sessions
   `;
@@ -90,9 +90,9 @@ requiresDb("syncPlaySession ends an active session when no game", async () => {
   }
 
   const startTime = new Date("2024-01-01T00:00:00Z");
-  await syncPlaySession(db.sql, credentialId, gameIdA, startTime);
+  await syncPlaySession(db.db, credentialId, gameIdA, startTime);
   await syncPlaySession(
-    db.sql,
+    db.db,
     credentialId,
     null,
     new Date("2024-01-01T01:00:00Z")
@@ -112,29 +112,24 @@ requiresDb("syncPlaySession switches sessions when game changes", async () => {
   }
 
   await syncPlaySession(
-    db.sql,
+    db.db,
     credentialId,
     gameIdA,
     new Date("2024-01-01T00:00:00Z")
   );
   const switchTime = new Date("2024-01-01T01:00:00Z");
-  await syncPlaySession(db.sql, credentialId, gameIdB, switchTime);
+  await syncPlaySession(db.db, credentialId, gameIdB, switchTime);
 
-  const rows = await db.sql<
-    {
-      game_id: number;
-      ended_at: Date | null;
-    }[]
-  >`
-    select game_id, ended_at
-    from play_sessions
-    order by id
-  `;
+  const rows = await db.db
+    .selectFrom("play_sessions")
+    .select(["game_id", "ended_at"])
+    .orderBy("id")
+    .execute();
 
   expect(rows.length).toBe(2);
-  expect(rows[0].game_id).toBe(gameIdA);
+  expect(Number(rows[0].game_id)).toBe(gameIdA);
   expect(rows[0].ended_at?.toISOString()).toBe(switchTime.toISOString());
-  expect(rows[1].game_id).toBe(gameIdB);
+  expect(Number(rows[1].game_id)).toBe(gameIdB);
   expect(rows[1].ended_at).toBeNull();
 });
 
@@ -144,9 +139,9 @@ requiresDb("syncPlaySession is idempotent for the same game", async () => {
   }
 
   const startedAt = new Date("2024-01-01T00:00:00Z");
-  await syncPlaySession(db.sql, credentialId, gameIdA, startedAt);
+  await syncPlaySession(db.db, credentialId, gameIdA, startedAt);
   await syncPlaySession(
-    db.sql,
+    db.db,
     credentialId,
     gameIdA,
     new Date("2024-01-01T00:10:00Z")
@@ -169,9 +164,9 @@ requiresDb(
     }
 
     const startedAt = new Date("2024-01-01T01:00:00Z");
-    await syncPlaySession(db.sql, credentialId, gameIdA, startedAt);
+    await syncPlaySession(db.db, credentialId, gameIdA, startedAt);
     await syncPlaySession(
-      db.sql,
+      db.db,
       credentialId,
       gameIdA,
       new Date("2024-01-01T00:30:00Z")

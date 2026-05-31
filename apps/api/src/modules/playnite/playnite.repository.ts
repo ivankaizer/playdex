@@ -1,9 +1,9 @@
-import type postgres from "postgres";
+import { sql } from "kysely";
 
-import { getSql } from "../../common/db/postgres";
+import { getDb, type DbExecutor } from "../../common/db/database";
+import { toDomainId } from "../../common/db/ids";
+import { upsertGame } from "../../common/db/queries/games";
 import type { NormalizedGame } from "../../common/domain/game";
-
-type Sql = ReturnType<typeof postgres>;
 
 type PlatformCredentialRow = {
   id: number;
@@ -27,91 +27,106 @@ type EndedSessionRow = {
   ended_at: Date;
 };
 
+type DbEndedSessionRow = Omit<
+  EndedSessionRow,
+  "id" | "platform_credential_id" | "game_id"
+> & {
+  id: string;
+  platform_credential_id: string;
+  game_id: string;
+};
+
+const toEndedSessionRow = (row: DbEndedSessionRow): EndedSessionRow => ({
+  ...row,
+  id: toDomainId(row.id, "play_sessions.id"),
+  platform_credential_id: toDomainId(
+    row.platform_credential_id,
+    "play_sessions.platform_credential_id"
+  ),
+  game_id: toDomainId(row.game_id, "play_sessions.game_id"),
+});
+
 const loadPlatformCredentialsByApiKey = async (
   apiKey: string,
   platform: string,
-  sql: Sql = getSql()
-) =>
-  sql<PlatformCredentialRow[]>`
-    select pc.id, p.key as platform, pc.api_key, pc.account_id
-    from platform_credentials pc
-    join platforms p on p.id = pc.platform_id
-    where pc.api_key = ${apiKey}
-      and p.key = ${platform}
-      and pc.active = true
-  `;
+  db: DbExecutor = getDb()
+): Promise<PlatformCredentialRow[]> => {
+  const rows = await db
+    .selectFrom("platform_credentials as pc")
+    .innerJoin("platforms as p", "p.id", "pc.platform_id")
+    .select(["pc.id", "p.key as platform", "pc.api_key", "pc.account_id"])
+    .where("pc.api_key", "=", apiKey)
+    .where("p.key", "=", platform)
+    .where("pc.active", "=", true)
+    .execute();
 
-const ensureGameId = async (game: NormalizedGame, sql: Sql = getSql()) => {
-  const rows = await sql<{ id: number }[]>`
-    insert into games (platform_id, title, external_id, canonical_key, capsule_url)
-    values (
-      coalesce(
-        (select id from platforms where key = ${game.platform}),
-        (select id from platforms where key = 'unknown')
-      ),
-      ${game.title},
-      ${game.externalId ?? null},
-      ${game.canonicalKey},
-      ${game.capsuleUrl ?? null}
-    )
-    on conflict (canonical_key)
-    do update set
-      title = case
-        when games.title_locked then games.title
-        else excluded.title
-      end,
-      platform_id = excluded.platform_id,
-      external_id = excluded.external_id,
-      capsule_url = case
-        when games.capsule_url_locked then games.capsule_url
-        else coalesce(excluded.capsule_url, games.capsule_url)
-      end,
-      updated_at = now()
-    returning id
-  `;
-  return rows[0].id;
+  return rows.map((row) => ({
+    ...row,
+    id: toDomainId(row.id, "platform_credentials.id"),
+  }));
 };
 
 const endActiveSessionsForCredential = async (
   platformCredentialId: number,
   endedAt: Date,
-  sql: Sql = getSql()
+  db: DbExecutor = getDb()
 ) =>
-  sql<EndedSessionRow[]>`
-    update play_sessions
-    set ended_at = ${endedAt}, updated_at = now()
-    where platform_credential_id = ${platformCredentialId}
-      and ended_at is null
-    returning id, platform_credential_id, game_id, started_at, ended_at
-  `;
+  (
+    await db
+      .updateTable("play_sessions")
+      .set({ ended_at: endedAt, updated_at: sql`now()` })
+      .where("platform_credential_id", "=", String(platformCredentialId))
+      .where("ended_at", "is", null)
+      .returning([
+        "id",
+        "platform_credential_id",
+        "game_id",
+        "started_at",
+        "ended_at",
+      ])
+      .execute()
+  ).map((row) => toEndedSessionRow(row as DbEndedSessionRow));
 
 const endActiveSessionsForCredentialExceptGame = async (
   platformCredentialId: number,
   gameId: number,
   endedAt: Date,
-  sql: Sql = getSql()
+  db: DbExecutor = getDb()
 ) =>
-  sql<EndedSessionRow[]>`
-    update play_sessions
-    set ended_at = ${endedAt}, updated_at = now()
-    where platform_credential_id = ${platformCredentialId}
-      and game_id <> ${gameId}
-      and ended_at is null
-    returning id, platform_credential_id, game_id, started_at, ended_at
-  `;
+  (
+    await db
+      .updateTable("play_sessions")
+      .set({ ended_at: endedAt, updated_at: sql`now()` })
+      .where("platform_credential_id", "=", String(platformCredentialId))
+      .where("game_id", "<>", String(gameId))
+      .where("ended_at", "is", null)
+      .returning([
+        "id",
+        "platform_credential_id",
+        "game_id",
+        "started_at",
+        "ended_at",
+      ])
+      .execute()
+  ).map((row) => toEndedSessionRow(row as DbEndedSessionRow));
 
 const insertActivePlaySession = async (
   platformCredentialId: number,
   gameId: number,
   startedAt: Date,
-  sql: Sql = getSql()
+  db: DbExecutor = getDb()
 ) => {
-  const rows = await sql<{ id: number }[]>`
-    insert into play_sessions (platform_credential_id, game_id, started_at)
-    values (${platformCredentialId}, ${gameId}, ${startedAt})
-    returning id
-  `;
-  return rows[0]?.id ?? null;
+  const row = await db
+    .insertInto("play_sessions")
+    .values({
+      platform_credential_id: platformCredentialId,
+      game_id: gameId,
+      started_at: startedAt,
+    })
+    .returning("id")
+    .executeTakeFirst();
+
+  return row ? toDomainId(row.id, "play_sessions.id") : null;
 };
 
 const insertPlaySession = async (
@@ -119,55 +134,72 @@ const insertPlaySession = async (
   gameId: number,
   startedAt: Date,
   endedAt: Date,
-  sql: Sql = getSql()
+  db: DbExecutor = getDb()
 ) => {
-  const rows = await sql<{ id: number }[]>`
-    insert into play_sessions (platform_credential_id, game_id, started_at, ended_at)
-    values (${platformCredentialId}, ${gameId}, ${startedAt}, ${endedAt})
-    returning id
-  `;
-  return rows[0]?.id ?? null;
+  const row = await db
+    .insertInto("play_sessions")
+    .values({
+      platform_credential_id: platformCredentialId,
+      game_id: gameId,
+      started_at: startedAt,
+      ended_at: endedAt,
+    })
+    .returning("id")
+    .executeTakeFirst();
+
+  return row ? toDomainId(row.id, "play_sessions.id") : null;
 };
 
 const fetchActiveSessionForCredential = async (
   platformCredentialId: number,
-  sql: Sql = getSql()
-) => {
-  const rows = await sql<ActiveSessionRow[]>`
-    select id, game_id, started_at, updated_at
-    from play_sessions
-    where platform_credential_id = ${platformCredentialId}
-      and ended_at is null
-    order by started_at desc
-    limit 1
-  `;
-  return rows[0] ?? null;
+  db: DbExecutor = getDb()
+): Promise<ActiveSessionRow | null> => {
+  const row = await db
+    .selectFrom("play_sessions")
+    .select(["id", "game_id", "started_at", "updated_at"])
+    .where("platform_credential_id", "=", String(platformCredentialId))
+    .where("ended_at", "is", null)
+    .orderBy("started_at", "desc")
+    .executeTakeFirst();
+
+  return row
+    ? {
+        ...row,
+        id: toDomainId(row.id, "play_sessions.id"),
+        game_id: toDomainId(row.game_id, "play_sessions.game_id"),
+      }
+    : null;
 };
 
 const touchActiveSession = async (
   sessionId: number,
   touchedAt: Date,
-  sql: Sql = getSql()
+  db: DbExecutor = getDb()
 ) => {
-  const rows = await sql<{ id: number }[]>`
-    update play_sessions
-    set updated_at = ${touchedAt}
-    where id = ${sessionId}
-      and ended_at is null
-    returning id
-  `;
-  return rows[0]?.id ?? null;
+  const row = await db
+    .updateTable("play_sessions")
+    .set({ updated_at: touchedAt })
+    .where("id", "=", String(sessionId))
+    .where("ended_at", "is", null)
+    .returning("id")
+    .executeTakeFirst();
+
+  return row ? toDomainId(row.id, "play_sessions.id") : null;
 };
 
 const endTimedOutActiveSessions = async (
   timeoutBefore: Date,
   endedAt: Date,
   timeoutMinutes: number,
-  sql: Sql = getSql()
-) =>
-  sql<EndedSessionRow[]>`
+  db: DbExecutor = getDb()
+) => {
+  // Kysely's builder is less clear for PostgreSQL UPDATE FROM plus interval math.
+  const { rows } = await sql<DbEndedSessionRow>`
     update play_sessions ps
-    set ended_at = least(${endedAt}, ps.updated_at + (${timeoutMinutes} * interval '1 minute')),
+    set ended_at = least(
+          ${endedAt},
+          ps.updated_at + (${timeoutMinutes} * interval '1 minute')
+        ),
         updated_at = now()
     from platform_credentials pc
     join platforms p on p.id = pc.platform_id
@@ -176,75 +208,106 @@ const endTimedOutActiveSessions = async (
       and ps.ended_at is null
       and ps.updated_at < ${timeoutBefore}
     returning ps.id, ps.platform_credential_id, ps.game_id, ps.started_at, ps.ended_at
-  `;
+  `.execute(db);
+
+  return rows.map(toEndedSessionRow);
+};
 
 const endTimedOutActiveSessionsForCredential = async (
   platformCredentialId: number,
   timeoutBefore: Date,
   endedAt: Date,
   timeoutMinutes: number,
-  sql: Sql = getSql()
-) =>
-  sql<EndedSessionRow[]>`
-    update play_sessions ps
-    set ended_at = least(${endedAt}, ps.updated_at + (${timeoutMinutes} * interval '1 minute')),
-        updated_at = now()
-    where ps.platform_credential_id = ${platformCredentialId}
-      and ps.ended_at is null
-      and ps.updated_at < ${timeoutBefore}
-    returning ps.id, ps.platform_credential_id, ps.game_id, ps.started_at, ps.ended_at
-  `;
+  db: DbExecutor = getDb()
+) => {
+  const rows = await db
+    .updateTable("play_sessions")
+    .set({
+      ended_at: sql`least(
+        ${endedAt},
+        updated_at + (${timeoutMinutes} * interval '1 minute')
+      )`,
+      updated_at: sql`now()`,
+    })
+    .where("platform_credential_id", "=", String(platformCredentialId))
+    .where("ended_at", "is", null)
+    .where("updated_at", "<", timeoutBefore)
+    .returning([
+      "id",
+      "platform_credential_id",
+      "game_id",
+      "started_at",
+      "ended_at",
+    ])
+    .execute();
+
+  return rows.map((row) => toEndedSessionRow(row as DbEndedSessionRow));
+};
 
 export const playniteRepository = {
-  loadCredentialsByApiKey: (apiKey: string, platform: string) =>
-    loadPlatformCredentialsByApiKey(apiKey, platform),
+  loadCredentialsByApiKey: (
+    apiKey: string,
+    platform: string,
+    db?: DbExecutor
+  ) => loadPlatformCredentialsByApiKey(apiKey, platform, db),
 
-  ensureGameId: (game: NormalizedGame) => ensureGameId(game),
+  ensureGameId: (game: NormalizedGame, db?: DbExecutor) =>
+    upsertGame(db ?? getDb(), game),
 
-  endActiveSessionsForCredential: (credentialId: number, endedAt: Date) =>
-    endActiveSessionsForCredential(credentialId, endedAt),
+  endActiveSessionsForCredential: (
+    credentialId: number,
+    endedAt: Date,
+    db?: DbExecutor
+  ) => endActiveSessionsForCredential(credentialId, endedAt, db),
 
   endActiveSessionsForCredentialExceptGame: (
     credentialId: number,
     gameId: number,
-    endedAt: Date
-  ) => endActiveSessionsForCredentialExceptGame(credentialId, gameId, endedAt),
+    endedAt: Date,
+    db?: DbExecutor
+  ) =>
+    endActiveSessionsForCredentialExceptGame(credentialId, gameId, endedAt, db),
 
   endTimedOutActiveSessions: (
     timeoutBefore: Date,
     endedAt: Date,
-    timeoutMinutes: number
-  ) => endTimedOutActiveSessions(timeoutBefore, endedAt, timeoutMinutes),
+    timeoutMinutes: number,
+    db?: DbExecutor
+  ) => endTimedOutActiveSessions(timeoutBefore, endedAt, timeoutMinutes, db),
 
   endTimedOutActiveSessionsForCredential: (
     credentialId: number,
     timeoutBefore: Date,
     endedAt: Date,
-    timeoutMinutes: number
+    timeoutMinutes: number,
+    db?: DbExecutor
   ) =>
     endTimedOutActiveSessionsForCredential(
       credentialId,
       timeoutBefore,
       endedAt,
-      timeoutMinutes
+      timeoutMinutes,
+      db
     ),
 
-  fetchActiveSessionForCredential: (credentialId: number) =>
-    fetchActiveSessionForCredential(credentialId),
+  fetchActiveSessionForCredential: (credentialId: number, db?: DbExecutor) =>
+    fetchActiveSessionForCredential(credentialId, db),
 
-  touchActiveSession: (sessionId: number, touchedAt: Date) =>
-    touchActiveSession(sessionId, touchedAt),
+  touchActiveSession: (sessionId: number, touchedAt: Date, db?: DbExecutor) =>
+    touchActiveSession(sessionId, touchedAt, db),
 
   insertActivePlaySession: (
     credentialId: number,
     gameId: number,
-    startedAt: Date
-  ) => insertActivePlaySession(credentialId, gameId, startedAt),
+    startedAt: Date,
+    db?: DbExecutor
+  ) => insertActivePlaySession(credentialId, gameId, startedAt, db),
 
   insertPlaySession: (
     credentialId: number,
     gameId: number,
     startedAt: Date,
-    endedAt: Date
-  ) => insertPlaySession(credentialId, gameId, startedAt, endedAt),
+    endedAt: Date,
+    db?: DbExecutor
+  ) => insertPlaySession(credentialId, gameId, startedAt, endedAt, db),
 };
