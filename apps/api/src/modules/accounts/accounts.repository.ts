@@ -480,20 +480,10 @@ const loadPlatformTotals = async (
     else ${sql.ref("pc_platform.key")}
   end`;
 
-  const sourceCase = sql<string>`case
-    when ${sql.ref("pc_platform.key")} = 'manual'
-      and coalesce(${sql.ref("mapped_game.canonical_key")}, ${sql.ref("g.canonical_key")}) like 'igdb:%'
-      then 'igdb'
-    when ${sql.ref("pc_platform.key")} = 'manual'
-      and coalesce(${sql.ref("mapped_game.id")}, ${sql.ref("g.id")}) is not null
-      then 'local'
-    else null
-  end`;
-
   const result = await sql<AccountPlatformTotalsRow>`
     select
       ${platformCase} as platform,
-      ${sourceCase} as source,
+      null as source,
       ${totalSecondsExpression()} as total_seconds
     from play_sessions ps
     join platform_credentials pc on pc.id = ps.platform_credential_id
