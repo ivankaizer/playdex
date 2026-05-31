@@ -81,7 +81,7 @@ requiresDb("startPolling records poll results and sessions", async () => {
 
   await new Promise<void>((resolve) => {
     void startPolling({
-      sql: db.sql,
+      db: db.db,
       loadAccounts,
       pollIntervalSeconds: 60,
       maxCycles: 1,
@@ -132,7 +132,7 @@ requiresDb("startPolling is idempotent for repeated poll results", async () => {
   await new Promise<void>((resolve) => {
     let completed = 0;
     void startPolling({
-      sql: db.sql,
+      db: db.db,
       loadAccounts,
       pollIntervalSeconds: 0,
       maxCycles: 2,
@@ -213,7 +213,7 @@ requiresDb("startPolling continues when one account fails", async () => {
 
   await new Promise<void>((resolve) => {
     void startPolling({
-      sql: db.sql,
+      db: db.db,
       loadAccounts,
       pollIntervalSeconds: 60,
       maxCycles: 1,
@@ -259,7 +259,7 @@ requiresDb("startPolling backs off after failures", async () => {
   await new Promise<void>((resolve) => {
     let completed = 0;
     void startPolling({
-      sql: db.sql,
+      db: db.db,
       loadAccounts,
       pollIntervalSeconds: 0,
       maxCycles: 2,
@@ -323,7 +323,7 @@ requiresDb(
 
     await new Promise<void>((resolve) => {
       void startPolling({
-        sql: db.sql,
+        db: db.db,
         loadAccounts,
         pollIntervalSeconds: 60,
         maxCycles: 1,

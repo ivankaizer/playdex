@@ -50,3 +50,4 @@ dist/
 apps/api/dist/
 apps/web/dist/
 todo.md
+*.internal

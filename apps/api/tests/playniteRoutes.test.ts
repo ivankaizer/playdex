@@ -382,7 +382,7 @@ requiresDb(
       error: { error: string } | null;
     };
     expect(payload.error).toBeNull();
-    expect(typeof payload.data?.sessionId).toBe("string");
+    expect(typeof payload.data?.sessionId).toBe("number");
 
     const rows = await db.sql<
       { platform_credential_id: number; ended_at: Date | null }[]

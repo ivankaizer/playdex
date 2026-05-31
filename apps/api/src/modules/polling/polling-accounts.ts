@@ -1,12 +1,15 @@
 import { PsnClient } from "../providers/clients/psn-client";
 import { SteamClient } from "../providers/clients/steam-client";
+import { getDb, type DbExecutor } from "../../common/db/database";
 import { pollingRepository } from "./polling.repository";
 
 import type { PollingAccountEntry } from "./polling";
 
-export const loadPollingAccounts = async (): Promise<PollingAccountEntry[]> => {
+export const loadPollingAccounts = async (
+  db: DbExecutor = getDb()
+): Promise<PollingAccountEntry[]> => {
   const accounts: PollingAccountEntry[] = [];
-  const credentials = await pollingRepository.loadPlatformCredentials();
+  const credentials = await pollingRepository.loadPlatformCredentials(db);
 
   for (const credential of credentials) {
     if (credential.platform === "playnite") {
@@ -53,7 +56,8 @@ export const loadPollingAccounts = async (): Promise<PollingAccountEntry[]> => {
           console.log(`Resolved PSN account ID: ${psnAccountId}`);
           await pollingRepository.storeResolvedAccountId(
             credential.id,
-            psnAccountId
+            psnAccountId,
+            db
           );
         } else {
           console.warn(

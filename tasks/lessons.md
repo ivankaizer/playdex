@@ -14,3 +14,11 @@
   - Create each feature under `specs/<NNN>-<feature-slug>/` using a three-digit sequence and kebab-case slug.
   - Keep `requirements.md`, `design.md`, and `tasks.md` together in that same directory.
   - Allocate the next available sequence for a new feature; reuse a directory only when revising the same feature.
+
+## 2026-05-31 - Execute an approved SDD feature end to end
+- Pattern: The implementation workflow stopped after each subtask and required repeated `next` messages.
+- Failure mode: Artificial review gates interrupt autonomous execution even after the user has approved the numbered feature plan.
+- Rule:
+  - Treat `$implement <NNN>` as a request to complete every remaining task in `specs/<NNN>-<feature-slug>/tasks.md`.
+  - Track and verify tasks individually, but continue automatically after each verified task.
+  - Ask for review only after final feature verification or when a genuine blocker requires user input.

@@ -1,4 +1,5 @@
 import { config } from "../../common/config";
+import { getDb, type DbExecutor } from "../../common/db/database";
 import { AppError } from "../../common/errors/AppError";
 import { normalizeGame, normalizeGameTitle } from "../games";
 import { searchIgdbGames } from "../providers/clients/igdb-client";
@@ -27,37 +28,47 @@ type ManualEntrySelection =
       coverUrl: string | null;
     };
 
-const getOrCreateManualCredential = async (userId: number) => {
+const getOrCreateManualCredential = async (
+  userId: number,
+  db: DbExecutor = getDb()
+) => {
   const existing = await manualRepository.loadProviderByPlatform(
     userId,
-    "manual"
+    "manual",
+    db
   );
   if (existing) {
     return existing;
   }
 
-  const created = await manualRepository.createManualCredential(userId);
+  const created = await manualRepository.createManualCredential(userId, db);
   if (!created?.[0]) {
     throw new AppError("Failed to create manual credential.", 500);
   }
   return created[0];
 };
 
-const ensureManualInput = async (userId: number, rawTitle: string) => {
+const ensureManualInput = async (
+  userId: number,
+  rawTitle: string,
+  db: DbExecutor = getDb()
+) => {
   const canonicalTitle = normalizeGameTitle(rawTitle);
   const existing = await manualRepository.loadManualInputByCanonical(
     userId,
-    canonicalTitle
+    canonicalTitle,
+    db
   );
   if (existing) {
-    await manualRepository.updateManualInputTitle(existing.id, rawTitle);
+    await manualRepository.updateManualInputTitle(existing.id, rawTitle, db);
     return existing;
   }
 
   const created = await manualRepository.insertManualInput(
     userId,
     rawTitle,
-    canonicalTitle
+    canonicalTitle,
+    db
   );
   if (!created) {
     throw new AppError("Failed to create manual input.", 500);
@@ -72,39 +83,45 @@ export const manualService = {
       throw new AppError("Title is required.", 400);
     }
 
-    const credential = await getOrCreateManualCredential(userId);
-    const manualInput = await ensureManualInput(userId, trimmed);
-    const startedAt = new Date();
+    return getDb()
+      .transaction()
+      .execute(async (trx) => {
+        const credential = await getOrCreateManualCredential(userId, trx);
+        const manualInput = await ensureManualInput(userId, trimmed, trx);
+        const startedAt = new Date();
 
-    await manualRepository.endActiveSessionsForCredential(
-      credential.id,
-      startedAt
-    );
+        await manualRepository.endActiveSessionsForCredential(
+          credential.id,
+          startedAt,
+          trx
+        );
 
-    let gameId = manualInput.mapped_game_id ?? null;
-    if (!gameId) {
-      const normalized = normalizeGame({
-        platform: "manual",
-        title: trimmed,
+        let gameId = manualInput.mapped_game_id ?? null;
+        if (!gameId) {
+          const normalized = normalizeGame({
+            platform: "manual",
+            title: trimmed,
+          });
+          gameId = await manualRepository.ensureGameId(normalized, trx);
+        }
+
+        const sessionId = await manualRepository.insertActivePlaySession(
+          credential.id,
+          gameId,
+          startedAt,
+          trx
+        );
+        if (!sessionId) {
+          throw new AppError("Failed to create manual session.", 500);
+        }
+
+        return {
+          sessionId,
+          gameId,
+          platformCredentialId: credential.id,
+          startedAt,
+        };
       });
-      gameId = await manualRepository.ensureGameId(normalized);
-    }
-
-    const sessionId = await manualRepository.insertActivePlaySession(
-      credential.id,
-      gameId,
-      startedAt
-    );
-    if (!sessionId) {
-      throw new AppError("Failed to create manual session.", 500);
-    }
-
-    return {
-      sessionId,
-      gameId,
-      platformCredentialId: credential.id,
-      startedAt,
-    };
   },
 
   createManualEntry: async (payload: {
@@ -120,35 +137,44 @@ export const manualService = {
       throw new AppError("Duration must be a positive number.", 400);
     }
 
-    const credential = await getOrCreateManualCredential(payload.userId);
+    return getDb()
+      .transaction()
+      .execute(async (trx) => {
+        const credential = await getOrCreateManualCredential(
+          payload.userId,
+          trx
+        );
 
-    const gameId =
-      payload.selection.type === "local"
-        ? payload.selection.gameId
-        : await manualRepository.ensureGameId(
-            normalizeGame({
-              platform: payload.selection.platform,
-              title: payload.selection.title,
-              externalId: payload.selection.igdbId,
-              capsuleUrl: payload.selection.coverUrl ?? undefined,
-            })
-          );
+        const gameId =
+          payload.selection.type === "local"
+            ? payload.selection.gameId
+            : await manualRepository.ensureGameId(
+                normalizeGame({
+                  platform: payload.selection.platform,
+                  title: payload.selection.title,
+                  externalId: payload.selection.igdbId,
+                  capsuleUrl: payload.selection.coverUrl ?? undefined,
+                }),
+                trx
+              );
 
-    const endedAt = new Date(
-      payload.startedAt.getTime() + payload.durationSeconds * 1000
-    );
+        const endedAt = new Date(
+          payload.startedAt.getTime() + payload.durationSeconds * 1000
+        );
 
-    const sessionId = await manualRepository.insertPlaySession(
-      credential.id,
-      gameId,
-      payload.startedAt,
-      endedAt
-    );
-    if (!sessionId) {
-      throw new AppError("Failed to create manual entry.", 500);
-    }
+        const sessionId = await manualRepository.insertPlaySession(
+          credential.id,
+          gameId,
+          payload.startedAt,
+          endedAt,
+          trx
+        );
+        if (!sessionId) {
+          throw new AppError("Failed to create manual entry.", 500);
+        }
 
-    return { sessionId };
+        return { sessionId };
+      });
   },
 
   stopManualSession: async (userId: number) => {
@@ -199,33 +225,41 @@ export const manualService = {
     inputId: number,
     selection: ManualMappingSelection
   ) => {
-    let platformKey: string | null = null;
-    if (selection.type === "igdb") {
-      if (selection.platform) {
-        platformKey = selection.platform;
-      } else if (selection.platformId) {
-        platformKey = await manualRepository.loadPlatformKeyByIgdbId(
-          selection.platformId
+    return getDb()
+      .transaction()
+      .execute(async (trx) => {
+        let platformKey: string | null = null;
+        if (selection.type === "igdb") {
+          if (selection.platform) {
+            platformKey = selection.platform;
+          } else if (selection.platformId) {
+            platformKey = await manualRepository.loadPlatformKeyByIgdbId(
+              selection.platformId,
+              trx
+            );
+          }
+        }
+
+        const gameId =
+          selection.type === "local"
+            ? selection.gameId
+            : await manualRepository.ensureIgdbGame(
+                {
+                  igdbId: selection.igdbId,
+                  title: selection.title,
+                  platform: platformKey,
+                  capsuleUrl: selection.coverUrl,
+                },
+                trx
+              );
+
+        return manualRepository.updateManualInputMapping(
+          userId,
+          inputId,
+          gameId,
+          trx
         );
-      }
-    }
-
-    const gameId =
-      selection.type === "local"
-        ? selection.gameId
-        : await manualRepository.ensureIgdbGame({
-            igdbId: selection.igdbId,
-            title: selection.title,
-            platform: platformKey,
-            capsuleUrl: selection.coverUrl,
-          });
-
-    const updated = await manualRepository.updateManualInputMapping(
-      userId,
-      inputId,
-      gameId
-    );
-    return updated;
+      });
   },
 
   searchManualMappingOptions: async (query: string) => {

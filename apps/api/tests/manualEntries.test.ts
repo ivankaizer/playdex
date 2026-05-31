@@ -90,7 +90,7 @@ const createGame = async (
       title,
       externalId,
     }),
-    db.sql
+    db.db
   );
 };
 
@@ -195,12 +195,14 @@ requiresDb(
 
     await startManualSession(userId, "Hades");
 
-    const rows = await db.sql<{ game_id: number }[]>`
-      select game_id from play_sessions
-      order by id desc limit 1
-    `;
+    const rows = await db.db
+      .selectFrom("play_sessions")
+      .select("game_id")
+      .orderBy("id", "desc")
+      .limit(1)
+      .execute();
 
-    expect(rows[0].game_id).toBe(mappedGameId);
+    expect(Number(rows[0].game_id)).toBe(mappedGameId);
   }
 );
 

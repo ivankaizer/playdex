@@ -7,11 +7,12 @@ import { getErrorMessage, logEvent } from "../../common/observability";
 import { renderNotificationWebp } from "./notification-image";
 import type { PollingNotifier } from "../polling";
 import { manualService } from "../manual";
-import { telegramRepository, type SqlClient } from "./telegram.repository";
+import type { DbExecutor } from "../../common/db/database";
+import { telegramRepository } from "./telegram.repository";
 
 export type TelegramBotConfig = {
   token: string;
-  sql: SqlClient;
+  db: DbExecutor;
 };
 
 const formatGameLabel = (game: { title: string; platform: string } | null) => {
@@ -98,7 +99,7 @@ const sendSessionImage = async ({
 
 export const createTelegramNotifier = ({
   token,
-  sql,
+  db,
 }: TelegramBotConfig): PollingNotifier => ({
   onPollFailure: async ({
     platformCredentialId,
@@ -108,7 +109,7 @@ export const createTelegramNotifier = ({
   }) => {
     const target = await telegramRepository.loadNotificationTargetByCredential(
       platformCredentialId,
-      sql
+      db
     );
     if (!target?.chat_id) {
       return;
@@ -128,13 +129,13 @@ export const createTelegramNotifier = ({
   onSessionStarted: async ({ platformCredentialId, gameId }) => {
     const target = await telegramRepository.loadNotificationTargetByCredential(
       platformCredentialId,
-      sql
+      db
     );
     if (!target?.chat_id) {
       return;
     }
 
-    const game = await telegramRepository.loadGameById(gameId, sql);
+    const game = await telegramRepository.loadGameById(gameId, db);
     await sendSessionImage({
       token,
       chatId: target.chat_id,
@@ -145,13 +146,13 @@ export const createTelegramNotifier = ({
   onSessionEnded: async ({ platformCredentialId, gameId, durationSeconds }) => {
     const target = await telegramRepository.loadNotificationTargetByCredential(
       platformCredentialId,
-      sql
+      db
     );
     if (!target?.chat_id) {
       return;
     }
 
-    const game = await telegramRepository.loadGameById(gameId, sql);
+    const game = await telegramRepository.loadGameById(gameId, db);
     const duration = formatDuration(durationSeconds);
     await sendSessionImage({
       token,
@@ -178,18 +179,18 @@ const summarizeStoppedSessions = (
 
 const summarizeStartedSession = async (
   gameId: number,
-  sql: SqlClient
+  db: DbExecutor
 ): Promise<string> => {
-  const game = await telegramRepository.loadGameById(gameId, sql);
+  const game = await telegramRepository.loadGameById(gameId, db);
   return `Session started: ${formatGameLabel(game)}.`;
 };
 
 const handleStopCommand = async (
   token: string,
-  sql: SqlClient,
+  db: DbExecutor,
   chatId: string
 ) => {
-  const user = await telegramRepository.loadUserByChatId(chatId, sql);
+  const user = await telegramRepository.loadUserByChatId(chatId, db);
   if (!user) {
     await sendNotification(
       token,
@@ -203,18 +204,18 @@ const handleStopCommand = async (
   const sessions = await telegramRepository.endActiveSessionsForUser(
     user.id,
     endedAt,
-    sql
+    db
   );
   await sendNotification(token, chatId, summarizeStoppedSessions(sessions));
 };
 
 const handleStartCommand = async (
   token: string,
-  sql: SqlClient,
+  db: DbExecutor,
   chatId: string,
   title: string
 ) => {
-  const user = await telegramRepository.loadUserByChatId(chatId, sql);
+  const user = await telegramRepository.loadUserByChatId(chatId, db);
   if (!user) {
     await sendNotification(
       token,
@@ -226,7 +227,7 @@ const handleStartCommand = async (
 
   try {
     const result = await manualService.startManualSession(user.id, title);
-    const message = await summarizeStartedSession(result.gameId, sql);
+    const message = await summarizeStartedSession(result.gameId, db);
     await sendNotification(token, chatId, message);
   } catch (error) {
     logEvent("error", "error.manual_entry", {
@@ -245,7 +246,7 @@ const handleStartCommand = async (
 const getCommand = (text: string) =>
   text.split(/\s+/).shift()?.toLowerCase() ?? "";
 
-export const startTelegramBot = ({ token, sql }: TelegramBotConfig) => {
+export const startTelegramBot = ({ token, db }: TelegramBotConfig) => {
   let offset = 0;
   const pollDelayMs = 1000;
 
@@ -270,7 +271,7 @@ export const startTelegramBot = ({ token, sql }: TelegramBotConfig) => {
         const chatId = String(message.chat.id);
 
         if (command.startsWith("/stop")) {
-          await handleStopCommand(token, sql, chatId);
+          await handleStopCommand(token, db, chatId);
           continue;
         }
 
@@ -283,7 +284,7 @@ export const startTelegramBot = ({ token, sql }: TelegramBotConfig) => {
               "Use /start <title> to begin a manual session, or /stop to end your current session."
             );
           } else {
-            await handleStartCommand(token, sql, chatId, title);
+            await handleStartCommand(token, db, chatId, title);
           }
           continue;
         }

@@ -1,5 +1,4 @@
-import postgres from "postgres";
-
+import { createDb, ensureDatabaseExists } from "../src/common/db/database";
 import { runMigrations } from "../src/common/db/migrations";
 
 const databaseUrl = Bun.env.DATABASE_URL;
@@ -37,25 +36,28 @@ if (!userIdRaw || !Number.isFinite(userId) || userId <= 0 || !passwordHash) {
   process.exit(1);
 }
 
-const sql = postgres(databaseUrl, {
-  max: 1,
-  onnotice: (notice) => {
-    if (notice.code === "42P07") {
-      return;
-    }
-    console.warn(notice);
-  },
-});
+try {
+  await ensureDatabaseExists(databaseUrl);
+} catch (error) {
+  console.error("Database setup failed.");
+  console.error(error);
+  process.exit(1);
+}
+
+const db = createDb(databaseUrl, { max: 1 });
 
 try {
-  await runMigrations({ sql });
+  await runMigrations({ db });
 
-  const rows = await sql<{ id: number }[]>`
-    update users
-    set password = ${passwordHash}, updated_at = now()
-    where id = ${userId}
-    returning id
-  `;
+  const rows = await db
+    .updateTable("users")
+    .set((eb) => ({
+      password: passwordHash,
+      updated_at: eb.fn<Date>("now", []),
+    }))
+    .where("id", "=", String(userId))
+    .returning("id")
+    .execute();
 
   if (rows.length === 0) {
     console.error(`No user found for id ${userId}`);
@@ -68,5 +70,5 @@ try {
   console.error(error);
   process.exitCode = 1;
 } finally {
-  await sql.end();
+  await db.destroy();
 }

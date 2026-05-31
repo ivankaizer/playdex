@@ -1,8 +1,5 @@
-import type postgres from "postgres";
-
-import { getSql } from "../../common/db/postgres";
-
-type Sql = ReturnType<typeof postgres>;
+import { getDb, type DbExecutor } from "../../common/db/database";
+import { toDomainId } from "../../common/db/ids";
 
 type UserAuthRow = {
   id: number;
@@ -12,24 +9,31 @@ type UserAuthRow = {
   chat_id?: string | null;
 };
 
-const loadUserByEmail = async (email: string, sql: Sql = getSql()) => {
-  const rows = await sql<UserAuthRow[]>`
-    select id, email, password, is_admin, chat_id
-    from users
-    where email = ${email}
-    limit 1
-  `;
-  return rows[0] ?? null;
+const normalizeUserAuthRow = (
+  row: Omit<UserAuthRow, "id"> & { id: string }
+): UserAuthRow => ({
+  ...row,
+  id: toDomainId(row.id, "users.id"),
+});
+
+const loadUserByEmail = async (email: string, db: DbExecutor = getDb()) => {
+  const row = await db
+    .selectFrom("users")
+    .select(["id", "email", "password", "is_admin", "chat_id"])
+    .where("email", "=", email)
+    .executeTakeFirst();
+
+  return row ? normalizeUserAuthRow(row) : null;
 };
 
-const loadUserById = async (userId: number, sql: Sql = getSql()) => {
-  const rows = await sql<UserAuthRow[]>`
-    select id, email, password, is_admin, chat_id
-    from users
-    where id = ${userId}
-    limit 1
-  `;
-  return rows[0] ?? null;
+const loadUserById = async (userId: number, db: DbExecutor = getDb()) => {
+  const row = await db
+    .selectFrom("users")
+    .select(["id", "email", "password", "is_admin", "chat_id"])
+    .where("id", "=", String(userId))
+    .executeTakeFirst();
+
+  return row ? normalizeUserAuthRow(row) : null;
 };
 
 export const authRepository = {
