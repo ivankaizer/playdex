@@ -4,9 +4,15 @@ on:
   push:
     branches:
       - main
+    tags:
+      - "millenium-v*"
     paths:
       - "apps/millenium/**"
+      - ".github/workflows/build-millenium-plugin.yaml"
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -23,7 +29,7 @@ jobs:
           fetch-depth: 0
 
       - name: Require plugin version bump
-        if: github.event_name == 'push'
+        if: github.event_name == 'push' && github.ref_type == 'branch'
         shell: pwsh
         run: |
           $beforeSha = "${{ github.event.before }}"
@@ -72,3 +78,11 @@ jobs:
           name: playdex-millennium-plugin
           path: apps/millenium/playdex-*.zip
           if-no-files-found: error
+
+      - name: Publish GitHub release
+        if: github.event_name == 'push' && github.ref_type == 'tag'
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Playdex Millennium ${{ github.ref_name }}
+          files: apps/millenium/playdex-*.zip
+          generate_release_notes: true
