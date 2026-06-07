@@ -3,7 +3,7 @@ name: Build Millennium plugin
 on:
   push:
     branches:
-      - master
+      - main
     paths:
       - "apps/millenium/**"
   workflow_dispatch:

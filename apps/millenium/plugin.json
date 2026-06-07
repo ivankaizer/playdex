@@ -3,7 +3,7 @@
   "name": "playdex",
   "common_name": "Playdex",
   "description": "Track playtime for non-Steam games",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "useBackend": true,
   "backend": "backend",
   "frontend": "frontend",
