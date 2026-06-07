@@ -1,4 +1,4 @@
-local logger = require("logger")
+local logger = require("playdex_logger")
 local settings = require("settings")
 local http_client = require("http_client")
 

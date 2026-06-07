@@ -1,30 +1,51 @@
-import { Millennium } from '@steambrew/client';
-import { jsonReplacer, jsonReviver } from './helpers.js';
+import { callable } from '@steambrew/client';
 import type Steam from './steam.js';
 
-/**
- * Call a method on the server
- * @param route The route to call, must be prefixed with `RPC.`
- * @param payload The payload to send
- * @returns The response from the server
- */
-function call<R>(route: `RPC.${string}`, payload: object): Promise<R> {
-  // Millennium build step for callable uses find and replace which doesn't always work
-  // (Sometimes the client variable will be called client$1 if you have another variable called client)
-  return Millennium.callServerMethod(route, {
-    payload: JSON.stringify(payload, jsonReplacer),
-  }).then((r) => JSON.parse(r, jsonReviver));
+type AppPayload = { app_name: string };
+type KeyPayload = { key: string };
+type GameKeyPayload = AppPayload & KeyPayload;
+type GameIdPayload = AppPayload & { id: string };
+
+const onNonSteamAppHeartbeat = callable<[AppPayload], boolean>(
+  'OnNonSteamAppHeartbeat',
+);
+const onNonSteamAppQuit = callable<[AppPayload], boolean>('OnNonSteamAppQuit');
+const onApiKeyFieldChange = callable<[KeyPayload], boolean>(
+  'OnApiKeyFieldChange',
+);
+const onGameApiKeyFieldChange = callable<[GameKeyPayload], boolean>(
+  'OnGameApiKeyFieldChange',
+);
+const getApiKey = callable<[], string>('GetApiKey');
+const getGameApiKey = callable<[AppPayload], string>('GetGameApiKey');
+const setGameId = callable<[GameIdPayload], boolean>('SetGameId');
+const getGameId = callable<[AppPayload], string>('GetGameId');
+
+function normalizeRpcString(value: unknown): string {
+  if (typeof value !== 'string') return '';
+
+  const trimmed = value.trim();
+  if (trimmed.length >= 2 && trimmed.startsWith('"') && trimmed.endsWith('"')) {
+    try {
+      const parsed = JSON.parse(trimmed) as unknown;
+      if (typeof parsed === 'string') return parsed;
+    } catch {
+      return value;
+    }
+  }
+
+  return value;
 }
 
 export class RPC {
   async OnNonSteamAppHeartbeat(app: Steam.AppOverview) {
-    await call('RPC.OnNonSteamAppHeartbeat', {
+    await onNonSteamAppHeartbeat({
       app_name: app.display_name,
     });
   }
 
   async OnNonSteamAppQuit(app: Steam.AppOverview) {
-    await call('RPC.OnNonSteamAppQuit', {
+    await onNonSteamAppQuit({
       app_name: app.display_name,
     });
   }
@@ -34,25 +55,25 @@ export class RPC {
   // ----------------------------------------------------------------
 
   async GetApiKey() {
-    return (await call<string>('RPC.GetApiKey', {})) || '';
+    return normalizeRpcString(await getApiKey());
   }
 
   async OnApiKeyFieldChange(key: string) {
-    return await call<boolean>('RPC.OnApiKeyFieldChange', {
+    return await onApiKeyFieldChange({
       key,
     });
   }
 
   async GetGameApiKey(app: Steam.AppOverview) {
-    return (
-      (await call<string>('RPC.GetGameApiKey', {
+    return normalizeRpcString(
+      await getGameApiKey({
         app_name: app.display_name,
-      })) || ''
+      }),
     );
   }
 
   async OnGameApiKeyFieldChange(app: Steam.AppOverview, key: string) {
-    return await call<boolean>('RPC.OnGameApiKeyFieldChange', {
+    return await onGameApiKeyFieldChange({
       app_name: app.display_name,
       key,
     });
@@ -63,17 +84,14 @@ export class RPC {
   // ----------------------------------------------------------------
 
   async SetGameId(app: Steam.AppOverview, id: string) {
-    return await call<boolean>('RPC.SetGameId', {
+    return await setGameId({
       app_name: app.display_name,
       id,
     });
   }
 
   async GetGameId(app: Steam.AppOverview) {
-    return (
-      (await call<string>('RPC.GetGameId', { app_name: app.display_name })) ||
-      ''
-    );
+    return normalizeRpcString(await getGameId({ app_name: app.display_name }));
   }
 }
 

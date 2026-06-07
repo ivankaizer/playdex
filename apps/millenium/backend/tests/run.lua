@@ -60,13 +60,20 @@ PLAYDEX_HTTP = {
 
 local function reset_modules()
   package.loaded.playdex_json = nil
+  package.loaded.playdex_logger = nil
   package.loaded.logger = nil
   package.loaded.game_identity = nil
   package.loaded.settings = nil
   package.loaded.http_client = nil
   package.loaded.playdex = nil
+  package.loaded.rpc = nil
+  package.loaded.main = nil
+  package.loaded.millennium = nil
+  package.loaded.fs = nil
   requests = {}
   decode_queue = {}
+  PLAYDEX_SETTINGS_PATH = nil
+  PLUGIN_BASE_DIR = nil
 end
 
 local function test_game_identity()
@@ -81,6 +88,9 @@ local function test_game_identity()
   local configured = identity.parse_game_name("Counter-Strike 2 [730]", " 123 ")
   assert_equal(configured.gameTitle, "Counter-Strike 2", "configured title")
   assert_equal(configured.gameId, "123", "configured id")
+
+  local quoted = identity.parse_game_name("Counter-Strike 2 [730]", '"123"')
+  assert_equal(quoted.gameId, "123", "quoted configured id")
 
   local missing = identity.parse_game_name("No Id", "")
   assert_equal(missing, nil, "missing id skips")
@@ -113,6 +123,9 @@ local function test_settings()
 
   assert_truthy(settings.set_game_id("Hades", " 730 "), "trim game id")
   assert_equal(settings.get_game_id("Hades"), "730", "trimmed game id")
+
+  assert_truthy(settings.set_game_id("Hades", '"123"'), "unwrap quoted game id")
+  assert_equal(settings.get_game_id("Hades"), "123", "unwrapped game id")
 
   os.remove(PLAYDEX_SETTINGS_PATH)
 end
@@ -158,10 +171,92 @@ local function test_playdex_requests()
   assert_equal(playdex.ping_session("Celeste"), false, "missing id skips ping")
 end
 
+local function test_rpc_callable_payload_shapes()
+  reset_modules()
+  local settings = require("settings")
+  settings._replace_for_test({
+    api_key = "global",
+    games = {},
+  })
+
+  local rpc = require("rpc")
+  assert_truthy(rpc.SetGameId("Hades", "1145360"), "positional payload saves game id")
+  assert_equal(settings.get_game_id("Hades"), "1145360", "positional payload game id")
+
+  assert_truthy(rpc.OnGameApiKeyFieldChange("Hades", "game-key"), "positional payload saves key")
+  assert_equal(settings.get_api_key("Hades"), "game-key", "positional payload game api key")
+
+  assert_equal(rpc.GetGameId("Hades"), "1145360", "positional payload reads game id")
+
+  assert_truthy(rpc.SetGameId({ { app_name = "Hades", id = "1145360" } }), "array payload saves game id")
+  assert_equal(settings.get_game_id("Hades"), "1145360", "array payload game id")
+
+  assert_truthy(rpc.OnGameApiKeyFieldChange({ args = { { app_name = "Hades", key = "game-key" } } }), "args payload saves key")
+  assert_equal(settings.get_api_key("Hades"), "game-key", "args payload game api key")
+
+  assert_equal(rpc.GetGameId({ params = { { app_name = "Hades" } } }), "1145360", "params payload reads game id")
+end
+
+local function test_logger_uses_millennium_logger()
+  reset_modules()
+  local messages = {}
+
+  package.preload.logger = function()
+    return {
+      info = function(_, message)
+        messages[#messages + 1] = message
+      end,
+    }
+  end
+
+  local logger = require("playdex_logger")
+  logger.info("hello")
+  assert_equal(messages[1], "[Playdex] hello", "millennium logger receives message")
+
+  package.preload.logger = nil
+end
+
+local function test_settings_path_uses_module_location()
+  reset_modules()
+  local settings = require("settings")
+  local app_data = os.getenv("APPDATA") or os.getenv("LOCALAPPDATA")
+  local expected = app_data and (app_data .. "\\playdex\\millennium\\playdex\\settings.json") or (backend_dir .. "\\settings.json")
+
+  assert_equal(settings._settings_path_for_test(), expected, "settings path uses writable location")
+end
+
+local function test_main_load_signals_ready()
+  reset_modules()
+  local ready_called = false
+
+  package.preload.millennium = function()
+    return {
+      ready = function()
+        ready_called = true
+      end,
+    }
+  end
+
+  PLAYDEX_SETTINGS_PATH = backend_dir .. "/tests/.tmp-settings.json"
+  os.remove(PLAYDEX_SETTINGS_PATH)
+
+  local plugin = require("main")
+  assert_equal(type(plugin.on_load), "function", "main exposes on_load")
+  plugin:on_load()
+  assert_truthy(ready_called, "on_load signals millennium ready")
+
+  package.preload.millennium = nil
+  os.remove(PLAYDEX_SETTINGS_PATH)
+end
+
 test_game_identity()
 test_settings()
 test_corrupt_settings()
 test_playdex_requests()
+test_rpc_callable_payload_shapes()
+test_logger_uses_millennium_logger()
+test_settings_path_uses_module_location()
+test_main_load_signals_ready()
 
 if failures > 0 then
   os.exit(1)

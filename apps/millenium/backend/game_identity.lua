@@ -5,7 +5,13 @@ local function trim(value)
     return ""
   end
 
-  return value:match("^%s*(.-)%s*$")
+  local trimmed = value:match("^%s*(.-)%s*$")
+  local quoted = trimmed:match('^"(.*)"$')
+  if quoted then
+    return quoted:gsub('\\"', '"'):gsub("\\\\", "\\")
+  end
+
+  return trimmed
 end
 
 local function clean_title(app_name)
