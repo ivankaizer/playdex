@@ -96,9 +96,9 @@ extension while moving all native backend behavior away from Python.
   "name": "playdex",
   "common_name": "Playdex",
   "description": "Track playtime for non-Steam games",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "useBackend": true,
-  "backend": "backend/main.lua",
+  "backend": "backend",
   "frontend": "frontend",
   "backendType": "lua"
 }

@@ -29,3 +29,4 @@ Build-Plugin
 Copy-PluginFiles -Destination build
 Compress-Archive -Path build -DestinationPath $zipName -Force
 Remove-Item -Path build -Recurse -Force
+Remove-Item -Path "playdex-$version" -Recurse -Force -ErrorAction SilentlyContinue
