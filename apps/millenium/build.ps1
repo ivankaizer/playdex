@@ -11,6 +11,7 @@ function Copy-PluginFiles {
   Copy-Item -Path "plugin.json" -Destination $Destination -Force
   Copy-Item -Path ".millennium" -Destination $Destination -Recurse -Force
   Copy-Item -Path "backend" -Destination $Destination -Recurse -Force
+  Remove-Item -Path "$Destination\backend\tests" -Recurse -Force -ErrorAction SilentlyContinue
 }
 
 function Get-PluginVersion {

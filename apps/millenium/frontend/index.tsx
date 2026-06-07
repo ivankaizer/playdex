@@ -1,34 +1,36 @@
 import { definePlugin, IconsModule, TextField } from '@steambrew/client';
 import { useEffect, useState } from 'react';
+import { register as registerAppProperties } from './app-properties.js';
+import { NON_STEAM_APP_APPID_MASK } from './constants.js';
 import { forceFakeLocationChange } from './helpers.js';
 import rpc from './rpc.js';
 import { onAppLaunch } from './running-apps.js';
-import { NON_STEAM_APP_APPID_MASK } from './constants.js';
-import { register as registerAppProperties } from './app-properties.js';
 
 export { RPC } from './rpc.js';
 
 const SettingsContent = () => {
   const [apiKey, setApiKey] = useState<string>('');
+  const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
     const load = async () => {
       const key = await rpc.GetApiKey();
       setApiKey(key ?? '');
+      setLoaded(true);
     };
 
     load();
   }, []);
 
   useEffect(() => {
-    if (!apiKey) return;
+    if (!loaded) return;
 
     const t = setTimeout(() => {
       rpc.OnApiKeyFieldChange(apiKey);
     }, 300);
 
     return () => clearTimeout(t);
-  }, [apiKey]);
+  }, [apiKey, loaded]);
 
   return (
     <TextField
@@ -52,13 +54,10 @@ export default definePlugin(() => {
 });
 
 async function OnPluginLoaded() {
-  onAppLaunch((app, { onLaunch, onHeartbeat, onQuit }) => {
+  onAppLaunch((app, { onPing, onQuit }) => {
     if (app.appid < NON_STEAM_APP_APPID_MASK) return;
-    onLaunch(() => {
-      rpc.OnNonSteamAppLaunch(app);
-    });
 
-    onHeartbeat(() => {
+    onPing(() => {
       rpc.OnNonSteamAppHeartbeat(app);
       forceFakeLocationChange();
     });

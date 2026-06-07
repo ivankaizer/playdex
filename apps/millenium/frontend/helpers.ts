@@ -1,5 +1,5 @@
-import Steam from './steam.js';
 import { createRoot } from 'react-dom/client';
+import Steam from './steam.js';
 
 /**
  * Render a React component to a DOM element

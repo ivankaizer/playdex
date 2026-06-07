@@ -3,8 +3,6 @@ import type {
   ApiResponse,
   PlayniteSessionEndResponseDto,
   PlayniteSessionPingResponseDto,
-  PlayniteSessionResponseDto,
-  PlayniteSessionStartResponseDto,
 } from "../../app/http/types";
 import { AppError } from "../../common/errors/AppError";
 import { getErrorMessage, logEvent } from "../../common/observability";
@@ -12,7 +10,6 @@ import type { PollingNotifier } from "../polling";
 import { playniteService, type PlayniteGameProvider } from "./playnite.service";
 
 type PlayniteSessionBody = {
-  durationInSeconds?: number;
   gameTitle: string;
   gameId?: string | number;
   gameProvider: string;
@@ -115,87 +112,21 @@ const notifyEndedSessions = async (
   }
 };
 
-export const recordPlayniteSessionHandler = async (ctx: {
-  request: Request;
-  body?: unknown;
-}): Promise<ApiResponse<PlayniteSessionResponseDto>> => {
-  const token = parseApiKey(ctx.request);
-
-  const payload = ctx.body as PlayniteSessionBody | null;
-  const durationRaw = payload?.durationInSeconds;
-  const durationInSeconds =
-    typeof durationRaw === "number" ? durationRaw : Number(durationRaw);
-
-  if (!Number.isFinite(durationInSeconds) || durationInSeconds <= 0) {
-    throw new AppError("durationInSeconds must be a positive number.", 400);
-  }
-
-  const parsed = parseGamePayload(ctx.body);
-  const result = await playniteService.recordSession({
-    apiKey: token,
-    durationInSeconds,
-    gameTitle: parsed.gameTitle,
-    gameId: parsed.gameId,
-    gameProvider: parsed.gameProvider,
-  });
-
-  if (!result) {
-    throw new AppError("Invalid api key.", 401);
-  }
-
-  return ok({ sessionId: result.sessionId });
-};
-
-export const startPlayniteSessionHandler =
+export const endPlayniteSessionsHandler =
   (notifier?: PollingNotifier) =>
   async (ctx: {
     request: Request;
     body?: unknown;
-  }): Promise<ApiResponse<PlayniteSessionStartResponseDto>> => {
+  }): Promise<ApiResponse<PlayniteSessionEndResponseDto>> => {
     const token = parseApiKey(ctx.request);
     const parsed = parseGamePayload(ctx.body);
 
-    const result = await playniteService.startSession({
+    const result = await playniteService.endSessions({
       apiKey: token,
       gameTitle: parsed.gameTitle,
       gameId: parsed.gameId,
       gameProvider: parsed.gameProvider,
     });
-
-    if (!result) {
-      throw new AppError("Invalid api key.", 401);
-    }
-
-    await notifyEndedSessions(
-      notifier,
-      result.endedSessions.map((session) => ({
-        platformCredentialId: result.platformCredentialId,
-        gameId: session.gameId,
-        startedAt: session.startedAt,
-        endedAt: result.startedAt,
-      }))
-    );
-
-    await safeNotify(
-      notifier?.onSessionStarted,
-      {
-        platformCredentialId: result.platformCredentialId,
-        gameId: result.gameId,
-        startedAt: result.startedAt,
-      },
-      "session.started"
-    );
-
-    return ok({ sessionId: result.sessionId });
-  };
-
-export const endPlayniteSessionsHandler =
-  (notifier?: PollingNotifier) =>
-  async (ctx: {
-    request: Request;
-  }): Promise<ApiResponse<PlayniteSessionEndResponseDto>> => {
-    const token = parseApiKey(ctx.request);
-    const result = await playniteService.endSessions({ apiKey: token });
 
     if (!result) {
       throw new AppError("Invalid api key.", 401);

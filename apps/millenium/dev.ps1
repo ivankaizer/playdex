@@ -41,6 +41,7 @@ function Copy-PluginFiles {
   Copy-Item -Path "plugin.json" -Destination $Destination -Force
   Copy-Item -Path ".millennium" -Destination $Destination -Recurse -Force
   Copy-Item -Path "backend" -Destination $Destination -Recurse -Force
+  Remove-Item -Path "$Destination\backend\tests" -Recurse -Force -ErrorAction SilentlyContinue
 }
 
 #####
@@ -48,7 +49,7 @@ function Copy-PluginFiles {
 $SteamPath = "C:\Program Files (x86)\Steam"
 $PluginName, $PluginCommonName = Get-PluginName -Path "./plugin.json"
 Stop-SteamProcess
-Set-PluginName -Path "plugin.json" -Name $PluginName-dev -CommonName "$PluginCommonName (dev)"
+Set-PluginName -Path "plugin.json" -Name "$PluginName-dev" -CommonName "$PluginCommonName (dev)"
 Build-Plugin
 Copy-PluginFiles -Destination "$SteamPath\plugins\$PluginName-dev"
 Set-PluginName -Path "plugin.json" -Name $PluginName -CommonName $PluginCommonName

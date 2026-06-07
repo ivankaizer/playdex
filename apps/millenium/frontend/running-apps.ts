@@ -11,8 +11,7 @@ export function onAppLaunch(
   handleLaunch: (
     app: Steam.AppOverview,
     handlers: {
-      onLaunch: (handleLaunch: VoidFunction) => void;
-      onHeartbeat: (handleHeartbeat: VoidFunction) => void;
+      onPing: (handlePing: VoidFunction) => void;
       onQuit: (handleQuit: VoidFunction) => void;
     },
   ) => Awaitable<Voidable<VoidFunction>>,
@@ -34,17 +33,15 @@ export function onAppLaunch(
       if (!onQuitMap.has(app.appid)) {
         onQuitMap.set(app.appid, new Set());
         onHeartbeatMap.set(app.appid, new Set());
-        const onLaunchSet = new Set<VoidFunction>();
 
         const onQuit = await handleLaunch(app, {
-          onLaunch: (cb: VoidFunction) => onLaunchSet.add(cb),
-          onHeartbeat: (cb: VoidFunction) =>
-            onHeartbeatMap.get(app.appid)!.add(cb),
+          onPing: (cb: VoidFunction) => onHeartbeatMap.get(app.appid)!.add(cb),
           onQuit: (cb: VoidFunction) => onQuitMap.get(app.appid)!.add(cb),
         });
         if (onQuit) onQuitMap.get(app.appid)!.add(onQuit);
 
-        await Promise.allSettled([...onLaunchSet].map((cb) => cb()));
+        const onHeartbeatSet = onHeartbeatMap.get(app.appid)!;
+        await Promise.allSettled([...onHeartbeatSet].map((cb) => cb()));
       } else {
         const onHeartbeatSet = onHeartbeatMap.get(app.appid)!;
         await Promise.allSettled([...onHeartbeatSet].map((cb) => cb()));

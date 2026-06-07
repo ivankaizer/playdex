@@ -30,13 +30,15 @@ export function PlaydexGameSettings({ app }: { app: Steam.AppOverview }) {
     try {
       setSaveState('Saving...');
 
-      await Promise.all([
+      const results = await Promise.all([
         rpc.SetGameId(app, gameId),
         rpc.OnGameApiKeyFieldChange(app, apiKey),
       ]);
 
+      if (!results.every(Boolean)) throw new Error('Save failed');
+
       setSaveState('Saved');
-    } catch (e) {
+    } catch (_e) {
       setSaveState('Failed');
     } finally {
       setTimeout(() => {
@@ -52,9 +54,7 @@ export function PlaydexGameSettings({ app }: { app: Steam.AppOverview }) {
     <div>
       <div>Set custom settings for the game</div>
 
-      <div style={{ marginTop: 8 }}>
-        Set custom game ID for the game
-      </div>
+      <div style={{ marginTop: 8 }}>Set custom game ID for the game</div>
       <div className={SettingsStyles.AsyncBackedInputChildren}>
         <TextField
           // @ts-expect-error - placeholder is a valid prop but not typed

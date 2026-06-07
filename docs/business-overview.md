@@ -1,6 +1,6 @@
 # Playdex — Business Overview
 
-Playdex is a **multi-platform playtime tracker** that automatically records what you play, when, and for how long — across Steam, PlayStation, and PC (via Playnite).
+Playdex is a **multi-platform playtime tracker** that automatically records what you play, when, and for how long — across Steam, PlayStation, and PC (via Playnite and the Steam Millennium extension).
 
 ---
 
@@ -42,7 +42,7 @@ flowchart TB
     API --> IGDB
 ```
 
-The system periodically polls Steam and PSN to detect what the user is playing, accepts session data from Playnite, and stores everything in a PostgreSQL database. Users view their play history on a web dashboard or receive Telegram notifications.
+The system periodically polls Steam and PSN to detect what the user is playing, accepts PC session data from Playnite and the Millennium extension, and stores everything in a PostgreSQL database. Users view their play history on a web dashboard or receive Telegram notifications.
 
 ---
 
@@ -52,9 +52,9 @@ The system periodically polls Steam and PSN to detect what the user is playing, 
 stateDiagram-v2
     [*] --> Idle: User stops playing
 
-    Idle --> Playing: Poll detects new game\nor Playnite starts session\nor manual start
+    Idle --> Playing: Poll detects new game\nor PC ping starts session\nor manual start
     Playing --> Playing: Same game (polls keep\nsession alive)
-    Playing --> Idle: Poll detects no game\nor Playnite ends session\nor manual stop
+    Playing --> Idle: Poll detects no game\nor PC end closes session\nor manual stop
 
     state Idle {
         [*] --> NoSession
@@ -73,7 +73,7 @@ stateDiagram-v2
 |---|---|---|
 | **Steam** | Polls `GetPlayerSummaries` every ~60s to get the currently played game | Auto, ~1 min |
 | **PSN** | Polls PSN presence API to detect the current game | Auto, ~1 min |
-| **Playnite** | PC app sends start/ping/end HTTP requests | Manual (per-session) |
+| **Playnite / Millennium** | PC clients send ping/end HTTP requests with game identity | Auto or manual client-driven |
 | **Manual** | User starts/stops sessions via the web UI | Manual |
 
 ---
@@ -223,6 +223,7 @@ The core value: **play once, track everywhere** — no manual logging, unified c
 | API Framework | Elysia |
 | Database | PostgreSQL 16 (Kysely ORM) |
 | Frontend | React + Vite + Tailwind CSS |
+| Steam Extension | Millennium, TypeScript/React frontend, Lua backend |
 | Auth | JWT + bcrypt |
 | Notifications | Satori → Resvg → Sharp → Telegram |
 | Infrastructure | Docker, GitHub Actions → AWS ECR |

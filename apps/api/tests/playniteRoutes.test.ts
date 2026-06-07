@@ -53,10 +53,7 @@ beforeEach(async () => {
   credentialId = credentialRows[0].id;
 });
 
-const sendStartRequest = async (
-  body: Record<string, unknown>,
-  token?: string
-) => {
+const sendStartRequest = async (token?: string) => {
   if (!app) {
     throw new Error("Server not initialized.");
   }
@@ -65,15 +62,31 @@ const sendStartRequest = async (
     new Request("http://localhost/api/playnite/sessions/start", {
       method: "POST",
       headers: {
-        "content-type": "application/json",
         ...(token ? { authorization: `Bearer ${token}` } : {}),
       },
-      body: JSON.stringify(body),
     })
   );
 };
 
-const sendEndRequest = async (token?: string) => {
+const sendRecordRequest = async (token?: string) => {
+  if (!app) {
+    throw new Error("Server not initialized.");
+  }
+
+  return await app.handle(
+    new Request("http://localhost/api/playnite/sessions", {
+      method: "POST",
+      headers: {
+        ...(token ? { authorization: `Bearer ${token}` } : {}),
+      },
+    })
+  );
+};
+
+const sendEndRequest = async (
+  body: Record<string, unknown> | null,
+  token?: string
+) => {
   if (!app) {
     throw new Error("Server not initialized.");
   }
@@ -82,8 +95,10 @@ const sendEndRequest = async (token?: string) => {
     new Request("http://localhost/api/playnite/sessions/end", {
       method: "POST",
       headers: {
+        ...(body ? { "content-type": "application/json" } : {}),
         ...(token ? { authorization: `Bearer ${token}` } : {}),
       },
+      body: body ? JSON.stringify(body) : undefined,
     })
   );
 };
@@ -255,7 +270,7 @@ requiresDb(
 );
 
 requiresDb(
-  "Playnite session ping endpoint switches active session when game changes",
+  "Playnite session ping endpoint starts another active session when game changes",
   async () => {
     if (!db) {
       throw new Error("Test database not initialized.");
@@ -281,7 +296,7 @@ requiresDb(
     };
     expect(payload.error).toBeNull();
     expect(payload.data?.started).toBe(true);
-    expect(payload.data?.endedSessionCount).toBe(1);
+    expect(payload.data?.endedSessionCount).toBe(0);
 
     const rows = await db.sql<{ game_id: number; ended_at: Date | null }[]>`
       select game_id, ended_at
@@ -292,7 +307,7 @@ requiresDb(
 
     expect(rows.length).toBe(2);
     expect(rows[0].game_id).toBe(oldGameId);
-    expect(rows[0].ended_at).not.toBeNull();
+    expect(rows[0].ended_at).toBeNull();
     expect(rows[1].game_id).not.toBe(oldGameId);
     expect(rows[1].ended_at).toBeNull();
   }
@@ -355,7 +370,25 @@ requiresDb(
 );
 
 requiresDb(
-  "Playnite session start endpoint ends existing sessions and creates a new one",
+  "Playnite session start endpoint is no longer registered",
+  async () => {
+    const response = await sendStartRequest(apiKey);
+
+    expect(response.status).toBe(404);
+  }
+);
+
+requiresDb(
+  "Playnite session record endpoint is no longer registered",
+  async () => {
+    const response = await sendRecordRequest(apiKey);
+
+    expect(response.status).toBe(404);
+  }
+);
+
+requiresDb(
+  "Playnite session end endpoint stops active sessions for the matching game",
   async () => {
     if (!db) {
       throw new Error("Test database not initialized.");
@@ -365,9 +398,62 @@ requiresDb(
     const oldGameId = await createGame("steam", "Old Game", "old-1");
     const otherGameId = await createGame("steam", "Other Game", "other-1");
     await createActiveSession(credentialId, oldGameId);
+    await createActiveSession(credentialId, otherGameId);
     await createActiveSession(otherCredentialId, otherGameId);
 
-    const response = await sendStartRequest(
+    const response = await sendEndRequest(
+      {
+        gameTitle: "Old Game",
+        gameId: "old-1",
+        gameProvider: "steam",
+      },
+      apiKey
+    );
+
+    expect(response.status).toBe(200);
+    const payload = (await response.json()) as {
+      data: { endedSessionCount: number } | null;
+      error: { error: string } | null;
+    };
+    expect(payload.error).toBeNull();
+    expect(payload.data?.endedSessionCount).toBe(1);
+
+    const rows = await db.sql<
+      { platform_credential_id: number; game_id: number; ended_at: Date | null }[]
+    >`
+      select platform_credential_id, game_id, ended_at
+      from play_sessions
+      order by id
+    `;
+
+    const endedForCredential = rows.filter(
+      (row) =>
+        row.platform_credential_id === credentialId &&
+        row.game_id === oldGameId &&
+        row.ended_at !== null
+    );
+    const activeOtherGameForCredential = rows.filter(
+      (row) =>
+        row.platform_credential_id === credentialId &&
+        row.game_id === otherGameId &&
+        row.ended_at === null
+    );
+    const activeForOther = rows.filter(
+      (row) =>
+        row.platform_credential_id === otherCredentialId &&
+        row.ended_at === null
+    );
+
+    expect(endedForCredential.length).toBe(1);
+    expect(activeOtherGameForCredential.length).toBe(1);
+    expect(activeForOther.length).toBe(1);
+  }
+);
+
+requiresDb(
+  "Playnite session end endpoint returns zero when no matching sessions are active",
+  async () => {
+    const response = await sendEndRequest(
       {
         gameTitle: "Hades",
         gameId: "123",
@@ -378,44 +464,18 @@ requiresDb(
 
     expect(response.status).toBe(200);
     const payload = (await response.json()) as {
-      data: { sessionId: string } | null;
+      data: { endedSessionCount: number } | null;
       error: { error: string } | null;
     };
     expect(payload.error).toBeNull();
-    expect(typeof payload.data?.sessionId).toBe("number");
-
-    const rows = await db.sql<
-      { platform_credential_id: number; ended_at: Date | null }[]
-    >`
-      select platform_credential_id, ended_at
-      from play_sessions
-      order by id
-    `;
-
-    const activeForCredential = rows.filter(
-      (row) =>
-        row.platform_credential_id === credentialId && row.ended_at === null
-    );
-    const endedForCredential = rows.filter(
-      (row) =>
-        row.platform_credential_id === credentialId && row.ended_at !== null
-    );
-    const activeForOther = rows.filter(
-      (row) =>
-        row.platform_credential_id === otherCredentialId &&
-        row.ended_at === null
-    );
-
-    expect(activeForCredential.length).toBe(1);
-    expect(endedForCredential.length).toBe(1);
-    expect(activeForOther.length).toBe(1);
+    expect(payload.data?.endedSessionCount).toBe(0);
   }
 );
 
 requiresDb(
-  "Playnite session start endpoint rejects missing api key",
+  "Playnite session end endpoint rejects missing api key",
   async () => {
-    const response = await sendStartRequest({
+    const response = await sendEndRequest({
       gameTitle: "Hades",
       gameId: "123",
       gameProvider: "steam",
@@ -432,31 +492,9 @@ requiresDb(
 );
 
 requiresDb(
-  "Playnite session start endpoint rejects invalid provider",
+  "Playnite session end endpoint rejects invalid api key",
   async () => {
-    const response = await sendStartRequest(
-      {
-        gameTitle: "Hades",
-        gameId: "123",
-        gameProvider: "psn",
-      },
-      apiKey
-    );
-
-    expect(response.status).toBe(400);
-    const payload = (await response.json()) as {
-      data: null;
-      error: { error: string } | null;
-    };
-    expect(payload.data).toBeNull();
-    expect(payload.error?.error).toBe("gameProvider must be steam or unknown.");
-  }
-);
-
-requiresDb(
-  "Playnite session start endpoint rejects invalid api key",
-  async () => {
-    const response = await sendStartRequest(
+    const response = await sendEndRequest(
       {
         gameTitle: "Hades",
         gameId: "123",
@@ -476,92 +514,38 @@ requiresDb(
 );
 
 requiresDb(
-  "Playnite session end endpoint stops active sessions for the api key",
+  "Playnite session end endpoint rejects missing game payload",
   async () => {
-    if (!db) {
-      throw new Error("Test database not initialized.");
-    }
+    const response = await sendEndRequest(null, apiKey);
 
-    const otherCredentialId = await createCredential("playnite-other");
-    const oldGameId = await createGame("steam", "Old Game", "old-1");
-    const otherGameId = await createGame("steam", "Other Game", "other-1");
-    await createActiveSession(credentialId, oldGameId);
-    await createActiveSession(otherCredentialId, otherGameId);
-
-    const response = await sendEndRequest(apiKey);
-
-    expect(response.status).toBe(200);
-    const payload = (await response.json()) as {
-      data: { endedSessionCount: number } | null;
-      error: { error: string } | null;
-    };
-    expect(payload.error).toBeNull();
-    expect(payload.data?.endedSessionCount).toBe(1);
-
-    const rows = await db.sql<
-      { platform_credential_id: number; ended_at: Date | null }[]
-    >`
-      select platform_credential_id, ended_at
-      from play_sessions
-      order by id
-    `;
-
-    const endedForCredential = rows.filter(
-      (row) =>
-        row.platform_credential_id === credentialId && row.ended_at !== null
-    );
-    const activeForOther = rows.filter(
-      (row) =>
-        row.platform_credential_id === otherCredentialId &&
-        row.ended_at === null
-    );
-
-    expect(endedForCredential.length).toBe(1);
-    expect(activeForOther.length).toBe(1);
-  }
-);
-
-requiresDb(
-  "Playnite session end endpoint returns zero when no sessions are active",
-  async () => {
-    const response = await sendEndRequest(apiKey);
-
-    expect(response.status).toBe(200);
-    const payload = (await response.json()) as {
-      data: { endedSessionCount: number } | null;
-      error: { error: string } | null;
-    };
-    expect(payload.error).toBeNull();
-    expect(payload.data?.endedSessionCount).toBe(0);
-  }
-);
-
-requiresDb(
-  "Playnite session end endpoint rejects missing api key",
-  async () => {
-    const response = await sendEndRequest();
-
-    expect(response.status).toBe(401);
+    expect(response.status).toBe(400);
     const payload = (await response.json()) as {
       data: null;
       error: { error: string } | null;
     };
     expect(payload.data).toBeNull();
-    expect(payload.error?.error).toBe("Missing api key.");
+    expect(payload.error?.error).toBe("gameTitle is required.");
   }
 );
 
 requiresDb(
-  "Playnite session end endpoint rejects invalid api key",
+  "Playnite session end endpoint rejects invalid provider",
   async () => {
-    const response = await sendEndRequest("bad-key");
+    const response = await sendEndRequest(
+      {
+        gameTitle: "Hades",
+        gameId: "123",
+        gameProvider: "psn",
+      },
+      apiKey
+    );
 
-    expect(response.status).toBe(401);
+    expect(response.status).toBe(400);
     const payload = (await response.json()) as {
       data: null;
       error: { error: string } | null;
     };
     expect(payload.data).toBeNull();
-    expect(payload.error?.error).toBe("Invalid api key.");
+    expect(payload.error?.error).toBe("gameProvider must be steam or unknown.");
   }
 );

@@ -3,5 +3,9 @@
   "name": "playdex",
   "common_name": "Playdex",
   "description": "Track playtime for non-Steam games",
-  "version": "1.2.0"
+  "version": "1.2.0",
+  "useBackend": true,
+  "backend": "backend/main.lua",
+  "frontend": "frontend",
+  "backendType": "lua"
 }

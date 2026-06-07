@@ -17,12 +17,6 @@ function call<R>(route: `RPC.${string}`, payload: object): Promise<R> {
 }
 
 export class RPC {
-  async OnNonSteamAppLaunch(app: Steam.AppOverview) {
-    await call('RPC.OnNonSteamAppLaunch', {
-      app_name: app.display_name,
-    });
-  }
-
   async OnNonSteamAppHeartbeat(app: Steam.AppOverview) {
     await call('RPC.OnNonSteamAppHeartbeat', {
       app_name: app.display_name,
@@ -44,19 +38,21 @@ export class RPC {
   }
 
   async OnApiKeyFieldChange(key: string) {
-    await call('RPC.OnApiKeyFieldChange', {
+    return await call<boolean>('RPC.OnApiKeyFieldChange', {
       key,
     });
   }
 
   async GetGameApiKey(app: Steam.AppOverview) {
     return (
-      (await call<string>('RPC.GetGameApiKey', { app_name: app.display_name })) || ''
+      (await call<string>('RPC.GetGameApiKey', {
+        app_name: app.display_name,
+      })) || ''
     );
   }
 
   async OnGameApiKeyFieldChange(app: Steam.AppOverview, key: string) {
-    await call('RPC.OnGameApiKeyFieldChange', {
+    return await call<boolean>('RPC.OnGameApiKeyFieldChange', {
       app_name: app.display_name,
       key,
     });
@@ -67,14 +63,17 @@ export class RPC {
   // ----------------------------------------------------------------
 
   async SetGameId(app: Steam.AppOverview, id: string) {
-    await call('RPC.SetGameId', {
+    return await call<boolean>('RPC.SetGameId', {
       app_name: app.display_name,
       id,
     });
   }
 
   async GetGameId(app: Steam.AppOverview) {
-    return (await call<string>('RPC.GetGameId', { app_name: app.display_name })) || '';
+    return (
+      (await call<string>('RPC.GetGameId', { app_name: app.display_name })) ||
+      ''
+    );
   }
 }
 

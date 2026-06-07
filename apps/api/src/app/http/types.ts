@@ -204,14 +204,6 @@ export type AccountSessionsParams = {
   accountId: string;
 };
 
-export type PlayniteSessionResponseDto = {
-  sessionId: number;
-};
-
-export type PlayniteSessionStartResponseDto = {
-  sessionId: number;
-};
-
 export type PlayniteSessionEndResponseDto = {
   endedSessionCount: number;
 };
