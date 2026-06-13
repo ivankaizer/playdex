@@ -1,4 +1,4 @@
-import { requireAuth } from "../../app/http/auth";
+import type { AuthenticatedContext } from "../../app/http/auth";
 import { ok } from "../../app/http/responses";
 import type {
   ApiResponse,
@@ -39,10 +39,10 @@ export const refreshHandler = async (ctx: {
   return ok(result);
 };
 
-export const meHandler = async (ctx: {
-  request: Request;
-}): Promise<ApiResponse<MeResponseDto>> => {
-  const auth = requireAuth(ctx.request);
+export const meHandler = async (
+  ctx: AuthenticatedContext
+): Promise<ApiResponse<MeResponseDto>> => {
+  const { auth } = ctx;
   const user = await authRepository.loadUserById(auth.userId);
   if (!user) {
     throw new AppError("User not found.", 404);

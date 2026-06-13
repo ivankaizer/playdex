@@ -1,9 +1,10 @@
-import type { Elysia } from "elysia";
+import { Elysia } from "elysia";
 
+import { withAuth } from "../../app/http/auth";
 import { loginHandler, meHandler, refreshHandler } from "./auth.handlers";
 
 export const registerAuthRoutes = (app: Elysia) =>
   app
     .post("/api/login", loginHandler)
     .post("/api/refresh", refreshHandler)
-    .get("/api/me", meHandler);
+    .use(withAuth(new Elysia()).get("/api/me", meHandler));

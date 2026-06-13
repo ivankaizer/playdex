@@ -1,8 +1,11 @@
-import type { Elysia } from "elysia";
+import { Elysia } from "elysia";
 
+import { withAuth } from "../../app/http/auth";
 import { getRecapHandler, getRecapYearsHandler } from "./recap.handlers";
 
 export const registerRecapRoutes = (app: Elysia) =>
-  app
-    .get("/api/recap/years", getRecapYearsHandler)
-    .get("/api/recap", getRecapHandler);
+  app.use(
+    withAuth(new Elysia())
+      .get("/api/recap/years", getRecapYearsHandler)
+      .get("/api/recap", getRecapHandler)
+  );

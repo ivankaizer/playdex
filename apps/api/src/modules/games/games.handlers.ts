@@ -1,4 +1,7 @@
-import { requireAuth } from "../../app/http/auth";
+import type {
+  AuthenticatedContext,
+  AuthenticatedParamsContext,
+} from "../../app/http/auth";
 import { ok } from "../../app/http/responses";
 import { AppError } from "../../common/errors/AppError";
 import { parseGameId } from "../../common/utils/gameId";
@@ -16,10 +19,10 @@ const parsePositiveInteger = (value: unknown, field: string) => {
 
 const parseRating = (value: unknown) => parsePositiveInteger(value, "rating");
 
-export const getIgnoreStatusHandler = async (ctx: {
-  request: Request;
-}): Promise<ApiResponse<unknown>> => {
-  const auth = requireAuth(ctx.request);
+export const getIgnoreStatusHandler = async (
+  ctx: AuthenticatedContext
+): Promise<ApiResponse<unknown>> => {
+  const { auth } = ctx;
   const url = new URL(ctx.request.url);
   const gameId = parseGameId(url.searchParams.get("gameId"), "gameId");
 
@@ -27,11 +30,10 @@ export const getIgnoreStatusHandler = async (ctx: {
   return ok(response);
 };
 
-export const ignoreGameHandler = async (ctx: {
-  request: Request;
-  body?: unknown;
-}): Promise<ApiResponse<unknown>> => {
-  const auth = requireAuth(ctx.request);
+export const ignoreGameHandler = async (
+  ctx: AuthenticatedContext & { body?: unknown }
+): Promise<ApiResponse<unknown>> => {
+  const { auth } = ctx;
   const payload = ctx.body as { gameId?: number | string } | null;
   const gameId = parseGameId(payload?.gameId ?? null, "gameId");
 
@@ -39,11 +41,10 @@ export const ignoreGameHandler = async (ctx: {
   return ok(response);
 };
 
-export const unignoreGameHandler = async (ctx: {
-  request: Request;
-  body?: unknown;
-}): Promise<ApiResponse<unknown>> => {
-  const auth = requireAuth(ctx.request);
+export const unignoreGameHandler = async (
+  ctx: AuthenticatedContext & { body?: unknown }
+): Promise<ApiResponse<unknown>> => {
+  const { auth } = ctx;
   const payload = ctx.body as { gameId?: number | string } | null;
   const gameId = parseGameId(payload?.gameId ?? null, "gameId");
 
@@ -51,10 +52,10 @@ export const unignoreGameHandler = async (ctx: {
   return ok(response);
 };
 
-export const getRatingHandler = async (ctx: {
-  request: Request;
-}): Promise<ApiResponse<unknown>> => {
-  const auth = requireAuth(ctx.request);
+export const getRatingHandler = async (
+  ctx: AuthenticatedContext
+): Promise<ApiResponse<unknown>> => {
+  const { auth } = ctx;
   const url = new URL(ctx.request.url);
   const gameId = parseGameId(url.searchParams.get("gameId"), "gameId");
 
@@ -62,11 +63,10 @@ export const getRatingHandler = async (ctx: {
   return ok(response);
 };
 
-export const upsertRatingHandler = async (ctx: {
-  request: Request;
-  body?: unknown;
-}): Promise<ApiResponse<unknown>> => {
-  const auth = requireAuth(ctx.request);
+export const upsertRatingHandler = async (
+  ctx: AuthenticatedContext & { body?: unknown }
+): Promise<ApiResponse<unknown>> => {
+  const { auth } = ctx;
   const payload = ctx.body as {
     gameId?: number | string;
     rating?: number;
@@ -78,11 +78,10 @@ export const upsertRatingHandler = async (ctx: {
   return ok(response);
 };
 
-export const deleteRatingHandler = async (ctx: {
-  request: Request;
-  body?: unknown;
-}): Promise<ApiResponse<unknown>> => {
-  const auth = requireAuth(ctx.request);
+export const deleteRatingHandler = async (
+  ctx: AuthenticatedContext & { body?: unknown }
+): Promise<ApiResponse<unknown>> => {
+  const { auth } = ctx;
   const payload = ctx.body as { gameId?: number | string } | null;
   const gameId = parseGameId(payload?.gameId ?? null, "gameId");
 
@@ -90,21 +89,20 @@ export const deleteRatingHandler = async (ctx: {
   return ok(response);
 };
 
-export const getGameHandler = async (ctx: {
-  request: Request;
-  params?: Record<string, string>;
-}): Promise<ApiResponse<unknown>> => {
-  const auth = requireAuth(ctx.request);
+export const getGameHandler = async (
+  ctx: AuthenticatedParamsContext
+): Promise<ApiResponse<unknown>> => {
+  const { auth } = ctx;
   const raw = ctx.params?.gameId ?? "";
   const gameId = parseGameId(raw, "gameId");
   const response = await gamesService.getGameById(auth.userId, gameId);
   return ok(response);
 };
 
-export const searchGamesHandler = async (ctx: {
-  request: Request;
-}): Promise<ApiResponse<unknown>> => {
-  const auth = requireAuth(ctx.request);
+export const searchGamesHandler = async (
+  ctx: AuthenticatedContext
+): Promise<ApiResponse<unknown>> => {
+  const { auth } = ctx;
   const url = new URL(ctx.request.url);
   const query = url.searchParams.get("query") ?? "";
   const limitRaw = url.searchParams.get("limit");
@@ -116,19 +114,18 @@ export const searchGamesHandler = async (ctx: {
   return ok(response);
 };
 
-export const listConnectionsHandler = async (ctx: {
-  request: Request;
-}): Promise<ApiResponse<unknown>> => {
-  const auth = requireAuth(ctx.request);
+export const listConnectionsHandler = async (
+  ctx: AuthenticatedContext
+): Promise<ApiResponse<unknown>> => {
+  const { auth } = ctx;
   const response = await gamesService.listConnections(auth.userId);
   return ok(response);
 };
 
-export const createConnectionHandler = async (ctx: {
-  request: Request;
-  body?: unknown;
-}): Promise<ApiResponse<unknown>> => {
-  const auth = requireAuth(ctx.request);
+export const createConnectionHandler = async (
+  ctx: AuthenticatedContext & { body?: unknown }
+): Promise<ApiResponse<unknown>> => {
+  const { auth } = ctx;
   const payload = ctx.body as {
     gameId?: number | string;
     connectedGameId?: number | string;
@@ -147,11 +144,10 @@ export const createConnectionHandler = async (ctx: {
   return ok(response);
 };
 
-export const deleteConnectionHandler = async (ctx: {
-  request: Request;
-  body?: unknown;
-}): Promise<ApiResponse<unknown>> => {
-  const auth = requireAuth(ctx.request);
+export const deleteConnectionHandler = async (
+  ctx: AuthenticatedContext & { body?: unknown }
+): Promise<ApiResponse<unknown>> => {
+  const { auth } = ctx;
   const payload = ctx.body as {
     gameId?: number | string;
     connectedGameId?: number | string;

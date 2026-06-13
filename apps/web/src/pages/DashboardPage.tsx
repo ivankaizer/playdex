@@ -23,6 +23,7 @@ import {
   formatUtcDateInput,
 } from "../utils/formatters";
 import { getSessionDurationSeconds } from "../utils/sessions";
+import { AppFooter } from "../components/AppFooter";
 import { AppHeader } from "../components/AppHeader";
 import { Background } from "../components/Background";
 import { ManualSessionModal } from "../components/ManualSessionModal";
@@ -683,6 +684,7 @@ export const DashboardPage = ({
             }
           />
         </section>
+        <AppFooter />
       </div>
       <ManualSessionModal
         isOpen={isManualModalOpen}

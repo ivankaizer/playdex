@@ -1,5 +1,6 @@
-import type { Elysia } from "elysia";
+import { Elysia } from "elysia";
 
+import { withAuth } from "../../app/http/auth";
 import {
   getPlayniteKeyHandler,
   listProvidersHandler,
@@ -7,7 +8,9 @@ import {
 } from "./providers.handlers";
 
 export const registerProviderRoutes = (app: Elysia) =>
-  app
-    .get("/api/providers", listProvidersHandler)
-    .put("/api/providers/status", updateProviderStatusHandler)
-    .post("/api/playnite/key", getPlayniteKeyHandler);
+  app.use(
+    withAuth(new Elysia())
+      .get("/api/providers", listProvidersHandler)
+      .put("/api/providers/status", updateProviderStatusHandler)
+      .post("/api/playnite/key", getPlayniteKeyHandler)
+  );

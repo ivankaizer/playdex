@@ -1,4 +1,7 @@
-import { requireAuth } from "../../app/http/auth";
+import type {
+  AuthenticatedContext,
+  AuthenticatedParamsContext,
+} from "../../app/http/auth";
 import { ok } from "../../app/http/responses";
 import type {
   AccountCurrentSessionResponseDto,
@@ -155,18 +158,18 @@ const parseStatsRange = (url: URL) => {
   return { startedAt: parsedFrom, endedAt };
 };
 
-export const listAccountsHandler = async (ctx: {
-  request: Request;
-}): Promise<ApiResponse<AccountSummaryDto[]>> => {
-  const auth = requireAuth(ctx.request);
+export const listAccountsHandler = async (
+  ctx: AuthenticatedContext
+): Promise<ApiResponse<AccountSummaryDto[]>> => {
+  const { auth } = ctx;
   const accounts = await accountsService.listAccounts(auth.userId);
   return ok(accounts);
 };
 
-export const listUserSessionsHandler = async (ctx: {
-  request: Request;
-}): Promise<ApiResponse<AccountSessionsResponseDto>> => {
-  const auth = requireAuth(ctx.request);
+export const listUserSessionsHandler = async (
+  ctx: AuthenticatedContext
+): Promise<ApiResponse<AccountSessionsResponseDto>> => {
+  const { auth } = ctx;
   const { limit, offset, filters } = parsePaginationAndFilters(
     new URL(ctx.request.url)
   );
@@ -188,11 +191,10 @@ export const listUserSessionsHandler = async (ctx: {
   return ok(response);
 };
 
-export const deleteUserSessionHandler = async (ctx: {
-  request: Request;
-  params?: Record<string, string>;
-}): Promise<ApiResponse<AccountSessionDeleteResponseDto>> => {
-  const auth = requireAuth(ctx.request);
+export const deleteUserSessionHandler = async (
+  ctx: AuthenticatedParamsContext
+): Promise<ApiResponse<AccountSessionDeleteResponseDto>> => {
+  const { auth } = ctx;
   const sessionId = parseSessionId(ctx.params);
   const result = await accountsService.removeUserSession(
     auth.userId,
@@ -206,10 +208,10 @@ export const deleteUserSessionHandler = async (ctx: {
   return ok({ sessionId: result.sessionId });
 };
 
-export const listUserSessionsTodayHandler = async (ctx: {
-  request: Request;
-}): Promise<ApiResponse<AccountTodaySessionsResponseDto>> => {
-  const auth = requireAuth(ctx.request);
+export const listUserSessionsTodayHandler = async (
+  ctx: AuthenticatedContext
+): Promise<ApiResponse<AccountTodaySessionsResponseDto>> => {
+  const { auth } = ctx;
   const sessions = await accountsService.fetchUserSessionsToday(
     auth.userId,
     10
@@ -217,10 +219,10 @@ export const listUserSessionsTodayHandler = async (ctx: {
   return ok({ accountId: null, sessions: sessions.map(toSessionDto) });
 };
 
-export const getUserCurrentSessionHandler = async (ctx: {
-  request: Request;
-}): Promise<ApiResponse<AccountCurrentSessionResponseDto>> => {
-  const auth = requireAuth(ctx.request);
+export const getUserCurrentSessionHandler = async (
+  ctx: AuthenticatedContext
+): Promise<ApiResponse<AccountCurrentSessionResponseDto>> => {
+  const { auth } = ctx;
   const session = await accountsService.fetchUserCurrentSession(auth.userId);
   return ok({
     accountId: null,
@@ -228,10 +230,10 @@ export const getUserCurrentSessionHandler = async (ctx: {
   });
 };
 
-export const getUserStatsHandler = async (ctx: {
-  request: Request;
-}): Promise<ApiResponse<AccountStatsRangeResponseDto>> => {
-  const auth = requireAuth(ctx.request);
+export const getUserStatsHandler = async (
+  ctx: AuthenticatedContext
+): Promise<ApiResponse<AccountStatsRangeResponseDto>> => {
+  const { auth } = ctx;
   const { startedAt, endedAt } = parseStatsRange(new URL(ctx.request.url));
   const stats = await accountsService.fetchUserStatsForRange(
     auth.userId,
@@ -241,11 +243,10 @@ export const getUserStatsHandler = async (ctx: {
   return ok({ accountId: null, stats: toStatsDto(stats) });
 };
 
-export const listAccountSessionsHandler = async (ctx: {
-  request: Request;
-  params?: Record<string, string>;
-}): Promise<ApiResponse<AccountSessionsResponseDto>> => {
-  const auth = requireAuth(ctx.request);
+export const listAccountSessionsHandler = async (
+  ctx: AuthenticatedParamsContext
+): Promise<ApiResponse<AccountSessionsResponseDto>> => {
+  const { auth } = ctx;
   const accountId = parseAccountId(ctx.params);
   const { limit, offset, filters } = parsePaginationAndFilters(
     new URL(ctx.request.url)
@@ -269,11 +270,10 @@ export const listAccountSessionsHandler = async (ctx: {
   return ok(response);
 };
 
-export const listAccountSessionsTodayHandler = async (ctx: {
-  request: Request;
-  params?: Record<string, string>;
-}): Promise<ApiResponse<AccountTodaySessionsResponseDto>> => {
-  const auth = requireAuth(ctx.request);
+export const listAccountSessionsTodayHandler = async (
+  ctx: AuthenticatedParamsContext
+): Promise<ApiResponse<AccountTodaySessionsResponseDto>> => {
+  const { auth } = ctx;
   const accountId = parseAccountId(ctx.params);
   const sessions = await accountsService.fetchAccountSessionsToday(
     accountId,
@@ -283,11 +283,10 @@ export const listAccountSessionsTodayHandler = async (ctx: {
   return ok({ accountId, sessions: sessions.map(toSessionDto) });
 };
 
-export const getAccountCurrentSessionHandler = async (ctx: {
-  request: Request;
-  params?: Record<string, string>;
-}): Promise<ApiResponse<AccountCurrentSessionResponseDto>> => {
-  const auth = requireAuth(ctx.request);
+export const getAccountCurrentSessionHandler = async (
+  ctx: AuthenticatedParamsContext
+): Promise<ApiResponse<AccountCurrentSessionResponseDto>> => {
+  const { auth } = ctx;
   const accountId = parseAccountId(ctx.params);
   const session = await accountsService.fetchAccountCurrentSession(
     accountId,
@@ -296,11 +295,10 @@ export const getAccountCurrentSessionHandler = async (ctx: {
   return ok({ accountId, session: session ? toSessionDto(session) : null });
 };
 
-export const getAccountStatsHandler = async (ctx: {
-  request: Request;
-  params?: Record<string, string>;
-}): Promise<ApiResponse<AccountStatsResponseDto>> => {
-  const auth = requireAuth(ctx.request);
+export const getAccountStatsHandler = async (
+  ctx: AuthenticatedParamsContext
+): Promise<ApiResponse<AccountStatsResponseDto>> => {
+  const { auth } = ctx;
   const accountId = parseAccountId(ctx.params);
   const stats = await accountsService.fetchAccountStats(accountId, auth.userId);
   return ok({

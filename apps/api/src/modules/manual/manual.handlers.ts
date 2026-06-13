@@ -1,4 +1,7 @@
-import { requireAuth } from "../../app/http/auth";
+import type {
+  AuthenticatedContext,
+  AuthenticatedParamsContext,
+} from "../../app/http/auth";
 import { ok } from "../../app/http/responses";
 import type {
   ManualEntryCreateResponseDto,
@@ -59,19 +62,18 @@ const parsePositiveInteger = (value: unknown, field: string) => {
   return numeric;
 };
 
-export const listManualInputsHandler = async (ctx: {
-  request: Request;
-}): Promise<ApiResponse<ManualInputsResponseDto>> => {
-  const auth = requireAuth(ctx.request);
+export const listManualInputsHandler = async (
+  ctx: AuthenticatedContext
+): Promise<ApiResponse<ManualInputsResponseDto>> => {
+  const { auth } = ctx;
   const inputs = await manualService.getManualInputs(auth.userId);
   return ok({ inputs });
 };
 
-export const startManualSessionHandler = async (ctx: {
-  request: Request;
-  body?: unknown;
-}): Promise<ApiResponse<ManualSessionStartResponseDto>> => {
-  const auth = requireAuth(ctx.request);
+export const startManualSessionHandler = async (
+  ctx: AuthenticatedContext & { body?: unknown }
+): Promise<ApiResponse<ManualSessionStartResponseDto>> => {
+  const { auth } = ctx;
   const payload = ctx.body as ManualSessionStartBody | null;
   const title = payload?.title?.trim() ?? "";
   if (!title) {
@@ -82,18 +84,18 @@ export const startManualSessionHandler = async (ctx: {
   return ok({ sessionId: result.sessionId });
 };
 
-export const stopManualSessionHandler = async (ctx: {
-  request: Request;
-}): Promise<ApiResponse<ManualSessionStopResponseDto>> => {
-  const auth = requireAuth(ctx.request);
+export const stopManualSessionHandler = async (
+  ctx: AuthenticatedContext
+): Promise<ApiResponse<ManualSessionStopResponseDto>> => {
+  const { auth } = ctx;
   const result = await manualService.stopManualSession(auth.userId);
   return ok({ endedSessionCount: result.endedSessionCount });
 };
 
-export const searchManualMappingsHandler = async (ctx: {
-  request: Request;
-}): Promise<ApiResponse<ManualMappingSearchResponseDto>> => {
-  requireAuth(ctx.request);
+export const searchManualMappingsHandler = async (
+  ctx: AuthenticatedContext
+): Promise<ApiResponse<ManualMappingSearchResponseDto>> => {
+  void ctx.auth;
 
   const url = new URL(ctx.request.url);
   const query = url.searchParams.get("query")?.trim() ?? "";
@@ -111,11 +113,10 @@ export const searchManualMappingsHandler = async (ctx: {
   });
 };
 
-export const createManualEntryHandler = async (ctx: {
-  request: Request;
-  body?: unknown;
-}): Promise<ApiResponse<ManualEntryCreateResponseDto>> => {
-  const auth = requireAuth(ctx.request);
+export const createManualEntryHandler = async (
+  ctx: AuthenticatedContext & { body?: unknown }
+): Promise<ApiResponse<ManualEntryCreateResponseDto>> => {
+  const { auth } = ctx;
   const payload = ctx.body as ManualEntryBody | null;
   const rawDate = payload?.date?.trim() ?? "";
   const startedAt = rawDate ? parseDateInput(rawDate) : null;
@@ -176,12 +177,10 @@ export const createManualEntryHandler = async (ctx: {
   return ok({ sessionId: result.sessionId });
 };
 
-export const mapManualInputHandler = async (ctx: {
-  request: Request;
-  params?: Record<string, string>;
-  body?: unknown;
-}): Promise<ApiResponse<ManualMappingResponseDto>> => {
-  const auth = requireAuth(ctx.request);
+export const mapManualInputHandler = async (
+  ctx: AuthenticatedParamsContext & { body?: unknown }
+): Promise<ApiResponse<ManualMappingResponseDto>> => {
+  const { auth } = ctx;
   const inputId = parsePositiveInteger(ctx.params?.inputId, "inputId");
   const payload = ctx.body as ManualMappingBody | null;
 

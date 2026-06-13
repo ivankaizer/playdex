@@ -20,6 +20,7 @@ import type {
   NavItem,
 } from "../types";
 import { formatPlatformLabel } from "../utils/formatters";
+import { AppFooter } from "../components/AppFooter";
 import { AppHeader } from "../components/AppHeader";
 import { Background } from "../components/Background";
 
@@ -1040,6 +1041,7 @@ export const MappingPage = ({
             </div>
           </div>
         </section>
+        <AppFooter />
       </div>
     </main>
   );

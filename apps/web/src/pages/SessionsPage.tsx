@@ -25,6 +25,7 @@ import {
 } from "../utils/formatters";
 import { getSessionDurationSeconds } from "../utils/sessions";
 import { encodeGameId } from "../utils/gameHash";
+import { AppFooter } from "../components/AppFooter";
 import { AppHeader } from "../components/AppHeader";
 import { Background } from "../components/Background";
 import { ManualEntryModal } from "../components/ManualEntryModal";
@@ -1000,6 +1001,7 @@ export const SessionsPage = ({
             </div>
           </div>
         </section>
+        <AppFooter />
       </div>
 
       <ManualEntryModal

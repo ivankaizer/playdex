@@ -1,8 +1,13 @@
 import jwt from "jsonwebtoken";
+import type { Elysia } from "elysia";
 
 import { AppError } from "../../common/errors/AppError";
 
 export type AuthContext = { userId: number; email: string };
+export type AuthenticatedContext = { request: Request; auth: AuthContext };
+export type AuthenticatedParamsContext = AuthenticatedContext & {
+  params?: Record<string, string>;
+};
 
 export const getJwtSecret = () => {
   const jwtSecret = Bun.env.JWT_SECRET;
@@ -44,3 +49,8 @@ export const requireAuth = (request: Request): AuthContext => {
     throw new AppError("Invalid token.", 401, { cause: error });
   }
 };
+
+export const withAuth = (app: Elysia) =>
+  app.derive(({ request }) => ({
+    auth: requireAuth(request),
+  }));

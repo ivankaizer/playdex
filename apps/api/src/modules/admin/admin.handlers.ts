@@ -1,4 +1,3 @@
-import { requireAuth } from "../../app/http/auth";
 import { ok } from "../../app/http/responses";
 import type {
   AdminCredentialUpdateResponseDto,
@@ -14,8 +13,12 @@ import type {
 } from "../../app/http/types";
 import { AppError } from "../../common/errors/AppError";
 import { parseGameId } from "../../common/utils/gameId";
-import { authRepository } from "../auth/auth.repository";
 import { adminService } from "./admin.service";
+
+type RequestContext = { request: Request };
+type ParamsContext = RequestContext & {
+  params?: Record<string, string>;
+};
 
 const parsePositiveInteger = (value: unknown, field: string) => {
   const numeric =
@@ -67,27 +70,16 @@ const parseBoolean = (value: unknown, field: string) => {
   return value;
 };
 
-const requireAdmin = async (request: Request) => {
-  const auth = requireAuth(request);
-  const user = await authRepository.loadUserById(auth.userId);
-  if (!user?.is_admin) {
-    throw new AppError("Admin access required.", 403);
-  }
-  return auth;
-};
-
-export const listRecentSessionsHandler = async (ctx: {
-  request: Request;
-}): Promise<ApiResponse<AdminRecentSessionsResponseDto>> => {
-  await requireAdmin(ctx.request);
+export const listRecentSessionsHandler = async (
+  _ctx: RequestContext
+): Promise<ApiResponse<AdminRecentSessionsResponseDto>> => {
   const data = await adminService.listRecentSessions();
   return ok(data);
 };
 
-export const listSessionsHandler = async (ctx: {
-  request: Request;
-}): Promise<ApiResponse<AdminSessionsListResponseDto>> => {
-  await requireAdmin(ctx.request);
+export const listSessionsHandler = async (
+  ctx: RequestContext
+): Promise<ApiResponse<AdminSessionsListResponseDto>> => {
   const url = new URL(ctx.request.url);
   const query = (url.searchParams.get("query") ?? "").trim();
   const limitRaw = url.searchParams.get("limit");
@@ -108,19 +100,16 @@ export const listSessionsHandler = async (ctx: {
   return ok(data);
 };
 
-export const listPlatformStatusesHandler = async (ctx: {
-  request: Request;
-}): Promise<ApiResponse<AdminPlatformStatusesResponseDto>> => {
-  await requireAdmin(ctx.request);
+export const listPlatformStatusesHandler = async (
+  _ctx: RequestContext
+): Promise<ApiResponse<AdminPlatformStatusesResponseDto>> => {
   const data = await adminService.listPlatformStatuses();
   return ok(data);
 };
 
-export const updatePlatformStatusHandler = async (ctx: {
-  request: Request;
-  body?: unknown;
-}): Promise<ApiResponse<AdminPlatformStatusUpdateResponseDto>> => {
-  await requireAdmin(ctx.request);
+export const updatePlatformStatusHandler = async (
+  ctx: RequestContext & { body?: unknown }
+): Promise<ApiResponse<AdminPlatformStatusUpdateResponseDto>> => {
   const payload = ctx.body as { platform?: unknown; enabled?: unknown } | null;
   const platform = parseNonEmptyString(payload?.platform, "platform");
   const enabled = parseBoolean(payload?.enabled, "enabled");
@@ -128,20 +117,16 @@ export const updatePlatformStatusHandler = async (ctx: {
   return ok(data);
 };
 
-export const listCredentialsHandler = async (ctx: {
-  request: Request;
-}): Promise<ApiResponse<AdminCredentialsResponseDto>> => {
-  await requireAdmin(ctx.request);
+export const listCredentialsHandler = async (
+  _ctx: RequestContext
+): Promise<ApiResponse<AdminCredentialsResponseDto>> => {
   const data = await adminService.listCredentials();
   return ok(data);
 };
 
-export const updateCredentialHandler = async (ctx: {
-  request: Request;
-  params?: Record<string, string>;
-  body?: unknown;
-}): Promise<ApiResponse<AdminCredentialUpdateResponseDto>> => {
-  await requireAdmin(ctx.request);
+export const updateCredentialHandler = async (
+  ctx: ParamsContext & { body?: unknown }
+): Promise<ApiResponse<AdminCredentialUpdateResponseDto>> => {
   const credentialId = parsePositiveInteger(
     ctx.params?.credentialId ?? "",
     "credentialId"
@@ -162,11 +147,9 @@ export const updateCredentialHandler = async (ctx: {
   return ok(data);
 };
 
-export const moveSessionsHandler = async (ctx: {
-  request: Request;
-  body?: unknown;
-}): Promise<ApiResponse<AdminSessionMoveResponseDto>> => {
-  await requireAdmin(ctx.request);
+export const moveSessionsHandler = async (
+  ctx: RequestContext & { body?: unknown }
+): Promise<ApiResponse<AdminSessionMoveResponseDto>> => {
   const payload = (ctx.body ?? {}) as {
     sessionIds?: unknown;
     targetCredentialId?: unknown;
@@ -182,10 +165,9 @@ export const moveSessionsHandler = async (ctx: {
   return ok(data);
 };
 
-export const searchGamesHandler = async (ctx: {
-  request: Request;
-}): Promise<ApiResponse<AdminGameSearchResponseDto>> => {
-  await requireAdmin(ctx.request);
+export const searchGamesHandler = async (
+  ctx: RequestContext
+): Promise<ApiResponse<AdminGameSearchResponseDto>> => {
   const url = new URL(ctx.request.url);
   const query = (url.searchParams.get("query") ?? "").trim();
   if (!query) {
@@ -200,12 +182,9 @@ export const searchGamesHandler = async (ctx: {
   return ok(data);
 };
 
-export const updateGameHandler = async (ctx: {
-  request: Request;
-  params?: Record<string, string>;
-  body?: unknown;
-}): Promise<ApiResponse<AdminGameUpdateResponseDto>> => {
-  await requireAdmin(ctx.request);
+export const updateGameHandler = async (
+  ctx: ParamsContext & { body?: unknown }
+): Promise<ApiResponse<AdminGameUpdateResponseDto>> => {
   const payload = (ctx.body ?? {}) as Record<string, unknown>;
   const url = new URL(ctx.request.url);
   const rawGameId =

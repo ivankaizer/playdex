@@ -1,4 +1,4 @@
-import { requireAuth } from "../../app/http/auth";
+import type { AuthenticatedContext } from "../../app/http/auth";
 import { ok } from "../../app/http/responses";
 import type {
   ApiResponse,
@@ -20,19 +20,18 @@ const parseNonNegativeInteger = (value: unknown, field: string) => {
   return numeric;
 };
 
-export const getUserSettingsHandler = async (ctx: {
-  request: Request;
-}): Promise<ApiResponse<UserSettingsResponseDto>> => {
-  const auth = requireAuth(ctx.request);
+export const getUserSettingsHandler = async (
+  ctx: AuthenticatedContext
+): Promise<ApiResponse<UserSettingsResponseDto>> => {
+  const { auth } = ctx;
   const settings = await settingsService.getUserSettings(auth.userId);
   return ok(settings);
 };
 
-export const updateUserSettingsHandler = async (ctx: {
-  request: Request;
-  body?: unknown;
-}): Promise<ApiResponse<UserSettingsResponseDto>> => {
-  const auth = requireAuth(ctx.request);
+export const updateUserSettingsHandler = async (
+  ctx: AuthenticatedContext & { body?: unknown }
+): Promise<ApiResponse<UserSettingsResponseDto>> => {
+  const { auth } = ctx;
   const payload = ctx.body as SettingsUpdateBody | null;
   const minutes = parseNonNegativeInteger(
     payload?.ignoreShortSessionsMinutes,

@@ -1,4 +1,4 @@
-import { requireAuth } from "../../app/http/auth";
+import type { AuthenticatedContext } from "../../app/http/auth";
 import { ok } from "../../app/http/responses";
 import type {
   ApiResponse,
@@ -91,18 +91,18 @@ const toRecapDto = (stats: RecapStats): RecapResponseDto => ({
   })),
 });
 
-export const getRecapYearsHandler = async (ctx: {
-  request: Request;
-}): Promise<ApiResponse<RecapYearsResponseDto>> => {
-  const auth = requireAuth(ctx.request);
+export const getRecapYearsHandler = async (
+  ctx: AuthenticatedContext
+): Promise<ApiResponse<RecapYearsResponseDto>> => {
+  const { auth } = ctx;
   const years = await recapService.fetchRecapYears(auth.userId);
   return ok({ years });
 };
 
-export const getRecapHandler = async (ctx: {
-  request: Request;
-}): Promise<ApiResponse<RecapResponseDto>> => {
-  const auth = requireAuth(ctx.request);
+export const getRecapHandler = async (
+  ctx: AuthenticatedContext
+): Promise<ApiResponse<RecapResponseDto>> => {
+  const { auth } = ctx;
   const range = parseRecapRange(new URL(ctx.request.url));
   const stats = await recapService.fetchRecap({
     userId: auth.userId,

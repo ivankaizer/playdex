@@ -2,6 +2,7 @@ import type { FormEvent } from "react";
 import { useEffect, useState } from "react";
 
 import { apiRequest } from "../api";
+import { AppFooter } from "../components/AppFooter";
 import { Background } from "../components/Background";
 import { StatsRecapSection } from "../components/StatsRecapSection";
 import { ThemeToggle } from "../components/ThemeToggle";
@@ -398,6 +399,8 @@ export const HomePage = ({
             </div>
           </div>
         </section>
+
+        <AppFooter />
       </div>
     </main>
   );

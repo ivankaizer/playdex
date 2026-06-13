@@ -1,11 +1,14 @@
-import type { Elysia } from "elysia";
+import { Elysia } from "elysia";
 
+import { withAuth } from "../../app/http/auth";
 import {
   getUserSettingsHandler,
   updateUserSettingsHandler,
 } from "./settings.handlers";
 
 export const registerSettingsRoutes = (app: Elysia) =>
-  app
-    .get("/api/settings", getUserSettingsHandler)
-    .put("/api/settings", updateUserSettingsHandler);
+  app.use(
+    withAuth(new Elysia())
+      .get("/api/settings", getUserSettingsHandler)
+      .put("/api/settings", updateUserSettingsHandler)
+  );

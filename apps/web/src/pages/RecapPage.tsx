@@ -9,6 +9,7 @@ import {
   formatHours,
   formatStatsPlatformLabel,
 } from "../utils/formatters";
+import { AppFooter } from "../components/AppFooter";
 import { AppHeader } from "../components/AppHeader";
 import { Background } from "../components/Background";
 
@@ -1040,6 +1041,7 @@ export const RecapPage = ({
             ) : null}
           </div>
         </section>
+        <AppFooter />
       </div>
     </main>
   );

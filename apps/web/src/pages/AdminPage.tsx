@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import { apiRequest } from "../api";
 import { navItems as defaultNavItems } from "../constants";
+import { AppFooter } from "../components/AppFooter";
 import { AppHeader } from "../components/AppHeader";
 import { Background } from "../components/Background";
 import type {
@@ -1101,6 +1102,7 @@ export const AdminPage = ({
             })}
           </div>
         </section>
+        <AppFooter />
       </div>
     </main>
   );

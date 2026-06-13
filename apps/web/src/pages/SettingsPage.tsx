@@ -10,6 +10,7 @@ import type {
   UserSettingsResponse,
 } from "../types";
 import { formatProviderName } from "../utils/formatters";
+import { AppFooter } from "../components/AppFooter";
 import { AppHeader } from "../components/AppHeader";
 import { Background } from "../components/Background";
 
@@ -324,6 +325,7 @@ export const SettingsPage = ({
             </div>
           </div>
         </section>
+        <AppFooter />
       </div>
     </main>
   );

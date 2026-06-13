@@ -1,4 +1,4 @@
-import { requireAuth } from "../../app/http/auth";
+import type { AuthenticatedContext } from "../../app/http/auth";
 import { ok } from "../../app/http/responses";
 import { AppError } from "../../common/errors/AppError";
 import type {
@@ -25,27 +25,26 @@ const parseProviderStatus = (value: unknown) => {
   return value;
 };
 
-export const listProvidersHandler = async (ctx: {
-  request: Request;
-}): Promise<ApiResponse<ProvidersResponseDto>> => {
-  const auth = requireAuth(ctx.request);
+export const listProvidersHandler = async (
+  ctx: AuthenticatedContext
+): Promise<ApiResponse<ProvidersResponseDto>> => {
+  const { auth } = ctx;
   const providers = await providersService.getProviders(auth.userId);
   return ok({ providers });
 };
 
-export const getPlayniteKeyHandler = async (ctx: {
-  request: Request;
-}): Promise<ApiResponse<PlayniteKeyResponseDto>> => {
-  const auth = requireAuth(ctx.request);
+export const getPlayniteKeyHandler = async (
+  ctx: AuthenticatedContext
+): Promise<ApiResponse<PlayniteKeyResponseDto>> => {
+  const { auth } = ctx;
   const apiKey = await providersService.getOrCreatePlayniteKey(auth.userId);
   return ok({ apiKey });
 };
 
-export const updateProviderStatusHandler = async (ctx: {
-  request: Request;
-  body?: unknown;
-}): Promise<ApiResponse<ProviderUpdateResponseDto>> => {
-  const auth = requireAuth(ctx.request);
+export const updateProviderStatusHandler = async (
+  ctx: AuthenticatedContext & { body?: unknown }
+): Promise<ApiResponse<ProviderUpdateResponseDto>> => {
+  const { auth } = ctx;
   const payload = ctx.body as {
     providerId?: number | string;
     status?: unknown;
