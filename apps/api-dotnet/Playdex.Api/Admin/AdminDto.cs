@@ -1,8 +1,6 @@
-namespace Playdex.Api.Admin;
+using System.Text.Json.Serialization;
 
-// ── Repository Intermediate Results ───────────────────────────────────────
-// Public records returned by IAdminRepository for Dapper mapping.
-// These are raw query results that the service maps to response DTOs.
+namespace Playdex.Api.Admin;
 
 public sealed record AdminRecentSessionRow(
     long UserId,
@@ -55,8 +53,6 @@ public sealed record AdminGameUpdateRow(
     long PlatformId,
     string? PlatformKey);
 
-// ── Recent Sessions ──────────────────────────────────────────────────────
-
 public sealed record AdminRecentSessionDto(
     long SessionId,
     string GameName,
@@ -71,8 +67,6 @@ public sealed record AdminUserRecentSessionsDto(
 
 public sealed record AdminRecentSessionsResponseDto(
     IReadOnlyList<AdminUserRecentSessionsDto> Users);
-
-// ── Searchable Sessions ──────────────────────────────────────────────────
 
 public sealed record AdminMovableSessionDto(
     long SessionId,
@@ -93,8 +87,6 @@ public sealed record AdminSessionsListResponseDto(
     int Limit,
     int Offset);
 
-// ── Session Move ─────────────────────────────────────────────────────────
-
 public sealed record AdminSessionMoveRequest(
     long[] SessionIds,
     long TargetCredentialId);
@@ -102,8 +94,6 @@ public sealed record AdminSessionMoveRequest(
 public sealed record AdminSessionMoveResponseDto(
     int MovedSessions,
     long TargetCredentialId);
-
-// ── Provider Platforms ───────────────────────────────────────────────────
 
 public sealed record AdminPlatformStatusDto(
     string Platform,
@@ -123,14 +113,12 @@ public sealed record AdminPlatformStatusUpdateResponseDto(
     bool Enabled,
     int UpdatedCredentials);
 
-// ── Credentials ──────────────────────────────────────────────────────────
-
 public sealed record AdminCredentialDto(
     long Id,
     string UserEmail,
     string Platform,
     string? ApiKey,
-    string? AccountUser,
+    [property: JsonPropertyName("user")] string? AccountUser,
     bool Active);
 
 public sealed record AdminCredentialsResponseDto(
@@ -138,12 +126,10 @@ public sealed record AdminCredentialsResponseDto(
 
 public sealed record AdminCredentialUpdateRequest(
     string? ApiKey,
-    string? AccountUser);
+    [property: JsonPropertyName("user")] string? AccountUser);
 
 public sealed record AdminCredentialUpdateResponseDto(
     AdminCredentialDto Credential);
-
-// ── Games ────────────────────────────────────────────────────────────────
 
 public sealed record AdminGameDto(
     string Id,

@@ -31,6 +31,10 @@ public sealed class AccountsService(IAccountsRepository repository)
         long sessionId, long userId, CancellationToken ct)
     {
         var deleted = await repository.DeleteSession(sessionId, userId, ct);
+        if (deleted == 0)
+        {
+            throw Http.AppProblem.NotFound("Session not found.");
+        }
         return new AccountSessionDeleteResponseDto(deleted);
     }
 

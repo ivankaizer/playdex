@@ -40,9 +40,10 @@ public sealed record PlatformSummaryDto(
     double TotalSeconds,
     int SessionCount);
 
+public sealed record RecapRangeDto(string? From, string? To);
+
 public sealed record RecapResponseDto(
-    string? From,
-    string? To,
+    RecapRangeDto Range,
     int TotalSessions,
     double TotalSeconds,
     double AverageSessionSeconds,

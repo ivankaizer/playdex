@@ -430,8 +430,7 @@ public sealed partial class RecapService(IRecapRepository repository)
         // ── Build response ─────────────────────────────────────
 
         return new RecapResponseDto(
-            From: from,
-            To: to,
+            Range: new RecapRangeDto(from, to),
             TotalSessions: totalSessions,
             TotalSeconds: totalSeconds,
             AverageSessionSeconds: averageSessionSeconds,

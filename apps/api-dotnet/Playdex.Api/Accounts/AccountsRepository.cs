@@ -127,7 +127,7 @@ public sealed class AccountsRepository(NpgsqlDataSource dataSource, PlaydexDbCon
         var topGames = sessions
             .GroupBy(s => s.Game)
             .Select(g => new AccountTopGameDto(
-                GameId.Encode(g.First().SessionId),
+                g.First().GameId,
                 g.Key,
                 g.Sum(MapDuration)))
             .OrderByDescending(g => g.TotalSeconds)
