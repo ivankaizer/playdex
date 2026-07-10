@@ -45,6 +45,41 @@ middleware or decorators.
 If a handler needs the current user, tenant, or role, that value should already
 be part of the typed handler context.
 
+## Modules Own Their DTOs
+
+Request and response DTOs belong to the feature module that defines the use case.
+Shared HTTP packages may define transport mechanics such as `ApiResponse`,
+`ApiErrorResponse`, pagination primitives, or common status envelopes, but they
+must not become a bucket for module-specific contracts.
+
+Preferred shape:
+
+```ts
+// modules/accounts/accounts.dto.ts
+export type AccountSessionDto = {
+  sessionId: number;
+  game: string;
+};
+
+// modules/accounts/accounts.handlers.ts
+import type { ApiResponse } from "../../app/http/types";
+import type { AccountSessionDto } from "./accounts.dto";
+```
+
+Avoid this shape:
+
+```ts
+// app/http/types.ts
+export type AccountSessionDto = {
+  sessionId: number;
+  game: string;
+};
+```
+
+Keeping DTOs module-local makes ownership clear, prevents cross-module coupling
+through a generic HTTP package, and makes it easier to move, split, or delete a
+feature without editing a central type registry.
+
 ## Keep Policy Scopes Explicit
 
 Middleware should be applied to the smallest route group that needs it. Do not

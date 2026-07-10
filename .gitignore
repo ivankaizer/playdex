@@ -51,3 +51,7 @@ apps/api/dist/
 apps/web/dist/
 todo.md
 *.internal
+
+# .NET build output
+**/bin/
+**/obj/
