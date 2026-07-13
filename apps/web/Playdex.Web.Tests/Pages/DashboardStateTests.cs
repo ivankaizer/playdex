@@ -22,6 +22,7 @@ public sealed class DashboardStateTests
             typeof(DashboardCurrentSessionView),
             typeof(DashboardRefreshMode),
             typeof(DashboardManualStartFlow),
+            typeof(DashboardRequestFlow),
             typeof(DashboardState),
         ];
 
@@ -73,6 +74,31 @@ public sealed class DashboardStateTests
     }
 
     [Fact]
+    public async Task AggregateRefresh_ReportsTheFirstFailureWithoutWaitingForAnUnresolvedSibling()
+    {
+        using var siblingCancellation = new CancellationTokenSource();
+        var unresolved = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var failure = new InvalidOperationException("first request failed");
+        var aggregate = DashboardRequestFlow.WaitAsync(
+            [unresolved.Task, Task.FromException(failure)],
+            siblingCancellation);
+
+        try
+        {
+            var observed = await Assert.ThrowsAsync<InvalidOperationException>(
+                () => aggregate.WaitAsync(TimeSpan.FromSeconds(1)));
+
+            Assert.Same(failure, observed);
+            Assert.True(siblingCancellation.IsCancellationRequested);
+            Assert.False(unresolved.Task.IsCompleted);
+        }
+        finally
+        {
+            unresolved.TrySetResult();
+        }
+    }
+
+    [Fact]
     public void DerivedCardsTotalsAndCurrentSessionMatchReactFormattingAndRounding()
     {
         var state = new DashboardState();
@@ -96,6 +122,29 @@ public sealed class DashboardStateTests
         Assert.Equal("2h", monthly.Hours);
         Assert.Equal("2", monthly.Sessions);
         Assert.Equal("Elden Ring", monthly.TopTitle);
+    }
+
+    [Fact]
+    public void PlatformRendering_PreservesRowsWhenRawPlatformsShareADisplayLabel()
+    {
+        var stats = new AccountStatsPeriod(
+            7200,
+            2,
+            null,
+            [new AccountPlatformStat("psn", 3600, null), new AccountPlatformStat("ps5", 3600, null)],
+            []);
+
+        var view = DashboardState.GetStatsView(stats);
+
+        Assert.Equal(["PS5", "PS5"], view.Platforms.Select(item => item.Label));
+
+        var root = FindWebRoot();
+        var dashboard = File.ReadAllText(Path.Combine(root, "Pages", "Dashboard.razor"));
+        var recap = File.ReadAllText(Path.Combine(root, "Components", "StatsRecapSection.razor"));
+        var pie = File.ReadAllText(Path.Combine(root, "Components", "StatsPieChart.razor"));
+        Assert.DoesNotContain("@key=\"item.Label\"", dashboard);
+        Assert.DoesNotContain("@key=\"item.Label\"", recap);
+        Assert.DoesNotContain("@key=\"segment.Label\"", pie);
     }
 
     [Fact]
@@ -215,7 +264,9 @@ public sealed class DashboardStateTests
         Assert.Contains("Title=\"Monthly stats\"", markup);
         Assert.Contains("Title=\"Yearly stats\"", markup);
         Assert.Contains("<ManualSessionModal", markup);
-        Assert.Contains("Task.WhenAll", code);
+        Assert.Contains("CancellationTokenSource.CreateLinkedTokenSource(_lifetime.Token)", code);
+        Assert.Contains("DashboardRequestFlow.WaitAsync", code);
+        Assert.True(code.Split("cancellationToken: refreshToken").Length - 1 >= 5);
         Assert.Contains("SendAsync<AccountSessionsResponse>(requests.TodaySessions", code);
         Assert.Contains("SendAsync<AccountStatsRangeResponse>(requests.TodayStats", code);
         Assert.Contains("SendAsync<AccountStatsRangeResponse>(requests.MonthlyStats", code);

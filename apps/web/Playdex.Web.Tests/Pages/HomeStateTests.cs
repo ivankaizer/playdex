@@ -67,6 +67,33 @@ public sealed class HomeStateTests
     }
 
     [Fact]
+    public void AuthenticatedHome_FirstRenderUsesTheResolvedRouterSession()
+    {
+        var root = FindWebRoot();
+        var app = File.ReadAllText(Path.Combine(root, "App.razor"));
+        var home = File.ReadAllText(Path.Combine(root, "Pages", "Home.razor.cs"));
+
+        Assert.Contains("new(NavigationOutcome.Wait)", app);
+        Assert.Contains("<CascadingValue Value=\"@_homeSession\">", app);
+        Assert.Contains("AuthSession.GetEmailAsync()", app);
+        Assert.Contains("[CascadingParameter]", home);
+        Assert.Contains("HomeSessionState InitialSession", home);
+
+        var sessionAssignment = home.IndexOf(
+            "_isLoggedIn = InitialSession.IsLoggedIn;",
+            StringComparison.Ordinal);
+        var profileInitialization = home.IndexOf(
+            "_state.BeginProfile(_isLoggedIn, InitialSession.CachedEmail)",
+            StringComparison.Ordinal);
+        var firstAwait = home.IndexOf("await ", StringComparison.Ordinal);
+
+        Assert.True(sessionAssignment >= 0 && sessionAssignment < firstAwait);
+        Assert.True(profileInitialization >= 0 && profileInitialization < firstAwait);
+        Assert.DoesNotContain("AuthSession.IsLoggedInAsync()", home);
+        Assert.DoesNotContain("AuthSession.GetEmailAsync()", home);
+    }
+
+    [Fact]
     public void HomePage_WiresTheReactLoginProfileSessionAndVisibleRegions()
     {
         var root = FindWebRoot();

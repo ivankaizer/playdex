@@ -6,6 +6,8 @@ using Playdex.Web.Models;
 
 namespace Playdex.Web.Pages;
 
+internal sealed record HomeSessionState(bool IsLoggedIn, string? CachedEmail);
+
 internal enum HomeLoginStatus
 {
     Idle,
@@ -115,17 +117,21 @@ public partial class Home : ComponentBase, IDisposable
     [Inject]
     private NavigationManager Navigation { get; set; } = null!;
 
+    [CascadingParameter]
+    private HomeSessionState InitialSession { get; set; } = new(false, null);
+
     protected override async Task OnInitializedAsync()
     {
+        _isLoggedIn = InitialSession.IsLoggedIn;
+        var shouldLoadProfile = _state.BeginProfile(_isLoggedIn, InitialSession.CachedEmail);
+
         var savedTheme = await Storage.GetAsync(ThemeKey);
         _theme = savedTheme is "light" or "dark"
             ? savedTheme
             : await Browser.PrefersDarkAsync() ? "dark" : "light";
         await ApplyThemeAsync();
 
-        _isLoggedIn = await AuthSession.IsLoggedInAsync();
-        var cachedEmail = await AuthSession.GetEmailAsync();
-        if (!_state.BeginProfile(_isLoggedIn, cachedEmail)) return;
+        if (!shouldLoadProfile) return;
 
         try
         {

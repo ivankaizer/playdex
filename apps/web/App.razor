@@ -7,34 +7,37 @@
 @inject NavigationManager Navigation
 
 <CascadingValue Name="IsAdmin" Value="@_isAdmin">
-    <Router AppAssembly="@typeof(App).Assembly" OnNavigateAsync="HandleNavigationAsync">
-        <Found Context="routeData">
-            @if (_currentDecision.Outcome == NavigationOutcome.Render)
-            {
-                <CascadingValue TValue="string"
-                                Name="NormalizedGameHash"
-                                Value="@(_currentDecision.GameHash!)">
-                    <RouteView RouteData="@routeData" />
-                </CascadingValue>
-            }
-            else if (_currentDecision.Outcome == NavigationOutcome.HomeFallback)
-            {
-                <Home />
-            }
-        </Found>
-        <NotFound>
-            @if (_currentDecision.Outcome is NavigationOutcome.Render or NavigationOutcome.HomeFallback)
-            {
-                <Home />
-            }
-        </NotFound>
-    </Router>
+    <CascadingValue Value="@_homeSession">
+        <Router AppAssembly="@typeof(App).Assembly" OnNavigateAsync="HandleNavigationAsync">
+            <Found Context="routeData">
+                @if (_currentDecision.Outcome == NavigationOutcome.Render)
+                {
+                    <CascadingValue TValue="string"
+                                    Name="NormalizedGameHash"
+                                    Value="@(_currentDecision.GameHash!)">
+                        <RouteView RouteData="@routeData" />
+                    </CascadingValue>
+                }
+                else if (_currentDecision.Outcome == NavigationOutcome.HomeFallback)
+                {
+                    <Home />
+                }
+            </Found>
+            <NotFound>
+                @if (_currentDecision.Outcome is NavigationOutcome.Render or NavigationOutcome.HomeFallback)
+                {
+                    <Home />
+                }
+            </NotFound>
+        </Router>
+    </CascadingValue>
 </CascadingValue>
 
 @code {
     private Task? _initializationTask;
     private Task? _profileTask;
-    private NavigationDecision _currentDecision = new(NavigationOutcome.HomeFallback);
+    private NavigationDecision _currentDecision = new(NavigationOutcome.Wait);
+    private HomeSessionState _homeSession = new(false, null);
     private bool _isLoggedIn;
     private bool _isAdmin;
     private bool _isProfileResolved;
@@ -76,6 +79,7 @@
     private async Task InitializeSessionAsync()
     {
         _isLoggedIn = await AuthSession.IsLoggedInAsync();
+        _homeSession = new HomeSessionState(_isLoggedIn, await AuthSession.GetEmailAsync());
         if (!_isLoggedIn)
         {
             _isProfileResolved = true;

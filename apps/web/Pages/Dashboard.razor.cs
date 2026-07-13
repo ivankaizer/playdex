@@ -94,6 +94,43 @@ internal static class DashboardManualStartFlow
     }
 }
 
+internal static class DashboardRequestFlow
+{
+    public static async Task WaitAsync(
+        IReadOnlyCollection<Task> requests,
+        CancellationTokenSource siblingCancellation)
+    {
+        var pending = requests.ToList();
+        while (pending.Count > 0)
+        {
+            var completed = await Task.WhenAny(pending);
+            pending.Remove(completed);
+
+            try
+            {
+                await completed;
+            }
+            catch
+            {
+                siblingCancellation.Cancel();
+                _ = ObserveAsync(pending);
+                throw;
+            }
+        }
+    }
+
+    private static async Task ObserveAsync(IReadOnlyCollection<Task> requests)
+    {
+        try
+        {
+            await Task.WhenAll(requests);
+        }
+        catch
+        {
+        }
+    }
+}
+
 internal sealed class DashboardState
 {
     public IReadOnlyList<AccountSession> TodaySessions { get; private set; } = [];
@@ -345,28 +382,27 @@ public partial class Dashboard : ComponentBase, IDisposable
         try
         {
             var requests = DashboardRequests.For(DateTimeOffset.Now);
+            using var siblingCancellation = CancellationTokenSource.CreateLinkedTokenSource(_lifetime.Token);
+            var refreshToken = siblingCancellation.Token;
             var todaySessionsTask = Api.SendAsync<AccountSessionsResponse>(requests.TodaySessions,
                 onAuthFailure: LogoutAsync,
-                cancellationToken: _lifetime.Token);
+                cancellationToken: refreshToken);
             var todayStatsTask = Api.SendAsync<AccountStatsRangeResponse>(requests.TodayStats,
                 onAuthFailure: LogoutAsync,
-                cancellationToken: _lifetime.Token);
+                cancellationToken: refreshToken);
             var monthlyStatsTask = Api.SendAsync<AccountStatsRangeResponse>(requests.MonthlyStats,
                 onAuthFailure: LogoutAsync,
-                cancellationToken: _lifetime.Token);
+                cancellationToken: refreshToken);
             var yearlyStatsTask = Api.SendAsync<AccountStatsRangeResponse>(requests.YearlyStats,
                 onAuthFailure: LogoutAsync,
-                cancellationToken: _lifetime.Token);
+                cancellationToken: refreshToken);
             var currentSessionTask = Api.SendAsync<AccountCurrentSessionResponse>(requests.CurrentSession,
                 onAuthFailure: LogoutAsync,
-                cancellationToken: _lifetime.Token);
+                cancellationToken: refreshToken);
 
-            await Task.WhenAll(
-                todaySessionsTask,
-                todayStatsTask,
-                monthlyStatsTask,
-                yearlyStatsTask,
-                currentSessionTask);
+            await DashboardRequestFlow.WaitAsync(
+                [todaySessionsTask, todayStatsTask, monthlyStatsTask, yearlyStatsTask, currentSessionTask],
+                siblingCancellation);
             _lifetime.Token.ThrowIfCancellationRequested();
 
             _state.CompleteRefresh(new DashboardSnapshot(

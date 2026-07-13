@@ -133,7 +133,7 @@
                                     @for (var index = 0; index < todayPlatforms.Count; index++)
                                     {
                                         var item = todayPlatforms[index];
-                                        <div @key="item.Label" class="flex items-center justify-between gap-3">
+                                        <div class="flex items-center justify-between gap-3">
                                             <div class="flex items-center gap-2">
                                                 <span class="h-2 w-2 rounded-full" style="@($"background-color: {PlatformPieColors[index % PlatformPieColors.Count]}")"></span>
                                                 <span>@item.Label</span>
