@@ -31,7 +31,7 @@
                         Date
                         <input type="date"
                                value="@ManualEntryDate"
-                               @onchange="eventArgs => OnDateChange.InvokeAsync(eventArgs.Value?.ToString() ?? "")"
+                               @onchange="eventArgs => OnDateChange.InvokeAsync(eventArgs.Value?.ToString() ?? string.Empty)"
                                class="mt-2 w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white/90 dark:bg-slate-950/80 px-3 py-2 text-sm text-slate-900 dark:text-white outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/30" />
                     </label>
                     <div class="grid grid-cols-2 gap-3">
@@ -41,7 +41,7 @@
                                    min="0"
                                    step="1"
                                    value="@ManualEntryHours"
-                                   @oninput="eventArgs => OnHoursChange.InvokeAsync(eventArgs.Value?.ToString() ?? "")"
+                                   @oninput="eventArgs => OnHoursChange.InvokeAsync(eventArgs.Value?.ToString() ?? string.Empty)"
                                    class="mt-2 w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white/90 dark:bg-slate-950/80 px-3 py-2 text-sm text-slate-900 dark:text-white outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/30" />
                         </label>
                         <label class="text-xs font-medium text-slate-600 dark:text-slate-300">
@@ -50,7 +50,7 @@
                                    min="0"
                                    step="1"
                                    value="@ManualEntryMinutes"
-                                   @oninput="eventArgs => OnMinutesChange.InvokeAsync(eventArgs.Value?.ToString() ?? "")"
+                                   @oninput="eventArgs => OnMinutesChange.InvokeAsync(eventArgs.Value?.ToString() ?? string.Empty)"
                                    class="mt-2 w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white/90 dark:bg-slate-950/80 px-3 py-2 text-sm text-slate-900 dark:text-white outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/30" />
                         </label>
                     </div>
@@ -61,7 +61,7 @@
                         Search by name
                         <input type="text"
                                value="@ManualEntrySearchQuery"
-                               @oninput="eventArgs => OnSearchQueryChange.InvokeAsync(eventArgs.Value?.ToString() ?? "")"
+                               @oninput="eventArgs => OnSearchQueryChange.InvokeAsync(eventArgs.Value?.ToString() ?? string.Empty)"
                                placeholder="Search games"
                                class="mt-2 w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white/90 dark:bg-slate-950/80 px-3 py-2 text-sm text-slate-900 dark:text-white outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/30" />
                     </label>
@@ -165,7 +165,7 @@
                             <label class="mt-4 block text-xs font-medium text-slate-600 dark:text-slate-300">
                                 Choose platform
                                 <select value="@ManualEntryPlatformKey"
-                                        @onchange="eventArgs => OnPlatformKeyChange.InvokeAsync(eventArgs.Value?.ToString() ?? "")"
+                                        @onchange="eventArgs => OnPlatformKeyChange.InvokeAsync(eventArgs.Value?.ToString() ?? string.Empty)"
                                         class="mt-2 w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white/90 dark:bg-slate-950/80 px-3 py-2 text-sm text-slate-900 dark:text-white outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/30">
                                     <option value="">Select a platform</option>
                                     @foreach (var platform in PlatformOptions)

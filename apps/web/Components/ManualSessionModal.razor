@@ -26,7 +26,7 @@
                 <label class="text-xs font-medium text-slate-600 dark:text-slate-300">
                     Pick from history
                     <select value="@ManualInputSelection"
-                            @onchange="eventArgs => OnSelectInput.InvokeAsync(eventArgs.Value?.ToString() ?? "")"
+                            @onchange="eventArgs => OnSelectInput.InvokeAsync(eventArgs.Value?.ToString() ?? string.Empty)"
                             disabled="@IsManualInputsLoading"
                             class="mt-2 w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white/90 dark:bg-slate-950/80 px-3 py-2 text-sm text-slate-900 dark:text-white outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/30">
                         <option value="">Choose a recent title</option>
@@ -48,7 +48,7 @@
                     <input type="text"
                            placeholder="Mario Kart"
                            value="@ManualInputText"
-                           @oninput="eventArgs => OnInputTextChange.InvokeAsync(eventArgs.Value?.ToString() ?? "")"
+                           @oninput="eventArgs => OnInputTextChange.InvokeAsync(eventArgs.Value?.ToString() ?? string.Empty)"
                            class="mt-2 w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white/90 dark:bg-slate-950/80 px-3 py-2 text-sm text-slate-900 dark:text-white outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/30" />
                 </label>
 
