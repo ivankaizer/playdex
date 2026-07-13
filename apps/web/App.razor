@@ -41,8 +41,10 @@
 
     private async Task HandleNavigationAsync(NavigationContext context)
     {
+        var cancellationToken = context.CancellationToken;
         _initializationTask ??= InitializeSessionAsync();
-        await _initializationTask;
+        await _initializationTask.WaitAsync(cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
 
         var path = context.Path;
         var separator = path.IndexOfAny('?', '#');
@@ -50,14 +52,15 @@
         if (!path.StartsWith('/')) path = $"/{path}";
 
         var decision = NavigationGuard.Resolve(path, _isLoggedIn, _isProfileResolved, _isAdmin);
-        _currentDecision = decision;
         if (decision.Outcome == NavigationOutcome.Wait && _profileTask is not null)
         {
-            await _profileTask;
+            await _profileTask.WaitAsync(cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
             decision = NavigationGuard.Resolve(path, _isLoggedIn, _isProfileResolved, _isAdmin);
-            _currentDecision = decision;
         }
 
+        cancellationToken.ThrowIfCancellationRequested();
+        _currentDecision = decision;
         if (decision.Outcome == NavigationOutcome.Redirect && decision.RedirectPath is not null)
         {
             var current = new Uri(Navigation.Uri).PathAndQuery;
@@ -65,6 +68,7 @@
                 current,
                 decision.RedirectPath,
                 replaceHistory: true);
+            cancellationToken.ThrowIfCancellationRequested();
             Navigation.NavigateTo(instruction.Target!, replace: instruction.ReplaceHistory);
         }
     }

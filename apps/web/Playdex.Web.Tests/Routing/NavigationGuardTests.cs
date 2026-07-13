@@ -1,3 +1,7 @@
+using System.Reflection;
+using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.Components.Routing;
+using Playdex.Web;
 using Playdex.Web.Routing;
 using Xunit;
 
@@ -5,6 +9,36 @@ namespace Playdex.Web.Tests.Routing;
 
 public sealed class NavigationGuardTests
 {
+    [Fact]
+    public async Task CancelledAdminNavigationCannotOverrideNewerRoute()
+    {
+        var app = new App();
+        var navigation = new RecordingNavigationManager();
+        var profile = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        SetProperty(app, "Navigation", navigation);
+        SetField(app, "_initializationTask", Task.CompletedTask);
+        SetField(app, "_profileTask", profile.Task);
+        SetField(app, "_isLoggedIn", true);
+        SetField(app, "_isProfileResolved", false);
+        SetField(app, "_isAdmin", false);
+
+        using var staleNavigationCancellation = new CancellationTokenSource();
+        var staleNavigation = NavigateAsync(app, "/admin", staleNavigationCancellation.Token);
+        Assert.False(staleNavigation.IsCompleted);
+
+        staleNavigationCancellation.Cancel();
+        await NavigateAsync(app, "/sessions", CancellationToken.None);
+        SetField(app, "_isProfileResolved", true);
+        profile.SetResult();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => staleNavigation);
+        Assert.Equal(
+            NavigationOutcome.Render,
+            GetField<NavigationDecision>(app, "_currentDecision").Outcome);
+        Assert.Empty(navigation.Navigations);
+        Assert.True(profile.Task.IsCompletedSuccessfully);
+    }
+
     [Theory]
     [InlineData(false, true, false)]
     [InlineData(true, true, false)]
@@ -136,5 +170,59 @@ public sealed class NavigationGuardTests
         Assert.Equal("/dashboard", instruction.Target);
         Assert.True(instruction.ReplaceHistory);
         Assert.False(instruction.ScrollToTop);
+    }
+
+    private static Task NavigateAsync(App app, string path, CancellationToken cancellationToken)
+    {
+        var constructor = typeof(NavigationContext).GetConstructor(
+            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
+            binder: null,
+            [typeof(string), typeof(CancellationToken)],
+            modifiers: null);
+        Assert.NotNull(constructor);
+
+        var context = (NavigationContext)constructor.Invoke([path, cancellationToken]);
+        var handler = typeof(App).GetMethod(
+            "HandleNavigationAsync",
+            BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.NotNull(handler);
+
+        return (Task)handler.Invoke(app, [context])!;
+    }
+
+    private static void SetField<T>(App app, string name, T value)
+    {
+        var field = typeof(App).GetField(name, BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.NotNull(field);
+        field.SetValue(app, value);
+    }
+
+    private static T GetField<T>(App app, string name)
+    {
+        var field = typeof(App).GetField(name, BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.NotNull(field);
+        return (T)field.GetValue(app)!;
+    }
+
+    private static void SetProperty<T>(App app, string name, T value)
+    {
+        var property = typeof(App).GetProperty(name, BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.NotNull(property);
+        property.SetValue(app, value);
+    }
+
+    private sealed class RecordingNavigationManager : NavigationManager
+    {
+        public RecordingNavigationManager()
+        {
+            Initialize("https://playdex.test/", "https://playdex.test/admin");
+        }
+
+        public List<string> Navigations { get; } = [];
+
+        protected override void NavigateToCore(string uri, bool forceLoad) => Navigations.Add(uri);
+
+        protected override void NavigateToCore(string uri, NavigationOptions options) =>
+            Navigations.Add(uri);
     }
 }
