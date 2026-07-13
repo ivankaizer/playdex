@@ -59,6 +59,9 @@
     [Parameter]
     public RenderFragment? Overlay { get; set; }
 
+    [Parameter]
+    public EventCallback<string> OnThemeChanged { get; set; }
+
     [CascadingParameter(Name = "IsAdmin")]
     public bool IsAdmin { get; set; }
 
@@ -74,12 +77,14 @@
             ? savedTheme
             : await Browser.PrefersDarkAsync() ? "dark" : "light";
         await ApplyThemeAsync();
+        await OnThemeChanged.InvokeAsync(_theme);
     }
 
     private async Task ToggleThemeAsync()
     {
         _theme = _theme == "dark" ? "light" : "dark";
         await ApplyThemeAsync();
+        await OnThemeChanged.InvokeAsync(_theme);
     }
 
     private async Task ApplyThemeAsync()
