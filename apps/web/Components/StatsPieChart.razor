@@ -1,0 +1,59 @@
+@using System.Globalization
+@using Microsoft.AspNetCore.Components
+
+@{
+    const double strokeWidth = 18;
+    var radius = (Size - strokeWidth) / 2;
+    var circumference = 2 * Math.PI * radius;
+    var total = Math.Max(Segments.Sum(segment => segment.Value), 1);
+    var offset = 0d;
+}
+
+<svg aria-hidden="true"
+     width="@Size"
+     height="@Size"
+     viewBox="@($"0 0 {Size} {Size}")"
+     class="shrink-0">
+    <circle cx="@Invariant(Size / 2d)"
+            cy="@Invariant(Size / 2d)"
+            r="@Invariant(radius)"
+            fill="transparent"
+            stroke="currentColor"
+            stroke-width="@Invariant(strokeWidth)"
+            class="text-slate-200 dark:text-slate-800"></circle>
+    @for (var index = 0; index < Segments.Count; index++)
+    {
+        var segment = Segments[index];
+        var dash = segment.Value / total * circumference;
+        var gap = circumference - dash;
+        var strokeDashOffset = -offset;
+        offset += dash;
+
+        <circle @key="segment.Label"
+                cx="@Invariant(Size / 2d)"
+                cy="@Invariant(Size / 2d)"
+                r="@Invariant(radius)"
+                fill="transparent"
+                stroke="@ColorAt(index)"
+                stroke-width="@Invariant(strokeWidth)"
+                stroke-dasharray="@($"{Invariant(dash)} {Invariant(gap)}")"
+                stroke-dashoffset="@Invariant(strokeDashOffset)"
+                transform="@($"rotate(-90 {Invariant(Size / 2d)} {Invariant(Size / 2d)})")"></circle>
+    }
+</svg>
+
+@code {
+    [Parameter, EditorRequired]
+    public IReadOnlyList<(string Label, double Value)> Segments { get; set; } = [];
+
+    [Parameter, EditorRequired]
+    public IReadOnlyList<string> Colors { get; set; } = [];
+
+    [Parameter]
+    public int Size { get; set; } = 150;
+
+    private string? ColorAt(int index) => Colors.Count == 0 ? null : Colors[index % Colors.Count];
+
+    private static string Invariant(double value) =>
+        value.ToString(CultureInfo.InvariantCulture);
+}

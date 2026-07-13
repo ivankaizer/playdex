@@ -1,0 +1,54 @@
+@using Microsoft.AspNetCore.Components
+
+<header class="flex flex-wrap items-center justify-between gap-4 rounded-3xl border border-slate-200 dark:border-slate-800 bg-white/90 dark:bg-slate-900/70 px-4 py-3 sm:px-6 sm:py-4 md:flex-nowrap">
+    <div class="min-w-0 flex-1">
+        <p class="text-xs font-semibold uppercase tracking-[0.5em] text-emerald-700 dark:text-emerald-300">
+            Playdex
+        </p>
+        <h1 class="truncate text-2xl font-semibold text-slate-900 dark:text-white">
+            @Title
+        </h1>
+    </div>
+    <nav class="flex flex-wrap items-center gap-3 text-sm md:flex-nowrap">
+        @foreach (var item in NavItems)
+        {
+            <button @key="item.Path"
+                    type="button"
+                    @onclick="() => OnNavigate.InvokeAsync(item.Path)"
+                    class="@(Path == item.Path
+                        ? "rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] transition bg-emerald-300 text-slate-900 dark:bg-emerald-400"
+                        : "rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] transition border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:border-emerald-400/60")">
+                @item.Label
+            </button>
+        }
+        <ThemeToggle Theme="@Theme" OnToggle="OnToggleTheme" Class="shrink-0" />
+        <button type="button"
+                @onclick="OnLogout"
+                class="rounded-full border border-rose-500/60 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-rose-700 dark:text-rose-200 transition hover:border-rose-400 hover:text-rose-700 dark:hover:text-rose-100">
+            Logout
+        </button>
+    </nav>
+</header>
+
+@code {
+    [Parameter, EditorRequired]
+    public string Title { get; set; } = "";
+
+    [Parameter, EditorRequired]
+    public IReadOnlyList<(string Label, string Path)> NavItems { get; set; } = [];
+
+    [Parameter, EditorRequired]
+    public string Path { get; set; } = "";
+
+    [Parameter, EditorRequired]
+    public EventCallback<string> OnNavigate { get; set; }
+
+    [Parameter, EditorRequired]
+    public EventCallback OnLogout { get; set; }
+
+    [Parameter, EditorRequired]
+    public string Theme { get; set; } = "light";
+
+    [Parameter, EditorRequired]
+    public EventCallback OnToggleTheme { get; set; }
+}

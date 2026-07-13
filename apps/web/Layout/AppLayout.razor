@@ -1,0 +1,108 @@
+@using Microsoft.AspNetCore.Components
+@using Playdex.Web.Auth
+@using Playdex.Web.Browser
+@using Playdex.Web.Components
+@using Playdex.Web.Routing
+@inject AuthSession AuthSession
+@inject BrowserInterop Browser
+@inject IBrowserStorage Storage
+@inject NavigationManager Navigation
+
+<main class="relative min-h-screen overflow-hidden bg-slate-200 dark:bg-slate-950 text-slate-900 dark:text-slate-100">
+    <Background />
+    <div class="relative mx-auto w-full max-w-6xl p-3 sm:px-6 sm:py-12">
+        <AppHeader Title="@Title"
+                   NavItems="@ResolvedNavItems"
+                   Path="@CurrentPath"
+                   OnNavigate="NavigateAsync"
+                   OnLogout="LogoutAsync"
+                   Theme="@_theme"
+                   OnToggleTheme="ToggleThemeAsync" />
+
+        @ChildContent
+        <AppFooter />
+    </div>
+</main>
+
+@Overlay
+
+@code {
+    private const string ThemeKey = "playdex.theme";
+
+    private static readonly IReadOnlyList<(string Label, string Path)> UserNavItems =
+    [
+        ("Dashboard", "/dashboard"),
+        ("Sessions", "/sessions"),
+        ("Recap", "/recap"),
+        ("Mapping", "/mapping"),
+        ("Settings", "/settings"),
+    ];
+
+    private static readonly IReadOnlyList<(string Label, string Path)> AdminNavItems =
+    [
+        ("Dashboard", "/dashboard"),
+        ("Sessions", "/sessions"),
+        ("Recap", "/recap"),
+        ("Mapping", "/mapping"),
+        ("Settings", "/settings"),
+        ("Admin", "/admin"),
+    ];
+
+    private string _theme = "light";
+
+    [Parameter, EditorRequired]
+    public string Title { get; set; } = "";
+
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+
+    [Parameter]
+    public RenderFragment? Overlay { get; set; }
+
+    [CascadingParameter(Name = "IsAdmin")]
+    public bool IsAdmin { get; set; }
+
+    private IReadOnlyList<(string Label, string Path)> ResolvedNavItems =>
+        IsAdmin ? AdminNavItems : UserNavItems;
+
+    private string CurrentPath => new Uri(Navigation.Uri).AbsolutePath;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var savedTheme = await Storage.GetAsync(ThemeKey);
+        _theme = savedTheme is "light" or "dark"
+            ? savedTheme
+            : await Browser.PrefersDarkAsync() ? "dark" : "light";
+        await ApplyThemeAsync();
+    }
+
+    private async Task ToggleThemeAsync()
+    {
+        _theme = _theme == "dark" ? "light" : "dark";
+        await ApplyThemeAsync();
+    }
+
+    private async Task ApplyThemeAsync()
+    {
+        await Browser.ApplyThemeAsync(_theme);
+        await Storage.SetAsync(ThemeKey, _theme);
+    }
+
+    private async Task NavigateAsync(string target)
+    {
+        var instruction = NavigationGuard.PlanNavigation(
+            new Uri(Navigation.Uri).PathAndQuery,
+            target,
+            replaceHistory: false);
+        if (instruction.Kind == NavigationInstructionKind.NoOp) return;
+
+        Navigation.NavigateTo(instruction.Target!);
+        if (instruction.ScrollToTop) await Browser.ScrollToTopAsync();
+    }
+
+    private async Task LogoutAsync()
+    {
+        await AuthSession.LogoutAsync();
+        Navigation.NavigateTo("/", forceLoad: true);
+    }
+}

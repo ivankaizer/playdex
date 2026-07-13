@@ -21,6 +21,11 @@
 
             document.documentElement.classList.toggle("dark", theme === "dark");
             document.documentElement.dataset.theme = theme;
+            try {
+                localStorage.setItem("playdex.theme", theme);
+            } catch {
+                // Theme still applies when storage is unavailable.
+            }
         })();
     </script>
     <style>
