@@ -9,6 +9,26 @@ public sealed class DashboardStateTests
     private static readonly DateTimeOffset Now = new(2026, 7, 13, 12, 0, 0, TimeSpan.Zero);
 
     [Fact]
+    public void DashboardStateTypes_AreInternalImplementationDetails()
+    {
+        Type[] types =
+        [
+            typeof(DashboardRequests),
+            typeof(DashboardSnapshot),
+            typeof(DashboardSessionCard),
+            typeof(DashboardPlatformView),
+            typeof(DashboardTopGameView),
+            typeof(DashboardStatsView),
+            typeof(DashboardCurrentSessionView),
+            typeof(DashboardRefreshMode),
+            typeof(DashboardManualStartFlow),
+            typeof(DashboardState),
+        ];
+
+        Assert.All(types, type => Assert.False(type.IsPublic, $"{type.Name} must remain internal."));
+    }
+
+    [Fact]
     public void Requests_PreserveTheFiveConcurrentReactUrlsAndUtcRanges()
     {
         var requests = DashboardRequests.For(Now);
@@ -112,6 +132,69 @@ public sealed class DashboardStateTests
         Assert.Equal(DashboardRefreshMode.Silent, state.ManualStopSucceeded());
         state.EndManualStop();
         Assert.False(state.IsManualStopLoading);
+    }
+
+    [Fact]
+    public async Task ManualStartFlow_RendersTheClosedModalBeforeStartingFollowUpRequests()
+    {
+        var steps = new List<string>();
+        var renderRelease = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        var flow = DashboardManualStartFlow.CompleteAsync(
+            () => steps.Add("close"),
+            async () =>
+            {
+                steps.Add("render");
+                await renderRelease.Task;
+            },
+            () =>
+            {
+                steps.Add("inputs");
+                return Task.CompletedTask;
+            },
+            () =>
+            {
+                steps.Add("refresh");
+                return Task.CompletedTask;
+            },
+            CancellationToken.None);
+
+        Assert.Equal(["close", "render"], steps);
+        Assert.False(flow.IsCompleted);
+
+        renderRelease.SetResult();
+        await flow;
+
+        Assert.Equal(["close", "render", "inputs", "refresh"], steps);
+    }
+
+    [Fact]
+    public async Task ManualStartFlow_DisposalAfterRenderSuppressesFollowUpRequests()
+    {
+        var followUpRequests = 0;
+        using var cancellation = new CancellationTokenSource();
+
+        var flow = DashboardManualStartFlow.CompleteAsync(
+            () => { },
+            () =>
+            {
+                cancellation.Cancel();
+                return Task.CompletedTask;
+            },
+            () =>
+            {
+                followUpRequests++;
+                return Task.CompletedTask;
+            },
+            () =>
+            {
+                followUpRequests++;
+                return Task.CompletedTask;
+            },
+            cancellation.Token);
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => flow);
+        Assert.Equal(0, followUpRequests);
     }
 
     [Fact]

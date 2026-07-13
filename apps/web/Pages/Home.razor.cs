@@ -6,14 +6,14 @@ using Playdex.Web.Models;
 
 namespace Playdex.Web.Pages;
 
-public enum HomeLoginStatus
+internal enum HomeLoginStatus
 {
     Idle,
     Loading,
     Success,
 }
 
-public sealed class HomeState
+internal sealed class HomeState
 {
     public HomeLoginStatus LoginStatus { get; private set; }
     public string Error { get; private set; } = string.Empty;

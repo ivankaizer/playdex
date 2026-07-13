@@ -7,6 +7,13 @@ namespace Playdex.Web.Tests.Pages;
 public sealed class HomeStateTests
 {
     [Fact]
+    public void HomeStateTypes_AreInternalImplementationDetails()
+    {
+        Assert.False(typeof(HomeLoginStatus).IsPublic);
+        Assert.False(typeof(HomeState).IsPublic);
+    }
+
+    [Fact]
     public void LoginLifecycle_DisablesOnlyWhileLoadingAndPreservesTheReactMessages()
     {
         var state = new HomeState();

@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Runtime.CompilerServices;
 using Microsoft.AspNetCore.Components;
 using Playdex.Web.Api;
 using Playdex.Web.Auth;
@@ -7,9 +8,11 @@ using Playdex.Web.Models;
 using Playdex.Web.Routing;
 using Playdex.Web.Utilities;
 
+[assembly: InternalsVisibleTo("Playdex.Web.Tests")]
+
 namespace Playdex.Web.Pages;
 
-public sealed record DashboardRequests(
+internal sealed record DashboardRequests(
     string TodaySessions,
     string TodayStats,
     string MonthlyStats,
@@ -35,14 +38,14 @@ public sealed record DashboardRequests(
     }
 }
 
-public sealed record DashboardSnapshot(
+internal sealed record DashboardSnapshot(
     IReadOnlyList<AccountSession> TodaySessions,
     IReadOnlyList<AccountPlatformStat> TodayPlatformTotals,
     AccountSession? CurrentSession,
     AccountStatsPeriod MonthlyStats,
     AccountStatsPeriod YearlyStats);
 
-public sealed record DashboardSessionCard(
+internal sealed record DashboardSessionCard(
     long SessionId,
     string GameId,
     string GamePath,
@@ -51,15 +54,15 @@ public sealed record DashboardSessionCard(
     string Platform,
     string? ImageUrl);
 
-public sealed record DashboardPlatformView(string Label, double Value, string Hours);
-public sealed record DashboardTopGameView(string GameId, string Title, string Hours);
-public sealed record DashboardStatsView(
+internal sealed record DashboardPlatformView(string Label, double Value, string Hours);
+internal sealed record DashboardTopGameView(string GameId, string Title, string Hours);
+internal sealed record DashboardStatsView(
     string Hours,
     string Sessions,
     string TopTitle,
     IReadOnlyList<DashboardPlatformView> Platforms,
     IReadOnlyList<DashboardTopGameView> TopGames);
-public sealed record DashboardCurrentSessionView(
+internal sealed record DashboardCurrentSessionView(
     string GameId,
     string GamePath,
     string Title,
@@ -68,12 +71,30 @@ public sealed record DashboardCurrentSessionView(
     string Elapsed,
     bool IsManual);
 
-public enum DashboardRefreshMode
+internal enum DashboardRefreshMode
 {
     Silent,
 }
 
-public sealed class DashboardState
+internal static class DashboardManualStartFlow
+{
+    public static async Task CompleteAsync(
+        Action closeModal,
+        Func<Task> renderClosedModal,
+        Func<Task> loadManualInputs,
+        Func<Task> refreshDashboard,
+        CancellationToken cancellationToken)
+    {
+        closeModal();
+        await renderClosedModal();
+        cancellationToken.ThrowIfCancellationRequested();
+        await loadManualInputs();
+        cancellationToken.ThrowIfCancellationRequested();
+        await refreshDashboard();
+    }
+}
+
+internal sealed class DashboardState
 {
     public IReadOnlyList<AccountSession> TodaySessions { get; private set; } = [];
     public IReadOnlyList<AccountPlatformStat> TodayPlatformTotals { get; private set; } = [];
@@ -398,9 +419,12 @@ public partial class Dashboard : ComponentBase, IDisposable
                 HttpMethod.Post,
                 new ManualSessionStartRequest(title),
                 cancellationToken: _lifetime.Token);
-            _state.ManualStartSucceeded();
-            await LoadManualInputsAsync();
-            await RefreshDashboardAsync(silent: true);
+            await DashboardManualStartFlow.CompleteAsync(
+                () => { _state.ManualStartSucceeded(); },
+                RenderManualCloseAsync,
+                LoadManualInputsAsync,
+                () => RefreshDashboardAsync(silent: true),
+                _lifetime.Token);
         }
         catch (OperationCanceledException) when (_lifetime.IsCancellationRequested)
         {
@@ -413,6 +437,12 @@ public partial class Dashboard : ComponentBase, IDisposable
         {
             _state.EndManualStart();
         }
+    }
+
+    private async Task RenderManualCloseAsync()
+    {
+        await InvokeAsync(StateHasChanged);
+        await Task.Yield();
     }
 
     private async Task StopManualSessionAsync()
