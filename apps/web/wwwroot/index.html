@@ -6,15 +6,36 @@
     <base href="/">
     <script>
         (() => {
-            const savedTheme = localStorage.getItem("playdex.theme");
+            let savedTheme;
+            try {
+                savedTheme = localStorage.getItem("playdex.theme");
+            } catch {
+                savedTheme = null;
+            }
+
+            const prefersDark = typeof window.matchMedia === "function" &&
+                window.matchMedia("(prefers-color-scheme: dark)").matches;
             const theme = savedTheme === "light" || savedTheme === "dark"
                 ? savedTheme
-                : window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+                : prefersDark ? "dark" : "light";
 
             document.documentElement.classList.toggle("dark", theme === "dark");
             document.documentElement.dataset.theme = theme;
         })();
     </script>
+    <style>
+        html[data-theme="light"] body,
+        html[data-theme="light"] #app {
+            background-color: #e2e8f0;
+            color: #0f172a;
+        }
+
+        html[data-theme="dark"] body,
+        html[data-theme="dark"] #app {
+            background-color: #020617;
+            color: #f1f5f9;
+        }
+    </style>
     <link href="css/app.css" rel="stylesheet">
     <title>Playdex</title>
 </head>
