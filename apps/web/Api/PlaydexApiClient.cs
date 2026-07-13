@@ -10,6 +10,7 @@ public sealed class PlaydexApiClient(HttpClient httpClient, AuthSession auth, st
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     private readonly string _apiBase = apiBase.Trim().TrimEnd('/');
+    private readonly Uri? _apiOrigin = ResolveAbsoluteUrl(apiBase.Trim(), httpClient.BaseAddress);
 
     public async Task<T> SendAsync<T>(
         string path,
@@ -19,9 +20,11 @@ public sealed class PlaydexApiClient(HttpClient httpClient, AuthSession auth, st
         Func<Task>? onAuthFailure = null,
         CancellationToken cancellationToken = default)
     {
+        var url = BuildUrl(path);
+        var useAuthentication = authenticated && IsApiOrigin(url);
         var firstResponse = await SendOnceAsync<T>(
-            path, method ?? HttpMethod.Get, body, authenticated, cancellationToken);
-        if (firstResponse.Error?.StatusCode != HttpStatusCode.Unauthorized || !authenticated)
+            url, method ?? HttpMethod.Get, body, useAuthentication, cancellationToken);
+        if (firstResponse.Error?.StatusCode != HttpStatusCode.Unauthorized || !useAuthentication)
         {
             if (firstResponse.Error is not null) throw firstResponse.Error;
             return firstResponse.Value!;
@@ -35,19 +38,19 @@ public sealed class PlaydexApiClient(HttpClient httpClient, AuthSession auth, st
         }
 
         var retryResponse = await SendOnceAsync<T>(
-            path, method ?? HttpMethod.Get, body, authenticated: true, cancellationToken);
+            url, method ?? HttpMethod.Get, body, authenticated: true, cancellationToken);
         if (retryResponse.Error is not null) throw retryResponse.Error;
         return retryResponse.Value!;
     }
 
     private async Task<Response<T>> SendOnceAsync<T>(
-        string path,
+        string url,
         HttpMethod method,
         object? body,
         bool authenticated,
         CancellationToken cancellationToken)
     {
-        using var request = new HttpRequestMessage(method, BuildUrl(path));
+        using var request = new HttpRequestMessage(method, url);
         if (body is not null) request.Content = JsonContent.Create(body, options: JsonOptions);
 
         if (authenticated)
@@ -66,9 +69,9 @@ public sealed class PlaydexApiClient(HttpClient httpClient, AuthSession auth, st
         }
 
         await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
-        return new Response<T>(
-            await JsonSerializer.DeserializeAsync<T>(stream, JsonOptions, cancellationToken),
-            null);
+        var value = await JsonSerializer.DeserializeAsync<T>(stream, JsonOptions, cancellationToken);
+        if (value is null) throw new JsonException("Successful response contained no JSON data.");
+        return new Response<T>(value, null);
     }
 
     private async Task<bool> TryRefreshAsync(CancellationToken cancellationToken)
@@ -79,7 +82,7 @@ public sealed class PlaydexApiClient(HttpClient httpClient, AuthSession auth, st
         try
         {
             var response = await SendOnceAsync<RefreshResponse>(
-                "/refresh",
+                BuildUrl("/refresh"),
                 HttpMethod.Post,
                 new RefreshRequest(refreshToken),
                 authenticated: false,
@@ -113,6 +116,29 @@ public sealed class PlaydexApiClient(HttpClient httpClient, AuthSession auth, st
         }
 
         return $"{_apiBase}/{path.TrimStart('/')}";
+    }
+
+    private bool IsApiOrigin(string url)
+    {
+        var target = ResolveAbsoluteUrl(url, httpClient.BaseAddress);
+        return target is not null &&
+            _apiOrigin is not null &&
+            target.Scheme.Equals(_apiOrigin.Scheme, StringComparison.OrdinalIgnoreCase) &&
+            target.IdnHost.Equals(_apiOrigin.IdnHost, StringComparison.OrdinalIgnoreCase) &&
+            target.Port == _apiOrigin.Port;
+    }
+
+    private static Uri? ResolveAbsoluteUrl(string url, Uri? baseAddress)
+    {
+        if (Uri.TryCreate(url, UriKind.Absolute, out var absolute) &&
+            (absolute.Scheme == Uri.UriSchemeHttp || absolute.Scheme == Uri.UriSchemeHttps))
+        {
+            return absolute;
+        }
+
+        return baseAddress is not null && Uri.TryCreate(baseAddress, url, out var resolved)
+            ? resolved
+            : null;
     }
 
     private static async Task<ApiException> CreateExceptionAsync(

@@ -117,6 +117,7 @@ public sealed class PlaydexApiClientTests
     [InlineData("missing")]
     [InlineData("failed")]
     [InlineData("malformed")]
+    [InlineData("null")]
     [InlineData("missing-access")]
     [InlineData("missing-refresh")]
     public async Task RefreshFailure_InvokesCallbackOnceAndThrowsOriginal401(string failure)
@@ -139,6 +140,7 @@ public sealed class PlaydexApiClientTests
                     HttpStatusCode.InternalServerError,
                     """{"detail":"refresh failed"}""")),
                 "malformed" => (_, _) => Task.FromResult(Json(HttpStatusCode.OK, "{")),
+                "null" => (_, _) => Task.FromResult(Json(HttpStatusCode.OK, "null")),
                 "missing-access" => (_, _) => Task.FromResult(Json(
                     HttpStatusCode.OK,
                     """{"refreshToken":"new-refresh"}""")),
@@ -191,6 +193,44 @@ public sealed class PlaydexApiClientTests
         Assert.Equal(0, callbackCount);
     }
 
+    [Fact]
+    public async Task AbsoluteUrlOnConfiguredApiOrigin_ReceivesBearer()
+    {
+        var storage = new MemoryBrowserStorage(("playdex.token", "access"));
+        using var handler = new RecordingHandler((_, _) => Json(HttpStatusCode.OK, "{}"));
+        var client = CreateClient(handler, storage, "https://api.test/api/");
+
+        await client.SendAsync<object>("https://api.test/direct");
+
+        Assert.Equal("Bearer access", handler.Requests[0].Authorization);
+    }
+
+    [Fact]
+    public async Task AbsoluteUrlOnDifferentOrigin_OmitsBearerRefreshAndCallback()
+    {
+        var callbackCount = 0;
+        var storage = new MemoryBrowserStorage(
+            ("playdex.token", "access"),
+            ("playdex.refresh", "refresh"));
+        using var handler = new RecordingHandler(
+            (_, _) => Json(HttpStatusCode.Unauthorized, """{"detail":"other origin"}"""),
+            (_, _) => Json(HttpStatusCode.InternalServerError, """{"detail":"must not refresh"}"""));
+        var client = CreateClient(handler, storage, "https://api.test/api/");
+
+        var exception = await Assert.ThrowsAsync<ApiException>(() => client.SendAsync<object>(
+            "https://other.test/private",
+            onAuthFailure: () =>
+            {
+                callbackCount++;
+                return Task.CompletedTask;
+            }));
+
+        Assert.Equal("other origin", exception.Message);
+        Assert.Single(handler.Requests);
+        Assert.Null(handler.Requests[0].Authorization);
+        Assert.Equal(0, callbackCount);
+    }
+
     [Theory]
     [InlineData("https://app.test/api", "/me", "https://app.test/api/me")]
     [InlineData("https://app.test/api/", "me", "https://app.test/api/me")]
@@ -200,7 +240,7 @@ public sealed class PlaydexApiClientTests
     [InlineData("https://ignored.test/api", "http://other.test/me", "http://other.test/me")]
     public async Task SendAsync_BuildsExactApiUri(string apiBase, string path, string expected)
     {
-        using var handler = new RecordingHandler((_, _) => Json(HttpStatusCode.OK, "null"));
+        using var handler = new RecordingHandler((_, _) => Json(HttpStatusCode.OK, "{}"));
         var client = CreateClient(handler, apiBase: apiBase);
 
         await client.SendAsync<object?>(path, authenticated: false);
@@ -212,8 +252,8 @@ public sealed class PlaydexApiClientTests
     public async Task RequestBodies_UseExactWebCamelCaseIncludingAdminUser()
     {
         using var handler = new RecordingHandler(
-            (_, _) => Json(HttpStatusCode.OK, "null"),
-            (_, _) => Json(HttpStatusCode.OK, "null"));
+            (_, _) => Json(HttpStatusCode.OK, "{}"),
+            (_, _) => Json(HttpStatusCode.OK, "{}"));
         var client = CreateClient(handler);
 
         await client.SendAsync<object?>(
@@ -255,6 +295,21 @@ public sealed class PlaydexApiClientTests
 
         Assert.Equal(HttpStatusCode.BadRequest, exception.StatusCode);
         Assert.Equal(expected, exception.Message);
+    }
+
+    [Theory]
+    [InlineData("null")]
+    [InlineData("")]
+    [InlineData("{")]
+    public async Task SuccessfulNullEmptyOrMalformedJson_ThrowsJsonException(string payload)
+    {
+        using var handler = new RecordingHandler((_, _) => Json(HttpStatusCode.OK, payload));
+        var client = CreateClient(handler);
+
+        var exception = await Assert.ThrowsAsync<JsonException>(() =>
+            client.SendAsync<MeResponse>("/me", authenticated: false));
+
+        if (payload == "null") Assert.Contains("JSON data", exception.Message);
     }
 
     [Fact]
@@ -308,7 +363,7 @@ public sealed class PlaydexApiClientTests
     public async Task EmptyAccessToken_OmitsBearerHeader()
     {
         var storage = new MemoryBrowserStorage(("playdex.token", ""));
-        using var handler = new RecordingHandler((_, _) => Json(HttpStatusCode.OK, "null"));
+        using var handler = new RecordingHandler((_, _) => Json(HttpStatusCode.OK, "{}"));
         var client = CreateClient(handler, storage);
 
         await client.SendAsync<object?>("/me");
@@ -337,7 +392,8 @@ public sealed class PlaydexApiClientTests
         string apiBase = "https://app.test/api/")
     {
         storage ??= new MemoryBrowserStorage();
-        return new PlaydexApiClient(new HttpClient(handler), new AuthSession(storage), apiBase);
+        var httpClient = new HttpClient(handler) { BaseAddress = new Uri("https://ui.test/") };
+        return new PlaydexApiClient(httpClient, new AuthSession(storage), apiBase);
     }
 
     private static HttpResponseMessage Json(HttpStatusCode statusCode, string body) => new(statusCode)
