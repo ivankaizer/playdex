@@ -1,4 +1,5 @@
 using System.Net;
+using System.Reflection;
 using System.Text;
 using System.Text.Json;
 using Playdex.Web.Api;
@@ -11,6 +12,19 @@ namespace Playdex.Web.Tests.Api;
 
 public sealed class PlaydexApiClientTests
 {
+    [Fact]
+    public void RefreshResponse_TokensMatchTheNonNullableBackendContract()
+    {
+        var nullability = new NullabilityInfoContext();
+
+        Assert.Equal(
+            NullabilityState.NotNull,
+            nullability.Create(typeof(RefreshResponse).GetProperty(nameof(RefreshResponse.AccessToken))!).ReadState);
+        Assert.Equal(
+            NullabilityState.NotNull,
+            nullability.Create(typeof(RefreshResponse).GetProperty(nameof(RefreshResponse.RefreshToken))!).ReadState);
+    }
+
     [Fact]
     public async Task SendAsync_DeserializesRawNullableDtoWithoutAnEnvelope()
     {
