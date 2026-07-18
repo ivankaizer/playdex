@@ -168,7 +168,7 @@ public sealed partial class TelegramBackgroundService : BackgroundService
         try
         {
             using var scope = _scopeFactory.CreateScope();
-            var userRepo = scope.ServiceProvider.GetRequiredService<ITelegramRepository>();
+            var userRepo = scope.ServiceProvider.GetRequiredService<TelegramRepository>();
             var manualService = scope.ServiceProvider.GetRequiredService<ManualService>();
 
             var user = await userRepo.GetUserByChatId(chatId.ToString(), ct);
@@ -208,7 +208,7 @@ public sealed partial class TelegramBackgroundService : BackgroundService
         try
         {
             using var scope = _scopeFactory.CreateScope();
-            var userRepo = scope.ServiceProvider.GetRequiredService<ITelegramRepository>();
+            var userRepo = scope.ServiceProvider.GetRequiredService<TelegramRepository>();
             var manualService = scope.ServiceProvider.GetRequiredService<ManualService>();
 
             var user = await userRepo.GetUserByChatId(chatId.ToString(), ct);

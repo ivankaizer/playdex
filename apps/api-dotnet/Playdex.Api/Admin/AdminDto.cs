@@ -128,6 +128,12 @@ public sealed record AdminCredentialUpdateRequest(
     string? ApiKey,
     [property: JsonPropertyName("user")] string? AccountUser);
 
+public sealed record AdminCredentialChanges(
+    bool ApiKeyChanged,
+    string? ApiKey,
+    bool AccountUserChanged,
+    string? AccountUser);
+
 public sealed record AdminCredentialUpdateResponseDto(
     AdminCredentialDto Credential);
 
@@ -149,6 +155,16 @@ public sealed record AdminGameUpdateRequest(
     string? ImageUrl,
     bool? LockTitle,
     bool? LockImage);
+
+public sealed record AdminGameChanges(
+    bool TitleChanged,
+    string Title,
+    bool ImageUrlChanged,
+    string? ImageUrl,
+    bool LockTitleChanged,
+    bool LockTitle,
+    bool LockImageChanged,
+    bool LockImage);
 
 public sealed record AdminGameUpdateResponseDto(
     AdminGameDto Game);

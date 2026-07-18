@@ -1,13 +1,18 @@
 using System.Globalization;
-using System.Text.RegularExpressions;
 using Playdex.Api.Common;
+using Playdex.Api.Configuration;
+using Playdex.Api.Games;
 using Playdex.Api.Http;
+using Playdex.Api.Polling;
 
 namespace Playdex.Api.Manual;
 
-public sealed partial class ManualService(IManualRepository repository)
+public sealed class ManualService(
+    ManualRepository repository,
+    IgdbClient igdbClient,
+    PlaydexOptions options)
 {
-    private const int MaxSearchResults = 20;
+    private const int MaxLocalSearchResults = 5;
     private const string ManualPlatformKey = "manual";
 
     /// <summary>
@@ -35,7 +40,11 @@ public sealed partial class ManualService(IManualRepository repository)
                 row.RawTitle,
                 row.CanonicalTitle,
                 row.MappedGameId.HasValue ? GameId.Encode(row.MappedGameId.Value) : null,
-                row.MappedGameId.HasValue ? "manual" : null,
+                row.MappedGameId.HasValue
+                    ? row.CanonicalKey?.StartsWith("igdb:", StringComparison.Ordinal) == true
+                        ? "igdb"
+                        : "local"
+                    : null,
                 mappedGame);
         }).ToList();
 
@@ -53,23 +62,21 @@ public sealed partial class ManualService(IManualRepository repository)
         if (string.IsNullOrWhiteSpace(title))
             throw AppProblem.Validation("Title is required.");
 
-        var credentialId = await repository.GetOrCreateManualCredential(userId, ct);
-        var canonicalTitle = NormalizeTitle(title);
+        return await repository.ExecuteInTransaction(async () =>
+        {
+            var credentialId = await repository.GetOrCreateManualCredential(userId, ct);
+            var canonicalTitle = GamesDomain.NormalizeTitle(title);
+            var manualInput = await repository.UpsertManualGameInput(userId, title, canonicalTitle, ct);
+            var startedAt = DateTimeOffset.UtcNow;
 
-        // Upsert the manual game input (tracks the raw vs canonical title)
-        await repository.UpsertManualGameInput(userId, title, canonicalTitle, ct);
+            await repository.EndActiveSessions(credentialId, ct);
+            var gameId = manualInput.MappedGameId ??
+                await ResolveOrCreateGame(title, ManualPlatformKey, null, ct);
+            var sessionId = await repository.CreatePlaySession(
+                credentialId, gameId, startedAt, null, ct);
 
-        // End any currently-active manual sessions
-        await repository.EndActiveSessions(credentialId, ct);
-
-        // Find or create the game entity
-        var gameId = await ResolveOrCreateGame(title, ManualPlatformKey, null, ct);
-
-        // Create a new active session (started_at = now, ended_at = null)
-        var sessionId = await repository.CreatePlaySession(
-            credentialId, gameId, DateTimeOffset.UtcNow, null, ct);
-
-        return new ManualSessionStartResponseDto(sessionId);
+            return new ManualSessionStartResponseDto(sessionId);
+        }, ct);
     }
 
     /// <summary>
@@ -77,8 +84,9 @@ public sealed partial class ManualService(IManualRepository repository)
     /// </summary>
     public async Task<ManualSessionStopResponseDto> StopSession(long userId, CancellationToken ct)
     {
-        var credentialId = await repository.GetOrCreateManualCredential(userId, ct);
-        var count = await repository.EndActiveSessions(credentialId, ct);
+        var credentialId = await repository.GetManualCredential(userId, ct);
+        if (!credentialId.HasValue) return new ManualSessionStopResponseDto(0);
+        var count = await repository.EndActiveSessions(credentialId.Value, ct);
 
         return new ManualSessionStopResponseDto(count);
     }
@@ -91,57 +99,72 @@ public sealed partial class ManualService(IManualRepository repository)
     public async Task<ManualEntryCreateResponseDto> CreateEntry(
         long userId, ManualEntryCreateRequest request, CancellationToken ct)
     {
-        // Parse the date
-        if (!DateTimeOffset.TryParse(request.Date, CultureInfo.InvariantCulture, DateTimeStyles.None, out var startTime))
-            throw AppProblem.Validation("Invalid date format.");
+        if (!DateTime.TryParseExact(
+                request.Date?.Trim(),
+                "yyyy-MM-dd",
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.None,
+                out var parsedDate))
+            throw AppProblem.Validation("date is required.");
+        var startTime = new DateTimeOffset(DateTime.SpecifyKind(parsedDate, DateTimeKind.Utc));
 
         if (request.DurationMinutes <= 0)
-            throw AppProblem.Validation("Duration must be positive.");
+            throw AppProblem.Validation("durationMinutes must be a positive integer.");
 
         var endTime = startTime.AddMinutes(request.DurationMinutes);
-        var credentialId = await repository.GetOrCreateManualCredential(userId, ct);
-
-        long gameId;
-
-        if (request.GameId is not null)
+        return await repository.ExecuteInTransaction(async () =>
         {
-            // Use explicitly-provided game
-            gameId = GameId.Parse(request.GameId);
-            var game = await repository.GetGameEntity(gameId, ct);
-            if (game is null)
-                throw AppProblem.Validation("Game not found for the specified gameId.");
-        }
-        else
-        {
-            // Resolve or create a game from the input fields
-            gameId = await ResolveOrCreateGame(
-                request.Title ?? "Unknown Game",
-                request.PlatformKey ?? ManualPlatformKey,
-                request.CapsuleUrl,
-                ct);
-        }
+            var credentialId = await repository.GetOrCreateManualCredential(userId, ct);
+            long gameId;
 
-        // Create the historical session
-        var sessionId = await repository.CreatePlaySession(
-            credentialId, gameId, startTime, endTime, ct);
+            if (!string.IsNullOrWhiteSpace(request.GameId))
+            {
+                gameId = GameId.Parse(request.GameId);
+                var game = await repository.GetGameEntity(gameId, ct);
+                if (game is null)
+                    throw AppProblem.Validation("Game not found for the specified gameId.");
+            }
+            else
+            {
+                var igdbId = request.IgdbId?.Trim();
+                var title = request.Title?.Trim();
+                var platformKey = request.PlatformKey?.Trim();
+                if (string.IsNullOrEmpty(igdbId) || string.IsNullOrEmpty(title) || string.IsNullOrEmpty(platformKey))
+                    throw AppProblem.Validation("igdbId, title, and platformKey are required.");
 
-        return new ManualEntryCreateResponseDto(sessionId);
+                gameId = await ResolveOrCreateIgdbGame(
+                    igdbId,
+                    title,
+                    platformKey,
+                    request.CapsuleUrl,
+                    ct);
+            }
+
+            var sessionId = await repository.CreatePlaySession(
+                credentialId, gameId, startTime, endTime, ct);
+            return new ManualEntryCreateResponseDto(sessionId);
+        }, ct);
     }
 
     /// <summary>
-    /// Search for possible game mappings (local database).
-    /// IGDB integration is not yet available.
+    /// Search for possible game mappings in the local database and IGDB.
     /// </summary>
     public async Task<ManualMappingSearchResponseDto> SearchMapping(
         string query, CancellationToken ct)
     {
         var trimmed = query.Trim();
         if (trimmed.Length == 0)
-            return new ManualMappingSearchResponseDto(query, false, []);
+            throw AppProblem.Validation("query is required.");
 
-        var localResults = await repository.SearchLocalGames(trimmed, MaxSearchResults, ct);
+        var igdbAvailable = !string.IsNullOrWhiteSpace(options.IgdbClientId) &&
+            !string.IsNullOrWhiteSpace(options.IgdbClientSecret);
+        var localTask = repository.SearchLocalGames(trimmed, MaxLocalSearchResults, ct);
+        var igdbTask = igdbAvailable
+            ? igdbClient.SearchGames(trimmed, options.IgdbClientId!, options.IgdbClientSecret!, ct)
+            : Task.FromResult(new List<IgdbSearchResult>());
+        await Task.WhenAll(localTask, igdbTask);
 
-        var results = localResults.Select(r => new ManualMappingSearchResultDto(
+        var results = localTask.Result.Select(r => new ManualMappingSearchResultDto(
             Source: "local",
             GameId: GameId.Encode(r.Id),
             IgdbId: null,
@@ -149,9 +172,17 @@ public sealed partial class ManualService(IManualRepository repository)
             Platform: r.Platform,
             PlatformId: null,
             CapsuleUrl: r.CapsuleUrl
-        )).ToList();
+        )).Concat(igdbTask.Result.Select(result => new ManualMappingSearchResultDto(
+            Source: "igdb",
+            GameId: null,
+            IgdbId: result.Id,
+            Title: result.Title,
+            Platform: result.Platform,
+            PlatformId: result.PlatformId,
+            CapsuleUrl: result.CoverUrl
+        ))).ToList();
 
-        return new ManualMappingSearchResponseDto(query, IgdbAvailable: false, results);
+        return new ManualMappingSearchResponseDto(trimmed, igdbAvailable, results);
     }
 
     /// <summary>
@@ -161,65 +192,69 @@ public sealed partial class ManualService(IManualRepository repository)
     public async Task<ManualMappingResponseDto> MapInput(
         long inputId, long userId, ManualMapInputRequest request, CancellationToken ct)
     {
-        long? gameId;
+        return await repository.ExecuteInTransaction(async () =>
+        {
+            long gameId;
+            if (!string.IsNullOrWhiteSpace(request.GameId))
+            {
+                gameId = GameId.Parse(request.GameId);
+                if (await repository.GetGameEntity(gameId, ct) is null)
+                    throw AppProblem.Validation("Game not found for the specified gameId.");
+            }
+            else
+            {
+                var igdbId = request.IgdbId?.Trim();
+                var title = request.Title?.Trim();
+                if (string.IsNullOrEmpty(igdbId) || string.IsNullOrEmpty(title))
+                    throw AppProblem.Validation("igdbId and title are required.");
 
-        if (request.GameId is not null)
-        {
-            // Map to an existing game by ID
-            gameId = GameId.Parse(request.GameId);
-            var game = await repository.GetGameEntity(gameId.Value, ct);
-            if (game is null)
-                throw AppProblem.Validation("Game not found for the specified gameId.");
-        }
-        else if (request.IgdbId.HasValue)
-        {
-            // IGDB integration not available yet — leave unmapped
-            gameId = null;
-        }
-        else if (!string.IsNullOrWhiteSpace(request.Title))
-        {
-            // Resolve or create a game from the provided fields
-            var platformKey = request.PlatformKey ?? ManualPlatformKey;
-            gameId = await ResolveOrCreateGame(request.Title, platformKey, request.CapsuleUrl, ct);
-        }
-        else
-        {
-            // No mapping criteria provided — clear any existing mapping
-            gameId = null;
-        }
+                var platformKey = request.PlatformKey?.Trim();
+                if (string.IsNullOrEmpty(platformKey) && request.PlatformId.HasValue)
+                    platformKey = await repository.GetPlatformKeyByIgdbId(request.PlatformId.Value, ct);
+                gameId = await ResolveOrCreateIgdbGame(
+                    igdbId,
+                    title,
+                    platformKey ?? "unknown",
+                    request.CapsuleUrl,
+                    ct);
+            }
 
-        await repository.MapManualInput(inputId, gameId, ct);
-
-        return new ManualMappingResponseDto(inputId, gameId.HasValue ? GameId.Encode(gameId.Value) : null);
+            var updated = await repository.MapManualInput(userId, inputId, gameId, ct);
+            if (updated is null) throw AppProblem.NotFound("Manual input not found.");
+            return new ManualMappingResponseDto(updated.Id, GameId.Encode(gameId));
+        }, ct);
     }
 
-    // ── Private helpers ─────────────────────────────────────────
-
-    /// <summary>
-    /// Normalize a game title into a stable canonical key for deduplication.
-    /// </summary>
-    private static string NormalizeTitle(string title)
-    {
-        var collapsed = WhitespaceRegex().Replace(title.Trim(), " ");
-        return collapsed.ToLowerInvariant();
-    }
-
-    /// <summary>
-    /// Resolve an existing game by its canonical key, or create a new one
-    /// with the manual platform.
-    /// </summary>
     private async Task<long> ResolveOrCreateGame(
         string title, string platformKey, string? capsuleUrl, CancellationToken ct)
     {
-        var canonicalKey = NormalizeTitle(title);
+        var canonicalKey = $"{platformKey}:{GamesDomain.NormalizeTitle(title)}";
 
         var platformId = await repository.GetPlatformIdByKey(platformKey, ct);
         if (platformId is null)
             throw AppProblem.Validation($"Platform '{platformKey}' not found.");
 
-        return await repository.UpsertGame(title, canonicalKey, platformId.Value, capsuleUrl, ct);
+        return await repository.UpsertGame(title, canonicalKey, null, platformId.Value, capsuleUrl, ct);
     }
 
-    [GeneratedRegex(@"\s+")]
-    private static partial Regex WhitespaceRegex();
+    private async Task<long> ResolveOrCreateIgdbGame(
+        string igdbId,
+        string title,
+        string platformKey,
+        string? capsuleUrl,
+        CancellationToken ct)
+    {
+        var platformId = await repository.GetPlatformIdByKey(platformKey, ct)
+            ?? await repository.GetPlatformIdByKey("unknown", ct);
+        if (!platformId.HasValue) throw AppProblem.Validation($"Platform '{platformKey}' not found.");
+
+        return await repository.UpsertGame(
+            title,
+            $"igdb:{igdbId}",
+            igdbId,
+            platformId.Value,
+            capsuleUrl,
+            ct);
+    }
+
 }

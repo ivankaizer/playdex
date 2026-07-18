@@ -69,7 +69,16 @@ public sealed class PlaydexApiClient(HttpClient httpClient, AuthSession auth, st
         }
 
         await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
-        var value = await JsonSerializer.DeserializeAsync<T>(stream, JsonOptions, cancellationToken);
+        var root = await JsonSerializer.DeserializeAsync<JsonElement>(stream, JsonOptions, cancellationToken);
+        var payload = root;
+        if (root.ValueKind == JsonValueKind.Object &&
+            root.TryGetProperty("data", out var data) &&
+            root.TryGetProperty("error", out _))
+        {
+            payload = data;
+        }
+
+        var value = payload.Deserialize<T>(JsonOptions);
         if (value is null) throw new JsonException("Successful response contained no JSON data.");
         return new Response<T>(value, null);
     }
@@ -150,10 +159,14 @@ public sealed class PlaydexApiClient(HttpClient httpClient, AuthSession auth, st
         {
             await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
             using var document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
-            if (document.RootElement.ValueKind == JsonValueKind.Object &&
-                document.RootElement.TryGetProperty("detail", out var property) &&
-                property.ValueKind == JsonValueKind.String &&
-                !string.IsNullOrWhiteSpace(property.GetString()))
+            if (TryGetErrorDetail(document.RootElement, out var envelopeDetail))
+            {
+                detail = envelopeDetail;
+            }
+            else if (document.RootElement.ValueKind == JsonValueKind.Object &&
+                     document.RootElement.TryGetProperty("detail", out var property) &&
+                     property.ValueKind == JsonValueKind.String &&
+                     !string.IsNullOrWhiteSpace(property.GetString()))
             {
                 detail = property.GetString()!;
             }
@@ -163,6 +176,23 @@ public sealed class PlaydexApiClient(HttpClient httpClient, AuthSession auth, st
         }
 
         return new ApiException(response.StatusCode, detail);
+    }
+
+    private static bool TryGetErrorDetail(JsonElement root, out string detail)
+    {
+        detail = "";
+        if (root.ValueKind != JsonValueKind.Object ||
+            !root.TryGetProperty("error", out var error) ||
+            error.ValueKind != JsonValueKind.Object ||
+            !error.TryGetProperty("error", out var message) ||
+            message.ValueKind != JsonValueKind.String ||
+            string.IsNullOrWhiteSpace(message.GetString()))
+        {
+            return false;
+        }
+
+        detail = message.GetString()!;
+        return true;
     }
 
     private sealed record Response<T>(T? Value, ApiException? Error);

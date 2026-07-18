@@ -1,13 +1,14 @@
+using System.Security.Cryptography;
 using Playdex.Api.Http;
 
 namespace Playdex.Api.Providers;
 
-public sealed class ProvidersService(IProvidersRepository repository)
+public sealed class ProvidersService(ProvidersRepository repository)
 {
     public async Task<ProvidersResponseDto> ListProviders(long userId, CancellationToken ct)
     {
         var providers = await repository.ListProviders(userId, ct);
-        return new ProvidersResponseDto(providers);
+        return new ProvidersResponseDto(providers.Select(ToResponse).ToList());
     }
 
     public async Task<ProviderUpdateResponseDto> UpdateProviderStatus(long userId, ProviderUpdateRequest request, CancellationToken ct)
@@ -23,7 +24,7 @@ public sealed class ProvidersService(IProvidersRepository repository)
             throw AppProblem.NotFound("Provider not found.");
         }
 
-        return new ProviderUpdateResponseDto(provider);
+        return new ProviderUpdateResponseDto(ToResponse(provider));
     }
 
     public async Task<PlayniteKeyResponseDto> GetOrCreatePlayniteKey(long userId, CancellationToken ct)
@@ -33,10 +34,12 @@ public sealed class ProvidersService(IProvidersRepository repository)
         return new PlayniteKeyResponseDto(key);
     }
 
-    private static string GenerateApiKey()
+    internal static string GenerateApiKey()
     {
-        var bytes = new byte[16];
-        Random.Shared.NextBytes(bytes);
+        var bytes = RandomNumberGenerator.GetBytes(16);
         return "plx_" + Convert.ToHexString(bytes).ToLowerInvariant();
     }
+
+    internal static ProviderStatusDto ToResponse(ProviderStatusDto provider) =>
+        provider.Platform == "playnite" ? provider : provider with { ApiKey = null };
 }

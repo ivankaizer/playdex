@@ -3,7 +3,7 @@ using Playdex.Api.Http;
 
 namespace Playdex.Api.Admin;
 
-public sealed class AdminService(IAdminRepository repository)
+public sealed class AdminService(AdminRepository repository)
 {
     /// <summary>
     /// Returns the last 3 play sessions for every user, grouped by user.
@@ -35,7 +35,10 @@ public sealed class AdminService(IAdminRepository repository)
     public async Task<AdminSessionsListResponseDto> SearchSessions(
         string query, int limit, int offset, CancellationToken ct)
     {
-        var (sessions, total) = await repository.SearchSessions(query, limit, offset, ct);
+        var trimmed = query.Trim();
+        var safeLimit = Math.Clamp(limit, 1, 200);
+        var safeOffset = Math.Max(0, offset);
+        var (sessions, total) = await repository.SearchSessions(trimmed, safeLimit, safeOffset, ct);
 
         var dtos = sessions.Select(r => new AdminMovableSessionDto(
             r.SessionId,
@@ -50,7 +53,7 @@ public sealed class AdminService(IAdminRepository repository)
             r.Live
         )).ToList();
 
-        return new AdminSessionsListResponseDto(query, dtos, total, limit, offset);
+        return new AdminSessionsListResponseDto(trimmed, dtos, total, safeLimit, safeOffset);
     }
 
     /// <summary>
@@ -64,6 +67,9 @@ public sealed class AdminService(IAdminRepository repository)
 
         if (request.TargetCredentialId <= 0)
             throw AppProblem.Validation("TargetCredentialId must be a positive number.");
+
+        if (await repository.GetCredential(request.TargetCredentialId, ct) is null)
+            throw AppProblem.NotFound("Target credential not found.");
 
         var moved = await repository.MoveSessions(request.SessionIds, request.TargetCredentialId, ct);
 
@@ -96,9 +102,13 @@ public sealed class AdminService(IAdminRepository repository)
         if (string.IsNullOrWhiteSpace(request.Platform))
             throw AppProblem.Validation("Platform is required.");
 
-        var updated = await repository.UpdatePlatformStatus(request.Platform, request.Enabled, ct);
+        var platform = request.Platform.Trim();
+        if (!await repository.PlatformExists(platform, ct))
+            throw AppProblem.NotFound("Platform not found.");
 
-        return new AdminPlatformStatusUpdateResponseDto(request.Platform, request.Enabled, updated);
+        var updated = await repository.UpdatePlatformStatus(platform, request.Enabled, ct);
+
+        return new AdminPlatformStatusUpdateResponseDto(platform, request.Enabled, updated);
     }
 
     /// <summary>
@@ -124,13 +134,21 @@ public sealed class AdminService(IAdminRepository repository)
     /// Update a specific platform credential's API key or account user.
     /// </summary>
     public async Task<AdminCredentialUpdateResponseDto> UpdateCredential(
-        long credentialId, AdminCredentialUpdateRequest request, CancellationToken ct)
+        long credentialId, AdminCredentialChanges changes, CancellationToken ct)
     {
         if (credentialId <= 0)
             throw AppProblem.Validation("CredentialId must be a positive number.");
 
+        if (!changes.ApiKeyChanged && !changes.AccountUserChanged)
+            throw AppProblem.Validation("At least one field must be provided.");
+
         var row = await repository.UpdateCredential(
-            credentialId, request.ApiKey, request.AccountUser, ct);
+            credentialId,
+            changes.ApiKeyChanged,
+            changes.ApiKey,
+            changes.AccountUserChanged,
+            changes.AccountUser,
+            ct);
 
         if (row is null)
             throw AppProblem.NotFound("Credential not found.");
@@ -149,9 +167,9 @@ public sealed class AdminService(IAdminRepository repository)
         var trimmed = query.Trim();
 
         if (trimmed.Length == 0)
-            return new AdminGameSearchResponseDto(query, []);
+            throw AppProblem.Validation("query is required.");
 
-        var rows = await repository.SearchGames(trimmed, limit, ct);
+        var rows = await repository.SearchGames(trimmed, Math.Clamp(limit, 1, 50), ct);
 
         var games = rows.Select(r => new AdminGameDto(
             GameId.Encode(r.Id),
@@ -162,7 +180,7 @@ public sealed class AdminService(IAdminRepository repository)
             r.ImageLocked
         )).ToList();
 
-        return new AdminGameSearchResponseDto(query, games);
+        return new AdminGameSearchResponseDto(trimmed, games);
     }
 
     /// <summary>
@@ -170,19 +188,22 @@ public sealed class AdminService(IAdminRepository repository)
     /// When gameId is provided in the request body (not route), use this overload.
     /// </summary>
     public async Task<AdminGameUpdateResponseDto> UpdateGame(
-        long? gameId, AdminGameUpdateRequest request, CancellationToken ct)
+        long gameId, AdminGameChanges changes, CancellationToken ct)
     {
-        var resolvedId = gameId ?? ParseGameId(request.GameId);
-
-        if (!resolvedId.HasValue)
-            throw AppProblem.Validation("GameId is required either in the URL or the request body.");
+        if (!changes.TitleChanged && !changes.ImageUrlChanged &&
+            !changes.LockTitleChanged && !changes.LockImageChanged)
+            throw AppProblem.Validation("At least one field must be provided.");
 
         var row = await repository.UpdateGame(
-            resolvedId.Value,
-            request.Title,
-            request.ImageUrl,
-            request.LockTitle,
-            request.LockImage,
+            gameId,
+            changes.TitleChanged,
+            changes.Title,
+            changes.ImageUrlChanged,
+            changes.ImageUrl,
+            changes.LockTitleChanged,
+            changes.LockTitle,
+            changes.LockImageChanged,
+            changes.LockImage,
             ct);
 
         if (row is null)
@@ -198,13 +219,5 @@ public sealed class AdminService(IAdminRepository repository)
         );
 
         return new AdminGameUpdateResponseDto(dto);
-    }
-
-    private static long? ParseGameId(string? gameId)
-    {
-        if (string.IsNullOrWhiteSpace(gameId))
-            return null;
-
-        return GameId.Parse(gameId);
     }
 }

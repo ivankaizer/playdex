@@ -102,9 +102,9 @@ public sealed class DashboardStateTests
     public void DerivedCardsTotalsAndCurrentSessionMatchReactFormattingAndRounding()
     {
         var state = new DashboardState();
-        state.CompleteRefresh(Snapshot());
+        state.CompleteRefresh(Snapshot(), Now);
 
-        var card = Assert.Single(state.GetTodaySessionCards(Now));
+        var card = Assert.Single(state.TodaySessionCards);
         Assert.Equal("Elden Ring", card.Title);
         Assert.Equal("1h 1m", card.Duration);
         Assert.Equal("PS5", card.Platform);
@@ -122,6 +122,30 @@ public sealed class DashboardStateTests
         Assert.Equal("2h", monthly.Hours);
         Assert.Equal("2", monthly.Sessions);
         Assert.Equal("Elden Ring", monthly.TopTitle);
+    }
+
+    [Fact]
+    public void TodaySessionCards_StayFrozenAcrossModalRerendersWhileCurrentElapsedAdvances()
+    {
+        var snapshot = Snapshot();
+        var openTodaySession = snapshot.TodaySessions[0] with
+        {
+            StartedAt = Now.AddMinutes(-10),
+            EndedAt = null,
+        };
+        snapshot = snapshot with { TodaySessions = [openTodaySession] };
+        var state = new DashboardState();
+        state.CompleteRefresh(snapshot, Now);
+        var cardsBeforeModal = state.TodaySessionCards;
+
+        state.OpenManualModal();
+
+        var cardsAfterModal = state.TodaySessionCards;
+        Assert.Same(cardsBeforeModal, cardsAfterModal);
+        Assert.Equal("10 min", Assert.Single(cardsAfterModal).Duration);
+        Assert.NotEqual(
+            state.GetCurrentSession(Now)?.Elapsed,
+            state.GetCurrentSession(Now.AddMinutes(5))?.Elapsed);
     }
 
     [Fact]
@@ -295,6 +319,20 @@ public sealed class DashboardStateTests
         Assert.Contains("OnThemeChanged.InvokeAsync(_theme)", layout);
         Assert.Contains("OnThemeChanged=\"SetTheme\"", markup);
         Assert.DoesNotContain("Storage.GetAsync(ThemeKey)", code);
+    }
+
+    [Fact]
+    public void AppLayout_RendersOverlayInsideMainAfterTheContentWrapperFooter()
+    {
+        var root = FindWebRoot();
+        var layout = File.ReadAllText(Path.Combine(root, "Layout", "AppLayout.razor"));
+        var footerIndex = layout.IndexOf("<AppFooter", StringComparison.Ordinal);
+        var overlayIndex = layout.IndexOf("@Overlay", StringComparison.Ordinal);
+        var mainCloseIndex = layout.IndexOf("</main>", StringComparison.Ordinal);
+
+        Assert.True(footerIndex >= 0, "AppLayout must render its footer.");
+        Assert.True(overlayIndex > footerIndex, "The overlay must follow the content wrapper footer.");
+        Assert.True(overlayIndex < mainCloseIndex, "The overlay must remain inside the main element.");
     }
 
     private static DashboardSnapshot Snapshot()

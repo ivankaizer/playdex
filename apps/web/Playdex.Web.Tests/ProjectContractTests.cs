@@ -104,6 +104,34 @@ public sealed class ProjectContractTests
         Assert.Contains("Playdex.Web.Tests/**", project);
     }
 
+    [Fact]
+    public void RetiredReactRuntimeAndBuildArtifacts_AreAbsent()
+    {
+        var retiredPaths = new[]
+        {
+            "src",
+            "tests",
+            "index.html",
+            "vite.config.ts",
+            "tsconfig.json",
+            "eslint.config.mjs",
+        };
+
+        Assert.All(retiredPaths, relativePath =>
+            Assert.False(
+                File.Exists(Path.Combine(WebRoot, relativePath))
+                || Directory.Exists(Path.Combine(WebRoot, relativePath)),
+                $"Retired React artifact still exists: {relativePath}"));
+
+        var package = ReadRequiredFile("package.json");
+        Assert.DoesNotContain("react", package, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("vite", package, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("typescript", package, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("tailwindcss", package);
+        Assert.Contains("postcss", package);
+        Assert.Contains("autoprefixer", package);
+    }
+
     private static string ReadRequiredFile(string relativePath)
     {
         var path = Path.Combine(WebRoot, relativePath);

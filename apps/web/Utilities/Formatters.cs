@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Numerics;
 
 namespace Playdex.Web.Utilities;
 
@@ -72,6 +73,9 @@ public static class Formatters
     public static string FormatTimeLabel(DateTimeOffset date) =>
         date.ToLocalTime().ToString("h:mm tt", EnUs);
 
+    public static string FormatLocalDateTime(DateTimeOffset date) =>
+        date.ToLocalTime().ToString("M/d/yyyy, h:mm:ss tt", EnUs);
+
     public static string FormatDuration(double seconds, DurationFormat format)
     {
         var safeSeconds = Math.Max(0, Math.Floor(seconds));
@@ -98,19 +102,95 @@ public static class Formatters
     public static string FormatHours(double seconds, int decimals)
     {
         var hours = seconds / 3600;
-        var value = decimals == 0
-            ? Math.Floor(hours + 0.5)
-            : double.IsFinite(hours)
-                ? Math.Round(hours, decimals, MidpointRounding.AwayFromZero)
-                : 0;
+        if (decimals != 0) return $"{FormatJavaScriptFixedNumber(hours, decimals)}h";
 
+        var value = Math.Floor(hours + 0.5);
         if (value == 0) value = 0;
-        var pattern = decimals == 0 ? "0" : $"0.{new string('#', decimals)}";
-        return $"{value.ToString(pattern, EnUs)}h";
+        return $"{value.ToString("0", EnUs)}h";
+    }
+
+    internal static string FormatJavaScriptFixedNumber(double value, int decimals)
+    {
+        if (!double.IsFinite(value)) return "0";
+        ArgumentOutOfRangeException.ThrowIfNegative(decimals);
+        if (decimals > 100) throw new ArgumentOutOfRangeException(nameof(decimals));
+        if (value == 0) return "0";
+
+        var isNegative = value < 0;
+        var magnitude = Math.Abs(value);
+        if (magnitude >= 1e21) return FormatJavaScriptNumber(value);
+
+        var bits = (ulong)BitConverter.DoubleToInt64Bits(magnitude);
+        var exponentBits = (int)(bits >> 52 & 0x7ff);
+        var fractionBits = bits & 0x000f_ffff_ffff_ffff;
+        var significand = exponentBits == 0
+            ? new BigInteger(fractionBits)
+            : new BigInteger(fractionBits | 1UL << 52);
+        var binaryExponent = exponentBits == 0
+            ? -1074
+            : exponentBits - 1023 - 52;
+
+        var numerator = significand * BigInteger.Pow(5, decimals);
+        var scaledExponent = binaryExponent + decimals;
+        BigInteger rounded;
+        if (scaledExponent >= 0)
+        {
+            rounded = numerator << scaledExponent;
+        }
+        else
+        {
+            var denominator = BigInteger.One << -scaledExponent;
+            rounded = BigInteger.DivRem(numerator, denominator, out var remainder);
+            if (remainder * 2 >= denominator) rounded++;
+        }
+
+        if (rounded.IsZero) return "0";
+        var fixedNumber = double.Parse(
+            $"{(isNegative ? "-" : string.Empty)}{rounded.ToString(CultureInfo.InvariantCulture)}e-{decimals}",
+            NumberStyles.Float,
+            CultureInfo.InvariantCulture);
+        return FormatJavaScriptNumber(fixedNumber);
     }
 
     public static string FormatUtcDateInput(DateTimeOffset date) =>
         date.UtcDateTime.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+
+    private static string FormatJavaScriptNumber(double value)
+    {
+        if (value == 0) return "0";
+
+        var isNegative = value < 0;
+        var roundTrip = Math.Abs(value).ToString("R", CultureInfo.InvariantCulture);
+        var exponentMarker = roundTrip.IndexOf('E');
+        var explicitExponent = exponentMarker >= 0
+            ? int.Parse(roundTrip[(exponentMarker + 1)..], NumberStyles.Integer, CultureInfo.InvariantCulture)
+            : 0;
+        var mantissa = exponentMarker >= 0 ? roundTrip[..exponentMarker] : roundTrip;
+        var decimalPoint = mantissa.IndexOf('.');
+        var integerDigits = decimalPoint >= 0 ? decimalPoint : mantissa.Length;
+        var digits = mantissa.Replace(".", string.Empty, StringComparison.Ordinal);
+        var leadingZeros = digits.Length - digits.TrimStart('0').Length;
+        digits = digits.TrimStart('0').TrimEnd('0');
+        var exponent = explicitExponent + integerDigits - 1 - leadingZeros;
+
+        string formatted;
+        if (exponent is >= -6 and < 21)
+        {
+            var decimalIndex = exponent + 1;
+            formatted = decimalIndex <= 0
+                ? $"0.{new string('0', -decimalIndex)}{digits}"
+                : decimalIndex >= digits.Length
+                    ? $"{digits}{new string('0', decimalIndex - digits.Length)}"
+                    : $"{digits[..decimalIndex]}.{digits[decimalIndex..]}";
+        }
+        else
+        {
+            var mantissaText = digits.Length == 1 ? digits : $"{digits[0]}.{digits[1..]}";
+            formatted = $"{mantissaText}e{(exponent >= 0 ? "+" : string.Empty)}{exponent}";
+        }
+
+        return isNegative ? $"-{formatted}" : formatted;
+    }
 
     private static string Whole(double value) => value.ToString("0", EnUs);
 }

@@ -1,0 +1,568 @@
+@page "/mapping"
+@using Microsoft.AspNetCore.Components
+@using Playdex.Web.Layout
+@using Playdex.Web.Models
+@using Playdex.Web.Utilities
+
+@{
+    RenderFragment<ManualInput> mappingEditor = input => @<div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-200/50 dark:bg-slate-950/50 p-4">
+        <div class="flex flex-wrap items-end gap-3">
+            <label class="flex-1 text-xs font-medium text-slate-600 dark:text-slate-300">
+                Search IGDB
+                <input type="text"
+                       value="@_state.MappingSearchQuery"
+                       @oninput="ChangeMappingSearchQuery"
+                       class="mt-2 w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white/90 dark:bg-slate-950/80 px-3 py-2 text-sm text-slate-900 dark:text-white outline-none transition focus:border-emerald-300 dark:focus:border-emerald-400 focus:ring-2 focus:ring-emerald-300/30 dark:focus:ring-emerald-400/30" />
+            </label>
+            <label class="text-xs font-medium text-slate-600 dark:text-slate-300">
+                Platform override
+                <select value="@_state.MappingPlatformOverride"
+                        @onchange="ChangeMappingPlatformOverride"
+                        class="mt-2 w-full min-w-[180px] rounded-xl border border-slate-300 dark:border-slate-700 bg-white/90 dark:bg-slate-950/80 px-3 py-2 text-sm text-slate-900 dark:text-white outline-none transition focus:border-emerald-300 dark:focus:border-emerald-400 focus:ring-2 focus:ring-emerald-300/30 dark:focus:ring-emerald-400/30 disabled:cursor-not-allowed">
+                    @foreach (var platform in ManualPlatformOptions)
+                    {
+                        <option @key="platform.Key" value="@platform.Key">@platform.Label</option>
+                    }
+                </select>
+            </label>
+            <button type="button"
+                    @onclick="SearchMappingAsync"
+                    disabled="@_state.IsMappingSearchLoading"
+                    class="rounded-full bg-emerald-300 dark:bg-emerald-400 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-slate-900 transition hover:bg-emerald-200 dark:hover:bg-emerald-300 disabled:cursor-not-allowed disabled:bg-emerald-200/60 dark:disabled:bg-emerald-300/60">
+                @(_state.IsMappingSearchLoading ? "Searching..." : "Search")
+            </button>
+            <button type="button"
+                    @onclick="CloseMappingRow"
+                    class="rounded-full border border-slate-300 dark:border-slate-700 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-slate-700 dark:text-slate-200">
+                Close
+            </button>
+        </div>
+
+        @if (!_state.MappingIgdbAvailable)
+        {
+            <p class="mt-3 text-xs text-amber-700 dark:text-amber-200">
+                IGDB is not configured on the server.
+            </p>
+        }
+        @if (_state.MappingSearchError.Length > 0)
+        {
+            <p class="mt-3 text-xs text-rose-700 dark:text-rose-300">
+                @_state.MappingSearchError
+            </p>
+        }
+
+        <div class="mt-4 grid gap-3">
+            @if (_state.MappingSearchResults.Count == 0)
+            {
+                <p class="text-xs text-slate-500 dark:text-slate-400">
+                    Search for a game to map this input.
+                </p>
+            }
+            else
+            {
+                @foreach (var result in _state.MappingSearchResults)
+                {
+                    <div @key="result"
+                         class="grid grid-cols-[auto,1fr] items-start gap-x-3 gap-y-2 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-200/40 dark:bg-slate-950/40 p-3">
+                        <div class="pt-1">
+                            @if (!string.IsNullOrEmpty(result.CapsuleUrl))
+                            {
+                                <img src="@result.CapsuleUrl"
+                                     alt="@($"{result.Title} cover")"
+                                     class="h-12 w-9 rounded-lg border border-slate-200 dark:border-slate-800 object-cover" />
+                            }
+                            else
+                            {
+                                <div class="h-12 w-9 rounded-lg border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/60"></div>
+                            }
+                        </div>
+                        <div class="space-y-1">
+                            <button type="button"
+                                    @onclick="() => NavigateMappingResultAsync(result)"
+                                    disabled="@string.IsNullOrEmpty(result.GameId)"
+                                    class="text-left text-sm font-semibold text-slate-900 dark:text-white transition hover:text-emerald-700 dark:hover:text-emerald-200">
+                                @result.Title
+                            </button>
+                            <p class="text-xs text-slate-500 dark:text-slate-400">
+                                @MappingResultPlatform(result) · @result.Source.ToUpperInvariant()
+                            </p>
+                        </div>
+                        <div class="col-span-2">
+                            <button type="button"
+                                    @onclick="() => SelectMappingResultAsync(input.Id, result)"
+                                    disabled="@_state.IsMappingUpdateLoading"
+                                    class="w-full rounded-full border border-emerald-300/60 dark:border-emerald-400/60 px-3 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-emerald-700 dark:text-emerald-200 transition hover:border-emerald-300 dark:hover:border-emerald-400 disabled:cursor-not-allowed sm:w-auto">
+                                @(_state.IsMappingUpdateLoading ? "Mapping..." : "Map")
+                            </button>
+                        </div>
+                    </div>
+                }
+            }
+        </div>
+    </div>;
+}
+
+<AppLayout Title="Mapping">
+    <ChildContent>
+        <section class="mt-10 rounded-3xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/60 p-5 sm:p-6">
+            <div class="flex flex-wrap items-center justify-between gap-4">
+                <div>
+                    <p class="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-700 dark:text-emerald-300">
+                        Manual mapping
+                    </p>
+                    <h2 class="mt-2 text-xl font-semibold text-slate-900 dark:text-white">
+                        Connect manual inputs to games
+                    </h2>
+                </div>
+                <button type="button"
+                        @onclick="LoadManualInputsAsync"
+                        disabled="@_state.IsManualInputsLoading"
+                        class="rounded-full border border-slate-300 dark:border-slate-700 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-slate-700 dark:text-slate-200 transition hover:border-emerald-300/60 dark:hover:border-emerald-400/60 disabled:cursor-not-allowed">
+                    @(_state.IsManualInputsLoading ? "Refreshing..." : "Refresh")
+                </button>
+            </div>
+
+            @if (_state.ManualInputsError.Length > 0)
+            {
+                <p class="mt-4 text-xs text-rose-700 dark:text-rose-300">
+                    @_state.ManualInputsError
+                </p>
+            }
+
+            <div class="mt-6 grid gap-4 md:hidden">
+                @if (_state.IsManualInputsLoading)
+                {
+                    @foreach (var row in new[] { 1, 2, 3 })
+                    {
+                        <div @key="row" class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/70 dark:bg-slate-950/60 p-4">
+                            <div class="grid grid-cols-[auto,1fr] items-start gap-x-3 gap-y-3">
+                                <div class="h-14 w-10 rounded-xl bg-slate-200/70 dark:bg-slate-800/60"></div>
+                                <div class="flex-1 space-y-2">
+                                    <div class="h-3 w-32 rounded-full bg-slate-200/70 dark:bg-slate-800/60"></div>
+                                    <div class="h-3 w-40 rounded-full bg-slate-200/40 dark:bg-slate-800/40"></div>
+                                </div>
+                                <div class="col-span-2 h-9 rounded-full bg-slate-200/40 dark:bg-slate-800/40"></div>
+                            </div>
+                        </div>
+                    }
+                }
+                else if (_state.ManualInputs.Count == 0)
+                {
+                    <div class="rounded-2xl border border-dashed border-slate-200 dark:border-slate-800 bg-slate-200/50 dark:bg-slate-950/50 p-4 text-sm text-slate-500 dark:text-slate-400">
+                        No manual inputs yet. Start a session to populate this list.
+                    </div>
+                }
+                else
+                {
+                    @foreach (var input in _state.ManualInputs)
+                    {
+                        <div @key="input.Id" class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/70 dark:bg-slate-950/60 p-4">
+                            <div class="grid grid-cols-[auto,1fr] items-start gap-x-3 gap-y-3">
+                                <div class="pt-1">
+                                    @if (!string.IsNullOrEmpty(input.MappedGame?.CapsuleUrl))
+                                    {
+                                        <img src="@input.MappedGame.CapsuleUrl"
+                                             alt="@($"{input.MappedGame.Title} cover")"
+                                             class="h-14 w-10 rounded-xl border border-slate-200 dark:border-slate-800 object-cover" />
+                                    }
+                                    else
+                                    {
+                                        <div class="h-14 w-10 rounded-xl border border-slate-200 dark:border-slate-800 bg-white/90 dark:bg-slate-900/70"></div>
+                                    }
+                                </div>
+                                <div class="flex-1 space-y-2">
+                                    <p class="text-[11px] uppercase tracking-[0.3em] text-slate-500 dark:text-slate-400">
+                                        Input
+                                    </p>
+                                    <p class="text-sm font-semibold text-slate-900 dark:text-white">
+                                        @input.Input
+                                    </p>
+                                    <div class="text-xs text-slate-600 dark:text-slate-300">
+                                        @if (input.MappedGame is not null)
+                                        {
+                                            <button type="button"
+                                                    @onclick="() => NavigateToGameAsync(input.MappedGame.Id)"
+                                                    class="font-semibold text-slate-900 dark:text-white transition hover:text-emerald-700 dark:hover:text-emerald-200">
+                                                @input.MappedGame.Title
+                                                @if (!string.IsNullOrEmpty(input.MappedGame.Platform))
+                                                {
+                                                    <text> · @Formatters.FormatPlatformLabel(input.MappedGame.Platform)</text>
+                                                }
+                                            </button>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-slate-500">Unmapped</span>
+                                        }
+                                    </div>
+                                </div>
+                                <div class="col-span-2">
+                                    <button type="button"
+                                            @onclick="() => OpenMappingRow(input)"
+                                            class="@MappingButtonClass(input)">
+                                        @(input.MappedGame is not null ? "Edit mapping" : "Map")
+                                    </button>
+                                </div>
+                            </div>
+
+                            @if (_state.ActiveMappingInputId == input.Id)
+                            {
+                                <div class="mt-4">@mappingEditor(input)</div>
+                            }
+                        </div>
+                    }
+                }
+            </div>
+
+            <div class="mt-6 hidden overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-800 md:block">
+                <table class="w-full text-left text-sm">
+                    <thead class="bg-white dark:bg-slate-950/70 text-xs uppercase tracking-[0.3em] text-slate-500 dark:text-slate-400">
+                        <tr>
+                            <th class="px-4 py-3 text-left">Input</th>
+                            <th class="px-4 py-3 text-left">Mapped game</th>
+                            <th class="px-4 py-3 text-right">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-200 dark:divide-slate-800 bg-white/80 dark:bg-slate-900/60">
+                        @if (_state.IsManualInputsLoading)
+                        {
+                            @foreach (var row in new[] { 1, 2, 3 })
+                            {
+                                <tr @key="row">
+                                    <td class="px-4 py-4"><div class="h-3 w-32 rounded-full bg-slate-200/70 dark:bg-slate-800/60"></div></td>
+                                    <td class="px-4 py-4"><div class="h-3 w-40 rounded-full bg-slate-200/50 dark:bg-slate-800/50"></div></td>
+                                    <td class="px-4 py-4 text-right"><div class="ml-auto h-8 w-20 rounded-full bg-slate-200/50 dark:bg-slate-800/50"></div></td>
+                                </tr>
+                            }
+                        }
+                        else if (_state.ManualInputs.Count == 0)
+                        {
+                            <tr>
+                                <td colspan="3" class="px-4 py-10 text-center text-sm text-slate-500 dark:text-slate-400">
+                                    No manual inputs yet. Start a session to populate this list.
+                                </td>
+                            </tr>
+                        }
+                        else
+                        {
+                            @foreach (var input in _state.ManualInputs)
+                            {
+                                <tr @key="@($"mapping-{input.Id}")" class="transition hover:bg-slate-100 dark:hover:bg-slate-900/70">
+                                    <td class="px-4 py-3 font-semibold text-slate-900 dark:text-white">@input.Input</td>
+                                    <td class="px-4 py-3 text-slate-600 dark:text-slate-300">
+                                        @if (input.MappedGame is not null)
+                                        {
+                                            <span class="inline-flex items-center gap-2">
+                                                @if (!string.IsNullOrEmpty(input.MappedGame.CapsuleUrl))
+                                                {
+                                                    <img src="@input.MappedGame.CapsuleUrl"
+                                                         alt="@($"{input.MappedGame.Title} cover")"
+                                                         class="h-10 w-8 rounded-lg border border-slate-200 dark:border-slate-800 object-cover" />
+                                                }
+                                                <button type="button"
+                                                        @onclick="() => NavigateToGameAsync(input.MappedGame.Id)"
+                                                        class="text-left text-sm font-semibold text-slate-900 dark:text-white transition hover:text-emerald-700 dark:hover:text-emerald-200">
+                                                    @input.MappedGame.Title
+                                                    @if (!string.IsNullOrEmpty(input.MappedGame.Platform))
+                                                    {
+                                                        <text> · @Formatters.FormatPlatformLabel(input.MappedGame.Platform)</text>
+                                                    }
+                                                </button>
+                                            </span>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-slate-500">Unmapped</span>
+                                        }
+                                    </td>
+                                    <td class="px-4 py-3 text-right">
+                                        <button type="button"
+                                                @onclick="() => OpenMappingRow(input)"
+                                                class="@(input.MappedGame is not null
+                                                    ? "rounded-full border border-slate-300 dark:border-slate-700 px-3 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-slate-700 dark:text-slate-200 transition hover:border-emerald-300/60 dark:hover:border-emerald-400/60 hover:text-emerald-700 dark:hover:text-emerald-100"
+                                                    : "rounded-full border border-emerald-300/60 dark:border-emerald-400/60 px-3 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-emerald-700 dark:text-emerald-200 transition hover:border-emerald-300 dark:hover:border-emerald-400")">
+                                            @(input.MappedGame is not null ? "Edit mapping" : "Map")
+                                        </button>
+                                    </td>
+                                </tr>
+                                @if (_state.ActiveMappingInputId == input.Id)
+                                {
+                                    <tr @key="@($"editor-{input.Id}")">
+                                        <td colspan="3" class="px-4 py-4">@mappingEditor(input)</td>
+                                    </tr>
+                                }
+                            }
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <section class="mt-10 rounded-3xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/60 p-5 sm:p-6">
+            <div class="flex flex-wrap items-center justify-between gap-4">
+                <div>
+                    <p class="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-700 dark:text-emerald-300">
+                        Game connections
+                    </p>
+                    <h2 class="mt-2 text-xl font-semibold text-slate-900 dark:text-white">
+                        Merge stats across editions
+                    </h2>
+                </div>
+                <button type="button"
+                        @onclick="LoadGameConnectionsAsync"
+                        disabled="@_state.IsGameConnectionsLoading"
+                        class="rounded-full border border-slate-300 dark:border-slate-700 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-slate-700 dark:text-slate-200 transition hover:border-emerald-300/60 dark:hover:border-emerald-400/60 disabled:cursor-not-allowed">
+                    @(_state.IsGameConnectionsLoading ? "Refreshing..." : "Refresh")
+                </button>
+            </div>
+
+            @if (_state.GameConnectionsError.Length > 0)
+            {
+                <p class="mt-4 text-xs text-rose-700 dark:text-rose-300">
+                    @_state.GameConnectionsError
+                </p>
+            }
+
+            <div class="mt-6 grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
+                <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/70 dark:bg-slate-950/50 p-4 sm:p-5">
+                    <p class="text-xs font-semibold uppercase tracking-[0.3em] text-slate-500 dark:text-slate-400">
+                        Connect games
+                    </p>
+                    <p class="mt-2 text-sm text-slate-600 dark:text-slate-300">
+                        Pick two games to combine their playtime into a single entry.
+                    </p>
+
+                    <div class="mt-4 grid gap-4">
+                        <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/70 dark:bg-slate-950/60 p-4">
+                            <p class="text-xs font-semibold uppercase tracking-[0.3em] text-slate-500 dark:text-slate-400">
+                                Primary game
+                            </p>
+                            <div class="mt-3 flex flex-wrap items-center gap-3">
+                                <input type="text"
+                                       value="@_state.PrimaryGameQuery"
+                                       @oninput="ChangePrimaryGameQuery"
+                                       class="flex-1 rounded-xl border border-slate-300 dark:border-slate-700 bg-white/90 dark:bg-slate-950/80 px-3 py-2 text-sm text-slate-900 dark:text-white outline-none transition focus:border-emerald-300 dark:focus:border-emerald-400 focus:ring-2 focus:ring-emerald-300/30 dark:focus:ring-emerald-400/30"
+                                       placeholder="Search games" />
+                                <button type="button"
+                                        @onclick="SearchPrimaryGamesAsync"
+                                        disabled="@_state.IsPrimaryGameLoading"
+                                        class="rounded-full bg-emerald-300 dark:bg-emerald-400 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-slate-900 transition hover:bg-emerald-200 dark:hover:bg-emerald-300 disabled:cursor-not-allowed disabled:bg-emerald-200/60 dark:disabled:bg-emerald-300/60">
+                                    @(_state.IsPrimaryGameLoading ? "Searching..." : "Search")
+                                </button>
+                            </div>
+                            @if (_state.PrimaryGameError.Length > 0)
+                            {
+                                <p class="mt-3 text-xs text-rose-700 dark:text-rose-300">@_state.PrimaryGameError</p>
+                            }
+                            @if (_state.SelectedPrimaryGame is { } selectedPrimary)
+                            {
+                                <div class="mt-3 flex items-center gap-3 rounded-xl border border-emerald-300/40 dark:border-emerald-400/40 bg-emerald-300/10 dark:bg-emerald-500/10 p-3 text-sm text-emerald-700 dark:text-emerald-100">
+                                    @if (!string.IsNullOrEmpty(selectedPrimary.CapsuleUrl))
+                                    {
+                                        <img src="@selectedPrimary.CapsuleUrl" alt="@($"{selectedPrimary.Title} cover")" class="h-10 w-8 rounded-lg border border-emerald-300/40 dark:border-emerald-400/40 object-cover" />
+                                    }
+                                    else
+                                    {
+                                        <div class="h-10 w-8 rounded-lg border border-emerald-300/40 dark:border-emerald-400/40 bg-emerald-300/10 dark:bg-emerald-500/10"></div>
+                                    }
+                                    <div>
+                                        <p class="font-semibold">@selectedPrimary.Title</p>
+                                        <p class="text-xs text-emerald-700 dark:text-emerald-200">@(string.IsNullOrEmpty(selectedPrimary.Platform) ? "Unknown platform" : Formatters.FormatPlatformLabel(selectedPrimary.Platform))</p>
+                                    </div>
+                                </div>
+                            }
+                            <div class="mt-3 grid gap-2">
+                                @if (_state.PrimaryGameResults.Count == 0)
+                                {
+                                    <p class="text-xs text-slate-500">Search to find the primary game.</p>
+                                }
+                                else
+                                {
+                                    @foreach (var result in _state.PrimaryGameResults)
+                                    {
+                                        <button @key="result.GameId" type="button" @onclick="() => _state.SelectPrimaryGame(result)" class="flex items-center gap-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-950/40 p-3 text-left text-sm text-slate-900 dark:text-white transition hover:border-emerald-300/60 dark:hover:border-emerald-400/60">
+                                            @if (!string.IsNullOrEmpty(result.CapsuleUrl))
+                                            {
+                                                <img src="@result.CapsuleUrl" alt="@($"{result.Title} cover")" class="h-10 w-8 rounded-lg border border-slate-200 dark:border-slate-800 object-cover" />
+                                            }
+                                            else
+                                            {
+                                                <div class="h-10 w-8 rounded-lg border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/60"></div>
+                                            }
+                                            <div>
+                                                <p class="font-semibold">@result.Title</p>
+                                                <p class="text-xs text-slate-500 dark:text-slate-400">@(string.IsNullOrEmpty(result.Platform) ? "Unknown platform" : Formatters.FormatPlatformLabel(result.Platform))</p>
+                                            </div>
+                                        </button>
+                                    }
+                                }
+                            </div>
+                        </div>
+
+                        <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/70 dark:bg-slate-950/60 p-4">
+                            <p class="text-xs font-semibold uppercase tracking-[0.3em] text-slate-500 dark:text-slate-400">
+                                Connected game
+                            </p>
+                            <div class="mt-3 flex flex-wrap items-center gap-3">
+                                <input type="text"
+                                       value="@_state.SecondaryGameQuery"
+                                       @oninput="ChangeSecondaryGameQuery"
+                                       class="flex-1 rounded-xl border border-slate-300 dark:border-slate-700 bg-white/90 dark:bg-slate-950/80 px-3 py-2 text-sm text-slate-900 dark:text-white outline-none transition focus:border-emerald-300 dark:focus:border-emerald-400 focus:ring-2 focus:ring-emerald-300/30 dark:focus:ring-emerald-400/30"
+                                       placeholder="Search games" />
+                                <button type="button"
+                                        @onclick="SearchSecondaryGamesAsync"
+                                        disabled="@_state.IsSecondaryGameLoading"
+                                        class="rounded-full bg-emerald-300 dark:bg-emerald-400 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-slate-900 transition hover:bg-emerald-200 dark:hover:bg-emerald-300 disabled:cursor-not-allowed disabled:bg-emerald-200/60 dark:disabled:bg-emerald-300/60">
+                                    @(_state.IsSecondaryGameLoading ? "Searching..." : "Search")
+                                </button>
+                            </div>
+                            @if (_state.SecondaryGameError.Length > 0)
+                            {
+                                <p class="mt-3 text-xs text-rose-700 dark:text-rose-300">@_state.SecondaryGameError</p>
+                            }
+                            @if (_state.SelectedSecondaryGame is { } selectedSecondary)
+                            {
+                                <div class="mt-3 flex items-center gap-3 rounded-xl border border-emerald-300/40 dark:border-emerald-400/40 bg-emerald-300/10 dark:bg-emerald-500/10 p-3 text-sm text-emerald-700 dark:text-emerald-100">
+                                    @if (!string.IsNullOrEmpty(selectedSecondary.CapsuleUrl))
+                                    {
+                                        <img src="@selectedSecondary.CapsuleUrl" alt="@($"{selectedSecondary.Title} cover")" class="h-10 w-8 rounded-lg border border-emerald-300/40 dark:border-emerald-400/40 object-cover" />
+                                    }
+                                    else
+                                    {
+                                        <div class="h-10 w-8 rounded-lg border border-emerald-300/40 dark:border-emerald-400/40 bg-emerald-300/10 dark:bg-emerald-500/10"></div>
+                                    }
+                                    <div>
+                                        <p class="font-semibold">@selectedSecondary.Title</p>
+                                        <p class="text-xs text-emerald-700 dark:text-emerald-200">@(string.IsNullOrEmpty(selectedSecondary.Platform) ? "Unknown platform" : Formatters.FormatPlatformLabel(selectedSecondary.Platform))</p>
+                                    </div>
+                                </div>
+                            }
+                            <div class="mt-3 grid gap-2">
+                                @if (_state.SecondaryGameResults.Count == 0)
+                                {
+                                    <p class="text-xs text-slate-500">Search to find the connected game.</p>
+                                }
+                                else
+                                {
+                                    @foreach (var result in _state.SecondaryGameResults)
+                                    {
+                                        <button @key="result.GameId" type="button" @onclick="() => _state.SelectSecondaryGame(result)" class="flex items-center gap-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-950/40 p-3 text-left text-sm text-slate-900 dark:text-white transition hover:border-emerald-300/60 dark:hover:border-emerald-400/60">
+                                            @if (!string.IsNullOrEmpty(result.CapsuleUrl))
+                                            {
+                                                <img src="@result.CapsuleUrl" alt="@($"{result.Title} cover")" class="h-10 w-8 rounded-lg border border-slate-200 dark:border-slate-800 object-cover" />
+                                            }
+                                            else
+                                            {
+                                                <div class="h-10 w-8 rounded-lg border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/60"></div>
+                                            }
+                                            <div>
+                                                <p class="font-semibold">@result.Title</p>
+                                                <p class="text-xs text-slate-500 dark:text-slate-400">@(string.IsNullOrEmpty(result.Platform) ? "Unknown platform" : Formatters.FormatPlatformLabel(result.Platform))</p>
+                                            </div>
+                                        </button>
+                                    }
+                                }
+                            </div>
+                        </div>
+                    </div>
+
+                    @if (_state.ConnectionSaveError.Length > 0)
+                    {
+                        <p class="mt-4 text-xs text-rose-700 dark:text-rose-300">@_state.ConnectionSaveError</p>
+                    }
+
+                    <div class="mt-4 flex flex-wrap gap-3">
+                        <button type="button"
+                                @onclick="ConnectGamesAsync"
+                                disabled="@_state.IsConnectionSaving"
+                                class="rounded-full bg-emerald-300 dark:bg-emerald-400 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-slate-900 transition hover:bg-emerald-200 dark:hover:bg-emerald-300 disabled:cursor-not-allowed disabled:bg-emerald-200/60 dark:disabled:bg-emerald-300/60">
+                            @(_state.IsConnectionSaving ? "Saving..." : "Connect games")
+                        </button>
+                        <button type="button"
+                                @onclick="_state.ClearConnectionDraft"
+                                class="rounded-full border border-slate-300 dark:border-slate-700 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-slate-700 dark:text-slate-200 transition hover:border-emerald-300/60 dark:hover:border-emerald-400/60">
+                            Clear
+                        </button>
+                    </div>
+                </div>
+
+                <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/70 dark:bg-slate-950/50 p-4 sm:p-5">
+                    <p class="text-xs font-semibold uppercase tracking-[0.3em] text-slate-500 dark:text-slate-400">
+                        Connected pairs
+                    </p>
+                    <div class="mt-4 space-y-3">
+                        @if (_state.IsGameConnectionsLoading)
+                        {
+                            @foreach (var row in new[] { 1, 2, 3 })
+                            {
+                                <div @key="row" class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/70 dark:bg-slate-950/40 p-3">
+                                    <div class="flex items-center gap-3">
+                                        <div class="h-10 w-8 rounded-lg bg-slate-200/70 dark:bg-slate-800/60"></div>
+                                        <div class="h-3 w-24 rounded-full bg-slate-200/70 dark:bg-slate-800/60"></div>
+                                    </div>
+                                </div>
+                            }
+                        }
+                        else if (_state.GameConnections.Count == 0)
+                        {
+                            <div class="rounded-2xl border border-dashed border-slate-200 dark:border-slate-800 bg-white/70 dark:bg-slate-950/40 p-4 text-xs text-slate-500 dark:text-slate-400">
+                                No game connections yet.
+                            </div>
+                        }
+                        else
+                        {
+                            @foreach (var connection in _state.GameConnections)
+                            {
+                                <div @key="@($"{connection.GameId}-{connection.ConnectedGameId}")" class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/70 dark:bg-slate-950/40 p-3">
+                                    <div class="flex flex-col gap-3">
+                                        <div class="flex items-center gap-3">
+                                            @if (!string.IsNullOrEmpty(connection.CapsuleUrl))
+                                            {
+                                                <img src="@connection.CapsuleUrl" alt="@($"{connection.Title} cover")" class="h-10 w-8 rounded-lg border border-slate-200 dark:border-slate-800 object-cover" />
+                                            }
+                                            else
+                                            {
+                                                <div class="h-10 w-8 rounded-lg border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/60"></div>
+                                            }
+                                            <div class="min-w-0 flex-1">
+                                                <button type="button" @onclick="() => NavigateToGameAsync(connection.GameId)" class="block w-full break-words text-left text-sm font-semibold text-slate-900 dark:text-white transition hover:text-emerald-700 dark:hover:text-emerald-200">@connection.Title</button>
+                                                <p class="text-xs text-slate-500 dark:text-slate-400">@(string.IsNullOrEmpty(connection.Platform) ? "Unknown platform" : Formatters.FormatPlatformLabel(connection.Platform))</p>
+                                            </div>
+                                        </div>
+                                        <div class="flex items-center gap-2 text-xs uppercase tracking-[0.3em] text-slate-500">
+                                            <span class="h-px flex-1 bg-slate-200 dark:bg-slate-800"></span>
+                                            <span>+ +</span>
+                                            <span class="h-px flex-1 bg-slate-200 dark:bg-slate-800"></span>
+                                        </div>
+                                        <div class="flex items-center gap-3">
+                                            @if (!string.IsNullOrEmpty(connection.ConnectedCapsuleUrl))
+                                            {
+                                                <img src="@connection.ConnectedCapsuleUrl" alt="@($"{connection.ConnectedTitle} cover")" class="h-10 w-8 rounded-lg border border-slate-200 dark:border-slate-800 object-cover" />
+                                            }
+                                            else
+                                            {
+                                                <div class="h-10 w-8 rounded-lg border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/60"></div>
+                                            }
+                                            <div class="min-w-0 flex-1">
+                                                <button type="button" @onclick="() => NavigateToGameAsync(connection.ConnectedGameId)" class="block w-full break-words text-left text-sm font-semibold text-slate-900 dark:text-white transition hover:text-emerald-700 dark:hover:text-emerald-200">@connection.ConnectedTitle</button>
+                                                <p class="text-xs text-slate-500 dark:text-slate-400">@(string.IsNullOrEmpty(connection.ConnectedPlatform) ? "Unknown platform" : Formatters.FormatPlatformLabel(connection.ConnectedPlatform))</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="mt-3 flex justify-end">
+                                        <button type="button"
+                                                @onclick="() => DisconnectGamesAsync(connection.GameId, connection.ConnectedGameId)"
+                                                disabled="@_state.IsConnectionSaving"
+                                                class="rounded-full border border-rose-400/60 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.3em] text-rose-700 dark:text-rose-200 transition hover:border-rose-300 hover:text-rose-700 dark:hover:text-rose-100 disabled:cursor-not-allowed">
+                                            Remove
+                                        </button>
+                                    </div>
+                                </div>
+                            }
+                        }
+                    </div>
+                </div>
+            </div>
+        </section>
+    </ChildContent>
+</AppLayout>

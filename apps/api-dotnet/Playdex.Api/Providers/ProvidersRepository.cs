@@ -1,79 +1,99 @@
-using Dapper;
-using Npgsql;
+using Microsoft.EntityFrameworkCore;
+using Playdex.Api.Data;
 
 namespace Playdex.Api.Providers;
 
-public interface IProvidersRepository
-{
-    Task<List<ProviderStatusDto>> ListProviders(long userId, CancellationToken ct);
-    Task<ProviderStatusDto?> UpdateProviderStatus(long userId, long providerId, string status, CancellationToken ct);
-    Task<string> GetOrCreatePlayniteKey(long userId, string apiKey, CancellationToken ct);
-}
-
-public sealed class ProvidersRepository(NpgsqlDataSource dataSource) : IProvidersRepository
+public sealed class ProvidersRepository(PlaydexDbContext db)
 {
     public async Task<List<ProviderStatusDto>> ListProviders(long userId, CancellationToken ct)
     {
-        await using var conn = await dataSource.OpenConnectionAsync(ct);
-        var rows = await conn.QueryAsync<ProviderRow>("""
-            SELECT pc.id, p.key AS platform, pc.account_id,
-                   CASE WHEN pc.active THEN 'active' ELSE 'paused' END AS status,
-                   pc.api_key
-            FROM platform_credentials pc
-            JOIN platforms p ON p.id = pc.platform_id
-            WHERE pc.user_id = @UserId
-            """, new { UserId = userId });
+        var rows = await db.PlatformCredentials
+            .AsNoTracking()
+            .Where(credential => credential.UserId == userId)
+            .OrderBy(credential => credential.Id)
+            .Join(
+                db.Platforms.AsNoTracking(),
+                credential => credential.PlatformId,
+                platform => platform.Id,
+                (credential, platform) => new
+                {
+                    credential.Id,
+                    Platform = platform.Key,
+                    credential.AccountId,
+                    Status = credential.Active ? "active" : "paused",
+                    credential.ApiKey,
+                })
+            .ToListAsync(ct);
 
         return rows.Select(r => new ProviderStatusDto(r.Id, r.Platform, r.AccountId, r.Status, r.ApiKey)).ToList();
     }
 
     public async Task<ProviderStatusDto?> UpdateProviderStatus(long userId, long providerId, string status, CancellationToken ct)
     {
-        await using var conn = await dataSource.OpenConnectionAsync(ct);
-        var row = await conn.QueryFirstOrDefaultAsync<ProviderRow>("""
-            WITH updated AS (
-                UPDATE platform_credentials
-                SET active = (@Status = 'active'), updated_at = NOW()
-                WHERE id = @Id AND user_id = @UserId
-                RETURNING id, platform_id, account_id, active, api_key
-            )
-            SELECT updated.id, p.key AS platform, updated.account_id,
-                   CASE WHEN updated.active THEN 'active' ELSE 'paused' END AS status,
-                   updated.api_key
-            FROM updated
-            JOIN platforms p ON p.id = updated.platform_id
-            """, new { UserId = userId, Id = providerId, Status = status });
+        var credential = await db.PlatformCredentials
+            .FirstOrDefaultAsync(
+                item => item.Id == providerId && item.UserId == userId,
+                ct);
+        if (credential is null) return null;
 
-        if (row is null) return null;
-        return new ProviderStatusDto(row.Id, row.Platform, row.AccountId, row.Status, row.ApiKey);
+        credential.Active = status == "active";
+        credential.UpdatedAt = DateTimeOffset.UtcNow;
+        await db.SaveChangesAsync(ct);
+        var platform = await db.Platforms
+            .AsNoTracking()
+            .Where(item => item.Id == credential.PlatformId)
+            .Select(item => item.Key)
+            .FirstAsync(ct);
+        return new ProviderStatusDto(
+            credential.Id,
+            platform,
+            credential.AccountId,
+            credential.Active ? "active" : "paused",
+            credential.ApiKey);
     }
 
     public async Task<string> GetOrCreatePlayniteKey(long userId, string apiKey, CancellationToken ct)
     {
-        await using var conn = await dataSource.OpenConnectionAsync(ct);
+        var existing = await db.PlatformCredentials
+            .Where(credential => credential.UserId == userId)
+            .Join(
+                db.Platforms.AsNoTracking().Where(platform => platform.Key == "playnite"),
+                credential => credential.PlatformId,
+                platform => platform.Id,
+                (credential, _) => credential)
+            .FirstOrDefaultAsync(ct);
 
-        var existing = await conn.QueryFirstOrDefaultAsync<string>("""
-            SELECT pc.api_key FROM platform_credentials pc
-            JOIN platforms p ON p.id = pc.platform_id
-            WHERE pc.user_id = @UserId AND p.key = 'playnite'
-            """, new { UserId = userId });
+        if (!string.IsNullOrEmpty(existing?.ApiKey)) return existing.ApiKey;
 
-        if (existing is not null) return existing;
+        if (existing is not null)
+        {
+            existing.ApiKey = apiKey;
+            existing.UpdatedAt = DateTimeOffset.UtcNow;
+            await db.SaveChangesAsync(ct);
+            return apiKey;
+        }
 
-        await conn.ExecuteAsync("""
-            INSERT INTO platform_credentials (user_id, platform_id, api_key, active, created_at, updated_at)
-            SELECT @UserId, id, @ApiKey, true, NOW(), NOW() FROM platforms WHERE key = 'playnite'
-            """, new { UserId = userId, ApiKey = apiKey });
+        var platformId = await db.Platforms
+            .AsNoTracking()
+            .Where(platform => platform.Key == "playnite")
+            .Select(platform => (long?)platform.Id)
+            .FirstOrDefaultAsync(ct);
+        if (platformId.HasValue)
+        {
+            var now = DateTimeOffset.UtcNow;
+            db.PlatformCredentials.Add(new PlatformCredential
+            {
+                UserId = userId,
+                PlatformId = platformId.Value,
+                ApiKey = apiKey,
+                AccountId = "local",
+                Active = true,
+                CreatedAt = now,
+                UpdatedAt = now,
+            });
+            await db.SaveChangesAsync(ct);
+        }
 
         return apiKey;
-    }
-
-    private sealed class ProviderRow
-    {
-        public long Id { get; set; }
-        public required string Platform { get; set; }
-        public string? AccountId { get; set; }
-        public required string Status { get; set; }
-        public string? ApiKey { get; set; }
     }
 }

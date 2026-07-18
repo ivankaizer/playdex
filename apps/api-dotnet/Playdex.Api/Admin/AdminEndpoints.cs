@@ -1,8 +1,7 @@
-using System.Globalization;
 using System.Security.Claims;
+using System.Text.Json;
 using Playdex.Api.Auth;
 using Playdex.Api.Common;
-using Playdex.Api.Http;
 
 namespace Playdex.Api.Admin;
 
@@ -12,201 +11,239 @@ public static class AdminEndpoints
     {
         var admin = api.MapGroup("/admin").RequireAuthorization();
 
-        // Sessions
         admin.MapGet("/sessions/recent", GetRecentSessions);
         admin.MapGet("/sessions", SearchSessions);
-        admin.MapPut("/sessions/move", MoveSessions);
 
-        // Providers / Platforms
+        admin.MapPut("/sessions/move", async (HttpContext http) =>
+        {
+            var request = await http.Request.ReadFromJsonAsync<AdminSessionMoveRequest>();
+            var authRepo = http.RequestServices.GetRequiredService<AuthRepository>();
+            var service = http.RequestServices.GetRequiredService<AdminService>();
+
+            IResult result;
+            if (request is null)
+            {
+                result = TypedResults.Problem("Request body is required.", statusCode: 400);
+            }
+            else
+            {
+                var forbid = await http.User.AssertAdminAsync(authRepo, http.RequestAborted);
+                result = forbid ?? TypedResults.Ok(await service.MoveSessions(request, http.RequestAborted));
+            }
+            await result.ExecuteAsync(http);
+        });
+
         admin.MapGet("/providers/platforms", GetPlatformStatuses);
-        admin.MapPut("/providers/platforms/status", UpdatePlatformStatus);
+        admin.MapPut("/providers/platforms/status", async (HttpContext http) =>
+        {
+            var request = await http.Request.ReadFromJsonAsync<AdminPlatformStatusUpdateRequest>();
+            var authRepo = http.RequestServices.GetRequiredService<AuthRepository>();
+            var service = http.RequestServices.GetRequiredService<AdminService>();
 
-        // Credentials
+            IResult result;
+            if (request is null)
+            {
+                result = TypedResults.Problem("Request body is required.", statusCode: 400);
+            }
+            else
+            {
+                var forbid = await http.User.AssertAdminAsync(authRepo, http.RequestAborted);
+                result = forbid ?? TypedResults.Ok(await service.UpdatePlatformStatus(request, http.RequestAborted));
+            }
+            await result.ExecuteAsync(http);
+        });
+
         admin.MapGet("/credentials", ListCredentials);
-        admin.MapPut("/credentials/{credentialId:long}", UpdateCredential);
+        admin.MapPut("/credentials/{credentialId:long}", async (long credentialId, HttpContext http) =>
+        {
+            var payload = await http.Request.ReadFromJsonAsync<JsonElement>();
+            var authRepo = http.RequestServices.GetRequiredService<AuthRepository>();
+            var service = http.RequestServices.GetRequiredService<AdminService>();
 
-        // Games
+            IResult result;
+            if (payload.ValueKind != JsonValueKind.Object)
+            {
+                result = TypedResults.Problem("Request body is required.", statusCode: 400);
+            }
+            else
+            {
+                var forbid = await http.User.AssertAdminAsync(authRepo, http.RequestAborted);
+                result = forbid ?? TypedResults.Ok(await service.UpdateCredential(
+                    credentialId,
+                    ParseCredentialChanges(payload),
+                    http.RequestAborted));
+            }
+            await result.ExecuteAsync(http);
+        });
+
         admin.MapGet("/games/search", SearchGames);
-        admin.MapPut("/games", UpdateGameBody);
-        admin.MapPut("/games/{gameId}", UpdateGameRoute);
+        admin.MapPut("/games", (HttpContext http) => UpdateGame(null, http));
+        admin.MapPut("/games/{gameId}", (string gameId, HttpContext http) => UpdateGame(gameId, http));
     }
 
-    // ── Session Endpoints ────────────────────────────────────────────────
-
-    private static async Task<ApiResponse<AdminRecentSessionsResponseDto>> GetRecentSessions(
+    private static async Task<IResult> GetRecentSessions(
         ClaimsPrincipal principal,
-        IAuthRepository authRepo,
+        AuthRepository authRepo,
         AdminService service,
         CancellationToken ct)
     {
-        await AssertAdmin(principal, authRepo, ct);
-        return ApiResponse<AdminRecentSessionsResponseDto>.Ok(
-            await service.GetRecentSessions(ct));
+        var forbid = await principal.AssertAdminAsync(authRepo, ct);
+        if (forbid is not null) return forbid;
+
+        return TypedResults.Ok(await service.GetRecentSessions(ct));
     }
 
-    private static async Task<ApiResponse<AdminSessionsListResponseDto>> SearchSessions(
+    private static async Task<IResult> SearchSessions(
         ClaimsPrincipal principal,
-        IAuthRepository authRepo,
+        AuthRepository authRepo,
         AdminService service,
         string? query, int? limit, int? offset,
         CancellationToken ct)
     {
-        await AssertAdmin(principal, authRepo, ct);
-        return ApiResponse<AdminSessionsListResponseDto>.Ok(
-            await service.SearchSessions(
-                query ?? "",
-                Math.Clamp(limit ?? 100, 1, 500),
-                Math.Max(offset ?? 0, 0),
-                ct));
+        var forbid = await principal.AssertAdminAsync(authRepo, ct);
+        if (forbid is not null) return forbid;
+
+        return TypedResults.Ok(await service.SearchSessions(
+            query ?? "", Math.Clamp(limit ?? 100, 1, 500), Math.Max(offset ?? 0, 0), ct));
     }
 
-    private static async Task<ApiResponse<AdminSessionMoveResponseDto>> MoveSessions(
-        AdminSessionMoveRequest? request,
+    private static async Task<IResult> GetPlatformStatuses(
         ClaimsPrincipal principal,
-        IAuthRepository authRepo,
+        AuthRepository authRepo,
         AdminService service,
         CancellationToken ct)
     {
-        if (request is null)
-            throw AppProblem.Validation("Request body is required.");
+        var forbid = await principal.AssertAdminAsync(authRepo, ct);
+        if (forbid is not null) return forbid;
 
-        await AssertAdmin(principal, authRepo, ct);
-        return ApiResponse<AdminSessionMoveResponseDto>.Ok(
-            await service.MoveSessions(request, ct));
+        return TypedResults.Ok(await service.GetPlatformStatuses(ct));
     }
 
-    // ── Platform Endpoints ───────────────────────────────────────────────
-
-    private static async Task<ApiResponse<AdminPlatformStatusesResponseDto>> GetPlatformStatuses(
+    private static async Task<IResult> ListCredentials(
         ClaimsPrincipal principal,
-        IAuthRepository authRepo,
+        AuthRepository authRepo,
         AdminService service,
         CancellationToken ct)
     {
-        await AssertAdmin(principal, authRepo, ct);
-        return ApiResponse<AdminPlatformStatusesResponseDto>.Ok(
-            await service.GetPlatformStatuses(ct));
+        var forbid = await principal.AssertAdminAsync(authRepo, ct);
+        if (forbid is not null) return forbid;
+
+        return TypedResults.Ok(await service.ListCredentials(ct));
     }
 
-    private static async Task<ApiResponse<AdminPlatformStatusUpdateResponseDto>> UpdatePlatformStatus(
-        AdminPlatformStatusUpdateRequest? request,
+    private static async Task<IResult> SearchGames(
         ClaimsPrincipal principal,
-        IAuthRepository authRepo,
-        AdminService service,
-        CancellationToken ct)
-    {
-        if (request is null)
-            throw AppProblem.Validation("Request body is required.");
-
-        await AssertAdmin(principal, authRepo, ct);
-        return ApiResponse<AdminPlatformStatusUpdateResponseDto>.Ok(
-            await service.UpdatePlatformStatus(request, ct));
-    }
-
-    // ── Credential Endpoints ─────────────────────────────────────────────
-
-    private static async Task<ApiResponse<AdminCredentialsResponseDto>> ListCredentials(
-        ClaimsPrincipal principal,
-        IAuthRepository authRepo,
-        AdminService service,
-        CancellationToken ct)
-    {
-        await AssertAdmin(principal, authRepo, ct);
-        return ApiResponse<AdminCredentialsResponseDto>.Ok(
-            await service.ListCredentials(ct));
-    }
-
-    private static async Task<ApiResponse<AdminCredentialUpdateResponseDto>> UpdateCredential(
-        long credentialId,
-        AdminCredentialUpdateRequest? request,
-        ClaimsPrincipal principal,
-        IAuthRepository authRepo,
-        AdminService service,
-        CancellationToken ct)
-    {
-        if (request is null)
-            throw AppProblem.Validation("Request body is required.");
-
-        await AssertAdmin(principal, authRepo, ct);
-        return ApiResponse<AdminCredentialUpdateResponseDto>.Ok(
-            await service.UpdateCredential(credentialId, request, ct));
-    }
-
-    // ── Game Endpoints ───────────────────────────────────────────────────
-
-    private static async Task<ApiResponse<AdminGameSearchResponseDto>> SearchGames(
-        ClaimsPrincipal principal,
-        IAuthRepository authRepo,
+        AuthRepository authRepo,
         AdminService service,
         string? query, int? limit,
         CancellationToken ct)
     {
-        await AssertAdmin(principal, authRepo, ct);
-        return ApiResponse<AdminGameSearchResponseDto>.Ok(
-            await service.SearchGames(query ?? "", limit ?? 20, ct));
+        var forbid = await principal.AssertAdminAsync(authRepo, ct);
+        if (forbid is not null) return forbid;
+
+        return TypedResults.Ok(await service.SearchGames(query ?? "", limit ?? 20, ct));
     }
 
-    /// <summary>
-    /// Update a game — gameId comes from the request body.
-    /// </summary>
-    private static async Task<ApiResponse<AdminGameUpdateResponseDto>> UpdateGameBody(
-        AdminGameUpdateRequest? request,
-        ClaimsPrincipal principal,
-        IAuthRepository authRepo,
-        AdminService service,
-        CancellationToken ct)
+    private static async Task UpdateGame(string? routeGameId, HttpContext http)
     {
-        if (request is null)
-            throw AppProblem.Validation("Request body is required.");
-
-        await AssertAdmin(principal, authRepo, ct);
-        return ApiResponse<AdminGameUpdateResponseDto>.Ok(
-            await service.UpdateGame(null, request, ct));
-    }
-
-    /// <summary>
-    /// Update a game — gameId comes from the route parameter.
-    /// The body fields (title, imageUrl, lockTitle, lockImage) override when provided.
-    /// </summary>
-    private static async Task<ApiResponse<AdminGameUpdateResponseDto>> UpdateGameRoute(
-        string gameId,
-        AdminGameUpdateRequest? request,
-        ClaimsPrincipal principal,
-        IAuthRepository authRepo,
-        AdminService service,
-        CancellationToken ct)
-    {
-        if (request is null)
-            throw AppProblem.Validation("Request body is required.");
-
-        await AssertAdmin(principal, authRepo, ct);
-
-        var parsedId = GameId.Parse(gameId, "gameId");
-        return ApiResponse<AdminGameUpdateResponseDto>.Ok(
-            await service.UpdateGame(parsedId, request, ct));
-    }
-
-    // ── Admin Auth Helper ────────────────────────────────────────────────
-
-    /// <summary>
-    /// Verify the current user is an admin. Throws Forbidden if not.
-    /// </summary>
-    private static async Task AssertAdmin(ClaimsPrincipal principal, IAuthRepository authRepo, CancellationToken ct)
-    {
-        var userId = GetUserId(principal);
-        var user = await authRepo.FindById(userId, ct);
-
-        if (user is null || !user.IsAdmin)
-            throw AppProblem.Forbidden();
-    }
-
-    private static long GetUserId(ClaimsPrincipal principal)
-    {
-        var subject = principal.FindFirstValue("sub");
-        if (!long.TryParse(subject, NumberStyles.None, CultureInfo.InvariantCulture, out var userId))
+        var payload = await http.Request.ReadFromJsonAsync<JsonElement>();
+        IResult result;
+        if (payload.ValueKind != JsonValueKind.Object)
         {
-            throw AppProblem.Unauthorized("Invalid token.");
+            result = TypedResults.Problem("Request body is required.", statusCode: 400);
         }
-        return userId;
+        else
+        {
+            var authRepo = http.RequestServices.GetRequiredService<AuthRepository>();
+            var service = http.RequestServices.GetRequiredService<AdminService>();
+            var forbid = await http.User.AssertAdminAsync(authRepo, http.RequestAborted);
+            if (forbid is not null)
+            {
+                result = forbid;
+            }
+            else
+            {
+                var rawGameId = routeGameId
+                    ?? ReadIdentifier(payload, "gameId")
+                    ?? ReadIdentifier(payload, "id")
+                    ?? http.Request.Query["gameId"].FirstOrDefault();
+                if (string.IsNullOrWhiteSpace(rawGameId))
+                    throw Http.AppProblem.Validation("gameId is required.");
+                result = TypedResults.Ok(await service.UpdateGame(
+                    GameId.Parse(rawGameId, "gameId"),
+                    ParseGameChanges(payload),
+                    http.RequestAborted));
+            }
+        }
+
+        await result.ExecuteAsync(http);
+    }
+
+    internal static AdminCredentialChanges ParseCredentialChanges(JsonElement payload)
+    {
+        var apiKey = ReadNullableString(payload, "apiKey");
+        var accountUser = ReadNullableString(payload, "user");
+        return new AdminCredentialChanges(
+            apiKey.Changed,
+            apiKey.Value,
+            accountUser.Changed,
+            accountUser.Value);
+    }
+
+    internal static AdminGameChanges ParseGameChanges(JsonElement payload)
+    {
+        var title = ReadRequiredString(payload, "title");
+        var imageUrl = ReadNullableString(payload, "imageUrl");
+        var lockTitle = ReadBoolean(payload, "lockTitle");
+        var lockImage = ReadBoolean(payload, "lockImage");
+        return new AdminGameChanges(
+            title.Changed,
+            title.Value ?? string.Empty,
+            imageUrl.Changed,
+            imageUrl.Value,
+            lockTitle.Changed,
+            lockTitle.Value,
+            lockImage.Changed,
+            lockImage.Value);
+    }
+
+    private static (bool Changed, string? Value) ReadNullableString(JsonElement payload, string name)
+    {
+        if (!payload.TryGetProperty(name, out var property)) return (false, null);
+        if (property.ValueKind == JsonValueKind.Null) return (true, null);
+        if (property.ValueKind != JsonValueKind.String)
+            throw Http.AppProblem.Validation($"{name} must be a string or null.");
+        var value = property.GetString()?.Trim();
+        return (true, string.IsNullOrEmpty(value) ? null : value);
+    }
+
+    private static (bool Changed, string? Value) ReadRequiredString(JsonElement payload, string name)
+    {
+        if (!payload.TryGetProperty(name, out var property)) return (false, null);
+        if (property.ValueKind != JsonValueKind.String)
+            throw Http.AppProblem.Validation($"{name} must be a string.");
+        var value = property.GetString()?.Trim();
+        if (string.IsNullOrEmpty(value))
+            throw Http.AppProblem.Validation($"{name} cannot be empty.");
+        return (true, value);
+    }
+
+    private static (bool Changed, bool Value) ReadBoolean(JsonElement payload, string name)
+    {
+        if (!payload.TryGetProperty(name, out var property)) return (false, false);
+        if (property.ValueKind is not (JsonValueKind.True or JsonValueKind.False))
+            throw Http.AppProblem.Validation($"{name} must be a boolean.");
+        return (true, property.GetBoolean());
+    }
+
+    private static string? ReadIdentifier(JsonElement payload, string name)
+    {
+        if (!payload.TryGetProperty(name, out var property)) return null;
+        return property.ValueKind switch
+        {
+            JsonValueKind.String => property.GetString(),
+            JsonValueKind.Number => property.GetRawText(),
+            _ => throw Http.AppProblem.Validation($"{name} must be a valid game id."),
+        };
     }
 }

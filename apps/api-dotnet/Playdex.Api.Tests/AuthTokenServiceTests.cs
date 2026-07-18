@@ -13,7 +13,10 @@ public sealed class AuthTokenServiceTests
         "auth-test-secret-that-is-long-enough-for-hmac-sha256",
         60,
         "15m",
-        []);
+        [],
+        null,
+        null,
+        null);
 
     [Fact]
     public void IssueTokenPair_PreservesClaimsAndTokenTypes()
@@ -47,7 +50,10 @@ public sealed class AuthServiceTests
         "auth-test-secret-that-is-long-enough-for-hmac-sha256",
         60,
         "15m",
-        []);
+        [],
+        null,
+        null,
+        null);
 
     [Fact]
     public async Task Login_AcceptsAnExistingBcryptPasswordHash()
@@ -82,12 +88,12 @@ public sealed class AuthServiceTests
         Assert.Equal("Invalid credentials.", problem.Message);
     }
 
-    private sealed class StubAuthRepository(User? user) : IAuthRepository
+    private sealed class StubAuthRepository(User? user) : AuthRepository(null!)
     {
-        public Task<User?> FindByEmail(string email, CancellationToken cancellationToken = default) =>
+        public override Task<User?> FindByEmail(string email, CancellationToken cancellationToken = default) =>
             Task.FromResult(user?.Email == email ? user : null);
 
-        public Task<User?> FindById(long userId, CancellationToken cancellationToken = default) =>
+        public override Task<User?> FindById(long userId, CancellationToken cancellationToken = default) =>
             Task.FromResult(user?.Id == userId ? user : null);
     }
 }

@@ -3,14 +3,14 @@ using Playdex.Api.Http;
 
 namespace Playdex.Api.Games;
 
-public sealed class GamesService(IGamesRepository repository)
+public sealed class GamesService(GamesRepository repository)
 {
     public async Task<GameSearchResponseDto> Search(string query, int limit, CancellationToken ct)
     {
         var trimmed = query.Trim();
         if (trimmed.Length == 0)
         {
-            return new GameSearchResponseDto(query, []);
+            throw AppProblem.Validation("query is required.");
         }
 
         var results = await repository.SearchGames(trimmed, Math.Clamp(limit, 1, 50), ct);
@@ -38,11 +38,19 @@ public sealed class GamesService(IGamesRepository repository)
 
         if (gameId == connectedId)
         {
-            throw AppProblem.Validation("Cannot connect a game to itself.");
+            throw AppProblem.Validation("gameId and connectedGameId must be different.");
         }
 
+        var first = await repository.GetGameEntity(gameId, ct);
+        var second = await repository.GetGameEntity(connectedId, ct);
+        if (first is null || second is null)
+            throw AppProblem.NotFound("Both games must exist to connect.");
+
         await repository.CreateConnection(userId, gameId, connectedId, ct);
-        return new GameConnectionChangeResponseDto(request.GameId, request.ConnectedGameId);
+        var normalized = GameConnections.Normalize(gameId, connectedId);
+        return new GameConnectionChangeResponseDto(
+            GameId.Encode(normalized.First),
+            GameId.Encode(normalized.Second));
     }
 
     public async Task<GameConnectionChangeResponseDto> Disconnect(
@@ -50,8 +58,13 @@ public sealed class GamesService(IGamesRepository repository)
     {
         var gameId = GameId.Parse(request.GameId);
         var connectedId = GameId.Parse(request.ConnectedGameId);
+        if (gameId == connectedId)
+            throw AppProblem.Validation("gameId and connectedGameId must be different.");
         await repository.DeleteConnection(userId, gameId, connectedId, ct);
-        return new GameConnectionChangeResponseDto(request.GameId, request.ConnectedGameId);
+        var normalized = GameConnections.Normalize(gameId, connectedId);
+        return new GameConnectionChangeResponseDto(
+            GameId.Encode(normalized.First),
+            GameId.Encode(normalized.Second));
     }
 
     public async Task<GameIgnoreResponseDto> GetIgnore(long userId, string? gameId, CancellationToken ct)

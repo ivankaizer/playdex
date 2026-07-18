@@ -1,6 +1,5 @@
 module.exports = {
   content: [
-    "./src/**/*.{ts,tsx}",
     "./App.razor",
     "./Pages/**/*.{razor,cs}",
     "./Components/**/*.{razor,cs}",

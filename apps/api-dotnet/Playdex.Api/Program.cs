@@ -30,30 +30,39 @@ builder.Services.AddSingleton(options);
 builder.Services.AddSingleton(dataSource);
 builder.Services.AddSingleton(tokenService);
 builder.Services.AddDbContext<PlaydexDbContext>(db => db.UseNpgsql(dataSource));
-builder.Services.AddScoped<IAuthRepository, AuthRepository>();
+builder.Services.AddScoped<AuthRepository>();
 builder.Services.AddScoped<AuthService>();
 builder.Services.AddPlaydexAuthentication(tokenService);
-builder.Services.AddSingleton(new MigrationCatalog([]));
+builder.Services.AddSingleton(new MigrationCatalog([new CurrentSchemaMigration()]));
 builder.Services.AddSingleton<MigrationRunner>();
 
-builder.Services.AddScoped<IAccountsRepository, AccountsRepository>();
+builder.Services.AddScoped<AccountsRepository>();
 builder.Services.AddScoped<AccountsService>();
-builder.Services.AddScoped<ISettingsRepository, SettingsRepository>();
+builder.Services.AddScoped<SettingsRepository>();
 builder.Services.AddScoped<SettingsService>();
-builder.Services.AddScoped<IGamesRepository, GamesRepository>();
+builder.Services.AddScoped<GamesRepository>();
 builder.Services.AddScoped<GamesService>();
-builder.Services.AddScoped<IManualRepository, ManualRepository>();
+builder.Services.AddScoped<ManualRepository>();
 builder.Services.AddScoped<ManualService>();
-builder.Services.AddScoped<IPlayniteRepository, PlayniteRepository>();
+builder.Services.AddScoped<PlayniteRepository>();
 builder.Services.AddScoped<PlayniteService>();
-builder.Services.AddScoped<IProvidersRepository, ProvidersRepository>();
+builder.Services.AddScoped<ProvidersRepository>();
 builder.Services.AddScoped<ProvidersService>();
-builder.Services.AddScoped<IAdminRepository, AdminRepository>();
+builder.Services.AddScoped<AdminRepository>();
 builder.Services.AddScoped<AdminService>();
-builder.Services.AddScoped<IRecapRepository, RecapRepository>();
+builder.Services.AddScoped<RecapRepository>();
 builder.Services.AddScoped<RecapService>();
 builder.Services.AddSingleton<MetricsCollector>();
-builder.Services.AddScoped<IPollingRepository, PollingRepository>();
+builder.Services.AddScoped<PollingRepository>();
+builder.Services.AddScoped<TelegramRepository>();
+builder.Services.AddHttpClient<IProviderClient, SteamClient>("SteamClient")
+    .ConfigureHttpClient(c => c.Timeout = TimeSpan.FromSeconds(15));
+builder.Services.AddHttpClient<IProviderClient, PsnClient>("PsnClient")
+    .ConfigureHttpClient(c => c.Timeout = TimeSpan.FromSeconds(15));
+builder.Services.AddHttpClient<IgdbClient>(c =>
+{
+    c.Timeout = TimeSpan.FromSeconds(15);
+});
 builder.Services.AddHostedService<PollingBackgroundService>();
 builder.Services.AddHostedService<TelegramBackgroundService>();
 
@@ -96,13 +105,14 @@ if (args.Contains("migrate", StringComparer.OrdinalIgnoreCase))
 }
 
 app.UseMiddleware<CorrelationIdMiddleware>();
+app.UseMiddleware<ApiEnvelopeMiddleware>();
 app.UseExceptionHandler();
 app.UseCors();
 app.UseAuthentication();
 app.UseAuthorization();
 
 var api = app.MapGroup("/api");
-api.MapGet("", () => ApiResponse<string>.Ok("Ok"));
+api.MapGet("", () => TypedResults.Ok("Ok"));
 api.MapAuthEndpoints();
 api.MapAccountsEndpoints();
 api.MapSettingsEndpoints();
@@ -138,6 +148,6 @@ app.MapFallback("/api/{**path}", RouteNotFound);
 
 app.Run();
 
-static IResult RouteNotFound() => throw AppProblem.NotFound();
+static IResult RouteNotFound() => TypedResults.NotFound();
 
 public partial class Program;

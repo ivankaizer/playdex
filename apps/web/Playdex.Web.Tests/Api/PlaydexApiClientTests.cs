@@ -59,6 +59,30 @@ public sealed class PlaydexApiClientTests
     }
 
     [Fact]
+    public async Task SendAsync_UnwrapsBunCompatibleResponseEnvelope()
+    {
+        using var handler = new RecordingHandler((_, _) => Json(
+            HttpStatusCode.OK,
+            """
+            {
+              "data": {
+                "userId": 42,
+                "email": "player@example.com",
+                "isAdmin": true
+              },
+              "error": null
+            }
+            """));
+        var client = CreateClient(handler);
+
+        var response = await client.SendAsync<MeResponse>("/me");
+
+        Assert.Equal(42, response.UserId);
+        Assert.Equal("player@example.com", response.Email);
+        Assert.True(response.IsAdmin);
+    }
+
+    [Fact]
     public async Task Authenticated401_RefreshesWithoutBearerPersistsTokensAndRetriesFreshRequest()
     {
         var storage = new MemoryBrowserStorage(
@@ -259,7 +283,7 @@ public sealed class PlaydexApiClientTests
         await client.SendAsync<object?>(
             "/manual/entries",
             HttpMethod.Post,
-            new ManualEntryCreateRequest("2026-07-13", 45, null, 123, "Game", "pc", null),
+            new ManualEntryCreateRequest("2026-07-13", 45, null, "123", "Game", "pc", null),
             authenticated: false);
         await client.SendAsync<object?>(
             "/admin/credentials/7",
@@ -269,7 +293,7 @@ public sealed class PlaydexApiClientTests
 
         using var manual = JsonDocument.Parse(handler.Requests[0].Body!);
         Assert.Equal(45, manual.RootElement.GetProperty("durationMinutes").GetInt32());
-        Assert.Equal(123, manual.RootElement.GetProperty("igdbId").GetInt32());
+        Assert.Equal("123", manual.RootElement.GetProperty("igdbId").GetString());
         Assert.True(manual.RootElement.TryGetProperty("platformKey", out _));
         Assert.False(manual.RootElement.TryGetProperty("DurationMinutes", out _));
 
@@ -281,7 +305,7 @@ public sealed class PlaydexApiClientTests
     [Theory]
     [InlineData("{\"status\":400,\"detail\":\"Problem detail\",\"correlationId\":\"abc\"}", "Problem detail")]
     [InlineData("{\"detail\":\"JWT detail\",\"title\":\"Unauthorized\"}", "JWT detail")]
-    [InlineData("{\"error\":{\"error\":\"legacy envelope\"}}", "Request failed.")]
+    [InlineData("{\"data\":null,\"error\":{\"error\":\"legacy envelope\"}}", "legacy envelope")]
     [InlineData("{\"detail\":\"\"}", "Request failed.")]
     [InlineData("not-json", "Request failed.")]
     [InlineData("", "Request failed.")]
@@ -372,7 +396,7 @@ public sealed class PlaydexApiClientTests
     }
 
     [Fact]
-    public async Task ManualSearchModel_UsesStringIgdbIdWhileMappingRequestUsesNullableInt()
+    public async Task ManualSearchAndMappingModelsPreserveStringIgdbIds()
     {
         using var handler = new RecordingHandler((_, _) => Json(
             HttpStatusCode.OK,
@@ -380,10 +404,10 @@ public sealed class PlaydexApiClientTests
         var client = CreateClient(handler);
 
         var response = await client.SendAsync<ManualMappingSearchResponse>("/manual/search?query=portal");
-        var request = new ManualMapInputRequest(null, 123, null, null, null, null);
+        var request = new ManualMapInputRequest(null, "123", null, null, null, null);
 
         Assert.Equal("00123", response.Results[0].IgdbId);
-        Assert.Equal(123, request.IgdbId);
+        Assert.Equal("123", request.IgdbId);
     }
 
     private static PlaydexApiClient CreateClient(

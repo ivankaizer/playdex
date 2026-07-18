@@ -2,20 +2,24 @@ using Playdex.Api.Common;
 
 namespace Playdex.Api.Accounts;
 
-public sealed class AccountsService(IAccountsRepository repository)
+public sealed class AccountsService(AccountsRepository repository)
 {
     public Task<List<AccountSummaryDto>> ListAccounts(long userId, CancellationToken ct) =>
         repository.ListAccounts(userId, ct);
 
-    public Task<SessionQueryResult> ListSessions(
+    public async Task<SessionQueryResult> ListSessions(
         long userId, long? accountId, string? title, string? gameId,
         string? from, string? to, string sort, string direction,
         int limit, int offset, int ignoreShortMinutes, CancellationToken ct)
     {
-        var parsedGameId = gameId is not null ? GameId.Parse(gameId) : (long?)null;
-        var fromDate = ParseDate(from);
-        var toDate = ParseDate(to);
-        return repository.ListSessions(userId, accountId, title, parsedGameId, fromDate, toDate,
+        IReadOnlyCollection<long>? gameIds = null;
+        if (gameId is not null)
+        {
+            var parsedGameId = GameId.Parse(gameId);
+            gameIds = await repository.ResolveConnectedGameIds(userId, parsedGameId, ct);
+        }
+        var range = AccountDateRange.ParseOptional(from, to);
+        return await repository.ListSessions(userId, accountId, title, gameIds, range.From, range.ToExclusive,
             sort, direction, limit, offset, ignoreShortMinutes, ct);
     }
 
@@ -58,13 +62,9 @@ public sealed class AccountsService(IAccountsRepository repository)
         long userId, long? accountId, string? from, string? to,
         int ignoreShortMinutes, CancellationToken ct)
     {
-        var fromDate = ParseDate(from);
-        var toDate = ParseDate(to);
-        if (!fromDate.HasValue || !toDate.HasValue)
-        {
-            throw Http.AppProblem.Validation("from and to are required.");
-        }
-        return repository.ComputeStats(userId, accountId, fromDate.Value, toDate.Value, ignoreShortMinutes, ct);
+        var range = AccountDateRange.ParseRequired(from, to);
+        return repository.ComputeStats(
+            userId, accountId, range.From!.Value, range.ToExclusive!.Value, ignoreShortMinutes, ct);
     }
 
     public async Task<AccountStatsResponseDto> ComputeAccountStats(
@@ -74,7 +74,4 @@ public sealed class AccountsService(IAccountsRepository repository)
         var yearly = await ComputeYearlyStats(userId, accountId, ignoreShortMinutes, ct);
         return new AccountStatsResponseDto(accountId, monthly, yearly);
     }
-
-    private static DateTimeOffset? ParseDate(string? value) =>
-        DateTimeOffset.TryParse(value, null, out var date) ? date : (DateTimeOffset?)null;
 }

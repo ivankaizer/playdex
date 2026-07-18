@@ -134,6 +134,7 @@ internal static class DashboardRequestFlow
 internal sealed class DashboardState
 {
     public IReadOnlyList<AccountSession> TodaySessions { get; private set; } = [];
+    public IReadOnlyList<DashboardSessionCard> TodaySessionCards { get; private set; } = [];
     public IReadOnlyList<AccountPlatformStat> TodayPlatformTotals { get; private set; } = [];
     public AccountSession? CurrentSession { get; private set; }
     public AccountStatsPeriod? MonthlyStats { get; private set; }
@@ -159,9 +160,13 @@ internal sealed class DashboardState
         DashboardError = string.Empty;
     }
 
-    public void CompleteRefresh(DashboardSnapshot snapshot)
+    public void CompleteRefresh(DashboardSnapshot snapshot) =>
+        CompleteRefresh(snapshot, DateTimeOffset.Now);
+
+    public void CompleteRefresh(DashboardSnapshot snapshot, DateTimeOffset now)
     {
         TodaySessions = snapshot.TodaySessions;
+        TodaySessionCards = CreateTodaySessionCards(snapshot.TodaySessions, now);
         TodayPlatformTotals = snapshot.TodayPlatformTotals;
         CurrentSession = snapshot.CurrentSession;
         MonthlyStats = snapshot.MonthlyStats;
@@ -172,6 +177,7 @@ internal sealed class DashboardState
     public void FailRefresh(string error)
     {
         TodaySessions = [];
+        TodaySessionCards = [];
         TodayPlatformTotals = [];
         CurrentSession = null;
         MonthlyStats = null;
@@ -180,8 +186,10 @@ internal sealed class DashboardState
         DashboardError = error;
     }
 
-    public IReadOnlyList<DashboardSessionCard> GetTodaySessionCards(DateTimeOffset now) =>
-        TodaySessions.Select(session => new DashboardSessionCard(
+    private static IReadOnlyList<DashboardSessionCard> CreateTodaySessionCards(
+        IReadOnlyList<AccountSession> sessions,
+        DateTimeOffset now) =>
+        sessions.Select(session => new DashboardSessionCard(
             session.SessionId,
             session.GameId,
             $"/games/{GameHash.EncodeGameId(session.GameId)}",
@@ -337,8 +345,7 @@ public partial class Dashboard : ComponentBase, IDisposable
 
     private IReadOnlyList<string> PlatformPieColors =>
         _theme == "dark" ? DarkPieColors : LightPieColors;
-    private IReadOnlyList<DashboardSessionCard> TodaySessionCards =>
-        _state.GetTodaySessionCards(DateTimeOffset.Now);
+    private IReadOnlyList<DashboardSessionCard> TodaySessionCards => _state.TodaySessionCards;
     private IReadOnlyList<DashboardPlatformView> TodayPlatforms => _state.GetTodayPlatforms();
     private DashboardCurrentSessionView? CurrentSession => _state.GetCurrentSession(DateTimeOffset.Now);
     private DashboardStatsView Monthly => DashboardState.GetStatsView(_state.MonthlyStats);
@@ -405,12 +412,14 @@ public partial class Dashboard : ComponentBase, IDisposable
                 siblingCancellation);
             _lifetime.Token.ThrowIfCancellationRequested();
 
-            _state.CompleteRefresh(new DashboardSnapshot(
-                (await todaySessionsTask).Sessions,
-                (await todayStatsTask).Stats.Platforms,
-                (await currentSessionTask).Session,
-                (await monthlyStatsTask).Stats,
-                (await yearlyStatsTask).Stats));
+            _state.CompleteRefresh(
+                new DashboardSnapshot(
+                    (await todaySessionsTask).Sessions,
+                    (await todayStatsTask).Stats.Platforms,
+                    (await currentSessionTask).Session,
+                    (await monthlyStatsTask).Stats,
+                    (await yearlyStatsTask).Stats),
+                DateTimeOffset.Now);
         }
         catch (OperationCanceledException) when (_lifetime.IsCancellationRequested)
         {

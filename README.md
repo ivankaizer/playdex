@@ -1,10 +1,13 @@
 # Playdex
 
-Playtime tracker for PSN and Steam accounts, built with Bun + Elysia.
+Playtime tracker for PSN and Steam accounts, built with a .NET 10 API and
+Blazor WebAssembly UI. Bun remains available for the legacy differential
+reference API and Kysely database migrations during the backend cutover.
 
 ## Requirements
 
-- Bun
+- .NET 10 SDK
+- Bun 1.3+
 - Docker (for local Postgres)
 
 ## Local setup
@@ -23,35 +26,38 @@ POLL_INTERVAL_SECONDS=180
 TELEGRAM_BOT_TOKEN=your-telegram-bot-token
 ```
 
-3. Install dependencies:
+3. Install migration and CSS dependencies:
 
 ```bash
 cd apps/api
 bun install
+cd ../web
+bun install
+bun run css:build
 ```
 
-4. Start the server:
+4. Start the .NET API from the repository root:
 
 ```bash
-cd apps/api
-bun run dev
+DATABASE_URL=postgresql://playdex:playdex@localhost:5432/playdex \
+JWT_SECRET=replace-with-at-least-32-random-bytes \
+dotnet run --project apps/api-dotnet/Playdex.Api/Playdex.Api.csproj
 ```
 
-Open `http://localhost:3000/` in your browser.
-
-5. (Optional) Run the web app:
+5. Start the Blazor UI:
 
 ```bash
 cd apps/web
-bun install
-bun run dev
+dotnet watch --project Playdex.Web.csproj --urls http://127.0.0.1:5173
 ```
+
+Open `http://127.0.0.1:5173/`. For the containerized development stack, run
+`docker compose up --build db app ui` instead.
 
 ## Useful commands
 
 ```bash
 cd apps/api
-bun run dev
 bun run format
 bun run format:check
 bun run check
@@ -62,11 +68,25 @@ bun run telegram:notify-image --type started --title "Like a Dragon Gaiden: The 
   --chat-id 77434259
 ```
 
+```bash
+cd apps/web
+bun run css:build
+dotnet test Playdex.Web.Tests/Playdex.Web.Tests.csproj
+dotnet publish Playdex.Web.csproj -c Release
+```
+
 ## Database migrations
 
 Migrations use [Kysely](https://www.kysely.dev/) with TypeScript modules under
-`apps/api/migrations/`. The `bun run db:migrate` command and application startup
-both use the same migration runner.
+`apps/api/migrations/`. Run `bun run db:migrate` as the authoritative database
+deployment step before starting the .NET API. The legacy Bun reference API also
+uses that same migration runner on startup.
+
+The .NET API additionally runs its idempotent `001_current_schema` bootstrap on
+startup. It can create the current schema in a brand-new database or record a
+baseline for a database that already has the complete Kysely schema. Kysely
+remains the source of truth for ordered historical and future schema changes,
+so production deployments must still run `bun run db:migrate` first.
 
 - **Naming convention**: migrations follow the `NNN_slug.ts` pattern (e.g.
   `001_init.ts`, `002_poll_results.ts`).
@@ -85,8 +105,10 @@ under `apps/api/migrations/` — standalone `.sql` files are no longer accepted.
 
 ## Notes
 
-- The server binds to port 3000 by default.
-- Migrations run on startup.
-- Metrics are available at `http://localhost:3000/metrics`.
-- OpenAPI docs are available at `http://localhost:3000/swagger` (JSON at `/swagger/json`).
+- The .NET API binds to the configured ASP.NET Core URL (port 3000 in Compose).
+- The development Blazor UI binds to port 5173; its production nginx image
+  listens on port 5056.
+- Apply migrations before .NET API startup with `bun run db:migrate`.
+- Metrics are available at `http://localhost:3000/api/metrics`.
+- OpenAPI JSON is available at `http://localhost:3000/swagger/json`.
 - Set `TELEGRAM_BOT_TOKEN` and `users.chat_id` to enable Telegram notifications.

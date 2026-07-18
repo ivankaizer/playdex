@@ -1,7 +1,8 @@
-.DS_Store
-.env
+bin
+obj
+Playdex.Web.Tests/bin
+Playdex.Web.Tests/obj
 node_modules
 dist
-*.log
 .git
-.gitignore
+.DS_Store

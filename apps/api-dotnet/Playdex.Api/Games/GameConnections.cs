@@ -58,18 +58,19 @@ public static class GameConnections
             Union(g, c);
         }
 
-        var merged = new Dictionary<long, (double Total, long RepId)>();
+        var merged = new Dictionary<long, (double Total, long RepId, double RepTotal)>();
         foreach (var (gameId, total) in gameTotals)
         {
             var root = Find(gameId);
-            if (!merged.ContainsKey(root) || total > merged[root].Total)
+            if (!merged.TryGetValue(root, out var existing))
             {
-                merged[root] = (total, gameId);
+                merged[root] = (total, gameId, total);
             }
             else
             {
-                var existing = merged[root];
-                merged[root] = (existing.Total + total, existing.RepId);
+                merged[root] = total > existing.RepTotal
+                    ? (existing.Total + total, gameId, total)
+                    : (existing.Total + total, existing.RepId, existing.RepTotal);
             }
         }
 

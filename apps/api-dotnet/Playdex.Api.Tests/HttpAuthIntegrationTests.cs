@@ -21,13 +21,10 @@ public sealed class HttpAuthIntegrationTests
     private const string JwtSecret = "http-integration-secret-that-is-long-enough-for-hmac-sha256";
 
     [Fact]
-    public async Task RootAndProtectedEndpoint_PreserveResponseEnvelopes()
+    public async Task RootAndProtectedEndpoint_ReturnExpectedStatusCodes()
     {
         var databaseUrl = ConfigureIntegrationEnvironment();
-        if (databaseUrl is null)
-        {
-            return;
-        }
+        if (databaseUrl is null) return;
 
         await using var factory = new WebApplicationFactory<Program>();
         using var client = factory.CreateClient();
@@ -36,6 +33,7 @@ public sealed class HttpAuthIntegrationTests
         var me = await client.GetAsync("/api/me");
 
         Assert.Equal(HttpStatusCode.OK, root.StatusCode);
+        Assert.Equal("application/json", root.Content.Headers.ContentType?.ToString());
         Assert.Equal("{\"data\":\"Ok\",\"error\":null}", await root.Content.ReadAsStringAsync());
         Assert.Equal(HttpStatusCode.Unauthorized, me.StatusCode);
         Assert.Equal(
@@ -44,13 +42,30 @@ public sealed class HttpAuthIntegrationTests
     }
 
     [Fact]
+    public async Task CorsPreflight_RemainsAnEmpty204Response()
+    {
+        var databaseUrl = ConfigureIntegrationEnvironment();
+        if (databaseUrl is null) return;
+
+        Environment.SetEnvironmentVariable("CORS_ORIGINS", "http://127.0.0.1:5175");
+        await using var factory = new WebApplicationFactory<Program>();
+        using var client = factory.CreateClient();
+        using var request = new HttpRequestMessage(HttpMethod.Options, "/api/me");
+        request.Headers.Add("Origin", "http://127.0.0.1:5175");
+        request.Headers.Add("Access-Control-Request-Method", "GET");
+
+        var response = await client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        Assert.Null(response.Content.Headers.ContentType);
+        Assert.Equal("", await response.Content.ReadAsStringAsync());
+    }
+
+    [Fact]
     public async Task LoginAndMe_AuthenticateAnExistingBcryptUser()
     {
         var databaseUrl = ConfigureIntegrationEnvironment();
-        if (databaseUrl is null)
-        {
-            return;
-        }
+        if (databaseUrl is null) return;
 
         var email = $"dotnet-auth-{Guid.NewGuid():n}@example.com";
         var password = "correct horse battery staple";
@@ -62,18 +77,23 @@ public sealed class HttpAuthIntegrationTests
         {
             await using var factory = new WebApplicationFactory<Program>();
             using var client = factory.CreateClient();
+
             var login = await client.PostAsJsonAsync("/api/login", new { email, password });
             var loginJson = JsonDocument.Parse(await login.Content.ReadAsStringAsync());
-            var accessToken = loginJson.RootElement.GetProperty("data").GetProperty("accessToken").GetString();
-            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+            var loginData = loginJson.RootElement.GetProperty("data");
+            var accessToken = loginData.GetProperty("accessToken").GetString();
+
+            client.DefaultRequestHeaders.Authorization =
+                new AuthenticationHeaderValue("Bearer", accessToken);
 
             var me = await client.GetAsync("/api/me");
             var meJson = JsonDocument.Parse(await me.Content.ReadAsStringAsync());
 
             Assert.Equal(HttpStatusCode.OK, login.StatusCode);
             Assert.Equal(HttpStatusCode.OK, me.StatusCode);
-            Assert.Equal(userId, meJson.RootElement.GetProperty("data").GetProperty("userId").GetInt64());
-            Assert.Equal(email, meJson.RootElement.GetProperty("data").GetProperty("email").GetString());
+            var meData = meJson.RootElement.GetProperty("data");
+            Assert.Equal(userId, meData.GetProperty("userId").GetInt64());
+            Assert.Equal(email, meData.GetProperty("email").GetString());
         }
         finally
         {
@@ -87,10 +107,7 @@ public sealed class HttpAuthIntegrationTests
     private static string? ConfigureIntegrationEnvironment()
     {
         var databaseUrl = Environment.GetEnvironmentVariable("PLAYDEX_INTEGRATION_DATABASE_URL");
-        if (string.IsNullOrWhiteSpace(databaseUrl))
-        {
-            return null;
-        }
+        if (string.IsNullOrWhiteSpace(databaseUrl)) return null;
 
         Environment.SetEnvironmentVariable("DATABASE_URL", databaseUrl);
         Environment.SetEnvironmentVariable("JWT_SECRET", JwtSecret);

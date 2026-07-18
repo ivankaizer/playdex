@@ -17,20 +17,20 @@ services:
       retries: 10
 
   app:
-    build: ./apps/api
+    build:
+      context: ./apps/api-dotnet
+      dockerfile: Dockerfile
     restart: "no"
-    command: ["bun", "run", "dev"]
     env_file:
       - .env
     environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_URLS: http://0.0.0.0:3000
       DATABASE_URL: postgresql://playdex:playdex@db:5432/playdex
       CORS_ORIGINS: "http://ui.playdex.orb.local,https://ui.playdex.orb.local"
       POLL_INTERVAL_SECONDS: 180
       JWT_SECRET: dev-only-jwt-secret-do-not-use-in-production
       ACCESS_TOKEN_TTL: 30m
-    volumes:
-      - ./apps/api:/app
-      - /app/node_modules
     ports:
       - "3000:3000"
     depends_on:
@@ -39,16 +39,15 @@ services:
   ui:
     build:
       context: ./apps/web
-      args:
-        VITE_API_URL: https://app.playdex.orb.local/api
       dockerfile: Dockerfile.dev
     restart: "no"
     environment:
-      CHOKIDAR_USEPOLLING: "true"
-      DATABASE_URL: postgresql://playdex:playdex@db:5432/playdex
+      DOTNET_USE_POLLING_FILE_WATCHER: "true"
     volumes:
       - ./apps/web:/app
-      - /app/node_modules
+      - web_node_modules:/app/node_modules
+      - dotnet_nuget:/root/.nuget/packages
+      - web_bun_cache:/root/.bun/install/cache
     ports:
       - "5173:5173"
     depends_on:
@@ -56,3 +55,6 @@ services:
 
 volumes:
   db_data:
+  web_node_modules:
+  dotnet_nuget:
+  web_bun_cache:

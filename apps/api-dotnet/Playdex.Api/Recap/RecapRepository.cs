@@ -1,32 +1,14 @@
-using Dapper;
-using Npgsql;
+using Microsoft.EntityFrameworkCore;
+using Playdex.Api.Data;
 
 namespace Playdex.Api.Recap;
 
-public interface IRecapRepository
-{
-    Task<List<RecapSessionRow>> ListRecapSessions(
-        long userId, DateTimeOffset? from, DateTimeOffset? to, CancellationToken ct);
-
-    Task<List<int>> ListRecapYears(long userId, CancellationToken ct);
-
-    Task<List<RecapFirstSessionRow>> ListFirstSessionsByGame(
-        long userId, CancellationToken ct);
-
-    Task<List<ManualMappingRow>> LoadManualMappings(
-        long userId, string[] canonicalTitles, CancellationToken ct);
-
-    Task<List<(long GameId, long ConnectedGameId)>> ListConnectionEdges(
-        long userId, CancellationToken ct);
-}
-
-public sealed class RecapRepository(NpgsqlDataSource dataSource) : IRecapRepository
+public sealed class RecapRepository(PlaydexDbContext db)
 {
     public async Task<List<RecapSessionRow>> ListRecapSessions(
         long userId, DateTimeOffset? from, DateTimeOffset? to, CancellationToken ct)
     {
-        await using var conn = await dataSource.OpenConnectionAsync(ct);
-        var rows = await conn.QueryAsync<RecapSessionRow>("""
+        return await db.Database.SqlQuery<RecapSessionRow>($"""
             SELECT
                 ps.id AS Id,
                 ps.started_at AS StartedAt,
@@ -43,31 +25,28 @@ public sealed class RecapRepository(NpgsqlDataSource dataSource) : IRecapReposit
             JOIN games g ON g.id = ps.game_id
             JOIN platforms pc_platform ON pc_platform.id = pc.platform_id
             JOIN platforms game_platform ON game_platform.id = g.platform_id
-            WHERE pc.user_id = @UserId
+            WHERE pc.user_id = {userId}
               AND NOT (
                   COALESCE(us.ignore_short_sessions_minutes, 0) > 0
                   AND ps.ended_at IS NOT NULL
                   AND EXTRACT(EPOCH FROM (ps.ended_at - ps.started_at))
                       < COALESCE(us.ignore_short_sessions_minutes, 0) * 60
               )
-              AND (@From IS NULL OR ps.started_at >= @From)
-              AND (@To IS NULL OR ps.started_at < @To)
+              AND (CAST({from} AS timestamptz) IS NULL OR ps.started_at >= {from})
+              AND (CAST({to} AS timestamptz) IS NULL OR ps.started_at < {to})
             ORDER BY ps.started_at ASC
-            """, new { UserId = userId, From = from, To = to });
-
-        return rows.AsList();
+            """).ToListAsync(ct);
     }
 
     public async Task<List<int>> ListRecapYears(long userId, CancellationToken ct)
     {
-        await using var conn = await dataSource.OpenConnectionAsync(ct);
-        var rows = await conn.QueryAsync<int>("""
+        return await db.Database.SqlQuery<int>($"""
             SELECT DISTINCT
                 EXTRACT(YEAR FROM ps.started_at AT TIME ZONE 'utc')::int AS Year
             FROM play_sessions ps
             JOIN platform_credentials pc ON pc.id = ps.platform_credential_id
             LEFT JOIN user_settings us ON us.user_id = pc.user_id
-            WHERE pc.user_id = @UserId
+            WHERE pc.user_id = {userId}
               AND NOT (
                   COALESCE(us.ignore_short_sessions_minutes, 0) > 0
                   AND ps.ended_at IS NOT NULL
@@ -75,16 +54,13 @@ public sealed class RecapRepository(NpgsqlDataSource dataSource) : IRecapReposit
                       < COALESCE(us.ignore_short_sessions_minutes, 0) * 60
               )
             ORDER BY 1 DESC
-            """, new { UserId = userId });
-
-        return rows.AsList();
+            """).ToListAsync(ct);
     }
 
     public async Task<List<RecapFirstSessionRow>> ListFirstSessionsByGame(
         long userId, CancellationToken ct)
     {
-        await using var conn = await dataSource.OpenConnectionAsync(ct);
-        var rows = await conn.QueryAsync<RecapFirstSessionRow>("""
+        return await db.Database.SqlQuery<RecapFirstSessionRow>($"""
             SELECT
                 ps.game_id AS GameId,
                 MIN(ps.started_at) AS FirstStartedAt,
@@ -99,7 +75,7 @@ public sealed class RecapRepository(NpgsqlDataSource dataSource) : IRecapReposit
             JOIN games g ON g.id = ps.game_id
             JOIN platforms pc_platform ON pc_platform.id = pc.platform_id
             JOIN platforms game_platform ON game_platform.id = g.platform_id
-            WHERE pc.user_id = @UserId
+            WHERE pc.user_id = {userId}
               AND NOT (
                   COALESCE(us.ignore_short_sessions_minutes, 0) > 0
                   AND ps.ended_at IS NOT NULL
@@ -110,9 +86,7 @@ public sealed class RecapRepository(NpgsqlDataSource dataSource) : IRecapReposit
                 ps.game_id, g.title, g.capsule_url,
                 pc_platform.key, game_platform.key, g.canonical_key
             ORDER BY FirstStartedAt ASC
-            """, new { UserId = userId });
-
-        return rows.AsList();
+            """).ToListAsync(ct);
     }
 
     public async Task<List<ManualMappingRow>> LoadManualMappings(
@@ -121,8 +95,7 @@ public sealed class RecapRepository(NpgsqlDataSource dataSource) : IRecapReposit
         if (canonicalTitles.Length == 0)
             return [];
 
-        await using var conn = await dataSource.OpenConnectionAsync(ct);
-        var rows = await conn.QueryAsync<ManualMappingRow>("""
+        return await db.Database.SqlQuery<ManualMappingRow>($"""
             SELECT
                 mgi.canonical_title AS CanonicalTitle,
                 mgi.mapped_game_id AS MappedGameId,
@@ -133,26 +106,22 @@ public sealed class RecapRepository(NpgsqlDataSource dataSource) : IRecapReposit
             FROM manual_game_inputs mgi
             LEFT JOIN games g ON g.id = mgi.mapped_game_id
             LEFT JOIN platforms gp ON gp.id = g.platform_id
-            WHERE mgi.user_id = @UserId
-              AND mgi.canonical_title = ANY(@Titles)
-            """, new { UserId = userId, Titles = canonicalTitles });
-
-        return rows.AsList();
+            WHERE mgi.user_id = {userId}
+              AND mgi.canonical_title = ANY({canonicalTitles})
+            """).ToListAsync(ct);
     }
 
     public async Task<List<(long GameId, long ConnectedGameId)>> ListConnectionEdges(
         long userId, CancellationToken ct)
     {
-        await using var conn = await dataSource.OpenConnectionAsync(ct);
-        var rows = await conn.QueryAsync<(long, long)>(
-            "SELECT game_id, connected_game_id FROM game_connections WHERE user_id = @UserId",
-            new { UserId = userId });
+        var edges = await db.GameConnections
+            .Where(gc => gc.UserId == userId)
+            .Select(gc => new { gc.GameId, gc.ConnectedGameId })
+            .ToListAsync(ct);
 
-        return rows.AsList();
+        return edges.Select(e => (e.GameId, e.ConnectedGameId)).ToList();
     }
 }
-
-// ── Internal row types for Dapper mapping ──────────────────────
 
 public sealed class RecapSessionRow
 {
@@ -160,27 +129,27 @@ public sealed class RecapSessionRow
     public DateTimeOffset StartedAt { get; set; }
     public DateTimeOffset? EndedAt { get; set; }
     public long GameId { get; set; }
-    public required string Title { get; set; }
+    public string Title { get; set; } = string.Empty;
     public string? CapsuleUrl { get; set; }
-    public required string Platform { get; set; }
-    public required string GamePlatform { get; set; }
-    public required string GameCanonicalKey { get; set; }
+    public string Platform { get; set; } = string.Empty;
+    public string GamePlatform { get; set; } = string.Empty;
+    public string GameCanonicalKey { get; set; } = string.Empty;
 }
 
 public sealed class RecapFirstSessionRow
 {
     public long GameId { get; set; }
     public DateTimeOffset FirstStartedAt { get; set; }
-    public required string Title { get; set; }
+    public string Title { get; set; } = string.Empty;
     public string? CapsuleUrl { get; set; }
-    public required string Platform { get; set; }
-    public required string GamePlatform { get; set; }
-    public required string GameCanonicalKey { get; set; }
+    public string Platform { get; set; } = string.Empty;
+    public string GamePlatform { get; set; } = string.Empty;
+    public string GameCanonicalKey { get; set; } = string.Empty;
 }
 
 public sealed class ManualMappingRow
 {
-    public required string CanonicalTitle { get; set; }
+    public string CanonicalTitle { get; set; } = string.Empty;
     public long? MappedGameId { get; set; }
     public string? MappedTitle { get; set; }
     public string? MappedPlatform { get; set; }

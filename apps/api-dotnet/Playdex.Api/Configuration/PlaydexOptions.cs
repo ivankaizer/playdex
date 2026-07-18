@@ -7,7 +7,10 @@ public sealed record PlaydexOptions(
     string JwtSecret,
     int PollIntervalSeconds,
     string AccessTokenTtl,
-    IReadOnlyList<string> CorsOrigins)
+    IReadOnlyList<string> CorsOrigins,
+    string? SteamApiKey,
+    string? IgdbClientId,
+    string? IgdbClientSecret)
 {
     private const int DefaultPollIntervalSeconds = 60;
     private const int MinimumPollIntervalSeconds = 10;
@@ -32,7 +35,10 @@ public sealed record PlaydexOptions(
             jwtSecret,
             ResolvePollIntervalSeconds(configuration["POLL_INTERVAL_SECONDS"]),
             configuration["ACCESS_TOKEN_TTL"]?.Trim() ?? "15m",
-            ResolveCorsOrigins(configuration["CORS_ORIGINS"]));
+            ResolveCorsOrigins(configuration["CORS_ORIGINS"]),
+            configuration["STEAM_API_KEY"]?.Trim(),
+            configuration["IGDB_CLIENT_ID"]?.Trim(),
+            configuration["IGDB_CLIENT_SECRET"]?.Trim());
     }
 
     private static int ResolvePollIntervalSeconds(string? value)

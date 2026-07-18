@@ -1,29 +1,14 @@
-using Dapper;
+using Microsoft.EntityFrameworkCore;
 using Npgsql;
 using Playdex.Api.Data;
 
 namespace Playdex.Api.Admin;
 
-public interface IAdminRepository
-{
-    Task<List<AdminRecentSessionRow>> GetRecentSessions(CancellationToken ct);
-    Task<(List<AdminMovableSessionRow> Sessions, int Total)> SearchSessions(string query, int limit, int offset, CancellationToken ct);
-    Task<int> MoveSessions(long[] sessionIds, long targetCredentialId, CancellationToken ct);
-    Task<List<AdminPlatformStatusRow>> GetPlatformStatuses(CancellationToken ct);
-    Task<int> UpdatePlatformStatus(string platform, bool enabled, CancellationToken ct);
-    Task<List<AdminCredentialRow>> ListCredentials(CancellationToken ct);
-    Task<AdminCredentialRow?> UpdateCredential(long credentialId, string? apiKey, string? accountUser, CancellationToken ct);
-    Task<List<AdminGameSearchRow>> SearchGames(string query, int limit, CancellationToken ct);
-    Task<AdminGameUpdateRow?> UpdateGame(long gameId, string? title, string? imageUrl, bool? lockTitle, bool? lockImage, CancellationToken ct);
-    Task<AdminGameUpdateRow?> GetGameById(long gameId, CancellationToken ct);
-}
-
-public sealed class AdminRepository(NpgsqlDataSource dataSource) : IAdminRepository
+public sealed class AdminRepository(PlaydexDbContext db)
 {
     public async Task<List<AdminRecentSessionRow>> GetRecentSessions(CancellationToken ct)
     {
-        await using var conn = await dataSource.OpenConnectionAsync(ct);
-        var rows = await conn.QueryAsync<AdminRecentSessionRow>("""
+        return await db.Database.SqlQueryRaw<AdminRecentSessionRow>("""
             WITH ranked AS (
                 SELECT u.id AS UserId, u.email AS Email, ps.id AS SessionId,
                        g.title AS GameName, ps.started_at AS StartedAt,
@@ -32,7 +17,7 @@ public sealed class AdminRepository(NpgsqlDataSource dataSource) : IAdminReposit
                            ELSE EXTRACT(EPOCH FROM (NOW() AT TIME ZONE 'utc' - ps.started_at))
                        END AS DurationSeconds,
                        ps.ended_at IS NULL AS Live,
-                       ROW_NUMBER() OVER (PARTITION BY u.id ORDER BY ps.id DESC) AS rn
+                       ROW_NUMBER() OVER (PARTITION BY u.id ORDER BY ps.started_at DESC, ps.id DESC) AS rn
                 FROM play_sessions ps
                 JOIN platform_credentials pc ON pc.id = ps.platform_credential_id
                 JOIN users u ON u.id = pc.user_id
@@ -41,65 +26,74 @@ public sealed class AdminRepository(NpgsqlDataSource dataSource) : IAdminReposit
             SELECT UserId, Email, SessionId, GameName, StartedAt, DurationSeconds, Live
             FROM ranked
             WHERE rn <= 3
-            ORDER BY UserId, StartedAt DESC
-            """);
-
-        return rows.AsList();
+            ORDER BY Email, StartedAt DESC, SessionId DESC
+            """).ToListAsync(ct);
     }
 
     public async Task<(List<AdminMovableSessionRow> Sessions, int Total)> SearchSessions(
         string query, int limit, int offset, CancellationToken ct)
     {
-        await using var conn = await dataSource.OpenConnectionAsync(ct);
-
         var likeQuery = $"%{query}%";
+        var queryable =
+            from session in db.PlaySessions.AsNoTracking()
+            join credential in db.PlatformCredentials.AsNoTracking()
+                on session.PlatformCredentialId equals credential.Id
+            join user in db.Users.AsNoTracking() on credential.UserId equals user.Id
+            join platform in db.Platforms.AsNoTracking() on credential.PlatformId equals platform.Id
+            join game in db.Games.AsNoTracking() on session.GameId equals game.Id
+            where EF.Functions.ILike(user.Email, likeQuery)
+                || EF.Functions.ILike(game.Title, likeQuery)
+                || (credential.AccountId != null
+                    && EF.Functions.ILike(credential.AccountId!, likeQuery))
+                || EF.Functions.ILike(platform.Key, likeQuery)
+            select new
+            {
+                SessionId = session.Id,
+                SourceCredentialId = credential.Id,
+                UserEmail = user.Email,
+                Platform = platform.Key,
+                AccountUser = credential.AccountId,
+                GameName = game.Title,
+                session.StartedAt,
+                session.EndedAt,
+            };
 
-        var baseSql = """
-            FROM play_sessions ps
-            JOIN platform_credentials pc ON pc.id = ps.platform_credential_id
-            JOIN users u ON u.id = pc.user_id
-            JOIN platforms p ON p.id = pc.platform_id
-            JOIN games g ON g.id = ps.game_id
-            WHERE u.email ILIKE @Query OR g.title ILIKE @Query OR p.key ILIKE @Query
-            """;
-
-        var total = await conn.ExecuteScalarAsync<int>(
-            $"SELECT COUNT(*) {baseSql}", new { Query = likeQuery });
-
-        var sessions = await conn.QueryAsync<AdminMovableSessionRow>($"""
-            SELECT ps.id AS SessionId, pc.id AS SourceCredentialId,
-                   u.email AS UserEmail, p.key AS Platform,
-                   pc.account_id AS AccountUser, g.title AS GameName,
-                   ps.started_at AS StartedAt, ps.ended_at AS EndedAt,
-                   CASE WHEN ps.ended_at IS NOT NULL
-                       THEN EXTRACT(EPOCH FROM (ps.ended_at - ps.started_at))
-                       ELSE EXTRACT(EPOCH FROM (NOW() AT TIME ZONE 'utc' - ps.started_at))
-                   END AS DurationSeconds,
-                   ps.ended_at IS NULL AS Live
-            {baseSql}
-            ORDER BY ps.id DESC
-            OFFSET @Offset LIMIT @Limit
-            """, new { Query = likeQuery, Offset = offset, Limit = limit });
-
-        return (sessions.AsList(), total);
+        var total = await queryable.CountAsync(ct);
+        var rows = await queryable
+            .OrderByDescending(row => row.StartedAt)
+            .ThenByDescending(row => row.SessionId)
+            .Skip(offset)
+            .Take(limit)
+            .ToListAsync(ct);
+        var now = DateTimeOffset.UtcNow;
+        var sessions = rows.Select(row => new AdminMovableSessionRow(
+            row.SessionId,
+            row.SourceCredentialId,
+            row.UserEmail,
+            row.Platform,
+            row.AccountUser,
+            row.GameName,
+            row.StartedAt,
+            row.EndedAt,
+            ((row.EndedAt ?? now) - row.StartedAt).TotalSeconds,
+            row.EndedAt is null)).ToList();
+        return (sessions, total);
     }
 
     public async Task<int> MoveSessions(long[] sessionIds, long targetCredentialId, CancellationToken ct)
     {
-        await using var conn = await dataSource.OpenConnectionAsync(ct);
-        var affected = await conn.ExecuteAsync("""
+        return await db.Database.ExecuteSqlRawAsync("""
             UPDATE play_sessions
             SET platform_credential_id = @TargetId, updated_at = NOW()
             WHERE id = ANY(@Ids) AND platform_credential_id != @TargetId
-            """, new { Ids = sessionIds, TargetId = targetCredentialId });
-
-        return affected;
+            """,
+            new NpgsqlParameter("TargetId", targetCredentialId),
+            new NpgsqlParameter("Ids", sessionIds));
     }
 
     public async Task<List<AdminPlatformStatusRow>> GetPlatformStatuses(CancellationToken ct)
     {
-        await using var conn = await dataSource.OpenConnectionAsync(ct);
-        var rows = await conn.QueryAsync<AdminPlatformStatusRow>("""
+        return await db.Database.SqlQueryRaw<AdminPlatformStatusRow>("""
             SELECT p.key AS Platform,
                    COUNT(*) AS TotalCredentials,
                    COUNT(*) FILTER (WHERE pc.active) AS ActiveCredentials
@@ -107,136 +101,193 @@ public sealed class AdminRepository(NpgsqlDataSource dataSource) : IAdminReposit
             JOIN platforms p ON p.id = pc.platform_id
             GROUP BY p.key
             ORDER BY p.key
-            """);
-
-        return rows.AsList();
+            """).ToListAsync(ct);
     }
 
     public async Task<int> UpdatePlatformStatus(string platform, bool enabled, CancellationToken ct)
     {
-        await using var conn = await dataSource.OpenConnectionAsync(ct);
-        var affected = await conn.ExecuteAsync("""
+        return await db.Database.ExecuteSqlInterpolatedAsync($"""
             UPDATE platform_credentials
-            SET active = @Enabled, updated_at = NOW()
-            WHERE platform_id = (SELECT id FROM platforms WHERE key = @Platform)
-            """, new { Platform = platform, Enabled = enabled });
-
-        return affected;
+            SET active = {enabled}, updated_at = NOW()
+            WHERE platform_id = (SELECT id FROM platforms WHERE key = {platform})
+            """, ct);
     }
+
+    public Task<bool> PlatformExists(string platform, CancellationToken ct) =>
+        db.Platforms.AsNoTracking().AnyAsync(item => item.Key == platform, ct);
 
     public async Task<List<AdminCredentialRow>> ListCredentials(CancellationToken ct)
     {
-        await using var conn = await dataSource.OpenConnectionAsync(ct);
-        var rows = await conn.QueryAsync<AdminCredentialRow>("""
-            SELECT pc.id AS Id, u.email AS UserEmail, p.key AS Platform,
-                   pc.api_key AS ApiKey, pc.account_id AS AccountUser, pc.active AS Active
-            FROM platform_credentials pc
-            JOIN users u ON u.id = pc.user_id
-            JOIN platforms p ON p.id = pc.platform_id
-            ORDER BY u.email, p.key
-            """);
-
-        return rows.AsList();
+        var rows = await db.PlatformCredentials
+            .AsNoTracking()
+            .Join(
+                db.Users.AsNoTracking(),
+                credential => credential.UserId,
+                user => user.Id,
+                (credential, user) => new { credential, user })
+            .Join(
+                db.Platforms.AsNoTracking(),
+                value => value.credential.PlatformId,
+                platform => platform.Id,
+                (value, platform) => new
+                {
+                    value.credential.Id,
+                    UserEmail = value.user.Email,
+                    Platform = platform.Key,
+                    value.credential.ApiKey,
+                    AccountUser = value.credential.AccountId,
+                    value.credential.Active,
+                })
+            .OrderBy(row => row.UserEmail)
+            .ThenBy(row => row.Platform)
+            .ThenBy(row => row.Id)
+            .ToListAsync(ct);
+        return rows.Select(row => new AdminCredentialRow(
+            row.Id,
+            row.UserEmail,
+            row.Platform,
+            row.ApiKey,
+            row.AccountUser,
+            row.Active)).ToList();
     }
 
+    public async Task<AdminCredentialRow?> GetCredential(long credentialId, CancellationToken ct) =>
+        await LoadCredentialRow(credentialId, ct);
+
     public async Task<AdminCredentialRow?> UpdateCredential(
-        long credentialId, string? apiKey, string? accountUser, CancellationToken ct)
+        long credentialId,
+        bool apiKeyChanged,
+        string? apiKey,
+        bool accountUserChanged,
+        string? accountUser,
+        CancellationToken ct)
     {
-        await using var conn = await dataSource.OpenConnectionAsync(ct);
-        var row = await conn.QueryFirstOrDefaultAsync<AdminCredentialRow>("""
-            UPDATE platform_credentials
-            SET api_key = COALESCE(@ApiKey, api_key),
-                account_id = COALESCE(@AccountUser, account_id),
-                updated_at = NOW()
-            WHERE id = @Id
-            RETURNING id
-            """, new { Id = credentialId, ApiKey = apiKey, AccountUser = accountUser });
+        var credential = await db.PlatformCredentials.FirstOrDefaultAsync(item => item.Id == credentialId, ct);
+        if (credential is null) return null;
+        if (apiKeyChanged) credential.ApiKey = apiKey;
+        if (accountUserChanged) credential.AccountId = accountUser;
+        credential.UpdatedAt = DateTimeOffset.UtcNow;
+        await db.SaveChangesAsync(ct);
+        return await LoadCredentialRow(credentialId, ct);
+    }
 
-        if (row is null) return null;
-
-        // Fetch the full credential row with joined data after update
-        return await conn.QueryFirstOrDefaultAsync<AdminCredentialRow>("""
-            SELECT pc.id AS Id, u.email AS UserEmail, p.key AS Platform,
-                   pc.api_key AS ApiKey, pc.account_id AS AccountUser, pc.active AS Active
-            FROM platform_credentials pc
-            JOIN users u ON u.id = pc.user_id
-            JOIN platforms p ON p.id = pc.platform_id
-            WHERE pc.id = @Id
-            """, new { Id = credentialId });
+    private async Task<AdminCredentialRow?> LoadCredentialRow(long credentialId, CancellationToken ct)
+    {
+        var row = await db.PlatformCredentials
+            .AsNoTracking()
+            .Where(credential => credential.Id == credentialId)
+            .Join(
+                db.Users.AsNoTracking(),
+                credential => credential.UserId,
+                user => user.Id,
+                (credential, user) => new { credential, user })
+            .Join(
+                db.Platforms.AsNoTracking(),
+                value => value.credential.PlatformId,
+                platform => platform.Id,
+                (value, platform) => new
+                {
+                    value.credential.Id,
+                    UserEmail = value.user.Email,
+                    Platform = platform.Key,
+                    value.credential.ApiKey,
+                    AccountUser = value.credential.AccountId,
+                    value.credential.Active,
+                })
+            .FirstOrDefaultAsync(ct);
+        return row is null
+            ? null
+            : new AdminCredentialRow(
+                row.Id,
+                row.UserEmail,
+                row.Platform,
+                row.ApiKey,
+                row.AccountUser,
+                row.Active);
     }
 
     public async Task<List<AdminGameSearchRow>> SearchGames(string query, int limit, CancellationToken ct)
     {
-        await using var conn = await dataSource.OpenConnectionAsync(ct);
-
-        // Try exact game ID match first (encoded or raw)
+        var pattern = $"%{query}%";
         var (exactId, _) = TryParseGameId(query);
 
-        var sql = """
+        if (exactId.HasValue)
+        {
+            return await db.Database.SqlQueryRaw<AdminGameSearchRow>("""
+                SELECT g.id, g.title, g.title_locked, p.key AS Platform,
+                       g.capsule_url AS ImageUrl, g.capsule_url_locked AS ImageLocked
+                FROM games g
+                JOIN platforms p ON p.id = g.platform_id
+                WHERE g.title ILIKE @Query OR g.capsule_url ILIKE @Query OR g.id = @ExactId
+                ORDER BY g.updated_at DESC
+                LIMIT @Limit
+                """,
+                new NpgsqlParameter("Query", pattern),
+                new NpgsqlParameter("ExactId", exactId.Value),
+                new NpgsqlParameter("Limit", limit))
+                .ToListAsync(ct);
+        }
+
+        return await db.Database.SqlQueryRaw<AdminGameSearchRow>("""
             SELECT g.id, g.title, g.title_locked, p.key AS Platform,
                    g.capsule_url AS ImageUrl, g.capsule_url_locked AS ImageLocked
             FROM games g
             JOIN platforms p ON p.id = g.platform_id
             WHERE g.title ILIKE @Query OR g.capsule_url ILIKE @Query
-            """;
-
-        if (exactId.HasValue)
-        {
-            sql += " OR g.id = @ExactId";
-        }
-
-        sql += "\nORDER BY g.title\nLIMIT @Limit";
-
-        var rows = await conn.QueryAsync<AdminGameSearchRow>(sql,
-            new { Query = $"%{query}%", ExactId = exactId, Limit = limit });
-
-        return rows.AsList();
+            ORDER BY g.updated_at DESC
+            LIMIT @Limit
+            """,
+            new NpgsqlParameter("Query", pattern),
+            new NpgsqlParameter("Limit", limit))
+            .ToListAsync(ct);
     }
 
     public async Task<AdminGameUpdateRow?> UpdateGame(
-        long gameId, string? title, string? imageUrl,
-        bool? lockTitle, bool? lockImage, CancellationToken ct)
+        long gameId,
+        bool titleChanged,
+        string title,
+        bool imageUrlChanged,
+        string? imageUrl,
+        bool lockTitleChanged,
+        bool lockTitle,
+        bool lockImageChanged,
+        bool lockImage,
+        CancellationToken ct)
     {
-        await using var conn = await dataSource.OpenConnectionAsync(ct);
-        var row = await conn.QueryFirstOrDefaultAsync<AdminGameUpdateRow>("""
-            UPDATE games
-            SET title = COALESCE(@Title, title),
-                capsule_url = COALESCE(@ImageUrl, capsule_url),
-                title_locked = COALESCE(@LockTitle, title_locked),
-                capsule_url_locked = COALESCE(@LockImage, capsule_url_locked),
-                updated_at = NOW()
-            WHERE id = @Id
-            RETURNING id, title, title_locked, capsule_url, capsule_url_locked, platform_id
-            """, new
-            {
-                Id = gameId,
-                Title = title,
-                ImageUrl = imageUrl,
-                LockTitle = lockTitle,
-                LockImage = lockImage,
-            });
-
-        if (row is null) return null;
-
-        // Load platform key and set it on the returned row
-        var platformKey = await conn.ExecuteScalarAsync<string>(
-            "SELECT key FROM platforms WHERE id = @Id", new { Id = row.PlatformId });
-
-        return row with { PlatformKey = platformKey };
+        var game = await db.Games.FirstOrDefaultAsync(item => item.Id == gameId, ct);
+        if (game is null) return null;
+        if (titleChanged) game.Title = title;
+        if (lockTitleChanged) game.TitleLocked = lockTitle;
+        else if (titleChanged) game.TitleLocked = true;
+        if (imageUrlChanged) game.CapsuleUrl = imageUrl;
+        if (lockImageChanged) game.CapsuleUrlLocked = lockImage;
+        else if (imageUrlChanged) game.CapsuleUrlLocked = true;
+        game.UpdatedAt = DateTimeOffset.UtcNow;
+        await db.SaveChangesAsync(ct);
+        return await GetGameById(gameId, ct);
     }
 
     public async Task<AdminGameUpdateRow?> GetGameById(long gameId, CancellationToken ct)
     {
-        await using var conn = await dataSource.OpenConnectionAsync(ct);
-        var row = await conn.QueryFirstOrDefaultAsync<AdminGameUpdateRow>("""
-            SELECT g.id, g.title, g.title_locked, g.capsule_url, g.capsule_url_locked, g.platform_id,
-                   p.key AS PlatformKey
-            FROM games g
-            JOIN platforms p ON p.id = g.platform_id
-            WHERE g.id = @Id
-            """, new { Id = gameId });
-
-        return row;
+        var row = await db.Games
+            .AsNoTracking()
+            .Where(game => game.Id == gameId)
+            .Join(
+                db.Platforms.AsNoTracking(),
+                game => game.PlatformId,
+                platform => platform.Id,
+                (game, platform) => new { game, PlatformKey = platform.Key })
+            .FirstOrDefaultAsync(ct);
+        return row is null
+            ? null
+            : new AdminGameUpdateRow(
+                row.game.Id,
+                row.game.Title,
+                row.game.TitleLocked,
+                row.game.CapsuleUrl,
+                row.game.CapsuleUrlLocked,
+                row.game.PlatformId,
+                row.PlatformKey);
     }
 
     private static (long? Id, bool IsEncoded) TryParseGameId(string value)

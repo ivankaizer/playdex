@@ -12,7 +12,7 @@ public sealed record LoginResult(
 
 public sealed record RefreshResult(string AccessToken, string RefreshToken);
 
-public sealed class AuthService(IAuthRepository repository, AuthTokenService tokens)
+public sealed class AuthService(AuthRepository repository, AuthTokenService tokens)
 {
     public async Task<LoginResult> Login(
         string email,

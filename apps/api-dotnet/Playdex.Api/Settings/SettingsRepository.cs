@@ -3,13 +3,7 @@ using Playdex.Api.Data;
 
 namespace Playdex.Api.Settings;
 
-public interface ISettingsRepository
-{
-    Task<UserSettingsResponseDto> LoadUserSettings(long userId, CancellationToken ct);
-    Task<UserSettingsResponseDto> UpsertSettings(long userId, int ignoreShortMinutes, CancellationToken ct);
-}
-
-public sealed class SettingsRepository(PlaydexDbContext db) : ISettingsRepository
+public sealed class SettingsRepository(PlaydexDbContext db)
 {
     public async Task<UserSettingsResponseDto> LoadUserSettings(long userId, CancellationToken ct)
     {

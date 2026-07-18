@@ -1,0 +1,35 @@
+{
+  "mcpServers": {
+    "gsd-workflow": {
+      "command": "/opt/homebrew/Cellar/node/24.1.0/bin/node",
+      "args": [
+        "/opt/homebrew/lib/node_modules/@opengsd/gsd-pi/packages/mcp-server/dist/cli.js"
+      ],
+      "cwd": "/Users/ivankayzer/www/playdex",
+      "env": {
+        "GSD_CLI_PATH": "/opt/homebrew/bin/gsd",
+        "GSD_BIN_PATH": "/opt/homebrew/bin/gsd",
+        "GSD_WORKFLOW_EXECUTORS_MODULE": "/Users/ivankayzer/.gsd/agent/extensions/gsd/tools/workflow-tool-executors.js",
+        "GSD_WORKFLOW_WRITE_GATE_MODULE": "/Users/ivankayzer/.gsd/agent/extensions/gsd/bootstrap/write-gate.js",
+        "GSD_PERSIST_WRITE_GATE_STATE": "1",
+        "GSD_WORKFLOW_PROJECT_ROOT": "/Users/ivankayzer/www/playdex"
+      }
+    },
+    "gsd-browser": {
+      "command": "/opt/homebrew/Cellar/node/24.1.0/bin/node",
+      "args": [
+        "/opt/homebrew/lib/node_modules/@opengsd/gsd-pi/node_modules/@opengsd/gsd-browser/bin/gsd-browser",
+        "mcp",
+        "--session",
+        "gsd-playdex-08468a02",
+        "--identity-scope",
+        "project",
+        "--identity-key",
+        "gsd-playdex-08468a02",
+        "--identity-project",
+        "gsd-playdex-08468a02"
+      ],
+      "cwd": "/Users/ivankayzer/www/playdex"
+    }
+  }
+}

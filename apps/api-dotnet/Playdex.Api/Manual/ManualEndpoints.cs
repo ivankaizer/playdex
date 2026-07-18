@@ -1,6 +1,5 @@
-using System.Globalization;
 using System.Security.Claims;
-using Playdex.Api.Http;
+using Playdex.Api.Auth;
 
 namespace Playdex.Api.Manual;
 
@@ -11,93 +10,63 @@ public static class ManualEndpoints
         var manual = api.MapGroup("/manual").RequireAuthorization();
 
         manual.MapGet("/inputs", ListInputs);
-        manual.MapPost("/sessions/start", StartSession);
+
+        manual.MapPost("/sessions/start", async (HttpContext http) =>
+        {
+            var request = await http.Request.ReadFromJsonAsync<ManualSessionStartRequest>();
+            var service = http.RequestServices.GetRequiredService<ManualService>();
+            IResult result = request is null
+                ? TypedResults.Problem("Request body is required.", statusCode: 400)
+                : TypedResults.Ok(await service.StartSession(http.User.GetUserId(), request, http.RequestAborted));
+            await result.ExecuteAsync(http);
+        });
+
         manual.MapPost("/sessions/stop", StopSession);
         manual.MapGet("/search", SearchMapping);
-        manual.MapPost("/entries", CreateEntry);
-        manual.MapPost("/inputs/{inputId:long}/map", MapInput);
+
+        manual.MapPost("/entries", async (HttpContext http) =>
+        {
+            var request = await http.Request.ReadFromJsonAsync<ManualEntryCreateRequest>();
+            var service = http.RequestServices.GetRequiredService<ManualService>();
+            IResult result = request is null
+                ? TypedResults.Problem("Request body is required.", statusCode: 400)
+                : TypedResults.Ok(await service.CreateEntry(http.User.GetUserId(), request, http.RequestAborted));
+            await result.ExecuteAsync(http);
+        });
+
+        manual.MapPost("/inputs/{inputId:long}/map", async (long inputId, HttpContext http) =>
+        {
+            var request = await http.Request.ReadFromJsonAsync<ManualMapInputRequest>();
+            var service = http.RequestServices.GetRequiredService<ManualService>();
+            IResult result = request is null
+                ? TypedResults.Problem("Request body is required.", statusCode: 400)
+                : TypedResults.Ok(await service.MapInput(inputId, http.User.GetUserId(), request, http.RequestAborted));
+            await result.ExecuteAsync(http);
+        });
     }
 
-    private static async Task<ApiResponse<ManualInputsResponseDto>> ListInputs(
+    private static async Task<IResult> ListInputs(
         ClaimsPrincipal principal,
         ManualService service,
         CancellationToken ct)
     {
-        var userId = GetUserId(principal);
-        return ApiResponse<ManualInputsResponseDto>.Ok(
-            await service.ListInputs(userId, ct));
+        return TypedResults.Ok(await service.ListInputs(principal.GetUserId(), ct));
     }
 
-    private static async Task<ApiResponse<ManualSessionStartResponseDto>> StartSession(
-        ManualSessionStartRequest? request,
+    private static async Task<IResult> StopSession(
         ClaimsPrincipal principal,
         ManualService service,
         CancellationToken ct)
     {
-        if (request is null)
-            throw AppProblem.Validation("Request body is required.");
-
-        var userId = GetUserId(principal);
-        return ApiResponse<ManualSessionStartResponseDto>.Ok(
-            await service.StartSession(userId, request, ct));
+        return TypedResults.Ok(await service.StopSession(principal.GetUserId(), ct));
     }
 
-    private static async Task<ApiResponse<ManualSessionStopResponseDto>> StopSession(
-        ClaimsPrincipal principal,
-        ManualService service,
-        CancellationToken ct)
-    {
-        var userId = GetUserId(principal);
-        return ApiResponse<ManualSessionStopResponseDto>.Ok(
-            await service.StopSession(userId, ct));
-    }
-
-    private static async Task<ApiResponse<ManualMappingSearchResponseDto>> SearchMapping(
+    private static async Task<IResult> SearchMapping(
         ClaimsPrincipal principal,
         ManualService service,
         string? query,
         CancellationToken ct)
     {
-        return ApiResponse<ManualMappingSearchResponseDto>.Ok(
-            await service.SearchMapping(query ?? "", ct));
-    }
-
-    private static async Task<ApiResponse<ManualEntryCreateResponseDto>> CreateEntry(
-        ManualEntryCreateRequest? request,
-        ClaimsPrincipal principal,
-        ManualService service,
-        CancellationToken ct)
-    {
-        if (request is null)
-            throw AppProblem.Validation("Request body is required.");
-
-        var userId = GetUserId(principal);
-        return ApiResponse<ManualEntryCreateResponseDto>.Ok(
-            await service.CreateEntry(userId, request, ct));
-    }
-
-    private static async Task<ApiResponse<ManualMappingResponseDto>> MapInput(
-        long inputId,
-        ManualMapInputRequest? request,
-        ClaimsPrincipal principal,
-        ManualService service,
-        CancellationToken ct)
-    {
-        if (request is null)
-            throw AppProblem.Validation("Request body is required.");
-
-        var userId = GetUserId(principal);
-        return ApiResponse<ManualMappingResponseDto>.Ok(
-            await service.MapInput(inputId, userId, request, ct));
-    }
-
-    private static long GetUserId(ClaimsPrincipal principal)
-    {
-        var subject = principal.FindFirstValue("sub");
-        if (!long.TryParse(subject, NumberStyles.None, CultureInfo.InvariantCulture, out var userId))
-        {
-            throw AppProblem.Unauthorized("Invalid token.");
-        }
-        return userId;
+        return TypedResults.Ok(await service.SearchMapping(query ?? "", ct));
     }
 }

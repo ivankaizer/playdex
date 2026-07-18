@@ -1,6 +1,5 @@
-using System.Globalization;
 using System.Security.Claims;
-using Playdex.Api.Http;
+using Playdex.Api.Auth;
 
 namespace Playdex.Api.Games;
 
@@ -12,140 +11,108 @@ public static class GamesEndpoints
         games.MapGet("/search", Search);
         games.MapGet("/{gameId}", GetGame);
         games.MapGet("/connections", ListConnections);
-        games.MapPost("/connections", Connect);
-        games.MapDelete("/connections", Disconnect);
+
+        games.MapPost("/connections", async (HttpContext http) =>
+        {
+            var request = await http.Request.ReadFromJsonAsync<GameConnectionChangeRequest>();
+            var service = http.RequestServices.GetRequiredService<GamesService>();
+            IResult result = request is null
+                ? TypedResults.Problem("Request body is required.", statusCode: 400)
+                : TypedResults.Ok(await service.Connect(http.User.GetUserId(), request, http.RequestAborted));
+            await result.ExecuteAsync(http);
+        });
+        games.MapDelete("/connections", async (HttpContext http) =>
+        {
+            var request = await http.Request.ReadFromJsonAsync<GameConnectionChangeRequest>();
+            var service = http.RequestServices.GetRequiredService<GamesService>();
+            IResult result = request is null
+                ? TypedResults.Problem("Request body is required.", statusCode: 400)
+                : TypedResults.Ok(await service.Disconnect(http.User.GetUserId(), request, http.RequestAborted));
+            await result.ExecuteAsync(http);
+        });
+
         games.MapGet("/ignored", GetIgnored);
-        games.MapPost("/ignored", SetIgnored);
-        games.MapDelete("/ignored", Unignore);
+        games.MapPost("/ignored", async (HttpContext http) =>
+        {
+            var request = await http.Request.ReadFromJsonAsync<GameIgnoreRequest>();
+            var service = http.RequestServices.GetRequiredService<GamesService>();
+            IResult result = request is null
+                ? TypedResults.Problem("Request body is required.", statusCode: 400)
+                : TypedResults.Ok(await service.SetIgnore(http.User.GetUserId(), request, true, http.RequestAborted));
+            await result.ExecuteAsync(http);
+        });
+        games.MapDelete("/ignored", async (HttpContext http) =>
+        {
+            var request = await http.Request.ReadFromJsonAsync<GameIgnoreRequest>();
+            var service = http.RequestServices.GetRequiredService<GamesService>();
+            IResult result = request is null
+                ? TypedResults.Problem("Request body is required.", statusCode: 400)
+                : TypedResults.Ok(await service.SetIgnore(http.User.GetUserId(), request, false, http.RequestAborted));
+            await result.ExecuteAsync(http);
+        });
+
         games.MapGet("/rating", GetRating);
-        games.MapPost("/rating", UpsertRating);
-        games.MapDelete("/rating", RemoveRating);
+        games.MapPost("/rating", async (HttpContext http) =>
+        {
+            var request = await http.Request.ReadFromJsonAsync<GameRatingRequest>();
+            var service = http.RequestServices.GetRequiredService<GamesService>();
+            IResult result = request is null
+                ? TypedResults.Problem("Request body is required.", statusCode: 400)
+                : TypedResults.Ok(await service.SetRating(http.User.GetUserId(), request, http.RequestAborted));
+            await result.ExecuteAsync(http);
+        });
+        games.MapDelete("/rating", async (HttpContext http) =>
+        {
+            var request = await http.Request.ReadFromJsonAsync<GameRatingRequest>();
+            var service = http.RequestServices.GetRequiredService<GamesService>();
+            IResult result = request is null
+                ? TypedResults.Problem("Request body is required.", statusCode: 400)
+                : TypedResults.Ok(await service.DeleteRating(http.User.GetUserId(), request, http.RequestAborted));
+            await result.ExecuteAsync(http);
+        });
     }
 
-    private static async Task<ApiResponse<GameSearchResponseDto>> Search(
+    private static async Task<IResult> Search(
         ClaimsPrincipal principal,
         GamesService service,
         string? query, int? limit,
         CancellationToken ct)
     {
-        return ApiResponse<GameSearchResponseDto>.Ok(
-            await service.Search(query ?? "", limit ?? 20, ct));
+        return TypedResults.Ok(await service.Search(query ?? "", limit ?? 20, ct));
     }
 
-    private static async Task<ApiResponse<GameResponseDto>> GetGame(
+    private static async Task<IResult> GetGame(
         string gameId,
         ClaimsPrincipal principal,
         GamesService service,
         CancellationToken ct)
     {
-        return ApiResponse<GameResponseDto>.Ok(await service.GetGame(gameId, ct));
+        return TypedResults.Ok(await service.GetGame(gameId, ct));
     }
 
-    private static async Task<ApiResponse<GameConnectionListResponseDto>> ListConnections(
+    private static async Task<IResult> ListConnections(
         ClaimsPrincipal principal,
         GamesService service,
         CancellationToken ct)
     {
-        var userId = GetUserId(principal);
-        return ApiResponse<GameConnectionListResponseDto>.Ok(
-            await service.ListConnections(userId, ct));
+        return TypedResults.Ok(await service.ListConnections(principal.GetUserId(), ct));
     }
 
-    private static async Task<ApiResponse<GameConnectionChangeResponseDto>> Connect(
-        GameConnectionChangeRequest? request,
-        ClaimsPrincipal principal,
-        GamesService service,
-        CancellationToken ct)
-    {
-        if (request is null) throw AppProblem.Validation("Request body is required.");
-        var userId = GetUserId(principal);
-        return ApiResponse<GameConnectionChangeResponseDto>.Ok(
-            await service.Connect(userId, request, ct));
-    }
-
-    private static async Task<ApiResponse<GameConnectionChangeResponseDto>> Disconnect(
-        GameConnectionChangeRequest? request,
-        ClaimsPrincipal principal,
-        GamesService service,
-        CancellationToken ct)
-    {
-        if (request is null) throw AppProblem.Validation("Request body is required.");
-        var userId = GetUserId(principal);
-        return ApiResponse<GameConnectionChangeResponseDto>.Ok(
-            await service.Disconnect(userId, request, ct));
-    }
-
-    private static async Task<ApiResponse<GameIgnoreResponseDto>> GetIgnored(
+    private static async Task<IResult> GetIgnored(
         ClaimsPrincipal principal,
         GamesService service,
         string? gameId,
         CancellationToken ct)
     {
-        return ApiResponse<GameIgnoreResponseDto>.Ok(
-            await service.GetIgnore(GetUserId(principal), gameId, ct));
+        return TypedResults.Ok(await service.GetIgnore(principal.GetUserId(), gameId, ct));
     }
 
-    private static async Task<ApiResponse<GameIgnoreResponseDto>> SetIgnored(
-        GameIgnoreRequest? request,
-        ClaimsPrincipal principal,
-        GamesService service,
-        CancellationToken ct)
-    {
-        if (request is null) throw AppProblem.Validation("Request body is required.");
-        return ApiResponse<GameIgnoreResponseDto>.Ok(
-            await service.SetIgnore(GetUserId(principal), request, true, ct));
-    }
-
-    private static async Task<ApiResponse<GameIgnoreResponseDto>> Unignore(
-        GameIgnoreRequest? request,
-        ClaimsPrincipal principal,
-        GamesService service,
-        CancellationToken ct)
-    {
-        if (request is null) throw AppProblem.Validation("Request body is required.");
-        return ApiResponse<GameIgnoreResponseDto>.Ok(
-            await service.SetIgnore(GetUserId(principal), request, false, ct));
-    }
-
-    private static async Task<ApiResponse<GameRatingResponseDto>> GetRating(
+    private static async Task<IResult> GetRating(
         ClaimsPrincipal principal,
         GamesService service,
         string? gameId,
         CancellationToken ct)
     {
-        return ApiResponse<GameRatingResponseDto>.Ok(
-            await service.GetRating(GetUserId(principal), gameId, ct));
-    }
-
-    private static async Task<ApiResponse<GameRatingResponseDto>> UpsertRating(
-        GameRatingRequest? request,
-        ClaimsPrincipal principal,
-        GamesService service,
-        CancellationToken ct)
-    {
-        if (request is null) throw AppProblem.Validation("Request body is required.");
-        return ApiResponse<GameRatingResponseDto>.Ok(
-            await service.SetRating(GetUserId(principal), request, ct));
-    }
-
-    private static async Task<ApiResponse<GameRatingResponseDto>> RemoveRating(
-        GameRatingRequest? request,
-        ClaimsPrincipal principal,
-        GamesService service,
-        CancellationToken ct)
-    {
-        if (request is null) throw AppProblem.Validation("Request body is required.");
-        return ApiResponse<GameRatingResponseDto>.Ok(
-            await service.DeleteRating(GetUserId(principal), request, ct));
-    }
-
-    private static long GetUserId(ClaimsPrincipal principal)
-    {
-        var subject = principal.FindFirstValue("sub");
-        if (!long.TryParse(subject, NumberStyles.None, CultureInfo.InvariantCulture, out var userId))
-        {
-            throw AppProblem.Unauthorized("Invalid token.");
-        }
-        return userId;
+        return TypedResults.Ok(await service.GetRating(principal.GetUserId(), gameId, ct));
     }
 }

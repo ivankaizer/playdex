@@ -1,8 +1,11 @@
 using System.Diagnostics;
 using System.Net;
+using System.Security.Cryptography;
+using System.Text;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-using Npgsql;
 using Playdex.Api.Configuration;
+using Playdex.Api.Data;
 using Playdex.Api.Metrics;
 using Playdex.Api.Playnite;
 
@@ -35,7 +38,6 @@ public sealed class PollingBackgroundService(
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        // Randomise initial delay to avoid thundering herd on startup.
         var initialDelayMs = Random.Shared.Next(0, 5001);
         logger.LogInformation("PollingBackgroundService will start after {Delay} ms", initialDelayMs);
         await Task.Delay(initialDelayMs, stoppingToken);
@@ -52,36 +54,41 @@ public sealed class PollingBackgroundService(
                 using var scope = serviceProvider.GetRequiredService<IServiceScopeFactory>().CreateScope();
                 var scopedServices = scope.ServiceProvider;
 
-                var pollingRepo = scopedServices.GetRequiredService<IPollingRepository>();
+                var pollingRepo = scopedServices.GetRequiredService<PollingRepository>();
                 var playniteService = scopedServices.GetRequiredService<PlayniteService>();
-                var playniteRepo = scopedServices.GetRequiredService<IPlayniteRepository>();
-                var dataSource = scopedServices.GetRequiredService<NpgsqlDataSource>();
+                var playniteRepo = scopedServices.GetRequiredService<PlayniteRepository>();
+                var db = scopedServices.GetRequiredService<PlaydexDbContext>();
                 var providerClients = scopedServices.GetServices<IProviderClient>()
                     .ToDictionary(c => c.PlatformKey, StringComparer.OrdinalIgnoreCase);
 
-                // Step 1 — End timed-out Playnite sessions before checking
-                // other platforms so stale Playnite sessions don't overlap.
                 var endedSessions = await playniteService.EndTimedOutSessions(stoppingToken);
                 if (endedSessions > 0)
                 {
                     logger.LogInformation("Ended {Count} timed-out Playnite sessions", endedSessions);
                 }
 
-                // Step 2 — Load active credentials (everything except Playnite).
                 var credentials = await pollingRepo.LoadActiveCredentials(stoppingToken);
                 logger.LogDebug("Loaded {Count} active credentials", credentials.Count);
 
-                // Step 3 — Process each credential.
                 foreach (var active in credentials)
                 {
                     if (stoppingToken.IsCancellationRequested) break;
 
-                    await ProcessCredential(
-                        active, pollingRepo, playniteRepo, dataSource,
-                        providerClients, stoppingToken);
+                    try
+                    {
+                        await ProcessCredential(
+                            active, pollingRepo, playniteRepo, db,
+                            providerClients, stoppingToken);
+                    }
+                    catch (Exception ex)
+                    {
+                        logger.LogWarning(ex,
+                            "Credential {CredentialId} ({Platform}) failed, continuing: {Message}",
+                            active.Credential.Id, active.PlatformKey, ex.Message);
+                        metrics.RecordPollFailure(active.PlatformKey, DateTimeOffset.UtcNow);
+                    }
                 }
 
-                // Success → reset backoff.
                 backoffMs = BaseBackoffMs;
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
@@ -93,15 +100,12 @@ public sealed class PollingBackgroundService(
                 logger.LogError(ex, "Poll cycle failed");
                 metrics.RecordPollFailure("all", DateTimeOffset.UtcNow);
 
-                // Exponential backoff before next cycle attempt.
                 logger.LogWarning("Backing off for {BackoffMs} ms", backoffMs);
                 await Task.Delay(backoffMs, stoppingToken);
                 backoffMs = (int)Math.Min(backoffMs * 2L, MaxBackoffMs);
                 continue;
             }
 
-            // Wait for the remainder of the poll interval (if any) before
-            // starting the next cycle.
             var elapsed = cycleStart.ElapsedMilliseconds;
             metrics.RecordCycleDuration(elapsed);
 
@@ -112,9 +116,9 @@ public sealed class PollingBackgroundService(
 
     private async Task ProcessCredential(
         ActiveCredential active,
-        IPollingRepository pollingRepo,
-        IPlayniteRepository playniteRepo,
-        NpgsqlDataSource dataSource,
+        PollingRepository pollingRepo,
+        PlayniteRepository playniteRepo,
+        PlaydexDbContext db,
         Dictionary<string, IProviderClient> providerClients,
         CancellationToken ct)
     {
@@ -127,7 +131,6 @@ public sealed class PollingBackgroundService(
             return;
         }
 
-        // ── Call the provider API ───────────────────────────────
         CurrentlyPlayingResult? providerResult;
 
         try
@@ -145,27 +148,22 @@ public sealed class PollingBackgroundService(
             await Task.Delay(RateLimitFallbackMs, ct);
             return;
         }
-        // Other exceptions bubble to the outer cycle handler for backoff.
 
         var polledAt = DateTimeOffset.UtcNow;
 
-        // ── No game currently playing ───────────────────────────
         if (providerResult is null)
         {
-            await EndAllSessions(playniteRepo, dataSource, credential.Id, polledAt, ct);
+            await EndAllSessions(playniteRepo, db, credential.Id, polledAt, ct);
             await pollingRepo.RecordPollResult(credential.Id, null, polledAt, null, ct);
             metrics.RecordPollSuccess(platformKey, polledAt);
             logger.LogDebug("Credential {CredentialId}: no game playing, ended sessions", credential.Id);
             return;
         }
 
-        // ── Game detected — upsert and sync ─────────────────────
-        await using var conn = await dataSource.OpenConnectionAsync(ct);
-        await using var tx = await conn.BeginTransactionAsync(ct);
+        await using var tx = await db.Database.BeginTransactionAsync(ct);
 
         var canonicalKey = $"{platformKey}:{providerResult.ExternalId ?? ComputeFallbackId(providerResult.Title)}";
         var gameId = await playniteRepo.UpsertGame(
-            conn, tx,
             providerResult.Title,
             providerResult.ExternalId,
             platformKey,
@@ -181,7 +179,7 @@ public sealed class PollingBackgroundService(
                 "Credential {CredentialId}: game {GameId} is ignored, ending sessions",
                 credential.Id, gameId);
 
-            await playniteRepo.EndActiveSessionsForCredential(conn, tx, credential.Id, polledAt, ct);
+            await playniteRepo.EndActiveSessionsForCredential(credential.Id, polledAt, ct);
             await tx.CommitAsync(ct);
 
             await pollingRepo.RecordPollResult(credential.Id, gameId, polledAt, null, ct);
@@ -189,7 +187,7 @@ public sealed class PollingBackgroundService(
             return;
         }
 
-        await SyncPlaySession(conn, tx, playniteRepo, credential.Id, gameId, polledAt, ct);
+        await SyncPlaySession(db, playniteRepo, credential.Id, gameId, polledAt, ct);
         await tx.CommitAsync(ct);
 
         await pollingRepo.RecordPollResult(credential.Id, gameId, polledAt, null, ct);
@@ -198,57 +196,46 @@ public sealed class PollingBackgroundService(
     }
 
     private static async Task SyncPlaySession(
-        NpgsqlConnection conn,
-        NpgsqlTransaction tx,
-        IPlayniteRepository playniteRepo,
+        PlaydexDbContext db,
+        PlayniteRepository playniteRepo,
         long credentialId,
         long gameId,
         DateTimeOffset now,
         CancellationToken ct)
     {
-        var active = await playniteRepo.FetchActiveSessionForCredential(conn, tx, credentialId, ct);
+        var active = await playniteRepo.FetchActiveSessionForCredential(credentialId, ct);
 
         if (active is not null)
         {
             if (active.GameId == gameId)
             {
-                // Same game still being played → keep alive.
-                await playniteRepo.TouchActiveSession(conn, tx, active.Id, now, ct);
+                await playniteRepo.TouchActiveSession(active.Id, now, ct);
             }
             else
             {
-                // Switched to a different game → end old session, start new.
-                await playniteRepo.EndActiveSessionsForCredential(conn, tx, credentialId, now, ct);
-                await playniteRepo.InsertActivePlaySession(conn, tx, credentialId, gameId, now, ct);
+                await playniteRepo.EndActiveSessionsForCredential(credentialId, now, ct);
+                await playniteRepo.InsertActivePlaySession(credentialId, gameId, now, ct);
             }
         }
         else
         {
-            // No active session → start a new one.
-            await playniteRepo.InsertActivePlaySession(conn, tx, credentialId, gameId, now, ct);
+            await playniteRepo.InsertActivePlaySession(credentialId, gameId, now, ct);
         }
     }
 
     private static async Task EndAllSessions(
-        IPlayniteRepository playniteRepo,
-        NpgsqlDataSource dataSource,
+        PlayniteRepository playniteRepo,
+        PlaydexDbContext db,
         long credentialId,
         DateTimeOffset now,
         CancellationToken ct)
     {
-        await using var conn = await dataSource.OpenConnectionAsync(ct);
-        await playniteRepo.EndActiveSessionsForCredential(conn, null, credentialId, now, ct);
+        await playniteRepo.EndActiveSessionsForCredential(credentialId, now, ct);
     }
 
-    /// <summary>
-    /// Deterministic fallback ID for titles that lack an external ID
-    /// (e.g. when the provider returns only a title).
-    /// </summary>
     private static string ComputeFallbackId(string title)
     {
-        // Use a stable hash so the same title always maps to the same
-        // canonical key slot.
-        var hash = title.GetHashCode(StringComparison.Ordinal);
-        return $"hash-{hash:X8}";
+        var hash = SHA256.HashData(Encoding.UTF8.GetBytes(title));
+        return $"hash-{Convert.ToHexString(hash)[..16]}";
     }
 }

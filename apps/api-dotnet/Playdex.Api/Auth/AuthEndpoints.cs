@@ -1,6 +1,6 @@
-using System.Globalization;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Mvc;
 using Playdex.Api.Http;
 
 namespace Playdex.Api.Auth;
@@ -13,8 +13,33 @@ public static class AuthEndpoints
 {
     public static void MapAuthEndpoints(this RouteGroupBuilder api)
     {
-        api.MapPost("/login", Login);
-        api.MapPost("/refresh", Refresh);
+        api.MapPost("/login", async (HttpContext http) =>
+        {
+            var request = await http.Request.ReadFromJsonAsync<LoginRequest>();
+            var service = http.RequestServices.GetRequiredService<AuthService>();
+            var email = request?.Email?.Trim() ?? "";
+            var password = request?.Password ?? "";
+
+            IResult result = email.Length == 0 || password.Length == 0
+                ? TypedResults.Problem("Email and password are required.", statusCode: 400)
+                : TypedResults.Ok(await service.Login(email, password, http.RequestAborted));
+
+            await result.ExecuteAsync(http);
+        });
+
+        api.MapPost("/refresh", async (HttpContext http) =>
+        {
+            var request = await http.Request.ReadFromJsonAsync<RefreshRequest>();
+            var service = http.RequestServices.GetRequiredService<AuthService>();
+            var refreshToken = request?.RefreshToken?.Trim() ?? "";
+
+            IResult result = refreshToken.Length == 0
+                ? TypedResults.Problem("Refresh token is required.", statusCode: 400)
+                : TypedResults.Ok(await service.Refresh(refreshToken, http.RequestAborted));
+
+            await result.ExecuteAsync(http);
+        });
+
         api.MapGet("/me", Me).RequireAuthorization();
     }
 
@@ -45,15 +70,17 @@ public static class AuthEndpoints
                     {
                         context.HandleResponse();
                         context.Response.StatusCode = StatusCodes.Status401Unauthorized;
-                        var message = context.Request.Headers.Authorization.Count == 0
+                        var detail = context.Request.Headers.Authorization.Count == 0
                             ? "Missing token."
                             : "Invalid token.";
-                        await context.Response.WriteAsJsonAsync(ApiResponse<object>.Fail(message));
+                        await context.Response.WriteAsJsonAsync(
+                            new ProblemDetails { Status = 401, Title = "Unauthorized", Detail = detail });
                     },
-                    OnForbidden = context =>
+                    OnForbidden = async context =>
                     {
                         context.Response.StatusCode = StatusCodes.Status403Forbidden;
-                        return context.Response.WriteAsJsonAsync(ApiResponse<object>.Fail("Forbidden."));
+                        await context.Response.WriteAsJsonAsync(
+                            new ProblemDetails { Status = 403, Title = "Forbidden", Detail = "Forbidden." });
                     },
                 };
             });
@@ -61,54 +88,16 @@ public static class AuthEndpoints
         return services;
     }
 
-    private static async Task<ApiResponse<LoginResult>> Login(
-        LoginRequest? request,
-        AuthService service,
-        CancellationToken cancellationToken)
-    {
-        var email = request?.Email?.Trim() ?? "";
-        var password = request?.Password ?? "";
-        if (email.Length == 0 || password.Length == 0)
-        {
-            throw AppProblem.Validation("Email and password are required.");
-        }
-
-        return ApiResponse<LoginResult>.Ok(
-            await service.Login(email, password, cancellationToken));
-    }
-
-    private static async Task<ApiResponse<RefreshResult>> Refresh(
-        RefreshRequest? request,
-        AuthService service,
-        CancellationToken cancellationToken)
-    {
-        var refreshToken = request?.RefreshToken?.Trim() ?? "";
-        if (refreshToken.Length == 0)
-        {
-            throw AppProblem.Validation("Refresh token is required.");
-        }
-
-        return ApiResponse<RefreshResult>.Ok(
-            await service.Refresh(refreshToken, cancellationToken));
-    }
-
-    private static async Task<ApiResponse<MeResponse>> Me(
+    private static async Task<IResult> Me(
         ClaimsPrincipal principal,
-        IAuthRepository repository,
-        CancellationToken cancellationToken)
+        AuthRepository repository,
+        CancellationToken ct)
     {
-        var subject = principal.FindFirstValue("sub");
-        if (!long.TryParse(subject, NumberStyles.None, CultureInfo.InvariantCulture, out var userId))
-        {
-            throw AppProblem.Unauthorized("Invalid token.");
-        }
-
-        var user = await repository.FindById(userId, cancellationToken);
+        var userId = principal.GetUserId();
+        var user = await repository.FindById(userId, ct);
         if (user is null)
-        {
-            throw AppProblem.NotFound("User not found.");
-        }
+            return TypedResults.Problem("User not found.", statusCode: 404);
 
-        return ApiResponse<MeResponse>.Ok(new MeResponse(user.Id, user.Email, user.IsAdmin));
+        return TypedResults.Ok(new MeResponse(user.Id, user.Email, user.IsAdmin));
     }
 }

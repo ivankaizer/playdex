@@ -1,32 +1,15 @@
-using Dapper;
 using Microsoft.EntityFrameworkCore;
-using Npgsql;
 using Playdex.Api.Common;
 using Playdex.Api.Data;
 using Playdex.Api.Http;
 
 namespace Playdex.Api.Manual;
 
-public interface IManualRepository
-{
-    Task<List<ManualInputRow>> ListManualInputs(long userId, CancellationToken ct);
-    Task<long> GetOrCreateManualCredential(long userId, CancellationToken ct);
-    Task<long> UpsertManualGameInput(long userId, string rawTitle, string canonicalTitle, CancellationToken ct);
-    Task<int> EndActiveSessions(long platformCredentialId, CancellationToken ct);
-    Task<long> CreatePlaySession(long platformCredentialId, long gameId, DateTimeOffset startedAt, DateTimeOffset? endedAt, CancellationToken ct);
-    Task<List<GameSearchRow>> SearchLocalGames(string query, int limit, CancellationToken ct);
-    Task<long> UpsertGame(string title, string canonicalKey, long platformId, string? capsuleUrl, CancellationToken ct);
-    Task<long?> GetPlatformIdByKey(string key, CancellationToken ct);
-    Task MapManualInput(long inputId, long? gameId, CancellationToken ct);
-    Task<Game?> GetGameEntity(long gameId, CancellationToken ct);
-}
-
-public sealed class ManualRepository(NpgsqlDataSource dataSource, PlaydexDbContext db) : IManualRepository
+public sealed class ManualRepository(PlaydexDbContext db)
 {
     public async Task<List<ManualInputRow>> ListManualInputs(long userId, CancellationToken ct)
     {
-        await using var conn = await dataSource.OpenConnectionAsync(ct);
-        var rows = await conn.QueryAsync<ManualInputRow>("""
+        return await db.Database.SqlQuery<ManualInputRow>($"""
             SELECT
                 mgi.id AS Id,
                 mgi.raw_title AS RawTitle,
@@ -35,15 +18,35 @@ public sealed class ManualRepository(NpgsqlDataSource dataSource, PlaydexDbConte
                 g.id AS GameId,
                 g.title AS GameTitle,
                 g.capsule_url AS CapsuleUrl,
-                p.name AS Platform
+                g.canonical_key AS CanonicalKey,
+                p.key AS Platform
             FROM manual_game_inputs mgi
             LEFT JOIN games g ON g.id = mgi.mapped_game_id
             LEFT JOIN platforms p ON p.id = g.platform_id
-            WHERE mgi.user_id = @UserId
+            WHERE mgi.user_id = {userId}
             ORDER BY mgi.updated_at DESC
-            """, new { UserId = userId });
+            """).ToListAsync(ct);
+    }
 
-        return rows.AsList();
+    public async Task<T> ExecuteInTransaction<T>(Func<Task<T>> action, CancellationToken ct)
+    {
+        await using var transaction = await db.Database.BeginTransactionAsync(ct);
+        var result = await action();
+        await transaction.CommitAsync(ct);
+        return result;
+    }
+
+    public async Task<long?> GetManualCredential(long userId, CancellationToken ct)
+    {
+        return await db.PlatformCredentials
+            .AsNoTracking()
+            .Where(pc => pc.UserId == userId)
+            .Join(
+                db.Platforms.Where(platform => platform.Key == "manual"),
+                credential => credential.PlatformId,
+                platform => platform.Id,
+                (credential, _) => (long?)credential.Id)
+            .FirstOrDefaultAsync(ct);
     }
 
     public async Task<long> GetOrCreateManualCredential(long userId, CancellationToken ct)
@@ -71,8 +74,8 @@ public sealed class ManualRepository(NpgsqlDataSource dataSource, PlaydexDbConte
         {
             UserId = userId,
             PlatformId = platformId.Value,
-            ApiKey = null,
-            AccountId = null,
+            ApiKey = "manual",
+            AccountId = "manual",
             Active = true,
             CreatedAt = now,
             UpdatedAt = now,
@@ -83,33 +86,47 @@ public sealed class ManualRepository(NpgsqlDataSource dataSource, PlaydexDbConte
         return credential.Id;
     }
 
-    public async Task<long> UpsertManualGameInput(long userId, string rawTitle, string canonicalTitle, CancellationToken ct)
+    public async Task<ManualInputLookupRow> UpsertManualGameInput(
+        long userId,
+        string rawTitle,
+        string canonicalTitle,
+        CancellationToken ct)
     {
         var now = DateTimeOffset.UtcNow;
-        await using var conn = await dataSource.OpenConnectionAsync(ct);
-        var id = await conn.ExecuteScalarAsync<long>("""
-            INSERT INTO manual_game_inputs (user_id, raw_title, canonical_title, created_at, updated_at)
-            VALUES (@UserId, @RawTitle, @CanonicalTitle, @Now, @Now)
-            ON CONFLICT (user_id, canonical_title) DO UPDATE SET
-                raw_title = @RawTitle,
-                updated_at = @Now
-            RETURNING id
-            """, new { UserId = userId, RawTitle = rawTitle, CanonicalTitle = canonicalTitle, Now = now });
+        var input = await db.ManualGameInputs
+            .FirstOrDefaultAsync(
+                item => item.UserId == userId && item.CanonicalTitle == canonicalTitle,
+                ct);
+        if (input is null)
+        {
+            input = new ManualGameInput
+            {
+                UserId = userId,
+                RawTitle = rawTitle,
+                CanonicalTitle = canonicalTitle,
+                CreatedAt = now,
+                UpdatedAt = now,
+            };
+            db.ManualGameInputs.Add(input);
+        }
+        else
+        {
+            input.RawTitle = rawTitle;
+            input.UpdatedAt = now;
+        }
 
-        return id;
+        await db.SaveChangesAsync(ct);
+        return new ManualInputLookupRow { Id = input.Id, MappedGameId = input.MappedGameId };
     }
 
     public async Task<int> EndActiveSessions(long platformCredentialId, CancellationToken ct)
     {
         var now = DateTimeOffset.UtcNow;
-        await using var conn = await dataSource.OpenConnectionAsync(ct);
-        var affected = await conn.ExecuteAsync("""
+        return await db.Database.ExecuteSqlInterpolatedAsync($"""
             UPDATE play_sessions
-            SET ended_at = @Now, updated_at = @Now
-            WHERE platform_credential_id = @CredId AND ended_at IS NULL
-            """, new { CredId = platformCredentialId, Now = now });
-
-        return affected;
+            SET ended_at = {now}, updated_at = {now}
+            WHERE platform_credential_id = {platformCredentialId} AND ended_at IS NULL
+            """, ct);
     }
 
     public async Task<long> CreatePlaySession(
@@ -118,58 +135,63 @@ public sealed class ManualRepository(NpgsqlDataSource dataSource, PlaydexDbConte
         CancellationToken ct)
     {
         var now = DateTimeOffset.UtcNow;
-        await using var conn = await dataSource.OpenConnectionAsync(ct);
-        var id = await conn.ExecuteScalarAsync<long>("""
-            INSERT INTO play_sessions (platform_credential_id, game_id, started_at, ended_at, created_at, updated_at)
-            VALUES (@CredId, @GameId, @StartedAt, @EndedAt, @Now, @Now)
-            RETURNING id
-            """, new { CredId = platformCredentialId, GameId = gameId, StartedAt = startedAt, EndedAt = endedAt, Now = now });
-
-        return id;
+        var session = new PlaySession
+        {
+            PlatformCredentialId = platformCredentialId,
+            GameId = gameId,
+            StartedAt = startedAt,
+            EndedAt = endedAt,
+            CreatedAt = now,
+            UpdatedAt = now,
+        };
+        db.PlaySessions.Add(session);
+        await db.SaveChangesAsync(ct);
+        return session.Id;
     }
 
     public async Task<List<GameSearchRow>> SearchLocalGames(string query, int limit, CancellationToken ct)
     {
-        await using var conn = await dataSource.OpenConnectionAsync(ct);
-        var rows = await conn.QueryAsync<GameSearchRow>("""
-            SELECT g.id, g.title, p.name AS platform, g.capsule_url
+        var pattern = $"%{query}%";
+        return await db.Database.SqlQuery<GameSearchRow>($"""
+            SELECT g.id, g.title, p.key AS platform, g.capsule_url
             FROM games g
             JOIN platforms p ON p.id = g.platform_id
-            WHERE g.title ILIKE @Query
-            ORDER BY g.title
-            LIMIT @Limit
-            """, new { Query = $"%{query}%", Limit = limit });
-
-        return rows.AsList();
+            WHERE g.title ILIKE {pattern}
+            ORDER BY g.updated_at DESC
+            LIMIT {limit}
+            """).ToListAsync(ct);
     }
 
     public async Task<long> UpsertGame(
-        string title, string canonicalKey, long platformId,
+        string title, string canonicalKey, string? externalId, long platformId,
         string? capsuleUrl, CancellationToken ct)
     {
         var now = DateTimeOffset.UtcNow;
-        await using var conn = await dataSource.OpenConnectionAsync(ct);
-        var id = await conn.ExecuteScalarAsync<long>("""
-            INSERT INTO games (title, canonical_key, platform_id, capsule_url, created_at, updated_at)
-            VALUES (@Title, @CanonicalKey, @PlatformId, @CapsuleUrl, @Now, @Now)
-            ON CONFLICT (canonical_key) DO UPDATE SET
-                title = CASE WHEN games.title_locked THEN games.title ELSE @Title END,
-                capsule_url = CASE
-                    WHEN games.capsule_url_locked THEN games.capsule_url
-                    ELSE COALESCE(@CapsuleUrl, games.capsule_url)
-                END,
-                updated_at = @Now
-            RETURNING id
-            """, new
+        var game = await db.Games.FirstOrDefaultAsync(item => item.CanonicalKey == canonicalKey, ct);
+        if (game is null)
         {
-            Title = title,
-            CanonicalKey = canonicalKey,
-            PlatformId = platformId,
-            CapsuleUrl = capsuleUrl,
-            Now = now
-        });
+            game = new Game
+            {
+                Title = title,
+                ExternalId = externalId,
+                CanonicalKey = canonicalKey,
+                PlatformId = platformId,
+                CapsuleUrl = capsuleUrl,
+                CreatedAt = now,
+                UpdatedAt = now,
+            };
+            db.Games.Add(game);
+        }
+        else
+        {
+            if (!game.TitleLocked) game.Title = title;
+            if (externalId is not null) game.ExternalId = externalId;
+            if (!game.CapsuleUrlLocked && capsuleUrl is not null) game.CapsuleUrl = capsuleUrl;
+            game.UpdatedAt = now;
+        }
 
-        return id;
+        await db.SaveChangesAsync(ct);
+        return game.Id;
     }
 
     public async Task<long?> GetPlatformIdByKey(string key, CancellationToken ct)
@@ -181,15 +203,30 @@ public sealed class ManualRepository(NpgsqlDataSource dataSource, PlaydexDbConte
             .FirstOrDefaultAsync(ct);
     }
 
-    public async Task MapManualInput(long inputId, long? gameId, CancellationToken ct)
+    public async Task<string?> GetPlatformKeyByIgdbId(int igdbPlatformId, CancellationToken ct)
+    {
+        return await db.Platforms
+            .AsNoTracking()
+            .Where(platform => platform.IgdbPlatformId == igdbPlatformId)
+            .Select(platform => platform.Key)
+            .FirstOrDefaultAsync(ct);
+    }
+
+    public async Task<ManualInputLookupRow?> MapManualInput(
+        long userId,
+        long inputId,
+        long gameId,
+        CancellationToken ct)
     {
         var now = DateTimeOffset.UtcNow;
-        await using var conn = await dataSource.OpenConnectionAsync(ct);
-        await conn.ExecuteAsync("""
-            UPDATE manual_game_inputs
-            SET mapped_game_id = @GameId, updated_at = @Now
-            WHERE id = @InputId
-            """, new { InputId = inputId, GameId = gameId, Now = now });
+        var input = await db.ManualGameInputs
+            .FirstOrDefaultAsync(item => item.Id == inputId && item.UserId == userId, ct);
+        if (input is null) return null;
+
+        input.MappedGameId = gameId;
+        input.UpdatedAt = now;
+        await db.SaveChangesAsync(ct);
+        return new ManualInputLookupRow { Id = input.Id, MappedGameId = input.MappedGameId };
     }
 
     public async Task<Game?> GetGameEntity(long gameId, CancellationToken ct)
@@ -198,24 +235,29 @@ public sealed class ManualRepository(NpgsqlDataSource dataSource, PlaydexDbConte
     }
 }
 
-// ── Internal row types for Dapper mapping ──────────────────────
-
 public sealed class ManualInputRow
 {
     public long Id { get; set; }
-    public required string RawTitle { get; set; }
-    public required string CanonicalTitle { get; set; }
+    public string RawTitle { get; set; } = string.Empty;
+    public string CanonicalTitle { get; set; } = string.Empty;
     public long? MappedGameId { get; set; }
     public long? GameId { get; set; }
     public string? GameTitle { get; set; }
     public string? CapsuleUrl { get; set; }
+    public string? CanonicalKey { get; set; }
     public string? Platform { get; set; }
+}
+
+public sealed class ManualInputLookupRow
+{
+    public long Id { get; set; }
+    public long? MappedGameId { get; set; }
 }
 
 public sealed class GameSearchRow
 {
     public long Id { get; set; }
-    public required string Title { get; set; }
-    public required string Platform { get; set; }
+    public string Title { get; set; } = string.Empty;
+    public string Platform { get; set; } = string.Empty;
     public string? CapsuleUrl { get; set; }
 }

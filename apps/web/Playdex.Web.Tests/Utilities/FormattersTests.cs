@@ -87,6 +87,7 @@ public sealed class FormattersTests
 
         Assert.Equal("Jul 13, 2026", Formatters.FormatDateLabel(localDate));
         Assert.Equal("1:05 PM", Formatters.FormatTimeLabel(localDate));
+        Assert.Equal("7/13/2026, 1:05:00 PM", Formatters.FormatLocalDateTime(localDate));
     }
 
     [Theory]
@@ -106,8 +107,14 @@ public sealed class FormattersTests
     [InlineData(1800, 0, "1h")]
     [InlineData(-1800, 0, "0h")]
     [InlineData(4500, 1, "1.3h")]
+    [InlineData(9180, 1, "2.5h")]
+    [InlineData(8100, 1, "2.3h")]
+    [InlineData(-9180, 1, "-2.5h")]
+    [InlineData(-8100, 1, "-2.3h")]
     [InlineData(3600, 1, "1h")]
     [InlineData(double.NaN, 1, "0h")]
+    [InlineData(double.PositiveInfinity, 1, "0h")]
+    [InlineData(double.NegativeInfinity, 1, "0h")]
     public void FormatHours_MatchesJavascriptRoundingAndTrailingZeroBehavior(
         double seconds,
         int decimals,

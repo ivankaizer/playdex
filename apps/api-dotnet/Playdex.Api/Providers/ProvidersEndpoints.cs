@@ -1,6 +1,5 @@
-using System.Globalization;
 using System.Security.Claims;
-using Playdex.Api.Http;
+using Playdex.Api.Auth;
 
 namespace Playdex.Api.Providers;
 
@@ -10,49 +9,33 @@ public static class ProvidersEndpoints
     {
         var providers = api.MapGroup("/providers").RequireAuthorization();
         providers.MapGet("", ListProviders);
-        providers.MapPut("/status", UpdateStatus);
+
+        providers.MapPut("/status", async (HttpContext http) =>
+        {
+            var request = await http.Request.ReadFromJsonAsync<ProviderUpdateRequest>();
+            var service = http.RequestServices.GetRequiredService<ProvidersService>();
+            IResult result = request is null
+                ? TypedResults.Problem("Request body is required.", statusCode: 400)
+                : TypedResults.Ok(await service.UpdateProviderStatus(http.User.GetUserId(), request, http.RequestAborted));
+            await result.ExecuteAsync(http);
+        });
 
         api.MapPost("/playnite/key", GetPlayniteKey).RequireAuthorization();
     }
 
-    private static async Task<ApiResponse<ProvidersResponseDto>> ListProviders(
+    private static async Task<IResult> ListProviders(
         ClaimsPrincipal principal,
         ProvidersService service,
         CancellationToken ct)
     {
-        var userId = GetUserId(principal);
-        return ApiResponse<ProvidersResponseDto>.Ok(await service.ListProviders(userId, ct));
+        return TypedResults.Ok(await service.ListProviders(principal.GetUserId(), ct));
     }
 
-    private static async Task<ApiResponse<ProviderUpdateResponseDto>> UpdateStatus(
-        ProviderUpdateRequest? request,
+    private static async Task<IResult> GetPlayniteKey(
         ClaimsPrincipal principal,
         ProvidersService service,
         CancellationToken ct)
     {
-        if (request is null) throw AppProblem.Validation("Request body is required.");
-        var userId = GetUserId(principal);
-        return ApiResponse<ProviderUpdateResponseDto>.Ok(
-            await service.UpdateProviderStatus(userId, request, ct));
-    }
-
-    private static async Task<ApiResponse<PlayniteKeyResponseDto>> GetPlayniteKey(
-        ClaimsPrincipal principal,
-        ProvidersService service,
-        CancellationToken ct)
-    {
-        var userId = GetUserId(principal);
-        return ApiResponse<PlayniteKeyResponseDto>.Ok(
-            await service.GetOrCreatePlayniteKey(userId, ct));
-    }
-
-    private static long GetUserId(ClaimsPrincipal principal)
-    {
-        var subject = principal.FindFirstValue("sub");
-        if (!long.TryParse(subject, NumberStyles.None, CultureInfo.InvariantCulture, out var userId))
-        {
-            throw AppProblem.Unauthorized("Invalid token.");
-        }
-        return userId;
+        return TypedResults.Ok(await service.GetOrCreatePlayniteKey(principal.GetUserId(), ct));
     }
 }

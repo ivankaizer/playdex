@@ -7,17 +7,34 @@ public sealed class ApiExceptionHandler(ILogger<ApiExceptionHandler> logger) : I
     public async ValueTask<bool> TryHandleAsync(
         HttpContext httpContext,
         Exception exception,
-        CancellationToken cancellationToken)
+        CancellationToken ct)
     {
-        var response = ErrorResponseFactory.FromException(exception);
-        var level = response.StatusCode >= 500 ? LogLevel.Error : LogLevel.Warning;
-        logger.Log(level, exception, "HTTP request failed with status {StatusCode} for {Method} {Path}",
-            response.StatusCode,
-            httpContext.Request.Method,
-            httpContext.Request.Path);
+        var appProblem = exception as AppProblem;
+        var statusCode = appProblem?.StatusCode ?? 500;
+        var detail = appProblem?.Message ?? "Internal server error.";
 
-        httpContext.Response.StatusCode = response.StatusCode;
-        await httpContext.Response.WriteAsJsonAsync(response.Envelope, cancellationToken);
+        if (appProblem is null)
+        {
+            logger.LogError(
+                exception,
+                "Unhandled API exception for {Method} {Path}",
+                httpContext.Request.Method,
+                httpContext.Request.Path);
+        }
+        else
+        {
+            logger.LogWarning(
+                "API request failed with {StatusCode} for {Method} {Path}: {Message}",
+                statusCode,
+                httpContext.Request.Method,
+                httpContext.Request.Path,
+                detail);
+        }
+
+        httpContext.Response.StatusCode = statusCode;
+        await httpContext.Response.WriteAsJsonAsync(
+            new { status = statusCode, detail, correlationId = httpContext.TraceIdentifier },
+            cancellationToken: ct);
         return true;
     }
 }

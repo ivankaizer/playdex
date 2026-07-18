@@ -2,7 +2,6 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.EntityFrameworkCore;
 using Playdex.Api.Configuration;
 using Playdex.Api.Data;
-using Playdex.Api.Http;
 using Xunit;
 
 namespace Playdex.Api.Tests;
@@ -45,45 +44,6 @@ public sealed class PlaydexOptionsTests
     }
 }
 
-
-public sealed class AppProblemTests
-{
-    [Fact]
-    public void NotFound_ReturnsTheExistingErrorEnvelope()
-    {
-        var problem = AppProblem.NotFound("Route not found.");
-
-        Assert.Equal(404, problem.StatusCode);
-        Assert.Null(problem.ToEnvelope().Data);
-        Assert.Equal("Route not found.", problem.ToEnvelope().Error?.Error);
-    }
-}
-
-public sealed class ErrorResponseFactoryTests
-{
-    [Theory]
-    [InlineData(400, "Invalid request.")]
-    [InlineData(401, "Unauthorized.")]
-    [InlineData(403, "Forbidden.")]
-    [InlineData(404, "Route not found.")]
-    [InlineData(409, "Conflict.")]
-    public void FromException_PreservesKnownApplicationErrors(int statusCode, string message)
-    {
-        var result = ErrorResponseFactory.FromException(new AppProblem(statusCode, message));
-
-        Assert.Equal(statusCode, result.StatusCode);
-        Assert.Equal(message, result.Envelope.Error?.Error);
-    }
-
-    [Fact]
-    public void FromException_HidesUnhandledExceptionDetails()
-    {
-        var result = ErrorResponseFactory.FromException(new InvalidOperationException("database password leaked"));
-
-        Assert.Equal(500, result.StatusCode);
-        Assert.Equal("Internal server error.", result.Envelope.Error?.Error);
-    }
-}
 
 public sealed class PlaydexDbContextTests
 {
@@ -156,7 +116,11 @@ public sealed class PlaydexDbContextTests
         }
 
         await using var command = connection.CreateCommand();
-        command.CommandText = "select (select count(*) from schema_migrations), (select count(*) from kysely_migration)";
+        command.CommandText = "select to_regclass('public.schema_migrations') is not null";
+        var hasLegacyHistory = (bool)(await command.ExecuteScalarAsync())!;
+        command.CommandText = hasLegacyHistory
+            ? "select (select count(*) from schema_migrations), (select count(*) from kysely_migration)"
+            : "select 0::bigint, (select count(*) from kysely_migration)";
         await using var reader = await command.ExecuteReaderAsync();
         await reader.ReadAsync();
         return (reader.GetInt64(0), reader.GetInt64(1));

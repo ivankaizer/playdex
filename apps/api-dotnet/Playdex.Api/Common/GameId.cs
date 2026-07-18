@@ -12,9 +12,7 @@ public static class GameId
     public static string Encode(long gameId)
     {
         if (gameId <= 0)
-        {
-            return "";
-        }
+            throw new ArgumentOutOfRangeException(nameof(gameId), "Game id must be positive.");
 
         var value = (ulong)(gameId * Multiplier + Increment);
         if (value == 0)

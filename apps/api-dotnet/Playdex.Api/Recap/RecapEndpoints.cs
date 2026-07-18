@@ -1,6 +1,6 @@
 using System.Globalization;
 using System.Security.Claims;
-using Playdex.Api.Http;
+using Playdex.Api.Auth;
 
 namespace Playdex.Api.Recap;
 
@@ -13,38 +13,35 @@ public static class RecapEndpoints
         recap.MapGet("", GetRecap);
     }
 
-    private static async Task<ApiResponse<RecapYearsResponseDto>> GetYears(
+    private static async Task<IResult> GetYears(
         ClaimsPrincipal principal,
         RecapService service,
         CancellationToken ct)
     {
-        var userId = GetUserId(principal);
-        return ApiResponse<RecapYearsResponseDto>.Ok(await service.GetYears(userId, ct));
+        return TypedResults.Ok(await service.GetYears(principal.GetUserId(), ct));
     }
 
-    private static async Task<ApiResponse<RecapResponseDto>> GetRecap(
+    private static async Task<IResult> GetRecap(
         ClaimsPrincipal principal,
         RecapService service,
         string? from,
         string? to,
         CancellationToken ct)
     {
-        var userId = GetUserId(principal);
-
         DateTimeOffset? startedAt = null;
         DateTimeOffset? endedAt = null;
 
         if (from is not null || to is not null)
         {
             if (from is null || to is null)
-                throw AppProblem.Validation("from and to are both required.");
+                return TypedResults.Problem("from and to are both required.", statusCode: 400);
 
             if (!DateTimeOffset.TryParse(from, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var parsedFrom) ||
                 !DateTimeOffset.TryParse(to, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var parsedTo))
-                throw AppProblem.Validation("from and to must be valid dates.");
+                return TypedResults.Problem("from and to must be valid dates.", statusCode: 400);
 
             if (parsedFrom > parsedTo)
-                throw AppProblem.Validation("from must be before to.");
+                return TypedResults.Problem("from must be before to.", statusCode: 400);
 
             startedAt = new DateTimeOffset(
                 parsedFrom.Year, parsedFrom.Month, parsedFrom.Day, 0, 0, 0, TimeSpan.Zero);
@@ -54,22 +51,13 @@ public static class RecapEndpoints
         }
 
         var result = await service.GetRecap(
-            userId,
+            principal.GetUserId(),
             from ?? (startedAt.HasValue ? startedAt.Value.ToString("yyyy-MM-dd") : null),
             to ?? (endedAt.HasValue ? endedAt.Value.AddDays(-1).ToString("yyyy-MM-dd") : null),
             startedAt,
             endedAt,
             ct);
 
-        return ApiResponse<RecapResponseDto>.Ok(result);
-    }
-
-    private static long GetUserId(ClaimsPrincipal principal)
-    {
-        var subject = principal.FindFirstValue("sub");
-        if (!long.TryParse(subject, NumberStyles.None, CultureInfo.InvariantCulture, out var userId))
-            throw AppProblem.Unauthorized("Invalid token.");
-
-        return userId;
+        return TypedResults.Ok(result);
     }
 }

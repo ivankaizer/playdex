@@ -1,23 +1,13 @@
-using Dapper;
-using Npgsql;
+using Microsoft.EntityFrameworkCore;
 using Playdex.Api.Data;
 
 namespace Playdex.Api.Polling;
 
-public interface IPollingRepository
-{
-    Task<List<ActiveCredential>> LoadActiveCredentials(CancellationToken ct);
-    Task<bool> CheckIfGameIgnored(long userId, long gameId, CancellationToken ct);
-    Task RecordPollResult(long credentialId, long? gameId, DateTimeOffset polledAt, string? rawPayload, CancellationToken ct);
-}
-
-public sealed class PollingRepository(NpgsqlDataSource dataSource) : IPollingRepository
+public sealed class PollingRepository(PlaydexDbContext db)
 {
     public async Task<List<ActiveCredential>> LoadActiveCredentials(CancellationToken ct)
     {
-        await using var conn = await dataSource.OpenConnectionAsync(ct);
-        var rows = await conn.QueryAsync<ActiveCredentialRow>(
-            """
+        var rows = await db.Database.SqlQuery<ActiveCredentialRow>($"""
             SELECT
                 pc.id                        AS Id,
                 pc.user_id                   AS UserId,
@@ -32,7 +22,7 @@ public sealed class PollingRepository(NpgsqlDataSource dataSource) : IPollingRep
             JOIN platforms p ON p.id = pc.platform_id
             WHERE pc.active
               AND p.key != 'playnite'
-            """);
+            """).ToListAsync(ct);
 
         return rows.Select(r => new ActiveCredential(
             new PlatformCredential
@@ -52,16 +42,7 @@ public sealed class PollingRepository(NpgsqlDataSource dataSource) : IPollingRep
 
     public async Task<bool> CheckIfGameIgnored(long userId, long gameId, CancellationToken ct)
     {
-        await using var conn = await dataSource.OpenConnectionAsync(ct);
-        return await conn.QueryFirstOrDefaultAsync<bool>(
-            """
-            SELECT EXISTS (
-                SELECT 1
-                FROM ignored_games
-                WHERE user_id = @UserId AND game_id = @GameId
-            )
-            """,
-            new { UserId = userId, GameId = gameId });
+        return await db.IgnoredGames.AnyAsync(ig => ig.UserId == userId && ig.GameId == gameId, ct);
     }
 
     public async Task RecordPollResult(
@@ -69,24 +50,18 @@ public sealed class PollingRepository(NpgsqlDataSource dataSource) : IPollingRep
         DateTimeOffset polledAt, string? rawPayload,
         CancellationToken ct)
     {
-        await using var conn = await dataSource.OpenConnectionAsync(ct);
         var now = DateTimeOffset.UtcNow;
-        await conn.ExecuteAsync(
-            """
-            INSERT INTO poll_results (platform_credential_id, game_id, polled_at, raw_payload, created_at)
-            VALUES (@CredentialId, @GameId, @PolledAt, @RawPayload::jsonb, @Now)
-            """,
-            new
-            {
-                CredentialId = credentialId,
-                GameId = gameId,
-                PolledAt = polledAt,
-                RawPayload = rawPayload ?? "null",
-                Now = now,
-            });
+        var pollResult = new PollResult
+        {
+            PlatformCredentialId = credentialId,
+            GameId = gameId,
+            PolledAt = polledAt,
+            RawPayload = rawPayload != null ? System.Text.Json.JsonDocument.Parse(rawPayload) : null,
+            CreatedAt = now,
+        };
+        db.PollResults.Add(pollResult);
+        await db.SaveChangesAsync(ct);
     }
-
-    // ── Internal row types for Dapper mapping ───────────────────
 
     private sealed class ActiveCredentialRow
     {

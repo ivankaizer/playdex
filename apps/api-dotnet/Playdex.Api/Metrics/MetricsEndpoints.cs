@@ -1,6 +1,5 @@
-using System.Globalization;
 using System.Security.Claims;
-using Playdex.Api.Http;
+using Playdex.Api.Auth;
 
 namespace Playdex.Api.Metrics;
 
@@ -12,22 +11,11 @@ public static class MetricsEndpoints
         metrics.MapGet("", GetMetrics);
     }
 
-    private static async Task<ApiResponse<MetricsSnapshotDto>> GetMetrics(
+    private static Task<IResult> GetMetrics(
         ClaimsPrincipal principal,
         MetricsCollector collector,
         CancellationToken ct)
     {
-        var userId = GetUserId(principal);
-        return ApiResponse<MetricsSnapshotDto>.Ok(collector.Snapshot());
-    }
-
-    private static long GetUserId(ClaimsPrincipal principal)
-    {
-        var subject = principal.FindFirstValue("sub");
-        if (!long.TryParse(subject, NumberStyles.None, CultureInfo.InvariantCulture, out var userId))
-        {
-            throw AppProblem.Unauthorized("Invalid token.");
-        }
-        return userId;
+        return Task.FromResult<IResult>(TypedResults.Ok(collector.Snapshot()));
     }
 }

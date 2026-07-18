@@ -1,5 +1,5 @@
-using System.Text.RegularExpressions;
 using Playdex.Api.Common;
+using Playdex.Api.Games;
 
 namespace Playdex.Api.Recap;
 
@@ -45,10 +45,27 @@ internal sealed record BingedInfo(
     long Root,
     int SessionCount);
 
-public sealed partial class RecapService(IRecapRepository repository)
+internal static class RecapRange
+{
+    public static DateTimeOffset ResolveEndExclusive(
+        DateTimeOffset now,
+        DateTimeOffset? endpointExclusiveTo) =>
+        endpointExclusiveTo.HasValue
+            ? new DateTimeOffset(
+                endpointExclusiveTo.Value.Year,
+                endpointExclusiveTo.Value.Month,
+                endpointExclusiveTo.Value.Day,
+                0,
+                0,
+                0,
+                TimeSpan.Zero)
+            : new DateTimeOffset(now.Year, now.Month, now.Day, 0, 0, 0, TimeSpan.Zero)
+                .AddDays(1);
+}
+
+public sealed class RecapService(RecapRepository repository)
 {
     private static readonly long DayMs = (long)TimeSpan.FromDays(1).TotalMilliseconds;
-    private static readonly Regex NonAlphanumeric = MyRegex();
 
     public async Task<RecapYearsResponseDto> GetYears(long userId, CancellationToken ct)
     {
@@ -94,8 +111,11 @@ public sealed partial class RecapService(IRecapRepository repository)
         long? longestSessionGroup = null;
         double longestSessionSeconds = 0;
 
+        var i = 0;
         foreach (var session in sessions)
         {
+            if (i++ % 1000 == 0)
+                ct.ThrowIfCancellationRequested();
             var startedMs = session.StartedAt.ToUnixTimeMilliseconds();
             var endedMs = session.EndedAt?.ToUnixTimeMilliseconds() ?? now.ToUnixTimeMilliseconds();
             var durationSeconds = Math.Max(0, Math.Floor((endedMs - startedMs) / 1000.0));
@@ -218,14 +238,7 @@ public sealed partial class RecapService(IRecapRepository repository)
             rangeStart = new DateTimeOffset(now.Year, now.Month, now.Day, 0, 0, 0, TimeSpan.Zero);
         }
 
-        if (endedAt.HasValue)
-        {
-            rangeEndExclusive = new DateTimeOffset(endedAt.Value.Year, endedAt.Value.Month, endedAt.Value.Day, 0, 0, 0, TimeSpan.Zero).AddDays(1);
-        }
-        else
-        {
-            rangeEndExclusive = new DateTimeOffset(now.Year, now.Month, now.Day, 0, 0, 0, TimeSpan.Zero).AddDays(1);
-        }
+        rangeEndExclusive = RecapRange.ResolveEndExclusive(now, endedAt);
 
         var daysInRange = Math.Max(0, (int)((rangeEndExclusive - rangeStart).TotalDays));
         var daysPlayed = daySet.Count;
@@ -481,7 +494,7 @@ public sealed partial class RecapService(IRecapRepository repository)
 
         var manualTitles = rows
             .Where(r => r.Platform == "manual")
-            .Select(r => NormalizeTitle(r.Title))
+            .Select(r => GamesDomain.NormalizeTitle(r.Title))
             .Distinct(StringComparer.Ordinal)
             .ToArray();
 
@@ -507,7 +520,7 @@ public sealed partial class RecapService(IRecapRepository repository)
             if (row.Platform != "manual")
                 return ToSessionData(row);
 
-            var normalized = NormalizeTitle(row.Title);
+            var normalized = GamesDomain.NormalizeTitle(row.Title);
             if (mappingIndex.TryGetValue(normalized, out var mapping))
             {
                 var source = ResolveMappedSource(mapping.CanonicalKey);
@@ -570,11 +583,6 @@ public sealed partial class RecapService(IRecapRepository repository)
 
     private static string ToUtcMonthKey(DateTimeOffset date) =>
         date.ToString("yyyy-MM");
-
-    private static string NormalizeTitle(string title) =>
-        string.Join(" ",
-            NonAlphanumeric.Replace(title.Trim().ToLowerInvariant(), " ")
-                .Split(' ', StringSplitOptions.RemoveEmptyEntries));
 
     private static string? ResolveMappedSource(string? canonicalKey)
     {
@@ -647,7 +655,4 @@ public sealed partial class RecapService(IRecapRepository repository)
     }
 
     private sealed record ConnectionIndex(Func<long, long> Find);
-
-    [GeneratedRegex("[^a-z0-9]+")]
-    private static partial Regex MyRegex();
 }

@@ -59,6 +59,93 @@ public sealed class MigrationCatalogTests
 public sealed class MigrationRunnerTests
 {
     [Fact]
+    public async Task CurrentSchemaMigration_BootstrapsAFreshDatabaseAndIsIdempotent()
+    {
+        var databaseUrl = Environment.GetEnvironmentVariable("PLAYDEX_INTEGRATION_DATABASE_URL");
+        if (string.IsNullOrWhiteSpace(databaseUrl))
+        {
+            return;
+        }
+
+        var baseConnectionString = PostgresConnectionString.Normalize(databaseUrl);
+        var databaseName = $"playdex_schema_{Guid.NewGuid():N}";
+        var adminBuilder = new NpgsqlConnectionStringBuilder(baseConnectionString)
+        {
+            Database = "postgres",
+            Pooling = false,
+        };
+
+        await using var adminConnection = new NpgsqlConnection(adminBuilder.ConnectionString);
+        await adminConnection.OpenAsync();
+
+        try
+        {
+            await using (var create = new NpgsqlCommand($"create database {databaseName}", adminConnection))
+            {
+                await create.ExecuteNonQueryAsync();
+            }
+
+            var databaseBuilder = new NpgsqlConnectionStringBuilder(baseConnectionString)
+            {
+                Database = databaseName,
+                Pooling = false,
+            };
+
+            await using (var dataSource = new NpgsqlDataSourceBuilder(databaseBuilder.ConnectionString).Build())
+            {
+                var runner = new MigrationRunner(
+                    dataSource,
+                    new MigrationCatalog([new CurrentSchemaMigration()]),
+                    NullLogger<MigrationRunner>.Instance);
+
+                await runner.RunAsync();
+                await runner.RunAsync();
+
+                await using var connection = await dataSource.OpenConnectionAsync();
+                await using var tables = new NpgsqlCommand(
+                    """
+                    select count(*)
+                    from information_schema.tables
+                    where table_schema = 'public'
+                      and table_name = any (@tableNames)
+                    """,
+                    connection);
+                tables.Parameters.AddWithValue(
+                    "tableNames",
+                    new[]
+                    {
+                        "users", "platforms", "platform_credentials", "games", "play_sessions",
+                        "poll_results", "manual_game_inputs", "ignored_games", "game_ratings",
+                        "user_settings", "game_connections",
+                    });
+                Assert.Equal(11L, await tables.ExecuteScalarAsync());
+
+                await using var platforms = new NpgsqlCommand(
+                    "select count(*) from platforms where key = any (@keys)",
+                    connection);
+                platforms.Parameters.AddWithValue(
+                    "keys",
+                    new[]
+                    {
+                        "ps5", "xbox-series-xs", "pc", "switch-1", "switch-2", "unknown",
+                        "steam", "playnite", "psn", "manual",
+                    });
+                Assert.Equal(10L, await platforms.ExecuteScalarAsync());
+
+                await using var history = new NpgsqlCommand(
+                    "select count(*) from dotnet_schema_migrations where migration_id = '001_current_schema'",
+                    connection);
+                Assert.Equal(1L, await history.ExecuteScalarAsync());
+            }
+        }
+        finally
+        {
+            await using var drop = new NpgsqlCommand($"drop database if exists {databaseName} with (force)", adminConnection);
+            await drop.ExecuteNonQueryAsync();
+        }
+    }
+
+    [Fact]
     public async Task RunAsync_AppliesEachMigrationExactlyOnce()
     {
         var databaseUrl = Environment.GetEnvironmentVariable("PLAYDEX_INTEGRATION_DATABASE_URL");

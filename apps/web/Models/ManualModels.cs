@@ -5,13 +5,13 @@ public sealed record ManualEntryCreateRequest(
     string Date,
     int DurationMinutes,
     string? GameId,
-    int? IgdbId,
+    string? IgdbId,
     string? Title,
     string? PlatformKey,
     string? CapsuleUrl);
 public sealed record ManualMapInputRequest(
     string? GameId,
-    int? IgdbId,
+    string? IgdbId,
     string? Title,
     string? PlatformKey,
     int? PlatformId,
