@@ -75,10 +75,21 @@ builder.Services.ConfigureHttpJsonOptions(json =>
 });
 
 builder.Logging.ClearProviders();
-builder.Logging.AddJsonConsole(cfg =>
+if (builder.Environment.IsDevelopment())
 {
-    cfg.JsonWriterOptions = new JsonWriterOptions { Indented = false };
-});
+    builder.Logging.AddSimpleConsole(cfg =>
+    {
+        cfg.IncludeScopes = true;
+        cfg.TimestampFormat = "HH:mm:ss ";
+    });
+}
+else
+{
+    builder.Logging.AddJsonConsole(cfg =>
+    {
+        cfg.JsonWriterOptions = new JsonWriterOptions { Indented = false };
+    });
+}
 
 builder.Services.AddCors(cfg =>
 {
