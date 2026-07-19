@@ -1,5 +1,4 @@
 using System.Net;
-using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Playdex.Api.Data;
@@ -10,7 +9,7 @@ public sealed class SteamClient(HttpClient httpClient) : IProviderClient
 {
     public string PlatformKey => "steam";
 
-    public async Task<CurrentlyPlayingResult?> GetCurrentlyPlaying(PlatformCredential credential, CancellationToken ct)
+    public async Task<ProviderPollResult?> GetCurrentlyPlaying(PlatformCredential credential, CancellationToken ct)
     {
         var steamId = credential.AccountId;
         if (string.IsNullOrEmpty(steamId))
@@ -30,18 +29,21 @@ public sealed class SteamClient(HttpClient httpClient) : IProviderClient
 
         response.EnsureSuccessStatusCode();
 
-        var payload = await response.Content.ReadFromJsonAsync<SteamPlayerSummariesResponse>(JsonOptions, ct);
+        var rawJson = await response.Content.ReadAsStringAsync(ct);
+        var payload = JsonSerializer.Deserialize<SteamPlayerSummariesResponse>(rawJson, JsonOptions);
         var player = payload?.Response?.Players?.FirstOrDefault();
 
         if (player?.GameId is null || string.IsNullOrEmpty(player.GameExtraInfo))
-            return null;
+            return new ProviderPollResult(Game: null, RawPayload: rawJson);
 
-        return new CurrentlyPlayingResult(
-            GameId: null,
-            Title: player.GameExtraInfo,
-            ExternalId: player.GameId,
-            CapsuleUrl: $"https://shared.steamstatic.com/store_item_assets/steam/apps/{player.GameId}/library_600x900_2x.jpg",
-            Platform: "steam"
+        return new ProviderPollResult(
+            Game: new CurrentlyPlayingResult(
+                Title: player.GameExtraInfo,
+                ExternalId: player.GameId,
+                CapsuleUrl: $"https://shared.steamstatic.com/store_item_assets/steam/apps/{player.GameId}/library_600x900_2x.jpg",
+                Platform: "steam"
+            ),
+            RawPayload: rawJson
         );
     }
 

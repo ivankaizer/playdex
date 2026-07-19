@@ -4,10 +4,20 @@ namespace Playdex.Api.Polling;
 
 /// <summary>
 /// Result from a provider's "currently playing" API call.
-/// When a user is playing nothing, the result is null.
+/// When a user is playing nothing, Game is null but RawPayload still
+/// captures the provider's raw response for debugging.
+/// Returns null only when the provider cannot be reached at all.
+/// </summary>
+public sealed record ProviderPollResult(
+    CurrentlyPlayingResult? Game,
+    string? RawPayload
+);
+
+/// <summary>
+/// Game data extracted from a provider's response when a user is
+/// actively playing something.
 /// </summary>
 public sealed record CurrentlyPlayingResult(
-    long? GameId,
     string Title,
     string? ExternalId,
     string? CapsuleUrl,
@@ -28,8 +38,11 @@ public interface IProviderClient
 
     /// <summary>
     /// Queries the provider for the user's currently playing game.
-    /// Returns null when the user is not playing anything or the
-    /// provider cannot be reached.
+    /// Returns null when the provider cannot be reached.
+    /// When the provider responds but the user is not playing,
+    /// the result's <see cref="ProviderPollResult.Game"/> is null
+    /// but <see cref="ProviderPollResult.RawPayload"/> still
+    /// contains the raw response for debugging.
     /// </summary>
-    Task<CurrentlyPlayingResult?> GetCurrentlyPlaying(PlatformCredential credential, CancellationToken ct);
+    Task<ProviderPollResult?> GetCurrentlyPlaying(PlatformCredential credential, CancellationToken ct);
 }

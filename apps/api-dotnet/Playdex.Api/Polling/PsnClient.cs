@@ -12,7 +12,7 @@ public sealed class PsnClient(HttpClient httpClient) : IProviderClient
 {
     public string PlatformKey => "psn";
 
-    public async Task<CurrentlyPlayingResult?> GetCurrentlyPlaying(PlatformCredential credential, CancellationToken ct)
+    public async Task<ProviderPollResult?> GetCurrentlyPlaying(PlatformCredential credential, CancellationToken ct)
     {
         var npsso = credential.ApiKey;
         var accountId = credential.AccountId;
@@ -31,24 +31,26 @@ public sealed class PsnClient(HttpClient httpClient) : IProviderClient
                 return null;
         }
 
-        var presence = await GetBasicPresence(accessToken, accountId, ct);
+        var (presence, rawPresence) = await GetBasicPresence(accessToken, accountId, ct);
         if (presence is null)
             return null;
 
         var titleInfo = presence.BasicPresence?.GameTitleInfoList?.FirstOrDefault();
         if (titleInfo?.TitleName is null)
-            return null;
+            return new ProviderPollResult(Game: null, RawPayload: rawPresence);
 
         string? capsuleUrl = null;
         if (titleInfo.ConceptIconUrl is not null)
             capsuleUrl = titleInfo.ConceptIconUrl;
 
-        return new CurrentlyPlayingResult(
-            GameId: null,
-            Title: titleInfo.TitleName,
-            ExternalId: titleInfo.NpTitleId ?? titleInfo.TitleId,
-            CapsuleUrl: capsuleUrl,
-            Platform: "psn"
+        return new ProviderPollResult(
+            Game: new CurrentlyPlayingResult(
+                Title: titleInfo.TitleName,
+                ExternalId: titleInfo.NpTitleId ?? titleInfo.TitleId,
+                CapsuleUrl: capsuleUrl,
+                Platform: "psn"
+            ),
+            RawPayload: rawPresence
         );
     }
 
@@ -150,7 +152,7 @@ public sealed class PsnClient(HttpClient httpClient) : IProviderClient
         }
     }
 
-    private async Task<PsnPresenceResponse?> GetBasicPresence(string accessToken, string accountId, CancellationToken ct)
+    private async Task<(PsnPresenceResponse? Presence, string? RawJson)> GetBasicPresence(string accessToken, string accountId, CancellationToken ct)
     {
         var url = $"https://us-prof.np.community.playstation.net/userProfile/v1/internal/users/{accountId}/basicPresence";
 
@@ -159,9 +161,11 @@ public sealed class PsnClient(HttpClient httpClient) : IProviderClient
 
         var response = await httpClient.SendAsync(request, ct);
         if (!response.IsSuccessStatusCode)
-            return null;
+            return (null, null);
 
-        return await response.Content.ReadFromJsonAsync<PsnPresenceResponse>(JsonOptions, ct);
+        var rawJson = await response.Content.ReadAsStringAsync(ct);
+        var presence = JsonSerializer.Deserialize<PsnPresenceResponse>(rawJson, JsonOptions);
+        return (presence, rawJson);
     }
 
     private string? _cachedAccessToken;

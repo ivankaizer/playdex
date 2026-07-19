@@ -131,11 +131,11 @@ public sealed class PollingBackgroundService(
             return;
         }
 
-        CurrentlyPlayingResult? providerResult;
+        ProviderPollResult? pollResult;
 
         try
         {
-            providerResult = await client.GetCurrentlyPlaying(credential, ct);
+            pollResult = await client.GetCurrentlyPlaying(credential, ct);
         }
         catch (HttpRequestException ex) when (ex.StatusCode == HttpStatusCode.TooManyRequests)
         {
@@ -151,24 +151,35 @@ public sealed class PollingBackgroundService(
 
         var polledAt = DateTimeOffset.UtcNow;
 
-        if (providerResult is null)
+        if (pollResult is null)
         {
             await EndAllSessions(playniteRepo, db, credential.Id, polledAt, ct);
             await pollingRepo.RecordPollResult(credential.Id, null, polledAt, null, ct);
+            metrics.RecordPollSuccess(platformKey, polledAt);
+            logger.LogDebug("Credential {CredentialId}: provider unreachable, ended sessions", credential.Id);
+            return;
+        }
+
+        if (pollResult.Game is null)
+        {
+            await EndAllSessions(playniteRepo, db, credential.Id, polledAt, ct);
+            await pollingRepo.RecordPollResult(credential.Id, null, polledAt, pollResult.RawPayload, ct);
             metrics.RecordPollSuccess(platformKey, polledAt);
             logger.LogDebug("Credential {CredentialId}: no game playing, ended sessions", credential.Id);
             return;
         }
 
+        var game = pollResult.Game;
+
         await using var tx = await db.Database.BeginTransactionAsync(ct);
 
-        var canonicalKey = $"{platformKey}:{providerResult.ExternalId ?? ComputeFallbackId(providerResult.Title)}";
+        var canonicalKey = $"{platformKey}:{game.ExternalId ?? ComputeFallbackId(game.Title)}";
         var gameId = await playniteRepo.UpsertGame(
-            providerResult.Title,
-            providerResult.ExternalId,
+            game.Title,
+            game.ExternalId,
             platformKey,
             canonicalKey,
-            providerResult.CapsuleUrl,
+            game.CapsuleUrl,
             ct);
 
         var ignored = await pollingRepo.CheckIfGameIgnored(credential.UserId, gameId, ct);
@@ -182,7 +193,7 @@ public sealed class PollingBackgroundService(
             await playniteRepo.EndActiveSessionsForCredential(credential.Id, polledAt, ct);
             await tx.CommitAsync(ct);
 
-            await pollingRepo.RecordPollResult(credential.Id, gameId, polledAt, null, ct);
+            await pollingRepo.RecordPollResult(credential.Id, gameId, polledAt, pollResult.RawPayload, ct);
             metrics.RecordPollSuccess(platformKey, polledAt);
             return;
         }
@@ -190,7 +201,7 @@ public sealed class PollingBackgroundService(
         await SyncPlaySession(db, playniteRepo, credential.Id, gameId, polledAt, ct);
         await tx.CommitAsync(ct);
 
-        await pollingRepo.RecordPollResult(credential.Id, gameId, polledAt, null, ct);
+        await pollingRepo.RecordPollResult(credential.Id, gameId, polledAt, pollResult.RawPayload, ct);
         metrics.RecordPollSuccess(platformKey, polledAt);
         logger.LogDebug("Credential {CredentialId}: synced session for game {GameId}", credential.Id, gameId);
     }
