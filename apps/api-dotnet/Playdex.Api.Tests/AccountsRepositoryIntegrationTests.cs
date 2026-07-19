@@ -1,7 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
-using Playdex.Api.Accounts;
-using Playdex.Api.Data;
+using Playdex.Api.Modules.Accounts;
+using Playdex.Api.Shared.Persistence;
 using Xunit;
 
 namespace Playdex.Api.Tests;
@@ -62,7 +62,7 @@ public sealed class AccountsRepositoryIntegrationTests
                 .UseNpgsql(dataSource)
                 .Options;
             await using var db = new PlaydexDbContext(dbOptions);
-            var service = new AccountsService(new AccountsRepository(db));
+            var service = new AccountsService(new AccountsRepository(db, new StubGames()));
 
             var sessions = await service.ListSessions(
                 userId.Value, null, null, null,
@@ -159,7 +159,7 @@ public sealed class AccountsRepositoryIntegrationTests
                 .UseNpgsql(dataSource)
                 .Options;
             await using var db = new PlaydexDbContext(dbOptions);
-            var repository = new AccountsRepository(db);
+            var repository = new AccountsRepository(db, new StubGames());
 
             Assert.Equal(ownedSessionId,
                 await repository.DeleteSession(ownedSessionId, ownerId.Value, CancellationToken.None));

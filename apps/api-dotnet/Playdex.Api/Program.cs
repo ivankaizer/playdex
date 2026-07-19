@@ -2,24 +2,23 @@ using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Npgsql;
-using Playdex.Api.Accounts;
-using Playdex.Api.Admin;
-using Playdex.Api.Auth;
-using Playdex.Api.Common;
-using Playdex.Api.Configuration;
-using Playdex.Api.Data;
-using Playdex.Api.Data.Migrations;
-using Playdex.Api.Games;
-using Playdex.Api.Http;
-using Playdex.Api.Manual;
-using Playdex.Api.Metrics;
+using Playdex.Api.Shared.Auth;
+using Playdex.Api.Shared.Common;
+using Playdex.Api.Shared.Http;
+using Playdex.Api.Shared.Persistence;
+using Playdex.Api.Shared.Persistence.Migrations;
+using Playdex.Api.Modules.Accounts;
+using Playdex.Api.Modules.Admin;
+using Playdex.Api.Modules.Games;
+using Playdex.Api.Modules.Manual;
+using Playdex.Api.Modules.Metrics;
+using Playdex.Api.Modules.Playnite;
+using Playdex.Api.Modules.Polling;
+using Playdex.Api.Modules.Providers;
+using Playdex.Api.Modules.Recap;
+using Playdex.Api.Modules.Settings;
+using Playdex.Api.Modules.Telegram;
 using Playdex.Api.Observability;
-using Playdex.Api.Playnite;
-using Playdex.Api.Polling;
-using Playdex.Api.Providers;
-using Playdex.Api.Recap;
-using Playdex.Api.Settings;
-using Playdex.Api.Telegram;
 
 var builder = WebApplication.CreateBuilder(args);
 var options = PlaydexOptions.FromConfiguration(builder.Configuration);
@@ -30,41 +29,23 @@ builder.Services.AddSingleton(options);
 builder.Services.AddSingleton(dataSource);
 builder.Services.AddSingleton(tokenService);
 builder.Services.AddDbContext<PlaydexDbContext>(db => db.UseNpgsql(dataSource));
-builder.Services.AddScoped<AuthRepository>();
-builder.Services.AddScoped<AuthService>();
-builder.Services.AddPlaydexAuthentication(tokenService);
 builder.Services.AddSingleton(new MigrationCatalog([new CurrentSchemaMigration()]));
 builder.Services.AddSingleton<MigrationRunner>();
+builder.Services.AddScoped<EventBus>();
 
-builder.Services.AddScoped<AccountsRepository>();
-builder.Services.AddScoped<AccountsService>();
-builder.Services.AddScoped<SettingsRepository>();
-builder.Services.AddScoped<SettingsService>();
-builder.Services.AddScoped<GamesRepository>();
-builder.Services.AddScoped<GamesService>();
-builder.Services.AddScoped<ManualRepository>();
-builder.Services.AddScoped<ManualService>();
-builder.Services.AddScoped<PlayniteRepository>();
-builder.Services.AddScoped<PlayniteService>();
-builder.Services.AddScoped<ProvidersRepository>();
-builder.Services.AddScoped<ProvidersService>();
-builder.Services.AddScoped<AdminRepository>();
-builder.Services.AddScoped<AdminService>();
-builder.Services.AddScoped<RecapRepository>();
-builder.Services.AddScoped<RecapService>();
-builder.Services.AddSingleton<MetricsCollector>();
-builder.Services.AddScoped<PollingRepository>();
-builder.Services.AddScoped<TelegramRepository>();
-builder.Services.AddHttpClient<IProviderClient, SteamClient>("SteamClient")
-    .ConfigureHttpClient(c => c.Timeout = TimeSpan.FromSeconds(15));
-builder.Services.AddHttpClient<IProviderClient, PsnClient>("PsnClient")
-    .ConfigureHttpClient(c => c.Timeout = TimeSpan.FromSeconds(15));
-builder.Services.AddHttpClient<IgdbClient>(c =>
-{
-    c.Timeout = TimeSpan.FromSeconds(15);
-});
-builder.Services.AddHostedService<PollingBackgroundService>();
-builder.Services.AddHostedService<TelegramBackgroundService>();
+builder.Services
+    .AddAuth(tokenService)
+    .AddAccounts()
+    .AddSettings()
+    .AddGames()
+    .AddManual()
+    .AddPlaynite()
+    .AddProviders()
+    .AddAdmin()
+    .AddRecap()
+    .AddPlaydexMetrics()
+    .AddPolling()
+    .AddTelegram();
 
 builder.Services.AddExceptionHandler<ApiExceptionHandler>();
 builder.Services.AddProblemDetails();
@@ -113,16 +94,18 @@ app.UseAuthorization();
 
 var api = app.MapGroup("/api");
 api.MapGet("", () => TypedResults.Ok("Ok"));
-api.MapAuthEndpoints();
-api.MapAccountsEndpoints();
-api.MapSettingsEndpoints();
-api.MapGamesEndpoints();
-api.MapManualEndpoints();
-api.MapPlayniteEndpoints();
-api.MapProvidersEndpoints();
-api.MapAdminEndpoints();
-api.MapRecapEndpoints();
-api.MapMetricsEndpoints();
+
+api
+    .MapAuth()
+    .MapAccounts()
+    .MapSettings()
+    .MapGames()
+    .MapManual()
+    .MapPlaynite()
+    .MapProviders()
+    .MapAdmin()
+    .MapRecap()
+    .MapMetrics();
 
 app.MapHealthChecks("/health/live", new HealthCheckOptions { Predicate = _ => false });
 app.MapHealthChecks("/health/ready");

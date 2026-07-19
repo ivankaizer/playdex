@@ -1,9 +1,9 @@
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
-using Playdex.Api.Admin;
-using Playdex.Api.Data;
-using Playdex.Api.Games;
-using Playdex.Api.Providers;
+using Playdex.Api.Modules.Admin;
+using Playdex.Api.Shared.Persistence;
+using Playdex.Api.Modules.Games;
+using Playdex.Api.Modules.Providers;
 using Xunit;
 
 namespace Playdex.Api.Tests;

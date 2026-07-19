@@ -1,4 +1,4 @@
-using Playdex.Api.Recap;
+using Playdex.Api.Modules.Recap;
 using Xunit;
 
 namespace Playdex.Api.Tests;

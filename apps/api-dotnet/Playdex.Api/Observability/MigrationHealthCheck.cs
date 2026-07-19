@@ -1,6 +1,6 @@
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Npgsql;
-using Playdex.Api.Data.Migrations;
+using Playdex.Api.Shared.Persistence.Migrations;
 
 namespace Playdex.Api.Observability;
 

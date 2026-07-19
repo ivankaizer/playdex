@@ -1,7 +1,7 @@
-using Playdex.Api.Auth;
-using Playdex.Api.Configuration;
-using Playdex.Api.Data;
-using Playdex.Api.Http;
+using Playdex.Api.Shared.Auth;
+using Playdex.Api.Shared.Common;
+using Playdex.Api.Shared.Persistence;
+using Playdex.Api.Shared.Http;
 using Xunit;
 
 namespace Playdex.Api.Tests;

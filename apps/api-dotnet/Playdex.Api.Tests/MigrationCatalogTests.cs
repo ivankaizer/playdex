@@ -1,7 +1,7 @@
 using Npgsql;
 using Microsoft.Extensions.Logging.Abstractions;
-using Playdex.Api.Data;
-using Playdex.Api.Data.Migrations;
+using Playdex.Api.Shared.Persistence;
+using Playdex.Api.Shared.Persistence.Migrations;
 using Xunit;
 
 namespace Playdex.Api.Tests;

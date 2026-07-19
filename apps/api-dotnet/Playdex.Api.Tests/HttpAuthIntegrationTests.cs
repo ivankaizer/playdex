@@ -4,7 +4,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Npgsql;
-using Playdex.Api.Data;
+using Playdex.Api.Shared.Persistence;
 using Xunit;
 
 namespace Playdex.Api.Tests;

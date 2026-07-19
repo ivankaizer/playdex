@@ -1,4 +1,4 @@
-using Playdex.Api.Games;
+using Playdex.Api.Modules.Games;
 using Xunit;
 
 namespace Playdex.Api.Tests;

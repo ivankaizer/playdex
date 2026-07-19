@@ -1,7 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
-using Playdex.Api.Data;
-using Playdex.Api.Manual;
+using Playdex.Api.Shared.Persistence;
+using Playdex.Api.Modules.Manual;
 using Xunit;
 
 namespace Playdex.Api.Tests;

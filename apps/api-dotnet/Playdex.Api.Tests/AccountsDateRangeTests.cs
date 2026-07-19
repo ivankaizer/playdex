@@ -1,5 +1,5 @@
-using Playdex.Api.Accounts;
-using Playdex.Api.Http;
+using Playdex.Api.Modules.Accounts;
+using Playdex.Api.Shared.Http;
 using Xunit;
 
 namespace Playdex.Api.Tests;

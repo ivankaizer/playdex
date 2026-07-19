@@ -1,7 +1,7 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.EntityFrameworkCore;
-using Playdex.Api.Configuration;
-using Playdex.Api.Data;
+using Playdex.Api.Shared.Common;
+using Playdex.Api.Shared.Persistence;
 using Xunit;
 
 namespace Playdex.Api.Tests;

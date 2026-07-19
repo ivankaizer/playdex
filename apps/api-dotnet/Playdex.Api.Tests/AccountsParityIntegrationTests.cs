@@ -1,8 +1,8 @@
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
-using Playdex.Api.Accounts;
-using Playdex.Api.Common;
-using Playdex.Api.Data;
+using Playdex.Api.Modules.Accounts;
+using Playdex.Api.Shared.Common;
+using Playdex.Api.Shared.Persistence;
 using Xunit;
 
 namespace Playdex.Api.Tests;
@@ -48,7 +48,7 @@ public sealed class AccountsParityIntegrationTests
                 new NpgsqlParameter("secondGameId", secondGameId));
 
             await using var db = Context(dataSource);
-            var service = new AccountsService(new AccountsRepository(db));
+            var service = new AccountsService(new AccountsRepository(db, new StubGames()));
             var sessions = await service.ListSessions(
                 userId, null, null, GameId.Encode(firstGameId),
                 "2026-07-15", "2026-07-15", "date", "asc", 10, 0, 0, CancellationToken.None);
@@ -115,7 +115,7 @@ public sealed class AccountsParityIntegrationTests
                 new NpgsqlParameter("gameId", rawGameId));
 
             await using var db = Context(dataSource);
-            var service = new AccountsService(new AccountsRepository(db));
+            var service = new AccountsService(new AccountsRepository(db, new StubGames()));
             var result = await service.ListSessions(
                 userId, null, null, null, "2026-07-16", "2026-07-16",
                 "date", "desc", 10, 0, 0, CancellationToken.None);

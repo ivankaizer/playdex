@@ -1,9 +1,9 @@
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
-using Playdex.Api.Admin;
-using Playdex.Api.Data;
-using Playdex.Api.Http;
+using Playdex.Api.Modules.Admin;
+using Playdex.Api.Shared.Persistence;
+using Playdex.Api.Shared.Http;
 using Xunit;
 
 namespace Playdex.Api.Tests;

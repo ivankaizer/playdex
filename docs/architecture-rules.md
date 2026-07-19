@@ -99,3 +99,34 @@ When a boundary rule exists, add tests that fail if code drifts back to the old
 shape. For example, scan protected handlers to ensure they do not import or call
 authorization helpers directly, and add route-level tests proving distinct auth
 schemes do not overlap.
+
+## Module Organization
+
+The `Playdex.Api` project is organized as a modular monolith:
+
+```
+Shared/           — Infrastructure shared by all modules
+  Persistence/    — DbContext, entities, migrations
+  Http/           — Middleware, AppProblem, correlation ID
+  Auth/           — JWT, claims extensions, auth endpoints
+  Common/         — GameId, options, event bus
+
+Modules/          — Feature modules
+  Accounts/       — AccountsModule.cs, *Service.cs, *Repository.cs, *Dto.cs, *Endpoints.cs
+  Games/          — Same pattern + public contract (IGames.cs)
+  ...
+```
+
+**Module registration**: Each module exposes an `Add{Name}()` extension on
+`IServiceCollection` and a `Map{Name}()` extension on `RouteGroupBuilder`.
+`Program.cs` calls one line per module.
+
+**Cross-module contracts**: If Module A depends on Module B, Module B exposes a
+public interface (`IModuleB`) colocated in its directory. Module A injects the
+interface, not the concrete type. Internal types (repositories, endpoints,
+internal-only services) are not imported across module boundaries.
+
+**Event bus**: Background services publish domain events via `EventBus.Publish()`.
+Module handlers implement `IEventHandler<T>` and are registered in the module's
+`Add{Name}()` method. This replaces `IServiceScopeFactory` service locator
+patterns for cross-module background communication.
