@@ -1,0 +1,23 @@
+meta {
+  name: Unignore Game
+  type: http
+  seq: 8
+}
+
+delete {
+  url: {{baseUrl}}/api/games/ignored
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+headers {
+  Accept: application/json
+}
+
+docs {
+  Remove a game from the ignored list.
+}

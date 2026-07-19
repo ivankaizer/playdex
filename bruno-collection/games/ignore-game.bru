@@ -1,0 +1,30 @@
+meta {
+  name: Ignore Game
+  type: http
+  seq: 7
+}
+
+post {
+  url: {{baseUrl}}/api/games/ignored
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+headers {
+  Accept: application/json
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "gameId": "string"
+  }
+}
+
+docs {
+  Add a game to the ignored list.
+}

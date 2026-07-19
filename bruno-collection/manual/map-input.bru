@@ -1,0 +1,35 @@
+meta {
+  name: Map Input
+  type: http
+  seq: 6
+}
+
+post {
+  url: {{baseUrl}}/api/manual/inputs/{{inputId}}/map
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+headers {
+  Accept: application/json
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "gameId": "string?",
+    "igdbId": "string?",
+    "title": "string?",
+    "platformKey": "string?",
+    "platformId": 0,
+    "capsuleUrl": "string?"
+  }
+}
+
+docs {
+  Map a manual input to a game.
+}

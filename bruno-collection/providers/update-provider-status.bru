@@ -1,0 +1,31 @@
+meta {
+  name: Update Provider Status
+  type: http
+  seq: 2
+}
+
+put {
+  url: {{baseUrl}}/api/providers/status
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+headers {
+  Accept: application/json
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "providerId": 1,
+    "status": "connected"
+  }
+}
+
+docs {
+  Update the connection status of a provider.
+}

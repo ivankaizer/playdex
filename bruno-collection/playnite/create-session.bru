@@ -1,0 +1,35 @@
+meta {
+  name: Create Session
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/api/playnite/sessions
+  body: json
+  auth: apikey
+}
+
+auth:apikey {
+  key: {{playniteApiKey}}
+  value: {{playniteApiKey}}
+  in: header
+}
+
+headers {
+  Accept: application/json
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "gameTitle": "Elden Ring",
+    "gameId": "12345",
+    "gameProvider": "steam",
+    "durationInSeconds": 3600
+  }
+}
+
+docs {
+  Create a completed play session via the Playnite extension. Uses API key authentication.
+}

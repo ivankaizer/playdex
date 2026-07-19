@@ -1,0 +1,23 @@
+meta {
+  name: Get Account Stats
+  type: http
+  seq: 5
+}
+
+get {
+  url: {{baseUrl}}/api/accounts/{{accountId}}/stats
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+headers {
+  Accept: application/json
+}
+
+docs {
+  Get playtime statistics for a specific account.
+}

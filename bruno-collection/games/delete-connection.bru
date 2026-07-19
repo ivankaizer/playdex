@@ -1,0 +1,23 @@
+meta {
+  name: Delete Connection
+  type: http
+  seq: 5
+}
+
+delete {
+  url: {{baseUrl}}/api/games/connections
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+headers {
+  Accept: application/json
+}
+
+docs {
+  Remove a connection between two games.
+}

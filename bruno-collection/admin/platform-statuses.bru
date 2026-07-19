@@ -1,0 +1,23 @@
+meta {
+  name: Platform Statuses
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{baseUrl}}/api/admin/providers/platforms
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+headers {
+  Accept: application/json
+}
+
+docs {
+  Admin: Get platform statuses for all providers.
+}

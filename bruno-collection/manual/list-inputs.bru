@@ -1,0 +1,23 @@
+meta {
+  name: List Inputs
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/api/manual/inputs
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+headers {
+  Accept: application/json
+}
+
+docs {
+  List all manual tracking inputs for the current user.
+}

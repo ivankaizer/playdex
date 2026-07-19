@@ -1,0 +1,30 @@
+meta {
+  name: Start Manual Session
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/api/manual/sessions/start
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+headers {
+  Accept: application/json
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "title": "Elden Ring"
+  }
+}
+
+docs {
+  Start a manually tracked play session.
+}

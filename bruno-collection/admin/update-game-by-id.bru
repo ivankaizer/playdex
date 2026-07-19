@@ -1,0 +1,33 @@
+meta {
+  name: Update Game by ID
+  type: http
+  seq: 10
+}
+
+put {
+  url: {{baseUrl}}/api/admin/games/{{gameId}}
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+headers {
+  Accept: application/json
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "title": "string?",
+    "imageUrl": "string?",
+    "lockTitle": false,
+    "lockImage": false
+  }
+}
+
+docs {
+  Admin: Update a game by its ID in the URL path.
+}

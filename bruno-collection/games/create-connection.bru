@@ -1,0 +1,31 @@
+meta {
+  name: Create Connection
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{baseUrl}}/api/games/connections
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+headers {
+  Accept: application/json
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "gameId": "string",
+    "connectedGameId": "string"
+  }
+}
+
+docs {
+  Create a connection between two games.
+}

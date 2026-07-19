@@ -1,0 +1,27 @@
+meta {
+  name: List Ignored Games
+  type: http
+  seq: 6
+}
+
+get {
+  url: {{baseUrl}}/api/games/ignored
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+query {
+  gameId: string?
+}
+
+headers {
+  Accept: application/json
+}
+
+docs {
+  List ignored games, optionally filtered by gameId.
+}

@@ -1,0 +1,34 @@
+meta {
+  name: List Account Sessions
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/api/accounts/{{accountId}}/sessions
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+query {
+  limit: 20
+  offset: 0
+  sort: startedAt
+  direction: desc
+  title: string?
+  gameId: string?
+  from: string?
+  to: string?
+}
+
+headers {
+  Accept: application/json
+}
+
+docs {
+  List sessions for a specific account with pagination, sorting, and filtering.
+}

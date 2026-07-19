@@ -1,0 +1,23 @@
+meta {
+  name: List Connections
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{baseUrl}}/api/games/connections
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+headers {
+  Accept: application/json
+}
+
+docs {
+  List all game connections for the current user.
+}

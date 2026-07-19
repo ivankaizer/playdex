@@ -1,0 +1,27 @@
+meta {
+  name: Get Ratings
+  type: http
+  seq: 9
+}
+
+get {
+  url: {{baseUrl}}/api/games/rating
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+query {
+  gameId: string?
+}
+
+headers {
+  Accept: application/json
+}
+
+docs {
+  Get ratings for games, optionally filtered by gameId.
+}

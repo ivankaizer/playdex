@@ -1,0 +1,24 @@
+meta {
+  name: Stop Manual Session
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/api/manual/sessions/stop
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+headers {
+  Accept: application/json
+  Content-Type: application/json
+}
+
+docs {
+  Stop the currently active manually tracked session.
+}

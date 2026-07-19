@@ -1,0 +1,28 @@
+meta {
+  name: Search Games
+  type: http
+  seq: 8
+}
+
+get {
+  url: {{baseUrl}}/api/admin/games/search
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+query {
+  query: zelda
+  limit: 10
+}
+
+headers {
+  Accept: application/json
+}
+
+docs {
+  Admin: Search games across the database.
+}

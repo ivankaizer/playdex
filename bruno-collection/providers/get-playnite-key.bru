@@ -1,0 +1,24 @@
+meta {
+  name: Get Playnite Key
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/api/playnite/key
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+headers {
+  Accept: application/json
+  Content-Type: application/json
+}
+
+docs {
+  Generate or retrieve the Playnite API key for the current user.
+}

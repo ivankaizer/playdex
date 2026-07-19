@@ -1,0 +1,23 @@
+meta {
+  name: Recent Sessions
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/api/admin/sessions/recent
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+headers {
+  Accept: application/json
+}
+
+docs {
+  Admin: Get recent sessions across all users.
+}

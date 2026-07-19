@@ -1,0 +1,34 @@
+meta {
+  name: Ping Session
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/api/playnite/sessions/ping
+  body: json
+  auth: apikey
+}
+
+auth:apikey {
+  key: {{playniteApiKey}}
+  value: {{playniteApiKey}}
+  in: header
+}
+
+headers {
+  Accept: application/json
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "gameTitle": "Elden Ring",
+    "gameId": "12345",
+    "gameProvider": "steam"
+  }
+}
+
+docs {
+  Ping an active session to keep it alive via the Playnite extension. Uses API key authentication.
+}
