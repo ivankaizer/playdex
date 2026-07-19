@@ -43,6 +43,7 @@ services:
     restart: "no"
     environment:
       DOTNET_USE_POLLING_FILE_WATCHER: "true"
+      PLAYDEX_API_URL: "https://app.playdex.orb.local/api/"
     volumes:
       - ./apps/web:/app
       - web_node_modules:/app/node_modules

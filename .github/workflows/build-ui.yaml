@@ -61,6 +61,6 @@ jobs:
           ECR_REPOSITORY: ${{ secrets.REPO_NAME }}-ui
         run: |
           IMAGE_TAG="$(git rev-parse --short HEAD)-$(date +'%Y-%m-%d-%H-%M')"
-          docker build --build-arg PLAYDEX_API_URL=https://playdex.ejwan.dev/api/ -t "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" -t "$ECR_REGISTRY/$ECR_REPOSITORY:latest" apps/web
+          docker build -t "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" -t "$ECR_REGISTRY/$ECR_REPOSITORY:latest" apps/web
           docker push "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
           docker push "$ECR_REGISTRY/$ECR_REPOSITORY:latest"
