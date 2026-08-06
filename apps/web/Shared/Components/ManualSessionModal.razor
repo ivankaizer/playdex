@@ -1,0 +1,122 @@
+@using Microsoft.AspNetCore.Components
+@using Playdex.Web.Shared.Models
+@using Playdex.Web.Shared.Common
+
+@if (IsOpen)
+{
+    <div class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/30 dark:bg-slate-950/80 px-4 py-8">
+        <div class="w-full max-w-lg rounded-3xl border border-slate-200 dark:border-slate-800 bg-white/90 dark:bg-slate-900/90 p-5 shadow-[0_30px_80px_rgba(15,23,42,0.7)] sm:p-6">
+            <div class="flex items-center justify-between gap-4">
+                <div>
+                    <p class="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-700 dark:text-emerald-300">
+                        Manual tracking
+                    </p>
+                    <h2 class="mt-2 text-xl font-semibold text-slate-900 dark:text-white">
+                        Start a session
+                    </h2>
+                </div>
+                <button type="button"
+                        @onclick="OnClose"
+                        class="rounded-full border border-slate-300 dark:border-slate-700 px-3 py-1 text-xs font-semibold uppercase tracking-[0.3em] text-slate-700 dark:text-slate-200">
+                    Close
+                </button>
+            </div>
+
+            <div class="mt-6 grid gap-4">
+                <label class="text-xs font-medium text-slate-600 dark:text-slate-300">
+                    Pick from history
+                    <select value="@ManualInputSelection"
+                            @onchange="eventArgs => OnSelectInput.InvokeAsync(eventArgs.Value?.ToString() ?? string.Empty)"
+                            disabled="@IsManualInputsLoading"
+                            class="mt-2 w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white/90 dark:bg-slate-950/80 px-3 py-2 text-sm text-slate-900 dark:text-white outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/30">
+                        <option value="">Choose a recent title</option>
+                        @foreach (var input in ManualInputs)
+                        {
+                            <option @key="input.Id" value="@input.Input">
+                                @Formatters.FormatManualInputLabel(
+                                    input.Input,
+                                    input.MappedGame?.Title,
+                                    input.MappedGame?.Platform,
+                                    input.MappedSource)
+                            </option>
+                        }
+                    </select>
+                </label>
+
+                <label class="text-xs font-medium text-slate-600 dark:text-slate-300">
+                    Or enter a new title
+                    <input type="text"
+                           placeholder="Mario Kart"
+                           value="@ManualInputText"
+                           @oninput="eventArgs => OnInputTextChange.InvokeAsync(eventArgs.Value?.ToString() ?? string.Empty)"
+                           class="mt-2 w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white/90 dark:bg-slate-950/80 px-3 py-2 text-sm text-slate-900 dark:text-white outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/30" />
+                </label>
+
+                @if (!string.IsNullOrEmpty(ManualInputsError))
+                {
+                    <p class="text-xs text-rose-700 dark:text-rose-300">
+                        @ManualInputsError
+                    </p>
+                }
+                @if (!string.IsNullOrEmpty(ManualStartError))
+                {
+                    <p class="text-xs text-rose-700 dark:text-rose-300">
+                        @ManualStartError
+                    </p>
+                }
+            </div>
+
+            <div class="mt-6 flex flex-wrap items-center justify-end gap-3">
+                <button type="button"
+                        @onclick="OnClose"
+                        class="rounded-full border border-slate-300 dark:border-slate-700 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-slate-700 dark:text-slate-200">
+                    Cancel
+                </button>
+                <button type="button"
+                        @onclick="OnStart"
+                        disabled="@(IsManualStartLoading || IsManualInputsLoading || string.IsNullOrWhiteSpace(ManualInputText))"
+                        class="rounded-full bg-emerald-400 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-slate-900 transition hover:bg-emerald-300 disabled:cursor-not-allowed disabled:bg-emerald-300/60">
+                    @(IsManualStartLoading ? "Starting..." : "Start session")
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter]
+    public bool IsOpen { get; set; }
+
+    [Parameter]
+    public IReadOnlyList<ManualInput> ManualInputs { get; set; } = [];
+
+    [Parameter]
+    public string ManualInputsError { get; set; } = "";
+
+    [Parameter]
+    public string ManualInputSelection { get; set; } = "";
+
+    [Parameter]
+    public string ManualInputText { get; set; } = "";
+
+    [Parameter]
+    public string ManualStartError { get; set; } = "";
+
+    [Parameter]
+    public bool IsManualInputsLoading { get; set; }
+
+    [Parameter]
+    public bool IsManualStartLoading { get; set; }
+
+    [Parameter]
+    public EventCallback OnClose { get; set; }
+
+    [Parameter]
+    public EventCallback<string> OnSelectInput { get; set; }
+
+    [Parameter]
+    public EventCallback<string> OnInputTextChange { get; set; }
+
+    [Parameter]
+    public EventCallback OnStart { get; set; }
+}

@@ -1,8 +1,8 @@
 using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
 using Playdex.Web;
-using Playdex.Web.Api;
-using Playdex.Web.Auth;
-using Playdex.Web.Browser;
+using Playdex.Web.Shared.Auth;
+using Playdex.Web.Shared.Browser;
+using Playdex.Web.Shared.Http;
 
 var builder = WebAssemblyHostBuilder.CreateDefault(args);
 builder.RootComponents.Add<App>("#app");

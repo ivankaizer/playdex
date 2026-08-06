@@ -1,5 +1,4 @@
-using Playdex.Web.Models;
-using Playdex.Web.Pages;
+using Playdex.Web.Modules.Settings;
 using Xunit;
 
 namespace Playdex.Web.Tests.Pages;
@@ -222,8 +221,8 @@ public sealed class SettingsStateTests
     public void SettingsPage_WiresLiteralReactMarkupRequestsAndCancellation()
     {
         var root = FindWebRoot();
-        var markupPath = Path.Combine(root, "Pages", "Settings.razor");
-        var codePath = Path.Combine(root, "Pages", "Settings.razor.cs");
+        var markupPath = Path.Combine(root, "Modules", "Settings", "Settings.razor");
+        var codePath = Path.Combine(root, "Modules", "Settings", "Settings.razor.cs");
         Assert.True(File.Exists(markupPath), "Missing Settings Razor page.");
 
         var markup = File.ReadAllText(markupPath);

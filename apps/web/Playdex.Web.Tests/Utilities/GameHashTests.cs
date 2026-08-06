@@ -1,4 +1,4 @@
-using Playdex.Web.Utilities;
+using Playdex.Web.Shared.Common;
 using Xunit;
 
 namespace Playdex.Web.Tests.Utilities;

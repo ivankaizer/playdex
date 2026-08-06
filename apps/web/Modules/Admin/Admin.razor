@@ -1,0 +1,340 @@
+@page "/admin"
+@using Playdex.Web.Layout
+@using Playdex.Web.Shared.Common
+
+<AppLayout Title="Admin">
+    <section class="mt-10 grid gap-6 lg:grid-cols-2">
+        <div class="rounded-3xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/60 p-5 sm:p-6">
+            <p class="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-700 dark:text-emerald-300">Recent sessions</p>
+            <h2 class="mt-2 text-xl font-semibold text-slate-900 dark:text-white">Last 3 sessions per user</h2>
+            @if (_state.SessionsError.Length > 0)
+            {
+                <p class="mt-4 text-xs text-rose-700 dark:text-rose-300">@_state.SessionsError</p>
+            }
+            <div class="mt-5 space-y-4">
+                @if (_state.IsSessionsLoading)
+                {
+                    <p class="text-xs text-slate-500 dark:text-slate-400">Loading sessions...</p>
+                }
+                else if (_state.RecentUsers.Count == 0)
+                {
+                    <p class="text-xs text-slate-500 dark:text-slate-400">No sessions found.</p>
+                }
+                else
+                {
+                    @foreach (var user in _state.RecentUsers)
+                    {
+                        <div @key="user.UserId" class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-200/40 dark:bg-slate-950/40 p-3">
+                            <p class="text-sm font-semibold text-slate-900 dark:text-white">@user.Email</p>
+                            <div class="mt-2 space-y-2">
+                                @foreach (var session in user.Sessions)
+                                {
+                                    <div @key="session.SessionId" class="flex items-start justify-between gap-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-white/70 dark:bg-slate-900/70 px-3 py-2 text-xs">
+                                        <div class="min-w-0">
+                                            <p class="truncate font-medium text-slate-800 dark:text-slate-100">@session.GameName</p>
+                                            <p class="mt-1 text-slate-500 dark:text-slate-400">
+                                                @Formatters.FormatLocalDateTime(session.StartedAt) · @Formatters.FormatDuration(session.DurationSeconds, DurationFormat.Short)
+                                            </p>
+                                        </div>
+                                        <span class="@($"shrink-0 rounded-full px-2 py-1 font-semibold uppercase tracking-[0.2em] {(session.Live ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300" : "bg-slate-200 text-slate-600 dark:bg-slate-800 dark:text-slate-300")}")">
+                                            @(session.Live ? "Live" : "Ended")
+                                        </span>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    }
+                }
+            </div>
+        </div>
+
+        <div class="rounded-3xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/60 p-5 sm:p-6">
+            <p class="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-700 dark:text-emerald-300">Provider controls</p>
+            <h2 class="mt-2 text-xl font-semibold text-slate-900 dark:text-white">Platform-level enable toggle</h2>
+            @if (_state.PlatformsError.Length > 0)
+            {
+                <p class="mt-4 text-xs text-rose-700 dark:text-rose-300">@_state.PlatformsError</p>
+            }
+            <div class="mt-5 space-y-3">
+                @if (_state.IsPlatformsLoading)
+                {
+                    <p class="text-xs text-slate-500 dark:text-slate-400">Loading platforms...</p>
+                }
+                else if (_state.Platforms.Count == 0)
+                {
+                    <p class="text-xs text-slate-500 dark:text-slate-400">No provider credentials found.</p>
+                }
+                else
+                {
+                    @foreach (var platform in _state.Platforms)
+                    {
+                        var isUpdating = _state.IsPlatformUpdating(platform.Platform);
+                        <div @key="platform.Platform" class="flex items-center justify-between rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-200/40 dark:bg-slate-950/40 px-4 py-3">
+                            <div>
+                                <p class="text-sm font-semibold text-slate-900 dark:text-white">@Formatters.FormatProviderName(platform.Platform)</p>
+                                <p class="text-xs text-slate-500 dark:text-slate-400">@platform.ActiveCredentials/@platform.TotalCredentials active</p>
+                            </div>
+                            <button type="button"
+                                    @onclick="() => TogglePlatformAsync(platform)"
+                                    disabled="@isUpdating"
+                                    class="@($"rounded-full px-3 py-2 text-xs font-semibold uppercase tracking-[0.25em] {(platform.Enabled ? "bg-emerald-400 text-slate-900" : "border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200")} disabled:cursor-not-allowed disabled:opacity-60")">
+                                @(isUpdating ? "Updating..." : platform.Enabled ? "Enabled" : "Disabled")
+                            </button>
+                        </div>
+                    }
+                }
+            </div>
+        </div>
+    </section>
+
+    <section class="mt-6 rounded-3xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/60 p-5 sm:p-6">
+        <p class="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-700 dark:text-emerald-300">Credentials</p>
+        <h2 class="mt-2 text-xl font-semibold text-slate-900 dark:text-white">Update platform credential records</h2>
+        @if (_state.CredentialsError.Length > 0)
+        {
+            <p class="mt-4 text-xs text-rose-700 dark:text-rose-300">@_state.CredentialsError</p>
+        }
+        @if (_state.IsCredentialsLoading)
+        {
+            <p class="mt-5 text-xs text-slate-500 dark:text-slate-400">Loading credentials...</p>
+        }
+        else if (_state.Credentials.Count == 0)
+        {
+            <p class="mt-5 text-xs text-slate-500 dark:text-slate-400">No credentials found.</p>
+        }
+        else
+        {
+            <div class="mt-5 flex flex-wrap gap-2">
+                @foreach (var platform in _state.CredentialPlatforms)
+                {
+                    var isActive = _state.SelectedCredentialPlatform == platform;
+                    <button @key="platform"
+                            type="button"
+                            @onclick="() => _state.SelectCredentialPlatform(platform)"
+                            class="@($"rounded-full px-3 py-2 text-xs font-semibold uppercase tracking-[0.25em] transition {(isActive ? "bg-emerald-400 text-slate-900" : "border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:border-emerald-400/60")}")">
+                        @Formatters.FormatProviderName(platform) (@_state.CredentialCountsByPlatform.GetValueOrDefault(platform))
+                    </button>
+                }
+            </div>
+            <div class="mt-4 space-y-3">
+                @foreach (var credential in _state.FilteredCredentials)
+                {
+                    var draft = _state.CredentialDrafts.GetValueOrDefault(credential.Id) ?? new CredentialDraft("", "");
+                    var isSaving = _state.IsCredentialSaving(credential.Id);
+                    <div @key="credential.Id" class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-200/40 dark:bg-slate-950/40 p-4">
+                        <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
+                            <p class="text-sm font-semibold text-slate-900 dark:text-white">@credential.UserEmail · @Formatters.FormatProviderName(credential.Platform)</p>
+                            <span class="text-xs text-slate-500 dark:text-slate-400">ID @credential.Id</span>
+                        </div>
+                        <div class="grid gap-3 md:grid-cols-2">
+                            <label class="text-xs text-slate-600 dark:text-slate-300">
+                                API key
+                                <input value="@draft.ApiKey"
+                                       @onchange="eventArgs => ChangeCredentialDraft(credential.Id, CredentialDraftField.ApiKey, eventArgs)"
+                                       class="mt-2 w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white/90 dark:bg-slate-950/80 px-3 py-2 text-sm text-slate-900 dark:text-white outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/30" />
+                            </label>
+                            <label class="text-xs text-slate-600 dark:text-slate-300">
+                                User
+                                <input value="@draft.AccountUser"
+                                       @onchange="eventArgs => ChangeCredentialDraft(credential.Id, CredentialDraftField.AccountUser, eventArgs)"
+                                       class="mt-2 w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white/90 dark:bg-slate-950/80 px-3 py-2 text-sm text-slate-900 dark:text-white outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/30" />
+                            </label>
+                        </div>
+                        <button type="button"
+                                @onclick="() => SaveCredentialAsync(credential.Id)"
+                                disabled="@isSaving"
+                                class="mt-3 rounded-full bg-emerald-400 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-slate-900 transition hover:bg-emerald-300 disabled:cursor-not-allowed disabled:bg-emerald-300/60">
+                            @(isSaving ? "Saving..." : "Save")
+                        </button>
+                    </div>
+                }
+            </div>
+        }
+    </section>
+
+    <section class="mt-6 rounded-3xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/60 p-5 sm:p-6">
+        <p class="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-700 dark:text-emerald-300">Session transfer</p>
+        <h2 class="mt-2 text-xl font-semibold text-slate-900 dark:text-white">Move game sessions between accounts</h2>
+
+        <div class="mt-4 flex flex-wrap gap-3">
+            <input value="@_state.SessionQuery"
+                   @oninput="ChangeSessionQuery"
+                   placeholder="Search by email, game, account user, or platform..."
+                   class="w-full max-w-md rounded-xl border border-slate-300 dark:border-slate-700 bg-white/90 dark:bg-slate-950/80 px-3 py-2 text-sm text-slate-900 dark:text-white outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/30" />
+            <button type="button"
+                    @onclick="SearchSessionsAsync"
+                    disabled="@_state.IsSessionListLoading"
+                    class="rounded-full bg-emerald-400 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-slate-900 transition hover:bg-emerald-300 disabled:cursor-not-allowed disabled:bg-emerald-300/60">
+                @(_state.IsSessionListLoading ? "Loading..." : "Search")
+            </button>
+        </div>
+
+        <div class="mt-4 flex flex-wrap items-end gap-3">
+            <label class="text-xs text-slate-600 dark:text-slate-300">
+                Target account
+                <select value="@_state.TargetCredentialId"
+                        @onchange="ChangeTargetCredential"
+                        class="mt-2 block w-full min-w-[18rem] rounded-xl border border-slate-300 dark:border-slate-700 bg-white/90 dark:bg-slate-950/80 px-3 py-2 text-sm text-slate-900 dark:text-white outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/30">
+                    <option value="">Select account...</option>
+                    @foreach (var credential in _state.Credentials)
+                    {
+                        <option @key="credential.Id" value="@credential.Id">
+                            @credential.UserEmail · @Formatters.FormatProviderName(credential.Platform) · @(credential.AccountUser ?? "Local") (ID @credential.Id)
+                        </option>
+                    }
+                </select>
+            </label>
+            <button type="button"
+                    @onclick="_state.ToggleVisibleSessions"
+                    disabled="@(_state.MovableSessions.Count == 0)"
+                    class="rounded-full border border-slate-300 dark:border-slate-700 px-3 py-2 text-xs font-semibold uppercase tracking-[0.25em] text-slate-700 dark:text-slate-200 transition hover:border-emerald-400/60 disabled:cursor-not-allowed disabled:opacity-60">
+                @(_state.AllVisibleSessionsSelected ? "Clear visible" : "Select visible")
+            </button>
+            <button type="button"
+                    @onclick="MoveSessionsAsync"
+                    disabled="@(_state.IsMovingSessions || _state.SelectedSessionIds.Count == 0)"
+                    class="rounded-full bg-emerald-400 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-slate-900 transition hover:bg-emerald-300 disabled:cursor-not-allowed disabled:bg-emerald-300/60">
+                @(_state.IsMovingSessions ? "Moving..." : $"Move selected ({_state.SelectedSessionIds.Count})")
+            </button>
+        </div>
+
+        @if (_state.MoveSessionsError.Length > 0)
+        {
+            <p class="mt-3 text-xs text-rose-700 dark:text-rose-300">@_state.MoveSessionsError</p>
+        }
+        @if (_state.MoveSessionsNotice.Length > 0)
+        {
+            <p class="mt-3 text-xs text-emerald-700 dark:text-emerald-300">@_state.MoveSessionsNotice</p>
+        }
+
+        @if (_state.SessionTotal > 0)
+        {
+            <div class="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-200/40 dark:bg-slate-950/40 px-3 py-2 text-xs">
+                <p class="text-slate-600 dark:text-slate-300">Showing @_state.SessionRangeStart-@_state.SessionRangeEnd of @_state.SessionTotal</p>
+                <div class="flex items-center gap-2">
+                    <button type="button"
+                            @onclick="() => LoadMovableSessionsAsync(_state.SessionQuery.Trim(), _state.SessionPage - 1)"
+                            disabled="@(_state.SessionPage <= 1 || _state.IsSessionListLoading)"
+                            class="rounded-full border border-slate-300 dark:border-slate-700 px-3 py-1 font-semibold uppercase tracking-[0.2em] text-slate-700 dark:text-slate-200 transition hover:border-emerald-400/60 disabled:cursor-not-allowed disabled:opacity-60">Prev</button>
+                    <span class="font-semibold text-slate-700 dark:text-slate-200">Page @_state.SessionPage/@_state.SessionPageCount</span>
+                    <button type="button"
+                            @onclick="() => LoadMovableSessionsAsync(_state.SessionQuery.Trim(), _state.SessionPage + 1)"
+                            disabled="@(_state.SessionPage >= _state.SessionPageCount || _state.IsSessionListLoading)"
+                            class="rounded-full border border-slate-300 dark:border-slate-700 px-3 py-1 font-semibold uppercase tracking-[0.2em] text-slate-700 dark:text-slate-200 transition hover:border-emerald-400/60 disabled:cursor-not-allowed disabled:opacity-60">Next</button>
+                </div>
+            </div>
+        }
+
+        <div class="mt-4 space-y-2">
+            @if (_state.IsSessionListLoading)
+            {
+                <p class="text-xs text-slate-500 dark:text-slate-400">Loading sessions...</p>
+            }
+            else if (_state.MovableSessions.Count == 0)
+            {
+                <p class="text-xs text-slate-500 dark:text-slate-400">No sessions found for this search.</p>
+            }
+            else
+            {
+                @foreach (var session in _state.MovableSessions)
+                {
+                    <label @key="session.SessionId" class="flex items-start gap-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-200/40 dark:bg-slate-950/40 px-3 py-2">
+                        <input type="checkbox"
+                               checked="@_state.SelectedSessionIds.Contains(session.SessionId)"
+                               @onchange="() => _state.ToggleSessionSelection(session.SessionId)"
+                               class="mt-1" />
+                        <div class="min-w-0 flex-1 text-xs">
+                            <p class="truncate font-medium text-slate-900 dark:text-white">@session.GameName</p>
+                            <p class="mt-1 text-slate-500 dark:text-slate-400">
+                                @session.UserEmail · @Formatters.FormatProviderName(session.Platform) · @(session.AccountUser ?? "Local") · Session #@session.SessionId
+                            </p>
+                            <p class="mt-1 text-slate-500 dark:text-slate-400">
+                                @Formatters.FormatLocalDateTime(session.StartedAt) · @Formatters.FormatDuration(session.DurationSeconds, DurationFormat.Short)
+                            </p>
+                        </div>
+                        <span class="@($"shrink-0 rounded-full px-2 py-1 text-xs font-semibold uppercase tracking-[0.2em] {(session.Live ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300" : "bg-slate-200 text-slate-600 dark:bg-slate-800 dark:text-slate-300")}")">
+                            @(session.Live ? "Live" : "Ended")
+                        </span>
+                    </label>
+                }
+            }
+        </div>
+    </section>
+
+    <section class="mt-6 rounded-3xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/60 p-5 sm:p-6">
+        <p class="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-700 dark:text-emerald-300">Game details</p>
+        <h2 class="mt-2 text-xl font-semibold text-slate-900 dark:text-white">Update title and image without next poll override</h2>
+        <div class="mt-4 flex flex-wrap gap-3">
+            <input value="@_state.GameQuery"
+                   @oninput="ChangeGameQuery"
+                   placeholder="Search by game ID, title, or image URL..."
+                   aria-label="Search games by game id, title, or image URL"
+                   class="w-full max-w-sm rounded-xl border border-slate-300 dark:border-slate-700 bg-white/90 dark:bg-slate-950/80 px-3 py-2 text-sm text-slate-900 dark:text-white outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/30" />
+            <button type="button"
+                    @onclick="SearchGamesAsync"
+                    disabled="@_state.IsGamesLoading"
+                    class="rounded-full bg-emerald-400 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-slate-900 transition hover:bg-emerald-300 disabled:cursor-not-allowed disabled:bg-emerald-300/60">
+                @(_state.IsGamesLoading ? "Searching..." : "Search")
+            </button>
+        </div>
+        @if (_state.GamesError.Length > 0)
+        {
+            <p class="mt-4 text-xs text-rose-700 dark:text-rose-300">@_state.GamesError</p>
+        }
+        <div class="mt-5 space-y-3">
+            @if (!_state.HasGameSearch && _state.GamesError.Length == 0 && !_state.IsGamesLoading)
+            {
+                <p class="text-xs text-slate-500 dark:text-slate-400">Search by game ID, title, or image URL to load editable results.</p>
+            }
+            else if (_state.HasGameSearch && _state.GamesError.Length == 0 && !_state.IsGamesLoading && _state.Games.Count == 0)
+            {
+                <p class="text-xs text-slate-500 dark:text-slate-400">No games found for this query.</p>
+            }
+            @foreach (var game in _state.Games)
+            {
+                var draft = _state.GameDrafts.GetValueOrDefault(game.Id) ?? new GameDraft(game.Title, game.TitleLocked, game.ImageUrl ?? "", game.ImageLocked);
+                var isSaving = _state.IsGameSaving(game.Id);
+                <div @key="game.Id" class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-200/40 dark:bg-slate-950/40 p-4">
+                    <p class="text-sm font-semibold text-slate-900 dark:text-white">@game.Title · @Formatters.FormatProviderName(game.Platform)</p>
+                    <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Game ID: <span class="font-mono">@game.Id</span></p>
+                    <div class="mt-3 grid gap-3 md:grid-cols-2">
+                        <label class="text-xs text-slate-600 dark:text-slate-300">
+                            Title
+                            <input value="@draft.Title"
+                                   @onchange="eventArgs => ChangeGameDraft(game.Id, GameDraftField.Title, eventArgs)"
+                                   class="mt-2 w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white/90 dark:bg-slate-950/80 px-3 py-2 text-sm text-slate-900 dark:text-white outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/30" />
+                        </label>
+                        <label class="text-xs text-slate-600 dark:text-slate-300">
+                            Image URL
+                            <input value="@draft.ImageUrl"
+                                   @onchange="eventArgs => ChangeGameDraft(game.Id, GameDraftField.ImageUrl, eventArgs)"
+                                   class="mt-2 w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white/90 dark:bg-slate-950/80 px-3 py-2 text-sm text-slate-900 dark:text-white outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/30" />
+                        </label>
+                    </div>
+                    <div class="mt-3 space-y-2">
+                        <label class="flex w-full items-center gap-2 text-xs text-slate-600 dark:text-slate-300">
+                            <input type="checkbox"
+                                   checked="@draft.LockTitle"
+                                   @onchange="eventArgs => ChangeGameDraft(game.Id, GameDraftField.LockTitle, eventArgs.Value is true)" />
+                            Lock title against polling updates
+                        </label>
+                        <label class="flex w-full items-center gap-2 text-xs text-slate-600 dark:text-slate-300">
+                            <input type="checkbox"
+                                   checked="@draft.LockImage"
+                                   @onchange="eventArgs => ChangeGameDraft(game.Id, GameDraftField.LockImage, eventArgs.Value is true)" />
+                            Lock image against polling updates
+                        </label>
+                    </div>
+                    <div class="mt-3">
+                        <button type="button"
+                                @onclick="() => SaveGameAsync(game.Id)"
+                                disabled="@isSaving"
+                                class="rounded-full bg-emerald-400 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-slate-900 transition hover:bg-emerald-300 disabled:cursor-not-allowed disabled:bg-emerald-300/60">
+                            @(isSaving ? "Saving..." : "Save")
+                        </button>
+                    </div>
+                </div>
+            }
+        </div>
+    </section>
+</AppLayout>

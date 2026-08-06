@@ -1,5 +1,5 @@
-using Playdex.Web.Models;
-using Playdex.Web.Pages;
+using Playdex.Web.Shared.Auth;
+using Playdex.Web.Modules.Home;
 using Xunit;
 
 namespace Playdex.Web.Tests.Pages;
@@ -71,7 +71,7 @@ public sealed class HomeStateTests
     {
         var root = FindWebRoot();
         var app = File.ReadAllText(Path.Combine(root, "App.razor"));
-        var home = File.ReadAllText(Path.Combine(root, "Pages", "Home.razor.cs"));
+        var home = File.ReadAllText(Path.Combine(root, "Modules", "Home", "Home.razor.cs"));
 
         Assert.Contains("new(NavigationOutcome.Wait)", app);
         Assert.Contains("<CascadingValue Value=\"@_homeSession\">", app);
@@ -97,8 +97,8 @@ public sealed class HomeStateTests
     public void HomePage_WiresTheReactLoginProfileSessionAndVisibleRegions()
     {
         var root = FindWebRoot();
-        var markup = File.ReadAllText(Path.Combine(root, "Pages", "Home.razor"));
-        var code = File.ReadAllText(Path.Combine(root, "Pages", "Home.razor.cs"));
+        var markup = File.ReadAllText(Path.Combine(root, "Modules", "Home", "Home.razor"));
+        var code = File.ReadAllText(Path.Combine(root, "Modules", "Home", "Home.razor.cs"));
 
         Assert.Contains("<ThemeToggle", markup);
         Assert.Contains("Your cross-platform playtime, perfectly organized.", markup);

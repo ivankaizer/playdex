@@ -1,5 +1,5 @@
-using Playdex.Web.Models;
-using Playdex.Web.Pages;
+using Playdex.Web.Shared.Models;
+using Playdex.Web.Modules.Dashboard;
 using Xunit;
 
 namespace Playdex.Web.Tests.Pages;
@@ -163,9 +163,9 @@ public sealed class DashboardStateTests
         Assert.Equal(["PS5", "PS5"], view.Platforms.Select(item => item.Label));
 
         var root = FindWebRoot();
-        var dashboard = File.ReadAllText(Path.Combine(root, "Pages", "Dashboard.razor"));
-        var recap = File.ReadAllText(Path.Combine(root, "Components", "StatsRecapSection.razor"));
-        var pie = File.ReadAllText(Path.Combine(root, "Components", "StatsPieChart.razor"));
+        var dashboard = File.ReadAllText(Path.Combine(root, "Modules", "Dashboard", "Dashboard.razor"));
+        var recap = File.ReadAllText(Path.Combine(root, "Shared", "Components", "StatsRecapSection.razor"));
+        var pie = File.ReadAllText(Path.Combine(root, "Shared", "Components", "StatsPieChart.razor"));
         Assert.DoesNotContain("@key=\"item.Label\"", dashboard);
         Assert.DoesNotContain("@key=\"item.Label\"", recap);
         Assert.DoesNotContain("@key=\"segment.Label\"", pie);
@@ -274,11 +274,11 @@ public sealed class DashboardStateTests
     public void DashboardPage_WiresConcurrentRefreshManualLifecycleAndLiteralRegionsWithoutPolling()
     {
         var root = FindWebRoot();
-        var markupPath = Path.Combine(root, "Pages", "Dashboard.razor");
+        var markupPath = Path.Combine(root, "Modules", "Dashboard", "Dashboard.razor");
         Assert.True(File.Exists(markupPath), "Missing Dashboard Razor page.");
 
         var markup = File.ReadAllText(markupPath);
-        var code = File.ReadAllText(Path.Combine(root, "Pages", "Dashboard.razor.cs"));
+        var code = File.ReadAllText(Path.Combine(root, "Modules", "Dashboard", "Dashboard.razor.cs"));
 
         Assert.Contains("@page \"/dashboard\"", markup);
         Assert.Contains("<AppLayout Title=\"Dashboard\"", markup);
@@ -312,8 +312,8 @@ public sealed class DashboardStateTests
     {
         var root = FindWebRoot();
         var layout = File.ReadAllText(Path.Combine(root, "Layout", "AppLayout.razor"));
-        var markup = File.ReadAllText(Path.Combine(root, "Pages", "Dashboard.razor"));
-        var code = File.ReadAllText(Path.Combine(root, "Pages", "Dashboard.razor.cs"));
+        var markup = File.ReadAllText(Path.Combine(root, "Modules", "Dashboard", "Dashboard.razor"));
+        var code = File.ReadAllText(Path.Combine(root, "Modules", "Dashboard", "Dashboard.razor.cs"));
 
         Assert.Contains("public EventCallback<string> OnThemeChanged", layout);
         Assert.Contains("OnThemeChanged.InvokeAsync(_theme)", layout);

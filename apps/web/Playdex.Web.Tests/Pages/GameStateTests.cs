@@ -1,6 +1,6 @@
-using Playdex.Web.Models;
-using Playdex.Web.Pages;
-using Playdex.Web.Utilities;
+using Playdex.Web.Shared.Models;
+using Playdex.Web.Modules.Games;
+using Playdex.Web.Shared.Common;
 using Xunit;
 
 namespace Playdex.Web.Tests.Pages;
@@ -107,8 +107,8 @@ public sealed class GameStateTests
     public void GamePageWiresCatchAllRouteReactMarkupAndAuthenticatedRequests()
     {
         var root = FindWebRoot();
-        var markupPath = Path.Combine(root, "Pages", "Game.razor");
-        var codePath = Path.Combine(root, "Pages", "Game.razor.cs");
+        var markupPath = Path.Combine(root, "Modules", "Games", "Game.razor");
+        var codePath = Path.Combine(root, "Modules", "Games", "Game.razor.cs");
 
         Assert.True(File.Exists(markupPath), "Missing Game Razor page.");
         var markup = File.ReadAllText(markupPath);

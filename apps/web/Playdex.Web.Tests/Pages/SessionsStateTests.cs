@@ -1,5 +1,5 @@
-using Playdex.Web.Models;
-using Playdex.Web.Pages;
+using Playdex.Web.Shared.Models;
+using Playdex.Web.Modules.Sessions;
 using Xunit;
 
 namespace Playdex.Web.Tests.Pages;
@@ -474,8 +474,8 @@ public sealed class SessionsStateTests
     public void SessionsPage_WiresReactRequestsResponsiveRowsModalAndCancellationWithoutMappedBadges()
     {
         var root = FindWebRoot();
-        var markupPath = Path.Combine(root, "Pages", "Sessions.razor");
-        var codePath = Path.Combine(root, "Pages", "Sessions.razor.cs");
+        var markupPath = Path.Combine(root, "Modules", "Sessions", "Sessions.razor");
+        var codePath = Path.Combine(root, "Modules", "Sessions", "Sessions.razor.cs");
         Assert.True(File.Exists(markupPath), "Missing Sessions Razor page.");
 
         var markup = File.ReadAllText(markupPath);

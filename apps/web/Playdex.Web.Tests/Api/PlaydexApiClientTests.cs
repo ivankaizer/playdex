@@ -2,10 +2,11 @@ using System.Net;
 using System.Reflection;
 using System.Text;
 using System.Text.Json;
-using Playdex.Web.Api;
-using Playdex.Web.Auth;
-using Playdex.Web.Browser;
-using Playdex.Web.Models;
+using Playdex.Web.Shared.Http;
+using Playdex.Web.Shared.Auth;
+using Playdex.Web.Shared.Browser;
+using Playdex.Web.Shared.Models;
+using Playdex.Web.Modules.Admin;
 using Xunit;
 
 namespace Playdex.Web.Tests.Api;

@@ -10,7 +10,7 @@ public sealed class ShellEventImportsTests
     {
         var webRoot = FindWebRoot();
         var directives = Directory
-            .EnumerateFiles(Path.Combine(webRoot, "Components"), "*.razor")
+            .EnumerateFiles(Path.Combine(webRoot, Path.Combine("Shared", "Components")), "*.razor")
             .SelectMany(path => Regex.Matches(File.ReadAllText(path), "@on(?:change|click|input)\\b"))
             .Select(match => match.Value)
             .Distinct(StringComparer.Ordinal)
@@ -28,7 +28,7 @@ public sealed class ShellEventImportsTests
     public void SharedEventDirectiveExpressionsAreRazorParseSafe()
     {
         var invalidFiles = Directory
-            .EnumerateFiles(Path.Combine(FindWebRoot(), "Components"), "*.razor")
+            .EnumerateFiles(Path.Combine(FindWebRoot(), Path.Combine("Shared", "Components")), "*.razor")
             .Where(path => File.ReadAllText(path).Contains("?? \"\"", StringComparison.Ordinal))
             .Select(Path.GetFileName)
             .Order(StringComparer.Ordinal)

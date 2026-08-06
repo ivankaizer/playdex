@@ -1,5 +1,5 @@
-using Playdex.Web.Models;
-using Playdex.Web.Pages;
+using Playdex.Web.Shared.Models;
+using Playdex.Web.Modules.Mapping;
 using Xunit;
 
 namespace Playdex.Web.Tests.Pages;
@@ -317,8 +317,8 @@ public sealed class MappingStateTests
     public void MappingPage_WiresLiteralResponsiveEditorsRequestsAndCancellation()
     {
         var root = FindWebRoot();
-        var markupPath = Path.Combine(root, "Pages", "Mapping.razor");
-        var codePath = Path.Combine(root, "Pages", "Mapping.razor.cs");
+        var markupPath = Path.Combine(root, "Modules", "Mapping", "Mapping.razor");
+        var codePath = Path.Combine(root, "Modules", "Mapping", "Mapping.razor.cs");
         Assert.True(File.Exists(markupPath), "Missing Mapping Razor page.");
 
         var markup = File.ReadAllText(markupPath);

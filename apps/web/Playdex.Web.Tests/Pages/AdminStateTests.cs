@@ -1,5 +1,4 @@
-using Playdex.Web.Models;
-using Playdex.Web.Pages;
+using Playdex.Web.Modules.Admin;
 using Xunit;
 
 namespace Playdex.Web.Tests.Pages;
@@ -130,8 +129,8 @@ public sealed class AdminStateTests
     public void AdminPageUsesCentralGuardAndLiteralSingleDomMarkup()
     {
         var root = FindWebRoot();
-        var markupPath = Path.Combine(root, "Pages", "Admin.razor");
-        var codePath = Path.Combine(root, "Pages", "Admin.razor.cs");
+        var markupPath = Path.Combine(root, "Modules", "Admin", "Admin.razor");
+        var codePath = Path.Combine(root, "Modules", "Admin", "Admin.razor.cs");
         Assert.True(File.Exists(markupPath), "Missing Admin Razor page.");
         var markup = File.ReadAllText(markupPath);
         var code = File.ReadAllText(codePath);

@@ -1,6 +1,5 @@
-using Playdex.Web.Auth;
-using Playdex.Web.Browser;
-using Playdex.Web.Models;
+using Playdex.Web.Shared.Auth;
+using Playdex.Web.Shared.Browser;
 using Xunit;
 
 namespace Playdex.Web.Tests.Auth;

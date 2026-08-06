@@ -1,7 +1,6 @@
 using System.Reflection;
 using Microsoft.AspNetCore.Components;
-using Playdex.Web.Models;
-using Playdex.Web.Pages;
+using Playdex.Web.Modules.Recap;
 using Xunit;
 
 namespace Playdex.Web.Tests.Pages;
@@ -297,8 +296,8 @@ public sealed class RecapStateTests
     public void RecapPage_WiresQueryStateInlineSectionsAndGameNavigationInReactOrder()
     {
         var root = FindWebRoot();
-        var markupPath = Path.Combine(root, "Pages", "Recap.razor");
-        var codePath = Path.Combine(root, "Pages", "Recap.razor.cs");
+        var markupPath = Path.Combine(root, "Modules", "Recap", "Recap.razor");
+        var codePath = Path.Combine(root, "Modules", "Recap", "Recap.razor.cs");
         Assert.True(File.Exists(markupPath), "Missing Recap Razor page.");
 
         var markup = File.ReadAllText(markupPath);
