@@ -21,6 +21,7 @@ public sealed class PollingBackgroundService(
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        Console.WriteLine("starting polling");
         var initialDelayMs = Random.Shared.Next(0, 5001);
         logger.LogInformation("PollingBackgroundService will start after {Delay} ms", initialDelayMs);
         await Task.Delay(initialDelayMs, stoppingToken);

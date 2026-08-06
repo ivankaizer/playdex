@@ -8,21 +8,21 @@ public sealed class PollingRepository(PlaydexDbContext db)
     public async Task<List<ActiveCredential>> LoadActiveCredentials(CancellationToken ct)
     {
         var rows = await db.Database.SqlQuery<ActiveCredentialRow>($"""
-            SELECT
-                pc.id                        AS Id,
-                pc.user_id                   AS UserId,
-                pc.api_key                   AS ApiKey,
-                pc.account_id                AS AccountId,
-                pc.created_at                AS CreatedAt,
-                pc.updated_at                AS UpdatedAt,
-                pc.active                    AS Active,
-                pc.platform_id               AS PlatformId,
-                p.key                        AS PlatformKey
-            FROM platform_credentials pc
-            JOIN platforms p ON p.id = pc.platform_id
-            WHERE pc.active
-              AND p.key != 'playnite'
-            """).ToListAsync(ct);
+                                                                    SELECT
+                                                                        pc.id                        AS Id,
+                                                                        pc.user_id                   AS UserId,
+                                                                        pc.api_key                   AS ApiKey,
+                                                                        pc.account_id                AS AccountId,
+                                                                        pc.created_at                AS CreatedAt,
+                                                                        pc.updated_at                AS UpdatedAt,
+                                                                        pc.active                    AS Active,
+                                                                        pc.platform_id               AS PlatformId,
+                                                                        p.key                        AS PlatformKey
+                                                                    FROM platform_credentials pc
+                                                                    JOIN platforms p ON p.id = pc.platform_id
+                                                                    WHERE pc.active
+                                                                      AND p.key != 'playnite'
+                                                                    """).ToListAsync(ct);
 
         return rows.Select(r => new ActiveCredential(
             new PlatformCredential
@@ -50,16 +50,16 @@ public sealed class PollingRepository(PlaydexDbContext db)
         DateTimeOffset polledAt, string? rawPayload,
         CancellationToken ct)
     {
-        var now = DateTimeOffset.UtcNow;
-        var pollResult = new PollResult
-        {
-            PlatformCredentialId = credentialId,
-            GameId = gameId,
-            PolledAt = polledAt,
-            RawPayload = rawPayload != null ? System.Text.Json.JsonDocument.Parse(rawPayload) : null,
-            CreatedAt = now,
-        };
-        db.PollResults.Add(pollResult);
+        db.PollResults.Add(
+            new PollResult
+            {
+                PlatformCredentialId = credentialId,
+                GameId = gameId,
+                PolledAt = polledAt,
+                RawPayload = rawPayload,
+                CreatedAt = DateTimeOffset.UtcNow,
+            }
+        );
         await db.SaveChangesAsync(ct);
     }
 

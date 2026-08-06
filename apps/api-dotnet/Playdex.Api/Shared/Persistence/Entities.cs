@@ -67,7 +67,7 @@ public sealed class PollResult
     public long PlatformCredentialId { get; set; }
     public long? GameId { get; set; }
     public DateTimeOffset PolledAt { get; set; }
-    public JsonDocument? RawPayload { get; set; }
+    public string? RawPayload { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
 }
 
