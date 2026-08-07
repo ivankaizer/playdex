@@ -1,0 +1,27 @@
+{
+  "games": {
+    "example-game": {
+      "gameId": "example-game",
+      "displayName": "Example Game",
+      "apiGameId": "configured-game-id",
+      "gameProvider": "steam",
+      "apiKey": null,
+      "launch": {
+        "executablePath": "C:\\Games\\Example\\Game.exe",
+        "arguments": []
+      },
+      "monitor": {
+        "mode": "launchedProcess",
+        "executablePath": null,
+        "executableName": null,
+        "exitDebounceSeconds": 10
+      }
+    }
+  },
+  "api": {
+    "baseUrl": "https://playdex.ejwan.dev/api",
+    "apiKey": "replace-with-bearer-api-key",
+    "pingIntervalSeconds": 30,
+    "requestTimeoutSeconds": 10
+  }
+}
