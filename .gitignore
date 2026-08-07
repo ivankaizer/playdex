@@ -33,8 +33,8 @@ package-lock.json
 .env
 
 dist/
-src/Playdex.Api/dist/
-src/Playdex.Web/dist/
+src/Api/dist/
+src/Web/dist/
 todo.md
 *.internal
 
