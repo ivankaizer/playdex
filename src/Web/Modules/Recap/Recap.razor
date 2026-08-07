@@ -1,0 +1,576 @@
+@page "/recap"
+@using System.Globalization
+@using Web.Layout
+@using Web.Shared.Common
+
+@{
+    var recap = CurrentRecap;
+    var weekdayChart = WeekdayChart;
+}
+
+<AppLayout Title="Recap" OnThemeChanged="SetTheme">
+    <ChildContent>
+        <section class="mt-10 space-y-6">
+            <div class="rounded-3xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/60 p-4 sm:p-5">
+                <p class="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-700 dark:text-emerald-300">
+                    Recap tabs
+                </p>
+                <div class="mt-4 flex flex-wrap gap-2">
+                    @foreach (var tab in Tabs)
+                    {
+                        <button type="button"
+                                @onclick="() => SelectTabAsync(tab.Key)"
+                                class="@TabClass(tab.Key)">
+                            @tab.Label
+                        </button>
+                    }
+                </div>
+            </div>
+
+            <div class="space-y-6">
+                @if (_state.ActiveTab == "custom")
+                {
+                    <div class="rounded-3xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/60 p-5 sm:p-6">
+                        <div class="flex flex-wrap items-center justify-between gap-3">
+                            <div>
+                                <p class="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-700 dark:text-emerald-300">
+                                    Custom recap
+                                </p>
+                                <h2 class="mt-2 text-xl font-semibold text-slate-900 dark:text-white">
+                                    Choose your range
+                                </h2>
+                            </div>
+                        </div>
+                        <div class="mt-5 grid gap-3 md:grid-cols-[1fr_1fr_auto]">
+                            <label class="text-xs font-medium text-slate-600 dark:text-slate-300">
+                                From
+                                <input type="date"
+                                       value="@_state.CustomFrom"
+                                       @oninput="SetCustomFrom"
+                                       class="mt-2 w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white/90 dark:bg-slate-950/80 px-3 py-2 text-sm text-slate-900 dark:text-white outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/30" />
+                            </label>
+                            <label class="text-xs font-medium text-slate-600 dark:text-slate-300">
+                                To
+                                <input type="date"
+                                       value="@_state.CustomTo"
+                                       @oninput="SetCustomTo"
+                                       class="mt-2 w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white/90 dark:bg-slate-950/80 px-3 py-2 text-sm text-slate-900 dark:text-white outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/30" />
+                            </label>
+                            <button type="button"
+                                    @onclick="ApplyCustomAsync"
+                                    class="mt-6 rounded-full border border-emerald-400/60 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-emerald-700 dark:text-emerald-200 transition hover:border-emerald-300">
+                                Apply
+                            </button>
+                        </div>
+                    </div>
+                }
+
+                @if (_state.Error.Length > 0)
+                {
+                    <p class="text-xs text-rose-700 dark:text-rose-300">
+                        @_state.Error
+                    </p>
+                }
+
+                @if (recap is not null)
+                {
+                    <div class="rounded-3xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/60 p-5 sm:p-6">
+                        <div class="flex flex-wrap items-center justify-between gap-3">
+                            <div>
+                                <p class="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-700 dark:text-emerald-300">
+                                    Most popular
+                                </p>
+                                <h2 class="mt-2 text-xl font-semibold text-slate-900 dark:text-white">
+                                    Top 5 games
+                                </h2>
+                            </div>
+                            <div class="text-xs font-semibold uppercase tracking-[0.3em] text-slate-500 dark:text-slate-400">
+                                @RangeLabel
+                            </div>
+                        </div>
+                        <div class="mt-5 grid gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
+                            @if (recap.TopGamesByTime.Count == 0)
+                            {
+                                <div class="rounded-2xl border border-dashed border-slate-200 dark:border-slate-800 bg-slate-200/50 dark:bg-slate-950/50 p-4 text-sm text-slate-500 dark:text-slate-400 lg:col-span-5">
+                                    No game data available yet.
+                                </div>
+                            }
+                            else
+                            {
+                                @foreach (var game in recap.TopGamesByTime)
+                                {
+                                    <button type="button"
+                                            @onclick="() => NavigateToGameAsync(game.GameId)"
+                                            class="group text-left">
+                                        <div class="w-full">
+                                            <div class="overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-200/50 dark:bg-slate-950/50">
+                                                @if (game.CapsuleUrl is { Length: > 0 })
+                                                {
+                                                    <img src="@game.CapsuleUrl"
+                                                         alt="@(game.Title) capsule art"
+                                                         class="aspect-[2/3] w-full object-cover" />
+                                                }
+                                                else
+                                                {
+                                                    <div class="flex aspect-[2/3] w-full items-center justify-center bg-slate-200/70 dark:bg-slate-900/70 text-xs uppercase tracking-[0.3em] text-slate-500 dark:text-slate-400">
+                                                        No art
+                                                    </div>
+                                                }
+                                            </div>
+                                            <div class="mt-3 grid grid-cols-[1fr_auto] items-start gap-3 text-sm">
+                                                <span class="min-w-0 line-clamp-2 font-semibold leading-snug text-slate-900 dark:text-white group-hover:text-emerald-700 dark:group-hover:text-emerald-200">
+                                                    @game.Title
+                                                </span>
+                                                <span class="text-xs font-semibold text-emerald-700 dark:text-emerald-200">
+                                                    @Formatters.FormatHours(game.TotalSeconds, 1)
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </button>
+                                }
+                            }
+                        </div>
+                    </div>
+                }
+
+                @if (_state.IsLoading)
+                {
+                    <p class="text-xs text-slate-500 dark:text-slate-400">
+                        Loading recap...
+                    </p>
+                }
+
+                @if (recap is not null)
+                {
+                    <div class="grid gap-6 lg:grid-cols-2 lg:items-stretch">
+                        <div class="h-full rounded-3xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/60 p-5 sm:p-6">
+                            <div class="flex flex-wrap items-center justify-between gap-3">
+                                <div>
+                                    <p class="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-700 dark:text-emerald-300">
+                                        Session overview
+                                    </p>
+                                    <h2 class="mt-2 text-xl font-semibold text-slate-900 dark:text-white">
+                                        Volume and session length
+                                    </h2>
+                                </div>
+                            </div>
+                            <div class="mt-4 grid gap-4">
+                                <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/70 dark:bg-slate-950/40 p-4">
+                                    <p class="text-xs font-semibold uppercase tracking-[0.3em] text-slate-500 dark:text-slate-400">
+                                        Volume
+                                    </p>
+                                    <div class="mt-3 grid gap-2 text-sm">
+                                        @foreach (var item in VolumeStats)
+                                        {
+                                            <div class="flex items-center justify-between">
+                                                <span class="text-[10px] uppercase tracking-[0.3em] text-slate-500 dark:text-slate-400">
+                                                    @item.Label
+                                                </span>
+                                                <span class="font-semibold text-slate-900 dark:text-white">
+                                                    @item.Value
+                                                </span>
+                                            </div>
+                                        }
+                                    </div>
+                                </div>
+                                <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/70 dark:bg-slate-950/40 p-4">
+                                    <p class="text-xs font-semibold uppercase tracking-[0.3em] text-slate-500 dark:text-slate-400">
+                                        Session length
+                                    </p>
+                                    <div class="mt-3 grid gap-2 text-sm">
+                                        @foreach (var item in SessionLengthStats)
+                                        {
+                                            <div class="flex items-center justify-between">
+                                                <span class="text-[10px] uppercase tracking-[0.3em] text-slate-500 dark:text-slate-400">
+                                                    @item.Label
+                                                </span>
+                                                <span class="font-semibold text-slate-900 dark:text-white">
+                                                    @item.Value
+                                                </span>
+                                            </div>
+                                        }
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="h-full rounded-3xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/60 p-5 sm:p-6">
+                            <div class="flex flex-wrap items-center justify-between gap-3">
+                                <div>
+                                    <p class="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-700 dark:text-emerald-300">
+                                        Consistency
+                                    </p>
+                                    <h2 class="mt-2 text-xl font-semibold text-slate-900 dark:text-white">
+                                        Days played
+                                    </h2>
+                                </div>
+                                <div class="text-xs font-semibold uppercase tracking-[0.3em] text-slate-500 dark:text-slate-400">
+                                    @DaysPlayed / @TotalDays days
+                                </div>
+                            </div>
+                            <div class="mt-4 grid gap-4 sm:grid-cols-[auto_1fr] items-center">
+                                <div class="relative flex h-36 w-36 items-center justify-center">
+                                    <svg class="h-full w-full -rotate-90" viewBox="0 0 120 120">
+                                        <circle cx="60"
+                                                cy="60"
+                                                r="46"
+                                                fill="none"
+                                                stroke="currentColor"
+                                                stroke-width="12"
+                                                class="text-slate-200 dark:text-slate-800"></circle>
+                                        <circle cx="60"
+                                                cy="60"
+                                                r="46"
+                                                fill="none"
+                                                stroke="currentColor"
+                                                stroke-width="12"
+                                                stroke-linecap="round"
+                                                stroke-dasharray="@DaysStrokeDasharray"
+                                                pathLength="100"
+                                                class="text-emerald-400"></circle>
+                                    </svg>
+                                    <div class="absolute text-center">
+                                        <p class="text-2xl font-semibold text-slate-900 dark:text-white">
+                                            @DaysPlayedPercentRounded%
+                                        </p>
+                                        <p class="text-[10px] uppercase tracking-[0.3em] text-slate-500 dark:text-slate-400">
+                                            played
+                                        </p>
+                                    </div>
+                                </div>
+                                <div class="grid gap-2 text-sm">
+                                    <div class="flex items-center justify-between">
+                                        <span class="text-[10px] uppercase tracking-[0.3em] text-slate-500 dark:text-slate-400">Days played</span>
+                                        <span class="font-semibold text-slate-900 dark:text-white">@DaysPlayed</span>
+                                    </div>
+                                    <div class="flex items-center justify-between">
+                                        <span class="text-[10px] uppercase tracking-[0.3em] text-slate-500 dark:text-slate-400">Days off</span>
+                                        <span class="font-semibold text-slate-900 dark:text-white">@DaysNotPlayed</span>
+                                    </div>
+                                    <div class="flex items-center justify-between">
+                                        <span class="text-[10px] uppercase tracking-[0.3em] text-slate-500 dark:text-slate-400">Play rate</span>
+                                        <span class="font-semibold text-slate-900 dark:text-white">@DaysPlayedPercentRounded%</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="mt-5 grid gap-3 sm:grid-cols-2">
+                                @foreach (var item in CadenceStats)
+                                {
+                                    <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/70 dark:bg-slate-950/40 p-3">
+                                        <p class="text-[10px] uppercase tracking-[0.3em] text-slate-500 dark:text-slate-400">
+                                            @item.Label
+                                        </p>
+                                        <p class="mt-2 text-sm font-semibold text-slate-900 dark:text-white">
+                                            @item.Value
+                                        </p>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="grid gap-6 lg:grid-cols-2 lg:items-stretch">
+                        <div class="h-full rounded-3xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/60 p-5 sm:p-6">
+                            <p class="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-700 dark:text-emerald-300">
+                                Weekly rhythm
+                            </p>
+                            <h2 class="mt-2 text-xl font-semibold text-slate-900 dark:text-white">
+                                Sessions by weekday
+                            </h2>
+                            <div class="mt-4">
+                                <svg class="h-24 w-full"
+                                     viewBox="@WeekdayViewBox"
+                                     preserveAspectRatio="none">
+                                    <defs>
+                                        <linearGradient id="weekdayGradient" x1="0" x2="0" y1="0" y2="1">
+                                            <stop offset="0%" stop-color="rgba(52, 211, 153, 0.4)"></stop>
+                                            <stop offset="100%" stop-color="rgba(52, 211, 153, 0)"></stop>
+                                        </linearGradient>
+                                    </defs>
+                                    @if (weekdayChart.AreaPath.Length > 0)
+                                    {
+                                        <path d="@weekdayChart.AreaPath"
+                                              fill="url(#weekdayGradient)"
+                                              stroke="none"></path>
+                                    }
+                                    @if (weekdayChart.LinePoints.Length > 0)
+                                    {
+                                        <polyline points="@weekdayChart.LinePoints"
+                                                  fill="none"
+                                                  stroke="rgba(16, 185, 129, 0.9)"
+                                                  stroke-width="2.5"
+                                                  stroke-linecap="round"
+                                                  stroke-linejoin="round"></polyline>
+                                    }
+                                    @foreach (var point in weekdayChart.Points)
+                                    {
+                                        <circle cx="@Number(point.X)"
+                                                cy="@Number(point.Y)"
+                                                r="2.5"
+                                                fill="rgba(16, 185, 129, 0.9)"></circle>
+                                    }
+                                </svg>
+                                <div class="mt-3 grid grid-cols-7 text-[10px] uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">
+                                    @foreach (var label in WeekdayLabels)
+                                    {
+                                        <span class="text-center">@label</span>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="h-full rounded-3xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/60 p-5 sm:p-6">
+                            <p class="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-700 dark:text-emerald-300">
+                                Hourly activity
+                            </p>
+                            <h2 class="mt-2 text-xl font-semibold text-slate-900 dark:text-white">
+                                Heatmap by hour
+                            </h2>
+                            <div class="mt-4 grid grid-cols-12 gap-2">
+                                @foreach (var item in recap.SessionsByHour)
+                                {
+                                    var intensity = item.SessionCount / (double)HourMaximum;
+                                    var opacity = 0.2 + intensity * 0.8;
+                                    <div class="flex flex-col items-center gap-2">
+                                        <span class="h-3 w-3 rounded-full bg-emerald-400"
+                                              style="@OpacityStyle(opacity)"></span>
+                                        <span class="text-[9px] uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">
+                                            @item.Hour.ToString("00", CultureInfo.InvariantCulture)
+                                        </span>
+                                    </div>
+                                }
+                            </div>
+                            <div class="mt-4 text-xs text-slate-500 dark:text-slate-400">
+                                Peak hour:
+                                <span class="font-semibold text-slate-900 dark:text-white">
+                                    @(recap.PeakHour is { } peakHour ? $"{peakHour.Hour:00}:00" : "—")
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="grid gap-6 lg:grid-cols-2 lg:items-stretch">
+                        <div class="h-full rounded-3xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/60 p-5 sm:p-6">
+                            <p class="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-700 dark:text-emerald-300">
+                                Time split
+                            </p>
+                            <h2 class="mt-2 text-xl font-semibold text-slate-900 dark:text-white">
+                                Weekend vs weekday
+                            </h2>
+                            <div class="mt-4 space-y-3">
+                                <div class="flex items-center justify-between text-xs uppercase tracking-[0.3em] text-slate-500 dark:text-slate-400">
+                                    <span>Weekend</span>
+                                    <span class="font-semibold text-slate-900 dark:text-white">
+                                        @Formatters.FormatHours(recap.WeekendSeconds, 1) · @WeekendSharePercent%
+                                    </span>
+                                </div>
+                                <div class="flex h-3 w-full overflow-hidden rounded-full bg-slate-200/70 dark:bg-slate-800/70">
+                                    <div class="h-full bg-emerald-400"
+                                         style="@PercentStyle(WeekendShare * 100)"></div>
+                                    <div class="h-full bg-sky-400"
+                                         style="@PercentStyle(WeekdayShare * 100)"></div>
+                                </div>
+                                <div class="flex items-center justify-between text-xs uppercase tracking-[0.3em] text-slate-500 dark:text-slate-400">
+                                    <span>Weekday</span>
+                                    <span class="font-semibold text-slate-900 dark:text-white">
+                                        @Formatters.FormatHours(recap.WeekdaySeconds, 1) · @WeekdaySharePercent%
+                                    </span>
+                                </div>
+                            </div>
+                            <div class="mt-6 grid gap-3 sm:grid-cols-2">
+                                <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/70 dark:bg-slate-950/40 p-3">
+                                    <p class="text-[10px] uppercase tracking-[0.3em] text-slate-500 dark:text-slate-400">
+                                        Peak hour
+                                    </p>
+                                    <p class="mt-2 text-sm font-semibold text-slate-900 dark:text-white">
+                                        @(recap.PeakHour is { } peak
+                                            ? $"{peak.Hour:00}:00 · {peak.SessionCount}"
+                                            : "—")
+                                    </p>
+                                </div>
+                                <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/70 dark:bg-slate-950/40 p-3">
+                                    <p class="text-[10px] uppercase tracking-[0.3em] text-slate-500 dark:text-slate-400">
+                                        Most used platform
+                                    </p>
+                                    <p class="mt-2 text-sm font-semibold text-slate-900 dark:text-white">
+                                        @(recap.MostUsedPlatform is { } platform
+                                            ? Formatters.FormatStatsPlatformLabel(platform.Platform)
+                                            : "—")
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="h-full rounded-3xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/60 p-5 sm:p-6">
+                            <p class="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-700 dark:text-emerald-300">
+                                Platform mix
+                            </p>
+                            <h2 class="mt-2 text-xl font-semibold text-slate-900 dark:text-white">
+                                Share of playtime
+                            </h2>
+                            <div class="mt-5 space-y-4">
+                                @if (recap.PlatformTotals.Count == 0)
+                                {
+                                    <p class="text-sm text-slate-500 dark:text-slate-400">
+                                        No platform data available yet.
+                                    </p>
+                                }
+                                else
+                                {
+                                    @for (var index = 0; index < recap.PlatformTotals.Count; index++)
+                                    {
+                                        var item = recap.PlatformTotals[index];
+                                        var share = PlatformTotalSeconds > 0
+                                            ? item.TotalSeconds / PlatformTotalSeconds * 100
+                                            : 0;
+                                        var barClass = PlatformBarClasses[index % PlatformBarClasses.Count];
+                                        var dotClass = PlatformDotClasses[index % PlatformDotClasses.Count];
+                                        <div class="space-y-2">
+                                            <div class="flex items-center justify-between text-sm">
+                                                <div class="flex items-center gap-2">
+                                                    <span class="h-2.5 w-2.5 rounded-full @dotClass"></span>
+                                                    <span class="font-semibold text-slate-900 dark:text-white">
+                                                        @Formatters.FormatStatsPlatformLabel(item.Platform)
+                                                    </span>
+                                                </div>
+                                                <span class="text-xs font-semibold text-slate-500 dark:text-slate-400">
+                                                    @RoundPercent(share)%
+                                                </span>
+                                            </div>
+                                            <div class="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
+                                                <span>@item.SessionCount sessions</span>
+                                                <span class="font-semibold text-emerald-700 dark:text-emerald-200">
+                                                    @Formatters.FormatHours(item.TotalSeconds, 1)
+                                                </span>
+                                            </div>
+                                            <div class="h-2 w-full overflow-hidden rounded-full bg-slate-200/70 dark:bg-slate-800/70">
+                                                <div class="h-full rounded-full @barClass"
+                                                     style="@PercentStyle(share)"></div>
+                                            </div>
+                                        </div>
+                                    }
+                                }
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="grid gap-6 lg:grid-cols-2 lg:items-stretch">
+                        <div class="h-full rounded-3xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/60 p-5 sm:p-6">
+                            <p class="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-700 dark:text-emerald-300">
+                                Library mix
+                            </p>
+                            <h2 class="mt-2 text-xl font-semibold text-slate-900 dark:text-white">
+                                How you explore games
+                            </h2>
+                            <div class="mt-4 grid gap-3 sm:grid-cols-2">
+                                @foreach (var item in GameMixStats)
+                                {
+                                    <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/70 dark:bg-slate-950/40 p-3">
+                                        <p class="text-[10px] uppercase tracking-[0.3em] text-slate-500 dark:text-slate-400">
+                                            @item.Label
+                                        </p>
+                                        <p class="mt-2 text-sm font-semibold text-slate-900 dark:text-white">
+                                            @item.Value
+                                        </p>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+
+                        <div class="h-full rounded-3xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/60 p-5 sm:p-6">
+                            <p class="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-700 dark:text-emerald-300">
+                                Highlights
+                            </p>
+                            <h2 class="mt-2 text-xl font-semibold text-slate-900 dark:text-white">
+                                Game leaders
+                            </h2>
+                            <div class="mt-4 grid gap-3">
+                                @foreach (var item in GameHighlightStats)
+                                {
+                                    <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/70 dark:bg-slate-950/40 p-3">
+                                        <p class="text-[10px] uppercase tracking-[0.3em] text-slate-500 dark:text-slate-400">
+                                            @item.Label
+                                        </p>
+                                        <p class="mt-2 text-sm font-semibold text-slate-900 dark:text-white">
+                                            @item.Value
+                                        </p>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="rounded-3xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/60 p-5 sm:p-6">
+                        <div class="flex flex-wrap items-center justify-between gap-3">
+                            <div>
+                                <p class="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-700 dark:text-emerald-300">
+                                    Full library
+                                </p>
+                                <h2 class="mt-2 text-xl font-semibold text-slate-900 dark:text-white">
+                                    Summed playtime by game
+                                </h2>
+                            </div>
+                        </div>
+                        <div class="mt-5 max-h-96 overflow-auto pr-1">
+                            @if (recap.GamesTable.Count == 0)
+                            {
+                                <p class="text-sm text-slate-500 dark:text-slate-400">
+                                    No games logged yet.
+                                </p>
+                            }
+                            else
+                            {
+                                <div class="overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-800">
+                                    <table class="w-full text-left text-xs">
+                                        <thead class="bg-white/80 dark:bg-slate-950/70 text-[10px] uppercase tracking-[0.28em] text-slate-500 dark:text-slate-400">
+                                            <tr>
+                                                <th class="px-3 py-2 text-left">Game</th>
+                                                <th class="px-3 py-2 text-left">Sessions</th>
+                                                <th class="px-3 py-2 text-left">Time</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @for (var index = 0; index < recap.GamesTable.Count; index++)
+                                            {
+                                                var game = recap.GamesTable[index];
+                                                <tr class="border-t border-slate-200/70 dark:border-slate-800/80 bg-slate-200/30 dark:bg-slate-950/40">
+                                                    <td class="px-3 py-2">
+                                                        <div class="flex min-w-0 items-center gap-2">
+                                                            <span class="text-[10px] font-semibold text-slate-500 dark:text-slate-400">
+                                                                @((index + 1).ToString("00", CultureInfo.InvariantCulture))
+                                                            </span>
+                                                            <div class="flex min-w-0 items-center gap-2">
+                                                                <button type="button"
+                                                                        @onclick="() => NavigateToGameAsync(game.GameId)"
+                                                                        title="@game.Title"
+                                                                        class="min-w-0 flex-1 truncate text-left text-sm font-semibold text-slate-900 dark:text-white transition hover:text-emerald-700 dark:hover:text-emerald-200">
+                                                                    @game.Title
+                                                                </button>
+                                                                @if (game.IsAbandoned)
+                                                                {
+                                                                    <span class="inline-flex items-center rounded-full border border-slate-300/70 bg-slate-200/40 px-1.5 py-px text-[8px] font-medium uppercase tracking-[0.14em] text-slate-500 dark:border-slate-700/80 dark:bg-slate-800/30 dark:text-slate-400">
+                                                                        abandoned
+                                                                    </span>
+                                                                }
+                                                            </div>
+                                                        </div>
+                                                    </td>
+                                                    <td class="px-3 py-2 text-slate-700 dark:text-slate-200">
+                                                        @game.SessionCount
+                                                    </td>
+                                                    <td class="px-3 py-2 font-semibold text-emerald-700 dark:text-emerald-200">
+                                                        @Formatters.FormatHours(game.TotalSeconds, 1)
+                                                    </td>
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                }
+            </div>
+        </section>
+    </ChildContent>
+</AppLayout>

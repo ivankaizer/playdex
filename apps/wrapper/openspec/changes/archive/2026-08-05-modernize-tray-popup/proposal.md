@@ -25,6 +25,6 @@ None.
 
 ## Impact
 
-- Affects the Windows Forms tray presentation in `src/GameSessionWrapper` and its UI-oriented tests.
+- Affects the Windows Forms tray presentation in `src/Playdex.Wrapper` and its UI-oriented tests.
 - Preserves configuration, launcher generation, game monitoring, heartbeat, and API behavior.
 - Adds no external runtime dependency and retains the existing single-file publishing model.

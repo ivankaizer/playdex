@@ -77,7 +77,7 @@ jobs:
         run: |
           bun --cwd apps/api run src/index.ts >/tmp/playdex-bun.log 2>&1 &
           BUN_PID=$!
-          ASPNETCORE_URLS=http://127.0.0.1:5100 dotnet run --project src/Playdex.Api/Playdex.Api.csproj --configuration Release --no-build >/tmp/playdex-dotnet.log 2>&1 &
+          ASPNETCORE_URLS=http://127.0.0.1:5100 dotnet run --project src/Api/Api.csproj --configuration Release --no-build >/tmp/playdex-dotnet.log 2>&1 &
           DOTNET_PID=$!
           trap 'kill "$BUN_PID" "$DOTNET_PID" 2>/dev/null || true' EXIT
           for attempt in {1..30}; do
@@ -88,4 +88,4 @@ jobs:
           done
           curl -fsS http://127.0.0.1:3000/api >/dev/null
           curl -fsS http://127.0.0.1:5100/api >/dev/null
-          dotnet test test/Playdex.Api.ContractTests/Playdex.Api.ContractTests.csproj --configuration Release --no-build --filter FullyQualifiedName~DifferentialHarnessTests
+          dotnet test test/Api.ContractTests/Api.ContractTests.csproj --configuration Release --no-build --filter FullyQualifiedName~DifferentialHarnessTests

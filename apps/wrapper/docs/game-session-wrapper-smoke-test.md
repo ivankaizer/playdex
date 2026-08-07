@@ -4,9 +4,9 @@
    `dotnet build PlaydexWrapper.sln`
 
 2. Publish the single-file wrapper:
-   `dotnet publish src/GameSessionWrapper/GameSessionWrapper.csproj -c Release -r win-x64 --self-contained true`
+   `dotnet publish src/Playdex.Wrapper/Playdex.Wrapper.csproj -c Release -r win-x64 --self-contained true`
 
-3. Start `GameSessionWrapper.exe` directly. Confirm the Playdex Wrapper window opens and does not launch a game. The default configuration is stored under the current user's local application-data directory at `PlaydexWrapper\config.json`.
+3. Start `Playdex.Wrapper.exe` directly. Confirm the Playdex Wrapper window opens and does not launch a game. The default configuration is stored under the current user's local application-data directory at `PlaydexWrapper\config.json`.
 
 4. Open Settings. Clear the API base URL, save, close the wrapper, and start it again. Confirm the empty value persists and is accepted as API tracking disabled.
 

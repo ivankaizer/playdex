@@ -1,0 +1,119 @@
+@page "/settings"
+@using Web.Layout
+
+<AppLayout Title="Settings">
+    <section class="mt-10 grid gap-6 lg:grid-cols-[1.05fr_0.95fr]">
+        <div class="space-y-6">
+            <div class="rounded-3xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/60 p-5 sm:p-6">
+                <p class="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-700 dark:text-emerald-300">
+                    Session filters
+                </p>
+                <h2 class="mt-2 text-xl font-semibold text-slate-900 dark:text-white">
+                    Ignore short sessions
+                </h2>
+                <p class="mt-2 text-xs text-slate-500 dark:text-slate-400">
+                    Sessions shorter than this duration are marked ignored and excluded from stats. Set to 0 to disable.
+                </p>
+                <div class="mt-5 flex flex-wrap items-end gap-4">
+                    <label class="text-xs font-medium text-slate-600 dark:text-slate-300">
+                        <span class="block">Minimum minutes</span>
+                        <input type="number"
+                               min="0"
+                               step="1"
+                               inputmode="numeric"
+                               value="@_state.IgnoreShortSessionsMinutes"
+                               @oninput="ChangeIgnoreShortSessionsMinutes"
+                               disabled="@(_state.IsSettingsLoading || _state.IsSettingsSaving)"
+                               class="mt-3 w-32 rounded-xl border border-slate-300 dark:border-slate-700 bg-white/90 dark:bg-slate-950/80 px-3 py-2 text-sm text-slate-900 dark:text-white outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/30 disabled:cursor-not-allowed disabled:opacity-60" />
+                    </label>
+                    <button type="button"
+                            @onclick="SaveSettingsAsync"
+                            disabled="@(_state.IsSettingsLoading || _state.IsSettingsSaving)"
+                            class="rounded-full bg-emerald-400 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-slate-900 transition hover:bg-emerald-300 disabled:cursor-not-allowed disabled:bg-emerald-300/60">
+                        @(_state.IsSettingsSaving ? "Saving..." : _state.IsSettingsLoading ? "Loading..." : "Save")
+                    </button>
+                </div>
+                @if (!string.IsNullOrEmpty(_state.SettingsError))
+                {
+                    <p class="mt-3 text-xs text-rose-700 dark:text-rose-300">
+                        @_state.SettingsError
+                    </p>
+                }
+            </div>
+        </div>
+
+        <div class="rounded-3xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/60 p-5 sm:p-6">
+            <p class="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-700 dark:text-emerald-300">
+                Manage providers
+            </p>
+            <h2 class="mt-2 text-xl font-semibold text-slate-900 dark:text-white">
+                Active connections
+            </h2>
+            @if (!string.IsNullOrEmpty(_state.ProvidersError))
+            {
+                <p class="mt-4 text-xs text-rose-700 dark:text-rose-300">
+                    @_state.ProvidersError
+                </p>
+            }
+            <div class="mt-6 space-y-4">
+                @if (_state.IsProvidersLoading)
+                {
+                    @for (var item = 1; item <= 2; item++)
+                    {
+                        <div @key="item" class="flex items-center justify-between gap-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-200/50 dark:bg-slate-950/50 p-4">
+                            <div class="flex items-center gap-3">
+                                <div class="h-10 w-10 rounded-full bg-slate-200/70 dark:bg-slate-800/60"></div>
+                                <div class="space-y-2">
+                                    <div class="h-3 w-24 rounded-full bg-slate-200/70 dark:bg-slate-800/60"></div>
+                                    <div class="h-2 w-16 rounded-full bg-slate-200/50 dark:bg-slate-800/50"></div>
+                                </div>
+                            </div>
+                            <div class="h-6 w-20 rounded-full bg-slate-200/70 dark:bg-slate-800/60"></div>
+                        </div>
+                    }
+                }
+                else if (_state.VisibleProviders.Count == 0)
+                {
+                    <div class="rounded-2xl border border-dashed border-slate-200 dark:border-slate-800 bg-slate-200/40 dark:bg-slate-950/40 p-4 text-xs text-slate-500 dark:text-slate-400">
+                        No providers connected yet. Add one to start syncing playtime.
+                    </div>
+                }
+                else
+                {
+                    @foreach (var provider in _state.VisibleProviders)
+                    {
+                        var presentation = SettingsState.Present(provider);
+                        var isUpdating = _state.IsProviderUpdating(provider.Id);
+                        <div @key="provider.Id" class="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-200/50 dark:bg-slate-950/50 p-4">
+                            <div class="flex items-center gap-3">
+                                <div class="flex h-10 w-10 items-center justify-center rounded-full @presentation.Color">
+                                    <span class="text-xs font-semibold uppercase @presentation.Accent">
+                                        @presentation.Label
+                                    </span>
+                                </div>
+                                <div>
+                                    <div class="flex items-center gap-2">
+                                        <p class="text-sm font-semibold text-slate-900 dark:text-white">
+                                            @presentation.Name
+                                        </p>
+                                    </div>
+                                    <p class="text-xs text-slate-500 dark:text-slate-400">
+                                        @presentation.Subtitle
+                                    </p>
+                                </div>
+                            </div>
+                            <div class="flex flex-wrap items-center gap-2 text-xs">
+                                <button type="button"
+                                        @onclick="() => ToggleProviderAsync(provider)"
+                                        disabled="@isUpdating"
+                                        class="@ProviderStatusButtonClass(provider)">
+                                    @(isUpdating ? "Updating..." : provider.Status == "active" ? "Active" : "Paused")
+                                </button>
+                            </div>
+                        </div>
+                    }
+                }
+            </div>
+        </div>
+    </section>
+</AppLayout>

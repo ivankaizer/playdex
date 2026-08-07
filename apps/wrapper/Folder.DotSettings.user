@@ -6,6 +6,6 @@
 	<s:String x:Key="/Default/CodeInspection/ExcludedFiles/FilesAndFoldersToSkip2/=7020124F_002D9FFC_002D4AC3_002D8F3D_002DAAB8E0240759_002Ff_003ATaskAwaiter_002Ecs_002Fl_003A_002E_002E_003F_002E_002E_003F_002E_002E_003FAppData_003FRoaming_003FJetBrains_003FRider2025_002E3_003Fresharper_002Dhost_003FSourcesCache_003F74e4c72cd3922ed61496931f33baf4a9b5950edddb6b78bc296241285f25c3_003FTaskAwaiter_002Ecs/@EntryIndexedValue">ForceIncluded</s:String>
 	<s:String x:Key="/Default/Environment/UnitTesting/UnitTestSessionStore/Sessions/=8195bebe_002Db055_002D48e0_002Db1e2_002Da877bb79b0c1/@EntryIndexedValue">&lt;SessionState ContinuousTestingMode="0" IsActive="True" Name="ConfigurationTests" xmlns="urn:schemas-jetbrains-com:jetbrains-ut-session"&gt;&#xD;
   &lt;TestAncestor&gt;&#xD;
-    &lt;TestId&gt;xUnit::89C7DBE8-98A2-D38A-3118-946A73D6E1BC::net10.0-windows::GameSessionWrapper.Tests.ConfigurationTests&lt;/TestId&gt;&#xD;
+    &lt;TestId&gt;xUnit::89C7DBE8-98A2-D38A-3118-946A73D6E1BC::net10.0-windows::Playdex.Wrapper.Tests.ConfigurationTests&lt;/TestId&gt;&#xD;
   &lt;/TestAncestor&gt;&#xD;
 &lt;/SessionState&gt;</s:String></wpf:ResourceDictionary>

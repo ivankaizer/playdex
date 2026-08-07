@@ -1,0 +1,111 @@
+@using Web.Shared.Http
+@using Web.Shared.Auth
+@using Web.Routing
+@inject AuthSession AuthSession
+@inject PlaydexApiClient Api
+@inject NavigationManager Navigation
+
+<CascadingValue Name="IsAdmin" Value="@_isAdmin">
+    <CascadingValue Value="@_homeSession">
+        <Router AppAssembly="@typeof(App).Assembly" OnNavigateAsync="HandleNavigationAsync">
+            <Found Context="routeData">
+                @if (_currentDecision.Outcome == NavigationOutcome.Render)
+                {
+                    <CascadingValue TValue="string"
+                                    Name="NormalizedGameHash"
+                                    Value="@(_currentDecision.GameHash!)">
+                        <RouteView RouteData="@routeData" />
+                    </CascadingValue>
+                }
+                else if (_currentDecision.Outcome == NavigationOutcome.HomeFallback)
+                {
+                    <Home />
+                }
+            </Found>
+            <NotFound>
+                @if (_currentDecision.Outcome is NavigationOutcome.Render or NavigationOutcome.HomeFallback)
+                {
+                    <Home />
+                }
+            </NotFound>
+        </Router>
+    </CascadingValue>
+</CascadingValue>
+
+@code {
+    private Task? _initializationTask;
+    private Task? _profileTask;
+    private NavigationDecision _currentDecision = new(NavigationOutcome.Wait);
+    private HomeSessionState _homeSession = new(false, null);
+    private bool _isLoggedIn;
+    private bool _isAdmin;
+    private bool _isProfileResolved;
+
+    private async Task HandleNavigationAsync(NavigationContext context)
+    {
+        var cancellationToken = context.CancellationToken;
+        _initializationTask ??= InitializeSessionAsync();
+        await _initializationTask.WaitAsync(cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var path = context.Path;
+        var separator = path.IndexOfAny('?', '#');
+        if (separator >= 0) path = path[..separator];
+        if (!path.StartsWith('/')) path = $"/{path}";
+
+        var decision = NavigationGuard.Resolve(path, _isLoggedIn, _isProfileResolved, _isAdmin);
+        if (decision.Outcome == NavigationOutcome.Wait && _profileTask is not null)
+        {
+            await _profileTask.WaitAsync(cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+            decision = NavigationGuard.Resolve(path, _isLoggedIn, _isProfileResolved, _isAdmin);
+        }
+
+        cancellationToken.ThrowIfCancellationRequested();
+        _currentDecision = decision;
+        if (decision.Outcome == NavigationOutcome.Redirect && decision.RedirectPath is not null)
+        {
+            var current = new Uri(Navigation.Uri).PathAndQuery;
+            var instruction = NavigationGuard.PlanNavigation(
+                current,
+                decision.RedirectPath,
+                replaceHistory: true);
+            cancellationToken.ThrowIfCancellationRequested();
+            Navigation.NavigateTo(instruction.Target!, replace: instruction.ReplaceHistory);
+        }
+    }
+
+    private async Task InitializeSessionAsync()
+    {
+        _isLoggedIn = await AuthSession.IsLoggedInAsync();
+        _homeSession = new HomeSessionState(_isLoggedIn, await AuthSession.GetEmailAsync());
+        if (!_isLoggedIn)
+        {
+            _isProfileResolved = true;
+            return;
+        }
+
+        _isAdmin = await AuthSession.IsAdminAsync();
+        _profileTask = RefreshProfileAsync();
+    }
+
+    private async Task RefreshProfileAsync()
+    {
+        try
+        {
+            var profile = await Api.SendAsync<MeResponse>("/me");
+            _isAdmin = profile.IsAdmin;
+            await AuthSession.StoreAdminAsync(profile.IsAdmin);
+        }
+        catch
+        {
+            _isAdmin = false;
+            await AuthSession.ClearAdminAsync();
+        }
+        finally
+        {
+            _isProfileResolved = true;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+}
