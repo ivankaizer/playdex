@@ -55,7 +55,7 @@ public static class AdminEndpoints
         });
 
         admin.MapGet("/credentials", ListCredentials);
-        admin.MapPut("/credentials/{credentialId:long}", async (long credentialId, HttpContext http) =>
+        admin.MapPut("/credentials/{credentialId}", async (string credentialId, HttpContext http) =>
         {
             var payload = await http.Request.ReadFromJsonAsync<JsonElement>();
             var authRepo = http.RequestServices.GetRequiredService<AuthRepository>();
@@ -70,7 +70,7 @@ public static class AdminEndpoints
             {
                 var forbid = await http.User.AssertAdminAsync(authRepo, http.RequestAborted);
                 result = forbid ?? TypedResults.Ok(await service.UpdateCredential(
-                    credentialId,
+                    ParsePositiveInteger(credentialId, "credentialId"),
                     ParseCredentialChanges(payload),
                     http.RequestAborted));
             }
@@ -104,8 +104,14 @@ public static class AdminEndpoints
         var forbid = await principal.AssertAdminAsync(authRepo, ct);
         if (forbid is not null) return forbid;
 
+        var resolvedLimit = limit ?? 100;
+        var resolvedOffset = offset ?? 0;
+        if (resolvedLimit <= 0)
+            throw AppProblem.Validation("limit must be a positive integer.");
+        if (resolvedOffset < 0)
+            throw AppProblem.Validation("offset must be a non-negative integer.");
         return TypedResults.Ok(await service.SearchSessions(
-            query ?? "", Math.Clamp(limit ?? 100, 1, 500), Math.Max(offset ?? 0, 0), ct));
+            query ?? "", resolvedLimit, resolvedOffset, ct));
     }
 
     private static async Task<IResult> GetPlatformStatuses(
@@ -142,7 +148,13 @@ public static class AdminEndpoints
         var forbid = await principal.AssertAdminAsync(authRepo, ct);
         if (forbid is not null) return forbid;
 
-        return TypedResults.Ok(await service.SearchGames(query ?? "", limit ?? 20, ct));
+        var trimmed = query?.Trim() ?? "";
+        if (trimmed.Length == 0)
+            throw AppProblem.Validation("query is required.");
+        var resolvedLimit = limit ?? 20;
+        if (resolvedLimit <= 0)
+            throw AppProblem.Validation("limit must be a positive integer.");
+        return TypedResults.Ok(await service.SearchGames(trimmed, resolvedLimit, ct));
     }
 
     private static async Task UpdateGame(string? routeGameId, HttpContext http)
@@ -246,5 +258,12 @@ public static class AdminEndpoints
             JsonValueKind.Number => property.GetRawText(),
             _ => throw AppProblem.Validation($"{name} must be a valid game id."),
         };
+    }
+
+    private static long ParsePositiveInteger(string value, string name)
+    {
+        if (!long.TryParse(value, out var parsed) || parsed <= 0)
+            throw AppProblem.Validation($"{name} must be a positive integer.");
+        return parsed;
     }
 }

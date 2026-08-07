@@ -4,106 +4,129 @@ using System.Text.Json.Serialization;
 
 namespace Playdex.Api.Modules.Telegram;
 
-// ── Public DTOs ───────────────────────────────────────────────
-
-/// <summary>
-/// Represents a single update from the Telegram Bot API (typically a new message).
-/// </summary>
 public sealed record TelegramUpdate(long UpdateId, TelegramMessage? Message);
-
-/// <summary>
-/// A message sent to a chat, with optional text content.
-/// </summary>
 public sealed record TelegramMessage(long MessageId, TelegramChat Chat, string? Text);
-
-/// <summary>
-/// A Telegram chat (direct conversation or group).
-/// </summary>
 public sealed record TelegramChat(long Id);
 
-// ── HTTP Client ───────────────────────────────────────────────
-
-/// <summary>
-/// Thin HTTP client for the Telegram Bot API.
-///
-/// The <see cref="HttpClient"/> passed to the constructor MUST have its
-/// <c>BaseAddress</c> set to <c>https://api.telegram.org/bot{token}/</c>.
-/// </summary>
-public sealed class TelegramClient(HttpClient httpClient)
+public sealed class TelegramClient
 {
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
-        PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower
+        PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
     };
+    private readonly HttpClient _httpClient;
+    private readonly string? _botToken;
 
-    /// <summary>
-    /// Poll <c>getUpdates</c> for incoming messages.
-    /// Uses long polling with a 30-second timeout.
-    /// </summary>
-    /// <param name="offset">
-    /// The <c>update_id</c> of the last processed update, or <c>null</c>
-    /// to receive all pending updates.
-    /// </param>
-    /// <param name="ct">Cancellation token.</param>
-    public async Task<IReadOnlyList<TelegramUpdate>> GetUpdatesAsync(
-        long? offset, CancellationToken ct)
+    public TelegramClient(HttpClient httpClient, IConfiguration configuration)
+        : this(httpClient, configuration["TELEGRAM_BOT_TOKEN"])
     {
-        var url = "getUpdates?timeout=30";
-        if (offset.HasValue)
-            url += $"&offset={offset.Value}";
+    }
 
-        var response = await httpClient.GetAsync(url, ct);
-        response.EnsureSuccessStatusCode();
+    internal TelegramClient(HttpClient httpClient, string? botToken)
+    {
+        _httpClient = httpClient;
+        _botToken = string.IsNullOrWhiteSpace(botToken) ? null : botToken.Trim();
+    }
 
-        var body = await response.Content
-            .ReadFromJsonAsync<TelegramApiEnvelope>(JsonOptions, ct);
+    public bool IsEnabled => _botToken is not null;
 
-        if (body?.Ok != true || body.Result is null)
-            return [];
+    public async Task<IReadOnlyList<TelegramUpdate>> GetUpdatesAsync(
+        long? offset,
+        CancellationToken ct)
+    {
+        EnsureEnabled();
+        var url = MethodUrl("getUpdates") + "?timeout=30";
+        if (offset.HasValue) url += $"&offset={offset.Value}";
 
-        return body.Result
-            .Where(api => api.Message is not null)
-            .Select(api => new TelegramUpdate(
-                api.UpdateId,
-                new TelegramMessage(
-                    api.Message!.MessageId,
-                    new TelegramChat(api.Message.Chat.Id),
-                    api.Message.Text)))
+        using var response = await _httpClient.GetAsync(url, ct);
+        var body = await ReadEnvelope<IReadOnlyList<TelegramApiUpdate>>(response, ct);
+        return (body ?? [])
+            .Select(update => new TelegramUpdate(
+                update.UpdateId,
+                update.Message is null
+                    ? null
+                    : new TelegramMessage(
+                        update.Message.MessageId,
+                        new TelegramChat(update.Message.Chat.Id),
+                        update.Message.Text)))
             .ToList();
     }
 
-    /// <summary>
-    /// Send a plain-text message to a chat.
-    /// </summary>
     public async Task SendMessageAsync(long chatId, string text, CancellationToken ct)
     {
+        EnsureEnabled();
         var payload = new Dictionary<string, object>
         {
             ["chat_id"] = chatId,
             ["text"] = text,
-            ["disable_web_page_preview"] = true
+            ["disable_web_page_preview"] = true,
         };
-
-        var response = await httpClient.PostAsJsonAsync("sendMessage", payload, JsonOptions, ct);
-        response.EnsureSuccessStatusCode();
+        using var response = await _httpClient.PostAsJsonAsync(
+            MethodUrl("sendMessage"), payload, JsonOptions, ct);
+        await ReadEnvelope<JsonElement>(response, ct);
     }
 
-    // ── Internal Telegram API envelope ─────────────────────────
+    public async Task SendPhotoAsync(
+        long chatId,
+        byte[] photo,
+        string caption,
+        CancellationToken ct)
+    {
+        EnsureEnabled();
+        using var content = new MultipartFormDataContent();
+        content.Add(new StringContent(chatId.ToString()), "chat_id");
+        content.Add(new StringContent(caption), "caption");
+        var image = new ByteArrayContent(photo);
+        image.Headers.ContentType = new("image/webp");
+        content.Add(image, "photo", "notification.webp");
+        using var response = await _httpClient.PostAsync(MethodUrl("sendPhoto"), content, ct);
+        await ReadEnvelope<JsonElement>(response, ct);
+    }
 
-    private sealed record TelegramApiEnvelope(
-        bool Ok,
-        string? Description,
-        IReadOnlyList<TelegramApiUpdate>? Result);
+    private async Task<T?> ReadEnvelope<T>(
+        HttpResponseMessage response,
+        CancellationToken ct)
+    {
+        TelegramApiEnvelope<T>? envelope;
+        try
+        {
+            envelope = await response.Content
+                .ReadFromJsonAsync<TelegramApiEnvelope<T>>(JsonOptions, ct);
+        }
+        catch (JsonException ex)
+        {
+            throw new TelegramApiException(
+                $"Telegram returned HTTP {(int)response.StatusCode} with an invalid response.", ex);
+        }
 
+        if (!response.IsSuccessStatusCode || envelope?.Ok != true)
+        {
+            var description = envelope?.Description;
+            throw new TelegramApiException(string.IsNullOrWhiteSpace(description)
+                ? $"Telegram request failed with HTTP {(int)response.StatusCode}."
+                : description);
+        }
+        return envelope.Result;
+    }
+
+    private string MethodUrl(string method) => $"https://api.telegram.org/bot{_botToken}/{method}";
+
+    private void EnsureEnabled()
+    {
+        if (!IsEnabled)
+            throw new InvalidOperationException("TELEGRAM_BOT_TOKEN is not configured.");
+    }
+
+    private sealed record TelegramApiEnvelope<T>(bool Ok, string? Description, T? Result);
     private sealed record TelegramApiUpdate(
         [property: JsonPropertyName("update_id")] long UpdateId,
         [property: JsonPropertyName("message")] TelegramApiMessage? Message);
-
     private sealed record TelegramApiMessage(
         [property: JsonPropertyName("message_id")] long MessageId,
         [property: JsonPropertyName("chat")] TelegramApiChat Chat,
         [property: JsonPropertyName("text")] string? Text);
-
-    private sealed record TelegramApiChat(
-        [property: JsonPropertyName("id")] long Id);
+    private sealed record TelegramApiChat([property: JsonPropertyName("id")] long Id);
 }
+
+public sealed class TelegramApiException(string message, Exception? innerException = null)
+    : Exception(message, innerException);

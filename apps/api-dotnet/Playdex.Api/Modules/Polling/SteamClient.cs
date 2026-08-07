@@ -24,7 +24,10 @@ public sealed class SteamClient(HttpClient httpClient) : IProviderClient
 
         if (response.StatusCode == HttpStatusCode.TooManyRequests)
         {
-            throw new HttpRequestException("Steam API rate limited", null, HttpStatusCode.TooManyRequests);
+            var retryAfter = response.Headers.RetryAfter?.Delta;
+            throw new ProviderPollException(
+                "Steam API rate limited.",
+                retryAfter ?? TimeSpan.FromMinutes(1));
         }
 
         response.EnsureSuccessStatusCode();
@@ -65,8 +68,11 @@ public sealed class SteamClient(HttpClient httpClient) : IProviderClient
 
     private sealed record SteamPlayer
     {
+        [JsonPropertyName("steamid")]
         public string? SteamId { get; init; }
+        [JsonPropertyName("gameid")]
         public string? GameId { get; init; }
+        [JsonPropertyName("gameextrainfo")]
         public string? GameExtraInfo { get; init; }
     }
 }

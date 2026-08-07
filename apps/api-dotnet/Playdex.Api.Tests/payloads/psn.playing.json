@@ -1,0 +1,19 @@
+{
+  "basicPresence": {
+    "availability": "availableToPlay",
+    "gameTitleInfoList": [
+      {
+        "format": "PS5",
+        "npTitleId": "PPSA28801_00",
+        "titleName": "Skate Story",
+        "conceptIconUrl": "https://image.api.playstation.com/vulcan/ap/rnd/202503/1915/1f1b60a5a79b1076b4249123cf75feee2fdf8e4df1726e84.png",
+        "launchPlatform": "PS5"
+      }
+    ],
+    "primaryPlatformInfo": {
+      "platform": "PS5",
+      "onlineStatus": "online",
+      "lastOnlineDate": "2025-12-25T07:49:29.616Z"
+    }
+  }
+}

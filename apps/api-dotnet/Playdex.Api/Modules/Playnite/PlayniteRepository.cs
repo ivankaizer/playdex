@@ -7,33 +7,36 @@ public sealed class PlayniteRepository(PlaydexDbContext db)
 {
     public async Task<PlayniteCredentialRow?> LoadCredentialByApiKey(string apiKey, CancellationToken ct)
     {
-        return await db.Database.SqlQuery<PlayniteCredentialRow?>($"""
-            SELECT pc.id
+        var credentials = await db.Database.SqlQuery<PlayniteCredentialRow>($"""
+            SELECT pc.id AS "Id"
             FROM platform_credentials pc
             JOIN platforms p ON p.id = pc.platform_id
             WHERE pc.api_key = {apiKey}
               AND p.key = 'playnite'
               AND pc.active = true
-            """).FirstOrDefaultAsync(ct);
+            """).Take(2).ToListAsync(ct);
+        return credentials.Count == 1 ? credentials[0] : null;
     }
 
     public async Task<long> UpsertGame(
         string title, string? externalId, string platformKey, string canonicalKey, string? capsuleUrl,
         CancellationToken ct)
     {
-        var platformId = await db.Database.SqlQuery<long?>(
-            $"SELECT id FROM platforms WHERE key = {platformKey}"
-            ).FirstOrDefaultAsync(ct);
+        var platformId = await db.Platforms
+            .Where(row => row.Key == platformKey)
+            .Select(row => (long?)row.Id)
+            .FirstOrDefaultAsync(ct);
 
         if (platformId is null)
         {
-            platformId = await db.Database.SqlQuery<long>(
-                $"SELECT id FROM platforms WHERE key = 'unknown'"
-                ).FirstAsync(ct);
+            platformId = await db.Platforms
+                .Where(row => row.Key == "unknown")
+                .Select(row => row.Id)
+                .SingleAsync(ct);
         }
 
         var now = DateTimeOffset.UtcNow;
-        return await db.Database.SqlQuery<long>($"""
+        var ids = await db.Database.SqlQuery<long>($"""
             INSERT INTO games (platform_id, title, external_id, canonical_key, capsule_url, created_at, updated_at)
             VALUES ({platformId!.Value}, {title}, {externalId}, {canonicalKey}, {capsuleUrl}, {now}, {now})
             ON CONFLICT (canonical_key) DO UPDATE SET
@@ -43,7 +46,8 @@ public sealed class PlayniteRepository(PlaydexDbContext db)
                 capsule_url = CASE WHEN games.capsule_url_locked THEN games.capsule_url ELSE COALESCE(EXCLUDED.capsule_url, games.capsule_url) END,
                 updated_at = NOW()
             RETURNING id
-            """).FirstAsync(ct);
+            """).ToListAsync(ct);
+        return ids.Single();
     }
 
     public async Task<long> InsertCompletePlaySession(
@@ -51,11 +55,12 @@ public sealed class PlayniteRepository(PlaydexDbContext db)
         CancellationToken ct)
     {
         var now = DateTimeOffset.UtcNow;
-        return await db.Database.SqlQuery<long>($"""
+        var ids = await db.Database.SqlQuery<long>($"""
             INSERT INTO play_sessions (platform_credential_id, game_id, started_at, ended_at, created_at, updated_at)
             VALUES ({credentialId}, {gameId}, {startedAt}, {endedAt}, {now}, {now})
             RETURNING id
-            """).FirstAsync(ct);
+            """).ToListAsync(ct);
+        return ids.Single();
     }
 
     public async Task<long> InsertActivePlaySession(
@@ -63,11 +68,12 @@ public sealed class PlayniteRepository(PlaydexDbContext db)
         CancellationToken ct)
     {
         var now = DateTimeOffset.UtcNow;
-        return await db.Database.SqlQuery<long>($"""
+        var ids = await db.Database.SqlQuery<long>($"""
             INSERT INTO play_sessions (platform_credential_id, game_id, started_at, created_at, updated_at)
             VALUES ({credentialId}, {gameId}, {startedAt}, {now}, {now})
             RETURNING id
-            """).FirstAsync(ct);
+            """).ToListAsync(ct);
+        return ids.Single();
     }
 
     public async Task<int> EndActiveSessionsForCredential(
@@ -115,7 +121,11 @@ public sealed class PlayniteRepository(PlaydexDbContext db)
         CancellationToken ct)
     {
         return await db.Database.SqlQuery<ActiveSessionRow?>($"""
-            SELECT id, game_id, started_at, updated_at
+            SELECT
+                id AS "Id",
+                game_id AS "GameId",
+                started_at AS "StartedAt",
+                updated_at AS "UpdatedAt"
             FROM play_sessions
             WHERE platform_credential_id = {credentialId} AND ended_at IS NULL
             ORDER BY started_at DESC

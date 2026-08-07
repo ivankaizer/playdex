@@ -88,5 +88,4 @@ jobs:
           done
           curl -fsS http://127.0.0.1:3000/api >/dev/null
           curl -fsS http://127.0.0.1:5100/api >/dev/null
-          dotnet test apps/api-dotnet/Playdex.ContractTests/Playdex.ContractTests.csproj --configuration Release --no-build --filter FullyQualifiedName~RootContractTests
-          dotnet test apps/api-dotnet/Playdex.ContractTests/Playdex.ContractTests.csproj --configuration Release --no-build --filter FullyQualifiedName~AuthContractTests
+          dotnet test apps/api-dotnet/Playdex.ContractTests/Playdex.ContractTests.csproj --configuration Release --no-build --filter FullyQualifiedName~DifferentialHarnessTests

@@ -14,14 +14,14 @@ public static class AccountsEndpoints
         sessions.MapGet("", ListSessions);
         sessions.MapGet("/today", ListSessionsToday);
         sessions.MapGet("/current", ListCurrentSession);
-        sessions.MapDelete("/{sessionId:long}", DeleteSession);
+        sessions.MapDelete("/{sessionId}", DeleteSession);
 
         api.MapGet("/stats", ListStatsForRange).RequireAuthorization();
 
-        accounts.MapGet("/{accountId:long}/sessions", ListAccountSessions);
-        accounts.MapGet("/{accountId:long}/sessions/today", ListAccountSessionsToday);
-        accounts.MapGet("/{accountId:long}/sessions/current", ListAccountCurrentSession);
-        accounts.MapGet("/{accountId:long}/stats", ListAccountStats);
+        accounts.MapGet("/{accountId}/sessions", ListAccountSessions);
+        accounts.MapGet("/{accountId}/sessions/today", ListAccountSessionsToday);
+        accounts.MapGet("/{accountId}/sessions/current", ListAccountCurrentSession);
+        accounts.MapGet("/{accountId}/stats", ListAccountStats);
     }
 
     private static async Task<IResult> ListAccounts(
@@ -42,7 +42,7 @@ public static class AccountsEndpoints
         var result = await service.ListSessions(
             principal.GetUserId(), null, title, gameId, from, to,
             sort ?? "date", direction ?? "desc",
-            Math.Clamp(limit ?? 10, 1, 100), Math.Max(offset ?? 0, 0),
+            ValidateLimit(limit), ValidateOffset(offset),
             0, ct);
         return TypedResults.Ok(new AccountSessionsResponseDto(null, result.Sessions, result.Total, result.Limit, result.Offset));
     }
@@ -76,56 +76,86 @@ public static class AccountsEndpoints
     }
 
     private static async Task<IResult> ListAccountSessions(
-        long accountId,
+        string accountId,
         ClaimsPrincipal principal,
         AccountsService service,
         int? limit, int? offset, string? sort, string? direction,
         string? title, string? gameId, string? from, string? to,
         CancellationToken ct)
     {
+        var parsedAccountId = ParseId(accountId, "accountId");
         var result = await service.ListSessions(
-            principal.GetUserId(), accountId, title, gameId, from, to,
+            principal.GetUserId(), parsedAccountId, title, gameId, from, to,
             sort ?? "date", direction ?? "desc",
-            Math.Clamp(limit ?? 10, 1, 100), Math.Max(offset ?? 0, 0),
+            ValidateLimit(limit), ValidateOffset(offset),
             0, ct);
-        return TypedResults.Ok(new AccountSessionsResponseDto(accountId, result.Sessions, result.Total, result.Limit, result.Offset));
+        return TypedResults.Ok(new AccountSessionsResponseDto(parsedAccountId, result.Sessions, result.Total, result.Limit, result.Offset));
     }
 
     private static async Task<IResult> ListAccountSessionsToday(
-        long accountId,
+        string accountId,
         ClaimsPrincipal principal,
         AccountsService service,
         CancellationToken ct)
     {
-        var sessions = await service.ListSessionsToday(principal.GetUserId(), accountId, 0, ct);
-        return TypedResults.Ok(new AccountTodaySessionsResponseDto(accountId, sessions));
+        var parsedAccountId = ParseId(accountId, "accountId");
+        var sessions = await service.ListSessionsToday(principal.GetUserId(), parsedAccountId, 0, ct);
+        return TypedResults.Ok(new AccountTodaySessionsResponseDto(parsedAccountId, sessions));
     }
 
     private static async Task<IResult> ListAccountCurrentSession(
-        long accountId,
+        string accountId,
         ClaimsPrincipal principal,
         AccountsService service,
         CancellationToken ct)
     {
-        var session = await service.LoadCurrentSession(principal.GetUserId(), accountId, ct);
-        return TypedResults.Ok(new AccountCurrentSessionResponseDto(accountId, session));
+        var parsedAccountId = ParseId(accountId, "accountId");
+        var session = await service.LoadCurrentSession(principal.GetUserId(), parsedAccountId, ct);
+        return TypedResults.Ok(new AccountCurrentSessionResponseDto(parsedAccountId, session));
     }
 
     private static async Task<IResult> ListAccountStats(
-        long accountId,
+        string accountId,
         ClaimsPrincipal principal,
         AccountsService service,
         CancellationToken ct)
     {
-        return TypedResults.Ok(await service.ComputeAccountStats(principal.GetUserId(), accountId, 0, ct));
+        return TypedResults.Ok(await service.ComputeAccountStats(
+            principal.GetUserId(), ParseId(accountId, "accountId"), 0, ct));
     }
 
     private static async Task<IResult> DeleteSession(
-        long sessionId,
+        string sessionId,
         ClaimsPrincipal principal,
         AccountsService service,
         CancellationToken ct)
     {
-        return TypedResults.Ok(await service.DeleteSession(sessionId, principal.GetUserId(), ct));
+        return TypedResults.Ok(await service.DeleteSession(
+            ParseId(sessionId, "sessionId"), principal.GetUserId(), ct));
+    }
+
+    private static int ValidateLimit(int? limit)
+    {
+        var value = limit ?? 10;
+        if (value <= 0)
+            throw Playdex.Api.Shared.Http.AppProblem.Validation(
+                "limit and offset must be valid numbers.");
+        return Math.Min(value, 100);
+    }
+
+    private static int ValidateOffset(int? offset)
+    {
+        var value = offset ?? 0;
+        if (value < 0)
+            throw Playdex.Api.Shared.Http.AppProblem.Validation(
+                "limit and offset must be valid numbers.");
+        return value;
+    }
+
+    private static long ParseId(string value, string name)
+    {
+        if (!long.TryParse(value, out var id))
+            throw Playdex.Api.Shared.Http.AppProblem.Validation($"{name} must be a number.");
+        return id;
     }
 }

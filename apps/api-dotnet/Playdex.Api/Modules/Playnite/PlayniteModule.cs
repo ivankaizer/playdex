@@ -8,7 +8,6 @@ public static class PlayniteModule
     {
         services.AddScoped<PlayniteRepository>();
         services.AddScoped<PlayniteService>();
-        services.AddScoped<IEventHandler<GameDetected>, GameDetectedHandler>();
         return services;
     }
 

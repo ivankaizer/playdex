@@ -46,3 +46,11 @@ public interface IProviderClient
     /// </summary>
     Task<ProviderPollResult?> GetCurrentlyPlaying(PlatformCredential credential, CancellationToken ct);
 }
+
+public sealed class ProviderPollException(
+    string message,
+    TimeSpan? retryAfter = null,
+    Exception? innerException = null) : Exception(message, innerException)
+{
+    public TimeSpan? RetryAfter { get; } = retryAfter;
+}

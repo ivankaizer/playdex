@@ -78,7 +78,11 @@ public static class GamesEndpoints
         string? query, int? limit,
         CancellationToken ct)
     {
-        return TypedResults.Ok(await service.Search(query ?? "", limit ?? 20, ct));
+        var resolvedLimit = limit ?? 10;
+        if (resolvedLimit <= 0)
+            throw Playdex.Api.Shared.Http.AppProblem.Validation(
+                "limit must be a positive integer.");
+        return TypedResults.Ok(await service.Search(query ?? "", resolvedLimit, ct));
     }
 
     private static async Task<IResult> GetGame(

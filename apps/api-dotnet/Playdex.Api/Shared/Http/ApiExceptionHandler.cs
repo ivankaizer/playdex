@@ -10,10 +10,11 @@ public sealed class ApiExceptionHandler(ILogger<ApiExceptionHandler> logger) : I
         CancellationToken ct)
     {
         var appProblem = exception as AppProblem;
-        var statusCode = appProblem?.StatusCode ?? 500;
-        var detail = appProblem?.Message ?? "Internal server error.";
+        var invalidJson = exception is System.Text.Json.JsonException or BadHttpRequestException;
+        var statusCode = appProblem?.StatusCode ?? (invalidJson ? 400 : 500);
+        var detail = appProblem?.Message ?? (invalidJson ? "Invalid JSON body." : "Internal server error.");
 
-        if (appProblem is null)
+        if (appProblem is null && !invalidJson)
         {
             logger.LogError(
                 exception,

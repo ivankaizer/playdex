@@ -24,6 +24,6 @@ public static class ClaimsPrincipalExtensions
         if (user is not null && user.IsAdmin)
             return null;
 
-        return TypedResults.Forbid();
+        throw AppProblem.Forbidden("Admin access required.");
     }
 }

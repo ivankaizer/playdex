@@ -4,9 +4,8 @@ using Playdex.Api.Shared.Common;
 namespace Playdex.Api.Modules.Telegram;
 
 public sealed partial class TelegramBackgroundService(
-    IConfiguration configuration,
     IServiceScopeFactory scopeFactory,
-    EventBus bus,
+    TelegramClient telegram,
     ILogger<TelegramBackgroundService> logger) : BackgroundService
 {
     internal const int DefaultPollIntervalMs = 2_000;
@@ -14,9 +13,7 @@ public sealed partial class TelegramBackgroundService(
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        var botToken = configuration["TELEGRAM_BOT_TOKEN"];
-
-        if (string.IsNullOrWhiteSpace(botToken))
+        if (!telegram.IsEnabled)
         {
             logger.LogWarning(
                 "TELEGRAM_BOT_TOKEN is not configured. " +
@@ -27,13 +24,6 @@ public sealed partial class TelegramBackgroundService(
 
         logger.LogInformation("Telegram integration started — polling for commands.");
 
-        using var httpClient = new HttpClient
-        {
-            BaseAddress = new Uri($"https://api.telegram.org/bot{botToken}/"),
-            Timeout = TimeSpan.FromSeconds(60)
-        };
-
-        var telegram = new TelegramClient(httpClient);
         long? offset = null;
 
         try
@@ -46,6 +36,7 @@ public sealed partial class TelegramBackgroundService(
 
                     foreach (var update in updates)
                     {
+                        offset = update.UpdateId + 1;
                         if (update.Message?.Text is null)
                             continue;
 
@@ -56,8 +47,6 @@ public sealed partial class TelegramBackgroundService(
                             update.Message.Text);
 
                         await ProcessCommandAsync(telegram, update, stoppingToken);
-
-                        offset = update.UpdateId + 1;
                     }
 
                     if (updates.Count == 0)
@@ -90,7 +79,7 @@ public sealed partial class TelegramBackgroundService(
         }
     }
 
-    private async Task ProcessCommandAsync(
+    internal async Task ProcessCommandAsync(
         TelegramClient telegram, TelegramUpdate update, CancellationToken ct)
     {
         var text = update.Message!.Text!.Trim();
@@ -98,7 +87,7 @@ public sealed partial class TelegramBackgroundService(
 
         var (command, args) = ParseCommand(text);
 
-        switch (command)
+        switch (command.StartsWith("/stop", StringComparison.Ordinal) ? "/stop" : command)
         {
             case "/start":
                 await HandleStartAsync(telegram, chatId, args, ct);
@@ -135,21 +124,28 @@ public sealed partial class TelegramBackgroundService(
         {
             using var scope = scopeFactory.CreateScope();
             var userRepo = scope.ServiceProvider.GetRequiredService<TelegramRepository>();
+            var manual = scope.ServiceProvider.GetRequiredService<Playdex.Api.Modules.Manual.ManualService>();
 
             var user = await userRepo.GetUserByChatId(chatId.ToString(), ct);
 
             if (user is null)
             {
                 await telegram.SendMessageAsync(chatId,
-                    "Your Telegram account is not linked to any Playdex account. " +
-                    "Please link it via the Playdex web interface first.", ct);
+                    "This chat is not linked to a Playdex user. " +
+                    "Ask an admin to set chat_id on your user record.", ct);
                 return;
             }
 
-            await bus.Publish(new StartSessionRequested(user.Id, 0, args), ct);
+            var result = await manual.StartSession(
+                user.Id,
+                new Playdex.Api.Modules.Manual.ManualSessionStartRequest(args),
+                ct);
+            var summary = await userRepo.GetSessionSummary(result.SessionId, ct);
 
             await telegram.SendMessageAsync(chatId,
-                $"✅ Started tracking \"{args}\".\nUse /stop when you are done playing.", ct);
+                summary is null
+                    ? "Session started."
+                    : $"Session started: {summary.Title} ({summary.Platform}).", ct);
         }
         catch (AppProblem ex)
         {
@@ -176,14 +172,18 @@ public sealed partial class TelegramBackgroundService(
             if (user is null)
             {
                 await telegram.SendMessageAsync(chatId,
-                    "Your Telegram account is not linked to any Playdex account. " +
-                    "Please link it via the Playdex web interface first.", ct);
+                    "This chat is not linked to a Playdex user. " +
+                    "Ask an admin to set chat_id on your user record.", ct);
                 return;
             }
 
-            await bus.Publish(new StopSessionRequested(user.Id), ct);
-
-            await telegram.SendMessageAsync(chatId, "✅ Stopped active session(s).", ct);
+            var sessions = await userRepo.EndActiveSessionsForUser(
+                user.Id, DateTimeOffset.UtcNow, ct);
+            var message = sessions.Count == 0
+                ? "No active sessions to stop."
+                : $"Stopped {sessions.Count} session(s): " +
+                  string.Join(", ", sessions.Select(row => $"{row.Title} ({row.Platform})")) + ".";
+            await telegram.SendMessageAsync(chatId, message, ct);
         }
         catch (AppProblem ex)
         {
@@ -216,7 +216,7 @@ public sealed partial class TelegramBackgroundService(
         await telegram.SendMessageAsync(chatId, help, ct);
     }
 
-    private static (string Command, string? Args) ParseCommand(string text)
+    internal static (string Command, string? Args) ParseCommand(string text)
     {
         var parts = text.Split(' ', 2, StringSplitOptions.TrimEntries);
         var command = parts[0].ToLowerInvariant();

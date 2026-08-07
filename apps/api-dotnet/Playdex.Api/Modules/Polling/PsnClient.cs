@@ -46,7 +46,7 @@ public sealed class PsnClient(HttpClient httpClient) : IProviderClient
         return new ProviderPollResult(
             Game: new CurrentlyPlayingResult(
                 Title: titleInfo.TitleName,
-                ExternalId: titleInfo.NpTitleId ?? titleInfo.TitleId,
+                ExternalId: titleInfo.NpTitleId,
                 CapsuleUrl: capsuleUrl,
                 Platform: "psn"
             ),
@@ -187,19 +187,23 @@ public sealed class PsnClient(HttpClient httpClient) : IProviderClient
 
     private sealed record PsnPresenceResponse
     {
+        [JsonPropertyName("basicPresence")]
         public PsnBasicPresence? BasicPresence { get; init; }
     }
 
     private sealed record PsnBasicPresence
     {
+        [JsonPropertyName("gameTitleInfoList")]
         public List<PsnGameTitleInfo>? GameTitleInfoList { get; init; }
     }
 
     private sealed record PsnGameTitleInfo
     {
+        [JsonPropertyName("titleName")]
         public string? TitleName { get; init; }
+        [JsonPropertyName("npTitleId")]
         public string? NpTitleId { get; init; }
-        public string? TitleId { get; init; }
+        [JsonPropertyName("conceptIconUrl")]
         public string? ConceptIconUrl { get; init; }
     }
 }

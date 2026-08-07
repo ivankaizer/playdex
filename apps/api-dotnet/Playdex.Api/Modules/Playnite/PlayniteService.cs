@@ -1,9 +1,14 @@
 using Microsoft.EntityFrameworkCore;
+using Playdex.Api.Shared.Common;
 using Playdex.Api.Shared.Persistence;
 
 namespace Playdex.Api.Modules.Playnite;
 
-public sealed class PlayniteService(PlayniteRepository repository, PlaydexDbContext db)
+public sealed class PlayniteService(
+    PlayniteRepository repository,
+    PlaydexDbContext db,
+    EventBus eventBus,
+    ILogger<PlayniteService> logger)
 {
     private const int PingTimeoutMinutes = 3;
 
@@ -57,9 +62,10 @@ public sealed class PlayniteService(PlayniteRepository repository, PlaydexDbCont
     }
 
     public async Task<PlayniteSessionEndResponseDto?> EndSessions(
-        string apiKey,
+        string apiKey, string gameTitle, string gameId, string gameProvider,
         CancellationToken ct)
     {
+        await using var tx = await db.Database.BeginTransactionAsync(ct);
         var credential = await repository.LoadCredentialByApiKey(apiKey, ct);
         if (credential is null)
         {
@@ -67,9 +73,30 @@ public sealed class PlayniteService(PlayniteRepository repository, PlaydexDbCont
         }
 
         var now = DateTimeOffset.UtcNow;
-        var endedCount = await repository.EndActiveSessionsForCredential(credential.Id, now, ct);
+        var canonicalKey = BuildCanonicalKey(gameProvider, gameId);
+        var capsuleUrl = GenerateCapsuleUrl(gameProvider, gameId);
+        var resolvedGameId = await repository.UpsertGame(
+            gameTitle, gameId, gameProvider, canonicalKey, capsuleUrl, ct);
+        var endedSessions = await db.PlaySessions
+            .Where(row =>
+                row.PlatformCredentialId == credential.Id &&
+                row.GameId == resolvedGameId &&
+                row.EndedAt == null)
+            .ToListAsync(ct);
+        foreach (var session in endedSessions)
+        {
+            session.EndedAt = now;
+            session.UpdatedAt = now;
+        }
+        await db.SaveChangesAsync(ct);
+        await tx.CommitAsync(ct);
+        foreach (var session in endedSessions)
+        {
+            await SafePublish(new SessionEnded(
+                session.Id, credential.Id, session.GameId, session.StartedAt, now), ct);
+        }
 
-        return new PlayniteSessionEndResponseDto(endedCount);
+        return new PlayniteSessionEndResponseDto(endedSessions.Count);
     }
 
     public async Task<PlayniteSessionPingResponseDto?> PingSession(
@@ -91,26 +118,57 @@ public sealed class PlayniteService(PlayniteRepository repository, PlaydexDbCont
         var now = DateTimeOffset.UtcNow;
         var timeoutBefore = now.AddMinutes(-PingTimeoutMinutes);
 
-        var endedTimedOut = await repository.EndTimedOutActiveSessionsForCredential(
-            credential.Id, timeoutBefore, now, PingTimeoutMinutes, ct);
+        var timedOut = await db.PlaySessions
+            .Where(row =>
+                row.PlatformCredentialId == credential.Id &&
+                row.EndedAt == null &&
+                row.UpdatedAt < timeoutBefore)
+            .ToListAsync(ct);
+        foreach (var session in timedOut)
+        {
+            session.EndedAt = session.UpdatedAt.AddMinutes(PingTimeoutMinutes);
+            session.UpdatedAt = now;
+        }
+        await db.SaveChangesAsync(ct);
 
-        var endedMismatched = await repository.EndActiveSessionsForCredentialExceptGame(
-            credential.Id, insertedGameId, now, ct);
-
-        var endedSessionCount = endedTimedOut + endedMismatched;
-
-        var active = await repository.FetchActiveSessionForCredential(credential.Id, ct);
+        var active = await db.PlaySessions
+            .Where(row =>
+                row.PlatformCredentialId == credential.Id &&
+                row.GameId == insertedGameId &&
+                row.EndedAt == null)
+            .OrderByDescending(row => row.StartedAt)
+            .FirstOrDefaultAsync(ct);
 
         if (active is not null && active.GameId == insertedGameId)
         {
-            await repository.TouchActiveSession(active.Id, now, ct);
+            active.UpdatedAt = now;
+            await db.SaveChangesAsync(ct);
             await tx.CommitAsync(ct);
-            return new PlayniteSessionPingResponseDto(active.Id, false, endedSessionCount);
+            foreach (var session in timedOut)
+            {
+                await SafePublish(new SessionEnded(
+                    session.Id,
+                    session.PlatformCredentialId,
+                    session.GameId,
+                    session.StartedAt,
+                    session.EndedAt!.Value), ct);
+            }
+            return new PlayniteSessionPingResponseDto(active.Id, false, timedOut.Count);
         }
 
         var sessionId = await repository.InsertActivePlaySession(credential.Id, insertedGameId, now, ct);
         await tx.CommitAsync(ct);
-        return new PlayniteSessionPingResponseDto(sessionId, true, endedSessionCount);
+        foreach (var session in timedOut)
+        {
+            await SafePublish(new SessionEnded(
+                session.Id,
+                session.PlatformCredentialId,
+                session.GameId,
+                session.StartedAt,
+                session.EndedAt!.Value), ct);
+        }
+        await SafePublish(new SessionStarted(sessionId, credential.Id, insertedGameId, now), ct);
+        return new PlayniteSessionPingResponseDto(sessionId, true, timedOut.Count);
     }
 
     public async Task<int> EndTimedOutSessions(CancellationToken ct)
@@ -133,5 +191,17 @@ public sealed class PlayniteService(PlayniteRepository repository, PlaydexDbCont
         }
 
         return null;
+    }
+
+    private async Task SafePublish<T>(T @event, CancellationToken ct)
+    {
+        try
+        {
+            await eventBus.Publish(@event, ct);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Playnite event handler failed for {EventType}", typeof(T).Name);
+        }
     }
 }

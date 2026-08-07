@@ -1,9 +1,11 @@
+using System.Text.Json;
+
 namespace Playdex.Api.Modules.Playnite;
 
 public sealed record PlayniteSessionRequest(
     int? DurationInSeconds,
     string GameTitle,
-    string GameId,
+    JsonElement? GameId,
     string GameProvider
 );
 

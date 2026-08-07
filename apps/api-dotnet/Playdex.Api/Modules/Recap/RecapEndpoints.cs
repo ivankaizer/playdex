@@ -34,7 +34,7 @@ public static class RecapEndpoints
         if (from is not null || to is not null)
         {
             if (from is null || to is null)
-                return TypedResults.Problem("from and to are both required.", statusCode: 400);
+                return TypedResults.Problem("from and to are required.", statusCode: 400);
 
             if (!DateTimeOffset.TryParse(from, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var parsedFrom) ||
                 !DateTimeOffset.TryParse(to, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var parsedTo))
@@ -43,11 +43,13 @@ public static class RecapEndpoints
             if (parsedFrom > parsedTo)
                 return TypedResults.Problem("from must be before to.", statusCode: 400);
 
-            startedAt = new DateTimeOffset(
-                parsedFrom.Year, parsedFrom.Month, parsedFrom.Day, 0, 0, 0, TimeSpan.Zero);
+            startedAt = parsedFrom.ToUniversalTime();
 
             endedAt = new DateTimeOffset(
-                parsedTo.Year, parsedTo.Month, parsedTo.Day, 0, 0, 0, TimeSpan.Zero).AddDays(1);
+                parsedTo.UtcDateTime.Year,
+                parsedTo.UtcDateTime.Month,
+                parsedTo.UtcDateTime.Day,
+                0, 0, 0, TimeSpan.Zero).AddDays(1);
         }
 
         var result = await service.GetRecap(
