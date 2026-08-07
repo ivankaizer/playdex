@@ -18,7 +18,7 @@ services:
 
   app:
     build:
-      context: ./apps/api-dotnet
+      context: ./src/Playdex.Api
       dockerfile: Dockerfile
     restart: "no"
     env_file:
@@ -38,14 +38,14 @@ services:
         condition: service_healthy
   ui:
     build:
-      context: ./apps/web
+      context: ./src/Playdex.Web
       dockerfile: Dockerfile.dev
     restart: "no"
     environment:
       DOTNET_USE_POLLING_FILE_WATCHER: "true"
       PLAYDEX_API_URL: "https://app.playdex.orb.local/api/"
     volumes:
-      - ./apps/web:/app
+      - ./src/Playdex.Web:/app
       - web_node_modules:/app/node_modules
       - dotnet_nuget:/root/.nuget/packages
       - web_bun_cache:/root/.bun/install/cache

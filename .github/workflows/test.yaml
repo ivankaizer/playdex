@@ -58,10 +58,10 @@ jobs:
         working-directory: apps/web
 
       - name: Strict Release build
-        run: dotnet build apps/api-dotnet/Playdex.sln --configuration Release --warnaserror
+        run: dotnet build Playdex.sln --configuration Release --warnaserror
 
       - name: Run .NET and Blazor tests
-        run: dotnet test apps/api-dotnet/Playdex.sln --configuration Release --no-build
+        run: dotnet test Playdex.sln --configuration Release --no-build
         env:
           PLAYDEX_INTEGRATION_DATABASE_URL: postgresql://playdex:playdex@127.0.0.1:5432/playdex_db_test
 
@@ -77,7 +77,7 @@ jobs:
         run: |
           bun --cwd apps/api run src/index.ts >/tmp/playdex-bun.log 2>&1 &
           BUN_PID=$!
-          ASPNETCORE_URLS=http://127.0.0.1:5100 dotnet run --project apps/api-dotnet/Playdex.Api/Playdex.Api.csproj --configuration Release --no-build >/tmp/playdex-dotnet.log 2>&1 &
+          ASPNETCORE_URLS=http://127.0.0.1:5100 dotnet run --project src/Playdex.Api/Playdex.Api.csproj --configuration Release --no-build >/tmp/playdex-dotnet.log 2>&1 &
           DOTNET_PID=$!
           trap 'kill "$BUN_PID" "$DOTNET_PID" 2>/dev/null || true' EXIT
           for attempt in {1..30}; do
@@ -88,4 +88,4 @@ jobs:
           done
           curl -fsS http://127.0.0.1:3000/api >/dev/null
           curl -fsS http://127.0.0.1:5100/api >/dev/null
-          dotnet test apps/api-dotnet/Playdex.ContractTests/Playdex.ContractTests.csproj --configuration Release --no-build --filter FullyQualifiedName~DifferentialHarnessTests
+          dotnet test test/Playdex.Api.ContractTests/Playdex.Api.ContractTests.csproj --configuration Release --no-build --filter FullyQualifiedName~DifferentialHarnessTests
