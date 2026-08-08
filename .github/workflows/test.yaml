@@ -43,18 +43,18 @@ jobs:
         run: bun install --frozen-lockfile
         working-directory: src/Web
 
-      - name: Apply database migrations
-        run: dotnet tool restore && dotnet restore && dotnet dotnet-ef database update
-        working-directory: src/Api
-        env:
-          DATABASE_URL: postgresql://playdex:playdex@127.0.0.1:5432/playdex_db_test
-
       - name: Build Blazor CSS
         run: bun run css:build
         working-directory: src/Web
 
       - name: Strict Release build
         run: dotnet build Playdex.sln --configuration Release --warnaserror
+
+      - name: Apply database migrations
+        run: dotnet run --no-build --project src/Api --configuration Release -- migrate
+        env:
+          DATABASE_URL: postgresql://playdex:playdex@127.0.0.1:5432/playdex_db_test
+          JWT_SECRET: test-secret-for-ci
 
       - name: Run .NET and Blazor tests
         run: dotnet test Playdex.sln --configuration Release --no-build

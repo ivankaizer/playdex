@@ -1,0 +1,11 @@
+###
+POST {{host}}/__admin/psn/playing
+
+###
+POST {{host}}/__admin/psn/not_playing
+
+###
+POST {{host}}/__admin/steam/playing
+
+###
+POST {{host}}/__admin/steam/not_playing

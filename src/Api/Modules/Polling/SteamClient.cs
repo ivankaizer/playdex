@@ -13,11 +13,15 @@ public sealed class SteamClient(HttpClient httpClient) : IProviderClient
     {
         var steamId = credential.AccountId;
         if (string.IsNullOrEmpty(steamId))
+        {
             return null;
+        }
 
         var apiKey = credential.ApiKey;
         if (string.IsNullOrEmpty(apiKey))
+        {
             return null;
+        }
 
         var url = $"https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v0002/?key={apiKey}&steamids={steamId}";
         var response = await httpClient.GetAsync(url, ct);
@@ -37,7 +41,9 @@ public sealed class SteamClient(HttpClient httpClient) : IProviderClient
         var player = payload?.Response?.Players?.FirstOrDefault();
 
         if (player?.GameId is null || string.IsNullOrEmpty(player.GameExtraInfo))
+        {
             return new ProviderPollResult(Game: null, RawPayload: rawJson);
+        }
 
         return new ProviderPollResult(
             Game: new CurrentlyPlayingResult(
@@ -68,8 +74,6 @@ public sealed class SteamClient(HttpClient httpClient) : IProviderClient
 
     private sealed record SteamPlayer
     {
-        [JsonPropertyName("steamid")]
-        public string? SteamId { get; init; }
         [JsonPropertyName("gameid")]
         public string? GameId { get; init; }
         [JsonPropertyName("gameextrainfo")]
