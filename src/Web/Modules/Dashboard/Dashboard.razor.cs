@@ -109,6 +109,8 @@ internal static class DashboardRequestFlow
 
 internal sealed class DashboardState
 {
+    private const int TodaySessionsPageSize = 3;
+
     public IReadOnlyList<AccountSession> TodaySessions { get; private set; } = [];
     public IReadOnlyList<DashboardSessionCard> TodaySessionCards { get; private set; } = [];
     public IReadOnlyList<AccountPlatformStat> TodayPlatformTotals { get; private set; } = [];
@@ -117,6 +119,7 @@ internal sealed class DashboardState
     public AccountStatsPeriod? YearlyStats { get; private set; }
     public bool IsDashboardLoading { get; private set; }
     public string DashboardError { get; private set; } = string.Empty;
+    public int TodaySessionsPage { get; private set; } = 1;
     public string TodayHours => Formatters.FormatHours(
         TodayPlatformTotals.Sum(item => item.TotalSeconds),
         1);
@@ -139,6 +142,7 @@ internal sealed class DashboardState
         MonthlyStats = snapshot.MonthlyStats;
         YearlyStats = snapshot.YearlyStats;
         IsDashboardLoading = false;
+        TodaySessionsPage = 1;
     }
 
     public void FailRefresh(string error)
@@ -151,7 +155,19 @@ internal sealed class DashboardState
         YearlyStats = null;
         IsDashboardLoading = false;
         DashboardError = error;
+        TodaySessionsPage = 1;
     }
+
+    public int TodaySessionsTotalPages =>
+        Math.Max(1, (int)Math.Ceiling(TodaySessionCards.Count / (double)TodaySessionsPageSize));
+
+    public IReadOnlyList<DashboardSessionCard> TodaySessionPageItems => TodaySessionCards
+        .Skip((TodaySessionsPage - 1) * TodaySessionsPageSize)
+        .Take(TodaySessionsPageSize)
+        .ToArray();
+
+    public void SetTodaySessionsPage(int page) =>
+        TodaySessionsPage = Math.Clamp(page, 1, TodaySessionsTotalPages);
 
     private static IReadOnlyList<DashboardSessionCard> CreateTodaySessionCards(
         IReadOnlyList<AccountSession> sessions,

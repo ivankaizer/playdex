@@ -177,7 +177,7 @@
                         }
                         else
                         {
-                            @foreach (var session in todaySessionCards)
+                            @foreach (var session in _state.TodaySessionPageItems)
                             {
                                 <div @key="session.SessionId"
                                      class="relative flex flex-wrap items-center justify-between gap-4 overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-200/50 dark:bg-slate-950/50 p-4"
@@ -202,6 +202,25 @@
                                             @session.Duration
                                         </p>
                                     </div>
+                                </div>
+                            }
+
+                            @if (_state.TodaySessionsTotalPages > 1)
+                            {
+                                <div class="flex items-center justify-between pt-2 text-xs uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">
+                                    <button type="button"
+                                            class="rounded-full border border-slate-200 dark:border-slate-800 px-3 py-1.5 text-slate-700 dark:text-slate-200 transition hover:border-emerald-400/60 hover:text-emerald-700 dark:hover:text-emerald-200 disabled:cursor-not-allowed disabled:opacity-50"
+                                            @onclick="() => _state.SetTodaySessionsPage(_state.TodaySessionsPage - 1)"
+                                            disabled="@(_state.TodaySessionsPage == 1)">
+                                        Prev
+                                    </button>
+                                    <span>@_state.TodaySessionsPage of @_state.TodaySessionsTotalPages</span>
+                                    <button type="button"
+                                            class="rounded-full border border-slate-200 dark:border-slate-800 px-3 py-1.5 text-slate-700 dark:text-slate-200 transition hover:border-emerald-400/60 hover:text-emerald-700 dark:hover:text-emerald-200 disabled:cursor-not-allowed disabled:opacity-50"
+                                            @onclick="() => _state.SetTodaySessionsPage(_state.TodaySessionsPage + 1)"
+                                            disabled="@(_state.TodaySessionsPage == _state.TodaySessionsTotalPages)">
+                                        Next
+                                    </button>
                                 </div>
                             }
                         }

@@ -144,6 +144,41 @@ public sealed class DashboardStateTests
     }
 
     [Fact]
+    public void TodaySessionCards_ArePaginatedByThreeWithClampedPage()
+    {
+        var snapshot = Snapshot();
+        snapshot = snapshot with
+        {
+            TodaySessions = Enumerable.Range(1, 8)
+                .Select(index => new AccountSession(
+                    index,
+                    Now.AddHours(-index),
+                    Now.AddHours(-index).AddSeconds(3600),
+                    "42",
+                    "steam",
+                    $"Game {index}",
+                    null,
+                    false,
+                    null,
+                    null))
+                .ToArray(),
+        };
+        var state = new DashboardState();
+        state.CompleteRefresh(snapshot, Now);
+
+        Assert.Equal(8, state.TodaySessionCards.Count);
+        Assert.Equal(3, state.TodaySessionsTotalPages);
+        Assert.Equal([1L, 2, 3], state.TodaySessionPageItems.Select(item => item.SessionId));
+
+        state.SetTodaySessionsPage(2);
+        Assert.Equal([4L, 5, 6], state.TodaySessionPageItems.Select(item => item.SessionId));
+        state.SetTodaySessionsPage(3);
+        Assert.Equal([7L, 8], state.TodaySessionPageItems.Select(item => item.SessionId));
+        state.SetTodaySessionsPage(99);
+        Assert.Equal(3, state.TodaySessionsPage);
+    }
+
+    [Fact]
     public void PlatformRendering_PreservesRowsWhenRawPlatformsShareADisplayLabel()
     {
         var stats = new AccountStatsPeriod(
