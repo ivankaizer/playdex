@@ -17,8 +17,7 @@ server.SetScenarioState("psn", "not_playing");
 Console.WriteLine("WireMock running on http://localhost:8888");
 Console.WriteLine("  POST /__admin/steam/playing   POST /__admin/steam/not_playing");
 Console.WriteLine("  POST /__admin/psn/playing     POST /__admin/psn/not_playing");
-Console.ReadKey();
-
+await Task.Delay(Timeout.Infinite);
 return;
 
 void SetupAdminEndpoint(string name)
@@ -45,6 +44,7 @@ void SetupProviderEndpoint(string name, string path)
             .Given(Request.Create().WithPath(path).UsingGet())
             .InScenario(name)
             .WhenStateIs(state)
+            .WillSetStateTo(state)
             .RespondWith(Response.Create()
                 .WithStatusCode(200)
                 .WithHeader("Content-Type", "application/json")

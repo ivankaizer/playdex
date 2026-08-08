@@ -1,8 +1,6 @@
+**/bin/
+**/obj/
+.git/
 .DS_Store
-.env
-.git
-.gitignore
-node_modules
-dist
-coverage
-*.log
+.tmp/
+node_modules/

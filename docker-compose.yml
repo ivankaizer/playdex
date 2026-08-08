@@ -26,10 +26,21 @@ services:
     ports:
       - "8888:8888"
 
+  seq:
+    image: datalust/seq:2026.1
+    restart: unless-stopped
+    environment:
+      ACCEPT_EULA: "Y"
+      SEQ_FIRSTRUN_NOAUTHENTICATION: "true"
+    ports:
+      - "5341:80"
+    volumes:
+      - seq_data:/data
+
   app:
     build:
-      context: ./src/Api
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: src/Api/Dockerfile
     restart: "no"
     env_file:
       - .env
@@ -38,7 +49,7 @@ services:
       ASPNETCORE_URLS: http://0.0.0.0:3000
       DATABASE_URL: postgresql://playdex:playdex@db:5432/playdex
       CORS_ORIGINS: "http://ui.playdex.orb.local,https://ui.playdex.orb.local"
-      Polling__IntervalSeconds: 180
+      Polling__IntervalSeconds: 10
       Auth__JwtSecret: dev-only-jwt-secret-do-not-use-in-production
       Auth__AccessTokenTtl: 30m
       Polling__UseWiremock: "true"
@@ -48,6 +59,8 @@ services:
       Polling__Psn__PresenceBaseUrl: http://wiremock:8888
       Polling__Psn__ClientId: mock-client-id
       Polling__Psn__RedirectUri: http://wiremock:8888/callback
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://seq:80/ingest/otlp
+      OTEL_EXPORTER_OTLP_PROTOCOL: http/protobuf
     ports:
       - "3000:3000"
     depends_on:
@@ -55,16 +68,20 @@ services:
         condition: service_healthy
       wiremock:
         condition: service_started
+      seq:
+        condition: service_started
   ui:
     build:
-      context: ./src/Web
-      dockerfile: Dockerfile.dev
+      context: .
+      dockerfile: src/Web/Dockerfile.dev
     restart: "no"
     environment:
       DOTNET_USE_POLLING_FILE_WATCHER: "true"
       PLAYDEX_API_URL: "https://app.playdex.orb.local/api/"
     volumes:
       - ./src/Web:/app
+      - ./Directory.Build.props:/app/Directory.Build.props:ro
+      - ./Directory.Packages.props:/app/Directory.Packages.props:ro
       - web_node_modules:/app/node_modules
       - dotnet_nuget:/root/.nuget/packages
       - web_bun_cache:/root/.bun/install/cache
@@ -75,6 +92,7 @@ services:
 
 volumes:
   db_data:
+  seq_data:
   web_node_modules:
   dotnet_nuget:
   web_bun_cache:

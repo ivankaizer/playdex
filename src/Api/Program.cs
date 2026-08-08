@@ -22,6 +22,8 @@ using Api.Observability;
 
 var builder = WebApplication.CreateBuilder(args);
 
+builder.AddServiceDefaults();
+
 var databaseUrl = builder.Configuration["DATABASE_URL"]?.Trim()
     ?? throw new InvalidOperationException("DATABASE_URL is required.");
 var corsOrigins = (builder.Configuration["CORS_ORIGINS"] ?? "")
@@ -89,6 +91,8 @@ if (args.Contains("migrate", StringComparer.OrdinalIgnoreCase))
 {
     return;
 }
+
+app.MapDefaultEndpoints();
 
 app.UseMiddleware<CorrelationIdMiddleware>();
 app.UseMiddleware<ApiEnvelopeMiddleware>();

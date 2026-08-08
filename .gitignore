@@ -41,3 +41,5 @@ todo.md
 # .NET build output
 **/bin/
 **/obj/
+
+*.DotSettings.user

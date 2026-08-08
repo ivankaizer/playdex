@@ -8,7 +8,7 @@ were removed after the live visual-parity gate passed.
 ```bash
 bun install --frozen-lockfile
 bun run css:build
-dotnet watch --project Playdex.Web.csproj --urls http://127.0.0.1:5173
+dotnet watch --project Web.csproj --urls http://127.0.0.1:5173
 ```
 
 `wwwroot/appsettings.Development.json` supplies the browser-visible API base
@@ -19,8 +19,8 @@ files; generated CSS is written to `wwwroot/css/app.css` and is not committed.
 
 ```bash
 bun run css:build
-dotnet test Playdex.Web.Tests/Playdex.Web.Tests.csproj
-dotnet publish Playdex.Web.csproj -c Release
+dotnet test Web.Tests/Web.Tests.csproj
+dotnet publish Web.csproj -c Release
 docker build --build-arg PLAYDEX_API_URL=https://example.test/api/ .
 ```
 

@@ -159,7 +159,7 @@ public class DatabaseSeeder(PlaydexDbContext db)
         return new User
         {
             Email = email,
-            Password = "password",
+            Password = BCrypt.Net.BCrypt.HashPassword("password"),
             ChatId = chatId,
             IsAdmin = isAdmin,
         };

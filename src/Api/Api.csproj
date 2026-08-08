@@ -12,8 +12,12 @@
     </PackageReference>
     <PackageReference Include="Microsoft.OpenApi" />
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
+    <PackageReference Include="Npgsql.OpenTelemetry" />
     <PackageReference Include="SkiaSharp" />
     <PackageReference Include="SkiaSharp.NativeAssets.Linux" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\ServiceDefaults\ServiceDefaults.csproj" />
   </ItemGroup>
   <ItemGroup>
     <EmbeddedResource Remove="Resources\**\*" />

@@ -1,9 +1,11 @@
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
-COPY Api.csproj .
-RUN dotnet restore Api.csproj
-COPY . .
-RUN dotnet publish -c Release -o /app
+COPY Directory.Build.props Directory.Packages.props ./
+COPY src/Api/Api.csproj Api/
+COPY src/ServiceDefaults/ ServiceDefaults/
+RUN dotnet restore Api/Api.csproj
+COPY src/Api/ Api/
+RUN dotnet publish Api/Api.csproj -c Release -o /app
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
 EXPOSE 3000
