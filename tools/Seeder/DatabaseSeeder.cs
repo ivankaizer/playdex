@@ -211,6 +211,10 @@ public class DatabaseSeeder(PlaydexDbContext db)
             }
 
             var alteredDate = date.AddDays(day);
+            if (alteredDate > DateTime.UtcNow)
+            {
+                continue;
+            }
 
             foreach (var _ in Enumerable.Range(0, 10))
             {
