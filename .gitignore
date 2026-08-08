@@ -22,6 +22,9 @@
 # vercel
 .vercel
 
+# dependencies
+node_modules/
+
 **/*.trace
 **/*.zip
 **/*.tar.gz
