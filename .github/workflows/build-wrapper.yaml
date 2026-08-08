@@ -26,9 +26,6 @@ jobs:
       - name: Publish wrapper (win-x64, single-file)
         run: dotnet publish src/Wrapper/Wrapper.csproj -c Release -r win-x64 -o ./artifacts/win-x64
 
-      - name: Publish wrapper (win-arm64, single-file)
-        run: dotnet publish src/Wrapper/Wrapper.csproj -c Release -r win-arm64 -o ./artifacts/win-arm64
-
       - name: Upload wrapper artifacts
         uses: actions/upload-artifact@v4
         with:
