@@ -8,51 +8,19 @@ using Web.Shared.Common;
 
 namespace Web.Modules.Sessions;
 
-internal sealed record SessionsManualSubmission(
-    string Path,
-    IReadOnlyDictionary<string, object?> Body);
-
 internal sealed record SessionsDeleteRequest(string Confirmation, string Path, HttpMethod Method)
 {
     public static SessionsDeleteRequest For(long sessionId) =>
         new("Remove this session entry?", $"/sessions/{sessionId}", HttpMethod.Delete);
 }
 
-internal readonly record struct SessionsManualRequestVersion(long Modal, long Request);
-
 internal sealed class SessionsRequestVersions
 {
     private long _stats;
-    private long _manualModal;
-    private long _manualSearch;
-    private long _manualSave;
 
     public long BeginStatsRequest() => ++_stats;
 
     public bool IsCurrentStatsRequest(long version) => version == _stats;
-
-    public void OpenManualModal() => _manualModal++;
-
-    public void CloseManualModal()
-    {
-        _manualModal++;
-        _manualSearch++;
-        _manualSave++;
-    }
-
-    public SessionsManualRequestVersion BeginManualSearch() =>
-        new(_manualModal, ++_manualSearch);
-
-    public void InvalidateManualSearch() => _manualSearch++;
-
-    public bool IsCurrentManualSearch(SessionsManualRequestVersion version) =>
-        version.Modal == _manualModal && version.Request == _manualSearch;
-
-    public SessionsManualRequestVersion BeginManualSave() =>
-        new(_manualModal, ++_manualSave);
-
-    public bool IsCurrentManualSave(SessionsManualRequestVersion version) =>
-        version.Modal == _manualModal && version.Request == _manualSave;
 }
 
 internal sealed record SessionsRowView(
@@ -94,19 +62,6 @@ internal sealed class SessionsState
     public AccountStatsPeriod? Stats { get; private set; }
     public bool IsStatsLoading { get; private set; }
     public string StatsError { get; private set; } = string.Empty;
-    public bool IsManualEntryOpen { get; private set; }
-    public string ManualDate { get; private set; } = string.Empty;
-    public string ManualHours { get; private set; } = "1";
-    public string ManualMinutes { get; private set; } = "0";
-    public ManualMappingSearchResult? ManualSelection { get; private set; }
-    public string ManualPlatform { get; private set; } = string.Empty;
-    public string ManualError { get; private set; } = string.Empty;
-    public string ManualSearchQuery { get; private set; } = string.Empty;
-    public IReadOnlyList<ManualMappingSearchResult> ManualSearchResults { get; private set; } = [];
-    public string ManualSearchError { get; private set; } = string.Empty;
-    public bool IsManualSearchLoading { get; private set; }
-    public bool IsIgdbAvailable { get; private set; } = true;
-    public bool IsManualSaving { get; private set; }
     public int RefreshVersion { get; private set; }
     public IReadOnlyCollection<long> DeletingSessionIds => _deletingSessionIds;
     public int Start => Total == 0 ? 0 : Offset + 1;
@@ -259,165 +214,6 @@ internal sealed class SessionsState
         StatsError = error;
     }
 
-    public void OpenManualEntry(DateTimeOffset now)
-    {
-        ManualDate = Formatters.FormatUtcDateInput(now);
-        IsManualEntryOpen = true;
-    }
-
-    public void SetManualDuration(string hours, string minutes)
-    {
-        ManualHours = hours;
-        ManualMinutes = minutes;
-    }
-
-    public void SetManualDate(string date) => ManualDate = date;
-
-    public void SelectManualResult(ManualMappingSearchResult result)
-    {
-        ManualSelection = result;
-        ManualPlatform = string.Empty;
-        ManualError = string.Empty;
-    }
-
-    public void SetManualPlatform(string platform) => ManualPlatform = platform;
-
-    public void SetManualSearchQuery(string query) => ManualSearchQuery = query;
-
-    public bool TryBeginManualSearch(out string? path)
-    {
-        var query = ManualSearchQuery.Trim();
-        if (query.Length == 0)
-        {
-            path = null;
-            ManualSearchError = "Enter a search query.";
-            return false;
-        }
-
-        BeginManualSearch();
-        path = $"/manual/search?query={EncodeUriComponent(query)}";
-        return true;
-    }
-
-    public void BeginManualSearch()
-    {
-        IsManualSearchLoading = true;
-        ManualSearchError = string.Empty;
-    }
-
-    public void CompleteManualSearch(ManualMappingSearchResponse response)
-    {
-        IsIgdbAvailable = response.IgdbAvailable;
-        ManualSearchResults = response.Results;
-        IsManualSearchLoading = false;
-    }
-
-    public void FailManualSearch(string error)
-    {
-        ManualSearchResults = [];
-        ManualSearchError = error;
-        IsManualSearchLoading = false;
-    }
-
-    public bool TryBuildManualEntry(out SessionsManualSubmission? submission)
-    {
-        submission = null;
-        ManualError = string.Empty;
-        if (!TryParseJavaScriptNumber(ManualHours, out var hours) ||
-            !TryParseJavaScriptNumber(ManualMinutes, out var minutesValue) ||
-            !double.IsFinite(hours) || !double.IsFinite(minutesValue) || hours < 0 || minutesValue < 0)
-        {
-            ManualError = "Duration must be a positive number.";
-            return false;
-        }
-
-        var minutes = (int)Math.Floor(hours * 60 + minutesValue);
-        if (minutes <= 0)
-        {
-            ManualError = "Duration must be at least 1 minute.";
-            return false;
-        }
-        if (ManualDate.Length == 0)
-        {
-            ManualError = "Select a date for this entry.";
-            return false;
-        }
-        if (ManualSelection is null)
-        {
-            ManualError = "Select a game to log.";
-            return false;
-        }
-        if (ManualSelection.Source == "igdb" && ManualPlatform.Trim().Length == 0)
-        {
-            ManualError = "Select a platform for the IGDB result.";
-            return false;
-        }
-        if (ManualSelection.Source == "local")
-        {
-            if (string.IsNullOrEmpty(ManualSelection.GameId))
-            {
-                ManualError = "Select a saved game.";
-                return false;
-            }
-            submission = new SessionsManualSubmission("/manual/entries", new Dictionary<string, object?>
-            {
-                ["date"] = ManualDate,
-                ["durationMinutes"] = minutes,
-                ["gameId"] = GameHash.EncodeGameId(ManualSelection.GameId),
-            });
-            return true;
-        }
-
-        if (string.IsNullOrEmpty(ManualSelection.IgdbId))
-        {
-            ManualError = "Select an IGDB game.";
-            return false;
-        }
-        submission = new SessionsManualSubmission("/manual/entries", new Dictionary<string, object?>
-        {
-            ["date"] = ManualDate,
-            ["durationMinutes"] = minutes,
-            ["igdbId"] = ManualSelection.IgdbId,
-            ["title"] = ManualSelection.Title,
-            ["platformKey"] = ManualPlatform,
-            ["capsuleUrl"] = ManualSelection.CapsuleUrl,
-        });
-        return true;
-    }
-
-    public void CompleteManualEntry()
-    {
-        CloseManualEntry();
-        RefreshVersion++;
-    }
-
-    public void CloseManualEntry()
-    {
-        IsManualEntryOpen = false;
-        ManualSearchQuery = string.Empty;
-        ManualSearchResults = [];
-        ManualSearchError = string.Empty;
-        ManualSelection = null;
-        ManualPlatform = string.Empty;
-        ManualError = string.Empty;
-        ManualHours = "1";
-        ManualMinutes = "0";
-        IsManualSearchLoading = false;
-        IsManualSaving = false;
-    }
-
-    public void CancelManualSearch() => IsManualSearchLoading = false;
-
-    public void BeginManualSave()
-    {
-        IsManualSaving = true;
-        ManualError = string.Empty;
-    }
-
-    public void FailManualSave(string error) => ManualError = error;
-
-    public void EndManualSave() => IsManualSaving = false;
-
     public void BeginDelete(long sessionId)
     {
         _deletingSessionIds.Add(sessionId);
@@ -462,25 +258,6 @@ internal sealed class SessionsState
             .Replace("%20", "+", StringComparison.Ordinal)
             .Replace("~", "%7E", StringComparison.Ordinal)
             .Replace("%2A", "*", StringComparison.Ordinal);
-
-    private static string EncodeUriComponent(string value) =>
-        Uri.EscapeDataString(value)
-            .Replace("%21", "!", StringComparison.Ordinal)
-            .Replace("%27", "'", StringComparison.Ordinal)
-            .Replace("%28", "(", StringComparison.Ordinal)
-            .Replace("%29", ")", StringComparison.Ordinal)
-            .Replace("%2A", "*", StringComparison.Ordinal);
-
-    private static bool TryParseJavaScriptNumber(string value, out double number)
-    {
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            number = 0;
-            return true;
-        }
-
-        return double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out number);
-    }
 }
 
 public partial class Sessions : ComponentBase, IDisposable
@@ -495,17 +272,6 @@ public partial class Sessions : ComponentBase, IDisposable
         ("this-year", "This year"),
         ("last-year", "Last year"),
     ];
-    private static readonly IReadOnlyList<(string Key, string Label)> PlatformOptions =
-    [
-        ("ps5", "PS5"),
-        ("pc", "PC"),
-        ("steam", "Steam"),
-        ("playnite", "Playnite"),
-        ("switch-1", "Nintendo Switch 1"),
-        ("switch-2", "Nintendo Switch 2"),
-        ("xbox-series-xs", "Xbox Series X|S"),
-        ("unknown", "Unknown"),
-    ];
     private static readonly IReadOnlyList<string> LightPieColors =
         ["#059669", "#0e7490", "#7c3aed", "#d97706"];
     private static readonly IReadOnlyList<string> DarkPieColors =
@@ -517,8 +283,6 @@ public partial class Sessions : ComponentBase, IDisposable
     private CancellationTokenSource? _titleDebounce;
     private CancellationTokenSource? _listRequest;
     private CancellationTokenSource? _statsRequest;
-    private CancellationTokenSource? _manualSearchRequest;
-    private CancellationTokenSource? _manualSaveRequest;
     private long _listRequestVersion;
     private string _theme = "light";
 
@@ -711,117 +475,6 @@ public partial class Sessions : ComponentBase, IDisposable
         }
     }
 
-    private void OpenManualEntry()
-    {
-        _requestVersions.OpenManualModal();
-        CancelManualRequests();
-        _state.OpenManualEntry(DateTimeOffset.Now);
-    }
-
-    private void CloseManualEntry()
-    {
-        _requestVersions.CloseManualModal();
-        CancelManualRequests();
-        _state.CloseManualEntry();
-    }
-
-    private void SetManualSearchQuery(string query)
-    {
-        _requestVersions.InvalidateManualSearch();
-        _manualSearchRequest?.Cancel();
-        _state.CancelManualSearch();
-        _state.SetManualSearchQuery(query);
-    }
-
-    private async Task SearchManualEntryAsync()
-    {
-        if (!_state.TryBeginManualSearch(out var path)) return;
-
-        var requestVersion = _requestVersions.BeginManualSearch();
-        _manualSearchRequest?.Cancel();
-        var requestCancellation = CancellationTokenSource.CreateLinkedTokenSource(_lifetime.Token);
-        _manualSearchRequest = requestCancellation;
-        try
-        {
-            var response = await Api.SendAsync<ManualMappingSearchResponse>(path!,
-                cancellationToken: requestCancellation.Token);
-            if (_requestVersions.IsCurrentManualSearch(requestVersion) &&
-                !requestCancellation.IsCancellationRequested)
-            {
-                _state.CompleteManualSearch(response);
-            }
-        }
-        catch (OperationCanceledException) when (requestCancellation.IsCancellationRequested)
-        {
-        }
-        catch (Exception exception)
-        {
-            if (_requestVersions.IsCurrentManualSearch(requestVersion))
-            {
-                _state.FailManualSearch(exception.Message);
-            }
-        }
-        finally
-        {
-            if (ReferenceEquals(_manualSearchRequest, requestCancellation))
-            {
-                _manualSearchRequest = null;
-            }
-            requestCancellation.Dispose();
-        }
-    }
-
-    private async Task SaveManualEntryAsync()
-    {
-        if (!_state.TryBuildManualEntry(out var submission)) return;
-
-        var requestVersion = _requestVersions.BeginManualSave();
-        _manualSaveRequest?.Cancel();
-        var requestCancellation = CancellationTokenSource.CreateLinkedTokenSource(_lifetime.Token);
-        _manualSaveRequest = requestCancellation;
-        _state.BeginManualSave();
-        try
-        {
-            await Api.SendAsync<ManualEntryCreateResponse>(submission!.Path,
-                HttpMethod.Post,
-                submission.Body,
-                cancellationToken: requestCancellation.Token);
-            if (_requestVersions.IsCurrentManualSave(requestVersion) &&
-                !requestCancellation.IsCancellationRequested)
-            {
-                _requestVersions.CloseManualModal();
-                _manualSearchRequest?.Cancel();
-                _state.CompleteManualEntry();
-                await RefreshAllAsync();
-            }
-        }
-        catch (OperationCanceledException) when (requestCancellation.IsCancellationRequested)
-        {
-        }
-        catch (Exception exception)
-        {
-            if (_requestVersions.IsCurrentManualSave(requestVersion))
-            {
-                _state.FailManualSave(exception.Message);
-            }
-        }
-        finally
-        {
-            if (_requestVersions.IsCurrentManualSave(requestVersion)) _state.EndManualSave();
-            if (ReferenceEquals(_manualSaveRequest, requestCancellation))
-            {
-                _manualSaveRequest = null;
-            }
-            requestCancellation.Dispose();
-        }
-    }
-
-    private void CancelManualRequests()
-    {
-        _manualSearchRequest?.Cancel();
-        _manualSaveRequest?.Cancel();
-    }
-
     private async Task RemoveSessionAsync(long sessionId)
     {
         var request = SessionsDeleteRequest.For(sessionId);
@@ -879,18 +532,13 @@ public partial class Sessions : ComponentBase, IDisposable
     {
         _listRequestVersion++;
         _requestVersions.BeginStatsRequest();
-        _requestVersions.CloseManualModal();
         _lifetime.Cancel();
         _titleDebounce?.Cancel();
         _listRequest?.Cancel();
         _statsRequest?.Cancel();
-        _manualSearchRequest?.Cancel();
-        _manualSaveRequest?.Cancel();
         _titleDebounce?.Dispose();
         _listRequest?.Dispose();
         _statsRequest?.Dispose();
-        _manualSearchRequest?.Dispose();
-        _manualSaveRequest?.Dispose();
         _lifetime.Dispose();
     }
 }

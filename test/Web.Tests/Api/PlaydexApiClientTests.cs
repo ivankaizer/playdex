@@ -282,23 +282,12 @@ public sealed class PlaydexApiClientTests
         var client = CreateClient(handler);
 
         await client.SendAsync<object?>(
-            "/manual/entries",
-            HttpMethod.Post,
-            new ManualEntryCreateRequest("2026-07-13", 45, null, "123", "Game", "pc", null),
-            authenticated: false);
-        await client.SendAsync<object?>(
             "/admin/credentials/7",
             HttpMethod.Put,
             new AdminCredentialUpdateRequest("key", "account-user"),
             authenticated: false);
 
-        using var manual = JsonDocument.Parse(handler.Requests[0].Body!);
-        Assert.Equal(45, manual.RootElement.GetProperty("durationMinutes").GetInt32());
-        Assert.Equal("123", manual.RootElement.GetProperty("igdbId").GetString());
-        Assert.True(manual.RootElement.TryGetProperty("platformKey", out _));
-        Assert.False(manual.RootElement.TryGetProperty("DurationMinutes", out _));
-
-        using var admin = JsonDocument.Parse(handler.Requests[1].Body!);
+        using var admin = JsonDocument.Parse(handler.Requests[0].Body!);
         Assert.Equal("account-user", admin.RootElement.GetProperty("user").GetString());
         Assert.False(admin.RootElement.TryGetProperty("accountUser", out _));
     }
@@ -394,21 +383,6 @@ public sealed class PlaydexApiClientTests
         await client.SendAsync<object?>("/me");
 
         Assert.Null(handler.Requests[0].Authorization);
-    }
-
-    [Fact]
-    public async Task ManualSearchAndMappingModelsPreserveStringIgdbIds()
-    {
-        using var handler = new RecordingHandler((_, _) => Json(
-            HttpStatusCode.OK,
-            """{"query":"portal","igdbAvailable":true,"results":[{"source":"igdb","gameId":null,"igdbId":"00123","title":"Portal","platform":null,"platformId":null,"capsuleUrl":null}]}"""));
-        var client = CreateClient(handler);
-
-        var response = await client.SendAsync<ManualMappingSearchResponse>("/manual/search?query=portal");
-        var request = new ManualMapInputRequest(null, "123", null, null, null, null);
-
-        Assert.Equal("00123", response.Results[0].IgdbId);
-        Assert.Equal("123", request.IgdbId);
     }
 
     private static PlaydexApiClient CreateClient(

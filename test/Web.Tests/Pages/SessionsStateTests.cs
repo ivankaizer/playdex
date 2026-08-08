@@ -221,192 +221,6 @@ public sealed class SessionsStateTests
     }
 
     [Fact]
-    public async Task RequestVersions_RejectDelayedManualWorkAfterEditCloseAndReopen()
-    {
-        var versions = new SessionsRequestVersions();
-        versions.OpenManualModal();
-        var search = versions.BeginManualSearch();
-        var save = versions.BeginManualSave();
-        var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var delayedApply = ApplyAfterReleaseAsync();
-
-        versions.InvalidateManualSearch();
-        versions.CloseManualModal();
-        versions.OpenManualModal();
-        completion.SetResult();
-
-        var (searchIsCurrent, saveIsCurrent) = await delayedApply;
-        Assert.False(searchIsCurrent);
-        Assert.False(saveIsCurrent);
-
-        async Task<(bool SearchIsCurrent, bool SaveIsCurrent)> ApplyAfterReleaseAsync()
-        {
-            await completion.Task;
-            return (
-                versions.IsCurrentManualSearch(search),
-                versions.IsCurrentManualSave(save));
-        }
-    }
-
-    [Fact]
-    public void ManualLocalEntry_UsesTheExactReactBodyAndRefreshesOnlyAfterSuccess()
-    {
-        var state = new SessionsState(new DateTimeOffset(2026, 7, 13, 0, 0, 0, TimeSpan.Zero));
-        state.OpenManualEntry(new DateTimeOffset(2026, 7, 14, 1, 0, 0, TimeSpan.FromHours(2)));
-        state.SetManualDuration("1", "30");
-        state.SelectManualResult(new ManualMappingSearchResult(
-            "local", "42", null, "Hades II", "steam", null, null));
-
-        Assert.True(state.TryBuildManualEntry(out var submission));
-        Assert.NotNull(submission);
-        Assert.Equal("/manual/entries", submission.Path);
-        Assert.Equal("2026-07-13", submission.Body["date"]);
-        Assert.Equal(90, submission.Body["durationMinutes"]);
-        Assert.Equal("3H4h3", submission.Body["gameId"]);
-        Assert.Equal(["date", "durationMinutes", "gameId"], submission.Body.Keys);
-
-        Assert.True(state.IsManualEntryOpen);
-        state.CompleteManualEntry();
-        Assert.False(state.IsManualEntryOpen);
-        Assert.Equal(1, state.RefreshVersion);
-    }
-
-    [Fact]
-    public void ManualEntryValidation_PreservesTheExactReactMessages()
-    {
-        var state = new SessionsState(new DateTimeOffset(2026, 7, 13, 0, 0, 0, TimeSpan.Zero));
-        state.OpenManualEntry(new DateTimeOffset(2026, 7, 13, 0, 0, 0, TimeSpan.Zero));
-
-        state.SetManualDuration("not-a-number", "0");
-        Assert.False(state.TryBuildManualEntry(out _));
-        Assert.Equal("Duration must be a positive number.", state.ManualError);
-
-        state.SetManualDuration("0", "0");
-        Assert.False(state.TryBuildManualEntry(out _));
-        Assert.Equal("Duration must be at least 1 minute.", state.ManualError);
-
-        state.SetManualDuration(string.Empty, string.Empty);
-        Assert.False(state.TryBuildManualEntry(out _));
-        Assert.Equal("Duration must be at least 1 minute.", state.ManualError);
-
-        state.SetManualDuration("0", "1");
-        state.SetManualDate(string.Empty);
-        Assert.False(state.TryBuildManualEntry(out _));
-        Assert.Equal("Select a date for this entry.", state.ManualError);
-
-        state.SetManualDate("2026-07-13");
-        Assert.False(state.TryBuildManualEntry(out _));
-        Assert.Equal("Select a game to log.", state.ManualError);
-
-        state.SelectManualResult(new ManualMappingSearchResult(
-            "igdb", null, "123", "Hades II", null, null, null));
-        Assert.False(state.TryBuildManualEntry(out _));
-        Assert.Equal("Select a platform for the IGDB result.", state.ManualError);
-
-        state.SelectManualResult(new ManualMappingSearchResult(
-            "local", string.Empty, null, "Hades II", "steam", null, null));
-        Assert.False(state.TryBuildManualEntry(out _));
-        Assert.Equal("Select a saved game.", state.ManualError);
-
-        state.SelectManualResult(new ManualMappingSearchResult(
-            "igdb", null, string.Empty, "Hades II", null, null, null));
-        state.SetManualPlatform("pc");
-        Assert.False(state.TryBuildManualEntry(out _));
-        Assert.Equal("Select an IGDB game.", state.ManualError);
-    }
-
-    [Fact]
-    public void ManualIgdbEntry_UsesTheExactReactBodyIncludingStringIdAndCapsule()
-    {
-        var state = new SessionsState(new DateTimeOffset(2026, 7, 13, 0, 0, 0, TimeSpan.Zero));
-        state.OpenManualEntry(new DateTimeOffset(2026, 7, 13, 0, 0, 0, TimeSpan.Zero));
-        state.SetManualDuration("0", "45");
-        state.SelectManualResult(new ManualMappingSearchResult(
-            "igdb", null, "123", "Hades II", null, null, "https://images.test/hades.jpg"));
-        state.SetManualPlatform("pc");
-
-        Assert.True(state.TryBuildManualEntry(out var submission));
-        Assert.NotNull(submission);
-        Assert.Equal("2026-07-13", submission.Body["date"]);
-        Assert.Equal(45, submission.Body["durationMinutes"]);
-        Assert.Equal("123", submission.Body["igdbId"]);
-        Assert.Equal("Hades II", submission.Body["title"]);
-        Assert.Equal("pc", submission.Body["platformKey"]);
-        Assert.Equal("https://images.test/hades.jpg", submission.Body["capsuleUrl"]);
-        Assert.Equal(
-            ["date", "durationMinutes", "igdbId", "title", "platformKey", "capsuleUrl"],
-            submission.Body.Keys);
-    }
-
-    [Fact]
-    public void ManualSearch_TrimsWithEncodeURIComponentAndKeepsItsOwnLifecycle()
-    {
-        var state = new SessionsState(new DateTimeOffset(2026, 7, 13, 0, 0, 0, TimeSpan.Zero));
-        state.SetManualSearchQuery("   ");
-        Assert.False(state.TryBeginManualSearch(out _));
-        Assert.Equal("Enter a search query.", state.ManualSearchError);
-
-        state.SetManualSearchQuery("  Hades II  ");
-        Assert.True(state.TryBeginManualSearch(out var path));
-        Assert.Equal("/manual/search?query=Hades%20II", path);
-        Assert.True(state.IsManualSearchLoading);
-        Assert.Empty(state.ManualSearchError);
-
-        var result = new ManualMappingSearchResult(
-            "local", "42", null, "Hades II", "steam", null, null);
-        state.CompleteManualSearch(new ManualMappingSearchResponse("Hades II", false, [result]));
-        Assert.False(state.IsManualSearchLoading);
-        Assert.False(state.IsIgdbAvailable);
-        Assert.Same(result, Assert.Single(state.ManualSearchResults));
-
-        state.BeginManualSearch();
-        state.FailManualSearch("Search unavailable.");
-        Assert.False(state.IsManualSearchLoading);
-        Assert.Empty(state.ManualSearchResults);
-        Assert.Equal("Search unavailable.", state.ManualSearchError);
-    }
-
-    [Fact]
-    public void ManualSearch_UsesTheEncodeURIComponentSpecialCharacterSet()
-    {
-        var state = new SessionsState(new DateTimeOffset(2026, 7, 13, 0, 0, 0, TimeSpan.Zero));
-        state.SetManualSearchQuery("A! (Test)*~'");
-
-        Assert.True(state.TryBeginManualSearch(out var path));
-        Assert.Equal("/manual/search?query=A!%20(Test)*~'", path);
-    }
-
-    [Fact]
-    public void ClosingManualEntry_ResetsTheSameDraftFieldsAsReactAndKeepsTheDate()
-    {
-        var state = new SessionsState(new DateTimeOffset(2026, 7, 13, 0, 0, 0, TimeSpan.Zero));
-        state.OpenManualEntry(new DateTimeOffset(2026, 7, 13, 0, 0, 0, TimeSpan.Zero));
-        state.SetManualDuration("2", "15");
-        state.SetManualSearchQuery("Hades");
-        state.SelectManualResult(new ManualMappingSearchResult(
-            "igdb", null, "123", "Hades II", null, null, null));
-        state.SetManualPlatform("pc");
-        state.FailManualSearch("Search unavailable.");
-        state.BeginManualSearch();
-        state.BeginManualSave();
-
-        state.CloseManualEntry();
-
-        Assert.False(state.IsManualEntryOpen);
-        Assert.Equal("2026-07-13", state.ManualDate);
-        Assert.Equal("1", state.ManualHours);
-        Assert.Equal("0", state.ManualMinutes);
-        Assert.Empty(state.ManualSearchQuery);
-        Assert.Empty(state.ManualSearchResults);
-        Assert.Empty(state.ManualSearchError);
-        Assert.Null(state.ManualSelection);
-        Assert.Empty(state.ManualPlatform);
-        Assert.Empty(state.ManualError);
-        Assert.False(state.IsManualSearchLoading);
-        Assert.False(state.IsManualSaving);
-    }
-
-    [Fact]
     public void Delete_IsConfirmGatedUsesTheExactEndpointAndRefreshesOnlyOnSuccess()
     {
         var request = SessionsDeleteRequest.For(7);
@@ -452,25 +266,6 @@ public sealed class SessionsStateTests
     }
 
     [Fact]
-    public void FailedManualSave_LeavesTheModalOpenAndEndsOnlyItsSavingState()
-    {
-        var state = new SessionsState(new DateTimeOffset(2026, 7, 13, 0, 0, 0, TimeSpan.Zero));
-        state.OpenManualEntry(new DateTimeOffset(2026, 7, 13, 0, 0, 0, TimeSpan.Zero));
-
-        state.BeginManualSave();
-        Assert.True(state.IsManualSaving);
-        Assert.Empty(state.ManualError);
-
-        state.FailManualSave("Failed to create entry.");
-        state.EndManualSave();
-
-        Assert.True(state.IsManualEntryOpen);
-        Assert.False(state.IsManualSaving);
-        Assert.Equal("Failed to create entry.", state.ManualError);
-        Assert.Equal(0, state.RefreshVersion);
-    }
-
-    [Fact]
     public void SessionsPage_WiresReactRequestsResponsiveRowsModalAndCancellationWithoutMappedBadges()
     {
         var root = FindWebRoot();
@@ -483,8 +278,9 @@ public sealed class SessionsStateTests
 
         Assert.Contains("@page \"/sessions\"", markup);
         Assert.Contains("<AppLayout Title=\"Sessions\"", markup);
-        Assert.Contains("<Overlay>", markup);
-        Assert.Contains("<ManualEntryModal", markup);
+        Assert.DoesNotContain("<Overlay>", markup);
+        Assert.DoesNotContain("<ManualEntryModal", markup);
+        Assert.DoesNotContain("Add entry", markup);
         Assert.Contains("mt-6 space-y-3 md:hidden", markup);
         Assert.Contains("mt-6 hidden overflow-hidden", markup);
         Assert.True(markup.Split("@foreach (var session in rowViews)").Length - 1 >= 2);
@@ -500,14 +296,14 @@ public sealed class SessionsStateTests
         Assert.Contains("_listRequestVersion", code);
         Assert.Contains("BeginStatsRequest()", code);
         Assert.Contains("SessionsRequestVersions", code);
-        Assert.Contains("SetManualSearchQuery", code);
+        Assert.DoesNotContain("Manual", code);
         Assert.Contains("BuildListRequest()", code);
         Assert.Contains("BuildStatsRequest()", code);
         Assert.DoesNotContain("onAuthFailure: LogoutAsync", code);
         Assert.Contains("Browser.ConfirmAsync(request.Confirmation)", code);
         Assert.Contains("SendAsync<object?>(request.Path, request.Method", code);
-        Assert.Contains("SendAsync<ManualMappingSearchResponse>(path", code);
-        Assert.Contains("SendAsync<ManualEntryCreateResponse>(submission!.Path", code);
+        Assert.DoesNotContain("SendAsync<ManualMappingSearchResponse>", code);
+        Assert.DoesNotContain("SendAsync<ManualEntryCreateResponse>", code);
         Assert.Contains("RefreshAllAsync()", code);
         Assert.Contains("_titleDebounce?.Cancel()", code);
         Assert.Contains("_listRequest?.Cancel()", code);

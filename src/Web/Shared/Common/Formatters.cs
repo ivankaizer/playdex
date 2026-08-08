@@ -41,32 +41,6 @@ public static class Formatters
 
     public static string FormatStatsPlatformLabel(string platform) => FormatPlatformLabel(platform);
 
-    public static string FormatManualMappingType(string? source) => source == "igdb" ? "IGDB" : "Local";
-
-    public static string FormatManualInputLabel(
-        string input,
-        string? mappedGameTitle,
-        string? mappedGamePlatform,
-        string? mappedSource)
-    {
-        if (mappedGameTitle is null) return input;
-
-        var platform = string.IsNullOrEmpty(mappedGamePlatform)
-            ? "Unknown platform"
-            : FormatPlatformLabel(mappedGamePlatform);
-        return $"{platform} · {FormatManualMappingType(mappedSource)} · {mappedGameTitle}";
-    }
-
-    public static string FormatEntryResultLabel(string source, string title, string? platform)
-    {
-        if (source != "local") return title;
-
-        var platformLabel = string.IsNullOrEmpty(platform)
-            ? "Unknown platform"
-            : FormatPlatformLabel(platform);
-        return $"{title} · {platformLabel}";
-    }
-
     public static string FormatDateLabel(DateTimeOffset date) =>
         date.ToLocalTime().ToString("MMM d, yyyy", EnUs);
 

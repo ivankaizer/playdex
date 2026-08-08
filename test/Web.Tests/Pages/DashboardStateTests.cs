@@ -20,8 +20,6 @@ public sealed class DashboardStateTests
             typeof(DashboardTopGameView),
             typeof(DashboardStatsView),
             typeof(DashboardCurrentSessionView),
-            typeof(DashboardRefreshMode),
-            typeof(DashboardManualStartFlow),
             typeof(DashboardRequestFlow),
             typeof(DashboardState),
         ];
@@ -125,7 +123,7 @@ public sealed class DashboardStateTests
     }
 
     [Fact]
-    public void TodaySessionCards_StayFrozenAcrossModalRerendersWhileCurrentElapsedAdvances()
+    public void TodaySessionCards_StayFrozenWhileCurrentElapsedAdvances()
     {
         var snapshot = Snapshot();
         var openTodaySession = snapshot.TodaySessions[0] with
@@ -136,13 +134,10 @@ public sealed class DashboardStateTests
         snapshot = snapshot with { TodaySessions = [openTodaySession] };
         var state = new DashboardState();
         state.CompleteRefresh(snapshot, Now);
-        var cardsBeforeModal = state.TodaySessionCards;
+        var cardsBefore = state.TodaySessionCards;
 
-        state.OpenManualModal();
-
-        var cardsAfterModal = state.TodaySessionCards;
-        Assert.Same(cardsBeforeModal, cardsAfterModal);
-        Assert.Equal("10 min", Assert.Single(cardsAfterModal).Duration);
+        Assert.Same(cardsBefore, state.TodaySessionCards);
+        Assert.Equal("10 min", Assert.Single(state.TodaySessionCards).Duration);
         Assert.NotEqual(
             state.GetCurrentSession(Now)?.Elapsed,
             state.GetCurrentSession(Now.AddMinutes(5))?.Elapsed);
@@ -172,106 +167,7 @@ public sealed class DashboardStateTests
     }
 
     [Fact]
-    public void ManualModalLifecycle_ResetsDraftsAndRequestsSilentStartAndStopRefreshes()
-    {
-        var state = new DashboardState();
-        var input = new ManualInput(7, "zelda", "zelda", null, null, null);
-
-        state.OpenManualModal();
-        state.BeginManualInputs();
-        state.CompleteManualInputs([input]);
-        state.SelectManualInput("zelda");
-
-        Assert.Equal("zelda", state.ManualInputSelection);
-        Assert.Equal("zelda", state.ManualInputText);
-
-        state.SetManualInputText("   ");
-        Assert.False(state.TryBeginManualStart(out _));
-        Assert.Equal("Enter a title to start a session.", state.ManualStartError);
-
-        state.SetManualInputText("  Zelda  ");
-        Assert.True(state.TryBeginManualStart(out var title));
-        Assert.Equal("Zelda", title);
-        Assert.Equal(DashboardRefreshMode.Silent, state.ManualStartSucceeded());
-        state.EndManualStart();
-
-        Assert.False(state.IsManualModalOpen);
-        Assert.Empty(state.ManualInputSelection);
-        Assert.Empty(state.ManualInputText);
-        Assert.Empty(state.ManualStartError);
-        Assert.False(state.IsManualStartLoading);
-
-        state.BeginManualStop();
-        Assert.Equal(DashboardRefreshMode.Silent, state.ManualStopSucceeded());
-        state.EndManualStop();
-        Assert.False(state.IsManualStopLoading);
-    }
-
-    [Fact]
-    public async Task ManualStartFlow_RendersTheClosedModalBeforeStartingFollowUpRequests()
-    {
-        var steps = new List<string>();
-        var renderRelease = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-
-        var flow = DashboardManualStartFlow.CompleteAsync(
-            () => steps.Add("close"),
-            async () =>
-            {
-                steps.Add("render");
-                await renderRelease.Task;
-            },
-            () =>
-            {
-                steps.Add("inputs");
-                return Task.CompletedTask;
-            },
-            () =>
-            {
-                steps.Add("refresh");
-                return Task.CompletedTask;
-            },
-            CancellationToken.None);
-
-        Assert.Equal(["close", "render"], steps);
-        Assert.False(flow.IsCompleted);
-
-        renderRelease.SetResult();
-        await flow;
-
-        Assert.Equal(["close", "render", "inputs", "refresh"], steps);
-    }
-
-    [Fact]
-    public async Task ManualStartFlow_DisposalAfterRenderSuppressesFollowUpRequests()
-    {
-        var followUpRequests = 0;
-        using var cancellation = new CancellationTokenSource();
-
-        var flow = DashboardManualStartFlow.CompleteAsync(
-            () => { },
-            () =>
-            {
-                cancellation.Cancel();
-                return Task.CompletedTask;
-            },
-            () =>
-            {
-                followUpRequests++;
-                return Task.CompletedTask;
-            },
-            () =>
-            {
-                followUpRequests++;
-                return Task.CompletedTask;
-            },
-            cancellation.Token);
-
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => flow);
-        Assert.Equal(0, followUpRequests);
-    }
-
-    [Fact]
-    public void DashboardPage_WiresConcurrentRefreshManualLifecycleAndLiteralRegionsWithoutPolling()
+    public void DashboardPage_WiresConcurrentRefreshAndLiteralRegionsWithoutPolling()
     {
         var root = FindWebRoot();
         var markupPath = Path.Combine(root, "Modules", "Dashboard", "Dashboard.razor");
@@ -287,7 +183,7 @@ public sealed class DashboardStateTests
         Assert.Contains("Today sessions", markup);
         Assert.Contains("Title=\"Monthly stats\"", markup);
         Assert.Contains("Title=\"Yearly stats\"", markup);
-        Assert.Contains("<ManualSessionModal", markup);
+        Assert.DoesNotContain("<ManualSessionModal", markup);
         Assert.Contains("CancellationTokenSource.CreateLinkedTokenSource(_lifetime.Token)", code);
         Assert.Contains("DashboardRequestFlow.WaitAsync", code);
         Assert.True(code.Split("cancellationToken: refreshToken").Length - 1 >= 5);
@@ -296,10 +192,10 @@ public sealed class DashboardStateTests
         Assert.Contains("SendAsync<AccountStatsRangeResponse>(requests.MonthlyStats", code);
         Assert.Contains("SendAsync<AccountStatsRangeResponse>(requests.YearlyStats", code);
         Assert.Contains("SendAsync<AccountCurrentSessionResponse>(requests.CurrentSession", code);
-        Assert.Contains("SendAsync<ManualInputsResponse>(\"/manual/inputs\"", code);
-        Assert.Contains("SendAsync<ManualSessionStartResponse>(\"/manual/sessions/start\"", code);
-        Assert.Contains("SendAsync<ManualSessionStopResponse>(\"/manual/sessions/stop\"", code);
-        Assert.True(code.Split("RefreshDashboardAsync(silent: true)").Length - 1 >= 2);
+        Assert.DoesNotContain("SendAsync<ManualInputsResponse>", code);
+        Assert.DoesNotContain("SendAsync<ManualSessionStartResponse>", code);
+        Assert.DoesNotContain("SendAsync<ManualSessionStopResponse>", code);
+        Assert.DoesNotContain("RefreshDashboardAsync(silent: true)", code);
         Assert.Contains("_lifetime.Token.ThrowIfCancellationRequested()", code);
         Assert.Contains("catch (OperationCanceledException) when (_lifetime.IsCancellationRequested)", code);
         Assert.Contains("_lifetime.Cancel()", code);

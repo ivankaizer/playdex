@@ -17,23 +17,6 @@
                         Current session
                     </p>
                     <div class="flex flex-wrap items-center gap-3">
-                        @if (currentSession?.IsManual == true)
-                        {
-                            <button type="button"
-                                    @onclick="StopManualSessionAsync"
-                                    disabled="@_state.IsManualStopLoading"
-                                    class="rounded-full border border-rose-500/60 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.3em] text-rose-700 dark:text-rose-200 transition hover:border-rose-400 hover:text-rose-700 dark:hover:text-rose-100 disabled:cursor-not-allowed disabled:border-rose-500/40">
-                                @(_state.IsManualStopLoading ? "Stopping..." : "Stop session")
-                            </button>
-                        }
-                        else
-                        {
-                            <button type="button"
-                                    @onclick="OpenManualModalAsync"
-                                    class="rounded-full border border-emerald-400/60 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.3em] text-emerald-700 dark:text-emerald-200 transition hover:border-emerald-300">
-                                Start session
-                            </button>
-                        }
                         <span class="rounded-full border border-emerald-400/40 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.3em] text-emerald-700 dark:text-emerald-200">
                             @(currentSession is null ? "Idle" : "Live")
                         </span>
@@ -245,18 +228,4 @@
                                OnOpenRecap="NavigateToYearlyRecapAsync" />
         </section>
     </ChildContent>
-    <Overlay>
-        <ManualSessionModal IsOpen="@_state.IsManualModalOpen"
-                            ManualInputs="@_state.ManualInputs"
-                            ManualInputsError="@_state.ManualInputsError"
-                            ManualInputSelection="@_state.ManualInputSelection"
-                            ManualInputText="@_state.ManualInputText"
-                            ManualStartError="@_state.ManualStartError"
-                            IsManualInputsLoading="@_state.IsManualInputsLoading"
-                            IsManualStartLoading="@_state.IsManualStartLoading"
-                            OnClose="_state.CloseManualModal"
-                            OnSelectInput="_state.SelectManualInput"
-                            OnInputTextChange="_state.SetManualInputText"
-                            OnStart="StartManualSessionAsync" />
-    </Overlay>
 </AppLayout>

@@ -19,11 +19,6 @@
                         Every session tracked
                     </h2>
                 </div>
-                <button type="button"
-                        @onclick="OpenManualEntry"
-                        class="rounded-full border border-emerald-400/60 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-emerald-700 dark:text-emerald-200 transition hover:border-emerald-300">
-                    Add entry
-                </button>
             </div>
 
             <div class="mt-6 flex flex-wrap gap-2">
@@ -325,29 +320,4 @@
             </div>
         </section>
     </ChildContent>
-    <Overlay>
-        <ManualEntryModal IsOpen="@_state.IsManualEntryOpen"
-                          ManualEntryDate="@_state.ManualDate"
-                          ManualEntryHours="@_state.ManualHours"
-                          ManualEntryMinutes="@_state.ManualMinutes"
-                          ManualEntrySearchQuery="@_state.ManualSearchQuery"
-                          ManualEntrySearchResults="@_state.ManualSearchResults"
-                          ManualEntrySelection="@_state.ManualSelection"
-                          ManualEntryPlatformKey="@_state.ManualPlatform"
-                          ManualEntryError="@_state.ManualError"
-                          ManualEntrySearchError="@_state.ManualSearchError"
-                          ManualEntryIgdbAvailable="@_state.IsIgdbAvailable"
-                          IsManualEntrySearchLoading="@_state.IsManualSearchLoading"
-                          IsManualEntrySaving="@_state.IsManualSaving"
-                          PlatformOptions="@PlatformOptions"
-                          OnClose="CloseManualEntry"
-                          OnSearch="SearchManualEntryAsync"
-                          OnSave="SaveManualEntryAsync"
-                          OnDateChange="_state.SetManualDate"
-                          OnHoursChange="value => _state.SetManualDuration(value, _state.ManualMinutes)"
-                          OnMinutesChange="value => _state.SetManualDuration(_state.ManualHours, value)"
-                          OnSearchQueryChange="SetManualSearchQuery"
-                          OnSelectResult="_state.SelectManualResult"
-                          OnPlatformKeyChange="_state.SetManualPlatform" />
-    </Overlay>
 </AppLayout>

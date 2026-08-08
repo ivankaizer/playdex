@@ -7,10 +7,6 @@ using Web.Shared.Common;
 
 namespace Web.Modules.Mapping;
 
-internal sealed record MappingSubmission(
-    string Path,
-    IReadOnlyDictionary<string, object?> Body);
-
 internal sealed record MappingConnectionSubmission(
     string Path,
     HttpMethod Method,
@@ -18,27 +14,11 @@ internal sealed record MappingConnectionSubmission(
 
 internal static class MappingInitialLoadFlow
 {
-    public static Task RunAsync(Func<Task> loadManualInputs, Func<Task> loadConnections)
-    {
-        var manualInputsTask = loadManualInputs();
-        var connectionsTask = loadConnections();
-        return Task.WhenAll(manualInputsTask, connectionsTask);
-    }
+    public static Task RunAsync(Func<Task> loadConnections) => loadConnections();
 }
 
 internal sealed class MappingState
 {
-    public IReadOnlyList<ManualInput> ManualInputs { get; private set; } = [];
-    public bool IsManualInputsLoading { get; private set; }
-    public string ManualInputsError { get; private set; } = string.Empty;
-    public long? ActiveMappingInputId { get; private set; }
-    public string MappingSearchQuery { get; private set; } = string.Empty;
-    public IReadOnlyList<ManualMappingSearchResult> MappingSearchResults { get; private set; } = [];
-    public string MappingSearchError { get; private set; } = string.Empty;
-    public bool IsMappingSearchLoading { get; private set; }
-    public bool MappingIgdbAvailable { get; private set; } = true;
-    public bool IsMappingUpdateLoading { get; private set; }
-    public string MappingPlatformOverride { get; private set; } = "auto";
     public IReadOnlyList<GameConnection> GameConnections { get; private set; } = [];
     public string GameConnectionsError { get; private set; } = string.Empty;
     public bool IsGameConnectionsLoading { get; private set; }
@@ -54,26 +34,6 @@ internal sealed class MappingState
     public GameSearchResult? SelectedSecondaryGame { get; private set; }
     public bool IsConnectionSaving { get; private set; }
     public string ConnectionSaveError { get; private set; } = string.Empty;
-
-    public string BeginManualInputsLoad()
-    {
-        IsManualInputsLoading = true;
-        ManualInputsError = string.Empty;
-        return "/manual/inputs";
-    }
-
-    public void CompleteManualInputsLoad(ManualInputsResponse response)
-    {
-        ManualInputs = response.Inputs;
-        IsManualInputsLoading = false;
-    }
-
-    public void FailManualInputsLoad(string error)
-    {
-        ManualInputs = [];
-        IsManualInputsLoading = false;
-        ManualInputsError = error;
-    }
 
     public string BeginGameConnectionsLoad()
     {
@@ -94,120 +54,6 @@ internal sealed class MappingState
         IsGameConnectionsLoading = false;
         GameConnectionsError = error;
     }
-
-    public void OpenMappingRow(ManualInput input)
-    {
-        ActiveMappingInputId = input.Id;
-        MappingSearchQuery = input.MappedGame?.Title ?? input.Input;
-        MappingSearchResults = [];
-        MappingSearchError = string.Empty;
-        MappingPlatformOverride = !string.IsNullOrWhiteSpace(input.MappedGame?.Platform)
-            ? input.MappedGame.Platform
-            : "auto";
-    }
-
-    public void CloseMappingRow()
-    {
-        ActiveMappingInputId = null;
-        MappingPlatformOverride = "auto";
-    }
-
-    public void SetMappingSearchQuery(string query) => MappingSearchQuery = query;
-
-    public void SetMappingPlatformOverride(string platform) => MappingPlatformOverride = platform;
-
-    public bool TryBeginMappingSearch(out string? path)
-    {
-        var query = MappingSearchQuery.Trim();
-        if (query.Length == 0)
-        {
-            path = null;
-            MappingSearchError = "Enter a search query.";
-            return false;
-        }
-
-        IsMappingSearchLoading = true;
-        MappingSearchError = string.Empty;
-        path = $"/manual/search?query={EncodeUriComponent(query)}";
-        return true;
-    }
-
-    public void CancelMappingSearch() => IsMappingSearchLoading = false;
-
-    public void CompleteMappingSearch(ManualMappingSearchResponse response)
-    {
-        MappingIgdbAvailable = response.IgdbAvailable;
-        MappingSearchResults = response.Results;
-        IsMappingSearchLoading = false;
-    }
-
-    public void FailMappingSearch(string error)
-    {
-        MappingSearchResults = [];
-        MappingSearchError = error;
-        IsMappingSearchLoading = false;
-    }
-
-    public bool TryBuildMappingSubmission(
-        long inputId,
-        ManualMappingSearchResult result,
-        out MappingSubmission? submission)
-    {
-        submission = null;
-        if (result.Source == "local" && !string.IsNullOrEmpty(result.GameId))
-        {
-            submission = new MappingSubmission(
-                $"/manual/inputs/{inputId}/map",
-                new Dictionary<string, object?>
-                {
-                    ["gameId"] = GameHash.EncodeGameId(result.GameId),
-                });
-            return true;
-        }
-
-        if (result.Source == "igdb" && !string.IsNullOrEmpty(result.IgdbId))
-        {
-            submission = new MappingSubmission(
-                $"/manual/inputs/{inputId}/map",
-                new Dictionary<string, object?>
-                {
-                    ["igdbId"] = result.IgdbId,
-                    ["title"] = result.Title,
-                    ["platformId"] = result.PlatformId,
-                    ["platformKey"] = MappingPlatformOverride == "auto"
-                        ? null
-                        : MappingPlatformOverride,
-                    ["capsuleUrl"] = result.CapsuleUrl,
-                });
-            return true;
-        }
-
-        MappingSearchError = "Invalid mapping selection.";
-        return false;
-    }
-
-    public void BeginMappingUpdate()
-    {
-        IsMappingUpdateLoading = true;
-        MappingSearchError = string.Empty;
-    }
-
-    public void CompleteMappingUpdate()
-    {
-        IsMappingUpdateLoading = false;
-        ActiveMappingInputId = null;
-        MappingSearchQuery = string.Empty;
-        MappingSearchResults = [];
-        MappingPlatformOverride = "auto";
-    }
-
-    public void FailMappingUpdate(string error)
-    {
-        IsMappingUpdateLoading = false;
-        MappingSearchError = error;
-    }
-
-    public void EndMappingUpdate() => IsMappingUpdateLoading = false;
 
     public void SetPrimaryGameQuery(string query) => PrimaryGameQuery = query;
 
@@ -374,31 +220,12 @@ internal sealed class MappingState
 
 public partial class Mapping : ComponentBase, IDisposable
 {
-    private static readonly IReadOnlyList<(string Key, string Label)> ManualPlatformOptions =
-    [
-        ("auto", "Use IGDB platform"),
-        ("ps5", "PS5"),
-        ("pc", "PC"),
-        ("steam", "Steam"),
-        ("playnite", "Playnite"),
-        ("switch-1", "Nintendo Switch 1"),
-        ("switch-2", "Nintendo Switch 2"),
-        ("xbox-series-xs", "Xbox Series X|S"),
-        ("unknown", "Unknown"),
-    ];
-
     private readonly CancellationTokenSource _lifetime = new();
     private readonly MappingState _state = new();
-    private CancellationTokenSource? _manualInputsRequest;
     private CancellationTokenSource? _connectionsRequest;
-    private CancellationTokenSource? _mappingSearchRequest;
-    private CancellationTokenSource? _mappingUpdateRequest;
     private CancellationTokenSource? _primarySearchRequest;
     private CancellationTokenSource? _secondarySearchRequest;
-    private long _manualInputsRequestVersion;
     private long _connectionsRequestVersion;
-    private long _mappingSearchRequestVersion;
-    private long _mappingUpdateRequestVersion;
     private long _primarySearchRequestVersion;
     private long _secondarySearchRequestVersion;
 
@@ -412,37 +239,7 @@ public partial class Mapping : ComponentBase, IDisposable
     private NavigationManager Navigation { get; set; } = null!;
 
     protected override Task OnInitializedAsync() =>
-        MappingInitialLoadFlow.RunAsync(LoadManualInputsAsync, LoadGameConnectionsAsync);
-
-    private async Task LoadManualInputsAsync()
-    {
-        var path = _state.BeginManualInputsLoad();
-        _manualInputsRequest?.Cancel();
-        var requestCancellation = CancellationTokenSource.CreateLinkedTokenSource(_lifetime.Token);
-        _manualInputsRequest = requestCancellation;
-        var version = ++_manualInputsRequestVersion;
-        try
-        {
-            var response = await Api.SendAsync<ManualInputsResponse>(path,
-                cancellationToken: requestCancellation.Token);
-            if (version == _manualInputsRequestVersion && !requestCancellation.IsCancellationRequested)
-            {
-                _state.CompleteManualInputsLoad(response);
-            }
-        }
-        catch (OperationCanceledException) when (requestCancellation.IsCancellationRequested)
-        {
-        }
-        catch (Exception exception)
-        {
-            if (version == _manualInputsRequestVersion) _state.FailManualInputsLoad(exception.Message);
-        }
-        finally
-        {
-            if (ReferenceEquals(_manualInputsRequest, requestCancellation)) _manualInputsRequest = null;
-            requestCancellation.Dispose();
-        }
-    }
+        MappingInitialLoadFlow.RunAsync(LoadGameConnectionsAsync);
 
     private async Task LoadGameConnectionsAsync()
     {
@@ -470,98 +267,6 @@ public partial class Mapping : ComponentBase, IDisposable
         finally
         {
             if (ReferenceEquals(_connectionsRequest, requestCancellation)) _connectionsRequest = null;
-            requestCancellation.Dispose();
-        }
-    }
-
-    private void OpenMappingRow(ManualInput input)
-    {
-        InvalidateMappingUpdate();
-        InvalidateMappingSearch();
-        _state.OpenMappingRow(input);
-    }
-
-    private void CloseMappingRow()
-    {
-        InvalidateMappingUpdate();
-        InvalidateMappingSearch();
-        _state.CloseMappingRow();
-    }
-
-    private void ChangeMappingSearchQuery(ChangeEventArgs eventArgs)
-    {
-        _state.SetMappingSearchQuery(eventArgs.Value?.ToString() ?? string.Empty);
-        InvalidateMappingSearch();
-    }
-
-    private void ChangeMappingPlatformOverride(ChangeEventArgs eventArgs) =>
-        _state.SetMappingPlatformOverride(eventArgs.Value?.ToString() ?? "auto");
-
-    private async Task SearchMappingAsync()
-    {
-        if (!_state.TryBeginMappingSearch(out var path)) return;
-        _mappingSearchRequest?.Cancel();
-        var requestCancellation = CancellationTokenSource.CreateLinkedTokenSource(_lifetime.Token);
-        _mappingSearchRequest = requestCancellation;
-        var version = ++_mappingSearchRequestVersion;
-        try
-        {
-            var response = await Api.SendAsync<ManualMappingSearchResponse>(path!,
-                cancellationToken: requestCancellation.Token);
-            if (version == _mappingSearchRequestVersion && !requestCancellation.IsCancellationRequested)
-            {
-                _state.CompleteMappingSearch(response);
-            }
-        }
-        catch (OperationCanceledException) when (requestCancellation.IsCancellationRequested)
-        {
-        }
-        catch (Exception exception)
-        {
-            if (version == _mappingSearchRequestVersion) _state.FailMappingSearch(exception.Message);
-        }
-        finally
-        {
-            if (ReferenceEquals(_mappingSearchRequest, requestCancellation)) _mappingSearchRequest = null;
-            requestCancellation.Dispose();
-        }
-    }
-
-    private async Task SelectMappingResultAsync(long inputId, ManualMappingSearchResult result)
-    {
-        _state.BeginMappingUpdate();
-        if (!_state.TryBuildMappingSubmission(inputId, result, out var submission))
-        {
-            _state.EndMappingUpdate();
-            return;
-        }
-
-        _mappingUpdateRequest?.Cancel();
-        var requestCancellation = CancellationTokenSource.CreateLinkedTokenSource(_lifetime.Token);
-        _mappingUpdateRequest = requestCancellation;
-        var version = ++_mappingUpdateRequestVersion;
-        try
-        {
-            await Api.SendAsync<ManualMappingResponse>(submission!.Path,
-                HttpMethod.Post,
-                submission.Body,
-                cancellationToken: requestCancellation.Token);
-            if (version != _mappingUpdateRequestVersion || requestCancellation.IsCancellationRequested) return;
-
-            _state.CompleteMappingUpdate();
-            await LoadManualInputsAsync();
-        }
-        catch (OperationCanceledException) when (requestCancellation.IsCancellationRequested)
-        {
-        }
-        catch (Exception exception)
-        {
-            if (version == _mappingUpdateRequestVersion) _state.FailMappingUpdate(exception.Message);
-        }
-        finally
-        {
-            if (version == _mappingUpdateRequestVersion) _state.EndMappingUpdate();
-            if (ReferenceEquals(_mappingUpdateRequest, requestCancellation)) _mappingUpdateRequest = null;
             requestCancellation.Dispose();
         }
     }
@@ -700,45 +405,6 @@ public partial class Mapping : ComponentBase, IDisposable
         if (instruction.ScrollToTop) await Browser.ScrollToTopAsync();
     }
 
-    private Task NavigateMappingResultAsync(ManualMappingSearchResult result) =>
-        string.IsNullOrEmpty(result.GameId)
-            ? Task.CompletedTask
-            : NavigateToGameAsync(result.GameId);
-
-    private string MappingResultPlatform(ManualMappingSearchResult result)
-    {
-        if (result.Source == "igdb")
-        {
-            return _state.MappingPlatformOverride == "auto"
-                ? result.Platform ?? "Unknown platform"
-                : Formatters.FormatPlatformLabel(_state.MappingPlatformOverride);
-        }
-
-        return string.IsNullOrEmpty(result.Platform)
-            ? "Unknown platform"
-            : Formatters.FormatPlatformLabel(result.Platform);
-    }
-
-    private static string MappingButtonClass(ManualInput input) =>
-        "w-full rounded-full px-3 py-2 text-xs font-semibold uppercase tracking-[0.3em] transition sm:w-auto " +
-        (input.MappedGame is not null
-            ? "border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:border-emerald-300/60 dark:hover:border-emerald-400/60 hover:text-emerald-700 dark:hover:text-emerald-100"
-            : "border border-emerald-300/60 dark:border-emerald-400/60 text-emerald-700 dark:text-emerald-200 hover:border-emerald-300 dark:hover:border-emerald-400");
-
-    private void InvalidateMappingSearch()
-    {
-        ++_mappingSearchRequestVersion;
-        _mappingSearchRequest?.Cancel();
-        _state.CancelMappingSearch();
-    }
-
-    private void InvalidateMappingUpdate()
-    {
-        ++_mappingUpdateRequestVersion;
-        _mappingUpdateRequest?.Cancel();
-        _state.EndMappingUpdate();
-    }
-
     private void InvalidatePrimarySearch()
     {
         ++_primarySearchRequestVersion;
@@ -756,16 +422,10 @@ public partial class Mapping : ComponentBase, IDisposable
     public void Dispose()
     {
         _lifetime.Cancel();
-        _manualInputsRequest?.Cancel();
         _connectionsRequest?.Cancel();
-        _mappingSearchRequest?.Cancel();
-        _mappingUpdateRequest?.Cancel();
         _primarySearchRequest?.Cancel();
         _secondarySearchRequest?.Cancel();
-        _manualInputsRequest?.Dispose();
         _connectionsRequest?.Dispose();
-        _mappingSearchRequest?.Dispose();
-        _mappingUpdateRequest?.Dispose();
         _primarySearchRequest?.Dispose();
         _secondarySearchRequest?.Dispose();
         _lifetime.Dispose();

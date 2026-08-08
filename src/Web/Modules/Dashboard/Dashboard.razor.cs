@@ -68,31 +68,7 @@ internal sealed record DashboardCurrentSessionView(
     string Title,
     string Platform,
     string StartedAt,
-    string Elapsed,
-    bool IsManual);
-
-internal enum DashboardRefreshMode
-{
-    Silent,
-}
-
-internal static class DashboardManualStartFlow
-{
-    public static async Task CompleteAsync(
-        Action closeModal,
-        Func<Task> renderClosedModal,
-        Func<Task> loadManualInputs,
-        Func<Task> refreshDashboard,
-        CancellationToken cancellationToken)
-    {
-        closeModal();
-        await renderClosedModal();
-        cancellationToken.ThrowIfCancellationRequested();
-        await loadManualInputs();
-        cancellationToken.ThrowIfCancellationRequested();
-        await refreshDashboard();
-    }
-}
+    string Elapsed);
 
 internal static class DashboardRequestFlow
 {
@@ -141,15 +117,6 @@ internal sealed class DashboardState
     public AccountStatsPeriod? YearlyStats { get; private set; }
     public bool IsDashboardLoading { get; private set; }
     public string DashboardError { get; private set; } = string.Empty;
-    public IReadOnlyList<ManualInput> ManualInputs { get; private set; } = [];
-    public bool IsManualInputsLoading { get; private set; }
-    public string ManualInputsError { get; private set; } = string.Empty;
-    public bool IsManualModalOpen { get; private set; }
-    public string ManualInputSelection { get; private set; } = string.Empty;
-    public string ManualInputText { get; private set; } = string.Empty;
-    public string ManualStartError { get; private set; } = string.Empty;
-    public bool IsManualStartLoading { get; private set; }
-    public bool IsManualStopLoading { get; private set; }
     public string TodayHours => Formatters.FormatHours(
         TodayPlatformTotals.Sum(item => item.TotalSeconds),
         1);
@@ -215,8 +182,7 @@ internal sealed class DashboardState
             Formatters.FormatTimeLabel(CurrentSession.StartedAt),
             Formatters.FormatDuration(
                 SessionDates.GetDurationSeconds(CurrentSession.StartedAt, CurrentSession.EndedAt, now),
-                DurationFormat.Long),
-            CurrentSession.Platform == "manual");
+                DurationFormat.Long));
     }
 
     public static DashboardStatsView GetStatsView(AccountStatsPeriod? stats)
@@ -236,76 +202,6 @@ internal sealed class DashboardState
                 game.Title,
                 Formatters.FormatHours(game.TotalSeconds, 1))).ToArray());
     }
-
-    public void OpenManualModal() => IsManualModalOpen = true;
-
-    public void CloseManualModal()
-    {
-        IsManualModalOpen = false;
-        ManualInputSelection = string.Empty;
-        ManualInputText = string.Empty;
-        ManualStartError = string.Empty;
-    }
-
-    public void BeginManualInputs()
-    {
-        IsManualInputsLoading = true;
-        ManualInputsError = string.Empty;
-    }
-
-    public void CompleteManualInputs(IReadOnlyList<ManualInput> inputs)
-    {
-        ManualInputs = inputs;
-        IsManualInputsLoading = false;
-    }
-
-    public void FailManualInputs(string error)
-    {
-        ManualInputs = [];
-        IsManualInputsLoading = false;
-        ManualInputsError = error;
-    }
-
-    public void SelectManualInput(string value)
-    {
-        ManualInputSelection = value;
-        ManualInputText = value;
-    }
-
-    public void SetManualInputText(string value) => ManualInputText = value;
-
-    public bool TryBeginManualStart(out string title)
-    {
-        title = ManualInputText.Trim();
-        if (title.Length == 0)
-        {
-            ManualStartError = "Enter a title to start a session.";
-            return false;
-        }
-
-        IsManualStartLoading = true;
-        ManualStartError = string.Empty;
-        return true;
-    }
-
-    public DashboardRefreshMode ManualStartSucceeded()
-    {
-        CloseManualModal();
-        return DashboardRefreshMode.Silent;
-    }
-
-    public void FailManualStart(string error) => ManualStartError = error;
-    public void EndManualStart() => IsManualStartLoading = false;
-
-    public void BeginManualStop()
-    {
-        IsManualStopLoading = true;
-        DashboardError = string.Empty;
-    }
-
-    public DashboardRefreshMode ManualStopSucceeded() => DashboardRefreshMode.Silent;
-    public void FailManualStop(string error) => DashboardError = error;
-    public void EndManualStop() => IsManualStopLoading = false;
 
     private static IReadOnlyList<DashboardPlatformView> CreatePlatforms(
         IReadOnlyList<AccountPlatformStat> platforms,
@@ -427,90 +323,6 @@ public partial class Dashboard : ComponentBase, IDisposable
         catch (Exception exception)
         {
             _state.FailRefresh(exception.Message);
-        }
-    }
-
-    private async Task OpenManualModalAsync()
-    {
-        _state.OpenManualModal();
-        await LoadManualInputsAsync();
-    }
-
-    private async Task LoadManualInputsAsync()
-    {
-        _state.BeginManualInputs();
-        try
-        {
-            var response = await Api.SendAsync<ManualInputsResponse>("/manual/inputs",
-                cancellationToken: _lifetime.Token);
-            _state.CompleteManualInputs(response.Inputs);
-        }
-        catch (OperationCanceledException) when (_lifetime.IsCancellationRequested)
-        {
-        }
-        catch (Exception exception)
-        {
-            _state.FailManualInputs(exception.Message);
-        }
-    }
-
-    private async Task StartManualSessionAsync()
-    {
-        if (!_state.TryBeginManualStart(out var title)) return;
-
-        try
-        {
-            await Api.SendAsync<ManualSessionStartResponse>("/manual/sessions/start",
-                HttpMethod.Post,
-                new ManualSessionStartRequest(title),
-                cancellationToken: _lifetime.Token);
-            await DashboardManualStartFlow.CompleteAsync(
-                () => { _state.ManualStartSucceeded(); },
-                RenderManualCloseAsync,
-                LoadManualInputsAsync,
-                () => RefreshDashboardAsync(silent: true),
-                _lifetime.Token);
-        }
-        catch (OperationCanceledException) when (_lifetime.IsCancellationRequested)
-        {
-        }
-        catch (Exception exception)
-        {
-            _state.FailManualStart(exception.Message);
-        }
-        finally
-        {
-            _state.EndManualStart();
-        }
-    }
-
-    private async Task RenderManualCloseAsync()
-    {
-        await InvokeAsync(StateHasChanged);
-        await Task.Yield();
-    }
-
-    private async Task StopManualSessionAsync()
-    {
-        _state.BeginManualStop();
-        try
-        {
-            await Api.SendAsync<ManualSessionStopResponse>("/manual/sessions/stop",
-                HttpMethod.Post,
-                cancellationToken: _lifetime.Token);
-            _state.ManualStopSucceeded();
-            await RefreshDashboardAsync(silent: true);
-        }
-        catch (OperationCanceledException) when (_lifetime.IsCancellationRequested)
-        {
-        }
-        catch (Exception exception)
-        {
-            _state.FailManualStop(exception.Message);
-        }
-        finally
-        {
-            _state.EndManualStop();
         }
     }
 

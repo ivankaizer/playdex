@@ -39,40 +39,6 @@ public sealed class FormattersTests
         Assert.Equal("Xbox Series X|S", Formatters.FormatStatsPlatformLabel("xbox-series-xs"));
     }
 
-    [Theory]
-    [InlineData("igdb", "IGDB")]
-    [InlineData("local", "Local")]
-    [InlineData(null, "Local")]
-    public void FormatManualMappingType_PreservesTheNullFallback(string? source, string expected)
-    {
-        Assert.Equal(expected, Formatters.FormatManualMappingType(source));
-    }
-
-    [Fact]
-    public void FormatManualInputLabel_UsesTheRawInputWhenNoGameIsMapped()
-    {
-        Assert.Equal("elden rnig", Formatters.FormatManualInputLabel("elden rnig", null, null, null));
-    }
-
-    [Fact]
-    public void FormatManualInputLabel_FormatsMappedAndMissingPlatformValues()
-    {
-        Assert.Equal(
-            "PS5 · IGDB · Elden Ring",
-            Formatters.FormatManualInputLabel("ignored", "Elden Ring", "psn", "igdb"));
-        Assert.Equal(
-            "Unknown platform · Local · Mystery Game",
-            Formatters.FormatManualInputLabel("ignored", "Mystery Game", null, null));
-    }
-
-    [Fact]
-    public void FormatEntryResultLabel_OnlyAddsAPlatformForLocalResults()
-    {
-        Assert.Equal("Hades · Steam", Formatters.FormatEntryResultLabel("local", "Hades", "steam"));
-        Assert.Equal("Hades · Unknown platform", Formatters.FormatEntryResultLabel("local", "Hades", null));
-        Assert.Equal("Hades", Formatters.FormatEntryResultLabel("igdb", "Hades", "steam"));
-    }
-
     [Fact]
     public void DateAndTimeLabels_UseEnUsBrowserStyleOutput()
     {
