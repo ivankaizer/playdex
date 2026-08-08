@@ -171,7 +171,7 @@ public sealed class PlayniteCompatibilityIntegrationTests(PostgresFixture postgr
         var databaseUrl = Environment.GetEnvironmentVariable("PLAYDEX_INTEGRATION_DATABASE_URL")!;
         Environment.SetEnvironmentVariable("DATABASE_URL", databaseUrl);
         Environment.SetEnvironmentVariable(
-            "JWT_SECRET", "playnite-integration-secret-at-least-thirty-two-bytes");
+            "Auth__JwtSecret", "playnite-integration-secret-at-least-thirty-two-bytes");
         Environment.SetEnvironmentVariable("POLL_INTERVAL_SECONDS", "3600");
     }
 

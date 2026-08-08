@@ -19,8 +19,13 @@ public sealed class GameStatsCompatibilityTests(PostgresFixture postgres)
 
         await using var db = CreateDb();
         var suffix = Guid.NewGuid().ToString("n");
+        var password = "stats-password";
         var steam = await db.Platforms.SingleAsync(row => row.Key == "steam");
-        var user = new User { Email = $"stats-{suffix}@example.test" };
+        var user = new User
+        {
+            Email = $"stats-{suffix}@example.test",
+            Password = BCrypt.Net.BCrypt.HashPassword(password),
+        };
         db.Users.Add(user);
         await db.SaveChangesAsync();
         var credential = new PlatformCredential
@@ -57,8 +62,15 @@ public sealed class GameStatsCompatibilityTests(PostgresFixture postgres)
             ConfigureHost();
             await using var factory = new WebApplicationFactory<Program>();
             using var client = factory.CreateClient();
-            client.DefaultRequestHeaders.Authorization =
-                new AuthenticationHeaderValue("Bearer", credential.ApiKey);
+            var login = await client.PostAsJsonAsync("/api/login", new
+            {
+                email = user.Email,
+                password,
+            });
+            var loginJson = JsonDocument.Parse(await login.Content.ReadAsStringAsync());
+            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+                "Bearer",
+                loginJson.RootElement.GetProperty("data").GetProperty("accessToken").GetString());
 
             var gameId = await db.Games
                 .AsNoTracking()
@@ -107,8 +119,13 @@ public sealed class GameStatsCompatibilityTests(PostgresFixture postgres)
 
         await using var db = CreateDb();
         var suffix = Guid.NewGuid().ToString("n");
+        var password = "stats-password";
         var steam = await db.Platforms.SingleAsync(row => row.Key == "steam");
-        var user = new User { Email = $"stats-empty-{suffix}@example.test" };
+        var user = new User
+        {
+            Email = $"stats-empty-{suffix}@example.test",
+            Password = BCrypt.Net.BCrypt.HashPassword(password),
+        };
         db.Users.Add(user);
         await db.SaveChangesAsync();
         var credential = new PlatformCredential
@@ -133,8 +150,15 @@ public sealed class GameStatsCompatibilityTests(PostgresFixture postgres)
             ConfigureHost();
             await using var factory = new WebApplicationFactory<Program>();
             using var client = factory.CreateClient();
-            client.DefaultRequestHeaders.Authorization =
-                new AuthenticationHeaderValue("Bearer", credential.ApiKey);
+            var login = await client.PostAsJsonAsync("/api/login", new
+            {
+                email = user.Email,
+                password,
+            });
+            var loginJson = JsonDocument.Parse(await login.Content.ReadAsStringAsync());
+            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+                "Bearer",
+                loginJson.RootElement.GetProperty("data").GetProperty("accessToken").GetString());
 
             var response = await client.GetAsync($"/api/games/{game.Id}/stats");
             var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
@@ -180,7 +204,7 @@ public sealed class GameStatsCompatibilityTests(PostgresFixture postgres)
         var databaseUrl = Environment.GetEnvironmentVariable("PLAYDEX_INTEGRATION_DATABASE_URL")!;
         Environment.SetEnvironmentVariable("DATABASE_URL", databaseUrl);
         Environment.SetEnvironmentVariable(
-            "JWT_SECRET", "game-stats-integration-secret-at-least-thirty-two-bytes");
+            "Auth__JwtSecret", "game-stats-integration-secret-at-least-thirty-two-bytes");
         Environment.SetEnvironmentVariable("POLL_INTERVAL_SECONDS", "3600");
     }
 

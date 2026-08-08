@@ -12,13 +12,12 @@ public sealed class DeploymentContractTests
     {
         var dockerfile = ReadWebFile("Dockerfile");
         var nginx = ReadWebFile("nginx.conf");
+        var entrypoint = ReadWebFile("docker-entrypoint.sh");
 
         Assert.Contains("oven/bun:1 AS css", dockerfile);
         Assert.Contains("bun run css:build", dockerfile);
         Assert.Contains("mcr.microsoft.com/dotnet/sdk:10.0 AS build", dockerfile);
         Assert.Contains("dotnet publish", dockerfile);
-        Assert.Contains("ARG PLAYDEX_API_URL", dockerfile);
-        Assert.Contains("__PLAYDEX_API_URL__", dockerfile);
         Assert.Contains("/app/publish/wwwroot", dockerfile);
         Assert.Contains("nginx:1.27-alpine", dockerfile);
         Assert.Contains("EXPOSE 5056", dockerfile);
@@ -26,19 +25,22 @@ public sealed class DeploymentContractTests
         Assert.Contains("127.0.0.1:5056", dockerfile);
         Assert.DoesNotContain("vite build", dockerfile, StringComparison.OrdinalIgnoreCase);
 
+        Assert.Contains("__PLAYDEX_API_URL__", entrypoint);
+        Assert.Contains("PLAYDEX_API_URL", entrypoint);
+
         Assert.Contains("listen 5056;", nginx);
         Assert.Contains("try_files $uri /index.html;", nginx);
     }
 
     [Fact]
-    public void DevelopmentImageRunsTailwindAndDotnetWatch()
+    public void DevelopmentImageRunsTailwindAndDotnet()
     {
         var dockerfile = ReadWebFile("Dockerfile.dev");
 
         Assert.Contains("mcr.microsoft.com/dotnet/sdk:10.0", dockerfile);
         Assert.Contains("COPY --from=bun", dockerfile);
         Assert.Contains("bun run css:watch", dockerfile);
-        Assert.Contains("dotnet watch --project Web.csproj", dockerfile);
+        Assert.Contains("dotnet run", dockerfile);
         Assert.Contains("http://0.0.0.0:5173", dockerfile);
         Assert.DoesNotContain("vite", dockerfile, StringComparison.OrdinalIgnoreCase);
     }
@@ -47,24 +49,28 @@ public sealed class DeploymentContractTests
     public void ComposeAndCiTargetDotnetAndBlazorArtifacts()
     {
         var compose = File.ReadAllText(Path.Combine(RepositoryRoot, "docker-compose.yml"));
-        var buildWorkflow = File.ReadAllText(Path.Combine(RepositoryRoot, ".github", "workflows", "build.yaml"));
+        var apiWorkflow = File.ReadAllText(Path.Combine(RepositoryRoot, ".github", "workflows", "build-api.yaml"));
+        var uiWorkflow = File.ReadAllText(Path.Combine(RepositoryRoot, ".github", "workflows", "build-ui.yaml"));
         var testWorkflow = File.ReadAllText(Path.Combine(RepositoryRoot, ".github", "workflows", "test.yaml"));
 
-        Assert.Contains("context: ./apps/api-dotnet", compose);
+        Assert.Contains("dockerfile: src/Api/Dockerfile", compose);
+        Assert.Contains("dockerfile: src/Web/Dockerfile.dev", compose);
         Assert.DoesNotContain("VITE_API_URL", compose);
         Assert.Contains("dotnet_nuget", compose);
         Assert.Contains("web_bun_cache", compose);
+        Assert.Contains("PLAYDEX_API_URL", compose);
 
-        Assert.Contains("apps/api-dotnet", buildWorkflow);
-        Assert.Contains("PLAYDEX_API_URL", buildWorkflow);
-        Assert.DoesNotContain("apps/api\n", buildWorkflow);
-        Assert.DoesNotContain("VITE_API_URL", buildWorkflow);
+        Assert.Contains("src/Api", apiWorkflow);
+        Assert.Contains("src/Web", uiWorkflow);
+        Assert.DoesNotContain("VITE_API_URL", apiWorkflow);
+        Assert.DoesNotContain("VITE_API_URL", uiWorkflow);
 
         Assert.Contains("actions/setup-dotnet", testWorkflow);
         Assert.Contains("dotnet-version: '10.0.x'", testWorkflow);
         Assert.Contains("bun run css:build", testWorkflow);
-        Assert.Contains("dotnet test Playdex.sln", testWorkflow);
         Assert.Contains("dotnet build Playdex.sln", testWorkflow);
+        Assert.Contains("dotnet test test/Api.Tests/Api.Tests.csproj", testWorkflow);
+        Assert.Contains("dotnet test test/Web.Tests/Web.Tests.csproj", testWorkflow);
     }
 
     private static string ReadWebFile(string relativePath) =>
@@ -80,6 +86,6 @@ public sealed class DeploymentContractTests
             if (Directory.Exists(candidate)) return candidate;
         }
 
-        throw new DirectoryNotFoundException("Could not locate Could not locate src/Web from the test output directory.");
+        throw new DirectoryNotFoundException("Could not locate src/Web from the test output directory.");
     }
 }

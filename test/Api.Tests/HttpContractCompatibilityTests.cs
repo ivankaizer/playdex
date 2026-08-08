@@ -102,7 +102,7 @@ public sealed class HttpContractCompatibilityTests(PostgresFixture postgres)
             "DATABASE_URL",
             Environment.GetEnvironmentVariable("PLAYDEX_INTEGRATION_DATABASE_URL"));
         Environment.SetEnvironmentVariable(
-            "JWT_SECRET", "http-contract-secret-at-least-thirty-two-bytes");
+            "Auth__JwtSecret", "http-contract-secret-at-least-thirty-two-bytes");
         Environment.SetEnvironmentVariable("POLL_INTERVAL_SECONDS", "3600");
     }
 }

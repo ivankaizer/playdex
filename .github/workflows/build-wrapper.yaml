@@ -26,6 +26,9 @@ jobs:
       - name: Publish wrapper (win-x64, single-file)
         run: dotnet publish src/Wrapper/Wrapper.csproj -c Release -r win-x64 -o ./artifacts/win-x64
 
+      - name: Run wrapper tests
+        run: dotnet test test/Wrapper.Tests/Wrapper.Tests.csproj --configuration Release
+
       - name: Upload wrapper artifacts
         uses: actions/upload-artifact@v4
         with:
