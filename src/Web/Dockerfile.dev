@@ -14,4 +14,4 @@ COPY src/Web/ .
 
 EXPOSE 5173
 
-CMD ["sh", "-c", "bun run css:watch & exec dotnet watch run --urls http://0.0.0.0:5173"]
+CMD ["sh", "-c", "bun run css:watch & exec dotnet run --urls http://0.0.0.0:5173"]

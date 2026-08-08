@@ -2,8 +2,10 @@ namespace Api.Modules.Telegram;
 
 public static class TelegramModule
 {
-    public static IServiceCollection AddTelegram(this IServiceCollection services)
+    public static IServiceCollection AddTelegram(this IServiceCollection services, IConfiguration configuration)
     {
+        services.Configure<TelegramOptions>(configuration.GetSection("Telegram"));
+
         services.AddScoped<TelegramRepository>();
         services.AddHttpClient<TelegramClient>(client =>
         {

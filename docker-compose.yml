@@ -53,6 +53,7 @@ services:
       Auth__JwtSecret: dev-only-jwt-secret-do-not-use-in-production
       Auth__AccessTokenTtl: 30m
       Polling__UseWiremock: "true"
+      Telegram__UseMock: "true"
       Polling__Steam__BaseUrl: http://wiremock:8888
       Polling__Psn__OAuthAuthorizeUrl: http://wiremock:8888/api/authz/v3/oauth/authorize
       Polling__Psn__OAuthTokenUrl: http://wiremock:8888/api/authz/v3/oauth/token
@@ -76,7 +77,6 @@ services:
       dockerfile: src/Web/Dockerfile.dev
     restart: "no"
     environment:
-      DOTNET_USE_POLLING_FILE_WATCHER: "true"
       PLAYDEX_API_URL: "https://app.playdex.orb.local/api/"
     volumes:
       - ./src/Web:/app

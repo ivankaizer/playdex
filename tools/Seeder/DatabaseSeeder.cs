@@ -14,9 +14,9 @@ public class DatabaseSeeder(PlaydexDbContext db)
         await Truncate();
 
         // users
-        var user = await db.AddAsync(MakeUser("user@playdex.dev", "user-chat-id"));
+        var user = await db.AddAsync(MakeUser("user@playdex.dev", "12345"));
         var secondUser = await db.AddAsync(MakeUser("second_user@playdex.dev"));
-        var admin = await db.AddAsync(MakeUser("admin@playdex.dev", "admin-chat-id", true));
+        var admin = await db.AddAsync(MakeUser("admin@playdex.dev", "67890", true));
         await db.SaveChangesAsync();
 
         // settings

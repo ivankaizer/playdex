@@ -1,6 +1,7 @@
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Microsoft.Extensions.Options;
 
 namespace Api.Modules.Telegram;
 
@@ -16,24 +17,44 @@ public sealed class TelegramClient
     };
     private readonly HttpClient _httpClient;
     private readonly string? _botToken;
+    private readonly TelegramOptions _options;
+    private readonly ILogger<TelegramClient> _logger;
 
-    public TelegramClient(HttpClient httpClient, IConfiguration configuration)
-        : this(httpClient, configuration["TELEGRAM_BOT_TOKEN"])
+    public TelegramClient(
+        HttpClient httpClient,
+        IConfiguration configuration,
+        IOptions<TelegramOptions> options,
+        ILogger<TelegramClient> logger)
+        : this(httpClient, configuration["TELEGRAM_BOT_TOKEN"], options, logger)
     {
     }
 
-    internal TelegramClient(HttpClient httpClient, string? botToken)
+    internal TelegramClient(
+        HttpClient httpClient,
+        string? botToken,
+        IOptions<TelegramOptions>? options = null,
+        ILogger<TelegramClient>? logger = null)
     {
         _httpClient = httpClient;
         _botToken = string.IsNullOrWhiteSpace(botToken) ? null : botToken.Trim();
+        _options = options?.Value ?? new TelegramOptions();
+        _logger = logger ?? Microsoft.Extensions.Logging.Abstractions.NullLogger<TelegramClient>.Instance;
     }
 
-    public bool IsEnabled => _botToken is not null;
+    public bool IsEnabled => _botToken is not null || _options.UseMock;
 
     public async Task<IReadOnlyList<TelegramUpdate>> GetUpdatesAsync(
         long? offset,
         CancellationToken ct)
     {
+        if (_options.UseMock)
+        {
+            _logger.LogInformation(
+                "TELEGRAM_MOCK getUpdates offset={Offset} — returning no updates (mock).",
+                offset);
+            return [];
+        }
+
         EnsureEnabled();
         var url = MethodUrl("getUpdates") + "?timeout=30";
         if (offset.HasValue) url += $"&offset={offset.Value}";
@@ -61,6 +82,13 @@ public sealed class TelegramClient
             ["text"] = text,
             ["disable_web_page_preview"] = true,
         };
+        if (_options.UseMock)
+        {
+            _logger.LogInformation(
+                "TELEGRAM_MOCK sendMessage {Payload}",
+                JsonSerializer.Serialize(payload, JsonOptions));
+            return;
+        }
         using var response = await _httpClient.PostAsJsonAsync(
             MethodUrl("sendMessage"), payload, JsonOptions, ct);
         await ReadEnvelope<JsonElement>(response, ct);
@@ -73,6 +101,21 @@ public sealed class TelegramClient
         CancellationToken ct)
     {
         EnsureEnabled();
+        var payload = new Dictionary<string, object>
+        {
+            ["chat_id"] = chatId,
+            ["caption"] = caption,
+            ["photo_file_name"] = "notification.webp",
+            ["photo_content_type"] = "image/webp",
+            ["photo_base64"] = Convert.ToBase64String(photo),
+        };
+        if (_options.UseMock)
+        {
+            _logger.LogInformation(
+                "TELEGRAM_MOCK sendPhoto {Payload}",
+                JsonSerializer.Serialize(payload, JsonOptions));
+            return;
+        }
         using var content = new MultipartFormDataContent();
         content.Add(new StringContent(chatId.ToString()), "chat_id");
         content.Add(new StringContent(caption), "caption");

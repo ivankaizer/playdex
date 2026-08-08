@@ -22,6 +22,12 @@ using Api.Observability;
 
 var builder = WebApplication.CreateBuilder(args);
 
+builder.Logging.ClearProviders();
+builder.Logging.AddJsonConsole(cfg =>
+{
+    cfg.JsonWriterOptions = new JsonWriterOptions { Indented = false };
+});
+
 builder.AddServiceDefaults();
 
 var databaseUrl = builder.Configuration["DATABASE_URL"]?.Trim()
@@ -52,7 +58,7 @@ builder.Services
     .AddRecap()
     .AddPlaydexMetrics()
     .AddPolling(builder.Configuration)
-    .AddTelegram();
+    .AddTelegram(builder.Configuration);
 
 builder.Services.AddExceptionHandler<ApiExceptionHandler>();
 builder.Services.AddProblemDetails();
@@ -60,12 +66,6 @@ builder.Services.ConfigureHttpJsonOptions(json =>
 {
     json.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
     json.SerializerOptions.PropertyNameCaseInsensitive = false;
-});
-
-builder.Logging.ClearProviders();
-builder.Logging.AddJsonConsole(cfg =>
-{
-    cfg.JsonWriterOptions = new JsonWriterOptions { Indented = false };
 });
 
 builder.Services.AddCors(cfg =>
