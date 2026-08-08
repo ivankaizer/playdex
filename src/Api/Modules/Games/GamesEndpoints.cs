@@ -10,6 +10,7 @@ public static class GamesEndpoints
         var games = api.MapGroup("/games").RequireAuthorization();
         games.MapGet("/search", Search);
         games.MapGet("/{gameId}", GetGame);
+        games.MapGet("/{gameId}/stats", GetGameStats);
         games.MapGet("/connections", ListConnections);
 
         games.MapPost("/connections", async (HttpContext http) =>
@@ -92,6 +93,15 @@ public static class GamesEndpoints
         CancellationToken ct)
     {
         return TypedResults.Ok(await service.GetGame(gameId, ct));
+    }
+
+    private static async Task<IResult> GetGameStats(
+        string gameId,
+        ClaimsPrincipal principal,
+        Api.Modules.Accounts.AccountsService service,
+        CancellationToken ct)
+    {
+        return TypedResults.Ok(await service.ComputeGameStats(principal.GetUserId(), gameId, ct));
     }
 
     private static async Task<IResult> ListConnections(

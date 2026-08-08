@@ -12,7 +12,7 @@ internal sealed record GameRequests(
     string GameHash,
     string Details,
     string SessionsBase,
-    string FirstSessions,
+    string Stats,
     string IgnoreStatus,
     string Rating)
 {
@@ -27,12 +27,12 @@ internal sealed record GameRequests(
             gameHash,
             $"/games/{gameHash}",
             sessionsBase,
-            $"{sessionsBase}&limit=5&offset=0",
+            $"/games/{gameHash}/stats",
             $"/games/ignored?gameId={gameHash}",
             $"/games/rating?gameId={gameHash}");
     }
 
-    public string SessionsPage(int offset) => $"{SessionsBase}&limit=100&offset={offset}";
+    public string SessionsPage(int page) => $"{SessionsBase}&limit=5&offset={(page - 1) * 5}";
 }
 
 internal sealed record GameMutationSubmission(
@@ -47,8 +47,8 @@ internal sealed record GameChartBucket(string Key, string Label, int Year, int M
 
 internal static class GameInitialLoadFlow
 {
-    public static Task RunAsync(Func<Task> loadDetails, Func<Task> loadSessionsAndStatuses) =>
-        Task.WhenAll(loadDetails(), loadSessionsAndStatuses());
+    public static Task RunAsync(Func<Task> loadDetails, Func<Task> loadStats, Func<Task> loadFirstSessions) =>
+        Task.WhenAll(loadDetails(), loadStats(), loadFirstSessions());
 }
 
 internal sealed class GameState
@@ -61,7 +61,6 @@ internal sealed class GameState
     public GameResponse? GameDetails { get; private set; }
     public string GameDetailsError { get; private set; } = string.Empty;
     public IReadOnlyList<AccountSession> RecentSessions { get; private set; } = [];
-    public IReadOnlyList<AccountSession> AllSessions { get; private set; } = [];
     public bool IsLoading { get; private set; }
     public string GameError { get; private set; } = string.Empty;
     public bool SessionsLoaded { get; private set; }
@@ -75,16 +74,18 @@ internal sealed class GameState
     public string RatingError { get; private set; } = string.Empty;
     public int SelectedYear { get; private set; }
     public int RecentPage { get; private set; } = 1;
+    public int RecentTotal { get; private set; }
+    public bool IsRecentPageLoading { get; private set; }
+    public GameStatsResponse? Stats { get; private set; }
+    public string StatsError { get; private set; } = string.Empty;
     public string DisplayTitle => GameDetails?.Title ??
         (GameDetailsError.Length > 0 ? "Unknown game" : "Loading game...");
     public string? GameImage =>
         RecentSessions.FirstOrDefault(session => session.CapsuleUrl is not null)?.CapsuleUrl ??
         GameDetails?.CapsuleUrl;
-    public IReadOnlyList<AccountSession> StatsSessions =>
-        AllSessions.Where(session => !session.Ignored).ToArray();
-    public double TotalSeconds => StatsSessions.Sum(DurationSeconds);
-    public string LastPlayedLabel => StatsSessions.FirstOrDefault() is { } session
-        ? Formatters.FormatDateLabel(session.StartedAt)
+    public double TotalSeconds => Stats?.TotalSeconds ?? 0;
+    public string LastPlayedLabel => Stats?.LastPlayedAt is { } lastPlayed
+        ? Formatters.FormatDateLabel(lastPlayed)
         : "—";
     public IReadOnlyList<GameChartBucket> YearlyStats => BuildYearlyStats();
     public IReadOnlyList<int> AvailableYears => YearlyStats.Select(item => item.Year).ToArray();
@@ -92,11 +93,7 @@ internal sealed class GameState
         ? SelectedYear
         : AvailableYears.LastOrDefault(SelectedYear);
     public IReadOnlyList<GameChartBucket> MonthlyStats => BuildMonthlyStats();
-    public int RecentTotalPages => Math.Max(1, (int)Math.Ceiling(RecentSessions.Count / (double)RecentPageSize));
-    public IReadOnlyList<AccountSession> RecentPageItems => RecentSessions
-        .Skip((RecentPage - 1) * RecentPageSize)
-        .Take(RecentPageSize)
-        .ToArray();
+    public int RecentTotalPages => Math.Max(1, (int)Math.Ceiling(RecentTotal / (double)RecentPageSize));
     public string RatingLabel => Rating switch
     {
         1 => "Rough",
@@ -113,10 +110,12 @@ internal sealed class GameState
         _now = now;
         SelectedYear = now.UtcDateTime.Year;
         RecentPage = 1;
+        RecentTotal = 0;
         GameDetails = null;
         RecentSessions = [];
-        AllSessions = [];
         Rating = null;
+        Stats = null;
+        StatsError = string.Empty;
         IsIgnored = false;
         GameDetailsError = string.Empty;
         GameError = string.Empty;
@@ -157,23 +156,58 @@ internal sealed class GameState
         GameDetailsError = error;
     }
 
-    public void CompleteSessions(AccountSessionsResponse response)
+    public void BeginFirstSessionsLoad()
+    {
+        IsLoading = true;
+        GameError = string.Empty;
+    }
+
+    public void CompleteFirstSessions(AccountSessionsResponse response)
     {
         RecentSessions = response.Sessions;
-        AllSessions = response.Sessions;
+        RecentTotal = response.Total;
         RecentPage = 1;
         IsLoading = false;
+        IsRecentPageLoading = false;
         SessionsLoaded = true;
+    }
+
+    public void CompleteSessionsPage(int page, AccountSessionsResponse response)
+    {
+        RecentSessions = response.Sessions;
+        RecentTotal = response.Total;
+        RecentPage = page;
+        IsRecentPageLoading = false;
+    }
+
+    public void BeginRecentPageLoad()
+    {
+        IsRecentPageLoading = true;
+        GameError = string.Empty;
     }
 
     public void FailSessions(string error)
     {
         RecentSessions = [];
-        AllSessions = [];
+        RecentTotal = 0;
         IsLoading = false;
+        IsRecentPageLoading = false;
         SessionsLoaded = true;
         GameError = error;
     }
+
+    public void BeginStatsLoad()
+    {
+        StatsError = string.Empty;
+    }
+
+    public void CompleteStats(GameStatsResponse response)
+    {
+        Stats = response;
+        StatsError = string.Empty;
+    }
+
+    public void FailStats(string error) => StatsError = error;
 
     public void CompleteIgnore(GameIgnoreResponse response)
     {
@@ -239,22 +273,17 @@ internal sealed class GameState
 
     public void EndRatingSave() => IsRatingSaving = false;
 
-    public void SetRecentPage(int page) => RecentPage = Math.Clamp(page, 1, RecentTotalPages);
-
     public void SetSelectedYear(int year) => SelectedYear = year;
-
-    private double DurationSeconds(AccountSession session) =>
-        SessionDates.GetDurationSeconds(session.StartedAt, session.EndedAt, _now);
 
     private IReadOnlyList<GameChartBucket> BuildYearlyStats()
     {
+        if (Stats is null) return [];
         var endYear = Math.Max(AllTimeStartYear, _now.UtcDateTime.Year);
         var totals = Enumerable.Range(AllTimeStartYear, endYear - AllTimeStartYear + 1)
             .ToDictionary(year => year, _ => 0d);
-        foreach (var session in StatsSessions)
+        foreach (var item in Stats.Years)
         {
-            var year = session.StartedAt.UtcDateTime.Year;
-            if (totals.ContainsKey(year)) totals[year] += DurationSeconds(session);
+            if (totals.ContainsKey(item.Year)) totals[item.Year] = item.Seconds;
         }
 
         return totals.Select(item => new GameChartBucket(
@@ -269,10 +298,12 @@ internal sealed class GameState
     {
         var year = ActiveYear;
         var totals = new double[12];
-        foreach (var session in StatsSessions)
+        foreach (var item in Stats?.Months ?? [])
         {
-            var date = session.StartedAt.UtcDateTime;
-            if (date.Year == year) totals[date.Month - 1] += DurationSeconds(session);
+            if (item.Year == year && item.Month is >= 1 and <= 12)
+            {
+                totals[item.Month - 1] = item.Seconds;
+            }
         }
 
         return Enumerable.Range(0, 12).Select(month => new GameChartBucket(
@@ -318,7 +349,8 @@ public partial class Game : ComponentBase, IDisposable
 
         await GameInitialLoadFlow.RunAsync(
             () => LoadDetailsAsync(requests!, version, requestCancellation.Token),
-            () => LoadSessionsAndStatusesAsync(requests!, version, requestCancellation.Token));
+            () => LoadStatsAsync(requests!, version, requestCancellation.Token),
+            () => LoadFirstSessionsAsync(requests!, version, requestCancellation.Token));
     }
 
     private async Task LoadDetailsAsync(GameRequests requests, long version, CancellationToken cancellationToken)
@@ -339,39 +371,38 @@ public partial class Game : ComponentBase, IDisposable
         }
     }
 
-    private async Task LoadSessionsAndStatusesAsync(
+    private async Task LoadStatsAsync(GameRequests requests, long version, CancellationToken cancellationToken)
+    {
+        _state.BeginStatsLoad();
+        try
+        {
+            var response = await Api.SendAsync<GameStatsResponse>(requests.Stats,
+                onAuthFailure: LogoutAsync,
+                cancellationToken: cancellationToken);
+            if (IsCurrent(version, cancellationToken)) _state.CompleteStats(response);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+        }
+        catch (Exception exception)
+        {
+            if (IsCurrent(version, cancellationToken)) _state.FailStats(exception.Message);
+        }
+    }
+
+    private async Task LoadFirstSessionsAsync(
         GameRequests requests,
         long version,
         CancellationToken cancellationToken)
     {
+        _state.BeginFirstSessionsLoad();
         try
         {
-            var path = requests.FirstSessions;
-            var first = await Api.SendAsync<AccountSessionsResponse>(path,
+            var response = await Api.SendAsync<AccountSessionsResponse>(requests.SessionsPage(1),
                 onAuthFailure: LogoutAsync,
                 cancellationToken: cancellationToken);
             if (!IsCurrent(version, cancellationToken)) return;
-
-            var sessions = first.Sessions.ToList();
-            var offset = first.Limit;
-            while (offset < first.Total)
-            {
-                path = requests.SessionsPage(offset);
-                var page = await Api.SendAsync<AccountSessionsResponse>(path,
-                    onAuthFailure: LogoutAsync,
-                    cancellationToken: cancellationToken);
-                if (!IsCurrent(version, cancellationToken)) return;
-                sessions.AddRange(page.Sessions);
-                if (page.Sessions.Count == 0 || page.Limit <= 0) break;
-                offset += page.Limit;
-            }
-
-            _state.CompleteSessions(new AccountSessionsResponse(
-                first.AccountId,
-                sessions,
-                sessions.Count,
-                first.Limit,
-                first.Offset));
+            _state.CompleteFirstSessions(response);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -387,6 +418,29 @@ public partial class Game : ComponentBase, IDisposable
         await Task.WhenAll(
             LoadIgnoreAsync(requests, version, cancellationToken),
             LoadRatingAsync(requests, version, cancellationToken));
+    }
+
+    private async Task LoadSessionsPageAsync(int page)
+    {
+        if (_state.Requests is null) return;
+        var version = _loadVersion;
+        var cancellationToken = CurrentCancellationToken;
+        _state.BeginRecentPageLoad();
+        try
+        {
+            var response = await Api.SendAsync<AccountSessionsResponse>(
+                _state.Requests.SessionsPage(page),
+                onAuthFailure: LogoutAsync,
+                cancellationToken: cancellationToken);
+            if (IsCurrent(version, cancellationToken)) _state.CompleteSessionsPage(page, response);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+        }
+        catch (Exception exception)
+        {
+            if (IsCurrent(version, cancellationToken)) _state.FailSessions(exception.Message);
+        }
     }
 
     private async Task LoadIgnoreAsync(GameRequests requests, long version, CancellationToken cancellationToken)

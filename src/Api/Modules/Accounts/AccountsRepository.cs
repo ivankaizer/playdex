@@ -117,6 +117,49 @@ public sealed class AccountsRepository(PlaydexDbContext db, IGames games)
         return sessions.Select(MapSession).ToList();
     }
 
+    public async Task<GameStatsResponseDto> ComputeGameStats(
+        long userId,
+        IReadOnlyCollection<long> gameIds,
+        CancellationToken ct)
+    {
+        var (sql, parameters) = BuildSessionQuery(userId, null, null, gameIds, null, null, excludeIgnored: true);
+        sql += " ORDER BY ps.started_at ASC";
+        var sessions = await db.Database.SqlQueryRaw<SessionDbRow>(sql, [.. parameters])
+            .ToListAsync(ct);
+        var mapped = sessions.Select(MapSession).ToList();
+        if (mapped.Count == 0)
+        {
+            return new GameStatsResponseDto(0, 0, null, [], []);
+        }
+
+        var now = DateTimeOffset.UtcNow;
+        var totalSeconds = mapped.Sum(MapDuration);
+        var lastPlayed = mapped
+            .OrderByDescending(session => session.StartedAt)
+            .Select(session => (DateTimeOffset?)session.StartedAt)
+            .First();
+
+        var endYear = Math.Max(AllTimeStartYear, now.UtcDateTime.Year);
+        var years = Enumerable.Range(AllTimeStartYear, endYear - AllTimeStartYear + 1)
+            .Select(year => new GameYearStatDto(
+                year,
+                mapped.Where(session => session.StartedAt.UtcDateTime.Year == year).Sum(MapDuration)))
+            .ToArray();
+        var months = Enumerable.Range(AllTimeStartYear, endYear - AllTimeStartYear + 1)
+            .SelectMany(year => Enumerable.Range(1, 12).Select(month => (year, month)))
+            .Select(pair => new GameMonthStatDto(
+                pair.year,
+                pair.month,
+                mapped.Where(session =>
+                    session.StartedAt.UtcDateTime.Year == pair.year &&
+                    session.StartedAt.UtcDateTime.Month == pair.month).Sum(MapDuration)))
+            .ToArray();
+
+        return new GameStatsResponseDto(totalSeconds, mapped.Count, lastPlayed, years, months);
+    }
+
+    private const int AllTimeStartYear = 2025;
+
     public async Task<AccountStatsPeriodDto> ComputeStats(
         long userId, long? accountId, DateTimeOffset from, DateTimeOffset to,
         int ignoreShortMinutes, CancellationToken ct)

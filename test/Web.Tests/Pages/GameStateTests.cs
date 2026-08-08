@@ -8,18 +8,19 @@ namespace Web.Tests.Pages;
 public sealed class GameStateTests
 {
     [Fact]
-    public void RequestsMatchReactDetailAndPagedSessionContract()
+    public void RequestsMatchReactDetailStatsAndPagedSessionContract()
     {
         var requests = GameRequests.For("3H4h3", new DateTimeOffset(2026, 7, 18, 9, 0, 0, TimeSpan.Zero));
 
         Assert.Equal("42", requests.GameId);
         Assert.Equal("/games/3H4h3", requests.Details);
+        Assert.Equal("/games/3H4h3/stats", requests.Stats);
         Assert.Equal(
             "/sessions?gameId=3H4h3&from=2025-01-01&to=2026-07-18&sort=date&direction=desc&limit=5&offset=0",
-            requests.FirstSessions);
+            requests.SessionsPage(1));
         Assert.Equal(
-            "/sessions?gameId=3H4h3&from=2025-01-01&to=2026-07-18&sort=date&direction=desc&limit=100&offset=5",
-            requests.SessionsPage(5));
+            "/sessions?gameId=3H4h3&from=2025-01-01&to=2026-07-18&sort=date&direction=desc&limit=5&offset=5",
+            requests.SessionsPage(2));
         Assert.Equal("/games/ignored?gameId=3H4h3", requests.IgnoreStatus);
         Assert.Equal("/games/rating?gameId=3H4h3", requests.Rating);
     }
@@ -41,43 +42,51 @@ public sealed class GameStateTests
     }
 
     [Fact]
-    public void IgnoredSessionsStayRecentButAreExcludedFromMetricsAndCharts()
+    public void RecentPageLoads_MaintainTotalAndPageIndependentOfCharts()
     {
         var state = new GameState();
         Assert.True(state.TryBegin("3H4h3", new DateTimeOffset(2026, 7, 18, 0, 0, 0, TimeSpan.Zero), out _));
-        state.CompleteSessions(new AccountSessionsResponse(null,
+        state.CompleteFirstSessions(new AccountSessionsResponse(null,
         [
-            Session(1, "2026-07-18T08:00:00Z", "2026-07-18T10:00:00Z", ignored: true, capsule: "ignored.jpg"),
-            Session(2, "2026-06-10T08:00:00Z", "2026-06-10T09:30:00Z", ignored: false),
-            Session(3, "2025-01-01T08:00:00Z", "2025-01-01T08:30:00Z", ignored: false),
-        ], 3, 5, 0));
+            Session(1, "2026-07-18T08:00:00Z", "2026-07-18T10:00:00Z", capsule: "recent.jpg"),
+        ], 11, 5, 0));
 
-        Assert.Equal(3, state.RecentSessions.Count);
-        Assert.Equal("ignored.jpg", state.GameImage);
-        Assert.Equal(2, state.StatsSessions.Count);
-        Assert.Equal(7200, state.TotalSeconds);
-        Assert.Equal("Jun 10, 2026", state.LastPlayedLabel);
-        Assert.Equal(0.5, state.YearlyStats.Single(item => item.Year == 2025).Hours);
-        Assert.Equal(1.5, state.YearlyStats.Single(item => item.Year == 2026).Hours);
-        Assert.Equal(1.5, state.MonthlyStats.Single(item => item.Month == 5).Hours);
+        Assert.Equal(3, state.RecentTotalPages);
+        Assert.Single(state.RecentSessions);
+        Assert.Equal("recent.jpg", state.GameImage);
+        Assert.False(state.IsLoading);
+        Assert.True(state.SessionsLoaded);
+
+        state.CompleteSessionsPage(3, new AccountSessionsResponse(null,
+        [
+            Session(11, "2026-07-08T08:00:00Z", "2026-07-08T09:00:00Z"),
+        ], 11, 5, 10));
+
+        Assert.Equal(3, state.RecentPage);
+        Assert.Single(state.RecentSessions);
+        Assert.Equal(3, state.RecentTotalPages);
+        Assert.False(state.IsRecentPageLoading);
     }
 
     [Fact]
-    public void RecentCardsUseFiveItemLocalPagination()
+    public void ChartBuckets_ComeFromServerStatsAndExcludeNothingOnTheClient()
     {
         var state = new GameState();
         Assert.True(state.TryBegin("3H4h3", new DateTimeOffset(2026, 7, 18, 0, 0, 0, TimeSpan.Zero), out _));
-        state.CompleteSessions(new AccountSessionsResponse(null,
-            Enumerable.Range(1, 11)
-                .Select(index => Session(index, $"2026-07-{index:00}T08:00:00Z", $"2026-07-{index:00}T09:00:00Z"))
-                .ToArray(), 11, 5, 0));
+        var stats = new GameStatsResponse(
+            7200,
+            3,
+            new DateTimeOffset(2026, 7, 18, 8, 0, 0, TimeSpan.Zero),
+            new[] { new GameYearStat(2025, 1800), new GameYearStat(2026, 5400) },
+            new[] { new GameMonthStat(2026, 6, 5400), new GameMonthStat(2025, 0, 1800) });
+        state.CompleteStats(stats);
 
-        Assert.Equal(3, state.RecentTotalPages);
-        Assert.Equal([1L, 2, 3, 4, 5], state.RecentPageItems.Select(item => item.SessionId));
-        state.SetRecentPage(3);
-        Assert.Equal([11L], state.RecentPageItems.Select(item => item.SessionId));
-        state.SetRecentPage(99);
-        Assert.Equal(3, state.RecentPage);
+        Assert.Equal(7200, state.TotalSeconds);
+        Assert.Equal("Jul 18, 2026", state.LastPlayedLabel);
+        Assert.Equal(0.5, state.YearlyStats.Single(item => item.Year == 2025).Hours);
+        Assert.Equal(1.5, state.YearlyStats.Single(item => item.Year == 2026).Hours);
+        Assert.Equal(1.5, state.MonthlyStats.Single(item => item.Month == 5).Hours);
+        Assert.Equal(2026, state.ActiveYear);
     }
 
     [Fact]
@@ -129,7 +138,9 @@ public sealed class GameStateTests
         Assert.Contains("[CascadingParameter(Name = \"NormalizedGameHash\")]", code);
         Assert.Contains("GameInitialLoadFlow.RunAsync", code);
         Assert.Contains("SendAsync<GameResponse>(requests.Details", code);
-        Assert.Contains("SendAsync<AccountSessionsResponse>(path", code);
+        Assert.Contains("SendAsync<GameStatsResponse>(requests.Stats", code);
+        Assert.Contains("SendAsync<AccountSessionsResponse>(requests.SessionsPage", code);
+        Assert.Contains("SendAsync<AccountSessionsResponse>(\n                _state.Requests.SessionsPage(page)", code);
         Assert.Contains("SendAsync<GameIgnoreResponse>(requests.IgnoreStatus", code);
         Assert.Contains("SendAsync<GameRatingResponse>(requests.Rating", code);
         Assert.Contains("onAuthFailure: LogoutAsync", code);

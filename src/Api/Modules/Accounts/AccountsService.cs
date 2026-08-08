@@ -1,5 +1,6 @@
 using Api.Shared.Http;
 using Api.Shared.Common;
+using Api.Modules.Games;
 
 namespace Api.Modules.Accounts;
 
@@ -74,5 +75,15 @@ public sealed class AccountsService(AccountsRepository repository)
         var monthly = await ComputeMonthlyStats(userId, accountId, ignoreShortMinutes, ct);
         var yearly = await ComputeYearlyStats(userId, accountId, ignoreShortMinutes, ct);
         return new AccountStatsResponseDto(accountId, monthly, yearly);
+    }
+
+    public async Task<GameStatsResponseDto> ComputeGameStats(
+        long userId,
+        string gameId,
+        CancellationToken ct)
+    {
+        var parsedGameId = GameId.Parse(gameId);
+        var gameIds = await repository.ResolveConnectedGameIds(userId, parsedGameId, ct);
+        return await repository.ComputeGameStats(userId, gameIds, ct);
     }
 }

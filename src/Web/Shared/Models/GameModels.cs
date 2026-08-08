@@ -19,3 +19,11 @@ public sealed record GameIgnoreRequest(string GameId);
 public sealed record GameIgnoreResponse(string GameId, bool Ignored);
 public sealed record GameRatingRequest(string GameId, int? Rating);
 public sealed record GameRatingResponse(string GameId, int? Rating);
+public sealed record GameYearStat(int Year, double Seconds);
+public sealed record GameMonthStat(int Year, int Month, double Seconds);
+public sealed record GameStatsResponse(
+    double TotalSeconds,
+    int SessionCount,
+    DateTimeOffset? LastPlayedAt,
+    IReadOnlyList<GameYearStat> Years,
+    IReadOnlyList<GameMonthStat> Months);

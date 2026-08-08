@@ -128,7 +128,7 @@
                     }
                     else
                     {
-                        @foreach (var session in _state.RecentPageItems)
+                        @foreach (var session in _state.RecentSessions)
                         {
                             <div @key="session.SessionId" class="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-200/50 dark:bg-slate-950/50 p-4">
                                 <div class="flex items-center gap-3">
@@ -157,20 +157,20 @@
                     }
                 </div>
 
-                @if (_state.RecentSessions.Count > 5)
+                @if (_state.RecentSessions.Count > 0 && _state.RecentTotalPages > 1)
                 {
                     <div class="mt-6 flex items-center justify-between text-xs uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">
                         <button type="button"
                                 class="rounded-full border border-slate-200 dark:border-slate-800 px-4 py-2 text-slate-700 dark:text-slate-200 transition hover:border-emerald-400/60 hover:text-emerald-700 dark:hover:text-emerald-200 disabled:cursor-not-allowed disabled:border-slate-200 dark:disabled:border-slate-800 disabled:text-slate-600"
-                                @onclick="() => _state.SetRecentPage(_state.RecentPage - 1)"
-                                disabled="@(_state.RecentPage == 1)">
+                                @onclick="() => LoadSessionsPageAsync(_state.RecentPage - 1)"
+                                disabled="@(_state.RecentPage == 1 || _state.IsRecentPageLoading)">
                             Prev
                         </button>
                         <span>Page @_state.RecentPage of @_state.RecentTotalPages</span>
                         <button type="button"
                                 class="rounded-full border border-slate-200 dark:border-slate-800 px-4 py-2 text-slate-700 dark:text-slate-200 transition hover:border-emerald-400/60 hover:text-emerald-700 dark:hover:text-emerald-200 disabled:cursor-not-allowed disabled:border-slate-200 dark:disabled:border-slate-800 disabled:text-slate-600"
-                                @onclick="() => _state.SetRecentPage(_state.RecentPage + 1)"
-                                disabled="@(_state.RecentPage == _state.RecentTotalPages)">
+                                @onclick="() => LoadSessionsPageAsync(_state.RecentPage + 1)"
+                                disabled="@(_state.RecentPage == _state.RecentTotalPages || _state.IsRecentPageLoading)">
                             Next
                         </button>
                     </div>
@@ -244,7 +244,7 @@
             </div>
             <div class="flex items-center justify-between rounded-xl border border-slate-200 dark:border-slate-800 bg-white/90 dark:bg-slate-900/70 px-4 py-3 sm:block sm:space-y-2 sm:px-5">
                 <p class="text-[11px] uppercase tracking-[0.3em] text-slate-500 dark:text-slate-400">Sessions</p>
-                <p class="text-lg font-semibold text-slate-900 dark:text-white">@_state.StatsSessions.Count</p>
+                <p class="text-lg font-semibold text-slate-900 dark:text-white">@_state.Stats?.SessionCount ?? 0</p>
             </div>
             <div class="flex items-center justify-between rounded-xl border border-slate-200 dark:border-slate-800 bg-white/90 dark:bg-slate-900/70 px-4 py-3 sm:block sm:space-y-2 sm:px-5">
                 <p class="text-[11px] uppercase tracking-[0.3em] text-slate-500 dark:text-slate-400">Last played</p>
@@ -260,11 +260,11 @@
                         <h2 class="mt-2 text-xl font-semibold text-slate-900 dark:text-white">Yearly play time</h2>
                     </div>
                 </div>
-                @if (_state.GameError.Length > 0)
+                @if (_state.StatsError.Length > 0)
                 {
-                    <p class="mt-4 text-xs text-rose-700 dark:text-rose-300">@_state.GameError</p>
+                    <p class="mt-4 text-xs text-rose-700 dark:text-rose-300">@_state.StatsError</p>
                 }
-                else if (_state.IsLoading)
+                else if (_state.Stats is null)
                 {
                     <div class="mt-6 grid grid-cols-[repeat(auto-fit,minmax(16px,1fr))] gap-2">
                         @foreach (var item in Enumerable.Range(0, 12))
@@ -317,11 +317,11 @@
                         </select>
                     </div>
                 </div>
-                @if (_state.GameError.Length > 0)
+                @if (_state.StatsError.Length > 0)
                 {
-                    <p class="mt-4 text-xs text-rose-700 dark:text-rose-300">@_state.GameError</p>
+                    <p class="mt-4 text-xs text-rose-700 dark:text-rose-300">@_state.StatsError</p>
                 }
-                else if (_state.IsLoading)
+                else if (_state.Stats is null)
                 {
                     <div class="mt-6 grid grid-cols-12 gap-2">
                         @foreach (var item in Enumerable.Range(0, 12))
