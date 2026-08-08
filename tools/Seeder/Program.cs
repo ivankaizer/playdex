@@ -1,0 +1,18 @@
+﻿using Api.Shared.Persistence;
+using Microsoft.EntityFrameworkCore;
+using Seeder;
+
+var connectionString = Environment.GetEnvironmentVariable("DATABASE_URL") ?? "postgresql://playdex:playdex@db:5432/playdex";
+
+if (string.IsNullOrEmpty(connectionString))
+{
+    throw new InvalidOperationException("DATABASE_URL is not set");
+}
+
+var options = new DbContextOptionsBuilder<PlaydexDbContext>()
+    .UseNpgsql(PostgresConnectionString.Normalize(connectionString))
+    .AddInterceptors(new TimestampInterceptor(DateTimeOffset.UtcNow))
+    .Options;
+
+var seeder = new DatabaseSeeder(new PlaydexDbContext(options));
+await seeder.Seed();
