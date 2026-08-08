@@ -33,7 +33,7 @@ public sealed class TelegramClientTests
     [Theory]
     [InlineData(HttpStatusCode.OK, "{\"ok\":false,\"description\":\"chat not found\"}")]
     [InlineData(HttpStatusCode.Unauthorized, "{\"ok\":false,\"description\":\"bad token\"}")]
-    public async Task BotApiFailureEnvelope_IsRaised(
+    public async Task BotApiFailureEnvelopeIsRaised(
         HttpStatusCode status,
         string payload)
     {

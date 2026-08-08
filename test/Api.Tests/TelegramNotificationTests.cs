@@ -4,18 +4,18 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.DependencyInjection;
 using Api.Modules.Telegram;
-using Api.Shared.Common;
-using Api.Shared.Persistence;
+using Api.Infrastructure.Common;
+using Api.Infrastructure.Persistence;
 using SkiaSharp;
 using Xunit;
 
 namespace Api.Tests;
 
-[Collection(PostgresCollection.Name)]
+[Collection(PostgresCollectionDefinition.Name)]
 public sealed class TelegramNotificationTests(PostgresFixture postgres)
 {
     [Fact]
-    public async Task Renderer_ProducesDeterministicSizeWebpWithCardContent()
+    public async Task RendererProducesDeterministicSizeWebpWithCardContent()
     {
         var cover = CreateCover();
         var renderer = new TelegramNotificationRenderer(new HttpClient(
@@ -38,7 +38,7 @@ public sealed class TelegramNotificationTests(PostgresFixture postgres)
     }
 
     [Fact]
-    public async Task Golden_SessionStartedCardMatchesExpectedPixelContent()
+    public async Task GoldenSessionStartedCardMatchesExpectedPixelContent()
     {
         var cover = CreateCover();
         var renderer = new TelegramNotificationRenderer(new HttpClient(
@@ -64,7 +64,7 @@ public sealed class TelegramNotificationTests(PostgresFixture postgres)
     }
 
     [Fact]
-    public async Task Golden_SessionEndedCardShowsDuration()
+    public async Task GoldenSessionEndedCardShowsDuration()
     {
         var cover = CreateCover();
         var ended = await RenderWithCover("Hades", "Steam", true, "1h 5m", cover);
@@ -79,7 +79,7 @@ public sealed class TelegramNotificationTests(PostgresFixture postgres)
     }
 
     [Fact]
-    public async Task Golden_ShortTitleRendersAtLargerSize()
+    public async Task GoldenShortTitleRendersAtLargerSize()
     {
         var cover = CreateCover();
         var renderer = new TelegramNotificationRenderer(new HttpClient(
@@ -100,7 +100,7 @@ public sealed class TelegramNotificationTests(PostgresFixture postgres)
     }
 
     [Fact]
-    public async Task Fallback_LongTitleWrapsToTwoLines()
+    public async Task FallbackLongTitleWrapsToTwoLines()
     {
         var cover = CreateCover();
         var renderer = new TelegramNotificationRenderer(new HttpClient(
@@ -123,7 +123,7 @@ public sealed class TelegramNotificationTests(PostgresFixture postgres)
     }
 
     [Fact]
-    public async Task Fallback_CoverRetrievalFailureIsThrown()
+    public async Task FallbackCoverRetrievalFailureIsThrown()
     {
         var renderer = new TelegramNotificationRenderer(new HttpClient(
             new StaticHandler(new HttpResponseMessage(HttpStatusCode.NotFound))));
@@ -136,7 +136,7 @@ public sealed class TelegramNotificationTests(PostgresFixture postgres)
     }
 
     [Fact]
-    public async Task Fallback_InvalidImageDataIsThrown()
+    public async Task FallbackInvalidImageDataIsThrown()
     {
         var renderer = new TelegramNotificationRenderer(new HttpClient(
             new StaticHandler(new HttpResponseMessage(HttpStatusCode.OK)
@@ -152,7 +152,7 @@ public sealed class TelegramNotificationTests(PostgresFixture postgres)
     }
 
     [Fact]
-    public void Fonts_AreBundledAndCanBeLoaded()
+    public void FontsAreBundledAndCanBeLoaded()
     {
         var regular = TelegramNotificationRenderer.GetRegularTypeface();
         var bold = TelegramNotificationRenderer.GetBoldTypeface();
@@ -163,7 +163,7 @@ public sealed class TelegramNotificationTests(PostgresFixture postgres)
     }
 
     [Fact]
-    public async Task Golden_SessionStartedPixelsMatchReference()
+    public async Task GoldenSessionStartedPixelsMatchReference()
     {
         var cover = CreateCover();
         var image1 = await RenderWithCover("Hades", "Steam", false, null, cover);
@@ -190,7 +190,7 @@ public sealed class TelegramNotificationTests(PostgresFixture postgres)
     }
 
     [Fact]
-    public async Task SessionEvents_SendPhotoFallbackToTextSkipUnlinkedAndIsolateDeliveryFailure()
+    public async Task SessionEventsSendPhotoFallbackToTextSkipUnlinkedAndIsolateDeliveryFailure()
     {
         if (!postgres.IsConfigured) return;
 
@@ -274,7 +274,7 @@ public sealed class TelegramNotificationTests(PostgresFixture postgres)
     }
 
     [Fact]
-    public async Task StopCommand_EndsEveryUserSessionAndReturnsArchivedSummary()
+    public async Task StopCommandEndsEveryUserSessionAndReturnsArchivedSummary()
     {
         if (!postgres.IsConfigured) return;
 

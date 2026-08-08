@@ -1,4 +1,5 @@
-using Api.Shared.Common;
+using System.Globalization;
+using Api.Infrastructure.Common;
 using Api.Modules.Games;
 
 namespace Api.Modules.Recap;
@@ -210,7 +211,7 @@ public sealed class RecapService(RecapRepository repository, IGames games)
 
         foreach (var key in sortedDayKeys)
         {
-            var dayDate = DateTime.Parse(key);
+            var dayDate = DateTime.Parse(key, CultureInfo.InvariantCulture);
             if (previousDay is null || (dayDate - previousDay.Value).Days != 1)
                 currentStreak = 1;
             else
@@ -579,10 +580,10 @@ public sealed class RecapService(RecapRepository repository, IGames games)
             row.Platform, null, null);
 
     private static string ToUtcDateKey(DateTimeOffset date) =>
-        date.ToString("yyyy-MM-dd");
+        date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
 
     private static string ToUtcMonthKey(DateTimeOffset date) =>
-        date.ToString("yyyy-MM");
+        date.ToString("yyyy-MM", CultureInfo.InvariantCulture);
 
     private static string? ResolveMappedSource(string? canonicalKey)
     {

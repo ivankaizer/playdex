@@ -1,5 +1,5 @@
 using System.Text.Json;
-using Api.Shared.Http;
+using Api.Infrastructure.Http;
 
 namespace Api.Modules.Playnite;
 
@@ -108,12 +108,12 @@ public static class PlayniteEndpoints
 
         if (string.IsNullOrEmpty(authHeader) ||
             !authHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
-            throw AppProblem.Unauthorized("Missing api key.");
+            throw AppProblemException.Unauthorized("Missing api key.");
 
         var apiKey = authHeader["Bearer ".Length..].Trim();
 
         if (apiKey.Length == 0)
-            throw AppProblem.Unauthorized("Missing api key.");
+            throw AppProblemException.Unauthorized("Missing api key.");
 
         return apiKey;
     }
@@ -132,14 +132,14 @@ public static class PlayniteEndpoints
         }
         catch (JsonException)
         {
-            throw AppProblem.Validation("Invalid JSON body.");
+            throw AppProblemException.Validation("Invalid JSON body.");
         }
     }
 
     private static string ValidateGamePayload(PlayniteSessionRequest? request)
     {
         if (string.IsNullOrWhiteSpace(request?.GameTitle))
-            throw AppProblem.Validation("gameTitle is required.");
+            throw AppProblemException.Validation("gameTitle is required.");
 
         var gameId = request.GameId switch
         {
@@ -148,11 +148,11 @@ public static class PlayniteEndpoints
             _ => null,
         };
         if (string.IsNullOrWhiteSpace(gameId))
-            throw AppProblem.Validation("gameId is required.");
+            throw AppProblemException.Validation("gameId is required.");
 
         if (string.IsNullOrWhiteSpace(request.GameProvider) ||
             !AllowedGameProviders.Contains(request.GameProvider.Trim().ToLowerInvariant()))
-            throw AppProblem.Validation("gameProvider must be steam or unknown.");
+            throw AppProblemException.Validation("gameProvider must be steam or unknown.");
 
         return gameId;
     }

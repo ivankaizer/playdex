@@ -1,7 +1,7 @@
 using Microsoft.EntityFrameworkCore;
-using Api.Shared.Common;
-using Api.Shared.Persistence;
-using Api.Shared.Http;
+using Api.Infrastructure.Common;
+using Api.Infrastructure.Persistence;
+using Api.Infrastructure.Http;
 
 namespace Api.Modules.Manual;
 
@@ -58,7 +58,7 @@ public sealed class ManualRepository(PlaydexDbContext db)
             .FirstOrDefaultAsync(ct);
 
         if (platformId is null)
-            throw AppProblem.NotFound("Manual platform not found.");
+            throw AppProblemException.NotFound("Manual platform not found.");
 
         var existing = await db.PlatformCredentials
             .AsNoTracking()

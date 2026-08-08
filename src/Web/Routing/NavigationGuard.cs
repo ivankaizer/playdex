@@ -1,4 +1,4 @@
-using Web.Shared.Common;
+using Web.Infrastructure.Common;
 
 namespace Web.Routing;
 

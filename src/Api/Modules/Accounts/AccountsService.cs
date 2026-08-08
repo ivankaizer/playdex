@@ -1,5 +1,5 @@
-using Api.Shared.Http;
-using Api.Shared.Common;
+using Api.Infrastructure.Http;
+using Api.Infrastructure.Common;
 using Api.Modules.Games;
 
 namespace Api.Modules.Accounts;
@@ -39,7 +39,7 @@ public sealed class AccountsService(AccountsRepository repository)
         var deleted = await repository.DeleteSession(sessionId, userId, ct);
         if (deleted == 0)
         {
-            throw AppProblem.NotFound("Session not found.");
+            throw AppProblemException.NotFound("Session not found.");
         }
         return new AccountSessionDeleteResponseDto(deleted);
     }

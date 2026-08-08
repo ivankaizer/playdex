@@ -1,7 +1,7 @@
 using System.Globalization;
-using Api.Shared.Common;
+using Api.Infrastructure.Common;
 using Api.Modules.Games;
-using Api.Shared.Http;
+using Api.Infrastructure.Http;
 using Api.Modules.Polling;
 using Microsoft.Extensions.Options;
 
@@ -61,7 +61,7 @@ public sealed class ManualService(
     {
         var title = request.Title?.Trim();
         if (string.IsNullOrWhiteSpace(title))
-            throw AppProblem.Validation("Title is required.");
+            throw AppProblemException.Validation("Title is required.");
 
         return await repository.ExecuteInTransaction(async () =>
         {
@@ -106,11 +106,11 @@ public sealed class ManualService(
                 CultureInfo.InvariantCulture,
                 DateTimeStyles.None,
                 out var parsedDate))
-            throw AppProblem.Validation("date is required.");
+            throw AppProblemException.Validation("date is required.");
         var startTime = new DateTimeOffset(DateTime.SpecifyKind(parsedDate, DateTimeKind.Utc));
 
         if (request.DurationMinutes <= 0)
-            throw AppProblem.Validation("durationMinutes must be a positive integer.");
+            throw AppProblemException.Validation("durationMinutes must be a positive integer.");
 
         var endTime = startTime.AddMinutes(request.DurationMinutes);
         return await repository.ExecuteInTransaction(async () =>
@@ -123,7 +123,7 @@ public sealed class ManualService(
                 gameId = GameId.Parse(request.GameId);
                 var game = await repository.GetGameEntity(gameId, ct);
                 if (game is null)
-                    throw AppProblem.Validation("Game not found for the specified gameId.");
+                    throw AppProblemException.Validation("Game not found for the specified gameId.");
             }
             else
             {
@@ -131,7 +131,7 @@ public sealed class ManualService(
                 var title = request.Title?.Trim();
                 var platformKey = request.PlatformKey?.Trim();
                 if (string.IsNullOrEmpty(igdbId) || string.IsNullOrEmpty(title) || string.IsNullOrEmpty(platformKey))
-                    throw AppProblem.Validation("igdbId, title, and platformKey are required.");
+                    throw AppProblemException.Validation("igdbId, title, and platformKey are required.");
 
                 gameId = await ResolveOrCreateIgdbGame(
                     igdbId,
@@ -155,7 +155,7 @@ public sealed class ManualService(
     {
         var trimmed = query.Trim();
         if (trimmed.Length == 0)
-            throw AppProblem.Validation("query is required.");
+            throw AppProblemException.Validation("query is required.");
 
         var opts = igdbOptions.Value;
         var igdbAvailable = !string.IsNullOrWhiteSpace(opts.ClientId) &&
@@ -201,14 +201,14 @@ public sealed class ManualService(
             {
                 gameId = GameId.Parse(request.GameId);
                 if (await repository.GetGameEntity(gameId, ct) is null)
-                    throw AppProblem.Validation("Game not found for the specified gameId.");
+                    throw AppProblemException.Validation("Game not found for the specified gameId.");
             }
             else
             {
                 var igdbId = request.IgdbId?.Trim();
                 var title = request.Title?.Trim();
                 if (string.IsNullOrEmpty(igdbId) || string.IsNullOrEmpty(title))
-                    throw AppProblem.Validation("igdbId and title are required.");
+                    throw AppProblemException.Validation("igdbId and title are required.");
 
                 var platformKey = request.PlatformKey?.Trim();
                 if (string.IsNullOrEmpty(platformKey) && request.PlatformId.HasValue)
@@ -222,7 +222,7 @@ public sealed class ManualService(
             }
 
             var updated = await repository.MapManualInput(userId, inputId, gameId, ct);
-            if (updated is null) throw AppProblem.NotFound("Manual input not found.");
+            if (updated is null) throw AppProblemException.NotFound("Manual input not found.");
             return new ManualMappingResponseDto(updated.Id, GameId.Encode(gameId));
         }, ct);
     }
@@ -234,7 +234,7 @@ public sealed class ManualService(
 
         var platformId = await repository.GetPlatformIdByKey(platformKey, ct);
         if (platformId is null)
-            throw AppProblem.Validation($"Platform '{platformKey}' not found.");
+            throw AppProblemException.Validation($"Platform '{platformKey}' not found.");
 
         return await repository.UpsertGame(title, canonicalKey, null, platformId.Value, capsuleUrl, ct);
     }
@@ -248,7 +248,7 @@ public sealed class ManualService(
     {
         var platformId = await repository.GetPlatformIdByKey(platformKey, ct)
             ?? await repository.GetPlatformIdByKey("unknown", ct);
-        if (!platformId.HasValue) throw AppProblem.Validation($"Platform '{platformKey}' not found.");
+        if (!platformId.HasValue) throw AppProblemException.Validation($"Platform '{platformKey}' not found.");
 
         return await repository.UpsertGame(
             title,

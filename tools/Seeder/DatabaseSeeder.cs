@@ -1,5 +1,6 @@
+using System.Globalization;
 using System.Text.RegularExpressions;
-using Api.Shared.Persistence;
+using Api.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 
 namespace Seeder;
@@ -193,7 +194,7 @@ public class DatabaseSeeder(PlaydexDbContext db)
         {
             Title = title,
             CanonicalKey = $"{platform.Key}:{externalId}",
-            ExternalId = externalId.ToString(),
+            ExternalId = externalId.ToString(CultureInfo.InvariantCulture),
             PlatformId = platform.Id,
             CapsuleUrl = imageUrl
         };

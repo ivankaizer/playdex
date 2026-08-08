@@ -1,7 +1,7 @@
 using System.Security.Claims;
 using System.Text.Json;
-using Api.Shared.Auth;
-using Api.Shared.Http;
+using Api.Infrastructure.Auth;
+using Api.Infrastructure.Http;
 
 namespace Api.Modules.Providers;
 
@@ -78,7 +78,7 @@ public static class ProvidersEndpoints
         if (!payload.TryGetProperty(name, out var property)) return (false, null);
         if (property.ValueKind == JsonValueKind.Null) return (true, null);
         if (property.ValueKind != JsonValueKind.String)
-            throw AppProblem.Validation($"{name} must be a string or null.");
+            throw AppProblemException.Validation($"{name} must be a string or null.");
         var value = property.GetString()?.Trim();
         return (true, string.IsNullOrEmpty(value) ? null : value);
     }
@@ -86,7 +86,7 @@ public static class ProvidersEndpoints
     private static long ParseProviderId(string value)
     {
         if (!long.TryParse(value, out var id) || id <= 0)
-            throw AppProblem.Validation("providerId must be a positive integer.");
+            throw AppProblemException.Validation("providerId must be a positive integer.");
         return id;
     }
 }

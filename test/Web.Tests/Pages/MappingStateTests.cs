@@ -1,4 +1,4 @@
-using Web.Shared.Models;
+using Web.Infrastructure.Models;
 using Web.Modules.Mapping;
 using Xunit;
 
@@ -7,7 +7,7 @@ namespace Web.Tests.Pages;
 public sealed class MappingStateTests
 {
     [Fact]
-    public void GameSearches_AreIndependentAndSelectingDoesNotBindLaterQueryEdits()
+    public void GameSearchesAreIndependentAndSelectingDoesNotBindLaterQueryEdits()
     {
         var state = new MappingState();
         var primary = Game("42", "Hades II");
@@ -104,7 +104,7 @@ public sealed class MappingStateTests
     }
 
     [Fact]
-    public void MappingPage_WiresLiteralResponsiveEditorsRequestsAndCancellation()
+    public void MappingPageWiresLiteralResponsiveEditorsRequestsAndCancellation()
     {
         var root = FindWebRoot();
         var markupPath = Path.Combine(root, "Modules", "Mapping", "Mapping.razor");

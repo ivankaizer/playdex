@@ -1,8 +1,8 @@
-using Api.Shared.Common;
+using Api.Infrastructure.Common;
 
 namespace Api.Modules.Manual;
 
-public sealed class ManualSessionHandler(ManualService manualService) : IEventHandler<StartSessionRequested>
+public sealed class ManualSessionHandler(ManualService manualService) : IEventSubscriber<StartSessionRequested>
 {
     public async Task Handle(StartSessionRequested @event, CancellationToken ct)
     {
@@ -11,7 +11,7 @@ public sealed class ManualSessionHandler(ManualService manualService) : IEventHa
     }
 }
 
-public sealed class ManualStopHandler(ManualService manualService) : IEventHandler<StopSessionRequested>
+public sealed class ManualStopHandler(ManualService manualService) : IEventSubscriber<StopSessionRequested>
 {
     public async Task Handle(StopSessionRequested @event, CancellationToken ct)
     {

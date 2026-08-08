@@ -4,16 +4,16 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
-using Api.Shared.Persistence;
+using Api.Infrastructure.Persistence;
 using Xunit;
 
 namespace Api.Tests;
 
-[Collection(PostgresCollection.Name)]
+[Collection(PostgresCollectionDefinition.Name)]
 public sealed class GameStatsCompatibilityTests(PostgresFixture postgres)
 {
     [Fact]
-    public async Task GameStats_ReturnsYearlyAndMonthlyBucketsScopedToTheGame()
+    public async Task GameStatsReturnsYearlyAndMonthlyBucketsScopedToTheGame()
     {
         if (!postgres.IsConfigured) return;
 
@@ -101,7 +101,7 @@ public sealed class GameStatsCompatibilityTests(PostgresFixture postgres)
     }
 
     [Fact]
-    public async Task GameStats_ReturnsEmptyBucketsForAGameWithNoSessions()
+    public async Task GameStatsReturnsEmptyBucketsForAGameWithNoSessions()
     {
         if (!postgres.IsConfigured) return;
 

@@ -1,7 +1,7 @@
 using Microsoft.AspNetCore.Components;
-using Web.Shared.Http;
-using Web.Shared.Auth;
-using Web.Shared.Browser;
+using Web.Infrastructure.Http;
+using Web.Infrastructure.Auth;
+using Web.Infrastructure.Browser;
 
 namespace Web.Modules.Home;
 
@@ -194,6 +194,7 @@ public partial class Home : ComponentBase, IDisposable
     {
         _lifetime.Cancel();
         _lifetime.Dispose();
+        GC.SuppressFinalize(this);
     }
 
     private sealed record PreviewCard(string GameId, string Title, string Hours, string ArtClass);

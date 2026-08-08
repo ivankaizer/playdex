@@ -1,5 +1,5 @@
 using System.Security.Claims;
-using Api.Shared.Auth;
+using Api.Infrastructure.Auth;
 
 namespace Api.Modules.Accounts;
 
@@ -138,7 +138,7 @@ public static class AccountsEndpoints
     {
         var value = limit ?? 10;
         if (value <= 0)
-            throw Api.Shared.Http.AppProblem.Validation(
+            throw Api.Infrastructure.Http.AppProblemException.Validation(
                 "limit and offset must be valid numbers.");
         return Math.Min(value, 100);
     }
@@ -147,7 +147,7 @@ public static class AccountsEndpoints
     {
         var value = offset ?? 0;
         if (value < 0)
-            throw Api.Shared.Http.AppProblem.Validation(
+            throw Api.Infrastructure.Http.AppProblemException.Validation(
                 "limit and offset must be valid numbers.");
         return value;
     }
@@ -155,7 +155,7 @@ public static class AccountsEndpoints
     private static long ParseId(string value, string name)
     {
         if (!long.TryParse(value, out var id))
-            throw Api.Shared.Http.AppProblem.Validation($"{name} must be a number.");
+            throw Api.Infrastructure.Http.AppProblemException.Validation($"{name} must be a number.");
         return id;
     }
 }

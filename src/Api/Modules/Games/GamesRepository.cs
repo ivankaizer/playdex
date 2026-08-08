@@ -1,6 +1,6 @@
 using Microsoft.EntityFrameworkCore;
-using Api.Shared.Common;
-using Api.Shared.Persistence;
+using Api.Infrastructure.Common;
+using Api.Infrastructure.Persistence;
 
 namespace Api.Modules.Games;
 

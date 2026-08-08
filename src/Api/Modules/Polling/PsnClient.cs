@@ -4,13 +4,18 @@ using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using Api.Shared.Persistence;
+using Api.Infrastructure.Persistence;
 using Microsoft.Extensions.Options;
 
 namespace Api.Modules.Polling;
 
 public sealed class PsnClient(HttpClient httpClient, IOptions<PsnOptions> options) : IProviderClient
 {
+    private static readonly JsonSerializerOptions TokenClaimsOptions = new()
+    {
+        PropertyNameCaseInsensitive = true,
+    };
+
     public string PlatformKey => "psn";
 
     public async Task<ProviderPollResult?> GetCurrentlyPlaying(PlatformCredential credential, CancellationToken ct)
@@ -146,7 +151,7 @@ public sealed class PsnClient(HttpClient httpClient, IOptions<PsnOptions> option
         try
         {
             var payload = Encoding.UTF8.GetString(Convert.FromBase64String(padded));
-            var claims = JsonSerializer.Deserialize<PsnTokenClaims>(payload, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            var claims = JsonSerializer.Deserialize<PsnTokenClaims>(payload, TokenClaimsOptions);
             return claims?.AccountId;
         }
         catch

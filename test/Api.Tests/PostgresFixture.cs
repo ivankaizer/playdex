@@ -1,11 +1,11 @@
 using Npgsql;
-using Api.Shared.Persistence;
+using Api.Infrastructure.Persistence;
 using Xunit;
 
 namespace Api.Tests;
 
 [CollectionDefinition(Name, DisableParallelization = true)]
-public sealed class PostgresCollection : ICollectionFixture<PostgresFixture>
+public sealed class PostgresCollectionDefinition : ICollectionFixture<PostgresFixture>
 {
     public const string Name = "PostgreSQL integration";
 }

@@ -1,6 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
-using Api.Shared.Persistence;
+using Api.Infrastructure.Persistence;
 
 namespace Api.Modules.Admin;
 
@@ -298,7 +298,7 @@ public sealed class AdminRepository(PlaydexDbContext db)
             return (rawId, false);
         }
 
-        var decoded = Api.Shared.Common.GameId.Decode(value);
+        var decoded = Api.Infrastructure.Common.GameId.Decode(value);
         if (decoded.HasValue)
         {
             return (decoded, true);

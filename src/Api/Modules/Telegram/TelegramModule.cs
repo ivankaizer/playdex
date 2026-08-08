@@ -15,11 +15,11 @@ public static class TelegramModule
         services.AddHttpClient<TelegramNotificationRenderer>(client =>
             client.Timeout = TimeSpan.FromSeconds(15));
         services.AddScoped<TelegramEventHandlers>();
-        services.AddScoped<Api.Shared.Common.IEventHandler<Api.Shared.Common.SessionStarted>>(
+        services.AddScoped<Api.Infrastructure.Common.IEventSubscriber<Api.Infrastructure.Common.SessionStarted>>(
             services => services.GetRequiredService<TelegramEventHandlers>());
-        services.AddScoped<Api.Shared.Common.IEventHandler<Api.Shared.Common.SessionEnded>>(
+        services.AddScoped<Api.Infrastructure.Common.IEventSubscriber<Api.Infrastructure.Common.SessionEnded>>(
             services => services.GetRequiredService<TelegramEventHandlers>());
-        services.AddScoped<Api.Shared.Common.IEventHandler<Api.Shared.Common.PollFailed>>(
+        services.AddScoped<Api.Infrastructure.Common.IEventSubscriber<Api.Infrastructure.Common.PollFailed>>(
             services => services.GetRequiredService<TelegramEventHandlers>());
         services.AddHostedService<TelegramBackgroundService>();
         return services;

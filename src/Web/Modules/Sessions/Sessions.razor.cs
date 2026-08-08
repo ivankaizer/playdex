@@ -1,10 +1,10 @@
 using System.Globalization;
 using Microsoft.AspNetCore.Components;
-using Web.Shared.Http;
-using Web.Shared.Browser;
-using Web.Shared.Models;
+using Web.Infrastructure.Http;
+using Web.Infrastructure.Browser;
+using Web.Infrastructure.Models;
 using Web.Routing;
-using Web.Shared.Common;
+using Web.Infrastructure.Common;
 
 namespace Web.Modules.Sessions;
 
@@ -46,7 +46,7 @@ internal sealed class SessionsState
         To = range.To.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
     }
 
-    public int Limit => 10;
+    public static int Limit => 10;
     public int Offset { get; private set; }
     public string Preset { get; private set; } = "this-week";
     public string Title { get; private set; } = string.Empty;
@@ -236,7 +236,7 @@ internal sealed class SessionsState
             Formatters.FormatDateLabel(session.StartedAt),
             Formatters.FormatDuration(
                 SessionDates.GetDurationSeconds(session.StartedAt, session.EndedAt, now),
-                DurationFormat.Short),
+                DurationFormat.Compact),
             session.CapsuleUrl,
             session.Ignored)).ToArray();
 
@@ -389,19 +389,19 @@ public partial class Sessions : ComponentBase, IDisposable
 
     private async Task SetPageAsync(int page)
     {
-        _state.SetOffset((page - 1) * _state.Limit);
+        _state.SetOffset((page - 1) * SessionsState.Limit);
         await LoadListAsync();
     }
 
     private async Task PreviousPageAsync()
     {
-        _state.SetOffset(_state.Offset - _state.Limit);
+        _state.SetOffset(_state.Offset - SessionsState.Limit);
         await LoadListAsync();
     }
 
     private async Task NextPageAsync()
     {
-        _state.SetOffset(_state.Offset + _state.Limit);
+        _state.SetOffset(_state.Offset + SessionsState.Limit);
         await LoadListAsync();
     }
 
@@ -540,5 +540,6 @@ public partial class Sessions : ComponentBase, IDisposable
         _listRequest?.Dispose();
         _statsRequest?.Dispose();
         _lifetime.Dispose();
+        GC.SuppressFinalize(this);
     }
 }

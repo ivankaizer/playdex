@@ -1,8 +1,8 @@
 using System.Globalization;
 using Microsoft.AspNetCore.Components;
-using Web.Shared.Http;
+using Web.Infrastructure.Http;
 using Web.Modules.Settings;
-using Web.Shared.Common;
+using Web.Infrastructure.Common;
 
 namespace Web.Modules.Settings;
 
@@ -467,5 +467,6 @@ public partial class Settings : ComponentBase, IDisposable
         _providersRequest?.Dispose();
         _settingsRequest?.Dispose();
         _lifetime.Dispose();
+        GC.SuppressFinalize(this);
     }
 }

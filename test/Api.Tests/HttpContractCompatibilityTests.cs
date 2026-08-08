@@ -5,12 +5,12 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
-using Api.Shared.Persistence;
+using Api.Infrastructure.Persistence;
 using Xunit;
 
 namespace Api.Tests;
 
-[Collection(PostgresCollection.Name)]
+[Collection(PostgresCollectionDefinition.Name)]
 public sealed class HttpContractCompatibilityTests(PostgresFixture postgres)
 {
     [Fact]

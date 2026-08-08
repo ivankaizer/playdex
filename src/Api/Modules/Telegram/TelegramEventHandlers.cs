@@ -1,16 +1,26 @@
-using Api.Shared.Common;
+using Microsoft.Extensions.Logging;
+using Api.Infrastructure.Common;
 
 namespace Api.Modules.Telegram;
 
-public sealed class TelegramEventHandlers(
+public sealed partial class TelegramEventHandlers(
     TelegramRepository repository,
     TelegramClient client,
     TelegramNotificationRenderer renderer,
     ILogger<TelegramEventHandlers> logger) :
-    IEventHandler<SessionStarted>,
-    IEventHandler<SessionEnded>,
-    IEventHandler<PollFailed>
+    IEventSubscriber<SessionStarted>,
+    IEventSubscriber<SessionEnded>,
+    IEventSubscriber<PollFailed>
 {
+    [LoggerMessage(Level = LogLevel.Error, Message = "Telegram poll-failure notification failed for credential {CredentialId}")]
+    private partial void LogPollFailureNotificationFailed(Exception exception, long credentialId);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Telegram card rendering or photo delivery failed; using text fallback")]
+    private partial void LogCardRenderingFailed(Exception exception);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Telegram text fallback failed")]
+    private partial void LogTextFallbackFailed(Exception exception);
+
     public async Task Handle(SessionStarted @event, CancellationToken ct)
     {
         if (!client.IsEnabled) return;
@@ -57,9 +67,7 @@ public sealed class TelegramEventHandlers(
         }
         catch (Exception ex)
         {
-            logger.LogError(ex,
-                "Telegram poll-failure notification failed for credential {CredentialId}",
-                @event.CredentialId);
+            LogPollFailureNotificationFailed(ex, @event.CredentialId);
         }
     }
 
@@ -81,8 +89,7 @@ public sealed class TelegramEventHandlers(
             }
             catch (Exception ex)
             {
-                logger.LogWarning(ex,
-                    "Telegram card rendering or photo delivery failed; using text fallback");
+                LogCardRenderingFailed(ex);
             }
         }
 
@@ -92,7 +99,7 @@ public sealed class TelegramEventHandlers(
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Telegram text fallback failed");
+            LogTextFallbackFailed(ex);
         }
     }
 

@@ -1,5 +1,5 @@
 using System.Security.Cryptography;
-using Api.Shared.Http;
+using Api.Infrastructure.Http;
 
 namespace Api.Modules.Providers;
 
@@ -15,13 +15,13 @@ public sealed class ProvidersService(ProvidersRepository repository)
     {
         if (request.Status is not "active" and not "paused")
         {
-            throw AppProblem.Validation("Status must be 'active' or 'paused'.");
+            throw AppProblemException.Validation("Status must be 'active' or 'paused'.");
         }
 
         var provider = await repository.UpdateProviderStatus(userId, request.ProviderId, request.Status, ct);
         if (provider is null)
         {
-            throw AppProblem.NotFound("Provider not found.");
+            throw AppProblemException.NotFound("Provider not found.");
         }
 
         return new ProviderUpdateResponseDto(ToResponse(provider));
@@ -42,12 +42,12 @@ public sealed class ProvidersService(ProvidersRepository repository)
     {
         if (!changes.ApiKeyChanged && !changes.AccountIdChanged)
         {
-            throw AppProblem.Validation("At least one field must be provided.");
+            throw AppProblemException.Validation("At least one field must be provided.");
         }
 
         if (changes.ApiKeyChanged && await repository.IsApiKeyLocked(userId, providerId, ct))
         {
-            throw AppProblem.Validation("API key is managed by an administrator.");
+            throw AppProblemException.Validation("API key is managed by an administrator.");
         }
 
         var provider = await repository.UpdateCredential(
@@ -60,7 +60,7 @@ public sealed class ProvidersService(ProvidersRepository repository)
             ct);
         if (provider is null)
         {
-            throw AppProblem.NotFound("Provider not found.");
+            throw AppProblemException.NotFound("Provider not found.");
         }
 
         return new ProviderCredentialUpdateResponseDto(ToResponse(provider));

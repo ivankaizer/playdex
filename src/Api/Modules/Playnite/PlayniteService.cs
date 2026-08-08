@@ -1,16 +1,20 @@
 using Microsoft.EntityFrameworkCore;
-using Api.Shared.Common;
-using Api.Shared.Persistence;
+using Microsoft.Extensions.Logging;
+using Api.Infrastructure.Common;
+using Api.Infrastructure.Persistence;
 
 namespace Api.Modules.Playnite;
 
-public sealed class PlayniteService(
+public sealed partial class PlayniteService(
     PlayniteRepository repository,
     PlaydexDbContext db,
     EventBus eventBus,
     ILogger<PlayniteService> logger)
 {
     private const int PingTimeoutMinutes = 3;
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Playnite event handler failed for {EventType}")]
+    private partial void LogPlayniteEventHandlerFailed(Exception exception, string eventType);
 
     public async Task<PlayniteSessionResponseDto?> RecordSession(
         string apiKey, int durationInSeconds, string gameTitle, string gameId, string gameProvider,
@@ -201,7 +205,7 @@ public sealed class PlayniteService(
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Playnite event handler failed for {EventType}", typeof(T).Name);
+            LogPlayniteEventHandlerFailed(ex, typeof(T).Name);
         }
     }
 }

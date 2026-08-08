@@ -1,9 +1,9 @@
 using System.Globalization;
 using Microsoft.AspNetCore.Components;
-using Web.Shared.Http;
-using Web.Shared.Auth;
-using Web.Shared.Models;
-using Web.Shared.Common;
+using Web.Infrastructure.Http;
+using Web.Infrastructure.Auth;
+using Web.Infrastructure.Models;
+using Web.Infrastructure.Common;
 
 namespace Web.Modules.Games;
 
@@ -18,7 +18,7 @@ internal sealed record GameRequests(
 {
     public static GameRequests For(string gameHash, DateTimeOffset now)
     {
-        var gameId = Web.Shared.Common.GameHash.DecodeGameHash(gameHash)
+        var gameId = Web.Infrastructure.Common.GameHash.DecodeGameHash(gameHash)
             ?? throw new ArgumentException("Invalid game hash.", nameof(gameHash));
         var to = Formatters.FormatUtcDateInput(now);
         var sessionsBase = $"/sessions?gameId={gameHash}&from=2025-01-01&to={to}&sort=date&direction=desc";
@@ -124,7 +124,7 @@ internal sealed class GameState
         IsIgnoreSaving = false;
         IsRatingSaving = false;
 
-        if (string.IsNullOrWhiteSpace(gameHash) || !Web.Shared.Common.GameHash.DecodeGameHash(gameHash).HasValue)
+        if (string.IsNullOrWhiteSpace(gameHash) || !Web.Infrastructure.Common.GameHash.DecodeGameHash(gameHash).HasValue)
         {
             Requests = null;
             requests = null;
@@ -275,7 +275,7 @@ internal sealed class GameState
 
     public void SetSelectedYear(int year) => SelectedYear = year;
 
-    private IReadOnlyList<GameChartBucket> BuildYearlyStats()
+    private GameChartBucket[] BuildYearlyStats()
     {
         if (Stats is null) return [];
         var endYear = Math.Max(AllTimeStartYear, _now.UtcDateTime.Year);
@@ -294,7 +294,7 @@ internal sealed class GameState
             item.Value)).ToArray();
     }
 
-    private IReadOnlyList<GameChartBucket> BuildMonthlyStats()
+    private GameChartBucket[] BuildMonthlyStats()
     {
         var year = ActiveYear;
         var totals = new double[12];
@@ -575,5 +575,6 @@ public partial class Game : ComponentBase, IDisposable
         _pageRequest?.Dispose();
         _lifetime.Cancel();
         _lifetime.Dispose();
+        GC.SuppressFinalize(this);
     }
 }

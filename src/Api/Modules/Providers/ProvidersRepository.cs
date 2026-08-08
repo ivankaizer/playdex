@@ -1,5 +1,5 @@
 using Microsoft.EntityFrameworkCore;
-using Api.Shared.Persistence;
+using Api.Infrastructure.Persistence;
 
 namespace Api.Modules.Providers;
 

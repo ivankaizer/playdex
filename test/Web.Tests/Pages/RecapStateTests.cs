@@ -18,7 +18,7 @@ public sealed class RecapStateTests
     [InlineData(double.NegativeInfinity, 1, "0")]
     [InlineData(0.1, 100, "0.1")]
     [InlineData(1e21, 1, "1e+21")]
-    public void AverageFormatter_MatchesNumberToFixedThenNumberStringification(
+    public void AverageFormatterMatchesNumberToFixedThenNumberStringification(
         double value,
         int decimals,
         string expected)
@@ -32,7 +32,7 @@ public sealed class RecapStateTests
     }
 
     [Fact]
-    public void YearsResolution_PreservesServerOrderThenRequestsAllTimeOnce()
+    public void YearsResolutionPreservesServerOrderThenRequestsAllTimeOnce()
     {
         var state = new RecapState();
 
@@ -49,7 +49,7 @@ public sealed class RecapStateTests
     }
 
     [Fact]
-    public void CompleteQueryRange_SelectsCustomAndBuildsTheExplicitReactUrl()
+    public void CompleteQueryRangeSelectsCustomAndBuildsTheExplicitReactUrl()
     {
         var state = new RecapState();
 
@@ -63,7 +63,7 @@ public sealed class RecapStateTests
     }
 
     [Fact]
-    public void DuplicateRangeKeys_UseTheFirstValueLikeUrlSearchParamsGet()
+    public void DuplicateRangeKeysUseTheFirstValueLikeUrlSearchParamsGet()
     {
         var state = new RecapState();
 
@@ -76,7 +76,7 @@ public sealed class RecapStateTests
     }
 
     [Fact]
-    public void OneSidedQuery_IsIgnoredAndRearmsTheAllTimeRequest()
+    public void OneSidedQueryIsIgnoredAndRearmsTheAllTimeRequest()
     {
         var state = new RecapState();
         state.CompleteYears(new RecapYearsResponse([2026]));
@@ -92,7 +92,7 @@ public sealed class RecapStateTests
     }
 
     [Fact]
-    public async Task InitialCustomLoad_RouteBecomesOneSidedWhileYearsPending_LoadsOneFallbackAfterYearsSettle()
+    public async Task InitialCustomLoadRouteBecomesOneSidedWhileYearsPendingLoadsOneFallbackAfterYearsSettle()
     {
         var state = new RecapState();
         var requests = new List<string>();
@@ -128,7 +128,7 @@ public sealed class RecapStateTests
     }
 
     [Fact]
-    public async Task InitialCustomLoad_RouteLosesRange_StartsFallbackBeforeStaleCustomCompletes()
+    public async Task InitialCustomLoadRouteLosesRangeStartsFallbackBeforeStaleCustomCompletes()
     {
         var state = new RecapState();
         var requests = new List<string>();
@@ -174,7 +174,7 @@ public sealed class RecapStateTests
     }
 
     [Fact]
-    public async Task InitialCustomLoad_CustomRemainsActive_DoesNotDoubleLoadAfterYearsSettle()
+    public async Task InitialCustomLoadCustomRemainsActiveDoesNotDoubleLoadAfterYearsSettle()
     {
         var state = new RecapState();
         var requests = new List<string>();
@@ -205,7 +205,7 @@ public sealed class RecapStateTests
     }
 
     [Fact]
-    public void YearTabs_PreserveServerOrderAndLoadWithoutChangingLocation()
+    public void YearTabsPreserveServerOrderAndLoadWithoutChangingLocation()
     {
         var state = new RecapState();
         state.CompleteYears(new RecapYearsResponse([2024, 2026, 2025]));
@@ -221,7 +221,7 @@ public sealed class RecapStateTests
     }
 
     [Fact]
-    public void CustomRange_RequiresBothBoundsForTabLoadAndBrowserNavigation()
+    public void CustomRangeRequiresBothBoundsForTabLoadAndBrowserNavigation()
     {
         var state = new RecapState();
         Assert.Null(state.SelectTab("custom"));
@@ -237,7 +237,7 @@ public sealed class RecapStateTests
     }
 
     [Fact]
-    public void RecapLoad_PreservesOldContentWhileLoadingAndClearsItOnFailure()
+    public void RecapLoadPreservesOldContentWhileLoadingAndClearsItOnFailure()
     {
         var state = new RecapState();
         var existing = Recap(totalSessions: 7);
@@ -264,7 +264,7 @@ public sealed class RecapStateTests
     }
 
     [Fact]
-    public void YearsFailure_StillResolvesAndAllowsTheDefaultRecapLoad()
+    public void YearsFailureStillResolvesAndAllowsTheDefaultRecapLoad()
     {
         var state = new RecapState();
 
@@ -280,7 +280,7 @@ public sealed class RecapStateTests
     }
 
     [Fact]
-    public void WeekdayChart_UsesTheSameInlineSvgCoordinatesAsReact()
+    public void WeekdayChartUsesTheSameInlineSvgCoordinatesAsReact()
     {
         var chart = RecapWeekdayChart.Build(
             [new WeekdayStat(1, 1), new WeekdayStat(2, 4), new WeekdayStat(3, 2)]);
@@ -293,7 +293,7 @@ public sealed class RecapStateTests
     }
 
     [Fact]
-    public void RecapPage_WiresQueryStateInlineSectionsAndGameNavigationInReactOrder()
+    public void RecapPageWiresQueryStateInlineSectionsAndGameNavigationInReactOrder()
     {
         var root = FindWebRoot();
         var markupPath = Path.Combine(root, "Modules", "Recap", "Recap.razor");

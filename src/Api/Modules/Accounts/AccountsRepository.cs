@@ -1,7 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
-using Api.Shared.Common;
-using Api.Shared.Persistence;
+using Api.Infrastructure.Common;
+using Api.Infrastructure.Persistence;
 using Api.Modules.Games;
 
 namespace Api.Modules.Accounts;

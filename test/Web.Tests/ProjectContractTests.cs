@@ -7,7 +7,7 @@ public sealed class ProjectContractTests
     private static readonly string WebRoot = FindWebRoot();
 
     [Fact]
-    public void Index_HostsBlazorWithTheExistingThemeContract()
+    public void IndexHostsBlazorWithTheExistingThemeContract()
     {
         var index = ReadRequiredFile("wwwroot/index.html");
         var headStart = index.IndexOf("<head>", StringComparison.Ordinal);
@@ -23,7 +23,7 @@ public sealed class ProjectContractTests
     }
 
     [Fact]
-    public void Index_BootstrapsThemeBeforeFirstPaintResources()
+    public void IndexBootstrapsThemeBeforeFirstPaintResources()
     {
         var index = ReadRequiredFile("wwwroot/index.html");
         var themeBootstrap = index.IndexOf("playdex.theme", StringComparison.Ordinal);
@@ -40,7 +40,7 @@ public sealed class ProjectContractTests
     }
 
     [Fact]
-    public void Index_DefinesLightAndDarkLoadingColors()
+    public void IndexDefinesLightAndDarkLoadingColors()
     {
         var index = ReadRequiredFile("wwwroot/index.html");
         var lightStart = index.IndexOf("html[data-theme=\"light\"]", StringComparison.Ordinal);
@@ -63,7 +63,7 @@ public sealed class ProjectContractTests
     }
 
     [Fact]
-    public void Index_AppliesFallbackThemeWhenStorageIsUnavailable()
+    public void IndexAppliesFallbackThemeWhenStorageIsUnavailable()
     {
         var index = ReadRequiredFile("wwwroot/index.html");
         var storageRead = index.IndexOf("localStorage.getItem", StringComparison.Ordinal);
@@ -89,13 +89,13 @@ public sealed class ProjectContractTests
     }
 
     [Fact]
-    public void App_UsesTheNativeBlazorRouter()
+    public void AppUsesTheNativeBlazorRouter()
     {
         Assert.Contains("<Router", ReadRequiredFile("App.razor"));
     }
 
     [Fact]
-    public void Project_IsBlazorOnlyAndTestsLiveSeparately()
+    public void ProjectIsBlazorOnlyAndTestsLiveSeparately()
     {
         var project = ReadRequiredFile("Web.csproj");
 
@@ -104,7 +104,7 @@ public sealed class ProjectContractTests
     }
 
     [Fact]
-    public void RetiredReactRuntimeAndBuildArtifacts_AreAbsent()
+    public void RetiredReactRuntimeAndBuildArtifactsAreAbsent()
     {
         var retiredPaths = new[]
         {

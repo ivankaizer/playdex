@@ -6,7 +6,7 @@ namespace Web.Tests.Pages;
 public sealed class SettingsStateTests
 {
     [Fact]
-    public void InitialLoads_BeginInReactOrderAndRemainIndependent()
+    public void InitialLoadsBeginInReactOrderAndRemainIndependent()
     {
         var state = new SettingsState();
 
@@ -24,7 +24,7 @@ public sealed class SettingsStateTests
     }
 
     [Fact]
-    public async Task InitialFlow_LaunchesProvidersThenSettingsWithoutWaitingForEither()
+    public async Task InitialFlowLaunchesProvidersThenSettingsWithoutWaitingForEither()
     {
         var calls = new List<string>();
         var providers = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -51,7 +51,7 @@ public sealed class SettingsStateTests
     }
 
     [Fact]
-    public void Loads_RetainOldValuesWhileLoadingAndFailIndependently()
+    public void LoadsRetainOldValuesWhileLoadingAndFailIndependently()
     {
         var state = new SettingsState();
         var provider = Provider(1, "steam", "active");
@@ -78,7 +78,7 @@ public sealed class SettingsStateTests
     }
 
     [Fact]
-    public void VisibleProviders_HideOnlyExactLowercaseManualAndLocalAndKeepOrder()
+    public void VisibleProvidersHideOnlyExactLowercaseManualAndLocalAndKeepOrder()
     {
         var state = new SettingsState();
         state.CompleteProvidersLoad(new ProvidersResponse([
@@ -98,7 +98,7 @@ public sealed class SettingsStateTests
     [InlineData("0", 0)]
     [InlineData("1.0", 1)]
     [InlineData("1e2", 100)]
-    public void SaveValidation_MatchesJavaScriptNumberIntegerCases(string draft, int expected)
+    public void SaveValidationMatchesJavaScriptNumberIntegerCases(string draft, int expected)
     {
         var state = new SettingsState();
         state.SetIgnoreShortSessionsMinutes(draft);
@@ -116,7 +116,7 @@ public sealed class SettingsStateTests
     [InlineData("1.5")]
     [InlineData("nope")]
     [InlineData("Infinity")]
-    public void SaveValidation_RejectsNonIntegerOrNegativeNumbers(string draft)
+    public void SaveValidationRejectsNonIntegerOrNegativeNumbers(string draft)
     {
         var state = new SettingsState();
         state.SetIgnoreShortSessionsMinutes(draft);
@@ -126,7 +126,7 @@ public sealed class SettingsStateTests
     }
 
     [Fact]
-    public void SettingsSave_DisablesThenUsesTheResponseWithoutSuccessState()
+    public void SettingsSaveDisablesThenUsesTheResponseWithoutSuccessState()
     {
         var state = new SettingsState();
         state.SetIgnoreShortSessionsMinutes("15");
@@ -150,7 +150,7 @@ public sealed class SettingsStateTests
     }
 
     [Fact]
-    public void ProviderUpdates_ArePerIdNonOptimisticAndReplaceFromTheResponse()
+    public void ProviderUpdatesArePerIdNonOptimisticAndReplaceFromTheResponse()
     {
         var state = new SettingsState();
         var steam = Provider(1, "steam", "active");
@@ -187,7 +187,7 @@ public sealed class SettingsStateTests
     }
 
     [Fact]
-    public void CredentialEdit_BuildsExactBodyAndIgnoresLockedApiKeyChanges()
+    public void CredentialEditBuildsExactBodyAndIgnoresLockedApiKeyChanges()
     {
         var state = new SettingsState();
         var steam = Provider(1, "steam", "active");
@@ -219,7 +219,7 @@ public sealed class SettingsStateTests
     }
 
     [Fact]
-    public void CredentialEdit_RejectsNoChangesAndCompletesByReplacingTheProvider()
+    public void CredentialEditRejectsNoChangesAndCompletesByReplacingTheProvider()
     {
         var state = new SettingsState();
         var steam = Provider(1, "steam", "active");
@@ -246,7 +246,7 @@ public sealed class SettingsStateTests
     [InlineData("psn", "P", "bg-indigo-500/30", "text-indigo-700 dark:text-indigo-200")]
     [InlineData("playnite", "PL", "bg-amber-500/30", "text-amber-700 dark:text-amber-200")]
     [InlineData("custom", "PX", "bg-slate-200 dark:bg-slate-800", "text-slate-700 dark:text-slate-200")]
-    public void ProviderPresentation_UsesTheExactReactMetadata(
+    public void ProviderPresentationUsesTheExactReactMetadata(
         string platform,
         string label,
         string color,
@@ -260,7 +260,7 @@ public sealed class SettingsStateTests
     }
 
     [Fact]
-    public void ProviderPresentation_PreservesEmptySubtitlesAndUsesNullFallbacks()
+    public void ProviderPresentationPreservesEmptySubtitlesAndUsesNullFallbacks()
     {
         Assert.Equal("Local", SettingsState.Present(
             new ProviderStatus(1, "steam", null, "active", "secret", false)).Subtitle);
@@ -273,7 +273,7 @@ public sealed class SettingsStateTests
     }
 
     [Fact]
-    public void SettingsPage_WiresLiteralReactMarkupRequestsAndCancellation()
+    public void SettingsPageWiresLiteralReactMarkupRequestsAndCancellation()
     {
         var root = FindWebRoot();
         var markupPath = Path.Combine(root, "Modules", "Settings", "Settings.razor");

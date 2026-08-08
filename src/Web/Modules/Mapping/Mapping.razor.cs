@@ -1,9 +1,9 @@
 using Microsoft.AspNetCore.Components;
-using Web.Shared.Http;
-using Web.Shared.Browser;
-using Web.Shared.Models;
+using Web.Infrastructure.Http;
+using Web.Infrastructure.Browser;
+using Web.Infrastructure.Models;
 using Web.Routing;
-using Web.Shared.Common;
+using Web.Infrastructure.Common;
 
 namespace Web.Modules.Mapping;
 
@@ -429,5 +429,6 @@ public partial class Mapping : ComponentBase, IDisposable
         _primarySearchRequest?.Dispose();
         _secondarySearchRequest?.Dispose();
         _lifetime.Dispose();
+        GC.SuppressFinalize(this);
     }
 }

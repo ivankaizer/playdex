@@ -1,12 +1,13 @@
 using System.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using Api.Shared.Common;
+using Api.Infrastructure.Common;
 using Api.Modules.Metrics;
 
 namespace Api.Modules.Polling;
 
-public sealed class PollingBackgroundService(
+public sealed partial class PollingBackgroundService(
     IServiceProvider serviceProvider,
     IOptions<PollingOptions> pollingOptions,
     MetricsCollector metrics,
@@ -14,17 +15,47 @@ public sealed class PollingBackgroundService(
 {
     private readonly CredentialBackoffTracker _backoff = new();
 
+    [LoggerMessage(Level = LogLevel.Information, Message = "PollingBackgroundService will start after {Delay} ms")]
+    private partial void LogWillStartAfter(int delay);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Starting poll cycle")]
+    private partial void LogStartingPollCycle();
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Loaded {Count} active credentials")]
+    private partial void LogLoadedCredentials(int count);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Skipping credential {CredentialId} until {NextEligibleAt}")]
+    private partial void LogSkippingCredential(long credentialId, DateTimeOffset nextEligibleAt);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Credential {CredentialId} ({Platform}) failed; retrying in {Delay}: {Message}")]
+    private partial void LogCredentialFailed(Exception exception, long credentialId, string platform, TimeSpan delay, string message);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Poll cycle failed")]
+    private partial void LogPollCycleFailed(Exception exception);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "No IProviderClient registered for platform {Platform}")]
+    private partial void LogNoProviderClient(string platform);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Credential {CredentialId}: successful poll resolved game {GameId}")]
+    private partial void LogSuccessfulPoll(long credentialId, long? gameId);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Playnite timeout cleanup failed")]
+    private partial void LogPlayniteTimeoutCleanupFailed(Exception exception);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Event handler failed for {EventType}")]
+    private partial void LogEventHandlerFailed(Exception exception, string eventType);
+
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         Console.WriteLine("starting polling");
         var initialDelayMs = Random.Shared.Next(0, 5001);
-        logger.LogInformation("PollingBackgroundService will start after {Delay} ms", initialDelayMs);
+        LogWillStartAfter(initialDelayMs);
         await Task.Delay(initialDelayMs, stoppingToken);
 
         while (!stoppingToken.IsCancellationRequested)
         {
             var cycleStart = Stopwatch.StartNew();
-            logger.LogDebug("Starting poll cycle");
+            LogStartingPollCycle();
 
             try
             {
@@ -36,7 +67,7 @@ public sealed class PollingBackgroundService(
                         .GetRequiredService<PollingRepository>()
                         .LoadActiveCredentials(stoppingToken);
                 }
-                logger.LogDebug("Loaded {Count} active credentials", credentials.Count);
+                LogLoadedCredentials(credentials.Count);
                 _backoff.Prune(credentials.Select(row => row.Credential.Id));
 
                 foreach (var active in credentials)
@@ -45,10 +76,7 @@ public sealed class PollingBackgroundService(
                     var now = DateTimeOffset.UtcNow;
                     if (!_backoff.IsEligible(active.Credential.Id, now, out var nextEligibleAt))
                     {
-                        logger.LogDebug(
-                            "Skipping credential {CredentialId} until {NextEligibleAt}",
-                            active.Credential.Id,
-                            nextEligibleAt);
+                        LogSkippingCredential(active.Credential.Id, nextEligibleAt);
                         continue;
                     }
 
@@ -67,9 +95,7 @@ public sealed class PollingBackgroundService(
                             : null;
                         var delay = _backoff.RecordFailure(
                             active.Credential.Id, DateTimeOffset.UtcNow, retryAfter);
-                        logger.LogWarning(ex,
-                            "Credential {CredentialId} ({Platform}) failed; retrying in {Delay}: {Message}",
-                            active.Credential.Id, active.PlatformKey, delay, ex.Message);
+                        LogCredentialFailed(ex, active.Credential.Id, active.PlatformKey, delay, ex.Message);
                         metrics.RecordPollFailure(active.PlatformKey, DateTimeOffset.UtcNow);
                         using var notificationScope = serviceProvider
                             .GetRequiredService<IServiceScopeFactory>()
@@ -91,7 +117,7 @@ public sealed class PollingBackgroundService(
             }
             catch (Exception ex)
             {
-                logger.LogError(ex, "Poll cycle failed");
+                LogPollCycleFailed(ex);
                 metrics.RecordPollFailure("all", DateTimeOffset.UtcNow);
 
                 await Task.Delay(TimeSpan.FromSeconds(5), stoppingToken);
@@ -120,7 +146,7 @@ public sealed class PollingBackgroundService(
 
         if (!providerClients.TryGetValue(platformKey, out var client))
         {
-            logger.LogWarning("No IProviderClient registered for platform {Platform}", platformKey);
+            LogNoProviderClient(platformKey);
             return;
         }
 
@@ -160,10 +186,7 @@ public sealed class PollingBackgroundService(
             }
         }
         metrics.RecordPollSuccess(platformKey, polledAt);
-        logger.LogDebug(
-            "Credential {CredentialId}: successful poll resolved game {GameId}",
-            credential.Id,
-            outcome.GameId);
+        LogSuccessfulPoll(credential.Id, outcome.GameId);
     }
 
     private async Task CleanupTimedOutPlayniteSessions(CancellationToken ct)
@@ -192,7 +215,7 @@ public sealed class PollingBackgroundService(
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Playnite timeout cleanup failed");
+            LogPlayniteTimeoutCleanupFailed(ex);
         }
     }
 
@@ -204,7 +227,7 @@ public sealed class PollingBackgroundService(
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Event handler failed for {EventType}", typeof(T).Name);
+            LogEventHandlerFailed(ex, typeof(T).Name);
         }
     }
 }

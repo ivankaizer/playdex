@@ -1,6 +1,8 @@
+using System.Globalization;
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace Api.Modules.Telegram;
@@ -9,7 +11,7 @@ public sealed record TelegramUpdate(long UpdateId, TelegramMessage? Message);
 public sealed record TelegramMessage(long MessageId, TelegramChat Chat, string? Text);
 public sealed record TelegramChat(long Id);
 
-public sealed class TelegramClient
+public sealed partial class TelegramClient
 {
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -19,6 +21,15 @@ public sealed class TelegramClient
     private readonly string? _botToken;
     private readonly TelegramOptions _options;
     private readonly ILogger<TelegramClient> _logger;
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "TELEGRAM_MOCK getUpdates offset={Offset} — returning no updates (mock).")]
+    private static partial void LogMockGetUpdates(ILogger logger, long? offset);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "TELEGRAM_MOCK sendMessage {Payload}")]
+    private static partial void LogMockSendMessage(ILogger logger, string payload);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "TELEGRAM_MOCK sendPhoto {Payload}")]
+    private static partial void LogMockSendPhoto(ILogger logger, string payload);
 
     public TelegramClient(
         HttpClient httpClient,
@@ -49,9 +60,7 @@ public sealed class TelegramClient
     {
         if (_options.UseMock)
         {
-            _logger.LogInformation(
-                "TELEGRAM_MOCK getUpdates offset={Offset} — returning no updates (mock).",
-                offset);
+            LogMockGetUpdates(_logger, offset);
             return [];
         }
 
@@ -84,9 +93,11 @@ public sealed class TelegramClient
         };
         if (_options.UseMock)
         {
-            _logger.LogInformation(
-                "TELEGRAM_MOCK sendMessage {Payload}",
-                JsonSerializer.Serialize(payload, JsonOptions));
+            if (_logger.IsEnabled(LogLevel.Information))
+            {
+                var payloadJson = JsonSerializer.Serialize(payload, JsonOptions);
+                LogMockSendMessage(_logger, payloadJson);
+            }
             return;
         }
         using var response = await _httpClient.PostAsJsonAsync(
@@ -111,13 +122,15 @@ public sealed class TelegramClient
         };
         if (_options.UseMock)
         {
-            _logger.LogInformation(
-                "TELEGRAM_MOCK sendPhoto {Payload}",
-                JsonSerializer.Serialize(payload, JsonOptions));
+            if (_logger.IsEnabled(LogLevel.Information))
+            {
+                var payloadJson = JsonSerializer.Serialize(payload, JsonOptions);
+                LogMockSendPhoto(_logger, payloadJson);
+            }
             return;
         }
         using var content = new MultipartFormDataContent();
-        content.Add(new StringContent(chatId.ToString()), "chat_id");
+        content.Add(new StringContent(chatId.ToString(CultureInfo.InvariantCulture)), "chat_id");
         content.Add(new StringContent(caption), "caption");
         var image = new ByteArrayContent(photo);
         image.Headers.ContentType = new("image/webp");
@@ -126,7 +139,7 @@ public sealed class TelegramClient
         await ReadEnvelope<JsonElement>(response, ct);
     }
 
-    private async Task<T?> ReadEnvelope<T>(
+    private static async Task<T?> ReadEnvelope<T>(
         HttpResponseMessage response,
         CancellationToken ct)
     {

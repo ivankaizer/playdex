@@ -4,16 +4,16 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
-using Api.Shared.Persistence;
+using Api.Infrastructure.Persistence;
 using Xunit;
 
 namespace Api.Tests;
 
-[Collection(PostgresCollection.Name)]
+[Collection(PostgresCollectionDefinition.Name)]
 public sealed class PlayniteCompatibilityIntegrationTests(PostgresFixture postgres)
 {
     [Fact]
-    public async Task EndAndPing_PreserveArchivedMatchingGameSemanticsAndEnvelope()
+    public async Task EndAndPingPreserveArchivedMatchingGameSemanticsAndEnvelope()
     {
         if (!postgres.IsConfigured) return;
 
@@ -124,7 +124,7 @@ public sealed class PlayniteCompatibilityIntegrationTests(PostgresFixture postgr
     }
 
     [Fact]
-    public async Task End_ValidatesAuthenticationPayloadAndProviderCompatibly()
+    public async Task EndValidatesAuthenticationPayloadAndProviderCompatibly()
     {
         if (!postgres.IsConfigured) return;
 

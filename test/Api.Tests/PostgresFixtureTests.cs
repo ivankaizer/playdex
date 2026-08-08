@@ -2,11 +2,11 @@ namespace Api.Tests;
 
 using Xunit;
 
-[Collection(PostgresCollection.Name)]
+[Collection(PostgresCollectionDefinition.Name)]
 public sealed class PostgresFixtureTests(PostgresFixture postgres)
 {
     [Fact]
-    public void Fixture_IsAvailableWhenIntegrationDatabaseIsConfigured()
+    public void FixtureIsAvailableWhenIntegrationDatabaseIsConfigured()
     {
         var configured = !string.IsNullOrWhiteSpace(
             Environment.GetEnvironmentVariable("PLAYDEX_INTEGRATION_DATABASE_URL"));

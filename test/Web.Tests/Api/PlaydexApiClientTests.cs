@@ -2,10 +2,10 @@ using System.Net;
 using System.Reflection;
 using System.Text;
 using System.Text.Json;
-using Web.Shared.Http;
-using Web.Shared.Auth;
-using Web.Shared.Browser;
-using Web.Shared.Models;
+using Web.Infrastructure.Http;
+using Web.Infrastructure.Auth;
+using Web.Infrastructure.Browser;
+using Web.Infrastructure.Models;
 using Web.Modules.Admin;
 using Xunit;
 
@@ -14,7 +14,7 @@ namespace Web.Tests.Api;
 public sealed class PlaydexApiClientTests
 {
     [Fact]
-    public void RefreshResponse_TokensMatchTheNonNullableBackendContract()
+    public void RefreshResponseTokensMatchTheNonNullableBackendContract()
     {
         var nullability = new NullabilityInfoContext();
 
@@ -27,7 +27,7 @@ public sealed class PlaydexApiClientTests
     }
 
     [Fact]
-    public async Task SendAsync_DeserializesRawNullableDtoWithoutAnEnvelope()
+    public async Task SendAsyncDeserializesRawNullableDtoWithoutAnEnvelope()
     {
         using var handler = new RecordingHandler((_, _) => Json(
             HttpStatusCode.OK,
@@ -60,7 +60,7 @@ public sealed class PlaydexApiClientTests
     }
 
     [Fact]
-    public async Task SendAsync_UnwrapsBunCompatibleResponseEnvelope()
+    public async Task SendAsyncUnwrapsBunCompatibleResponseEnvelope()
     {
         using var handler = new RecordingHandler((_, _) => Json(
             HttpStatusCode.OK,
@@ -84,7 +84,7 @@ public sealed class PlaydexApiClientTests
     }
 
     [Fact]
-    public async Task Authenticated401_RefreshesWithoutBearerPersistsTokensAndRetriesFreshRequest()
+    public async Task Authenticated401RefreshesWithoutBearerPersistsTokensAndRetriesFreshRequest()
     {
         var storage = new MemoryBrowserStorage(
             ("playdex.token", "old-access"),
@@ -113,7 +113,7 @@ public sealed class PlaydexApiClientTests
     }
 
     [Fact]
-    public async Task Retry401_DoesNotRefreshAgainOrInvokeAuthFailure()
+    public async Task Retry401DoesNotRefreshAgainOrInvokeAuthFailure()
     {
         var callbackCount = 0;
         var storage = new MemoryBrowserStorage(
@@ -145,7 +145,7 @@ public sealed class PlaydexApiClientTests
     [InlineData("null")]
     [InlineData("missing-access")]
     [InlineData("missing-refresh")]
-    public async Task RefreshFailure_InvokesCallbackOnceAndThrowsOriginal401(string failure)
+    public async Task RefreshFailureInvokesCallbackOnceAndThrowsOriginal401(string failure)
     {
         var callbackCount = 0;
         var storage = failure == "missing"
@@ -191,7 +191,7 @@ public sealed class PlaydexApiClientTests
     }
 
     [Fact]
-    public async Task Unauthenticated401_OmitsBearerAndDoesNotRefreshOrInvokeCallback()
+    public async Task Unauthenticated401OmitsBearerAndDoesNotRefreshOrInvokeCallback()
     {
         var callbackCount = 0;
         var storage = new MemoryBrowserStorage(
@@ -219,7 +219,7 @@ public sealed class PlaydexApiClientTests
     }
 
     [Fact]
-    public async Task AbsoluteUrlOnConfiguredApiOrigin_ReceivesBearer()
+    public async Task AbsoluteUrlOnConfiguredApiOriginReceivesBearer()
     {
         var storage = new MemoryBrowserStorage(("playdex.token", "access"));
         using var handler = new RecordingHandler((_, _) => Json(HttpStatusCode.OK, "{}"));
@@ -231,7 +231,7 @@ public sealed class PlaydexApiClientTests
     }
 
     [Fact]
-    public async Task AbsoluteUrlOnDifferentOrigin_OmitsBearerRefreshAndCallback()
+    public async Task AbsoluteUrlOnDifferentOriginOmitsBearerRefreshAndCallback()
     {
         var callbackCount = 0;
         var storage = new MemoryBrowserStorage(
@@ -263,7 +263,7 @@ public sealed class PlaydexApiClientTests
     [InlineData("https://app.test/api", "/sessions?title=a%20b&page=2", "https://app.test/api/sessions?title=a%20b&page=2")]
     [InlineData("https://ignored.test/api", "https://other.test/me?q=a%20b", "https://other.test/me?q=a%20b")]
     [InlineData("https://ignored.test/api", "http://other.test/me", "http://other.test/me")]
-    public async Task SendAsync_BuildsExactApiUri(string apiBase, string path, string expected)
+    public async Task SendAsyncBuildsExactApiUri(string apiBase, string path, string expected)
     {
         using var handler = new RecordingHandler((_, _) => Json(HttpStatusCode.OK, "{}"));
         var client = CreateClient(handler, apiBase: apiBase);
@@ -274,7 +274,7 @@ public sealed class PlaydexApiClientTests
     }
 
     [Fact]
-    public async Task RequestBodies_UseExactWebCamelCaseIncludingAdminUser()
+    public async Task RequestBodiesUseExactWebCamelCaseIncludingAdminUser()
     {
         using var handler = new RecordingHandler(
             (_, _) => Json(HttpStatusCode.OK, "{}"),
@@ -299,7 +299,7 @@ public sealed class PlaydexApiClientTests
     [InlineData("{\"detail\":\"\"}", "Request failed.")]
     [InlineData("not-json", "Request failed.")]
     [InlineData("", "Request failed.")]
-    public async Task ApiException_UsesOnlyRootDetailOrFallback(string payload, string expected)
+    public async Task ApiExceptionUsesOnlyRootDetailOrFallback(string payload, string expected)
     {
         using var handler = new RecordingHandler((_, _) => Json(HttpStatusCode.BadRequest, payload));
         var client = CreateClient(handler);
@@ -315,7 +315,7 @@ public sealed class PlaydexApiClientTests
     [InlineData("null")]
     [InlineData("")]
     [InlineData("{")]
-    public async Task SuccessfulNullEmptyOrMalformedJson_ThrowsJsonException(string payload)
+    public async Task SuccessfulNullEmptyOrMalformedJsonThrowsJsonException(string payload)
     {
         using var handler = new RecordingHandler((_, _) => Json(HttpStatusCode.OK, payload));
         var client = CreateClient(handler);
@@ -327,7 +327,7 @@ public sealed class PlaydexApiClientTests
     }
 
     [Fact]
-    public async Task CancellationBeforeInitialRequest_Propagates()
+    public async Task CancellationBeforeInitialRequestPropagates()
     {
         using var handler = new RecordingHandler(async (_, cancellationToken) =>
         {
@@ -343,7 +343,7 @@ public sealed class PlaydexApiClientTests
     }
 
     [Fact]
-    public async Task CancellationDuringRefresh_PropagatesWithoutAuthFailureCallback()
+    public async Task CancellationDuringRefreshPropagatesWithoutAuthFailureCallback()
     {
         var callbackCount = 0;
         using var cancellation = new CancellationTokenSource();
@@ -374,7 +374,7 @@ public sealed class PlaydexApiClientTests
     }
 
     [Fact]
-    public async Task EmptyAccessToken_OmitsBearerHeader()
+    public async Task EmptyAccessTokenOmitsBearerHeader()
     {
         var storage = new MemoryBrowserStorage(("playdex.token", ""));
         using var handler = new RecordingHandler((_, _) => Json(HttpStatusCode.OK, "{}"));

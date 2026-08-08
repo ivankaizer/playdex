@@ -1,6 +1,6 @@
 using System.Globalization;
 using System.Security.Claims;
-using Api.Shared.Auth;
+using Api.Infrastructure.Auth;
 
 namespace Api.Modules.Recap;
 
@@ -54,8 +54,8 @@ public static class RecapEndpoints
 
         var result = await service.GetRecap(
             principal.GetUserId(),
-            from ?? (startedAt.HasValue ? startedAt.Value.ToString("yyyy-MM-dd") : null),
-            to ?? (endedAt.HasValue ? endedAt.Value.AddDays(-1).ToString("yyyy-MM-dd") : null),
+            from ?? (startedAt.HasValue ? startedAt.Value.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) : null),
+            to ?? (endedAt.HasValue ? endedAt.Value.AddDays(-1).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) : null),
             startedAt,
             endedAt,
             ct);

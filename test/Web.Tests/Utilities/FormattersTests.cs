@@ -1,4 +1,4 @@
-using Web.Shared.Common;
+using Web.Infrastructure.Common;
 using Xunit;
 
 namespace Web.Tests.Utilities;
@@ -12,7 +12,7 @@ public sealed class FormattersTests
     [InlineData("switch-2", "Nintendo Switch 2")]
     [InlineData("xbox-series-xs", "Xbox Series X|S")]
     [InlineData("other", "other")]
-    public void FormatPlatformLabel_UsesTheReactMappingOrFallsBack(string platform, string expected)
+    public void FormatPlatformLabelUsesTheReactMappingOrFallsBack(string platform, string expected)
     {
         Assert.Equal(expected, Formatters.FormatPlatformLabel(platform));
     }
@@ -21,26 +21,26 @@ public sealed class FormattersTests
     [InlineData("psn", "PlayStation")]
     [InlineData("steam", "Steam")]
     [InlineData("other", "other")]
-    public void FormatProviderName_UsesTheReactMappingOrFallsBack(string platform, string expected)
+    public void FormatProviderNameUsesTheReactMappingOrFallsBack(string platform, string expected)
     {
         Assert.Equal(expected, Formatters.FormatProviderName(platform));
     }
 
     [Fact]
-    public void FormatSessionPlatformLabel_PrefersTheMappedPlatform()
+    public void FormatSessionPlatformLabelPrefersTheMappedPlatform()
     {
         Assert.Equal("Nintendo Switch 2", Formatters.FormatSessionPlatformLabel("steam", "switch-2"));
         Assert.Equal("Steam", Formatters.FormatSessionPlatformLabel("steam", null));
     }
 
     [Fact]
-    public void FormatStatsPlatformLabel_UsesTheSharedPlatformMapping()
+    public void FormatStatsPlatformLabelUsesTheSharedPlatformMapping()
     {
         Assert.Equal("Xbox Series X|S", Formatters.FormatStatsPlatformLabel("xbox-series-xs"));
     }
 
     [Fact]
-    public void DateAndTimeLabels_UseEnUsBrowserStyleOutput()
+    public void DateAndTimeLabelsUseEnUsBrowserStyleOutput()
     {
         var localDate = new DateTimeOffset(
             2026,
@@ -57,14 +57,14 @@ public sealed class FormattersTests
     }
 
     [Theory]
-    [InlineData(-0.1, DurationFormat.Short, "0m")]
-    [InlineData(0, DurationFormat.Short, "0m")]
-    [InlineData(59.999, DurationFormat.Long, "0 min")]
-    [InlineData(60, DurationFormat.Short, "1m")]
-    [InlineData(3599, DurationFormat.Long, "59 min")]
-    [InlineData(3600, DurationFormat.Short, "1h 00m")]
-    [InlineData(3660, DurationFormat.Long, "1h 1m")]
-    public void FormatDuration_MatchesReactBoundaries(double seconds, DurationFormat format, string expected)
+    [InlineData(-0.1, DurationFormat.Compact, "0m")]
+    [InlineData(0, DurationFormat.Compact, "0m")]
+    [InlineData(59.999, DurationFormat.Full, "0 min")]
+    [InlineData(60, DurationFormat.Compact, "1m")]
+    [InlineData(3599, DurationFormat.Full, "59 min")]
+    [InlineData(3600, DurationFormat.Compact, "1h 00m")]
+    [InlineData(3660, DurationFormat.Full, "1h 1m")]
+    public void FormatDurationMatchesReactBoundaries(double seconds, DurationFormat format, string expected)
     {
         Assert.Equal(expected, Formatters.FormatDuration(seconds, format));
     }
@@ -81,7 +81,7 @@ public sealed class FormattersTests
     [InlineData(double.NaN, 1, "0h")]
     [InlineData(double.PositiveInfinity, 1, "0h")]
     [InlineData(double.NegativeInfinity, 1, "0h")]
-    public void FormatHours_MatchesJavascriptRoundingAndTrailingZeroBehavior(
+    public void FormatHoursMatchesJavascriptRoundingAndTrailingZeroBehavior(
         double seconds,
         int decimals,
         string expected)
@@ -90,7 +90,7 @@ public sealed class FormattersTests
     }
 
     [Fact]
-    public void FormatUtcDateInput_UsesTheUtcCalendarDate()
+    public void FormatUtcDateInputUsesTheUtcCalendarDate()
     {
         var date = new DateTimeOffset(2026, 7, 13, 0, 30, 0, TimeSpan.FromHours(2));
 

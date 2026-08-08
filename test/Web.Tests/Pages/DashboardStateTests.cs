@@ -1,4 +1,4 @@
-using Web.Shared.Models;
+using Web.Infrastructure.Models;
 using Web.Modules.Dashboard;
 using Xunit;
 
@@ -9,7 +9,7 @@ public sealed class DashboardStateTests
     private static readonly DateTimeOffset Now = new(2026, 7, 13, 12, 0, 0, TimeSpan.Zero);
 
     [Fact]
-    public void DashboardStateTypes_AreInternalImplementationDetails()
+    public void DashboardStateTypesAreInternalImplementationDetails()
     {
         Type[] types =
         [
@@ -28,7 +28,7 @@ public sealed class DashboardStateTests
     }
 
     [Fact]
-    public void Requests_PreserveTheFiveConcurrentReactUrlsAndUtcRanges()
+    public void RequestsPreserveTheFiveConcurrentReactUrlsAndUtcRanges()
     {
         var requests = DashboardRequests.For(Now);
 
@@ -44,7 +44,7 @@ public sealed class DashboardStateTests
     }
 
     [Fact]
-    public void Refresh_IsAllOrNothingAndSilentRefreshDoesNotShowTheSkeleton()
+    public void RefreshIsAllOrNothingAndSilentRefreshDoesNotShowTheSkeleton()
     {
         var state = new DashboardState();
         var snapshot = Snapshot();
@@ -72,7 +72,7 @@ public sealed class DashboardStateTests
     }
 
     [Fact]
-    public async Task AggregateRefresh_ReportsTheFirstFailureWithoutWaitingForAnUnresolvedSibling()
+    public async Task AggregateRefreshReportsTheFirstFailureWithoutWaitingForAnUnresolvedSibling()
     {
         using var siblingCancellation = new CancellationTokenSource();
         var unresolved = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -123,7 +123,7 @@ public sealed class DashboardStateTests
     }
 
     [Fact]
-    public void TodaySessionCards_StayFrozenWhileCurrentElapsedAdvances()
+    public void TodaySessionCardsStayFrozenWhileCurrentElapsedAdvances()
     {
         var snapshot = Snapshot();
         var openTodaySession = snapshot.TodaySessions[0] with
@@ -144,7 +144,7 @@ public sealed class DashboardStateTests
     }
 
     [Fact]
-    public void TodaySessionCards_ArePaginatedByThreeWithClampedPage()
+    public void TodaySessionCardsArePaginatedByThreeWithClampedPage()
     {
         var snapshot = Snapshot();
         snapshot = snapshot with
@@ -179,7 +179,7 @@ public sealed class DashboardStateTests
     }
 
     [Fact]
-    public void PlatformRendering_PreservesRowsWhenRawPlatformsShareADisplayLabel()
+    public void PlatformRenderingPreservesRowsWhenRawPlatformsShareADisplayLabel()
     {
         var stats = new AccountStatsPeriod(
             7200,
@@ -194,15 +194,15 @@ public sealed class DashboardStateTests
 
         var root = FindWebRoot();
         var dashboard = File.ReadAllText(Path.Combine(root, "Modules", "Dashboard", "Dashboard.razor"));
-        var recap = File.ReadAllText(Path.Combine(root, "Shared", "Components", "StatsRecapSection.razor"));
-        var pie = File.ReadAllText(Path.Combine(root, "Shared", "Components", "StatsPieChart.razor"));
+        var recap = File.ReadAllText(Path.Combine(root, "Infrastructure", "Components", "StatsRecapSection.razor"));
+        var pie = File.ReadAllText(Path.Combine(root, "Infrastructure", "Components", "StatsPieChart.razor"));
         Assert.DoesNotContain("@key=\"item.Label\"", dashboard);
         Assert.DoesNotContain("@key=\"item.Label\"", recap);
         Assert.DoesNotContain("@key=\"segment.Label\"", pie);
     }
 
     [Fact]
-    public void DashboardPage_WiresConcurrentRefreshAndLiteralRegionsWithoutPolling()
+    public void DashboardPageWiresConcurrentRefreshAndLiteralRegionsWithoutPolling()
     {
         var root = FindWebRoot();
         var markupPath = Path.Combine(root, "Modules", "Dashboard", "Dashboard.razor");
@@ -239,7 +239,7 @@ public sealed class DashboardStateTests
     }
 
     [Fact]
-    public void DashboardPiePalette_FollowsEveryAppLayoutThemeChange()
+    public void DashboardPiePaletteFollowsEveryAppLayoutThemeChange()
     {
         var root = FindWebRoot();
         var layout = File.ReadAllText(Path.Combine(root, "Layout", "AppLayout.razor"));
@@ -253,7 +253,7 @@ public sealed class DashboardStateTests
     }
 
     [Fact]
-    public void AppLayout_RendersOverlayInsideMainAfterTheContentWrapperFooter()
+    public void AppLayoutRendersOverlayInsideMainAfterTheContentWrapperFooter()
     {
         var root = FindWebRoot();
         var layout = File.ReadAllText(Path.Combine(root, "Layout", "AppLayout.razor"));

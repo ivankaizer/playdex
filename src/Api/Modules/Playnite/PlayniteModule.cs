@@ -1,4 +1,4 @@
-using Api.Shared.Common;
+using Api.Infrastructure.Common;
 
 namespace Api.Modules.Playnite;
 

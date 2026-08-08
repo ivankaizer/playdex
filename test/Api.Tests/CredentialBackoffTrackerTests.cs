@@ -1,3 +1,4 @@
+using System.Globalization;
 using Api.Modules.Polling;
 using Xunit;
 
@@ -6,10 +7,10 @@ namespace Api.Tests;
 public sealed class CredentialBackoffTrackerTests
 {
     [Fact]
-    public void FailureState_IsIndependentHonorsRetryAfterAndResetsPerCredential()
+    public void FailureStateIsIndependentHonorsRetryAfterAndResetsPerCredential()
     {
         var tracker = new CredentialBackoffTracker();
-        var now = DateTimeOffset.Parse("2026-08-06T12:00:00Z");
+        var now = DateTimeOffset.Parse("2026-08-06T12:00:00Z", CultureInfo.InvariantCulture);
 
         Assert.Equal(TimeSpan.FromSeconds(5), tracker.RecordFailure(10, now));
         Assert.Equal(TimeSpan.FromSeconds(10), tracker.RecordFailure(10, now));

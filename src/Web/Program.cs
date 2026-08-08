@@ -1,8 +1,8 @@
 using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
 using Web;
-using Web.Shared.Auth;
-using Web.Shared.Browser;
-using Web.Shared.Http;
+using Web.Infrastructure.Auth;
+using Web.Infrastructure.Browser;
+using Web.Infrastructure.Http;
 
 var builder = WebAssemblyHostBuilder.CreateDefault(args);
 builder.RootComponents.Add<App>("#app");

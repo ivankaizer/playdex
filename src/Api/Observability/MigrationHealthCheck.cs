@@ -1,14 +1,18 @@
 using Microsoft.Extensions.Diagnostics.HealthChecks;
+using Microsoft.Extensions.Logging;
 using Npgsql;
-using Api.Shared.Persistence.Migrations;
+using Api.Infrastructure.Persistence.Migrations;
 
 namespace Api.Observability;
 
-public sealed class MigrationHealthCheck(
+public sealed partial class MigrationHealthCheck(
     NpgsqlDataSource dataSource,
     MigrationCatalog catalog,
     ILogger<MigrationHealthCheck> logger) : IHealthCheck
 {
+    [LoggerMessage(Level = LogLevel.Error, Message = "Migration health check failed")]
+    private partial void LogMigrationHealthCheckFailed(Exception exception);
+
     public async Task<HealthCheckResult> CheckHealthAsync(
         HealthCheckContext context,
         CancellationToken cancellationToken = default)
@@ -42,7 +46,7 @@ public sealed class MigrationHealthCheck(
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Migration health check failed");
+            LogMigrationHealthCheckFailed(ex);
             return HealthCheckResult.Unhealthy("Migration check failed.", ex);
         }
     }

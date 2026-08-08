@@ -1,4 +1,4 @@
-using Api.Shared.Http;
+using Api.Infrastructure.Http;
 
 namespace Api.Modules.Settings;
 
@@ -18,6 +18,6 @@ public sealed class SettingsService(SettingsRepository repository)
     internal static int ValidateIgnoreShortSessionsMinutes(int? value) =>
         value is >= 0
             ? value.Value
-            : throw AppProblem.Validation(
+            : throw AppProblemException.Validation(
                 "ignoreShortSessionsMinutes must be a non-negative integer.");
 }

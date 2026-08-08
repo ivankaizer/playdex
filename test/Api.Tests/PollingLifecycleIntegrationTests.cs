@@ -1,15 +1,15 @@
 using Microsoft.EntityFrameworkCore;
 using Api.Modules.Polling;
-using Api.Shared.Persistence;
+using Api.Infrastructure.Persistence;
 using Xunit;
 
 namespace Api.Tests;
 
-[Collection(PostgresCollection.Name)]
+[Collection(PostgresCollectionDefinition.Name)]
 public sealed class PollingLifecycleIntegrationTests(PostgresFixture postgres)
 {
     [Fact]
-    public async Task SuccessfulPolls_ApplyStartUnchangedSwitchStopIgnoreAndEvidenceAtomically()
+    public async Task SuccessfulPollsApplyStartUnchangedSwitchStopIgnoreAndEvidenceAtomically()
     {
         if (!postgres.IsConfigured) return;
 

@@ -1,5 +1,5 @@
 using System.Globalization;
-using Api.Shared.Http;
+using Api.Infrastructure.Http;
 
 namespace Api.Modules.Accounts;
 
@@ -26,16 +26,16 @@ internal readonly record struct AccountDateRange(DateTimeOffset? From, DateTimeO
     private static AccountDateRange Parse(string? from, string? to, bool required)
     {
         if (required && (string.IsNullOrEmpty(from) || string.IsNullOrEmpty(to)))
-            throw AppProblem.Validation("from and to are required.");
+            throw AppProblemException.Validation("from and to are required.");
 
         var parsedFrom = ParseBound(from);
         var parsedTo = ParseBound(to);
 
         if (parsedFrom.HasValue && parsedTo.HasValue && parsedFrom > parsedTo)
-            throw AppProblem.Validation("from must be before to.");
+            throw AppProblemException.Validation("from must be before to.");
 
         if (parsedTo.HasValue && parsedTo.Value.UtcDateTime.Date == DateTime.MaxValue.Date)
-            throw AppProblem.Validation(InvalidDatesMessage);
+            throw AppProblemException.Validation(InvalidDatesMessage);
 
         var toExclusive = parsedTo.HasValue
             ? new DateTimeOffset(parsedTo.Value.UtcDateTime.Date, TimeSpan.Zero).AddDays(1)
@@ -56,7 +56,7 @@ internal readonly record struct AccountDateRange(DateTimeOffset? From, DateTimeO
                 DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal,
                 out var parsed))
         {
-            throw AppProblem.Validation(InvalidDatesMessage);
+            throw AppProblemException.Validation(InvalidDatesMessage);
         }
 
         return parsed;

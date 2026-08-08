@@ -1,4 +1,4 @@
-using Web.Shared.Auth;
+using Web.Infrastructure.Auth;
 using Web.Modules.Home;
 using Xunit;
 
@@ -7,14 +7,14 @@ namespace Web.Tests.Pages;
 public sealed class HomeStateTests
 {
     [Fact]
-    public void HomeStateTypes_AreInternalImplementationDetails()
+    public void HomeStateTypesAreInternalImplementationDetails()
     {
         Assert.False(typeof(HomeLoginStatus).IsPublic);
         Assert.False(typeof(HomeState).IsPublic);
     }
 
     [Fact]
-    public void LoginLifecycle_DisablesOnlyWhileLoadingAndPreservesTheReactMessages()
+    public void LoginLifecycleDisablesOnlyWhileLoadingAndPreservesTheReactMessages()
     {
         var state = new HomeState();
 
@@ -32,7 +32,7 @@ public sealed class HomeStateTests
     }
 
     [Fact]
-    public void SuccessfulLogin_StoresTheSessionEmailAndSuccessState()
+    public void SuccessfulLoginStoresTheSessionEmailAndSuccessState()
     {
         var state = new HomeState();
         state.BeginLogin();
@@ -45,7 +45,7 @@ public sealed class HomeStateTests
     }
 
     [Fact]
-    public void ProfileFallback_LoadsOnlyWhenATokenExistsWithoutACachedEmail()
+    public void ProfileFallbackLoadsOnlyWhenATokenExistsWithoutACachedEmail()
     {
         var state = new HomeState();
 
@@ -67,7 +67,7 @@ public sealed class HomeStateTests
     }
 
     [Fact]
-    public void AuthenticatedHome_FirstRenderUsesTheResolvedRouterSession()
+    public void AuthenticatedHomeFirstRenderUsesTheResolvedRouterSession()
     {
         var root = FindWebRoot();
         var app = File.ReadAllText(Path.Combine(root, "App.razor"));
@@ -94,7 +94,7 @@ public sealed class HomeStateTests
     }
 
     [Fact]
-    public void HomePage_WiresTheReactLoginProfileSessionAndVisibleRegions()
+    public void HomePageWiresTheReactLoginProfileSessionAndVisibleRegions()
     {
         var root = FindWebRoot();
         var markup = File.ReadAllText(Path.Combine(root, "Modules", "Home", "Home.razor"));

@@ -8,7 +8,7 @@ public sealed class DeploymentContractTests
     private static readonly string RepositoryRoot = Directory.GetParent(Directory.GetParent(WebRoot)!.FullName)!.FullName;
 
     [Fact]
-    public void ProductionImage_PublishesBlazorAndServesItOnTheNginxContractPort()
+    public void ProductionImagePublishesBlazorAndServesItOnTheNginxContractPort()
     {
         var dockerfile = ReadWebFile("Dockerfile");
         var nginx = ReadWebFile("nginx.conf");
@@ -31,7 +31,7 @@ public sealed class DeploymentContractTests
     }
 
     [Fact]
-    public void DevelopmentImage_RunsTailwindAndDotnetWatch()
+    public void DevelopmentImageRunsTailwindAndDotnetWatch()
     {
         var dockerfile = ReadWebFile("Dockerfile.dev");
 
@@ -44,7 +44,7 @@ public sealed class DeploymentContractTests
     }
 
     [Fact]
-    public void ComposeAndCi_TargetDotnetAndBlazorArtifacts()
+    public void ComposeAndCiTargetDotnetAndBlazorArtifacts()
     {
         var compose = File.ReadAllText(Path.Combine(RepositoryRoot, "docker-compose.yml"));
         var buildWorkflow = File.ReadAllText(Path.Combine(RepositoryRoot, ".github", "workflows", "build.yaml"));

@@ -1,5 +1,5 @@
 using System.Security.Claims;
-using Api.Shared.Auth;
+using Api.Infrastructure.Auth;
 
 namespace Api.Modules.Games;
 
@@ -81,7 +81,7 @@ public static class GamesEndpoints
     {
         var resolvedLimit = limit ?? 10;
         if (resolvedLimit <= 0)
-            throw Api.Shared.Http.AppProblem.Validation(
+            throw Api.Infrastructure.Http.AppProblemException.Validation(
                 "limit must be a positive integer.");
         return TypedResults.Ok(await service.Search(query ?? "", resolvedLimit, ct));
     }

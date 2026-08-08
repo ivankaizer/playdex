@@ -1,12 +1,16 @@
 using Microsoft.Extensions.Diagnostics.HealthChecks;
+using Microsoft.Extensions.Logging;
 using Npgsql;
 
 namespace Api.Observability;
 
-public sealed class DatabaseHealthCheck(
+public sealed partial class DatabaseHealthCheck(
     NpgsqlDataSource dataSource,
     ILogger<DatabaseHealthCheck> logger) : IHealthCheck
 {
+    [LoggerMessage(Level = LogLevel.Error, Message = "Database health check failed")]
+    private partial void LogDatabaseHealthCheckFailed(Exception exception);
+
     public async Task<HealthCheckResult> CheckHealthAsync(
         HealthCheckContext context,
         CancellationToken cancellationToken = default)
@@ -22,7 +26,7 @@ public sealed class DatabaseHealthCheck(
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Database health check failed");
+            LogDatabaseHealthCheckFailed(ex);
             return HealthCheckResult.Unhealthy("Database unreachable.", ex);
         }
     }

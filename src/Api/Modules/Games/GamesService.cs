@@ -1,5 +1,5 @@
-using Api.Shared.Common;
-using Api.Shared.Http;
+using Api.Infrastructure.Common;
+using Api.Infrastructure.Http;
 
 namespace Api.Modules.Games;
 
@@ -18,7 +18,7 @@ public sealed class GamesService(GamesRepository repository) : IGames
         var trimmed = query.Trim();
         if (trimmed.Length == 0)
         {
-            throw AppProblem.Validation("query is required.");
+            throw AppProblemException.Validation("query is required.");
         }
 
         var results = await repository.SearchGames(trimmed, Math.Clamp(limit, 1, 50), ct);
@@ -29,7 +29,7 @@ public sealed class GamesService(GamesRepository repository) : IGames
     {
         var id = GameId.Parse(gameId);
         var game = await repository.GetGameById(id, ct);
-        return game ?? throw AppProblem.NotFound("Game not found.");
+        return game ?? throw AppProblemException.NotFound("Game not found.");
     }
 
     public async Task<GameConnectionListResponseDto> ListConnections(long userId, CancellationToken ct)
@@ -46,13 +46,13 @@ public sealed class GamesService(GamesRepository repository) : IGames
 
         if (gameId == connectedId)
         {
-            throw AppProblem.Validation("gameId and connectedGameId must be different.");
+            throw AppProblemException.Validation("gameId and connectedGameId must be different.");
         }
 
         var first = await repository.GetGameEntity(gameId, ct);
         var second = await repository.GetGameEntity(connectedId, ct);
         if (first is null || second is null)
-            throw AppProblem.NotFound("Both games must exist to connect.");
+            throw AppProblemException.NotFound("Both games must exist to connect.");
 
         await repository.CreateConnection(userId, gameId, connectedId, ct);
         var normalized = GameConnections.Normalize(gameId, connectedId);
@@ -67,7 +67,7 @@ public sealed class GamesService(GamesRepository repository) : IGames
         var gameId = GameId.Parse(request.GameId);
         var connectedId = GameId.Parse(request.ConnectedGameId);
         if (gameId == connectedId)
-            throw AppProblem.Validation("gameId and connectedGameId must be different.");
+            throw AppProblemException.Validation("gameId and connectedGameId must be different.");
         await repository.DeleteConnection(userId, gameId, connectedId, ct);
         var normalized = GameConnections.Normalize(gameId, connectedId);
         return new GameConnectionChangeResponseDto(
@@ -77,7 +77,7 @@ public sealed class GamesService(GamesRepository repository) : IGames
 
     public async Task<GameIgnoreResponseDto> GetIgnore(long userId, string? gameId, CancellationToken ct)
     {
-        if (gameId is null) throw AppProblem.Validation("gameId is required.");
+        if (gameId is null) throw AppProblemException.Validation("gameId is required.");
         var id = GameId.Parse(gameId);
         var ignored = await repository.GetIgnoreStatus(userId, id, ct);
         return new GameIgnoreResponseDto(gameId, ignored);
@@ -92,7 +92,7 @@ public sealed class GamesService(GamesRepository repository) : IGames
 
     public async Task<GameRatingResponseDto> GetRating(long userId, string? gameId, CancellationToken ct)
     {
-        if (gameId is null) throw AppProblem.Validation("gameId is required.");
+        if (gameId is null) throw AppProblemException.Validation("gameId is required.");
         var id = GameId.Parse(gameId);
         var rating = await repository.GetRating(userId, id, ct);
         return new GameRatingResponseDto(gameId, rating);
@@ -104,7 +104,7 @@ public sealed class GamesService(GamesRepository repository) : IGames
         var rating = request.Rating;
         if (rating is null || rating < 1 || rating > 5)
         {
-            throw AppProblem.Validation("Rating must be between 1 and 5.");
+            throw AppProblemException.Validation("Rating must be between 1 and 5.");
         }
         await repository.SetRating(userId, gameId, rating.Value, ct);
         return new GameRatingResponseDto(request.GameId, rating);

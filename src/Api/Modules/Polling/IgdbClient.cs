@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
@@ -54,7 +55,7 @@ public sealed class IgdbClient(HttpClient httpClient, IOptions<IgdbOptions> opti
         {
             var platformInfo = game.Platforms?.FirstOrDefault(p => p?.Id is not null);
             return new IgdbSearchResult(
-                Id: game.Id.ToString(),
+                Id: game.Id.ToString(CultureInfo.InvariantCulture),
                 Title: game.Name,
                 Platform: platformInfo?.Name,
                 PlatformId: platformInfo?.Id,

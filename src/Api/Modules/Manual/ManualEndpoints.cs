@@ -1,5 +1,5 @@
 using System.Security.Claims;
-using Api.Shared.Auth;
+using Api.Infrastructure.Auth;
 
 namespace Api.Modules.Manual;
 

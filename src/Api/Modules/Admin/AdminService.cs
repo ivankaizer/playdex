@@ -1,5 +1,5 @@
-using Api.Shared.Common;
-using Api.Shared.Http;
+using Api.Infrastructure.Common;
+using Api.Infrastructure.Http;
 
 namespace Api.Modules.Admin;
 
@@ -63,13 +63,13 @@ public sealed class AdminService(AdminRepository repository)
         AdminSessionMoveRequest request, CancellationToken ct)
     {
         if (request.SessionIds.Length == 0)
-            throw AppProblem.Validation("At least one sessionId is required.");
+            throw AppProblemException.Validation("At least one sessionId is required.");
 
         if (request.TargetCredentialId <= 0)
-            throw AppProblem.Validation("TargetCredentialId must be a positive number.");
+            throw AppProblemException.Validation("TargetCredentialId must be a positive number.");
 
         if (await repository.GetCredential(request.TargetCredentialId, ct) is null)
-            throw AppProblem.NotFound("Target credential not found.");
+            throw AppProblemException.NotFound("Target credential not found.");
 
         var moved = await repository.MoveSessions(request.SessionIds, request.TargetCredentialId, ct);
 
@@ -100,11 +100,11 @@ public sealed class AdminService(AdminRepository repository)
         AdminPlatformStatusUpdateRequest request, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(request.Platform))
-            throw AppProblem.Validation("Platform is required.");
+            throw AppProblemException.Validation("Platform is required.");
 
         var platform = request.Platform.Trim();
         if (!await repository.PlatformExists(platform, ct))
-            throw AppProblem.NotFound("Platform not found.");
+            throw AppProblemException.NotFound("Platform not found.");
 
         var updated = await repository.UpdatePlatformStatus(platform, request.Enabled, ct);
 
@@ -137,10 +137,10 @@ public sealed class AdminService(AdminRepository repository)
         long credentialId, AdminCredentialChanges changes, CancellationToken ct)
     {
         if (credentialId <= 0)
-            throw AppProblem.Validation("CredentialId must be a positive number.");
+            throw AppProblemException.Validation("CredentialId must be a positive number.");
 
         if (!changes.ApiKeyChanged && !changes.AccountUserChanged)
-            throw AppProblem.Validation("At least one field must be provided.");
+            throw AppProblemException.Validation("At least one field must be provided.");
 
         var row = await repository.UpdateCredential(
             credentialId,
@@ -151,7 +151,7 @@ public sealed class AdminService(AdminRepository repository)
             ct);
 
         if (row is null)
-            throw AppProblem.NotFound("Credential not found.");
+            throw AppProblemException.NotFound("Credential not found.");
 
         var dto = new AdminCredentialDto(
             row.Id, row.UserEmail, row.Platform, row.ApiKey, row.AccountUser, row.Active);
@@ -167,7 +167,7 @@ public sealed class AdminService(AdminRepository repository)
         var trimmed = query.Trim();
 
         if (trimmed.Length == 0)
-            throw AppProblem.Validation("query is required.");
+            throw AppProblemException.Validation("query is required.");
 
         var rows = await repository.SearchGames(trimmed, Math.Clamp(limit, 1, 50), ct);
 
@@ -192,7 +192,7 @@ public sealed class AdminService(AdminRepository repository)
     {
         if (!changes.TitleChanged && !changes.ImageUrlChanged &&
             !changes.LockTitleChanged && !changes.LockImageChanged)
-            throw AppProblem.Validation("At least one field must be provided.");
+            throw AppProblemException.Validation("At least one field must be provided.");
 
         var row = await repository.UpdateGame(
             gameId,
@@ -207,7 +207,7 @@ public sealed class AdminService(AdminRepository repository)
             ct);
 
         if (row is null)
-            throw AppProblem.NotFound("Game not found.");
+            throw AppProblemException.NotFound("Game not found.");
 
         var dto = new AdminGameDto(
             GameId.Encode(row.Id),

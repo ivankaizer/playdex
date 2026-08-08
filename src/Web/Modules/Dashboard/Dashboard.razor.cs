@@ -1,12 +1,12 @@
 using System.Globalization;
 using System.Runtime.CompilerServices;
 using Microsoft.AspNetCore.Components;
-using Web.Shared.Http;
-using Web.Shared.Auth;
-using Web.Shared.Browser;
-using Web.Shared.Models;
+using Web.Infrastructure.Http;
+using Web.Infrastructure.Auth;
+using Web.Infrastructure.Browser;
+using Web.Infrastructure.Models;
 using Web.Routing;
-using Web.Shared.Common;
+using Web.Infrastructure.Common;
 
 [assembly: InternalsVisibleTo("Web.Tests")]
 
@@ -169,7 +169,7 @@ internal sealed class DashboardState
     public void SetTodaySessionsPage(int page) =>
         TodaySessionsPage = Math.Clamp(page, 1, TodaySessionsTotalPages);
 
-    private static IReadOnlyList<DashboardSessionCard> CreateTodaySessionCards(
+    private static DashboardSessionCard[] CreateTodaySessionCards(
         IReadOnlyList<AccountSession> sessions,
         DateTimeOffset now) =>
         sessions.Select(session => new DashboardSessionCard(
@@ -179,7 +179,7 @@ internal sealed class DashboardState
             session.Game,
             Formatters.FormatDuration(
                 SessionDates.GetDurationSeconds(session.StartedAt, session.EndedAt, now),
-                DurationFormat.Long),
+                DurationFormat.Full),
             Formatters.FormatSessionPlatformLabel(session.Platform, session.MappedPlatform),
             session.CapsuleUrl)).ToArray();
 
@@ -198,7 +198,7 @@ internal sealed class DashboardState
             Formatters.FormatTimeLabel(CurrentSession.StartedAt),
             Formatters.FormatDuration(
                 SessionDates.GetDurationSeconds(CurrentSession.StartedAt, CurrentSession.EndedAt, now),
-                DurationFormat.Long));
+                DurationFormat.Full));
     }
 
     public static DashboardStatsView GetStatsView(AccountStatsPeriod? stats)
@@ -219,7 +219,7 @@ internal sealed class DashboardState
                 Formatters.FormatHours(game.TotalSeconds, 1))).ToArray());
     }
 
-    private static IReadOnlyList<DashboardPlatformView> CreatePlatforms(
+    private static DashboardPlatformView[] CreatePlatforms(
         IReadOnlyList<AccountPlatformStat> platforms,
         double totalSeconds)
     {
@@ -284,8 +284,8 @@ public partial class Dashboard : ComponentBase, IDisposable
         Monthly.TopGames.Select(item => (item.GameId, item.Title, item.Hours)).ToArray();
     private IReadOnlyList<(string GameId, string Title, string Hours)> YearlyTopGames =>
         Yearly.TopGames.Select(item => (item.GameId, item.Title, item.Hours)).ToArray();
-    private string MonthlyHighlightsLabel => $"{DateTime.Now.ToString("MMMM", EnUs)} highlights";
-    private string YearlyRecapLabel => $"{DateTime.Now.Year} recap";
+    private static string MonthlyHighlightsLabel => $"{DateTime.Now.ToString("MMMM", EnUs)} highlights";
+    private static string YearlyRecapLabel => $"{DateTime.Now.Year} recap";
 
     protected override async Task OnInitializedAsync()
     {
@@ -360,7 +360,7 @@ public partial class Dashboard : ComponentBase, IDisposable
     private Task NavigateToSessionsAsync() => NavigateAsync("/sessions");
     private Task NavigateToGameAsync(string gameId) => NavigateAsync($"/games/{GameHash.EncodeGameId(gameId)}");
 
-    private string RecapPath(DateRangeKind range)
+    private static string RecapPath(DateRangeKind range)
     {
         var now = DateTimeOffset.Now;
         var utc = now.UtcDateTime;
@@ -384,6 +384,7 @@ public partial class Dashboard : ComponentBase, IDisposable
     {
         _lifetime.Cancel();
         _lifetime.Dispose();
+        GC.SuppressFinalize(this);
     }
 
     private enum DateRangeKind

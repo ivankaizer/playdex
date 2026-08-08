@@ -1,6 +1,6 @@
 @page "/admin"
 @using Web.Layout
-@using Web.Shared.Common
+@using Web.Infrastructure.Common
 
 <AppLayout Title="Admin">
     <section class="mt-10 grid gap-6 lg:grid-cols-2">
@@ -33,7 +33,7 @@
                                         <div class="min-w-0">
                                             <p class="truncate font-medium text-slate-800 dark:text-slate-100">@session.GameName</p>
                                             <p class="mt-1 text-slate-500 dark:text-slate-400">
-                                                @Formatters.FormatLocalDateTime(session.StartedAt) · @Formatters.FormatDuration(session.DurationSeconds, DurationFormat.Short)
+                                                @Formatters.FormatLocalDateTime(session.StartedAt) · @Formatters.FormatDuration(session.DurationSeconds, DurationFormat.Compact)
                                             </p>
                                         </div>
                                         <span class="@($"shrink-0 rounded-full px-2 py-1 font-semibold uppercase tracking-[0.2em] {(session.Live ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300" : "bg-slate-200 text-slate-600 dark:bg-slate-800 dark:text-slate-300")}")">
@@ -249,7 +249,7 @@
                                 @session.UserEmail · @Formatters.FormatProviderName(session.Platform) · @(session.AccountUser ?? "Local") · Session #@session.SessionId
                             </p>
                             <p class="mt-1 text-slate-500 dark:text-slate-400">
-                                @Formatters.FormatLocalDateTime(session.StartedAt) · @Formatters.FormatDuration(session.DurationSeconds, DurationFormat.Short)
+                                @Formatters.FormatLocalDateTime(session.StartedAt) · @Formatters.FormatDuration(session.DurationSeconds, DurationFormat.Compact)
                             </p>
                         </div>
                         <span class="@($"shrink-0 rounded-full px-2 py-1 text-xs font-semibold uppercase tracking-[0.2em] {(session.Live ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300" : "bg-slate-200 text-slate-600 dark:bg-slate-800 dark:text-slate-300")}")">

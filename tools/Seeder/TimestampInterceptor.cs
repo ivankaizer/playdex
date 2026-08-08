@@ -1,4 +1,4 @@
-using Api.Shared.Persistence;
+using Api.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 

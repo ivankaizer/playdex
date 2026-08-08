@@ -1,5 +1,6 @@
-using Api.Shared.Http;
-using Api.Shared.Common;
+using System.Globalization;
+using Api.Infrastructure.Http;
+using Api.Infrastructure.Common;
 
 namespace Api.Modules.Telegram;
 
@@ -11,18 +12,39 @@ public sealed partial class TelegramBackgroundService(
     internal const int DefaultPollIntervalMs = 2_000;
     internal const int BackoffIntervalMs = 10_000;
 
+    [LoggerMessage(Level = LogLevel.Warning, Message = "TELEGRAM_BOT_TOKEN is not configured. Telegram integration is disabled. Set the environment variable to enable it.")]
+    private partial void LogTelegramNotConfigured();
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Telegram integration started — polling for commands.")]
+    private partial void LogTelegramStarted();
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Processing update {UpdateId} from chat {ChatId}: {Text}")]
+    private partial void LogProcessingUpdate(long updateId, long chatId, string? text);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Telegram API request failed (network / auth error).")]
+    private partial void LogTelegramApiRequestFailed(Exception exception);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Unhandled error in Telegram polling loop.")]
+    private partial void LogTelegramPollingLoopError(Exception exception);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Telegram integration stopped.")]
+    private partial void LogTelegramStopped();
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error processing /start for chat {ChatId}")]
+    private partial void LogStartError(Exception exception, long chatId);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error processing /stop for chat {ChatId}")]
+    private partial void LogStopError(Exception exception, long chatId);
+
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         if (!telegram.IsEnabled)
         {
-            logger.LogWarning(
-                "TELEGRAM_BOT_TOKEN is not configured. " +
-                "Telegram integration is disabled. " +
-                "Set the environment variable to enable it.");
+            LogTelegramNotConfigured();
             return;
         }
 
-        logger.LogInformation("Telegram integration started — polling for commands.");
+        LogTelegramStarted();
 
         long? offset = null;
 
@@ -40,11 +62,7 @@ public sealed partial class TelegramBackgroundService(
                         if (update.Message?.Text is null)
                             continue;
 
-                        logger.LogDebug(
-                            "Processing update {UpdateId} from chat {ChatId}: {Text}",
-                            update.UpdateId,
-                            update.Message.Chat.Id,
-                            update.Message.Text);
+                        LogProcessingUpdate(update.UpdateId, update.Message.Chat.Id, update.Message.Text);
 
                         await ProcessCommandAsync(telegram, update, stoppingToken);
                     }
@@ -60,7 +78,7 @@ public sealed partial class TelegramBackgroundService(
                 }
                 catch (HttpRequestException ex)
                 {
-                    logger.LogError(ex, "Telegram API request failed (network / auth error).");
+                    LogTelegramApiRequestFailed(ex);
                     await Task.Delay(BackoffIntervalMs, stoppingToken);
                 }
                 catch (TaskCanceledException)
@@ -68,14 +86,14 @@ public sealed partial class TelegramBackgroundService(
                 }
                 catch (Exception ex)
                 {
-                    logger.LogError(ex, "Unhandled error in Telegram polling loop.");
+                    LogTelegramPollingLoopError(ex);
                     await Task.Delay(BackoffIntervalMs, stoppingToken);
                 }
             }
         }
         finally
         {
-            logger.LogInformation("Telegram integration stopped.");
+            LogTelegramStopped();
         }
     }
 
@@ -126,7 +144,7 @@ public sealed partial class TelegramBackgroundService(
             var userRepo = scope.ServiceProvider.GetRequiredService<TelegramRepository>();
             var manual = scope.ServiceProvider.GetRequiredService<Api.Modules.Manual.ManualService>();
 
-            var user = await userRepo.GetUserByChatId(chatId.ToString(), ct);
+            var user = await userRepo.GetUserByChatId(chatId.ToString(CultureInfo.InvariantCulture), ct);
 
             if (user is null)
             {
@@ -147,13 +165,13 @@ public sealed partial class TelegramBackgroundService(
                     ? "Session started."
                     : $"Session started: {summary.Title} ({summary.Platform}).", ct);
         }
-        catch (AppProblem ex)
+        catch (AppProblemException ex)
         {
             await telegram.SendMessageAsync(chatId, $"❌ {ex.Message}", ct);
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Error processing /start for chat {ChatId}", chatId);
+            LogStartError(ex, chatId);
             await telegram.SendMessageAsync(chatId,
                 "❌ An unexpected error occurred while starting the session.", ct);
         }
@@ -167,7 +185,7 @@ public sealed partial class TelegramBackgroundService(
             using var scope = scopeFactory.CreateScope();
             var userRepo = scope.ServiceProvider.GetRequiredService<TelegramRepository>();
 
-            var user = await userRepo.GetUserByChatId(chatId.ToString(), ct);
+            var user = await userRepo.GetUserByChatId(chatId.ToString(CultureInfo.InvariantCulture), ct);
 
             if (user is null)
             {
@@ -185,13 +203,13 @@ public sealed partial class TelegramBackgroundService(
                   string.Join(", ", sessions.Select(row => $"{row.Title} ({row.Platform})")) + ".";
             await telegram.SendMessageAsync(chatId, message, ct);
         }
-        catch (AppProblem ex)
+        catch (AppProblemException ex)
         {
             await telegram.SendMessageAsync(chatId, $"❌ {ex.Message}", ct);
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Error processing /stop for chat {ChatId}", chatId);
+            LogStopError(ex, chatId);
             await telegram.SendMessageAsync(chatId,
                 "❌ An unexpected error occurred while stopping sessions.", ct);
         }

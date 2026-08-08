@@ -1,5 +1,5 @@
-using Web.Shared.Auth;
-using Web.Shared.Browser;
+using Web.Infrastructure.Auth;
+using Web.Infrastructure.Browser;
 using Xunit;
 
 namespace Web.Tests.Auth;
@@ -7,7 +7,7 @@ namespace Web.Tests.Auth;
 public sealed class AuthSessionTests
 {
     [Fact]
-    public async Task StoreLogin_WritesExactlyTheFourReactAuthKeys()
+    public async Task StoreLoginWritesExactlyTheFourReactAuthKeys()
     {
         var storage = new MemoryBrowserStorage();
         var session = new AuthSession(storage);
@@ -29,7 +29,7 @@ public sealed class AuthSessionTests
     [InlineData("", false)]
     [InlineData(" ", true)]
     [InlineData("token", true)]
-    public async Task IsLoggedIn_UsesNonEmptyAccessToken(string? token, bool expected)
+    public async Task IsLoggedInUsesNonEmptyAccessToken(string? token, bool expected)
     {
         var session = new AuthSession(new MemoryBrowserStorage(("playdex.token", token)));
 
@@ -42,7 +42,7 @@ public sealed class AuthSessionTests
     [InlineData("0", false)]
     [InlineData(" 1", false)]
     [InlineData(null, false)]
-    public async Task IsAdmin_AcceptsOnlyExactOne(string? value, bool expected)
+    public async Task IsAdminAcceptsOnlyExactOne(string? value, bool expected)
     {
         var session = new AuthSession(new MemoryBrowserStorage(("playdex.isAdmin", value)));
 
@@ -50,7 +50,7 @@ public sealed class AuthSessionTests
     }
 
     [Fact]
-    public async Task ProfileAndTokenUpdates_WriteOnlyTheirOwnKeys()
+    public async Task ProfileAndTokenUpdatesWriteOnlyTheirOwnKeys()
     {
         var storage = new MemoryBrowserStorage();
         var session = new AuthSession(storage);
@@ -69,7 +69,7 @@ public sealed class AuthSessionTests
     }
 
     [Fact]
-    public async Task Logout_RemovesOnlyAuthKeysAndPreservesTheme()
+    public async Task LogoutRemovesOnlyAuthKeysAndPreservesTheme()
     {
         var storage = new MemoryBrowserStorage(
             ("playdex.token", "access"),
@@ -93,7 +93,7 @@ public sealed class AuthSessionTests
     }
 
     [Fact]
-    public async Task ClearAdmin_RemovesOnlyTheCachedAdminFlag()
+    public async Task ClearAdminRemovesOnlyTheCachedAdminFlag()
     {
         var storage = new MemoryBrowserStorage(
             ("playdex.token", "access"),
@@ -109,7 +109,7 @@ public sealed class AuthSessionTests
     }
 
     [Fact]
-    public async Task StoreAdmin_UpdatesOnlyTheCachedAdminFlag()
+    public async Task StoreAdminUpdatesOnlyTheCachedAdminFlag()
     {
         var storage = new MemoryBrowserStorage(("playdex.email", "player@example.com"));
         var session = new AuthSession(storage);
@@ -121,7 +121,7 @@ public sealed class AuthSessionTests
     }
 
     [Fact]
-    public void BrowserRuntime_ExposesOnlyTheRequiredGlobalInteropAndLoadsBeforeBlazor()
+    public void BrowserRuntimeExposesOnlyTheRequiredGlobalInteropAndLoadsBeforeBlazor()
     {
         var webRoot = FindWebRoot();
         var scriptPath = Path.Combine(webRoot, "wwwroot", "js", "playdex.js");
@@ -142,7 +142,7 @@ public sealed class AuthSessionTests
     }
 
     [Fact]
-    public void Program_RegistersAuthBrowserInteropAndApiServicesAsScoped()
+    public void ProgramRegistersAuthBrowserInteropAndApiServicesAsScoped()
     {
         var program = File.ReadAllText(Path.Combine(FindWebRoot(), "Program.cs"));
 

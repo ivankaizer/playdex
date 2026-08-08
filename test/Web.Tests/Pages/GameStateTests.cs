@@ -1,6 +1,7 @@
-using Web.Shared.Models;
+using System.Globalization;
+using Web.Infrastructure.Models;
 using Web.Modules.Games;
-using Web.Shared.Common;
+using Web.Infrastructure.Common;
 using Xunit;
 
 namespace Web.Tests.Pages;
@@ -42,7 +43,7 @@ public sealed class GameStateTests
     }
 
     [Fact]
-    public void RecentPageLoads_MaintainTotalAndPageIndependentOfCharts()
+    public void RecentPageLoadsMaintainTotalAndPageIndependentOfCharts()
     {
         var state = new GameState();
         Assert.True(state.TryBegin("3H4h3", new DateTimeOffset(2026, 7, 18, 0, 0, 0, TimeSpan.Zero), out _));
@@ -69,7 +70,7 @@ public sealed class GameStateTests
     }
 
     [Fact]
-    public void ChartBuckets_ComeFromServerStatsAndExcludeNothingOnTheClient()
+    public void ChartBucketsComeFromServerStatsAndExcludeNothingOnTheClient()
     {
         var state = new GameState();
         Assert.True(state.TryBegin("3H4h3", new DateTimeOffset(2026, 7, 18, 0, 0, 0, TimeSpan.Zero), out _));
@@ -156,8 +157,8 @@ public sealed class GameStateTests
         string? capsule = null) =>
         new(
             id,
-            DateTimeOffset.Parse(started),
-            DateTimeOffset.Parse(ended),
+            DateTimeOffset.Parse(started, CultureInfo.InvariantCulture),
+            DateTimeOffset.Parse(ended, CultureInfo.InvariantCulture),
             "42",
             "steam",
             "Game",

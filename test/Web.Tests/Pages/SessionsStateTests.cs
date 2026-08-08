@@ -1,4 +1,4 @@
-using Web.Shared.Models;
+using Web.Infrastructure.Models;
 using Web.Modules.Sessions;
 using Xunit;
 
@@ -7,7 +7,7 @@ namespace Web.Tests.Pages;
 public sealed class SessionsStateTests
 {
     [Fact]
-    public void InitialState_UsesTheUtcMondayThroughSundayRangeAndExactReactUrls()
+    public void InitialStateUsesTheUtcMondayThroughSundayRangeAndExactReactUrls()
     {
         var state = new SessionsState(
             new DateTimeOffset(2026, 7, 13, 23, 30, 0, TimeSpan.FromHours(-7)));
@@ -15,7 +15,7 @@ public sealed class SessionsStateTests
         Assert.Equal("this-week", state.Preset);
         Assert.Equal("2026-07-13", state.From);
         Assert.Equal("2026-07-19", state.To);
-        Assert.Equal(10, state.Limit);
+        Assert.Equal(10, SessionsState.Limit);
         Assert.Equal(
             "/sessions?limit=10&offset=0&from=2026-07-13&to=2026-07-19&sort=date&direction=desc",
             state.BuildListRequest());
@@ -25,7 +25,7 @@ public sealed class SessionsStateTests
     }
 
     [Fact]
-    public void DebouncedTitle_IsTrimmedResetsPagingAndOnlyChangesTheListUrl()
+    public void DebouncedTitleIsTrimmedResetsPagingAndOnlyChangesTheListUrl()
     {
         var state = new SessionsState(new DateTimeOffset(2026, 7, 13, 0, 0, 0, TimeSpan.Zero));
         state.SetOffset(30);
@@ -44,7 +44,7 @@ public sealed class SessionsStateTests
     }
 
     [Fact]
-    public void DebouncedTitle_UsesUrlSearchParamsFormEncodingForReactSpecialCharacters()
+    public void DebouncedTitleUsesUrlSearchParamsFormEncodingForReactSpecialCharacters()
     {
         var state = new SessionsState(new DateTimeOffset(2026, 7, 13, 0, 0, 0, TimeSpan.Zero));
 
@@ -57,7 +57,7 @@ public sealed class SessionsStateTests
     }
 
     [Fact]
-    public void DebouncedTitle_RejectsAStaleVersionSoOlderWorkCannotWin()
+    public void DebouncedTitleRejectsAStaleVersionSoOlderWorkCannotWin()
     {
         var state = new SessionsState(new DateTimeOffset(2026, 7, 13, 0, 0, 0, TimeSpan.Zero));
         state.SetOffset(20);
@@ -72,7 +72,7 @@ public sealed class SessionsStateTests
     }
 
     [Fact]
-    public void CustomDates_ResetPagingAndStatsRequireBothBounds()
+    public void CustomDatesResetPagingAndStatsRequireBothBounds()
     {
         var state = new SessionsState(new DateTimeOffset(2026, 7, 13, 0, 0, 0, TimeSpan.Zero));
         state.SetOffset(20);
@@ -101,7 +101,7 @@ public sealed class SessionsStateTests
     [InlineData("this-month", "2026-07-01", "2026-07-31")]
     [InlineData("this-year", "2026-01-01", "2026-12-31")]
     [InlineData("last-year", "2025-01-01", "2025-12-31")]
-    public void Presets_UseUtcCalendarRangesAndResetPaging(string preset, string from, string to)
+    public void PresetsUseUtcCalendarRangesAndResetPaging(string preset, string from, string to)
     {
         var now = new DateTimeOffset(2026, 7, 13, 23, 30, 0, TimeSpan.FromHours(-7));
         var state = new SessionsState(now);
@@ -116,7 +116,7 @@ public sealed class SessionsStateTests
     }
 
     [Fact]
-    public void Sort_ResetsPagingTogglesTheActiveKeyAndDefaultsANewKeyToDescending()
+    public void SortResetsPagingTogglesTheActiveKeyAndDefaultsANewKeyToDescending()
     {
         var state = new SessionsState(new DateTimeOffset(2026, 7, 13, 0, 0, 0, TimeSpan.Zero));
         state.SetOffset(20);
@@ -134,7 +134,7 @@ public sealed class SessionsStateTests
     }
 
     [Fact]
-    public void ListAndStats_HaveIndependentLoadingDataAndErrorLifecycles()
+    public void ListAndStatsHaveIndependentLoadingDataAndErrorLifecycles()
     {
         var state = new SessionsState(new DateTimeOffset(2026, 7, 13, 0, 0, 0, TimeSpan.Zero));
         var stats = new AccountStatsPeriod(3600, 1, "Hades II", [], []);
@@ -164,7 +164,7 @@ public sealed class SessionsStateTests
     }
 
     [Fact]
-    public void CompletedList_DrivesTheReactShowingAndFourPageWindow()
+    public void CompletedListDrivesTheReactShowingAndFourPageWindow()
     {
         var state = new SessionsState(new DateTimeOffset(2026, 7, 13, 0, 0, 0, TimeSpan.Zero));
         state.SetOffset(20);
@@ -184,7 +184,7 @@ public sealed class SessionsStateTests
     }
 
     [Fact]
-    public void StatsLoad_IsSkippedAndClearedWhenEitherDateBoundIsMissing()
+    public void StatsLoadIsSkippedAndClearedWhenEitherDateBoundIsMissing()
     {
         var state = new SessionsState(new DateTimeOffset(2026, 7, 13, 0, 0, 0, TimeSpan.Zero));
         var stats = new AccountStatsPeriod(3600, 1, null, [], []);
@@ -201,7 +201,7 @@ public sealed class SessionsStateTests
     }
 
     [Fact]
-    public async Task RequestVersions_RejectDelayedStatsAfterTheRangeBecomesIncomplete()
+    public async Task RequestVersionsRejectDelayedStatsAfterTheRangeBecomesIncomplete()
     {
         var versions = new SessionsRequestVersions();
         var request = versions.BeginStatsRequest();
@@ -221,7 +221,7 @@ public sealed class SessionsStateTests
     }
 
     [Fact]
-    public void Delete_IsConfirmGatedUsesTheExactEndpointAndRefreshesOnlyOnSuccess()
+    public void DeleteIsConfirmGatedUsesTheExactEndpointAndRefreshesOnlyOnSuccess()
     {
         var request = SessionsDeleteRequest.For(7);
         Assert.Equal("Remove this session entry?", request.Confirmation);
@@ -246,7 +246,7 @@ public sealed class SessionsStateTests
     }
 
     [Fact]
-    public void RowView_UsesMappedPlatformCapsuleIgnoredFlagHashAndShortDuration()
+    public void RowViewUsesMappedPlatformCapsuleIgnoredFlagHashAndShortDuration()
     {
         var now = new DateTimeOffset(2026, 7, 13, 12, 0, 0, TimeSpan.Zero);
         var state = new SessionsState(now);
@@ -266,7 +266,7 @@ public sealed class SessionsStateTests
     }
 
     [Fact]
-    public void SessionsPage_WiresReactRequestsResponsiveRowsModalAndCancellationWithoutMappedBadges()
+    public void SessionsPageWiresReactRequestsResponsiveRowsModalAndCancellationWithoutMappedBadges()
     {
         var root = FindWebRoot();
         var markupPath = Path.Combine(root, "Modules", "Sessions", "Sessions.razor");

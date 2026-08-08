@@ -1,6 +1,6 @@
 using System.Globalization;
 using Microsoft.AspNetCore.Components;
-using Web.Shared.Http;
+using Web.Infrastructure.Http;
 using Web.Modules.Admin;
 
 namespace Web.Modules.Admin;
@@ -187,7 +187,7 @@ internal sealed class AdminState
         SessionTotal = snapshot.Movable.Total;
         SessionPage = 1;
         _selectedSessionIds.Clear();
-        SelectedCredentialPlatform = CredentialPlatforms.FirstOrDefault() ?? string.Empty;
+        SelectedCredentialPlatform = CredentialPlatforms.Count > 0 ? CredentialPlatforms[0] : string.Empty;
         EndInitialLoading();
     }
 
@@ -701,5 +701,6 @@ public partial class Admin : ComponentBase, IDisposable
         _gameSearchRequest?.Dispose();
         _lifetime.Cancel();
         _lifetime.Dispose();
+        GC.SuppressFinalize(this);
     }
 }

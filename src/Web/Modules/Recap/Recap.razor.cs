@@ -1,12 +1,12 @@
 using System.Globalization;
 using System.Net;
 using Microsoft.AspNetCore.Components;
-using Web.Shared.Http;
-using Web.Shared.Auth;
-using Web.Shared.Browser;
+using Web.Infrastructure.Http;
+using Web.Infrastructure.Auth;
+using Web.Infrastructure.Browser;
 using Web.Modules.Recap;
 using Web.Routing;
-using Web.Shared.Common;
+using Web.Infrastructure.Common;
 
 namespace Web.Modules.Recap;
 
@@ -155,7 +155,7 @@ internal sealed class RecapState
     private static string BuildRangeRequest(string from, string to) =>
         $"/recap?from={Uri.EscapeDataString(from)}&to={Uri.EscapeDataString(to)}";
 
-    private static IReadOnlyDictionary<string, string> ParseQuery(string query)
+    private static Dictionary<string, string> ParseQuery(string query)
     {
         var values = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (var part in query.TrimStart('?').Split('&', StringSplitOptions.RemoveEmptyEntries))
@@ -287,10 +287,10 @@ public partial class Recap : ComponentBase, IDisposable
     private IReadOnlyList<(string Label, string Value)> SessionLengthStats => CurrentRecap is { } recap
         ?
         [
-            ("Avg session length", Formatters.FormatDuration(recap.AverageSessionSeconds, DurationFormat.Long)),
-            ("Median session length", Formatters.FormatDuration(recap.MedianSessionSeconds, DurationFormat.Long)),
-            ("Longest session", Formatters.FormatDuration(recap.LongestSessionSeconds, DurationFormat.Long)),
-            ("Shortest session", Formatters.FormatDuration(recap.ShortestSessionSeconds, DurationFormat.Long)),
+            ("Avg session length", Formatters.FormatDuration(recap.AverageSessionSeconds, DurationFormat.Full)),
+            ("Median session length", Formatters.FormatDuration(recap.MedianSessionSeconds, DurationFormat.Full)),
+            ("Longest session", Formatters.FormatDuration(recap.LongestSessionSeconds, DurationFormat.Full)),
+            ("Shortest session", Formatters.FormatDuration(recap.ShortestSessionSeconds, DurationFormat.Full)),
         ]
         : [];
 
@@ -334,10 +334,10 @@ public partial class Recap : ComponentBase, IDisposable
                 ? $"{time.Title} · {Formatters.FormatHours(time.TotalSeconds, 1)}"
                 : "—"),
             ("Top game by avg session", recap.TopGameByAverageSession is { } average
-                ? $"{average.Title} · {Formatters.FormatDuration(average.AverageSessionSeconds, DurationFormat.Long)}"
+                ? $"{average.Title} · {Formatters.FormatDuration(average.AverageSessionSeconds, DurationFormat.Full)}"
                 : "—"),
             ("Longest session game", recap.GameWithLongestSession is { } longest
-                ? $"{longest.Title} · {Formatters.FormatDuration(longest.SessionSeconds, DurationFormat.Long)}"
+                ? $"{longest.Title} · {Formatters.FormatDuration(longest.SessionSeconds, DurationFormat.Full)}"
                 : "—"),
         ]
         : [];
@@ -508,5 +508,6 @@ public partial class Recap : ComponentBase, IDisposable
         _recapRequest?.Cancel();
         _recapRequest?.Dispose();
         _lifetime.Dispose();
+        GC.SuppressFinalize(this);
     }
 }
