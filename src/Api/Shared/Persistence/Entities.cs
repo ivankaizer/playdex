@@ -28,6 +28,7 @@ public sealed class PlatformCredential : IHasTimestamps
     public long UserId { get; set; }
     public string? ApiKey { get; set; }
     public string? AccountId { get; set; }
+    public bool ApiKeyLocked { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }
     public bool Active { get; set; }

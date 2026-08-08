@@ -31,6 +31,7 @@ internal static class SettingsInitialLoadFlow
 internal sealed class SettingsState
 {
     private readonly HashSet<long> _updatingProviderIds = [];
+    private readonly HashSet<long> _savingCredentialIds = [];
 
     public IReadOnlyList<ProviderStatus> Providers { get; private set; } = [];
     public bool IsProvidersLoading { get; private set; }
@@ -39,6 +40,10 @@ internal sealed class SettingsState
     public bool IsSettingsLoading { get; private set; }
     public bool IsSettingsSaving { get; private set; }
     public string SettingsError { get; private set; } = string.Empty;
+    public long? EditingCredentialId { get; private set; }
+    public string EditingAccountId { get; private set; } = string.Empty;
+    public string EditingApiKey { get; private set; } = string.Empty;
+    public string CredentialError { get; private set; } = string.Empty;
     public IReadOnlyList<ProviderStatus> VisibleProviders => Providers
         .Where(provider => provider.Platform != "manual" && provider.Platform != "local")
         .ToArray();
@@ -157,6 +162,90 @@ internal sealed class SettingsState
     public void EndProviderUpdate(long providerId) => _updatingProviderIds.Remove(providerId);
 
     public bool IsProviderUpdating(long providerId) => _updatingProviderIds.Contains(providerId);
+
+    public void BeginCredentialEdit(ProviderStatus provider)
+    {
+        EditingCredentialId = provider.Id;
+        EditingAccountId = provider.AccountId ?? string.Empty;
+        EditingApiKey = provider.ApiKey ?? string.Empty;
+        CredentialError = string.Empty;
+    }
+
+    public void CancelCredentialEdit()
+    {
+        EditingCredentialId = null;
+        EditingAccountId = string.Empty;
+        EditingApiKey = string.Empty;
+        CredentialError = string.Empty;
+    }
+
+    public bool IsEditingCredential(long providerId) => EditingCredentialId == providerId;
+
+    public bool IsCredentialSaving(long providerId) => _savingCredentialIds.Contains(providerId);
+
+    public void SetEditingAccountId(string value) => EditingAccountId = value;
+
+    public void SetEditingApiKey(string value) => EditingApiKey = value;
+
+    public bool TryBuildCredentialSubmission(out SettingsSubmission? submission)
+    {
+        submission = null;
+        CredentialError = string.Empty;
+        if (EditingCredentialId is not { } providerId) return false;
+
+        var provider = Providers.FirstOrDefault(item => item.Id == providerId);
+        if (provider is null) return false;
+
+        var accountIdChanged = EditingAccountId != (provider.AccountId ?? string.Empty);
+        var apiKeyChanged = !provider.ApiKeyLocked && EditingApiKey != (provider.ApiKey ?? string.Empty);
+
+        if (!accountIdChanged && !apiKeyChanged)
+        {
+            CredentialError = "No changes to save.";
+            return false;
+        }
+
+        var trimmedAccountId = EditingAccountId.Trim();
+        var trimmedApiKey = EditingApiKey.Trim();
+        accountIdChanged = trimmedAccountId != (provider.AccountId ?? string.Empty);
+        apiKeyChanged = !provider.ApiKeyLocked && trimmedApiKey != (provider.ApiKey ?? string.Empty);
+        if (!accountIdChanged && !apiKeyChanged)
+        {
+            CredentialError = "No changes to save.";
+            return false;
+        }
+
+        var body = new Dictionary<string, object?>();
+        if (accountIdChanged) body["accountId"] = string.IsNullOrEmpty(trimmedAccountId) ? null : trimmedAccountId;
+        if (apiKeyChanged) body["apiKey"] = string.IsNullOrEmpty(trimmedApiKey) ? null : trimmedApiKey;
+
+        submission = new SettingsSubmission(
+            $"/providers/{providerId}",
+            HttpMethod.Put,
+            body);
+        return true;
+    }
+
+    public void BeginCredentialSave(long providerId)
+    {
+        _savingCredentialIds.Add(providerId);
+        CredentialError = string.Empty;
+    }
+
+    public void CompleteCredentialSave(ProviderStatus updated)
+    {
+        Providers = Providers
+            .Select(provider => provider.Id == updated.Id ? updated : provider)
+            .ToArray();
+        EditingCredentialId = null;
+        EditingAccountId = string.Empty;
+        EditingApiKey = string.Empty;
+        _savingCredentialIds.Remove(updated.Id);
+    }
+
+    public void FailCredentialSave(string error) => CredentialError = error;
+
+    public void EndCredentialSave(long providerId) => _savingCredentialIds.Remove(providerId);
 
     public static SettingsProviderPresentation Present(ProviderStatus provider)
     {
@@ -310,6 +399,55 @@ public partial class Settings : ComponentBase, IDisposable
         finally
         {
             _state.EndProviderUpdate(provider.Id);
+        }
+    }
+
+    private Task ToggleCredentialEditorAsync(ProviderStatus provider)
+    {
+        if (_state.IsEditingCredential(provider.Id))
+        {
+            CancelCredentialEdit();
+        }
+        else
+        {
+            BeginCredentialEdit(provider);
+        }
+        return Task.CompletedTask;
+    }
+
+    private void BeginCredentialEdit(ProviderStatus provider) => _state.BeginCredentialEdit(provider);
+
+    private void CancelCredentialEdit() => _state.CancelCredentialEdit();
+
+    private void ChangeEditingAccountId(ChangeEventArgs eventArgs) =>
+        _state.SetEditingAccountId(eventArgs.Value?.ToString() ?? string.Empty);
+
+    private void ChangeEditingApiKey(ChangeEventArgs eventArgs) =>
+        _state.SetEditingApiKey(eventArgs.Value?.ToString() ?? string.Empty);
+
+    private async Task SaveCredentialAsync(ProviderStatus provider)
+    {
+        if (!_state.TryBuildCredentialSubmission(out var submission)) return;
+
+        _state.BeginCredentialSave(provider.Id);
+        try
+        {
+            var response = await Api.SendAsync<ProviderCredentialUpdateResponse>(submission!.Path,
+                submission.Method,
+                submission.Body,
+                cancellationToken: _lifetime.Token);
+            _state.CompleteCredentialSave(response.Provider);
+        }
+        catch (OperationCanceledException) when (_lifetime.IsCancellationRequested)
+        {
+        }
+        catch (Exception exception)
+        {
+            _state.FailCredentialSave(exception.Message);
+        }
+        finally
+        {
+            _state.EndCredentialSave(provider.Id);
         }
     }
 

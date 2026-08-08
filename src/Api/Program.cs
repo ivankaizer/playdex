@@ -42,7 +42,10 @@ var dataSource = new NpgsqlDataSourceBuilder(PostgresConnectionString.Normalize(
 
 builder.Services.AddSingleton(dataSource);
 builder.Services.AddDbContext<PlaydexDbContext>(db => db.UseNpgsql(dataSource));
-builder.Services.AddSingleton(new MigrationCatalog([new CurrentSchemaMigration()]));
+builder.Services.AddSingleton(new MigrationCatalog([
+    new CurrentSchemaMigration(),
+    new CredentialApiKeyLockMigration(),
+]));
 builder.Services.AddSingleton<MigrationRunner>();
 builder.Services.AddScoped<EventBus>();
 

@@ -84,32 +84,86 @@
                     {
                         var presentation = SettingsState.Present(provider);
                         var isUpdating = _state.IsProviderUpdating(provider.Id);
-                        <div @key="provider.Id" class="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-200/50 dark:bg-slate-950/50 p-4">
-                            <div class="flex items-center gap-3">
-                                <div class="flex h-10 w-10 items-center justify-center rounded-full @presentation.Color">
-                                    <span class="text-xs font-semibold uppercase @presentation.Accent">
-                                        @presentation.Label
-                                    </span>
-                                </div>
-                                <div>
-                                    <div class="flex items-center gap-2">
-                                        <p class="text-sm font-semibold text-slate-900 dark:text-white">
-                                            @presentation.Name
+                        <div @key="provider.Id" class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-200/50 dark:bg-slate-950/50 p-4">
+                            <div class="flex flex-wrap items-center justify-between gap-4">
+                                <div class="flex items-center gap-3">
+                                    <div class="flex h-10 w-10 items-center justify-center rounded-full @presentation.Color">
+                                        <span class="text-xs font-semibold uppercase @presentation.Accent">
+                                            @presentation.Label
+                                        </span>
+                                    </div>
+                                    <div>
+                                        <div class="flex items-center gap-2">
+                                            <p class="text-sm font-semibold text-slate-900 dark:text-white">
+                                                @presentation.Name
+                                            </p>
+                                        </div>
+                                        <p class="text-xs text-slate-500 dark:text-slate-400">
+                                            @presentation.Subtitle
                                         </p>
                                     </div>
-                                    <p class="text-xs text-slate-500 dark:text-slate-400">
-                                        @presentation.Subtitle
-                                    </p>
+                                </div>
+                                <div class="flex flex-wrap items-center gap-2 text-xs">
+                                    <button type="button"
+                                            @onclick="() => ToggleProviderAsync(provider)"
+                                            disabled="@isUpdating"
+                                            class="@ProviderStatusButtonClass(provider)">
+                                        @(isUpdating ? "Updating..." : provider.Status == "active" ? "Active" : "Paused")
+                                    </button>
+                                    <button type="button"
+                                            @onclick="() => ToggleCredentialEditorAsync(provider)"
+                                            class="rounded-full border border-slate-300 dark:border-slate-700 px-3 py-2 font-semibold uppercase tracking-[0.3em] text-slate-700 dark:text-slate-200 transition hover:border-emerald-400/60 hover:text-emerald-700 dark:hover:text-emerald-100">
+                                        @(_state.IsEditingCredential(provider.Id) ? "Cancel" : "Edit")
+                                    </button>
                                 </div>
                             </div>
-                            <div class="flex flex-wrap items-center gap-2 text-xs">
-                                <button type="button"
-                                        @onclick="() => ToggleProviderAsync(provider)"
-                                        disabled="@isUpdating"
-                                        class="@ProviderStatusButtonClass(provider)">
-                                    @(isUpdating ? "Updating..." : provider.Status == "active" ? "Active" : "Paused")
-                                </button>
-                            </div>
+
+                            @if (_state.IsEditingCredential(provider.Id))
+                            {
+                                <div class="mt-4 grid gap-3 sm:grid-cols-2">
+                                    <label class="text-xs font-medium text-slate-600 dark:text-slate-300">
+                                        <span class="block">Account ID</span>
+                                        <input type="text"
+                                               value="@_state.EditingAccountId"
+                                               @oninput="ChangeEditingAccountId"
+                                               disabled="@_state.IsCredentialSaving(provider.Id)"
+                                               class="mt-2 w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white/90 dark:bg-slate-950/80 px-3 py-2 text-sm text-slate-900 dark:text-white outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/30 disabled:cursor-not-allowed disabled:opacity-60" />
+                                    </label>
+                                    @if (provider.ApiKeyLocked)
+                                    {
+                                        <div class="text-xs font-medium text-slate-600 dark:text-slate-300">
+                                            <span class="block">API key</span>
+                                            <div class="mt-2 flex items-center gap-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-200/40 dark:bg-slate-950/60 px-3 py-2 text-sm text-slate-500 dark:text-slate-400">
+                                                <span class="inline-flex h-2 w-2 rounded-full bg-amber-400"></span>
+                                                Managed by administrator
+                                            </div>
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <label class="text-xs font-medium text-slate-600 dark:text-slate-300">
+                                            <span class="block">API key</span>
+                                            <input type="text"
+                                                   value="@_state.EditingApiKey"
+                                                   @oninput="ChangeEditingApiKey"
+                                                   disabled="@_state.IsCredentialSaving(provider.Id)"
+                                                   class="mt-2 w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white/90 dark:bg-slate-950/80 px-3 py-2 text-sm text-slate-900 dark:text-white outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/30 disabled:cursor-not-allowed disabled:opacity-60" />
+                                        </label>
+                                    }
+                                </div>
+                                @if (!string.IsNullOrEmpty(_state.CredentialError))
+                                {
+                                    <p class="mt-3 text-xs text-rose-700 dark:text-rose-300">@_state.CredentialError</p>
+                                }
+                                <div class="mt-4 flex justify-end">
+                                    <button type="button"
+                                            @onclick="() => SaveCredentialAsync(provider)"
+                                            disabled="@_state.IsCredentialSaving(provider.Id)"
+                                            class="rounded-full bg-emerald-400 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-slate-900 transition hover:bg-emerald-300 disabled:cursor-not-allowed disabled:bg-emerald-300/60">
+                                        @(_state.IsCredentialSaving(provider.Id) ? "Saving..." : "Save")
+                                    </button>
+                                </div>
+                            }
                         </div>
                     }
                 }

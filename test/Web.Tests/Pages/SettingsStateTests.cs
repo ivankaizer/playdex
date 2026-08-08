@@ -186,6 +186,61 @@ public sealed class SettingsStateTests
         Assert.Same(psn, state.Providers[1]);
     }
 
+    [Fact]
+    public void CredentialEdit_BuildsExactBodyAndIgnoresLockedApiKeyChanges()
+    {
+        var state = new SettingsState();
+        var steam = Provider(1, "steam", "active");
+        var locked = new ProviderStatus(2, "psn", "account-2", "active", "secret", true);
+        state.CompleteProvidersLoad(new ProvidersResponse([steam, locked]));
+
+        state.BeginCredentialEdit(steam);
+        Assert.True(state.IsEditingCredential(1));
+        Assert.Equal("account-1", state.EditingAccountId);
+        Assert.Equal("", state.EditingApiKey);
+
+        state.SetEditingAccountId("  new-account  ");
+        state.SetEditingApiKey("new-secret");
+        Assert.True(state.TryBuildCredentialSubmission(out var submission));
+        Assert.NotNull(submission);
+        Assert.Equal("/providers/1", submission.Path);
+        Assert.Equal(HttpMethod.Put, submission.Method);
+        Assert.Equal(["accountId", "apiKey"], submission.Body.Keys);
+        Assert.Equal("new-account", submission.Body["accountId"]);
+        Assert.Equal("new-secret", submission.Body["apiKey"]);
+        state.CancelCredentialEdit();
+
+        state.BeginCredentialEdit(locked);
+        state.SetEditingAccountId("new-account");
+        state.SetEditingApiKey("should-be-ignored");
+        Assert.True(state.TryBuildCredentialSubmission(out var lockedSubmission));
+        Assert.NotNull(lockedSubmission);
+        Assert.Equal(["accountId"], lockedSubmission.Body.Keys);
+    }
+
+    [Fact]
+    public void CredentialEdit_RejectsNoChangesAndCompletesByReplacingTheProvider()
+    {
+        var state = new SettingsState();
+        var steam = Provider(1, "steam", "active");
+        state.CompleteProvidersLoad(new ProvidersResponse([steam]));
+
+        state.BeginCredentialEdit(steam);
+        Assert.False(state.TryBuildCredentialSubmission(out _));
+        Assert.Equal("No changes to save.", state.CredentialError);
+
+        state.SetEditingAccountId("changed");
+        Assert.True(state.TryBuildCredentialSubmission(out _));
+        state.BeginCredentialSave(1);
+        var updated = steam with { AccountId = "changed" };
+        state.CompleteCredentialSave(updated);
+
+        Assert.Same(updated, state.Providers[0]);
+        Assert.False(state.IsEditingCredential(1));
+        Assert.False(state.IsCredentialSaving(1));
+        Assert.Empty(state.EditingAccountId);
+    }
+
     [Theory]
     [InlineData("steam", "S", "bg-slate-200 dark:bg-slate-800", "text-slate-900 dark:text-slate-100")]
     [InlineData("psn", "P", "bg-indigo-500/30", "text-indigo-700 dark:text-indigo-200")]
@@ -208,13 +263,13 @@ public sealed class SettingsStateTests
     public void ProviderPresentation_PreservesEmptySubtitlesAndUsesNullFallbacks()
     {
         Assert.Equal("Local", SettingsState.Present(
-            new ProviderStatus(1, "steam", null, "active", "secret")).Subtitle);
+            new ProviderStatus(1, "steam", null, "active", "secret", false)).Subtitle);
         Assert.Equal("", SettingsState.Present(
-            new ProviderStatus(1, "steam", "", "active", "secret")).Subtitle);
+            new ProviderStatus(1, "steam", "", "active", "secret", false)).Subtitle);
         Assert.Equal("Local", SettingsState.Present(
-            new ProviderStatus(1, "playnite", "account", "active", null)).Subtitle);
+            new ProviderStatus(1, "playnite", "account", "active", null, false)).Subtitle);
         Assert.Equal("", SettingsState.Present(
-            new ProviderStatus(1, "playnite", "account", "active", "")).Subtitle);
+            new ProviderStatus(1, "playnite", "account", "active", "", false)).Subtitle);
     }
 
     [Fact]
@@ -238,6 +293,9 @@ public sealed class SettingsStateTests
         Assert.Contains("inputmode=\"numeric\"", markup);
         Assert.Contains("No providers connected yet. Add one to start syncing playtime.", markup);
         Assert.Contains("Updating...", markup);
+        Assert.Contains("Managed by administrator", markup);
+        Assert.Contains("ToggleCredentialEditorAsync", markup);
+        Assert.Contains("SaveCredentialAsync", markup);
         Assert.DoesNotContain("EditForm", markup);
         Assert.DoesNotContain("success", markup, StringComparison.OrdinalIgnoreCase);
 
@@ -246,6 +304,7 @@ public sealed class SettingsStateTests
         Assert.Contains("SendAsync<UserSettingsResponse>(path", code);
         Assert.Contains("SendAsync<UserSettingsResponse>(submission!.Path", code);
         Assert.Contains("SendAsync<ProviderUpdateResponse>(submission.Path", code);
+        Assert.Contains("SendAsync<ProviderCredentialUpdateResponse>(submission!.Path", code);
         Assert.Contains("CancellationTokenSource.CreateLinkedTokenSource", code);
         Assert.Contains("_lifetime.Cancel()", code);
         Assert.DoesNotContain("onAuthFailure", code);
@@ -253,7 +312,7 @@ public sealed class SettingsStateTests
     }
 
     private static ProviderStatus Provider(long id, string platform, string status) =>
-        new(id, platform, $"account-{id}", status, platform == "playnite" ? $"key-{id}" : null);
+        new(id, platform, $"account-{id}", status, platform == "playnite" ? $"key-{id}" : null, false);
 
     private static string FindWebRoot()
     {

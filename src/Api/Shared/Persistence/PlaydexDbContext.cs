@@ -71,6 +71,7 @@ public sealed class PlaydexDbContext(DbContextOptions<PlaydexDbContext> options)
         entity.Property(row => row.UserId).HasColumnName("user_id");
         entity.Property(row => row.ApiKey).HasColumnName("api_key");
         entity.Property(row => row.AccountId).HasColumnName("account_id");
+        entity.Property(row => row.ApiKeyLocked).HasColumnName("api_key_locked");
         entity.Property(row => row.CreatedAt).HasColumnName("created_at");
         entity.Property(row => row.UpdatedAt).HasColumnName("updated_at");
         entity.Property(row => row.Active).HasColumnName("active");

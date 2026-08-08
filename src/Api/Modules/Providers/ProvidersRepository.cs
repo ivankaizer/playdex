@@ -22,10 +22,12 @@ public sealed class ProvidersRepository(PlaydexDbContext db)
                     credential.AccountId,
                     Status = credential.Active ? "active" : "paused",
                     credential.ApiKey,
+                    credential.ApiKeyLocked,
                 })
             .ToListAsync(ct);
 
-        return rows.Select(r => new ProviderStatusDto(r.Id, r.Platform, r.AccountId, r.Status, r.ApiKey)).ToList();
+        return rows.Select(r => new ProviderStatusDto(
+            r.Id, r.Platform, r.AccountId, r.Status, r.ApiKey, r.ApiKeyLocked)).ToList();
     }
 
     public async Task<ProviderStatusDto?> UpdateProviderStatus(long userId, long providerId, string status, CancellationToken ct)
@@ -49,8 +51,49 @@ public sealed class ProvidersRepository(PlaydexDbContext db)
             platform,
             credential.AccountId,
             credential.Active ? "active" : "paused",
-            credential.ApiKey);
+            credential.ApiKey,
+            credential.ApiKeyLocked);
     }
+
+    public async Task<ProviderStatusDto?> UpdateCredential(
+        long userId,
+        long providerId,
+        bool apiKeyChanged,
+        string? apiKey,
+        bool accountIdChanged,
+        string? accountId,
+        CancellationToken ct)
+    {
+        var credential = await db.PlatformCredentials
+            .FirstOrDefaultAsync(
+                item => item.Id == providerId && item.UserId == userId,
+                ct);
+        if (credential is null) return null;
+
+        if (apiKeyChanged) credential.ApiKey = apiKey;
+        if (accountIdChanged) credential.AccountId = accountId;
+        credential.UpdatedAt = DateTimeOffset.UtcNow;
+        await db.SaveChangesAsync(ct);
+        var platform = await db.Platforms
+            .AsNoTracking()
+            .Where(item => item.Id == credential.PlatformId)
+            .Select(item => item.Key)
+            .FirstAsync(ct);
+        return new ProviderStatusDto(
+            credential.Id,
+            platform,
+            credential.AccountId,
+            credential.Active ? "active" : "paused",
+            credential.ApiKey,
+            credential.ApiKeyLocked);
+    }
+
+    public async Task<bool> IsApiKeyLocked(long userId, long providerId, CancellationToken ct) =>
+        await db.PlatformCredentials
+            .AsNoTracking()
+            .Where(item => item.Id == providerId && item.UserId == userId)
+            .Select(item => item.ApiKeyLocked)
+            .FirstOrDefaultAsync(ct);
 
     public async Task<string> GetOrCreatePlayniteKey(long userId, string apiKey, CancellationToken ct)
     {

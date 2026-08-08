@@ -34,6 +34,38 @@ public sealed class ProvidersService(ProvidersRepository repository)
         return new PlayniteKeyResponseDto(key);
     }
 
+    public async Task<ProviderCredentialUpdateResponseDto> UpdateCredential(
+        long userId,
+        long providerId,
+        ProviderCredentialChanges changes,
+        CancellationToken ct)
+    {
+        if (!changes.ApiKeyChanged && !changes.AccountIdChanged)
+        {
+            throw AppProblem.Validation("At least one field must be provided.");
+        }
+
+        if (changes.ApiKeyChanged && await repository.IsApiKeyLocked(userId, providerId, ct))
+        {
+            throw AppProblem.Validation("API key is managed by an administrator.");
+        }
+
+        var provider = await repository.UpdateCredential(
+            userId,
+            providerId,
+            changes.ApiKeyChanged,
+            changes.ApiKey,
+            changes.AccountIdChanged,
+            changes.AccountId,
+            ct);
+        if (provider is null)
+        {
+            throw AppProblem.NotFound("Provider not found.");
+        }
+
+        return new ProviderCredentialUpdateResponseDto(ToResponse(provider));
+    }
+
     internal static string GenerateApiKey()
     {
         var bytes = RandomNumberGenerator.GetBytes(16);
@@ -41,5 +73,5 @@ public sealed class ProvidersService(ProvidersRepository repository)
     }
 
     internal static ProviderStatusDto ToResponse(ProviderStatusDto provider) =>
-        provider.Platform == "playnite" ? provider : provider with { ApiKey = null };
+        provider with { ApiKey = provider.ApiKeyLocked ? null : provider.ApiKey };
 }

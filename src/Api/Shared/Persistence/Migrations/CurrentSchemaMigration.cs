@@ -67,6 +67,7 @@ public sealed class CurrentSchemaMigration : IPlaydexMigration
             user_id bigint not null references users(id) on delete cascade,
             api_key text,
             account_id text,
+            api_key_locked boolean not null default false,
             created_at timestamptz not null default now(),
             updated_at timestamptz not null default now(),
             active boolean not null default true,
