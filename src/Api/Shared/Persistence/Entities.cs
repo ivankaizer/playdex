@@ -1,8 +1,6 @@
-using System.Text.Json;
-
 namespace Api.Shared.Persistence;
 
-public sealed class User
+public sealed class User : IHasTimestamps
 {
     public long Id { get; set; }
     public required string Email { get; set; }
@@ -13,7 +11,7 @@ public sealed class User
     public bool IsAdmin { get; set; }
 }
 
-public sealed class Platform
+public sealed class Platform : IHasTimestamps
 {
     public long Id { get; set; }
     public required string Key { get; set; }
@@ -24,7 +22,7 @@ public sealed class Platform
     public DateTimeOffset UpdatedAt { get; set; }
 }
 
-public sealed class PlatformCredential
+public sealed class PlatformCredential : IHasTimestamps
 {
     public long Id { get; set; }
     public long UserId { get; set; }
@@ -36,7 +34,7 @@ public sealed class PlatformCredential
     public long PlatformId { get; set; }
 }
 
-public sealed class Game
+public sealed class Game: IHasTimestamps
 {
     public long Id { get; set; }
     public required string Title { get; set; }
@@ -50,7 +48,7 @@ public sealed class Game
     public bool TitleLocked { get; set; }
 }
 
-public sealed class PlaySession
+public sealed class PlaySession : IHasTimestamps
 {
     public long Id { get; set; }
     public long PlatformCredentialId { get; set; }
@@ -71,7 +69,7 @@ public sealed class PollResult
     public DateTimeOffset CreatedAt { get; set; }
 }
 
-public sealed class ManualGameInput
+public sealed class ManualGameInput : IHasTimestamps
 {
     public long Id { get; set; }
     public long UserId { get; set; }
@@ -82,7 +80,7 @@ public sealed class ManualGameInput
     public DateTimeOffset UpdatedAt { get; set; }
 }
 
-public sealed class IgnoredGame
+public sealed class IgnoredGame : IHasTimestamps
 {
     public long Id { get; set; }
     public long UserId { get; set; }
@@ -91,7 +89,7 @@ public sealed class IgnoredGame
     public DateTimeOffset UpdatedAt { get; set; }
 }
 
-public sealed class GameRating
+public sealed class GameRating : IHasTimestamps
 {
     public long Id { get; set; }
     public long UserId { get; set; }
@@ -101,7 +99,7 @@ public sealed class GameRating
     public DateTimeOffset UpdatedAt { get; set; }
 }
 
-public sealed class UserSettings
+public sealed class UserSettings : IHasTimestamps
 {
     public long UserId { get; set; }
     public int IgnoreShortSessionsMinutes { get; set; }
@@ -109,7 +107,7 @@ public sealed class UserSettings
     public DateTimeOffset UpdatedAt { get; set; }
 }
 
-public sealed class GameConnection
+public sealed class GameConnection : IHasTimestamps
 {
     public long UserId { get; set; }
     public long GameId { get; set; }
