@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using Api.Shared.Common;
 using Api.Modules.Metrics;
 
@@ -7,7 +8,7 @@ namespace Api.Modules.Polling;
 
 public sealed class PollingBackgroundService(
     IServiceProvider serviceProvider,
-    PlaydexOptions options,
+    IOptions<PollingOptions> pollingOptions,
     MetricsCollector metrics,
     ILogger<PollingBackgroundService> logger) : BackgroundService
 {
@@ -100,7 +101,7 @@ public sealed class PollingBackgroundService(
             var elapsed = cycleStart.ElapsedMilliseconds;
             metrics.RecordCycleDuration(elapsed);
 
-            var delayMs = Math.Max(0, (options.PollIntervalSeconds * 1000L) - elapsed);
+            var delayMs = Math.Max(0, (pollingOptions.Value.IntervalSeconds * 1000L) - elapsed);
             await Task.Delay((int)delayMs, stoppingToken);
         }
     }

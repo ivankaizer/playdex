@@ -43,12 +43,13 @@ public static class AuthEndpoints
         api.MapGet("/me", Me).RequireAuthorization();
     }
 
-    public static IServiceCollection AddPlaydexAuthentication(
-        this IServiceCollection services,
-        AuthTokenService tokens)
+    public static IServiceCollection AddPlaydexAuthentication(this IServiceCollection services)
     {
+        services.AddSingleton<AuthTokenService>();
         services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-            .AddJwtBearer(options =>
+            .AddJwtBearer();
+        services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme)
+            .Configure<AuthTokenService>((options, tokens) =>
             {
                 options.MapInboundClaims = false;
                 options.TokenValidationParameters = tokens.ValidationParameters();

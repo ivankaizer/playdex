@@ -2,6 +2,7 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Microsoft.Extensions.Options;
 
 namespace Api.Modules.Polling;
 
@@ -13,18 +14,22 @@ public sealed record IgdbSearchResult(
     string? CoverUrl
 );
 
-public sealed class IgdbClient(HttpClient httpClient)
+public sealed class IgdbClient(HttpClient httpClient, IOptions<IgdbOptions> options)
 {
     private string? _cachedToken;
     private DateTimeOffset _cachedExpiresAt;
 
-    public async Task<List<IgdbSearchResult>> SearchGames(string query, string clientId, string clientSecret, CancellationToken ct)
+    public async Task<List<IgdbSearchResult>> SearchGames(string query, CancellationToken ct)
     {
         var trimmed = query.Trim();
         if (string.IsNullOrEmpty(trimmed))
             return [];
 
-        var token = await EnsureToken(clientId, clientSecret, ct);
+        var opts = options.Value;
+        if (string.IsNullOrEmpty(opts.ClientId) || string.IsNullOrEmpty(opts.ClientSecret))
+            return [];
+
+        var token = await EnsureToken(opts.ClientId, opts.ClientSecret, ct);
         if (token is null)
             return [];
 
@@ -35,7 +40,7 @@ public sealed class IgdbClient(HttpClient httpClient)
                 System.Text.Encoding.UTF8,
                 "text/plain")
         };
-        request.Headers.Add("Client-ID", clientId);
+        request.Headers.Add("Client-ID", opts.ClientId);
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
         var response = await httpClient.SendAsync(request, ct);

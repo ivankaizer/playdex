@@ -1,0 +1,30 @@
+namespace Api.Modules.Polling;
+
+public class PollingOptions
+{
+    public int IntervalSeconds { get; set; } = 60;
+    public bool UseWiremock { get; set; }
+    public SteamOptions Steam { get; set; } = new();
+    public PsnOptions Psn { get; set; } = new();
+    public IgdbOptions Igdb { get; set; } = new();
+}
+
+public class SteamOptions
+{
+    public string BaseUrl { get; set; } = "https://api.steampowered.com";
+}
+
+public class PsnOptions
+{
+    public string OAuthAuthorizeUrl { get; set; } = "https://ca.account.sony.com/api/authz/v3/oauth/authorize";
+    public string OAuthTokenUrl { get; set; } = "https://ca.account.sony.com/api/authz/v3/oauth/token";
+    public string PresenceBaseUrl { get; set; } = "https://us-prof.np.community.playstation.net";
+    public string ClientId { get; set; } = "ac8d5c4b-efa9-4eb4-a605-33fafb3831f8";
+    public string RedirectUri { get; set; } = "https://remoteplay.dl.playstation.net/remoteplay/redirect";
+}
+
+public class IgdbOptions
+{
+    public string? ClientId { get; set; }
+    public string? ClientSecret { get; set; }
+}

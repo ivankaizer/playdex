@@ -21,20 +21,25 @@ using Api.Modules.Telegram;
 using Api.Observability;
 
 var builder = WebApplication.CreateBuilder(args);
-var options = PlaydexOptions.FromConfiguration(builder.Configuration);
-var dataSource = new NpgsqlDataSourceBuilder(PostgresConnectionString.Normalize(options.DatabaseUrl)).Build();
-var tokenService = new AuthTokenService(options);
 
-builder.Services.AddSingleton(options);
+var databaseUrl = builder.Configuration["DATABASE_URL"]?.Trim()
+    ?? throw new InvalidOperationException("DATABASE_URL is required.");
+var corsOrigins = (builder.Configuration["CORS_ORIGINS"] ?? "")
+    .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+    .Where(origin => origin != "*")
+    .Distinct(StringComparer.Ordinal)
+    .ToArray();
+
+var dataSource = new NpgsqlDataSourceBuilder(PostgresConnectionString.Normalize(databaseUrl)).Build();
+
 builder.Services.AddSingleton(dataSource);
-builder.Services.AddSingleton(tokenService);
 builder.Services.AddDbContext<PlaydexDbContext>(db => db.UseNpgsql(dataSource));
 builder.Services.AddSingleton(new MigrationCatalog([new CurrentSchemaMigration()]));
 builder.Services.AddSingleton<MigrationRunner>();
 builder.Services.AddScoped<EventBus>();
 
 builder.Services
-    .AddAuth(tokenService)
+    .AddAuth(builder.Configuration)
     .AddAccounts()
     .AddSettings()
     .AddGames()
@@ -44,7 +49,7 @@ builder.Services
     .AddAdmin()
     .AddRecap()
     .AddPlaydexMetrics()
-    .AddPolling()
+    .AddPolling(builder.Configuration)
     .AddTelegram();
 
 builder.Services.AddExceptionHandler<ApiExceptionHandler>();
@@ -65,7 +70,7 @@ builder.Services.AddCors(cfg =>
 {
     cfg.AddDefaultPolicy(policy =>
     {
-        policy.WithOrigins([..options.CorsOrigins])
+        policy.WithOrigins(corsOrigins)
               .WithMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
               .AllowAnyHeader();
     });

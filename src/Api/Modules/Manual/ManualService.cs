@@ -3,13 +3,14 @@ using Api.Shared.Common;
 using Api.Modules.Games;
 using Api.Shared.Http;
 using Api.Modules.Polling;
+using Microsoft.Extensions.Options;
 
 namespace Api.Modules.Manual;
 
 public sealed class ManualService(
     ManualRepository repository,
     IgdbClient igdbClient,
-    PlaydexOptions options,
+    IOptions<IgdbOptions> igdbOptions,
     IGames games)
 {
     private const int MaxLocalSearchResults = 5;
@@ -156,11 +157,12 @@ public sealed class ManualService(
         if (trimmed.Length == 0)
             throw AppProblem.Validation("query is required.");
 
-        var igdbAvailable = !string.IsNullOrWhiteSpace(options.IgdbClientId) &&
-            !string.IsNullOrWhiteSpace(options.IgdbClientSecret);
+        var opts = igdbOptions.Value;
+        var igdbAvailable = !string.IsNullOrWhiteSpace(opts.ClientId) &&
+            !string.IsNullOrWhiteSpace(opts.ClientSecret);
         var localTask = repository.SearchLocalGames(trimmed, MaxLocalSearchResults, ct);
         var igdbTask = igdbAvailable
-            ? igdbClient.SearchGames(trimmed, options.IgdbClientId!, options.IgdbClientSecret!, ct)
+            ? igdbClient.SearchGames(trimmed, ct)
             : Task.FromResult(new List<IgdbSearchResult>());
         await Task.WhenAll(localTask, igdbTask);
 

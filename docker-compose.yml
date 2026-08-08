@@ -16,6 +16,16 @@ services:
       timeout: 5s
       retries: 10
 
+  wiremock:
+    build:
+      context: .
+      dockerfile: tools/Wiremock/Dockerfile
+    restart: unless-stopped
+    volumes:
+      - ./tools/Wiremock/mocks:/app/mocks:ro
+    ports:
+      - "8888:8888"
+
   app:
     build:
       context: ./src/Api
@@ -28,14 +38,23 @@ services:
       ASPNETCORE_URLS: http://0.0.0.0:3000
       DATABASE_URL: postgresql://playdex:playdex@db:5432/playdex
       CORS_ORIGINS: "http://ui.playdex.orb.local,https://ui.playdex.orb.local"
-      POLL_INTERVAL_SECONDS: 180
-      JWT_SECRET: dev-only-jwt-secret-do-not-use-in-production
-      ACCESS_TOKEN_TTL: 30m
+      Polling__IntervalSeconds: 180
+      Auth__JwtSecret: dev-only-jwt-secret-do-not-use-in-production
+      Auth__AccessTokenTtl: 30m
+      Polling__UseWiremock: "true"
+      Polling__Steam__BaseUrl: http://wiremock:8888
+      Polling__Psn__OAuthAuthorizeUrl: http://wiremock:8888/api/authz/v3/oauth/authorize
+      Polling__Psn__OAuthTokenUrl: http://wiremock:8888/api/authz/v3/oauth/token
+      Polling__Psn__PresenceBaseUrl: http://wiremock:8888
+      Polling__Psn__ClientId: mock-client-id
+      Polling__Psn__RedirectUri: http://wiremock:8888/callback
     ports:
       - "3000:3000"
     depends_on:
       db:
         condition: service_healthy
+      wiremock:
+        condition: service_started
   ui:
     build:
       context: ./src/Web

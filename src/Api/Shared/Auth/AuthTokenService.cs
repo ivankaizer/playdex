@@ -2,6 +2,7 @@ using System.Globalization;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
+using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using Api.Shared.Common;
 
@@ -9,12 +10,12 @@ namespace Api.Shared.Auth;
 
 public sealed record AuthTokenPair(string AccessToken, string RefreshToken);
 
-public sealed class AuthTokenService(PlaydexOptions options)
+public sealed class AuthTokenService(IOptions<AuthOptions> options)
 {
     private static readonly TimeSpan RefreshTokenLifetime = TimeSpan.FromDays(30);
     private readonly JwtSecurityTokenHandler _handler = new() { MapInboundClaims = false };
-    private readonly SymmetricSecurityKey _key = new(Encoding.UTF8.GetBytes(options.JwtSecret));
-    private readonly TimeSpan _accessTokenLifetime = ParseLifetime(options.AccessTokenTtl);
+    private readonly SymmetricSecurityKey _key = new(Encoding.UTF8.GetBytes(options.Value.JwtSecret));
+    private readonly TimeSpan _accessTokenLifetime = ParseLifetime(options.Value.AccessTokenTtl);
 
     public AuthTokenPair IssueTokenPair(long userId, string email) =>
         new(
@@ -75,7 +76,7 @@ public sealed class AuthTokenService(PlaydexOptions options)
         if (value.Length < 2
             || !double.TryParse(value[..^1], NumberStyles.None, CultureInfo.InvariantCulture, out var amount))
         {
-            throw new OptionsValidationException("ACCESS_TOKEN_TTL must use a numeric value followed by s, m, h, or d.");
+            throw new Api.Shared.Common.OptionsValidationException("ACCESS_TOKEN_TTL must use a numeric value followed by s, m, h, or d.");
         }
 
         return value[^1] switch
@@ -84,7 +85,7 @@ public sealed class AuthTokenService(PlaydexOptions options)
             'm' => TimeSpan.FromMinutes(amount),
             'h' => TimeSpan.FromHours(amount),
             'd' => TimeSpan.FromDays(amount),
-            _ => throw new OptionsValidationException("ACCESS_TOKEN_TTL must use a numeric value followed by s, m, h, or d."),
+            _ => throw new Api.Shared.Common.OptionsValidationException("ACCESS_TOKEN_TTL must use a numeric value followed by s, m, h, or d."),
         };
     }
 }

@@ -2,10 +2,11 @@ using System.Net;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Api.Shared.Persistence;
+using Microsoft.Extensions.Options;
 
 namespace Api.Modules.Polling;
 
-public sealed class SteamClient(HttpClient httpClient) : IProviderClient
+public sealed class SteamClient(HttpClient httpClient, IOptions<SteamOptions> options) : IProviderClient
 {
     public string PlatformKey => "steam";
 
@@ -23,7 +24,7 @@ public sealed class SteamClient(HttpClient httpClient) : IProviderClient
             return null;
         }
 
-        var url = $"https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v0002/?key={apiKey}&steamids={steamId}";
+        var url = $"{options.Value.BaseUrl.TrimEnd('/')}/ISteamUser/GetPlayerSummaries/v0002/?key={apiKey}&steamids={steamId}";
         var response = await httpClient.GetAsync(url, ct);
 
         if (response.StatusCode == HttpStatusCode.TooManyRequests)

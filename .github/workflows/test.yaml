@@ -54,7 +54,7 @@ jobs:
         run: dotnet run --no-build --project src/Api --configuration Release -- migrate
         env:
           DATABASE_URL: postgresql://playdex:playdex@127.0.0.1:5432/playdex_db_test
-          JWT_SECRET: test-secret-for-ci
+          Auth__JwtSecret: test-secret-for-ci
 
       - name: Run .NET and Blazor tests
         run: dotnet test Playdex.sln --configuration Release --no-build
