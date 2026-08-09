@@ -34,7 +34,7 @@ jobs:
           ECR_REPOSITORY: ${{ secrets.REPO_NAME }}-ui
         run: |
           IMAGE_TAG="$(git rev-parse --short HEAD)-$(date +'%Y-%m-%d-%H-%M')"
-          docker build -t "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" -t "$ECR_REGISTRY/$ECR_REPOSITORY:latest" src/Web
+          docker build -f src/Web/Dockerfile -t "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" -t "$ECR_REGISTRY/$ECR_REPOSITORY:latest" .
 
       - name: Push UI image to ECR
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'

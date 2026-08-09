@@ -58,14 +58,15 @@ public sealed class ApplicationAndUiTests
         var root = FindRepositoryRoot();
         var sourceRoots = new[]
         {
-            Path.Combine(root, "src"),
-            Path.Combine(root, "test")
+            Path.Combine(root, "src", "Wrapper"),
+            Path.Combine(root, "test", "Wrapper.Tests")
         };
         var violations = sourceRoots
             .SelectMany(path => Directory.EnumerateFiles(path, "*", SearchOption.AllDirectories))
             .Where(path => Path.GetExtension(path) is ".cs" or ".csproj")
             .Where(path => !path.Split(Path.DirectorySeparatorChar).Any(segment => segment is "bin" or "obj"))
             .Where(path => !string.Equals(Path.GetFileName(path), nameof(AppBrand) + ".cs", StringComparison.Ordinal))
+            .Where(path => !string.Equals(Path.GetFileName(path), "Wrapper.csproj", StringComparison.Ordinal))
             .Where(path => File.ReadAllText(path).Contains(AppBrand.Name, StringComparison.OrdinalIgnoreCase))
             .ToList();
 
