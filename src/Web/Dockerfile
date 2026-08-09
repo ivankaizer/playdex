@@ -15,6 +15,8 @@ RUN dotnet restore Web/Web.csproj
 COPY src/Web/ Web/
 COPY --from=css /src/Web/wwwroot/css/app.css Web/wwwroot/css/app.css
 RUN dotnet publish Web/Web.csproj -c Release -o /app/publish
+RUN test -f /app/publish/wwwroot/_framework/dotnet.js \
+    && find /app/publish/wwwroot/_framework -type f -name '*.wasm' -print -quit | grep -q .
 
 FROM nginx:1.27-alpine
 

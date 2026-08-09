@@ -19,6 +19,7 @@ public sealed class DeploymentContractTests
         Assert.Contains("mcr.microsoft.com/dotnet/sdk:10.0 AS build", dockerfile);
         Assert.Contains("dotnet publish", dockerfile);
         Assert.Contains("/app/publish/wwwroot", dockerfile);
+        Assert.Contains("-name '*.wasm'", dockerfile);
         Assert.Contains("nginx:1.27-alpine", dockerfile);
         Assert.Contains("EXPOSE 5056", dockerfile);
         Assert.Contains("HEALTHCHECK", dockerfile);
@@ -27,9 +28,17 @@ public sealed class DeploymentContractTests
 
         Assert.Contains("__PLAYDEX_API_URL__", entrypoint);
         Assert.Contains("PLAYDEX_API_URL", entrypoint);
+        Assert.Contains("Blazor framework publish is incomplete", entrypoint);
+        Assert.Contains("-name '*.wasm'", entrypoint);
 
         Assert.Contains("listen 5056;", nginx);
         Assert.Contains("try_files $uri /index.html;", nginx);
+        Assert.Contains("location = /_framework/dotnet.js", nginx);
+        Assert.Contains("location = /_framework/blazor.webassembly.js", nginx);
+        Assert.Contains("location ^~ /_framework/", nginx);
+        Assert.Contains("try_files $uri =404;", nginx);
+        Assert.Contains("no-cache, no-store, must-revalidate", nginx);
+        Assert.Contains("max-age=31536000, immutable", nginx);
     }
 
     [Fact]
