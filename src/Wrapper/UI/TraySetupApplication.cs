@@ -4,22 +4,27 @@ internal sealed partial class TraySetupApplication : IDisposable
 {
     private readonly ConfigStore store;
     private readonly WrapperConfig config;
+    private readonly AppLoggerFactory logging;
     private readonly ILogger<TraySetupApplication> logger;
     private readonly LauncherManager launcherManager;
     private readonly string sourceExecutable;
     private readonly Icon applicationIcon;
     private readonly NotifyIcon icon;
     private readonly TrayApplicationWindow window;
-
-    public string? GameIdToLaunch { get; private set; }
+    private readonly LudusaviRunner ludusaviRunner;
+    private readonly BackupCoordinator backupCoordinator;
 
     public TraySetupApplication(ConfigStore store, WrapperConfig config, AppLoggerFactory logging)
     {
         this.store = store;
         this.config = config;
+        this.logging = logging;
         logger = logging.CreateLogger<TraySetupApplication>();
         launcherManager = new LauncherManager(logging.CreateLogger<LauncherManager>());
         sourceExecutable = Environment.ProcessPath ?? throw new InvalidOperationException("Cannot determine the wrapper executable path.");
+        ludusaviRunner = new LudusaviRunner(new LudusaviProcess());
+        var backupStateStore = new BackupStateStore(Path.Combine(config.Storage.StateDirectory, "ludusavi-backups.json"));
+        var backupState = backupStateStore.LoadAsync().GetAwaiter().GetResult();
 
         applicationIcon = AppBrand.LoadApplicationIcon();
         icon = new NotifyIcon
@@ -28,10 +33,23 @@ internal sealed partial class TraySetupApplication : IDisposable
             Text = AppBrand.ProductName,
             Visible = true
         };
+        backupCoordinator = new BackupCoordinator(
+            config,
+            store,
+            backupState,
+            backupStateStore,
+            ludusaviRunner,
+            logging.CreateLogger<BackupCoordinator>(),
+            RefreshGameMenuOnUiThread);
         window = new TrayApplicationWindow(
             () => config.Games.Values,
+            gameId => BackupStatusPresentation.From(
+                config.Games[gameId],
+                backupCoordinator.GetState(gameId),
+                DateTimeOffset.Now),
             new TrayWindowActions(
                 gameId => RunTrayActionAsync("Game launch", () => LaunchGameAsync(gameId)),
+                gameId => RunTrayActionAsync("Save backup", () => BackupGameAsync(gameId)),
                 gameId => RunTrayActionAsync("Game settings", () => EditGameSettingsAsync(gameId)),
                 gameId => RunTrayActionAsync("Game removal", () => RemoveGameAsync(gameId)),
                 () => RunTrayActionAsync("Add a game", AddGameAsync),
@@ -56,6 +74,7 @@ internal sealed partial class TraySetupApplication : IDisposable
         };
         window.ShowWindow(Cursor.Position);
         _ = RunTrayActionAsync("Launcher synchronization", () => SynchronizeLaunchersAsync(showConfirmation: false));
+        _ = backupCoordinator.RunSchedulerAsync();
     }
 
     private void RefreshGameMenu()
@@ -63,6 +82,18 @@ internal sealed partial class TraySetupApplication : IDisposable
         if (window.Visible)
         {
             window.RefreshContent();
+        }
+    }
+
+    private void RefreshGameMenuOnUiThread()
+    {
+        if (window.IsDisposed || !window.IsHandleCreated) return;
+        try
+        {
+            window.BeginInvoke(new Action(RefreshGameMenu));
+        }
+        catch (InvalidOperationException)
+        {
         }
     }
 
@@ -117,10 +148,43 @@ internal sealed partial class TraySetupApplication : IDisposable
     private Task LaunchGameAsync(string gameId)
     {
         var game = config.GetGameForLaunch(gameId);
-        GameIdToLaunch = game.GameId;
         LogGameLaunching(logger, game.GameId);
-        Application.ExitThread();
+        _ = RunGameSessionAsync(game);
         return Task.CompletedTask;
+    }
+
+    private async Task RunGameSessionAsync(GameConfig game)
+    {
+        try
+        {
+            using var coordinator = SessionCoordinator.Create(config, game, logging);
+            await coordinator.RunAsync(CancellationToken.None);
+        }
+        catch (Exception ex)
+        {
+            LogTrayActionFailed(logger, "Game session", ex);
+            icon.ShowBalloonTip(5000, "Game session failed", $"Could not monitor {game.DisplayName}. See the wrapper log for details.", ToolTipIcon.Error);
+        }
+    }
+
+    private async Task BackupGameAsync(string gameId)
+    {
+        if (!config.Games.TryGetValue(gameId, out var game))
+        {
+            throw new InvalidOperationException($"Game '{gameId}' is not configured.");
+        }
+
+        await backupCoordinator.RequestManualAsync(game);
+        var state = backupCoordinator.GetState(gameId);
+        if (state?.Result == BackupResultKind.Success)
+        {
+            icon.ShowBalloonTip(3000, "Save backup complete", $"{game.DisplayName} was backed up.", ToolTipIcon.Info);
+        }
+        else
+        {
+            var detail = state?.LastError ?? "The backup did not complete.";
+            icon.ShowBalloonTip(5000, "Save backup failed", detail, ToolTipIcon.Warning);
+        }
     }
 
     private async Task RemoveGameAsync(string gameId)
@@ -143,6 +207,7 @@ internal sealed partial class TraySetupApplication : IDisposable
 
         var removed = GameCatalog.Remove(config, gameId);
         await store.SaveAsync(config);
+        await backupCoordinator.RemoveStateAsync(gameId);
         launcherManager.RemoveLauncherArtifacts(config.Storage, removed);
         RefreshGameMenu();
         LogGameRemoved(logger, removed.GameId);
@@ -157,7 +222,7 @@ internal sealed partial class TraySetupApplication : IDisposable
         }
 
         var currentId = string.IsNullOrWhiteSpace(game.ApiGameId) ? game.GameId : game.ApiGameId;
-        using var editor = new GameSettingsDialog(game.DisplayName, currentId, TrayTheme.Current(), window.DeviceDpi);
+        using var editor = new GameSettingsDialog(game.DisplayName, currentId, game.Backup.DailyEnabled, TrayTheme.Current(), window.DeviceDpi);
         if (editor.ShowDialog(window) != DialogResult.OK)
         {
             return;
@@ -165,6 +230,7 @@ internal sealed partial class TraySetupApplication : IDisposable
 
         GameCatalog.ChangeDisplayName(config, gameId, editor.GameName);
         GameCatalog.ChangeApiGameId(config, gameId, editor.GameId);
+        game.Backup.DailyEnabled = editor.DailyBackupEnabled;
         await store.SaveAsync(config);
         RefreshGameMenu();
         LogGameSettingsChanged(logger, game.GameId, game.DisplayName, game.ApiGameId);
@@ -172,20 +238,40 @@ internal sealed partial class TraySetupApplication : IDisposable
 
     private async Task OpenSettingsAsync()
     {
-        using var editor = new ApiSettingsDialog(config.Api.BaseUrl, config.Api.ApiKey, TrayTheme.Current(), window.DeviceDpi);
+        using var editor = new ApiSettingsDialog(
+            config.Api.BaseUrl,
+            config.Api.ApiKey,
+            config.Ludusavi.ExecutablePath,
+            TrayTheme.Current(),
+            window.DeviceDpi);
         if (editor.ShowDialog(window) != DialogResult.OK)
         {
             return;
         }
 
+        if (!string.IsNullOrWhiteSpace(editor.LudusaviExecutablePath))
+        {
+            try
+            {
+                await ludusaviRunner.ValidateAsync(editor.LudusaviExecutablePath);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(window, ex.Message, "Invalid Ludusavi executable", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+        }
+
         config.Api.BaseUrl = editor.BaseUrl;
         config.Api.ApiKey = editor.ApiKey;
+        config.Ludusavi.ExecutablePath = editor.LudusaviExecutablePath;
         await store.SaveAsync(config);
         LogApiSettingsSaved(
             logger,
             config.Api.BaseUrl,
             config.Api.ApiKey);
         icon.ShowBalloonTip(2500, "Settings saved", "API settings were updated.", ToolTipIcon.Info);
+        RefreshGameMenu();
     }
 
     private Task SynchronizeLaunchersAsync(bool showConfirmation)
@@ -208,6 +294,7 @@ internal sealed partial class TraySetupApplication : IDisposable
 
     public void Dispose()
     {
+        backupCoordinator.Dispose();
         window.Dispose();
         icon.Dispose();
         applicationIcon.Dispose();

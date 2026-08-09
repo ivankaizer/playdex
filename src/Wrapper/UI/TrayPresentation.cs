@@ -44,6 +44,46 @@ internal sealed record TrayGamePresentation(string Title, string Subtitle)
         : char.ToUpperInvariant(value[0]) + value[1..];
 }
 
+internal enum BackupIndicatorKind
+{
+    Disabled,
+    Due,
+    Running,
+    Success,
+    Unsupported,
+    Failed
+}
+
+internal sealed record BackupStatusPresentation(BackupIndicatorKind Kind, string Glyph, string Tooltip)
+{
+    public static BackupStatusPresentation From(GameConfig game, GameBackupState? state, DateTimeOffset now)
+    {
+        if (state?.Result == BackupResultKind.Running)
+            return new(BackupIndicatorKind.Running, "●", "Backup is running.");
+
+        if (state?.Result == BackupResultKind.Failed)
+            return new(BackupIndicatorKind.Failed, "!", Format("Last backup failed", state.LastAttemptAt, state.LastError));
+
+        if (state?.Result == BackupResultKind.Unsupported)
+            return new(BackupIndicatorKind.Unsupported, "?", Format("Game is not supported by Ludusavi", state.LastAttemptAt, state.LastError));
+
+        if (game.Backup.DailyEnabled && BackupCoordinator.IsDue(state, now))
+            return new(BackupIndicatorKind.Due, "●", "Daily backup is due.");
+
+        if (state?.LastSuccessAt is not null)
+            return new(BackupIndicatorKind.Success, "✓", $"Last backup succeeded {state.LastSuccessAt.Value.ToLocalTime():g}.");
+
+        return new(BackupIndicatorKind.Disabled, "○", "No backup has been recorded. Daily backup is disabled.");
+    }
+
+    private static string Format(string text, DateTimeOffset? timestamp, string? error)
+    {
+        var when = timestamp is null ? "" : $" {timestamp.Value.ToLocalTime():g}.";
+        var detail = string.IsNullOrWhiteSpace(error) ? "" : $" {error}";
+        return $"{text}{when}{detail}".Trim();
+    }
+}
+
 internal static class TrayWindowLifecycle
 {
     public static bool ShouldHideOnClose(CloseReason reason) => reason == CloseReason.UserClosing;
@@ -78,13 +118,31 @@ internal sealed class TrayLayoutMetrics
 internal sealed class ApiSettingsDialogMetrics
 {
     public int Dpi { get; }
-    public Size ClientSize => new(Scale(420), Scale(220));
+    public Size ClientSize => new(Scale(420), Scale(300));
     public Size InputSize => new(Scale(388), Scale(27));
     public Size ButtonSize => new(Scale(68), Scale(28));
 
     private ApiSettingsDialogMetrics(int dpi) => Dpi = Math.Max(96, dpi);
 
     public static ApiSettingsDialogMetrics ForDpi(int dpi) => new(dpi);
+
+    public int Scale(int logicalPixels) =>
+        (int)Math.Round(logicalPixels * Dpi / 96d, MidpointRounding.AwayFromZero);
+}
+
+internal sealed class TrayMenuMetrics
+{
+    public int Dpi { get; }
+    public int OuterPadding => Scale(4);
+    public int HorizontalPadding => Scale(10);
+    public int ItemHeight => Scale(24);
+    public int SeparatorHeight => Scale(6);
+    public int CornerRadius => Scale(7);
+    public int ItemCornerRadius => Scale(5);
+
+    private TrayMenuMetrics(int dpi) => Dpi = Math.Max(96, dpi);
+
+    public static TrayMenuMetrics ForDpi(int dpi) => new(dpi);
 
     public int Scale(int logicalPixels) =>
         (int)Math.Round(logicalPixels * Dpi / 96d, MidpointRounding.AwayFromZero);
@@ -117,6 +175,7 @@ internal static class TrayDpi
 
 internal sealed record TrayWindowActions(
     Func<string, Task> LaunchGame,
+    Func<string, Task> BackupGame,
     Func<string, Task> EditGameSettings,
     Func<string, Task> RemoveGame,
     Func<Task> AddGame,

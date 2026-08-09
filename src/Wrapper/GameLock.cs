@@ -26,5 +26,22 @@ internal sealed class GameLock : IDisposable
         }
     }
 
+    public static bool IsHeld(string directory, string gameId)
+    {
+        Directory.CreateDirectory(directory);
+        var canonicalGameId = gameId.ToUpperInvariant();
+        var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(canonicalGameId)))[..16];
+        var path = Path.Combine(directory, $"{hash}.lock");
+        try
+        {
+            using var stream = new FileStream(path, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
+            return false;
+        }
+        catch (IOException)
+        {
+            return true;
+        }
+    }
+
     public void Dispose() => _stream.Dispose();
 }

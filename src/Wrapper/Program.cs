@@ -34,11 +34,6 @@ internal static partial class Program
         using var trayApplication = new UI.TraySetupApplication(configStore, config, logging);
         Application.Run();
 
-        if (trayApplication.GameIdToLaunch is not null)
-        {
-            RunConfiguredGame(config, trayApplication.GameIdToLaunch, logging);
-        }
-
         return CommandCode.Success;
     }
 

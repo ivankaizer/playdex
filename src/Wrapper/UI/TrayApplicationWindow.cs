@@ -5,13 +5,18 @@ namespace Wrapper.UI;
 internal sealed class TrayApplicationWindow : Form
 {
     private readonly Func<IEnumerable<GameConfig>> gamesProvider;
+    private readonly Func<string, BackupStatusPresentation> backupStatusProvider;
     private readonly TrayWindowActions actions;
     private TrayPalette palette = TrayTheme.Light;
     private TrayLayoutMetrics layout = TrayLayoutMetrics.ForDpi(96);
 
-    public TrayApplicationWindow(Func<IEnumerable<GameConfig>> gamesProvider, TrayWindowActions actions)
+    public TrayApplicationWindow(
+        Func<IEnumerable<GameConfig>> gamesProvider,
+        Func<string, BackupStatusPresentation> backupStatusProvider,
+        TrayWindowActions actions)
     {
         this.gamesProvider = gamesProvider;
+        this.backupStatusProvider = backupStatusProvider;
         this.actions = actions;
         AutoScaleMode = AutoScaleMode.None;
         FormBorderStyle = FormBorderStyle.FixedSingle;
@@ -132,11 +137,12 @@ internal sealed class TrayApplicationWindow : Form
             var game = games[index];
             var hasScrollbar = games.Count * layout.RowStride > panel.ClientSize.Height;
             var rowWidth = panel.ClientSize.Width - (hasScrollbar ? SystemInformation.VerticalScrollBarWidth : 0);
-            var row = new TrayGameRow(game, palette, layout, rowWidth)
+            var row = new TrayGameRow(game, backupStatusProvider(game.GameId), palette, layout, rowWidth)
             {
                 Location = new Point(0, index * layout.RowStride)
             };
             row.LaunchRequested += async (_, _) => await actions.LaunchGame(game.GameId);
+            row.BackupRequested += async (_, _) => await actions.BackupGame(game.GameId);
             row.EditGameSettingsRequested += async (_, _) => await actions.EditGameSettings(game.GameId);
             row.RemoveRequested += async (_, _) => await actions.RemoveGame(game.GameId);
             panel.Controls.Add(row);
@@ -179,17 +185,20 @@ internal sealed class ApiSettingsDialog : Form
 {
     private readonly TextBox baseUrlInput;
     private readonly TextBox apiKeyInput;
+    private readonly TextBox ludusaviPathInput;
     private readonly Label validation;
     private readonly ApiSettingsDialogMetrics layout;
 
     public string BaseUrl { get; private set; }
     public string ApiKey { get; private set; }
+    public string LudusaviExecutablePath { get; private set; }
 
-    public ApiSettingsDialog(string baseUrl, string apiKey, TrayPalette palette, int dpi)
+    public ApiSettingsDialog(string baseUrl, string apiKey, string ludusaviExecutablePath, TrayPalette palette, int dpi)
     {
         layout = ApiSettingsDialogMetrics.ForDpi(dpi);
         BaseUrl = baseUrl;
         ApiKey = apiKey;
+        LudusaviExecutablePath = ludusaviExecutablePath;
         AutoScaleMode = AutoScaleMode.None;
         AutoSize = false;
         ClientSize = layout.ClientSize;
@@ -231,22 +240,39 @@ internal sealed class ApiSettingsDialog : Form
         };
         Controls.Add(apiKeyInput);
 
+        Controls.Add(CreateLabel("Ludusavi executable", 16, 142, palette));
+        ludusaviPathInput = new TextBox
+        {
+            Text = ludusaviExecutablePath,
+            Location = P(16, 166),
+            Size = Z(310, 27),
+            MaxLength = LudusaviConfig.MaximumExecutablePathLength,
+            BackColor = palette.Surface,
+            ForeColor = palette.Text,
+            AccessibleName = "Ludusavi executable path"
+        };
+        Controls.Add(ludusaviPathInput);
+        var browse = CreateDialogButton("Browse...", palette.Surface, palette.Text);
+        browse.Location = P(336, 165);
+        browse.Click += (_, _) => BrowseForLudusavi();
+        Controls.Add(browse);
+
         validation = new Label
         {
-            Location = P(16, 139),
-            Size = Z(388, 24),
+            Location = P(16, 205),
+            Size = Z(388, 34),
             Font = new Font("Segoe UI", 8f),
             ForeColor = palette.Danger
         };
         Controls.Add(validation);
 
         var cancel = CreateDialogButton("Cancel", palette.Surface, palette.Text);
-        cancel.Location = P(260, 176);
+        cancel.Location = P(260, 256);
         cancel.DialogResult = DialogResult.Cancel;
         Controls.Add(cancel);
 
         var save = CreateDialogButton("Save", palette.Accent, palette == TrayTheme.Dark ? Color.FromArgb(20, 20, 20) : Color.White);
-        save.Location = P(336, 176);
+        save.Location = P(336, 256);
         save.Click += (_, _) => SaveSettings();
         Controls.Add(save);
 
@@ -289,6 +315,7 @@ internal sealed class ApiSettingsDialog : Form
         {
             BaseUrl = ApiConfig.NormalizeBaseUrl(baseUrlInput.Text);
             ApiKey = apiKeyInput.Text.Trim();
+            LudusaviExecutablePath = LudusaviConfig.NormalizeExecutablePath(ludusaviPathInput.Text);
             DialogResult = DialogResult.OK;
             Close();
         }
@@ -296,6 +323,19 @@ internal sealed class ApiSettingsDialog : Form
         {
             validation.Text = ex.Message;
             baseUrlInput.Focus();
+        }
+    }
+
+    private void BrowseForLudusavi()
+    {
+        using var picker = new OpenFileDialog
+        {
+            Filter = "Ludusavi (ludusavi.exe)|ludusavi.exe|Executables (*.exe)|*.exe",
+            Title = "Select Ludusavi"
+        };
+        if (picker.ShowDialog(this) == DialogResult.OK)
+        {
+            ludusaviPathInput.Text = picker.FileName;
         }
     }
 
@@ -310,17 +350,20 @@ internal sealed class GameSettingsDialog : Form
 
     private readonly TextBox gameNameInput;
     private readonly TextBox gameIdInput;
+    private readonly CheckBox dailyBackupInput;
     private readonly Label validation;
     private readonly ApiSettingsDialogMetrics layout;
 
     public string GameName { get; private set; }
     public string GameId { get; private set; }
+    public bool DailyBackupEnabled { get; private set; }
 
-    public GameSettingsDialog(string currentGameName, string currentGameId, TrayPalette palette, int dpi)
+    public GameSettingsDialog(string currentGameName, string currentGameId, bool dailyBackupEnabled, TrayPalette palette, int dpi)
     {
         layout = ApiSettingsDialogMetrics.ForDpi(dpi);
         GameName = currentGameName;
         GameId = currentGameId;
+        DailyBackupEnabled = dailyBackupEnabled;
         AutoScaleMode = AutoScaleMode.None;
         AutoSize = false;
         ClientSize = layout.ClientSize;
@@ -390,22 +433,33 @@ internal sealed class GameSettingsDialog : Form
         };
         Controls.Add(gameIdInput);
 
+        dailyBackupInput = new CheckBox
+        {
+            Text = "Back up saves daily with Ludusavi",
+            Checked = dailyBackupEnabled,
+            Location = P(16, 139),
+            Size = Z(388, 26),
+            ForeColor = palette.Text,
+            AccessibleName = "Enable daily Ludusavi backup"
+        };
+        Controls.Add(dailyBackupInput);
+
         validation = new Label
         {
-            Location = P(16, 139),
-            Size = Z(388, 24),
+            Location = P(16, 174),
+            Size = Z(388, 40),
             Font = new Font("Segoe UI", 8f),
             ForeColor = palette.Danger
         };
         Controls.Add(validation);
 
         var cancel = CreateDialogButton("Cancel", palette.Surface, palette.Text);
-        cancel.Location = P(260, 176);
+        cancel.Location = P(260, 256);
         cancel.DialogResult = DialogResult.Cancel;
         Controls.Add(cancel);
 
         var save = CreateDialogButton("Save", palette.Accent, palette == TrayTheme.Dark ? Color.FromArgb(20, 20, 20) : Color.White);
-        save.Location = P(336, 176);
+        save.Location = P(336, 256);
         save.Click += (_, _) => SaveGameSettings();
         Controls.Add(save);
 
@@ -439,6 +493,7 @@ internal sealed class GameSettingsDialog : Form
         {
             GameName = GameCatalog.NormalizeDisplayName(gameNameInput.Text);
             GameId = GameCatalog.NormalizeApiGameId(gameIdInput.Text);
+            DailyBackupEnabled = dailyBackupInput.Checked;
             DialogResult = DialogResult.OK;
             Close();
         }
@@ -471,11 +526,13 @@ internal sealed class TrayGameRow : UserControl
     private readonly TrayPalette palette;
     private readonly TrayLayoutMetrics layout;
     private bool hovering;
+    private readonly ToolTip backupTooltip = new();
     public event EventHandler? LaunchRequested;
+    public event EventHandler? BackupRequested;
     public event EventHandler? EditGameSettingsRequested;
     public event EventHandler? RemoveRequested;
 
-    public TrayGameRow(GameConfig game, TrayPalette palette, TrayLayoutMetrics layout, int width)
+    public TrayGameRow(GameConfig game, BackupStatusPresentation backupStatus, TrayPalette palette, TrayLayoutMetrics layout, int width)
     {
         this.palette = palette;
         this.layout = layout;
@@ -491,8 +548,10 @@ internal sealed class TrayGameRow : UserControl
         var icon = new PictureBox { Location = P(8, 10), Size = Z(36, 36), SizeMode = PictureBoxSizeMode.Zoom, Image = LoadGameIcon(game.Launch.ExecutablePath) };
         var moreWidth = layout.OverflowButtonSize;
         var moreLeft = Width - S(8) - moreWidth;
+        var statusSize = S(22);
+        var statusLeft = moreLeft - statusSize - S(2);
         var textLeft = S(52);
-        var textWidth = moreLeft - textLeft - S(6);
+        var textWidth = statusLeft - textLeft - S(6);
         var title = new Label
         {
             Text = display.Title,
@@ -529,9 +588,22 @@ internal sealed class TrayGameRow : UserControl
         more.FlatAppearance.BorderSize = 0;
         more.FlatAppearance.MouseOverBackColor = palette.Hover;
         more.Click += (_, _) => ShowOverflow(more, display.Title);
+        var backupIndicator = new Label
+        {
+            Text = backupStatus.Glyph,
+            AccessibleName = backupStatus.Tooltip,
+            Location = new Point(statusLeft, S(17)),
+            Size = new Size(statusSize, S(22)),
+            TextAlign = ContentAlignment.MiddleCenter,
+            Font = new Font("Segoe UI", 10f, FontStyle.Bold),
+            ForeColor = IndicatorColor(backupStatus.Kind),
+            BackColor = Color.Transparent
+        };
+        backupTooltip.SetToolTip(backupIndicator, backupStatus.Tooltip);
         Controls.Add(icon);
         Controls.Add(title);
         Controls.Add(subtitle);
+        Controls.Add(backupIndicator);
         Controls.Add(more);
         WireLaunch(icon);
         WireLaunch(title);
@@ -581,6 +653,7 @@ internal sealed class TrayGameRow : UserControl
         if (disposing)
         {
             foreach (var picture in Controls.OfType<PictureBox>()) picture.Image?.Dispose();
+            backupTooltip.Dispose();
         }
         base.Dispose(disposing);
     }
@@ -600,7 +673,7 @@ internal sealed class TrayGameRow : UserControl
 
     private void ShowOverflow(Control anchor, string title)
     {
-        var outerPadding = S(2);
+        var menuLayout = TrayMenuMetrics.ForDpi(layout.Dpi);
         var menu = new ContextMenuStrip
         {
             AutoSize = false,
@@ -609,32 +682,58 @@ internal sealed class TrayGameRow : UserControl
             ShowImageMargin = false,
             GripStyle = ToolStripGripStyle.Hidden,
             LayoutStyle = ToolStripLayoutStyle.VerticalStackWithOverflow,
-            Padding = new Padding(outerPadding)
+            Padding = new Padding(
+                menuLayout.OuterPadding,
+                menuLayout.OuterPadding,
+                0,
+                0),
+            DropShadowEnabled = true,
+            Font = new Font("Segoe UI", 9f),
+            Renderer = new TrayContextMenuRenderer(palette, menuLayout)
         };
-        var gameSettings = new ToolStripMenuItem("Game settings...") { AutoSize = false, ForeColor = palette.Text };
-        var remove = new ToolStripMenuItem($"Remove {title}") { AutoSize = false, ForeColor = palette.Danger };
+        var backup = new ToolStripMenuItem("Back up saves now") { AutoSize = false, ForeColor = palette.Text };
+        var gameSettings = new ToolStripMenuItem("Game settings") { AutoSize = false, ForeColor = palette.Text };
+        var separator = new ToolStripSeparator { AutoSize = false };
+        var remove = new ToolStripMenuItem($"Remove {title}")
+        {
+            AutoSize = false,
+            ForeColor = palette.Danger,
+            Tag = TrayContextMenuRenderer.DangerItemTag
+        };
+        var backupTextSize = TextRenderer.MeasureText(backup.Text, backup.Font, Size.Empty, TextFormatFlags.NoPadding);
         var settingsTextSize = TextRenderer.MeasureText(gameSettings.Text, gameSettings.Font, Size.Empty, TextFormatFlags.NoPadding);
         var removeTextSize = TextRenderer.MeasureText(remove.Text, remove.Font, Size.Empty, TextFormatFlags.NoPadding);
-        var horizontalPadding = S(8);
-        var itemWidth = Math.Max(settingsTextSize.Width, removeTextSize.Width) + horizontalPadding * 2;
-        var itemHeight = Math.Max(S(24), Math.Max(settingsTextSize.Height, removeTextSize.Height) + S(4));
-        menu.Size = new Size(itemWidth + outerPadding * 2, itemHeight * 2 + outerPadding * 2);
-        foreach (var item in new[] { gameSettings, remove })
+        var itemWidth = Math.Max(backupTextSize.Width, Math.Max(settingsTextSize.Width, removeTextSize.Width)) + menuLayout.HorizontalPadding * 2;
+        menu.Size = new Size(
+            itemWidth + menuLayout.OuterPadding,
+            menuLayout.ItemHeight * 3 + menuLayout.SeparatorHeight + menuLayout.OuterPadding);
+        foreach (var item in new[] { backup, gameSettings, remove })
         {
-            item.Size = new Size(itemWidth, itemHeight);
-            item.Padding = new Padding(horizontalPadding, 0, horizontalPadding, 0);
+            item.Size = new Size(itemWidth, menuLayout.ItemHeight);
+            item.Padding = new Padding(menuLayout.HorizontalPadding, 0, menuLayout.HorizontalPadding, 0);
             item.Margin = Padding.Empty;
         }
+        separator.Size = new Size(itemWidth, menuLayout.SeparatorHeight);
+        separator.Margin = Padding.Empty;
+        var backupSelected = false;
         var settingsSelected = false;
         var removeSelected = false;
+        backup.Click += (_, _) => backupSelected = true;
         gameSettings.Click += (_, _) => settingsSelected = true;
         remove.Click += (_, _) => removeSelected = true;
+        menu.Items.Add(backup);
         menu.Items.Add(gameSettings);
+        menu.Items.Add(separator);
         menu.Items.Add(remove);
+        menu.Opening += (_, _) => TrayContextMenuRenderer.ApplyRoundedRegion(menu, menuLayout.CornerRadius);
         menu.Closed += (_, _) => BeginInvoke(new Action(() =>
         {
             menu.Dispose();
-            if (settingsSelected)
+            if (backupSelected)
+            {
+                BackupRequested?.Invoke(this, EventArgs.Empty);
+            }
+            else if (settingsSelected)
             {
                 EditGameSettingsRequested?.Invoke(this, EventArgs.Empty);
             }
@@ -645,6 +744,15 @@ internal sealed class TrayGameRow : UserControl
         }));
         menu.Show(anchor, new Point(0, anchor.Height));
     }
+
+    private Color IndicatorColor(BackupIndicatorKind kind) => kind switch
+    {
+        BackupIndicatorKind.Success => Color.FromArgb(34, 139, 74),
+        BackupIndicatorKind.Failed => palette.Danger,
+        BackupIndicatorKind.Due => Color.FromArgb(210, 140, 0),
+        BackupIndicatorKind.Running => palette.Accent,
+        _ => palette.MutedText
+    };
 
     private static Bitmap LoadGameIcon(string? path)
     {
@@ -664,6 +772,91 @@ internal sealed class TrayGameRow : UserControl
     private int S(int logicalPixels) => layout.Scale(logicalPixels);
     private Point P(int x, int y) => new(S(x), S(y));
     private Size Z(int width, int height) => new(S(width), S(height));
+}
+
+internal sealed class TrayContextMenuRenderer(TrayPalette palette, TrayMenuMetrics layout) : ToolStripProfessionalRenderer
+{
+    public const string DangerItemTag = "danger";
+
+    protected override void OnRenderToolStripBackground(ToolStripRenderEventArgs e)
+    {
+        e.Graphics.Clear(palette.Surface);
+    }
+
+    protected override void OnRenderToolStripBorder(ToolStripRenderEventArgs e)
+    {
+        e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+        var bounds = new Rectangle(Point.Empty, e.ToolStrip.Size);
+        bounds.Width -= 1;
+        bounds.Height -= 1;
+        using var path = CreateRoundedPath(bounds, layout.CornerRadius);
+        using var pen = new Pen(palette.Border);
+        e.Graphics.DrawPath(pen, path);
+    }
+
+    protected override void OnRenderMenuItemBackground(ToolStripItemRenderEventArgs e)
+    {
+        if (!e.Item.Selected) return;
+
+        e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+        var inset = layout.Scale(1);
+        var bounds = new Rectangle(inset, inset, e.Item.Width - inset * 2, e.Item.Height - inset * 2);
+        var isDanger = string.Equals(e.Item.Tag as string, DangerItemTag, StringComparison.Ordinal);
+        using var brush = new SolidBrush(isDanger ? Color.FromArgb(38, palette.Danger) : palette.Hover);
+        using var path = CreateRoundedPath(bounds, layout.ItemCornerRadius);
+        e.Graphics.FillPath(brush, path);
+    }
+
+    protected override void OnRenderSeparator(ToolStripSeparatorRenderEventArgs e)
+    {
+        var y = e.Item.Height / 2;
+        using var pen = new Pen(palette.Border);
+        e.Graphics.DrawLine(pen, layout.HorizontalPadding, y, e.Item.Width - layout.HorizontalPadding, y);
+    }
+
+    protected override void OnRenderItemText(ToolStripItemTextRenderEventArgs e)
+    {
+        var textBounds = new Rectangle(
+            layout.HorizontalPadding,
+            0,
+            Math.Max(0, e.Item.Width - layout.HorizontalPadding * 2),
+            e.Item.Height);
+        TextRenderer.DrawText(
+            e.Graphics,
+            e.Text,
+            e.TextFont,
+            textBounds,
+            e.Item.ForeColor,
+            TextFormatFlags.Left |
+            TextFormatFlags.VerticalCenter |
+            TextFormatFlags.SingleLine |
+            TextFormatFlags.EndEllipsis |
+            TextFormatFlags.NoPrefix |
+            TextFormatFlags.NoPadding);
+    }
+
+    public static void ApplyRoundedRegion(Control control, int radius)
+    {
+        var bounds = control.ClientRectangle;
+        if (bounds.Width <= 0 || bounds.Height <= 0) return;
+
+        var oldRegion = control.Region;
+        using var path = CreateRoundedPath(bounds, radius);
+        control.Region = new Region(path);
+        oldRegion?.Dispose();
+    }
+
+    private static GraphicsPath CreateRoundedPath(Rectangle bounds, int radius)
+    {
+        var diameter = Math.Max(1, radius * 2);
+        var path = new GraphicsPath();
+        path.AddArc(bounds.Left, bounds.Top, diameter, diameter, 180, 90);
+        path.AddArc(bounds.Right - diameter, bounds.Top, diameter, diameter, 270, 90);
+        path.AddArc(bounds.Right - diameter, bounds.Bottom - diameter, diameter, diameter, 0, 90);
+        path.AddArc(bounds.Left, bounds.Bottom - diameter, diameter, diameter, 90, 90);
+        path.CloseFigure();
+        return path;
+    }
 }
 
 internal static class RoundedGraphicsExtensions
