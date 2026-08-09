@@ -18,6 +18,9 @@ public sealed class ConfigurationTests
         game.GameProvider = "steam";
         game.ApiKey = "game-key";
         config.Api.ApiKey = "global-key";
+        config.Ludusavi.ExecutablePath = "C:\\Tools\\ludusavi.exe";
+        game.Backup.DailyEnabled = true;
+        game.Backup.LudusaviGameTitle = "Doom: The Dark Ages";
         await store.SaveAsync(config);
 
         var loaded = await store.LoadOrCreateAsync();
@@ -25,6 +28,9 @@ public sealed class ConfigurationTests
         Assert.Equal("1234", loaded.Games["demo"].ApiGameId);
         Assert.Equal("steam", loaded.Games["demo"].GameProvider);
         Assert.Equal("game-key", loaded.Api.ResolveApiKey(loaded.Games["demo"]));
+        Assert.Equal("C:\\Tools\\ludusavi.exe", loaded.Ludusavi.ExecutablePath);
+        Assert.True(loaded.Games["demo"].Backup.DailyEnabled);
+        Assert.Equal("Doom: The Dark Ages", loaded.Games["demo"].Backup.LudusaviGameTitle);
     }
 
     [Fact]
@@ -173,11 +179,13 @@ public sealed class ConfigurationTests
         game.DisplayName = "Cronos";
         game.ApiGameId = "Cronos";
         game.GameProvider = "steam";
+        game.Backup.LudusaviGameTitle = "Old title";
         var launcherPath = LauncherManager.GetLauncherPath(config.Storage, game);
 
         var changed = GameCatalog.ChangeApiGameId(config, "Cronos", "  1850570  ");
         Assert.Equal(game, changed);
         Assert.Equal("1850570", game.ApiGameId);
+        Assert.Null(game.Backup.LudusaviGameTitle);
         Assert.True(config.Games.ContainsKey("Cronos"));
         Assert.Equal("Cronos", game.GameId);
         Assert.Equal(launcherPath, LauncherManager.GetLauncherPath(config.Storage, game));
@@ -314,6 +322,21 @@ public sealed class ConfigurationTests
             }
         }
 
+        return Task.CompletedTask;
+    }
+
+    [Fact]
+    public Task TestLudusaviPathNormalization()
+    {
+        var directory = NewTempDir();
+        var executable = Path.Combine(directory, "ludusavi.exe");
+        File.WriteAllBytes(executable, [0x4d, 0x5a]);
+
+        Assert.Equal(executable, LudusaviConfig.NormalizeExecutablePath($"  \"{executable}\"  "));
+        Assert.Equal("", LudusaviConfig.NormalizeExecutablePath(""));
+
+        Assert.Throws<InvalidOperationException>(() => LudusaviConfig.NormalizeExecutablePath(Path.Combine(directory, "other.exe")));
+        Assert.Throws<InvalidOperationException>(() => LudusaviConfig.NormalizeExecutablePath(Path.Combine(directory, "missing", "ludusavi.exe")));
         return Task.CompletedTask;
     }
 }

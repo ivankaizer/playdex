@@ -137,10 +137,10 @@ public sealed class ApplicationAndUiTests
         Assert.Equal("https://steamdb.info/", GameSettingsDialog.SteamDbUrl);
         var expected = new[]
         {
-            (Dpi: 96, Client: new Size(420, 220), Input: new Size(388, 27), Button: new Size(68, 28)),
-            (Dpi: 120, Client: new Size(525, 275), Input: new Size(485, 34), Button: new Size(85, 35)),
-            (Dpi: 144, Client: new Size(630, 330), Input: new Size(582, 41), Button: new Size(102, 42)),
-            (Dpi: 192, Client: new Size(840, 440), Input: new Size(776, 54), Button: new Size(136, 56))
+            (Dpi: 96, Client: new Size(420, 300), Input: new Size(388, 27), Button: new Size(68, 28)),
+            (Dpi: 120, Client: new Size(525, 375), Input: new Size(485, 34), Button: new Size(85, 35)),
+            (Dpi: 144, Client: new Size(630, 450), Input: new Size(582, 41), Button: new Size(102, 42)),
+            (Dpi: 192, Client: new Size(840, 600), Input: new Size(776, 54), Button: new Size(136, 56))
         };
 
         foreach (var item in expected)
@@ -157,6 +157,30 @@ public sealed class ApplicationAndUiTests
     }
 
     [Fact]
+    public Task TestTrayMenuMetrics()
+    {
+        var expected = new[]
+        {
+            (Dpi: 96, OuterPadding: 4, ItemHeight: 24, SeparatorHeight: 6, CornerRadius: 7),
+            (Dpi: 144, OuterPadding: 6, ItemHeight: 36, SeparatorHeight: 9, CornerRadius: 11),
+            (Dpi: 192, OuterPadding: 8, ItemHeight: 48, SeparatorHeight: 12, CornerRadius: 14)
+        };
+
+        foreach (var item in expected)
+        {
+            var metrics = TrayMenuMetrics.ForDpi(item.Dpi);
+            Assert.Equal(item.Dpi, metrics.Dpi);
+            Assert.Equal(item.OuterPadding, metrics.OuterPadding);
+            Assert.Equal(item.ItemHeight, metrics.ItemHeight);
+            Assert.Equal(item.SeparatorHeight, metrics.SeparatorHeight);
+            Assert.Equal(item.CornerRadius, metrics.CornerRadius);
+            Assert.True(metrics.HorizontalPadding > metrics.OuterPadding);
+        }
+
+        return Task.CompletedTask;
+    }
+
+    [Fact]
     public Task TestTrayWindowLifecycle()
     {
         Assert.True(TrayWindowLifecycle.ShouldHideOnClose(CloseReason.UserClosing));
@@ -164,6 +188,32 @@ public sealed class ApplicationAndUiTests
         Assert.True(!TrayWindowLifecycle.ShouldHideOnClose(CloseReason.TaskManagerClosing));
         Assert.Equal(FormWindowState.Normal, TrayWindowLifecycle.RestoredState(FormWindowState.Minimized));
         Assert.Equal(FormWindowState.Normal, TrayWindowLifecycle.RestoredState(FormWindowState.Normal));
+        return Task.CompletedTask;
+    }
+
+    [Fact]
+    public Task TestBackupStatusPresentation()
+    {
+        var now = new DateTimeOffset(2026, 8, 9, 12, 0, 0, TimeSpan.FromHours(2));
+        var game = new GameConfig { Backup = new BackupConfig { DailyEnabled = true } };
+        Assert.Equal(BackupIndicatorKind.Due, BackupStatusPresentation.From(game, null, now).Kind);
+
+        var success = new GameBackupState
+        {
+            Result = BackupResultKind.Success,
+            LastAttemptAt = now,
+            LastSuccessAt = now
+        };
+        Assert.Equal(BackupIndicatorKind.Success, BackupStatusPresentation.From(game, success, now).Kind);
+
+        success.LastSuccessAt = now.AddDays(-1);
+        success.LastAttemptAt = now.AddDays(-1);
+        Assert.Equal(BackupIndicatorKind.Due, BackupStatusPresentation.From(game, success, now).Kind);
+
+        var failed = new GameBackupState { Result = BackupResultKind.Failed, LastAttemptAt = now, LastError = "cloud conflict" };
+        var presentation = BackupStatusPresentation.From(game, failed, now);
+        Assert.Equal(BackupIndicatorKind.Failed, presentation.Kind);
+        Assert.Contains("cloud conflict", presentation.Tooltip);
         return Task.CompletedTask;
     }
 

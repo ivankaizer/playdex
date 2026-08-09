@@ -64,6 +64,10 @@ internal sealed class ConfigStore(string path)
             config.Games ?? new Dictionary<string, GameConfig>(),
             StringComparer.OrdinalIgnoreCase);
         config.Api ??= new ApiConfig();
+        config.Ludusavi ??= new LudusaviConfig();
+        config.Ludusavi.ExecutablePath = LudusaviConfig.NormalizeExecutablePath(
+            config.Ludusavi.ExecutablePath,
+            requireExisting: false);
         var storage = config.Storage ?? new StorageConfig();
         config.Storage = new StorageConfig
         {
@@ -76,6 +80,10 @@ internal sealed class ConfigStore(string path)
         {
             game.Launch ??= new LaunchConfig();
             game.Monitor ??= new MonitorConfig();
+            game.Backup ??= new BackupConfig();
+            game.Backup.LudusaviGameTitle = string.IsNullOrWhiteSpace(game.Backup.LudusaviGameTitle)
+                ? null
+                : game.Backup.LudusaviGameTitle.Trim();
         }
     }
 

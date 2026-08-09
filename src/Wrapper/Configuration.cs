@@ -4,6 +4,7 @@ internal sealed class WrapperConfig
 {
     public Dictionary<string, GameConfig> Games { get; set; } = new(StringComparer.OrdinalIgnoreCase);
     public ApiConfig Api { get; set; } = new();
+    public LudusaviConfig Ludusavi { get; set; } = new();
     public StorageConfig Storage { get; set; } = new();
 
     public GameConfig GetOrCreateGame(string gameId)
@@ -38,6 +39,13 @@ internal sealed class GameConfig
     public string? ApiKey { get; set; }
     public LaunchConfig Launch { get; set; } = new();
     public MonitorConfig Monitor { get; set; } = new();
+    public BackupConfig Backup { get; set; } = new();
+}
+
+internal sealed class BackupConfig
+{
+    public bool DailyEnabled { get; set; }
+    public string? LudusaviGameTitle { get; set; }
 }
 
 internal static class GameCatalog
@@ -93,7 +101,12 @@ internal static class GameCatalog
             throw new InvalidOperationException($"Game '{gameId}' is not configured.");
         }
 
-        game.ApiGameId = NormalizeApiGameId(apiGameId);
+        var normalized = NormalizeApiGameId(apiGameId);
+        if (!string.Equals(game.ApiGameId, normalized, StringComparison.Ordinal))
+        {
+            game.Backup.LudusaviGameTitle = null;
+        }
+        game.ApiGameId = normalized;
         return game;
     }
 
@@ -229,6 +242,41 @@ internal sealed class ApiConfig
         }
 
         return normalized;
+    }
+}
+
+internal sealed class LudusaviConfig
+{
+    public const int MaximumExecutablePathLength = 32767;
+
+    public string ExecutablePath { get; set; } = "";
+    public bool IsConfigured => !string.IsNullOrWhiteSpace(ExecutablePath);
+
+    public static string NormalizeExecutablePath(string? executablePath, bool requireExisting = true)
+    {
+        var normalized = executablePath?.Trim().Trim('"') ?? "";
+        if (string.IsNullOrWhiteSpace(normalized))
+        {
+            return "";
+        }
+
+        if (normalized.Length > MaximumExecutablePathLength)
+        {
+            throw new InvalidOperationException("The Ludusavi executable path is too long.");
+        }
+
+        var fullPath = Path.GetFullPath(normalized);
+        if (!string.Equals(Path.GetFileName(fullPath), "ludusavi.exe", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException("Select ludusavi.exe.");
+        }
+
+        if (requireExisting && !File.Exists(fullPath))
+        {
+            throw new InvalidOperationException("The selected Ludusavi executable does not exist.");
+        }
+
+        return fullPath;
     }
 }
 
