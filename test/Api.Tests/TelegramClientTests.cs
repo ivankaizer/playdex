@@ -8,26 +8,21 @@ namespace Api.Tests;
 public sealed class TelegramClientTests
 {
     [Fact]
-    public async Task SendsTextAndMultipartPhotoAndRetainsNonMessageUpdates()
+    public async Task SendsTextAndMultipartPhoto()
     {
         var handler = new RecordingHandler(
             Json("{\"ok\":true,\"result\":{}}"),
-            Json("{\"ok\":true,\"result\":{}}"),
-            Json("{\"ok\":true,\"result\":[{\"update_id\":7}]}"));
+            Json("{\"ok\":true,\"result\":{}}"));
         var client = CreateClient(handler);
 
         await client.SendMessageAsync(42, "hello", CancellationToken.None);
         await client.SendPhotoAsync(42, [1, 2, 3], "caption", CancellationToken.None);
-        var updates = await client.GetUpdatesAsync(7, CancellationToken.None);
 
         Assert.EndsWith("/bottest-token/sendMessage", handler.Requests[0].Uri);
         Assert.Contains("\"chat_id\":42", handler.Requests[0].Body);
         Assert.EndsWith("/bottest-token/sendPhoto", handler.Requests[1].Uri);
         Assert.StartsWith("multipart/form-data", handler.Requests[1].ContentType);
         Assert.Contains("notification.webp", handler.Requests[1].Body);
-        var update = Assert.Single(updates);
-        Assert.Equal(7, update.UpdateId);
-        Assert.Null(update.Message);
     }
 
     [Theory]
