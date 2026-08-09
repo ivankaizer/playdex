@@ -1,12 +1,12 @@
+using System.Globalization;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
 using Npgsql;
-using OpenTelemetry;
-using OpenTelemetry.Metrics;
+using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
 
 namespace Microsoft.Extensions.Hosting;
@@ -28,42 +28,51 @@ public static class Extensions
 
     public static IHostApplicationBuilder ConfigureOpenTelemetry(this IHostApplicationBuilder builder)
     {
-        builder.Logging.AddOpenTelemetry(logging =>
-        {
-            logging.IncludeFormattedMessage = true;
-            logging.IncludeScopes = true;
-        });
+        var sentryDsn = GetSentryDsn(builder.Configuration);
+        var traceSampleRate = GetTraceSampleRate(builder.Configuration);
 
         builder.Services.AddOpenTelemetry()
-            .WithLogging()
-            .WithMetrics(metrics =>
-            {
-                metrics.AddAspNetCoreInstrumentation()
-                       .AddHttpClientInstrumentation()
-                       .AddRuntimeInstrumentation();
-            })
+            .ConfigureResource(resource => resource.AddService(builder.Environment.ApplicationName))
             .WithTracing(tracing =>
             {
                 tracing.AddAspNetCoreInstrumentation()
                        .AddHttpClientInstrumentation()
                        .AddNpgsql();
-            });
 
-        builder.AddOpenTelemetryExporters();
+                if (sentryDsn is not null)
+                {
+                    tracing.SetSampler(new ParentBasedSampler(new TraceIdRatioBasedSampler(traceSampleRate)))
+                           .AddSentryOtlpExporter(sentryDsn);
+                }
+            });
 
         return builder;
     }
 
-    private static IHostApplicationBuilder AddOpenTelemetryExporters(this IHostApplicationBuilder builder)
+    public static string? GetSentryDsn(IConfiguration configuration)
     {
-        var useOtlpExporter = !string.IsNullOrWhiteSpace(builder.Configuration["OTEL_EXPORTER_OTLP_ENDPOINT"]);
+        return Normalize(configuration["SENTRY_DSN"])
+            ?? Normalize(configuration["Sentry:Dsn"]);
+    }
 
-        if (useOtlpExporter)
-        {
-            builder.Services.AddOpenTelemetry().UseOtlpExporter();
-        }
+    public static double GetTraceSampleRate(IConfiguration configuration)
+    {
+        var configured = configuration["SENTRY_TRACES_SAMPLE_RATE"]
+            ?? configuration["Sentry:TracesSampleRate"];
+        return double.TryParse(configured, NumberStyles.Float, CultureInfo.InvariantCulture, out var value) &&
+               value is >= 0 and <= 1
+            ? value
+            : 0.2;
+    }
 
-        return builder;
+    private static string? Normalize(string? value)
+    {
+        var normalized = value?.Trim();
+        return string.IsNullOrWhiteSpace(normalized) ||
+               normalized.StartsWith("__", StringComparison.Ordinal) &&
+               normalized.EndsWith("__", StringComparison.Ordinal)
+            ? null
+            : normalized;
     }
 
     public static IHostApplicationBuilder AddDefaultHealthChecks(this IHostApplicationBuilder builder)
