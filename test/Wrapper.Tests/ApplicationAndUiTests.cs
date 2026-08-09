@@ -59,7 +59,7 @@ public sealed class ApplicationAndUiTests
         var sourceRoots = new[]
         {
             Path.Combine(root, "src"),
-            Path.Combine(root, "tests")
+            Path.Combine(root, "test")
         };
         var violations = sourceRoots
             .SelectMany(path => Directory.EnumerateFiles(path, "*", SearchOption.AllDirectories))
