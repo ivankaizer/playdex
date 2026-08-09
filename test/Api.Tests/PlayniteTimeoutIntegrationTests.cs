@@ -38,7 +38,7 @@ public sealed class PlayniteTimeoutIntegrationTests(PostgresFixture postgres)
         };
         db.AddRange(credential, game);
         await db.SaveChangesAsync();
-        var lastPing = DateTimeOffset.UtcNow.AddMinutes(-5);
+        var lastPing = TruncateToMicroseconds(DateTimeOffset.UtcNow.AddMinutes(-5));
         var session = new PlaySession
         {
             PlatformCredentialId = credential.Id,
@@ -72,4 +72,7 @@ public sealed class PlayniteTimeoutIntegrationTests(PostgresFixture postgres)
             await db.SaveChangesAsync();
         }
     }
+
+    private static DateTimeOffset TruncateToMicroseconds(DateTimeOffset value) =>
+        new(value.Ticks - value.Ticks % TimeSpan.TicksPerMicrosecond, value.Offset);
 }
