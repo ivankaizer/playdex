@@ -122,6 +122,9 @@ public sealed class ApplicationAndUiTests
             Assert.Equal(metrics.Scale(36), metrics.ManagementButtonHeight);
             Assert.Equal(metrics.Scale(26), metrics.ExitButtonHeight);
             Assert.Equal(metrics.Scale(30), metrics.OverflowButtonSize);
+            Assert.Equal(metrics.Scale(6), metrics.ScrollbarWidth);
+            Assert.Equal(metrics.Scale(2), metrics.ScrollbarMargin);
+            Assert.Equal(metrics.Scale(24), metrics.ScrollbarMinimumThumbHeight);
             Assert.Equal(5, TrayLayoutMetrics.MaxVisibleGameRows);
             Assert.Equal(metrics.RowStride * 5, metrics.GamePanelMaxHeight);
             Assert.True(metrics.GamePanelMinHeight >= metrics.RowHeight);

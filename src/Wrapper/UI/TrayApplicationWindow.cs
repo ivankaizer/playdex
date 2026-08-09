@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Drawing.Drawing2D;
 
 namespace Wrapper.UI;
@@ -7,6 +8,7 @@ internal sealed class TrayApplicationWindow : Form
     private readonly Func<IEnumerable<GameConfig>> gamesProvider;
     private readonly Func<string, BackupStatusPresentation> backupStatusProvider;
     private readonly TrayWindowActions actions;
+    private TrayGameListPanel? gamesPanel;
     private TrayPalette palette = TrayTheme.Light;
     private TrayLayoutMetrics layout = TrayLayoutMetrics.ForDpi(96);
 
@@ -73,13 +75,13 @@ internal sealed class TrayApplicationWindow : Form
         ClientSize = new Size(layout.PopupWidth, layout.ActionAreaHeight + gamesHeight);
         BackColor = palette.Background;
 
-        var gamesPanel = new Panel
+        gamesPanel = new TrayGameListPanel(palette, layout)
         {
             Location = P(8, 6),
             Size = new Size(layout.PopupWidth - S(16), gamesHeight),
-            AutoScroll = games.Count * layout.RowStride > gamesHeight,
             BackColor = palette.Background
         };
+        gamesPanel.SetContentHeight(games.Count * layout.RowStride);
         Controls.Add(gamesPanel);
         BuildGameRows(gamesPanel, games);
 
@@ -116,15 +118,26 @@ internal sealed class TrayApplicationWindow : Form
         Invalidate();
     }
 
-    private void BuildGameRows(Panel panel, List<GameConfig> games)
+    protected override void OnMouseWheel(MouseEventArgs e)
+    {
+        if (gamesPanel is not null && gamesPanel.RectangleToScreen(gamesPanel.ClientRectangle).Contains(Cursor.Position))
+        {
+            gamesPanel.ScrollByWheel(e.Delta);
+            return;
+        }
+
+        base.OnMouseWheel(e);
+    }
+
+    private void BuildGameRows(TrayGameListPanel panel, List<GameConfig> games)
     {
         if (games.Count == 0)
         {
-            panel.Controls.Add(new Label
+            panel.AddContent(new Label
             {
                 Text = "No games yet\nAdd an executable to get started.",
                 Location = P(8, 8),
-                Size = new Size(panel.ClientSize.Width - S(16), S(64)),
+                Size = new Size(panel.ContentWidth - S(16), S(64)),
                 ForeColor = palette.MutedText,
                 Font = new Font("Segoe UI", 9.5f),
                 TextAlign = ContentAlignment.MiddleCenter
@@ -135,8 +148,7 @@ internal sealed class TrayApplicationWindow : Form
         for (var index = 0; index < games.Count; index++)
         {
             var game = games[index];
-            var hasScrollbar = games.Count * layout.RowStride > panel.ClientSize.Height;
-            var rowWidth = panel.ClientSize.Width - (hasScrollbar ? SystemInformation.VerticalScrollBarWidth : 0);
+            var rowWidth = panel.ContentWidth;
             var row = new TrayGameRow(game, backupStatusProvider(game.GameId), palette, layout, rowWidth)
             {
                 Location = new Point(0, index * layout.RowStride)
@@ -145,7 +157,7 @@ internal sealed class TrayApplicationWindow : Form
             row.BackupRequested += async (_, _) => await actions.BackupGame(game.GameId);
             row.EditGameSettingsRequested += async (_, _) => await actions.EditGameSettings(game.GameId);
             row.RemoveRequested += async (_, _) => await actions.RemoveGame(game.GameId);
-            panel.Controls.Add(row);
+            panel.AddContent(row);
         }
     }
 
@@ -179,6 +191,202 @@ internal sealed class TrayApplicationWindow : Form
     private int S(int logicalPixels) => layout.Scale(logicalPixels);
     private Point P(int x, int y) => new(S(x), S(y));
     private Size Z(int width, int height) => new(S(width), S(height));
+}
+
+internal sealed class TrayGameListPanel : Panel
+{
+    private readonly Panel content;
+    private readonly TrayScrollBar scrollbar;
+    private readonly TrayLayoutMetrics layout;
+    private int contentHeight;
+
+    public int ContentWidth => content.Width;
+
+    public TrayGameListPanel(TrayPalette palette, TrayLayoutMetrics layout)
+    {
+        this.layout = layout;
+        DoubleBuffered = true;
+        TabStop = false;
+
+        content = new Panel
+        {
+            BackColor = palette.Background,
+            Location = Point.Empty,
+            TabStop = false
+        };
+        scrollbar = new TrayScrollBar(palette, layout)
+        {
+            Visible = false
+        };
+        scrollbar.ValueChanged += (_, _) => content.Top = -scrollbar.Value;
+        Controls.Add(content);
+        Controls.Add(scrollbar);
+        scrollbar.BringToFront();
+    }
+
+    public void SetContentHeight(int height)
+    {
+        contentHeight = Math.Max(0, height);
+        UpdateScrollLayout();
+    }
+
+    public void AddContent(Control control) => content.Controls.Add(control);
+
+    public void ScrollByWheel(int delta)
+    {
+        if (!scrollbar.Visible || delta == 0) return;
+
+        var lines = SystemInformation.MouseWheelScrollLines;
+        if (lines == 0) return;
+        var step = lines < 0
+            ? ClientSize.Height
+            : Math.Max(1, layout.RowStride * lines / 3);
+        scrollbar.Value -= (int)Math.Round(delta / (double)SystemInformation.MouseWheelScrollDelta * step);
+    }
+
+    protected override void OnResize(EventArgs eventargs)
+    {
+        base.OnResize(eventargs);
+        UpdateScrollLayout();
+    }
+
+    protected override void OnMouseWheel(MouseEventArgs e)
+    {
+        ScrollByWheel(e.Delta);
+    }
+
+    private void UpdateScrollLayout()
+    {
+        var viewportHeight = Math.Max(0, ClientSize.Height);
+        var hasOverflow = contentHeight > viewportHeight;
+        var gutter = hasOverflow ? layout.ScrollbarWidth + layout.ScrollbarMargin * 2 : 0;
+        content.Size = new Size(
+            Math.Max(0, ClientSize.Width - gutter),
+            Math.Max(contentHeight, viewportHeight));
+        scrollbar.Visible = hasOverflow;
+        scrollbar.Bounds = new Rectangle(
+            Math.Max(0, ClientSize.Width - layout.ScrollbarWidth - layout.ScrollbarMargin),
+            layout.ScrollbarMargin,
+            layout.ScrollbarWidth,
+            Math.Max(0, viewportHeight - layout.ScrollbarMargin * 2));
+        scrollbar.SetRange(viewportHeight, contentHeight);
+        content.Top = -scrollbar.Value;
+    }
+}
+
+internal sealed class TrayScrollBar : Control
+{
+    private readonly TrayPalette palette;
+    private readonly TrayLayoutMetrics layout;
+    private int maximum;
+    private int value;
+    private int viewportHeight;
+    private int contentHeight;
+    private bool dragging;
+    private int dragStartY;
+    private int dragStartValue;
+
+    public event EventHandler? ValueChanged;
+
+    [Browsable(false)]
+    [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+    public int Value
+    {
+        get => value;
+        set
+        {
+            var next = Math.Clamp(value, 0, maximum);
+            if (next == this.value) return;
+            this.value = next;
+            Invalidate();
+            ValueChanged?.Invoke(this, EventArgs.Empty);
+        }
+    }
+
+    public TrayScrollBar(TrayPalette palette, TrayLayoutMetrics layout)
+    {
+        this.palette = palette;
+        this.layout = layout;
+        SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.UserPaint, true);
+        AccessibleName = "Game list scrollbar";
+        AccessibleRole = AccessibleRole.ScrollBar;
+        BackColor = palette.Background;
+        Cursor = Cursors.Hand;
+        TabStop = false;
+    }
+
+    public void SetRange(int viewportHeight, int contentHeight)
+    {
+        this.viewportHeight = Math.Max(0, viewportHeight);
+        this.contentHeight = Math.Max(0, contentHeight);
+        maximum = Math.Max(0, this.contentHeight - this.viewportHeight);
+        Value = Math.Min(Value, maximum);
+        Invalidate();
+    }
+
+    protected override void OnPaint(PaintEventArgs e)
+    {
+        base.OnPaint(e);
+        if (maximum <= 0 || Height <= 0) return;
+
+        e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+        var trackWidth = Math.Max(2, layout.ScrollbarWidth / 3);
+        var track = new Rectangle((Width - trackWidth) / 2, 0, trackWidth, Height);
+        using var trackBrush = new SolidBrush(palette.Border);
+        e.Graphics.FillRoundedRectangle(trackBrush, track, trackWidth / 2);
+
+        var thumb = ThumbBounds();
+        using var thumbBrush = new SolidBrush(palette.MutedText);
+        e.Graphics.FillRoundedRectangle(thumbBrush, thumb, Math.Max(1, thumb.Width / 2));
+    }
+
+    protected override void OnMouseDown(MouseEventArgs e)
+    {
+        base.OnMouseDown(e);
+        if (e.Button != MouseButtons.Left || maximum <= 0) return;
+
+        var thumb = ThumbBounds();
+        if (thumb.Contains(e.Location))
+        {
+            dragging = true;
+            dragStartY = e.Y;
+            dragStartValue = Value;
+            Capture = true;
+        }
+        else
+        {
+            Value += e.Y < thumb.Top ? -viewportHeight : viewportHeight;
+        }
+    }
+
+    protected override void OnMouseMove(MouseEventArgs e)
+    {
+        base.OnMouseMove(e);
+        if (!dragging || maximum <= 0) return;
+
+        var available = Math.Max(1, Height - ThumbBounds().Height);
+        Value = dragStartValue + (int)Math.Round((e.Y - dragStartY) * maximum / (double)available);
+    }
+
+    protected override void OnMouseUp(MouseEventArgs e)
+    {
+        base.OnMouseUp(e);
+        dragging = false;
+        Capture = false;
+    }
+
+    private Rectangle ThumbBounds()
+    {
+        var thumbHeight = contentHeight <= 0
+            ? Height
+            : Math.Clamp(
+                (int)Math.Round(Height * viewportHeight / (double)contentHeight),
+                Math.Min(layout.ScrollbarMinimumThumbHeight, Height),
+                Height);
+        var available = Math.Max(0, Height - thumbHeight);
+        var top = maximum <= 0 ? 0 : (int)Math.Round(available * Value / (double)maximum);
+        return new Rectangle(0, top, Width, thumbHeight);
+    }
 }
 
 internal sealed class ApiSettingsDialog : Form
