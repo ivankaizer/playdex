@@ -28,6 +28,12 @@ builder.Logging.AddJsonConsole(cfg =>
     cfg.JsonWriterOptions = new JsonWriterOptions { Indented = false };
 });
 
+var sentrySettings = PlaydexSentrySettings.From(builder.Configuration, builder.Environment);
+if (sentrySettings.IsEnabled)
+{
+    builder.WebHost.UseSentry(sentrySettings.ConfigureApi);
+}
+
 builder.AddServiceDefaults();
 
 var databaseUrl = builder.Configuration["DATABASE_URL"]?.Trim()
@@ -106,6 +112,7 @@ app.UseAuthorization();
 
 var api = app.MapGroup("/api");
 api.MapGet("", () => TypedResults.Ok("Ok"));
+api.MapGet("/observability/sentry", () => TypedResults.Ok(sentrySettings.ToBrowserSettings()));
 
 api
     .MapAuth()

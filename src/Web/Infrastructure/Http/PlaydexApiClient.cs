@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Web.Infrastructure.Auth;
+using Web.Observability;
 
 namespace Web.Infrastructure.Http;
 
@@ -49,7 +50,9 @@ public sealed class PlaydexApiClient(HttpClient httpClient, AuthSession auth, st
         bool authenticated,
         CancellationToken cancellationToken)
     {
+        var transaction = SentryApiTracing.Start(method, url);
         using var request = new HttpRequestMessage(method, url);
+        SentryApiTracing.AddTraceHeader(request, transaction);
         if (body is not null) request.Content = JsonContent.Create(body, options: JsonOptions);
 
         if (authenticated)
@@ -61,25 +64,39 @@ public sealed class PlaydexApiClient(HttpClient httpClient, AuthSession auth, st
             }
         }
 
-        using var response = await httpClient.SendAsync(request, cancellationToken);
-        if (!response.IsSuccessStatusCode)
+        HttpResponseMessage response;
+        try
         {
-            return new Response<T>(default, await CreateExceptionAsync(response, cancellationToken));
+            response = await httpClient.SendAsync(request, cancellationToken);
+            transaction?.Finish(SentryApiTracing.ToSpanStatus(response.StatusCode));
+        }
+        catch (Exception exception)
+        {
+            transaction?.Finish(exception);
+            throw;
         }
 
-        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
-        var root = await JsonSerializer.DeserializeAsync<JsonElement>(stream, JsonOptions, cancellationToken);
-        var payload = root;
-        if (root.ValueKind == JsonValueKind.Object &&
-            root.TryGetProperty("data", out var data) &&
-            root.TryGetProperty("error", out _))
+        using (response)
         {
-            payload = data;
-        }
+            if (!response.IsSuccessStatusCode)
+            {
+                return new Response<T>(default, await CreateExceptionAsync(response, cancellationToken));
+            }
 
-        var value = payload.Deserialize<T>(JsonOptions);
-        if (value is null) throw new JsonException("Successful response contained no JSON data.");
-        return new Response<T>(value, null);
+            await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+            var root = await JsonSerializer.DeserializeAsync<JsonElement>(stream, JsonOptions, cancellationToken);
+            var payload = root;
+            if (root.ValueKind == JsonValueKind.Object &&
+                root.TryGetProperty("data", out var data) &&
+                root.TryGetProperty("error", out _))
+            {
+                payload = data;
+            }
+
+            var value = payload.Deserialize<T>(JsonOptions);
+            if (value is null) throw new JsonException("Successful response contained no JSON data.");
+            return new Response<T>(value, null);
+        }
     }
 
     private async Task<bool> TryRefreshAsync(CancellationToken cancellationToken)
