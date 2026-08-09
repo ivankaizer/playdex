@@ -37,55 +37,28 @@ jobs:
 
       - name: Install Bun dependencies
         run: bun install --frozen-lockfile
-        working-directory: apps/api
+        working-directory: src/Web
 
       - name: Install CSS dependencies
         run: bun install --frozen-lockfile
-        working-directory: apps/web
-
-      - name: Check Bun reference API
-        run: bun run check
-        working-directory: apps/api
-
-      - name: Apply database migrations
-        run: bun run db:migrate
-        working-directory: apps/api
-        env:
-          DATABASE_URL: postgresql://playdex:playdex@127.0.0.1:5432/playdex_db_test
+        working-directory: src/Web
 
       - name: Build Blazor CSS
         run: bun run css:build
-        working-directory: apps/web
+        working-directory: src/Web
 
       - name: Strict Release build
-        run: dotnet build apps/api-dotnet/Playdex.sln --configuration Release --warnaserror
+        run: dotnet build Playdex.sln --configuration Release --warnaserror
 
-      - name: Run .NET and Blazor tests
-        run: dotnet test apps/api-dotnet/Playdex.sln --configuration Release --no-build
-        env:
-          PLAYDEX_INTEGRATION_DATABASE_URL: postgresql://playdex:playdex@127.0.0.1:5432/playdex_db_test
-
-      - name: Run live Bun-versus-.NET contracts
-        shell: bash
+      - name: Apply database migrations
+        run: dotnet run --no-build --project src/Api --configuration Release -- migrate
         env:
           DATABASE_URL: postgresql://playdex:playdex@127.0.0.1:5432/playdex_db_test
-          PLAYDEX_CONTRACT_DATABASE_URL: postgresql://playdex:playdex@127.0.0.1:5432/playdex_db_test
-          JWT_SECRET: contract-test-secret-that-is-at-least-thirty-two-bytes
-          POLL_INTERVAL_SECONDS: 3600
-          BUN_API_BASE_URL: http://127.0.0.1:3000
-          DOTNET_API_BASE_URL: http://127.0.0.1:5100
+          Auth__JwtSecret: test-secret-for-ci
+
+      - name: Run .NET and Blazor tests
         run: |
-          bun --cwd apps/api run src/index.ts >/tmp/playdex-bun.log 2>&1 &
-          BUN_PID=$!
-          ASPNETCORE_URLS=http://127.0.0.1:5100 dotnet run --project apps/api-dotnet/Playdex.Api/Playdex.Api.csproj --configuration Release --no-build >/tmp/playdex-dotnet.log 2>&1 &
-          DOTNET_PID=$!
-          trap 'kill "$BUN_PID" "$DOTNET_PID" 2>/dev/null || true' EXIT
-          for attempt in {1..30}; do
-            if curl -fsS http://127.0.0.1:3000/api >/dev/null && curl -fsS http://127.0.0.1:5100/api >/dev/null; then
-              break
-            fi
-            sleep 1
-          done
-          curl -fsS http://127.0.0.1:3000/api >/dev/null
-          curl -fsS http://127.0.0.1:5100/api >/dev/null
-          dotnet test apps/api-dotnet/Playdex.ContractTests/Playdex.ContractTests.csproj --configuration Release --no-build --filter FullyQualifiedName~DifferentialHarnessTests
+          dotnet test test/Api.Tests/Api.Tests.csproj --configuration Release --no-build
+          dotnet test test/Web.Tests/Web.Tests.csproj --configuration Release --no-build
+        env:
+          PLAYDEX_INTEGRATION_DATABASE_URL: postgresql://playdex:playdex@127.0.0.1:5432/playdex_db_test

@@ -1,0 +1,36 @@
+name: Build Windows Wrapper
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "src/Wrapper/**"
+      - "Directory.Packages.props"
+      - "Directory.Build.props"
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build wrapper for Windows
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Publish wrapper (win-x64, single-file)
+        run: dotnet publish src/Wrapper/Wrapper.csproj -c Release -r win-x64 -o ./artifacts/win-x64
+
+      - name: Run wrapper tests
+        run: dotnet test test/Wrapper.Tests/Wrapper.Tests.csproj --configuration Release
+
+      - name: Upload wrapper artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: playdex-wrapper-windows
+          path: ./artifacts/**

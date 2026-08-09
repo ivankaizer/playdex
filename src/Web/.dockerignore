@@ -1,0 +1,8 @@
+bin
+obj
+Web.Tests/bin
+Web.Tests/obj
+node_modules
+dist
+.git
+.DS_Store

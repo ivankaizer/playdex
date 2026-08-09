@@ -5,40 +5,12 @@ on:
     branches:
       - main
     paths:
-      - "apps/web/**"
+      - "src/Web/**"
   workflow_dispatch:
 
 jobs:
-  api:
-    name: Build API
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: eu-north-1
-
-      - name: Login to Amazon ECR
-        id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v2
-
-      - name: Build and push API image
-        env:
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          ECR_REPOSITORY: ${{ secrets.REPO_NAME }}
-        run: |
-          IMAGE_TAG="$(git rev-parse --short HEAD)-$(date +'%Y-%m-%d-%H-%M')"
-          docker build -t "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" -t "$ECR_REGISTRY/$ECR_REPOSITORY:latest" apps/api-dotnet
-          docker push "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
-          docker push "$ECR_REGISTRY/$ECR_REPOSITORY:latest"
-
-  ui:
-    name: Build UI
+  Build:
+    name: Build
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -61,6 +33,6 @@ jobs:
           ECR_REPOSITORY: ${{ secrets.REPO_NAME }}-ui
         run: |
           IMAGE_TAG="$(git rev-parse --short HEAD)-$(date +'%Y-%m-%d-%H-%M')"
-          docker build -t "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" -t "$ECR_REGISTRY/$ECR_REPOSITORY:latest" apps/web
+          docker build -t "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" -t "$ECR_REGISTRY/$ECR_REPOSITORY:latest" src/Web
           docker push "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
           docker push "$ECR_REGISTRY/$ECR_REPOSITORY:latest"

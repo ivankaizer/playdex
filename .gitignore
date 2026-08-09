@@ -22,6 +22,9 @@
 # vercel
 .vercel
 
+# dependencies
+node_modules/
+
 **/*.trace
 **/*.zip
 **/*.tar.gz
@@ -33,11 +36,13 @@ package-lock.json
 .env
 
 dist/
-apps/api/dist/
-apps/web/dist/
+src/Api/dist/
+src/Web/dist/
 todo.md
 *.internal
 
 # .NET build output
 **/bin/
 **/obj/
+
+*.DotSettings.user

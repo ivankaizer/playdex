@@ -1,8 +1,0 @@
-bin
-obj
-Playdex.Web.Tests/bin
-Playdex.Web.Tests/obj
-node_modules
-dist
-.git
-.DS_Store
