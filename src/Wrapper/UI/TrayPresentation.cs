@@ -106,6 +106,9 @@ internal sealed class TrayLayoutMetrics
     public int ManagementButtonHeight => Scale(36);
     public int ExitButtonHeight => Scale(26);
     public int OverflowButtonSize => Scale(30);
+    public int ScrollbarWidth => Scale(6);
+    public int ScrollbarMargin => Scale(2);
+    public int ScrollbarMinimumThumbHeight => Scale(24);
 
     private TrayLayoutMetrics(int dpi) => Dpi = Math.Max(96, dpi);
 
