@@ -104,6 +104,17 @@ public sealed class ProjectContractTests
     }
 
     [Fact]
+    public void TailwindScansTheFeatureOrganizedBlazorSources()
+    {
+        var config = ReadRequiredFile("tailwind.config.cjs");
+
+        Assert.Contains("./Infrastructure/**/*.{razor,cs}", config);
+        Assert.Contains("./Layout/**/*.{razor,cs}", config);
+        Assert.Contains("./Modules/**/*.{razor,cs}", config);
+        Assert.Contains("./Routing/**/*.{razor,cs}", config);
+    }
+
+    [Fact]
     public void RetiredReactRuntimeAndBuildArtifactsAreAbsent()
     {
         var retiredPaths = new[]

@@ -1,9 +1,10 @@
 module.exports = {
   content: [
     "./App.razor",
-    "./Pages/**/*.{razor,cs}",
-    "./Components/**/*.{razor,cs}",
+    "./Infrastructure/**/*.{razor,cs}",
     "./Layout/**/*.{razor,cs}",
+    "./Modules/**/*.{razor,cs}",
+    "./Routing/**/*.{razor,cs}",
     "./wwwroot/{index.html,js/*.js}",
   ],
   darkMode: "class",
