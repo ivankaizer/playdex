@@ -2,7 +2,6 @@ using System.Net;
 using System.Text;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
-using Microsoft.Extensions.DependencyInjection;
 using Api.Modules.Telegram;
 using Api.Infrastructure.Common;
 using Api.Infrastructure.Persistence;
@@ -273,78 +272,6 @@ public sealed class TelegramNotificationTests(PostgresFixture postgres)
         }
     }
 
-    [Fact]
-    public async Task StopCommandEndsEveryUserSessionAndReturnsArchivedSummary()
-    {
-        if (!postgres.IsConfigured) return;
-
-        await using var db = CreateDb();
-        var suffix = Guid.NewGuid().ToString("n");
-        var steam = await db.Platforms.SingleAsync(row => row.Key == "steam");
-        var playnite = await db.Platforms.SingleAsync(row => row.Key == "playnite");
-        var user = new User
-        {
-            Email = $"telegram-stop-{suffix}@example.test",
-            ChatId = "9191",
-        };
-        db.Users.Add(user);
-        await db.SaveChangesAsync();
-        var credentials = new[]
-        {
-            new PlatformCredential { UserId = user.Id, PlatformId = steam.Id, Active = true },
-            new PlatformCredential { UserId = user.Id, PlatformId = playnite.Id, Active = true },
-        };
-        var games = new[]
-        {
-            new Game { PlatformId = steam.Id, Title = "Steam Game", CanonicalKey = $"steam:stop-{suffix}" },
-            new Game { PlatformId = playnite.Id, Title = "Playnite Game", CanonicalKey = $"playnite:stop-{suffix}" },
-        };
-        db.AddRange(credentials);
-        db.AddRange(games);
-        await db.SaveChangesAsync();
-        db.AddRange(
-            Active(credentials[0].Id, games[0].Id),
-            Active(credentials[1].Id, games[1].Id));
-        await db.SaveChangesAsync();
-
-        try
-        {
-            var telegramHandler = new RecordingHandler(
-                Json("{\"ok\":true,\"result\":{}}"));
-            var client = new TelegramClient(
-                new HttpClient(telegramHandler) { BaseAddress = new Uri("https://api.telegram.test/") },
-                "test-token");
-            var services = new ServiceCollection()
-                .AddSingleton(db)
-                .AddScoped<TelegramRepository>()
-                .BuildServiceProvider();
-            var service = new TelegramBackgroundService(
-                services.GetRequiredService<IServiceScopeFactory>(),
-                client,
-                NullLogger<TelegramBackgroundService>.Instance);
-
-            await service.ProcessCommandAsync(
-                client,
-                new TelegramUpdate(1, new TelegramMessage(1, new TelegramChat(9191), "/stop")),
-                CancellationToken.None);
-
-            Assert.Empty(await db.PlaySessions.AsNoTracking().Where(row =>
-                credentials.Select(credential => credential.Id).Contains(row.PlatformCredentialId) &&
-                row.EndedAt == null).ToListAsync());
-            Assert.Contains("sendMessage", Assert.Single(telegramHandler.Requests));
-            Assert.Contains("Stopped 2 session(s)", telegramHandler.Bodies.Single());
-            Assert.Contains("Steam Game", telegramHandler.Bodies.Single());
-            await services.DisposeAsync();
-        }
-        finally
-        {
-            db.Users.Remove(user);
-            await db.SaveChangesAsync();
-            db.Games.RemoveRange(games);
-            await db.SaveChangesAsync();
-        }
-    }
-
     private static byte[] CreateCover()
     {
         using var surface = SKSurface.Create(new SKImageInfo(320, 480));
@@ -358,19 +285,6 @@ public sealed class TelegramNotificationTests(PostgresFixture postgres)
         new DbContextOptionsBuilder<PlaydexDbContext>()
             .UseNpgsql(postgres.DataSource!)
             .Options);
-
-    private static PlaySession Active(long credentialId, long gameId)
-    {
-        var now = DateTimeOffset.UtcNow;
-        return new PlaySession
-        {
-            PlatformCredentialId = credentialId,
-            GameId = gameId,
-            StartedAt = now,
-            CreatedAt = now,
-            UpdatedAt = now,
-        };
-    }
 
     private static HttpResponseMessage Json(string value) => new(HttpStatusCode.OK)
     {

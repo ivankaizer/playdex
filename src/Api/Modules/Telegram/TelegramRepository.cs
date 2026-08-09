@@ -11,11 +11,6 @@ namespace Api.Modules.Telegram;
 /// </summary>
 public sealed class TelegramRepository(PlaydexDbContext db)
 {
-    public async Task<User?> GetUserByChatId(string chatId, CancellationToken ct)
-    {
-        return await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.ChatId == chatId, ct);
-    }
-
     public async Task<TelegramNotificationTarget?> GetNotificationTarget(
         long credentialId,
         long gameId,
@@ -49,45 +44,6 @@ public sealed class TelegramRepository(PlaydexDbContext db)
             .AsNoTracking()
             .SingleOrDefaultAsync(ct);
     }
-
-    public async Task<TelegramSessionSummary?> GetSessionSummary(
-        long sessionId,
-        CancellationToken ct)
-    {
-        return await (
-            from session in db.PlaySessions
-            join game in db.Games on session.GameId equals game.Id
-            join platform in db.Platforms on game.PlatformId equals platform.Id
-            where session.Id == sessionId
-            select new TelegramSessionSummary(game.Title, platform.Name))
-            .AsNoTracking()
-            .SingleOrDefaultAsync(ct);
-    }
-
-    public async Task<IReadOnlyList<TelegramSessionSummary>> EndActiveSessionsForUser(
-        long userId,
-        DateTimeOffset endedAt,
-        CancellationToken ct)
-    {
-        var active = await (
-            from session in db.PlaySessions
-            join credential in db.PlatformCredentials
-                on session.PlatformCredentialId equals credential.Id
-            join game in db.Games on session.GameId equals game.Id
-            join platform in db.Platforms on game.PlatformId equals platform.Id
-            where credential.UserId == userId && session.EndedAt == null
-            select new { Session = session, game.Title, Platform = platform.Name })
-            .ToListAsync(ct);
-        foreach (var row in active)
-        {
-            row.Session.EndedAt = endedAt;
-            row.Session.UpdatedAt = endedAt;
-        }
-        await db.SaveChangesAsync(ct);
-        return active
-            .Select(row => new TelegramSessionSummary(row.Title, row.Platform))
-            .ToList();
-    }
 }
 
 public sealed record TelegramNotificationTarget(
@@ -97,4 +53,3 @@ public sealed record TelegramNotificationTarget(
     string? CapsuleUrl);
 
 public sealed record TelegramCredentialTarget(string? ChatId, string Platform);
-public sealed record TelegramSessionSummary(string Title, string Platform);

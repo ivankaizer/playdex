@@ -1,15 +1,10 @@
 using System.Globalization;
 using System.Net.Http.Json;
 using System.Text.Json;
-using System.Text.Json.Serialization;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace Api.Modules.Telegram;
-
-public sealed record TelegramUpdate(long UpdateId, TelegramMessage? Message);
-public sealed record TelegramMessage(long MessageId, TelegramChat Chat, string? Text);
-public sealed record TelegramChat(long Id);
 
 public sealed partial class TelegramClient
 {
@@ -21,9 +16,6 @@ public sealed partial class TelegramClient
     private readonly string? _botToken;
     private readonly TelegramOptions _options;
     private readonly ILogger<TelegramClient> _logger;
-
-    [LoggerMessage(Level = LogLevel.Information, Message = "TELEGRAM_MOCK getUpdates offset={Offset} — returning no updates (mock).")]
-    private static partial void LogMockGetUpdates(ILogger logger, long? offset);
 
     [LoggerMessage(Level = LogLevel.Information, Message = "TELEGRAM_MOCK sendMessage {Payload}")]
     private static partial void LogMockSendMessage(ILogger logger, string payload);
@@ -53,34 +45,6 @@ public sealed partial class TelegramClient
     }
 
     public bool IsEnabled => _botToken is not null || _options.UseMock;
-
-    public async Task<IReadOnlyList<TelegramUpdate>> GetUpdatesAsync(
-        long? offset,
-        CancellationToken ct)
-    {
-        if (_options.UseMock)
-        {
-            LogMockGetUpdates(_logger, offset);
-            return [];
-        }
-
-        EnsureEnabled();
-        var url = MethodUrl("getUpdates") + "?timeout=30";
-        if (offset.HasValue) url += $"&offset={offset.Value}";
-
-        using var response = await _httpClient.GetAsync(url, ct);
-        var body = await ReadEnvelope<IReadOnlyList<TelegramApiUpdate>>(response, ct);
-        return (body ?? [])
-            .Select(update => new TelegramUpdate(
-                update.UpdateId,
-                update.Message is null
-                    ? null
-                    : new TelegramMessage(
-                        update.Message.MessageId,
-                        new TelegramChat(update.Message.Chat.Id),
-                        update.Message.Text)))
-            .ToList();
-    }
 
     public async Task SendMessageAsync(long chatId, string text, CancellationToken ct)
     {
@@ -174,14 +138,6 @@ public sealed partial class TelegramClient
     }
 
     private sealed record TelegramApiEnvelope<T>(bool Ok, string? Description, T? Result);
-    private sealed record TelegramApiUpdate(
-        [property: JsonPropertyName("update_id")] long UpdateId,
-        [property: JsonPropertyName("message")] TelegramApiMessage? Message);
-    private sealed record TelegramApiMessage(
-        [property: JsonPropertyName("message_id")] long MessageId,
-        [property: JsonPropertyName("chat")] TelegramApiChat Chat,
-        [property: JsonPropertyName("text")] string? Text);
-    private sealed record TelegramApiChat([property: JsonPropertyName("id")] long Id);
 }
 
 public sealed class TelegramApiException(string message, Exception? innerException = null)

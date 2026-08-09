@@ -21,7 +21,6 @@ public static class TelegramModule
             services => services.GetRequiredService<TelegramEventHandlers>());
         services.AddScoped<Api.Infrastructure.Common.IEventSubscriber<Api.Infrastructure.Common.PollFailed>>(
             services => services.GetRequiredService<TelegramEventHandlers>());
-        services.AddHostedService<TelegramBackgroundService>();
         return services;
     }
 }
