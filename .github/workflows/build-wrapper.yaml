@@ -8,6 +8,7 @@ on:
       - "src/Wrapper/**"
       - "Directory.Packages.props"
       - "Directory.Build.props"
+  pull_request:
   workflow_dispatch:
 
 jobs:
@@ -30,6 +31,7 @@ jobs:
         run: dotnet test test/Wrapper.Tests/Wrapper.Tests.csproj --configuration Release
 
       - name: Upload wrapper artifacts
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: actions/upload-artifact@v4
         with:
           name: playdex-wrapper-windows

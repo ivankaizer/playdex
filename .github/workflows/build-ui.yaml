@@ -6,6 +6,7 @@ on:
       - main
     paths:
       - "src/Web/**"
+  pull_request:
   workflow_dispatch:
 
 jobs:
@@ -27,12 +28,20 @@ jobs:
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Build and push UI image
+      - name: Build UI image
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           ECR_REPOSITORY: ${{ secrets.REPO_NAME }}-ui
         run: |
           IMAGE_TAG="$(git rev-parse --short HEAD)-$(date +'%Y-%m-%d-%H-%M')"
-          docker build -t "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" -t "$ECR_REGISTRY/$ECR_REPOSITORY:latest" src/Web
+          docker build -f src/Web/Dockerfile -t "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" -t "$ECR_REGISTRY/$ECR_REPOSITORY:latest" .
+
+      - name: Push UI image to ECR
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: ${{ secrets.REPO_NAME }}-ui
+        run: |
+          IMAGE_TAG="$(git rev-parse --short HEAD)-$(date +'%Y-%m-%d-%H-%M')"
           docker push "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
           docker push "$ECR_REGISTRY/$ECR_REPOSITORY:latest"
