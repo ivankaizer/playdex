@@ -5,6 +5,9 @@ on:
       - main
     paths:
       - "src/Api/**"
+  pull_request:
+    paths:
+      - "src/Api/**"
   workflow_dispatch:
 jobs:
   Build:
