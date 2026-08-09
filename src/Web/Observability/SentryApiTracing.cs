@@ -51,7 +51,9 @@ public static class SentryApiTracing
 
     public static string NormalizePath(string url)
     {
-        var path = Uri.TryCreate(url, UriKind.Absolute, out var absolute)
+        var path = Uri.TryCreate(url, UriKind.Absolute, out var absolute) &&
+                   (absolute.Scheme.Equals(Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase) ||
+                    absolute.Scheme.Equals(Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase))
             ? absolute.AbsolutePath
             : url.Split('?', '#')[0];
         var segments = path.Split('/', StringSplitOptions.RemoveEmptyEntries)
