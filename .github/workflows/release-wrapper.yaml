@@ -1,0 +1,48 @@
+name: Release Windows Wrapper
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build and release Windows wrapper
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Run wrapper tests
+        run: dotnet test test/Wrapper.Tests/Wrapper.Tests.csproj --configuration Release
+
+      - name: Publish single-file wrapper
+        run: >
+          dotnet publish src/Wrapper/Wrapper.csproj
+          --configuration Release
+          --runtime win-x64
+          --self-contained true
+          --output artifacts/publish
+
+      - name: Create release archive
+        shell: pwsh
+        run: >
+          Compress-Archive
+          -Path artifacts/publish/*
+          -DestinationPath "artifacts/playdex-wrapper-windows-${{ github.ref_name }}.zip"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v3
+        with:
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          files: artifacts/playdex-wrapper-windows-${{ github.ref_name }}.zip
