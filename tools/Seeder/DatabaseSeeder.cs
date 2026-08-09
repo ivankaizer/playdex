@@ -28,11 +28,11 @@ public class DatabaseSeeder(PlaydexDbContext db)
 
         // platforms
         var platformCustom = MakePlatform("Custom");
-        var platformPlaystation = MakePlatform("PS5", 167);
+        var platformPlaystation = MakePlatform("psn", 167);
         var platformPc = MakePlatform("PC", 6);
         await db.AddAsync(platformPc);
         await db.SaveChangesAsync();
-        var platformSteam = MakePlatform("Steam", parentId: platformPc.Id);
+        var platformSteam = MakePlatform("steam", parentId: platformPc.Id);
 
         await db.AddAsync(platformCustom);
         await db.AddAsync(platformPlaystation);
@@ -116,7 +116,7 @@ public class DatabaseSeeder(PlaydexDbContext db)
 
             new PlatformCredential
             {
-                AccountId = "psn-account-id", UserId = user.Entity.Id, Active = true,
+                AccountId = "psn-account-id", UserId = user.Entity.Id, ApiKey = "psn-npsso", Active = true,
                 PlatformId = platformPlaystation.Id
             },
 
