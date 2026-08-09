@@ -10,8 +10,13 @@ public static class PollingModule
         services.Configure<IgdbOptions>(configuration.GetSection("Polling:Igdb"));
 
         services.AddScoped<PollingRepository>();
+        services.AddSingleton<PsnTokenCache>();
         services.AddHttpClient<IProviderClient, SteamClient>(c => c.Timeout = TimeSpan.FromSeconds(15));
-        services.AddHttpClient<IProviderClient, PsnClient>(c => c.Timeout = TimeSpan.FromSeconds(15));
+        services.AddHttpClient<IProviderClient, PsnClient>(c => c.Timeout = TimeSpan.FromSeconds(15))
+            .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
+            {
+                AllowAutoRedirect = false,
+            });
         services.AddHttpClient<IgdbClient>(c => c.Timeout = TimeSpan.FromSeconds(15));
         services.AddHostedService<PollingBackgroundService>();
         return services;

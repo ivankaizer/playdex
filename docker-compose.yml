@@ -47,8 +47,6 @@ services:
       Polling__Psn__OAuthAuthorizeUrl: http://wiremock:8888/api/authz/v3/oauth/authorize
       Polling__Psn__OAuthTokenUrl: http://wiremock:8888/api/authz/v3/oauth/token
       Polling__Psn__PresenceBaseUrl: http://wiremock:8888
-      Polling__Psn__ClientId: mock-client-id
-      Polling__Psn__RedirectUri: http://wiremock:8888/callback
     ports:
       - "3000:3000"
     depends_on:

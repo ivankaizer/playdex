@@ -8,7 +8,7 @@ var server = WireMockServer.Start(8888);
 SetupAdminEndpoint("steam");
 SetupAdminEndpoint("psn");
 SetupProviderEndpoint("steam", "/ISteamUser/GetPlayerSummaries/v0002/");
-SetupProviderEndpoint("psn", "/userProfile/v1/internal/users/psn-account-id/basicPresence");
+SetupProviderEndpoint("psn", "/api/userProfile/v1/internal/users/psn-account-id/basicPresences");
 SetupPsnOAuth();
 
 server.SetScenarioState("steam", "not_playing");
@@ -55,10 +55,12 @@ void SetupProviderEndpoint(string name, string path)
 void SetupPsnOAuth()
 {
     server
-        .Given(Request.Create().WithPath("/api/authz/v3/oauth/authorize").UsingPost())
+        .Given(Request.Create().WithPath("/api/authz/v3/oauth/authorize").UsingGet())
         .RespondWith(Response.Create()
             .WithStatusCode(302)
-            .WithHeader("Location", "https://remoteplay.dl.playstation.net/remoteplay/redirect?code=mock-psn-code"));
+            .WithHeader(
+                "Location",
+                "com.playstation.PlayStationApp://redirect/?code=mock-psn-code&cid=mock-client-id"));
 
     server
         .Given(Request.Create().WithPath("/api/authz/v3/oauth/token").UsingPost())

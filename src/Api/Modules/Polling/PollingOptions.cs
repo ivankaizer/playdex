@@ -18,9 +18,7 @@ public class PsnOptions
 {
     public string OAuthAuthorizeUrl { get; set; } = "https://ca.account.sony.com/api/authz/v3/oauth/authorize";
     public string OAuthTokenUrl { get; set; } = "https://ca.account.sony.com/api/authz/v3/oauth/token";
-    public string PresenceBaseUrl { get; set; } = "https://us-prof.np.community.playstation.net";
-    public string ClientId { get; set; } = "ac8d5c4b-efa9-4eb4-a605-33fafb3831f8";
-    public string RedirectUri { get; set; } = "https://remoteplay.dl.playstation.net/remoteplay/redirect";
+    public string PresenceBaseUrl { get; set; } = "https://m.np.playstation.com";
 }
 
 public class IgdbOptions
