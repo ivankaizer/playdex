@@ -36,11 +36,14 @@ public sealed record AccountStatsPeriodDto(
     int SessionCount,
     string? TopGameTitle,
     IReadOnlyList<AccountPlatformStatDto> Platforms,
-    IReadOnlyList<AccountTopGameDto> TopGames);
+    IReadOnlyList<AccountTopGameDto> TopGames,
+    IReadOnlyList<AccountMonthStatDto> Months);
 
 public sealed record AccountPlatformStatDto(string Platform, double TotalSeconds, string? Source);
 
 public sealed record AccountTopGameDto(string GameId, string Title, double TotalSeconds);
+
+public sealed record AccountMonthStatDto(int Year, int Month, double TotalSeconds);
 
 public sealed record AccountStatsResponseDto(
     long? AccountId,

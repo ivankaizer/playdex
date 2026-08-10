@@ -57,18 +57,38 @@
                 Platform distribution
             </p>
             <div class="mt-4 flex flex-wrap items-center gap-4">
-                <StatsPieChart Segments="@PieSegments" Colors="@Colors" Size="168" />
+                <StatsPieChart Segments="@PieSegments"
+                               Colors="@Colors"
+                               Size="168"
+                               SelectedKey="@SelectedPlatform"
+                               OnSegmentSelect="@OnPlatformSelect" />
                 <div class="flex-1 space-y-2 text-xs text-slate-600 dark:text-slate-300">
                     @for (var index = 0; index < Platforms.Count; index++)
                     {
                         var item = Platforms[index];
-                        <div class="flex items-center justify-between gap-3">
-                            <div class="flex items-center gap-2">
-                                <span class="h-2 w-2 rounded-full" style="@ColorStyle(index)"></span>
-                                <span>@item.Label</span>
+                        @if (OnPlatformSelect.HasDelegate)
+                        {
+                            <button type="button"
+                                    @onclick="() => OnPlatformSelect.InvokeAsync(item.Key)"
+                                    aria-pressed="@(SelectedPlatform == item.Key ? "true" : "false")"
+                                    class="flex w-full items-center justify-between gap-3 rounded-lg px-2 py-1 text-left transition hover:bg-slate-200/70 dark:hover:bg-slate-800/70 @(SelectedPlatform == item.Key ? "bg-emerald-100/80 text-emerald-900 ring-1 ring-emerald-400/60 dark:bg-emerald-400/10 dark:text-emerald-100" : SelectedPlatform.Length > 0 ? "opacity-55" : null)">
+                                <span class="flex items-center gap-2">
+                                    <span class="h-2 w-2 rounded-full" style="@ColorStyle(index)"></span>
+                                    <span>@item.Label</span>
+                                </span>
+                                <span>@Invariant(item.Value)% · @item.Hours</span>
+                            </button>
+                        }
+                        else
+                        {
+                            <div class="flex items-center justify-between gap-3">
+                                <div class="flex items-center gap-2">
+                                    <span class="h-2 w-2 rounded-full" style="@ColorStyle(index)"></span>
+                                    <span>@item.Label</span>
+                                </div>
+                                <span>@Invariant(item.Value)% · @item.Hours</span>
                             </div>
-                            <span>@Invariant(item.Value)% · @item.Hours</span>
-                        </div>
+                        }
                     }
                 </div>
             </div>
@@ -122,7 +142,7 @@
     public IReadOnlyList<(string Label, string Value)> Summary { get; set; } = [];
 
     [Parameter, EditorRequired]
-    public IReadOnlyList<(string Label, double Value, string Hours)> Platforms { get; set; } = [];
+    public IReadOnlyList<(string Key, string Label, double Value, string Hours)> Platforms { get; set; } = [];
 
     [Parameter, EditorRequired]
     public IReadOnlyList<(string GameId, string Title, string Hours)> TopGames { get; set; } = [];
@@ -136,8 +156,14 @@
     [Parameter]
     public EventCallback OnOpenRecap { get; set; }
 
-    private IReadOnlyList<(string Label, double Value)> PieSegments =>
-        Platforms.Select(item => (item.Label, item.Value)).ToArray();
+    [Parameter]
+    public string SelectedPlatform { get; set; } = "";
+
+    [Parameter]
+    public EventCallback<string> OnPlatformSelect { get; set; }
+
+    private IReadOnlyList<(string Key, string Label, double Value)> PieSegments =>
+        Platforms.Select(item => (item.Key, item.Label, item.Value)).ToArray();
 
     private string? ColorStyle(int index) =>
         Colors.Count == 0 ? null : $"background-color: {Colors[index % Colors.Count]}";

@@ -70,12 +70,12 @@ public partial class Home : ComponentBase, IDisposable
         ("Sessions", "93"),
         ("Top title", "Hades II"),
     ];
-    private static readonly IReadOnlyList<(string Label, double Value, string Hours)> PreviewRecapPlatforms =
+    private static readonly IReadOnlyList<(string Key, string Label, double Value, string Hours)> PreviewRecapPlatforms =
     [
-        ("Steam", 52, "64.9h"),
-        ("PlayStation", 30, "37.4h"),
-        ("Xbox", 12, "14.9h"),
-        ("Switch", 6, "7.6h"),
+        ("steam", "Steam", 52, "64.9h"),
+        ("ps5", "PlayStation", 30, "37.4h"),
+        ("xbox-series-xs", "Xbox", 12, "14.9h"),
+        ("switch-1", "Switch", 6, "7.6h"),
     ];
     private static readonly IReadOnlyList<(string GameId, string Title, string Hours)> PreviewRecapTopGames =
     [

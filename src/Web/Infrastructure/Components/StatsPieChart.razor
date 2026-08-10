@@ -1,5 +1,6 @@
 @using System.Globalization
 @using Microsoft.AspNetCore.Components
+@using Microsoft.AspNetCore.Components.Web
 
 @{
     const double strokeWidth = 18;
@@ -9,7 +10,8 @@
     var offset = 0d;
 }
 
-<svg aria-hidden="true"
+<svg role="group"
+     aria-label="Platform distribution"
      width="@Size"
      height="@Size"
      viewBox="@($"0 0 {Size} {Size}")"
@@ -20,6 +22,7 @@
             fill="transparent"
             stroke="currentColor"
             stroke-width="@Invariant(strokeWidth)"
+            aria-hidden="true"
             class="text-slate-200 dark:text-slate-800"></circle>
     @for (var index = 0; index < Segments.Count; index++)
     {
@@ -34,22 +37,43 @@
                 r="@Invariant(radius)"
                 fill="transparent"
                 stroke="@ColorAt(index)"
-                stroke-width="@Invariant(strokeWidth)"
+                stroke-width="@Invariant(SelectedKey == segment.Key ? strokeWidth + 4 : strokeWidth)"
                 stroke-dasharray="@($"{Invariant(dash)} {Invariant(gap)}")"
                 stroke-dashoffset="@Invariant(strokeDashOffset)"
-                transform="@($"rotate(-90 {Invariant(Size / 2d)} {Invariant(Size / 2d)})")"></circle>
+                opacity="@(SelectedKey.Length > 0 && SelectedKey != segment.Key ? "0.35" : "1")"
+                role="@(OnSegmentSelect.HasDelegate ? "button" : null)"
+                tabindex="@(OnSegmentSelect.HasDelegate ? "0" : null)"
+                aria-label="@($"Filter by {segment.Label}: {Invariant(segment.Value)} percent")"
+                aria-pressed="@(OnSegmentSelect.HasDelegate ? SelectedKey == segment.Key ? "true" : "false" : null)"
+                @onclick="() => SelectAsync(segment.Key)"
+                @onkeydown="eventArgs => HandleKeyDownAsync(eventArgs, segment.Key)"
+                @onkeydown:preventDefault="OnSegmentSelect.HasDelegate"
+                transform="@($"rotate(-90 {Invariant(Size / 2d)} {Invariant(Size / 2d)})")"
+                class="@(OnSegmentSelect.HasDelegate ? "cursor-pointer outline-none focus:opacity-80" : null)"></circle>
     }
 </svg>
 
 @code {
     [Parameter, EditorRequired]
-    public IReadOnlyList<(string Label, double Value)> Segments { get; set; } = [];
+    public IReadOnlyList<(string Key, string Label, double Value)> Segments { get; set; } = [];
 
     [Parameter, EditorRequired]
     public IReadOnlyList<string> Colors { get; set; } = [];
 
     [Parameter]
     public int Size { get; set; } = 150;
+
+    [Parameter]
+    public string SelectedKey { get; set; } = "";
+
+    [Parameter]
+    public EventCallback<string> OnSegmentSelect { get; set; }
+
+    private Task SelectAsync(string key) =>
+        OnSegmentSelect.HasDelegate ? OnSegmentSelect.InvokeAsync(key) : Task.CompletedTask;
+
+    private Task HandleKeyDownAsync(KeyboardEventArgs eventArgs, string key) =>
+        eventArgs.Key is "Enter" or " " ? SelectAsync(key) : Task.CompletedTask;
 
     private string? ColorAt(int index) => Colors.Count == 0 ? null : Colors[index % Colors.Count];
 

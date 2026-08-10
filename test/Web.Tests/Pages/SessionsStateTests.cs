@@ -1,4 +1,5 @@
 using Web.Infrastructure.Models;
+using Web.Infrastructure.Common;
 using Web.Modules.Sessions;
 using Xunit;
 
@@ -54,6 +55,45 @@ public sealed class SessionsStateTests
         Assert.Equal(
             "/sessions?limit=10&offset=0&title=A%7EB%21+%28Test%29*&from=2026-07-13&to=2026-07-19&sort=date&direction=desc",
             state.BuildListRequest());
+    }
+
+    [Fact]
+    public void PlatformSelectionResetsPagingFiltersBothRequestsAndTogglesToAll()
+    {
+        var state = new SessionsState(new DateTimeOffset(2026, 7, 13, 0, 0, 0, TimeSpan.Zero));
+        state.SetOffset(30);
+
+        state.SetPlatform("ps5");
+
+        Assert.Equal(0, state.Offset);
+        Assert.Equal("ps5", state.Platform);
+        Assert.Equal(
+            "/sessions?limit=10&offset=0&platform=ps5&from=2026-07-13&to=2026-07-19&sort=date&direction=desc",
+            state.BuildListRequest());
+        Assert.Equal(
+            "/stats?from=2026-07-13&to=2026-07-19&platform=ps5",
+            state.BuildStatsRequest());
+
+        state.SetOffset(20);
+        state.TogglePlatform("ps5");
+
+        Assert.Empty(state.Platform);
+        Assert.Equal(0, state.Offset);
+        Assert.DoesNotContain("platform", state.BuildListRequest());
+        Assert.DoesNotContain("platform", state.BuildStatsRequest());
+    }
+
+    [Fact]
+    public void MonthlyChartLabelsIncludeTheYearOnlyWhenBucketsSpanYears()
+    {
+        var december = new AccountMonthStat(2025, 12, 3600);
+        var january = new AccountMonthStat(2026, 1, 0);
+
+        Assert.False(StatsMonthLabels.SpansYears([december]));
+        Assert.Equal("Dec", StatsMonthLabels.Format(december, spansYears: false));
+        Assert.True(StatsMonthLabels.SpansYears([december, january]));
+        Assert.Equal("Dec 2025", StatsMonthLabels.Format(december, spansYears: true));
+        Assert.Equal("Jan 2026", StatsMonthLabels.Format(january, spansYears: true));
     }
 
     [Fact]
@@ -137,7 +177,7 @@ public sealed class SessionsStateTests
     public void ListAndStatsHaveIndependentLoadingDataAndErrorLifecycles()
     {
         var state = new SessionsState(new DateTimeOffset(2026, 7, 13, 0, 0, 0, TimeSpan.Zero));
-        var stats = new AccountStatsPeriod(3600, 1, "Hades II", [], []);
+        var stats = new AccountStatsPeriod(3600, 1, "Hades II", [], [], []);
 
         state.BeginListLoad();
         state.BeginStatsLoad();
@@ -187,7 +227,7 @@ public sealed class SessionsStateTests
     public void StatsLoadIsSkippedAndClearedWhenEitherDateBoundIsMissing()
     {
         var state = new SessionsState(new DateTimeOffset(2026, 7, 13, 0, 0, 0, TimeSpan.Zero));
-        var stats = new AccountStatsPeriod(3600, 1, null, [], []);
+        var stats = new AccountStatsPeriod(3600, 1, null, [], [], []);
         state.CompleteStatsLoad(new AccountStatsRangeResponse(1, stats));
         state.SetFrom(string.Empty);
 
@@ -289,6 +329,10 @@ public sealed class SessionsStateTests
         Assert.Contains("No sessions match your filters.", markup);
         Assert.Contains("No sessions yet. Sync a provider to populate this list.", markup);
         Assert.Contains("Loading stats...", markup);
+        Assert.Contains("All platforms", markup);
+        Assert.Contains("OnPlatformSelect=\"TogglePlatformAsync\"", markup);
+        Assert.Contains("Hours per month", markup);
+        Assert.Contains("<StatsMonthlyHoursChart", markup);
         Assert.Contains("Showing @_state.Start-@_state.End of @_state.Total sessions", markup);
 
         Assert.Contains("Task.Delay(300, debounce.Token)", code);
@@ -305,9 +349,23 @@ public sealed class SessionsStateTests
         Assert.DoesNotContain("SendAsync<ManualMappingSearchResponse>", code);
         Assert.DoesNotContain("SendAsync<ManualEntryCreateResponse>", code);
         Assert.Contains("RefreshAllAsync()", code);
+        Assert.Contains("TogglePlatformAsync", code);
+        Assert.Contains("&platform=", code);
         Assert.Contains("_titleDebounce?.Cancel()", code);
         Assert.Contains("_listRequest?.Cancel()", code);
         Assert.Contains("_statsRequest?.Cancel()", code);
+
+        var recap = File.ReadAllText(Path.Combine(root, "Infrastructure", "Components", "StatsRecapSection.razor"));
+        var pie = File.ReadAllText(Path.Combine(root, "Infrastructure", "Components", "StatsPieChart.razor"));
+        var monthlyChart = File.ReadAllText(Path.Combine(root, "Infrastructure", "Components", "StatsMonthlyHoursChart.razor"));
+        Assert.Contains("aria-pressed", recap);
+        Assert.Contains("OnPlatformSelect.InvokeAsync", recap);
+        Assert.Contains("role=\"@(OnSegmentSelect.HasDelegate ? \"button\" : null)\"", pie);
+        Assert.Contains("tabindex", pie);
+        Assert.Contains("HandleKeyDownAsync", pie);
+        Assert.Contains("eventArgs.Key is \"Enter\" or \" \"", pie);
+        Assert.Contains("overflow-x-auto", monthlyChart);
+        Assert.Contains("aria-label=\"Hours per month\"", monthlyChart);
     }
 
     private static string FindWebRoot()

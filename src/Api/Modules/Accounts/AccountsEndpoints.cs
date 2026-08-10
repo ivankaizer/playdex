@@ -36,11 +36,11 @@ public static class AccountsEndpoints
         ClaimsPrincipal principal,
         AccountsService service,
         int? limit, int? offset, string? sort, string? direction,
-        string? title, string? gameId, string? from, string? to,
+        string? title, string? gameId, string? platform, string? from, string? to,
         CancellationToken ct)
     {
         var result = await service.ListSessions(
-            principal.GetUserId(), null, title, gameId, from, to,
+            principal.GetUserId(), null, title, gameId, platform, from, to,
             sort ?? "date", direction ?? "desc",
             ValidateLimit(limit), ValidateOffset(offset),
             0, ct);
@@ -68,10 +68,10 @@ public static class AccountsEndpoints
     private static async Task<IResult> ListStatsForRange(
         ClaimsPrincipal principal,
         AccountsService service,
-        string? from, string? to,
+        string? from, string? to, string? platform,
         CancellationToken ct)
     {
-        var stats = await service.ComputeStatsForRange(principal.GetUserId(), null, from, to, 0, ct);
+        var stats = await service.ComputeStatsForRange(principal.GetUserId(), null, from, to, platform, 0, ct);
         return TypedResults.Ok(new AccountStatsRangeResponseDto(null, stats));
     }
 
@@ -80,12 +80,12 @@ public static class AccountsEndpoints
         ClaimsPrincipal principal,
         AccountsService service,
         int? limit, int? offset, string? sort, string? direction,
-        string? title, string? gameId, string? from, string? to,
+        string? title, string? gameId, string? platform, string? from, string? to,
         CancellationToken ct)
     {
         var parsedAccountId = ParseId(accountId, "accountId");
         var result = await service.ListSessions(
-            principal.GetUserId(), parsedAccountId, title, gameId, from, to,
+            principal.GetUserId(), parsedAccountId, title, gameId, platform, from, to,
             sort ?? "date", direction ?? "desc",
             ValidateLimit(limit), ValidateOffset(offset),
             0, ct);
