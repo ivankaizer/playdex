@@ -12,12 +12,12 @@ using Api.Modules.Admin;
 using Api.Modules.Games;
 using Api.Modules.Manual;
 using Api.Modules.Metrics;
+using Api.Modules.Notifications;
 using Api.Modules.Playnite;
 using Api.Modules.Polling;
 using Api.Modules.Providers;
 using Api.Modules.Recap;
 using Api.Modules.Settings;
-using Api.Modules.Telegram;
 using Api.Observability;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -68,7 +68,7 @@ builder.Services
     .AddRecap()
     .AddPlaydexMetrics()
     .AddPolling(builder.Configuration)
-    .AddTelegram(builder.Configuration);
+    .AddNotifications(builder.Configuration);
 
 builder.Services.AddExceptionHandler<ApiExceptionHandler>();
 builder.Services.AddProblemDetails();

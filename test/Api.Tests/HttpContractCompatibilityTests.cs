@@ -67,6 +67,17 @@ public sealed class HttpContractCompatibilityTests(PostgresFixture postgres)
             var malformed = await client.SendAsync(malformedRequest);
             var partialRecap = await client.GetAsync("/api/recap?from=2026-01-01");
             var forbiddenAdmin = await client.GetAsync("/api/admin/sessions");
+            var unconfiguredNotificationTest = await client.PostAsync(
+                "/api/settings/notifications/test", null);
+            var updateNotificationSettings = await client.PutAsJsonAsync("/api/settings", new
+            {
+                ignoreShortSessionsMinutes = 0,
+                telegramChatId = "424242",
+            });
+            var configuredNotificationTest = await client.PostAsync(
+                "/api/settings/notifications/test", null);
+            var configuredNotificationJson = JsonDocument.Parse(
+                await configuredNotificationTest.Content.ReadAsStringAsync());
             var recap = await client.GetAsync(
                 "/api/recap?from=2026-01-01T12:30:00Z&to=2026-01-02");
             var recapJson = JsonDocument.Parse(await recap.Content.ReadAsStringAsync());
@@ -83,6 +94,13 @@ public sealed class HttpContractCompatibilityTests(PostgresFixture postgres)
             Assert.Contains("from and to are required", await partialRecap.Content.ReadAsStringAsync());
             Assert.Equal(HttpStatusCode.Forbidden, forbiddenAdmin.StatusCode);
             Assert.Contains("Admin access required", await forbiddenAdmin.Content.ReadAsStringAsync());
+            Assert.Equal(HttpStatusCode.BadRequest, unconfiguredNotificationTest.StatusCode);
+            Assert.Contains("Configure a Telegram chat ID",
+                await unconfiguredNotificationTest.Content.ReadAsStringAsync());
+            Assert.Equal(HttpStatusCode.OK, updateNotificationSettings.StatusCode);
+            Assert.Equal(HttpStatusCode.OK, configuredNotificationTest.StatusCode);
+            Assert.True(configuredNotificationJson.RootElement
+                .GetProperty("data").GetProperty("sent").GetBoolean());
             Assert.Equal("2026-01-01T12:30:00Z",
                 recapJson.RootElement.GetProperty("data").GetProperty("range").GetProperty("from").GetString());
             Assert.Equal("2026-01-02",

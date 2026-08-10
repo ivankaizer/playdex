@@ -41,7 +41,7 @@ public sealed class PlaydexDbContext(DbContextOptions<PlaydexDbContext> options)
         entity.Property(row => row.Password).HasColumnName("password");
         entity.Property(row => row.CreatedAt).HasColumnName("created_at");
         entity.Property(row => row.UpdatedAt).HasColumnName("updated_at");
-        entity.Property(row => row.ChatId).HasColumnName("chat_id");
+        entity.Property(row => row.TelegramChatId).HasColumnName("chat_id");
         entity.Property(row => row.IsAdmin).HasColumnName("is_admin");
         entity.HasIndex(row => row.Email).IsUnique();
     }
