@@ -20,7 +20,7 @@ public sealed class OpenXblPlatformMigration : IPlaydexMigration
             insert into platforms (key, name, parent_id)
             values (
                 'xbox',
-                'Xbox (OpenXBL)',
+                'Xbox',
                 (select id from platforms where key = 'xbox-series-xs'))
             on conflict (key) do update set
                 name = excluded.name,
