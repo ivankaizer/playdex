@@ -13,6 +13,8 @@ public sealed class OpenXblClient(
     HttpClient httpClient,
     IOptions<OpenXblOptions> options) : IProviderClient, IProviderGameMetadataClient
 {
+    private const string XboxOnlinePresenceTitleId = "704208617";
+
     public string PlatformKey => "xbox";
 
     public async Task<ProviderPollResult?> GetCurrentlyPlaying(
@@ -77,6 +79,7 @@ public sealed class OpenXblClient(
             .SelectMany(device => device.Titles ?? [])
             .Where(candidate =>
                 !string.IsNullOrWhiteSpace(candidate.Name) &&
+                !string.Equals(candidate.Id, XboxOnlinePresenceTitleId, StringComparison.Ordinal) &&
                 string.Equals(candidate.State, "Active", StringComparison.OrdinalIgnoreCase) &&
                 (string.IsNullOrWhiteSpace(candidate.Placement) ||
                  string.Equals(candidate.Placement, "Full", StringComparison.OrdinalIgnoreCase)))

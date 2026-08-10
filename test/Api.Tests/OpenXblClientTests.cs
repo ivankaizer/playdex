@@ -79,6 +79,36 @@ public sealed class OpenXblClientTests
     }
 
     [Fact]
+    public async Task SystemOnlineTitleIsNotPlaying()
+    {
+        var handler = new RecordingHandler(Json("""
+            {
+              "content": {
+                "xuid": "2535400000000001",
+                "state": "Online",
+                "devices": [{
+                  "type": "WindowsOneCore",
+                  "titles": [{
+                    "id": "704208617",
+                    "name": "Online",
+                    "placement": "Full",
+                    "state": "Active"
+                  }]
+                }],
+                "cloaked": true
+              },
+              "code": 200
+            }
+            """));
+
+        var result = await CreateClient(handler)
+            .GetCurrentlyPlaying(Credential(), CancellationToken.None);
+
+        Assert.Null(result?.Game);
+        Assert.NotNull(result?.RawPayload);
+    }
+
+    [Fact]
     public async Task RateLimitProducesProviderBackoff()
     {
         var response = new HttpResponseMessage(HttpStatusCode.TooManyRequests);
