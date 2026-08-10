@@ -43,6 +43,17 @@ public static class ProvidersEndpoints
             await result.ExecuteAsync(http);
         });
 
+        providers.MapPost("/openxbl", async (HttpContext http) =>
+        {
+            var request = await http.Request.ReadFromJsonAsync<OpenXblConnectRequest>();
+            var service = http.RequestServices.GetRequiredService<ProvidersService>();
+            IResult result = request is null
+                ? TypedResults.Problem("Request body is required.", statusCode: 400)
+                : TypedResults.Ok(await service.ConnectOpenXbl(
+                    http.User.GetUserId(), request, http.RequestAborted));
+            await result.ExecuteAsync(http);
+        });
+
         api.MapPost("/playnite/key", GetPlayniteKey).RequireAuthorization();
     }
 

@@ -7,6 +7,7 @@ public static class PollingModule
         services.Configure<PollingOptions>(configuration.GetSection("Polling"));
         services.Configure<SteamOptions>(configuration.GetSection("Polling:Steam"));
         services.Configure<PsnOptions>(configuration.GetSection("Polling:Psn"));
+        services.Configure<OpenXblOptions>(configuration.GetSection("Polling:OpenXbl"));
         services.Configure<IgdbOptions>(configuration.GetSection("Polling:Igdb"));
 
         services.AddScoped<PollingRepository>();
@@ -17,6 +18,7 @@ public static class PollingModule
             {
                 AllowAutoRedirect = false,
             });
+        services.AddHttpClient<IProviderClient, OpenXblClient>(c => c.Timeout = TimeSpan.FromSeconds(15));
         services.AddHttpClient<IgdbClient>(c => c.Timeout = TimeSpan.FromSeconds(15));
         services.AddHostedService<PollingBackgroundService>();
         return services;

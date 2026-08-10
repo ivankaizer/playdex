@@ -44,6 +44,11 @@ internal sealed class SettingsState
     public string EditingAccountId { get; private set; } = string.Empty;
     public string EditingApiKey { get; private set; } = string.Empty;
     public string CredentialError { get; private set; } = string.Empty;
+    public string OpenXblApiKey { get; private set; } = string.Empty;
+    public string OpenXblXuid { get; private set; } = string.Empty;
+    public string OpenXblError { get; private set; } = string.Empty;
+    public bool IsOpenXblConnecting { get; private set; }
+    public bool HasXboxProvider => Providers.Any(provider => provider.Platform == "xbox");
     public IReadOnlyList<ProviderStatus> VisibleProviders => Providers
         .Where(provider => provider.Platform != "manual" && provider.Platform != "local")
         .ToArray();
@@ -247,6 +252,59 @@ internal sealed class SettingsState
 
     public void EndCredentialSave(long providerId) => _savingCredentialIds.Remove(providerId);
 
+    public void SetOpenXblApiKey(string value) => OpenXblApiKey = value;
+
+    public void SetOpenXblXuid(string value) => OpenXblXuid = value;
+
+    public bool TryBuildOpenXblSubmission(out SettingsSubmission? submission)
+    {
+        submission = null;
+        OpenXblError = string.Empty;
+        var apiKey = OpenXblApiKey.Trim();
+        if (apiKey.Length == 0)
+        {
+            OpenXblError = "Enter an OpenXBL API key.";
+            return false;
+        }
+
+        var xuid = OpenXblXuid.Trim();
+        if (xuid.Any(character => !char.IsAsciiDigit(character)))
+        {
+            OpenXblError = "Xbox XUID must contain digits only.";
+            return false;
+        }
+
+        submission = new SettingsSubmission(
+            "/providers/openxbl",
+            HttpMethod.Post,
+            new Dictionary<string, object?>
+            {
+                ["apiKey"] = apiKey,
+                ["xuid"] = xuid.Length == 0 ? null : xuid,
+            });
+        return true;
+    }
+
+    public void BeginOpenXblConnect()
+    {
+        IsOpenXblConnecting = true;
+        OpenXblError = string.Empty;
+    }
+
+    public void CompleteOpenXblConnect(ProviderStatus provider)
+    {
+        Providers = Providers
+            .Where(item => item.Platform != "xbox")
+            .Append(provider)
+            .ToArray();
+        OpenXblApiKey = string.Empty;
+        OpenXblXuid = string.Empty;
+    }
+
+    public void FailOpenXblConnect(string error) => OpenXblError = error;
+
+    public void EndOpenXblConnect() => IsOpenXblConnecting = false;
+
     public static SettingsProviderPresentation Present(ProviderStatus provider)
     {
         var (label, color, accent) = provider.Platform switch
@@ -254,6 +312,7 @@ internal sealed class SettingsState
             "steam" => ("S", "bg-slate-200 dark:bg-slate-800", "text-slate-900 dark:text-slate-100"),
             "psn" => ("P", "bg-indigo-500/30", "text-indigo-700 dark:text-indigo-200"),
             "playnite" => ("PL", "bg-amber-500/30", "text-amber-700 dark:text-amber-200"),
+            "xbox" => ("X", "bg-lime-500/30", "text-lime-700 dark:text-lime-200"),
             _ => ("PX", "bg-slate-200 dark:bg-slate-800", "text-slate-700 dark:text-slate-200"),
         };
         var subtitle = provider.Platform == "playnite"
@@ -424,6 +483,38 @@ public partial class Settings : ComponentBase, IDisposable
 
     private void ChangeEditingApiKey(ChangeEventArgs eventArgs) =>
         _state.SetEditingApiKey(eventArgs.Value?.ToString() ?? string.Empty);
+
+    private void ChangeOpenXblApiKey(ChangeEventArgs eventArgs) =>
+        _state.SetOpenXblApiKey(eventArgs.Value?.ToString() ?? string.Empty);
+
+    private void ChangeOpenXblXuid(ChangeEventArgs eventArgs) =>
+        _state.SetOpenXblXuid(eventArgs.Value?.ToString() ?? string.Empty);
+
+    private async Task ConnectOpenXblAsync()
+    {
+        if (!_state.TryBuildOpenXblSubmission(out var submission)) return;
+
+        _state.BeginOpenXblConnect();
+        try
+        {
+            var response = await Api.SendAsync<OpenXblConnectResponse>(submission!.Path,
+                submission.Method,
+                submission.Body,
+                cancellationToken: _lifetime.Token);
+            _state.CompleteOpenXblConnect(response.Provider);
+        }
+        catch (OperationCanceledException) when (_lifetime.IsCancellationRequested)
+        {
+        }
+        catch (Exception exception)
+        {
+            _state.FailOpenXblConnect(exception.Message);
+        }
+        finally
+        {
+            _state.EndOpenXblConnect();
+        }
+    }
 
     private async Task SaveCredentialAsync(ProviderStatus provider)
     {

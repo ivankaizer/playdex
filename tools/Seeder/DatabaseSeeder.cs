@@ -29,6 +29,7 @@ public class DatabaseSeeder(PlaydexDbContext db)
         // platforms
         var platformCustom = MakePlatform("Custom");
         var platformPlaystation = MakePlatform("psn", 167);
+        var platformXbox = MakePlatform("xbox", 169);
         var platformPc = MakePlatform("PC", 6);
         await db.AddAsync(platformPc);
         await db.SaveChangesAsync();
@@ -36,6 +37,7 @@ public class DatabaseSeeder(PlaydexDbContext db)
 
         await db.AddAsync(platformCustom);
         await db.AddAsync(platformPlaystation);
+        await db.AddAsync(platformXbox);
         await db.AddAsync(platformSteam);
         await db.SaveChangesAsync();
 

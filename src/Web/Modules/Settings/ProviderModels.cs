@@ -12,4 +12,5 @@ public sealed record ProviderUpdateRequest(long ProviderId, string Status);
 public sealed record ProviderUpdateResponse(ProviderStatus Provider);
 public sealed record ProviderCredentialUpdateRequest(string? ApiKey, string? AccountId);
 public sealed record ProviderCredentialUpdateResponse(ProviderStatus Provider);
+public sealed record OpenXblConnectResponse(ProviderStatus Provider);
 public sealed record PlayniteKeyResponse(string ApiKey);

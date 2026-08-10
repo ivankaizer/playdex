@@ -55,6 +55,56 @@
                     @_state.ProvidersError
                 </p>
             }
+            @if (!_state.IsProvidersLoading && !_state.HasXboxProvider)
+            {
+                <div class="mt-6 rounded-2xl border border-lime-500/30 bg-lime-500/5 p-4">
+                    <div class="flex items-start justify-between gap-4">
+                        <div>
+                            <p class="text-sm font-semibold text-slate-900 dark:text-white">Xbox presence experiment</p>
+                            <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                                Uses the unofficial OpenXBL service to detect the game currently active on your Xbox account.
+                            </p>
+                        </div>
+                        <span class="rounded-full bg-amber-500/20 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-amber-700 dark:text-amber-200">Experimental</span>
+                    </div>
+                    <div class="mt-4 grid gap-3 sm:grid-cols-2">
+                        <label class="text-xs font-medium text-slate-600 dark:text-slate-300">
+                            <span class="block">OpenXBL API key</span>
+                            <input type="password"
+                                   value="@_state.OpenXblApiKey"
+                                   @oninput="ChangeOpenXblApiKey"
+                                   disabled="@_state.IsOpenXblConnecting"
+                                   autocomplete="off"
+                                   class="mt-2 w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white/90 dark:bg-slate-950/80 px-3 py-2 text-sm text-slate-900 dark:text-white outline-none transition focus:border-lime-400 focus:ring-2 focus:ring-lime-400/30 disabled:cursor-not-allowed disabled:opacity-60" />
+                        </label>
+                        <label class="text-xs font-medium text-slate-600 dark:text-slate-300">
+                            <span class="block">Xbox XUID <span class="font-normal text-slate-400">(optional)</span></span>
+                            <input type="text"
+                                   value="@_state.OpenXblXuid"
+                                   @oninput="ChangeOpenXblXuid"
+                                   disabled="@_state.IsOpenXblConnecting"
+                                   inputmode="numeric"
+                                   class="mt-2 w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white/90 dark:bg-slate-950/80 px-3 py-2 text-sm text-slate-900 dark:text-white outline-none transition focus:border-lime-400 focus:ring-2 focus:ring-lime-400/30 disabled:cursor-not-allowed disabled:opacity-60" />
+                        </label>
+                    </div>
+                    <p class="mt-3 text-[11px] text-slate-500 dark:text-slate-400">
+                        Leave XUID empty to use the Xbox account linked to the key. Get a key from
+                        <a href="https://xbl.io/dashboard" target="_blank" rel="noreferrer" class="font-semibold text-lime-700 underline dark:text-lime-300">OpenXBL</a>.
+                    </p>
+                    @if (!string.IsNullOrEmpty(_state.OpenXblError))
+                    {
+                        <p class="mt-3 text-xs text-rose-700 dark:text-rose-300">@_state.OpenXblError</p>
+                    }
+                    <div class="mt-4 flex justify-end">
+                        <button type="button"
+                                @onclick="ConnectOpenXblAsync"
+                                disabled="@_state.IsOpenXblConnecting"
+                                class="rounded-full bg-lime-400 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-slate-900 transition hover:bg-lime-300 disabled:cursor-not-allowed disabled:opacity-60">
+                            @(_state.IsOpenXblConnecting ? "Connecting..." : "Connect Xbox")
+                        </button>
+                    </div>
+                </div>
+            }
             <div class="mt-6 space-y-4">
                 @if (_state.IsProvidersLoading)
                 {

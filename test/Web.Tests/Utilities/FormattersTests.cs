@@ -11,6 +11,7 @@ public sealed class FormattersTests
     [InlineData("switch-1", "Nintendo Switch 1")]
     [InlineData("switch-2", "Nintendo Switch 2")]
     [InlineData("xbox-series-xs", "Xbox Series X|S")]
+    [InlineData("xbox", "Xbox")]
     [InlineData("other", "other")]
     public void FormatPlatformLabelUsesTheReactMappingOrFallsBack(string platform, string expected)
     {

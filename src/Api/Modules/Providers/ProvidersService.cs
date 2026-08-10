@@ -66,6 +66,32 @@ public sealed class ProvidersService(ProvidersRepository repository)
         return new ProviderCredentialUpdateResponseDto(ToResponse(provider));
     }
 
+    public async Task<OpenXblConnectResponseDto> ConnectOpenXbl(
+        long userId,
+        OpenXblConnectRequest request,
+        CancellationToken ct)
+    {
+        var apiKey = request.ApiKey?.Trim();
+        if (string.IsNullOrEmpty(apiKey))
+            throw AppProblemException.Validation("OpenXBL API key is required.");
+
+        var xuid = request.Xuid?.Trim();
+        if (!string.IsNullOrEmpty(xuid) && xuid.Any(character => !char.IsAsciiDigit(character)))
+            throw AppProblemException.Validation("Xbox XUID must contain digits only.");
+        if (await repository.IsPlatformApiKeyLocked(userId, "xbox", ct))
+            throw AppProblemException.Validation("OpenXBL API key is managed by an administrator.");
+
+        var provider = await repository.ConnectOpenXbl(
+            userId,
+            apiKey,
+            string.IsNullOrEmpty(xuid) ? null : xuid,
+            ct);
+        if (provider is null)
+            throw AppProblemException.NotFound("Xbox provider is not installed.");
+
+        return new OpenXblConnectResponseDto(ToResponse(provider));
+    }
+
     internal static string GenerateApiKey()
     {
         var bytes = RandomNumberGenerator.GetBytes(16);
