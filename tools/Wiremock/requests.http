@@ -9,3 +9,12 @@ POST {{host}}/__admin/steam/playing
 
 ###
 POST {{host}}/__admin/steam/not_playing
+
+###
+POST {{host}}/__admin/xbl/playing
+
+###
+POST {{host}}/__admin/xbl/not_playing
+
+###
+POST {{host}}/__admin/xbl/not_playing_online

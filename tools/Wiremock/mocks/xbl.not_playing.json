@@ -1,0 +1,14 @@
+{
+  "content": {
+    "xuid": "2535400000000001",
+    "state": "Offline",
+    "lastSeen": {
+      "deviceType": "WindowsOneCore",
+      "titleId": "1902585111",
+      "titleName": "DOOM: The Dark Ages",
+      "timestamp": "2025-05-24T10:39:07.2297895"
+    },
+    "cloaked": true
+  },
+  "code": 200
+}

@@ -1,0 +1,22 @@
+{
+  "content": {
+    "xuid": "2535400000000001",
+    "state": "Online",
+    "devices": [
+      {
+        "type": "WindowsOneCore",
+        "titles": [
+          {
+            "id": "704208617",
+            "name": "Online",
+            "placement": "Full",
+            "state": "Active",
+            "lastModified": "2026-08-10T13:59:27.8765898"
+          }
+        ]
+      }
+    ],
+    "cloaked": true
+  },
+  "code": 200
+}
