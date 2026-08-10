@@ -20,3 +20,5 @@ public sealed record ProviderCredentialChanges(
     bool AccountIdChanged,
     string? AccountId);
 public sealed record ProviderCredentialUpdateResponseDto(ProviderStatusDto Provider);
+public sealed record OpenXblConnectRequest(string? ApiKey, string? Xuid);
+public sealed record OpenXblConnectResponseDto(ProviderStatusDto Provider);

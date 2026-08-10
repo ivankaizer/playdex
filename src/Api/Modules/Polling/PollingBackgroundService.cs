@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Api.Infrastructure.Common;
+using Api.Infrastructure.Persistence;
 using Api.Modules.Metrics;
 
 namespace Api.Modules.Polling;
@@ -38,6 +39,9 @@ public sealed partial class PollingBackgroundService(
 
     [LoggerMessage(Level = LogLevel.Debug, Message = "Credential {CredentialId}: successful poll resolved game {GameId}")]
     private partial void LogSuccessfulPoll(long credentialId, long? gameId);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Game metadata enrichment failed for credential {CredentialId}, game {GameId}")]
+    private partial void LogMetadataEnrichmentFailed(Exception exception, long credentialId, long gameId);
 
     [LoggerMessage(Level = LogLevel.Error, Message = "Playnite timeout cleanup failed")]
     private partial void LogPlayniteTimeoutCleanupFailed(Exception exception);
@@ -165,6 +169,7 @@ public sealed partial class PollingBackgroundService(
             polledAt,
             pollResult.RawPayload,
             ct);
+        await EnrichGameIfNeeded(client, credential, pollResult.Game, outcome, pollingRepo, ct);
         foreach (var transition in outcome.Transitions.Where(row => row.Notify))
         {
             if (transition.Kind == SessionTransitionKind.Started)
@@ -187,6 +192,38 @@ public sealed partial class PollingBackgroundService(
         }
         metrics.RecordPollSuccess(platformKey, polledAt);
         LogSuccessfulPoll(credential.Id, outcome.GameId);
+    }
+
+    private async Task EnrichGameIfNeeded(
+        IProviderClient client,
+        PlatformCredential credential,
+        CurrentlyPlayingResult? detectedGame,
+        SuccessfulPollOutcome outcome,
+        PollingRepository repository,
+        CancellationToken ct)
+    {
+        if (outcome.Ignored ||
+            !outcome.NeedsCapsule ||
+            outcome.GameId is not { } gameId ||
+            string.IsNullOrWhiteSpace(detectedGame?.ExternalId) ||
+            client is not IProviderGameMetadataClient metadataClient)
+        {
+            return;
+        }
+
+        try
+        {
+            var capsuleUrl = await metadataClient.GetCapsuleUrl(
+                credential,
+                detectedGame.ExternalId,
+                ct);
+            if (!string.IsNullOrWhiteSpace(capsuleUrl))
+                await repository.UpdateGameCapsule(gameId, capsuleUrl, ct);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException || !ct.IsCancellationRequested)
+        {
+            LogMetadataEnrichmentFailed(ex, credential.Id, gameId);
+        }
     }
 
     private async Task CleanupTimedOutPlayniteSessions(CancellationToken ct)

@@ -16,6 +16,15 @@
         <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
         <LinkBase>mocks\</LinkBase>
       </Content>
+      <Content Update="mocks\xbl.not_playing.online.json">
+        <LinkBase>mocks/</LinkBase>
+      </Content>
+      <Content Update="mocks\xbl.playing.json">
+        <LinkBase>mocks/</LinkBase>
+      </Content>
+      <Content Update="mocks\xbl.game_details.json">
+        <LinkBase>mocks/</LinkBase>
+      </Content>
     </ItemGroup>
 
 </Project>

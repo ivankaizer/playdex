@@ -95,6 +95,61 @@ public sealed class ProvidersRepository(PlaydexDbContext db)
             .Select(item => item.ApiKeyLocked)
             .FirstOrDefaultAsync(ct);
 
+    public Task<bool> IsPlatformApiKeyLocked(long userId, string platformKey, CancellationToken ct) =>
+        db.PlatformCredentials
+            .AsNoTracking()
+            .Where(item => item.UserId == userId && item.ApiKeyLocked)
+            .Join(
+                db.Platforms.AsNoTracking().Where(platform => platform.Key == platformKey),
+                credential => credential.PlatformId,
+                platform => platform.Id,
+                (credential, _) => credential)
+            .AnyAsync(ct);
+
+    public async Task<ProviderStatusDto?> ConnectOpenXbl(
+        long userId,
+        string apiKey,
+        string? xuid,
+        CancellationToken ct)
+    {
+        var platformId = await db.Platforms
+            .AsNoTracking()
+            .Where(platform => platform.Key == "xbox")
+            .Select(platform => (long?)platform.Id)
+            .FirstOrDefaultAsync(ct);
+        if (!platformId.HasValue) return null;
+
+        var credential = await db.PlatformCredentials
+            .FirstOrDefaultAsync(
+                item => item.UserId == userId && item.PlatformId == platformId.Value,
+                ct);
+        var now = DateTimeOffset.UtcNow;
+        if (credential is null)
+        {
+            credential = new PlatformCredential
+            {
+                UserId = userId,
+                PlatformId = platformId.Value,
+                CreatedAt = now,
+            };
+            db.PlatformCredentials.Add(credential);
+        }
+
+        credential.ApiKey = apiKey;
+        credential.AccountId = xuid;
+        credential.Active = true;
+        credential.UpdatedAt = now;
+        await db.SaveChangesAsync(ct);
+
+        return new ProviderStatusDto(
+            credential.Id,
+            "xbox",
+            credential.AccountId,
+            "active",
+            credential.ApiKey,
+            credential.ApiKeyLocked);
+    }
+
     public async Task<string> GetOrCreatePlayniteKey(long userId, string apiKey, CancellationToken ct)
     {
         var existing = await db.PlatformCredentials

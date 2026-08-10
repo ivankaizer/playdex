@@ -17,6 +17,7 @@ public static class Formatters
     {
         "ps5" or "psn" => "PS5",
         "xbox-series-xs" => "Xbox Series X|S",
+        "xbox" => "Xbox",
         "pc" => "PC",
         "switch-1" => "Nintendo Switch 1",
         "switch-2" => "Nintendo Switch 2",
@@ -31,6 +32,7 @@ public static class Formatters
     {
         "steam" => "Steam",
         "psn" => "PlayStation",
+        "xbox" => "Xbox",
         "playnite" => "Playnite",
         "manual" => "Manual",
         _ => platform,

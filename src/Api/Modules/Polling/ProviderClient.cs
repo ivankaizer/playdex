@@ -47,6 +47,17 @@ public interface IProviderClient
     Task<ProviderPollResult?> GetCurrentlyPlaying(PlatformCredential credential, CancellationToken ct);
 }
 
+/// <summary>
+/// Optional provider capability for enriching a newly persisted game.
+/// </summary>
+public interface IProviderGameMetadataClient
+{
+    Task<string?> GetCapsuleUrl(
+        PlatformCredential credential,
+        string externalId,
+        CancellationToken ct);
+}
+
 public sealed class ProviderPollException(
     string message,
     TimeSpan? retryAfter = null,

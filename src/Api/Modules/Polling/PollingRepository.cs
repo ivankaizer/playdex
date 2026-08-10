@@ -54,9 +54,12 @@ public sealed class PollingRepository(PlaydexDbContext db)
 
         long? gameId = null;
         var ignored = false;
+        var needsCapsule = false;
         if (detectedGame is not null)
         {
-            gameId = await UpsertGame(detectedGame, ct);
+            var upserted = await UpsertGame(detectedGame, ct);
+            gameId = upserted.Id;
+            needsCapsule = upserted.NeedsCapsule;
             ignored = await db.IgnoredGames
                 .Join(
                     db.PlatformCredentials.Where(row => row.Id == credentialId),
@@ -115,7 +118,7 @@ public sealed class PollingRepository(PlaydexDbContext db)
             transitions.Add(SessionTransition.Started(startedSession, notify: true));
         }
         await transaction.CommitAsync(ct);
-        return new SuccessfulPollOutcome(gameId, ignored, transitions);
+        return new SuccessfulPollOutcome(gameId, ignored, needsCapsule, transitions);
     }
 
     public async Task<List<ActiveCredential>> LoadActiveCredentials(CancellationToken ct)
@@ -176,7 +179,21 @@ public sealed class PollingRepository(PlaydexDbContext db)
         await db.SaveChangesAsync(ct);
     }
 
-    private async Task<long> UpsertGame(CurrentlyPlayingResult game, CancellationToken ct)
+    public async Task UpdateGameCapsule(long gameId, string capsuleUrl, CancellationToken ct)
+    {
+        await db.Games
+            .Where(game =>
+                game.Id == gameId &&
+                game.CapsuleUrl == null &&
+                !game.CapsuleUrlLocked)
+            .ExecuteUpdateAsync(
+                updates => updates
+                    .SetProperty(game => game.CapsuleUrl, capsuleUrl)
+                    .SetProperty(game => game.UpdatedAt, DateTimeOffset.UtcNow),
+                ct);
+    }
+
+    private async Task<UpsertedGameRow> UpsertGame(CurrentlyPlayingResult game, CancellationToken ct)
     {
         var platformId = await db.Platforms
             .Where(row => row.Key == game.Platform)
@@ -193,7 +210,7 @@ public sealed class PollingRepository(PlaydexDbContext db)
         var canonicalKey = $"{game.Platform}:{externalId ?? NormalizeTitle(title)}";
         var now = DateTimeOffset.UtcNow;
 
-        var ids = await db.Database.SqlQuery<long>($"""
+        var rows = await db.Database.SqlQuery<UpsertedGameRow>($"""
             INSERT INTO games
                 (platform_id, title, external_id, canonical_key, capsule_url, created_at, updated_at)
             VALUES
@@ -207,9 +224,9 @@ public sealed class PollingRepository(PlaydexDbContext db)
                     ELSE COALESCE(EXCLUDED.capsule_url, games.capsule_url)
                 END,
                 updated_at = EXCLUDED.updated_at
-            RETURNING id
+            RETURNING id AS "Id", capsule_url IS NULL AS "NeedsCapsule"
             """).ToListAsync(ct);
-        return ids.Single();
+        return rows.Single();
     }
 
     private static string NormalizeTitle(string title)
@@ -232,6 +249,12 @@ public sealed class PollingRepository(PlaydexDbContext db)
         public bool Active { get; set; }
         public long PlatformId { get; set; }
         public string PlatformKey { get; set; } = string.Empty;
+    }
+
+    private sealed class UpsertedGameRow
+    {
+        public long Id { get; set; }
+        public bool NeedsCapsule { get; set; }
     }
 }
 
@@ -284,4 +307,5 @@ public sealed record SessionTransition(
 public sealed record SuccessfulPollOutcome(
     long? GameId,
     bool Ignored,
+    bool NeedsCapsule,
     IReadOnlyList<SessionTransition> Transitions);

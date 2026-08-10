@@ -29,6 +29,7 @@ public class DatabaseSeeder(PlaydexDbContext db)
         // platforms
         var platformCustom = MakePlatform("Custom");
         var platformPlaystation = MakePlatform("psn", 167);
+        var platformXbox = MakePlatform("xbox", 169);
         var platformPc = MakePlatform("PC", 6);
         await db.AddAsync(platformPc);
         await db.SaveChangesAsync();
@@ -36,6 +37,7 @@ public class DatabaseSeeder(PlaydexDbContext db)
 
         await db.AddAsync(platformCustom);
         await db.AddAsync(platformPlaystation);
+        await db.AddAsync(platformXbox);
         await db.AddAsync(platformSteam);
         await db.SaveChangesAsync();
 
@@ -119,7 +121,11 @@ public class DatabaseSeeder(PlaydexDbContext db)
                 AccountId = "psn-account-id", UserId = user.Entity.Id, ApiKey = "psn-npsso", Active = true,
                 PlatformId = platformPlaystation.Id
             },
-
+            new PlatformCredential
+            {
+                ApiKey = "xbox-api-key", UserId = user.Entity.Id, Active = true,
+                PlatformId = platformXbox.Id
+            },
             new PlatformCredential
                 { AccountId = "pc-account-id", UserId = user.Entity.Id, Active = true, PlatformId = platformPc.Id },
             new PlatformCredential

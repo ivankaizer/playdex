@@ -51,6 +51,7 @@ builder.Services.AddDbContext<PlaydexDbContext>(db => db.UseNpgsql(dataSource));
 builder.Services.AddSingleton(new MigrationCatalog([
     new CurrentSchemaMigration(),
     new CredentialApiKeyLockMigration(),
+    new OpenXblPlatformMigration(),
 ]));
 builder.Services.AddSingleton<MigrationRunner>();
 builder.Services.AddScoped<EventBus>();

@@ -260,6 +260,42 @@ public sealed class SettingsStateTests
     }
 
     [Fact]
+    public void OpenXblConnectionValidatesAndAddsXboxProvider()
+    {
+        var state = new SettingsState();
+        state.CompleteProvidersLoad(new ProvidersResponse([Provider(1, "steam", "active")]));
+
+        Assert.False(state.HasXboxProvider);
+        Assert.False(state.TryBuildOpenXblSubmission(out _));
+        Assert.Equal("Enter an OpenXBL API key.", state.OpenXblError);
+
+        state.SetOpenXblApiKey("  openxbl-key  ");
+        state.SetOpenXblXuid("not-a-xuid");
+        Assert.False(state.TryBuildOpenXblSubmission(out _));
+        Assert.Equal("Xbox XUID must contain digits only.", state.OpenXblError);
+
+        state.SetOpenXblXuid(" 2533274817903789 ");
+        Assert.True(state.TryBuildOpenXblSubmission(out var submission));
+        Assert.NotNull(submission);
+        Assert.Equal("/providers/openxbl", submission.Path);
+        Assert.Equal(HttpMethod.Post, submission.Method);
+        Assert.Equal("openxbl-key", submission.Body["apiKey"]);
+        Assert.Equal("2533274817903789", submission.Body["xuid"]);
+
+        state.BeginOpenXblConnect();
+        Assert.True(state.IsOpenXblConnecting);
+        var xbox = new ProviderStatus(2, "xbox", "2533274817903789", "active", "openxbl-key", false);
+        state.CompleteOpenXblConnect(xbox);
+        state.EndOpenXblConnect();
+
+        Assert.True(state.HasXboxProvider);
+        Assert.Equal([1, 2], state.Providers.Select(provider => provider.Id));
+        Assert.False(state.IsOpenXblConnecting);
+        Assert.Empty(state.OpenXblApiKey);
+        Assert.Empty(state.OpenXblXuid);
+    }
+
+    [Fact]
     public void ProviderPresentationPreservesEmptySubtitlesAndUsesNullFallbacks()
     {
         Assert.Equal("Local", SettingsState.Present(

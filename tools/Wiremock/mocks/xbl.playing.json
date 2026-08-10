@@ -1,0 +1,21 @@
+{
+  "content": {
+    "xuid": "2535400000000001",
+    "state": "Online",
+    "devices": [
+      {
+        "type": "WindowsOneCore",
+        "titles": [
+          {
+            "id": "1963849763",
+            "name": "Thymesia",
+            "placement": "Full",
+            "state": "Active",
+            "lastModified": "2026-08-10T14:15:33.3365211"
+          }
+        ]
+      }
+    ]
+  },
+  "code": 200
+}
