@@ -12,8 +12,11 @@ public sealed partial class TelegramEventHandlers(
     IEventSubscriber<SessionEnded>,
     IEventSubscriber<PollFailed>
 {
-    [LoggerMessage(Level = LogLevel.Error, Message = "Telegram poll-failure notification failed for credential {CredentialId}")]
-    private partial void LogPollFailureNotificationFailed(Exception exception, long credentialId);
+    [LoggerMessage(Level = LogLevel.Error, Message = "Telegram poll-failure notification failed for credential {CredentialId} and admin chat {ChatId}")]
+    private partial void LogPollFailureNotificationFailed(
+        Exception exception,
+        long credentialId,
+        long chatId);
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Telegram card rendering or photo delivery failed; using text fallback")]
     private partial void LogCardRenderingFailed(Exception exception);
@@ -55,19 +58,22 @@ public sealed partial class TelegramEventHandlers(
     public async Task Handle(PollFailed @event, CancellationToken ct)
     {
         if (!client.IsEnabled) return;
-        var target = await repository.GetCredentialTarget(@event.CredentialId, ct);
-        if (target is null || !TryChat(target.ChatId, out var chatId)) return;
-        try
+        var adminChatIds = await repository.GetAdminChatIds(ct);
+        var message =
+            $"Polling failed for {@event.Platform}. " +
+            $"Error: {@event.Message}. " +
+            $"Retrying in {Math.Round(@event.RetryDelay.TotalSeconds)}s.";
+
+        foreach (var chatId in NormalizeChatIds(adminChatIds))
         {
-            await client.SendMessageAsync(chatId,
-                $"Polling failed for {@event.Platform}. " +
-                $"Error: {@event.Message}. " +
-                $"Retrying in {Math.Round(@event.RetryDelay.TotalSeconds)}s.",
-                ct);
-        }
-        catch (Exception ex)
-        {
-            LogPollFailureNotificationFailed(ex, @event.CredentialId);
+            try
+            {
+                await client.SendMessageAsync(chatId, message, ct);
+            }
+            catch (Exception ex) when (!ct.IsCancellationRequested)
+            {
+                LogPollFailureNotificationFailed(ex, @event.CredentialId, chatId);
+            }
         }
     }
 
@@ -105,6 +111,18 @@ public sealed partial class TelegramEventHandlers(
 
     private static bool TryChat(string? value, out long chatId) =>
         long.TryParse(value, out chatId);
+
+    internal static IEnumerable<long> NormalizeChatIds(IEnumerable<string> values)
+    {
+        HashSet<long> seen = [];
+        foreach (var value in values)
+        {
+            if (TryChat(value, out var chatId) && seen.Add(chatId))
+            {
+                yield return chatId;
+            }
+        }
+    }
 
     private static string FormatDuration(TimeSpan duration)
     {

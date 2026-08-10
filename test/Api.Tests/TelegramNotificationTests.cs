@@ -1,6 +1,7 @@
 using System.Net;
 using System.Text;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Api.Modules.Telegram;
 using Api.Infrastructure.Common;
@@ -189,7 +190,7 @@ public sealed class TelegramNotificationTests(PostgresFixture postgres)
     }
 
     [Fact]
-    public async Task SessionEventsSendPhotoFallbackToTextSkipUnlinkedAndIsolateDeliveryFailure()
+    public async Task SessionEventsSendPhotoFallbackToTextAndSkipUnlinkedChat()
     {
         if (!postgres.IsConfigured) return;
 
@@ -223,8 +224,7 @@ public sealed class TelegramNotificationTests(PostgresFixture postgres)
         {
             var telegramHandler = new RecordingHandler(
                 Json("{\"ok\":true,\"result\":{}}"),
-                Json("{\"ok\":true,\"result\":{}}"),
-                Json("{\"ok\":false,\"description\":\"blocked\"}"));
+                Json("{\"ok\":true,\"result\":{}}"));
             var client = new TelegramClient(
                 new HttpClient(telegramHandler) { BaseAddress = new Uri("https://api.telegram.test/") },
                 "test-token");
@@ -252,16 +252,12 @@ public sealed class TelegramNotificationTests(PostgresFixture postgres)
                 CancellationToken.None);
             Assert.Contains("sendMessage", telegramHandler.Requests[1]);
 
-            await handler.Handle(
-                new PollFailed(credential.Id, "steam", "rate limited", TimeSpan.FromMinutes(1)),
-                CancellationToken.None);
-
             user.ChatId = null;
             await db.SaveChangesAsync();
             await handler.Handle(
                 new SessionStarted(2, credential.Id, game.Id, now),
                 CancellationToken.None);
-            Assert.Equal(3, telegramHandler.Requests.Count);
+            Assert.Equal(2, telegramHandler.Requests.Count);
         }
         finally
         {
@@ -270,6 +266,143 @@ public sealed class TelegramNotificationTests(PostgresFixture postgres)
             db.Games.Remove(game);
             await db.SaveChangesAsync();
         }
+    }
+
+    [Fact]
+    public void AdminChatNormalizationSkipsInvalidAndDuplicateCandidates()
+    {
+        var result = TelegramEventHandlers.NormalizeChatIds(
+            ["6101", "not-a-chat", "6101", "6102", ""]);
+
+        Assert.Equal([6101L, 6102L], result);
+    }
+
+    [Fact]
+    public async Task PollFailuresNotifyDistinctAdminChatsButNotRegularOwner()
+    {
+        if (!postgres.IsConfigured) return;
+
+        await using var db = CreateDb();
+        await using var transaction = await db.Database.BeginTransactionAsync();
+        await db.Users.Where(user => user.IsAdmin).ExecuteUpdateAsync(
+            setters => setters.SetProperty(user => user.IsAdmin, false));
+
+        var suffix = Guid.NewGuid().ToString("n");
+        var steam = await db.Platforms.SingleAsync(row => row.Key == "steam");
+        var owner = new User
+        {
+            Email = $"telegram-owner-{suffix}@example.test",
+            ChatId = "5100",
+        };
+        var adminOne = new User
+        {
+            Email = $"telegram-admin-one-{suffix}@example.test",
+            ChatId = "6101",
+            IsAdmin = true,
+        };
+        var adminTwo = new User
+        {
+            Email = $"telegram-admin-two-{suffix}@example.test",
+            ChatId = "6102",
+            IsAdmin = true,
+        };
+        var invalidAdmin = new User
+        {
+            Email = $"telegram-admin-invalid-{suffix}@example.test",
+            ChatId = "not-a-chat",
+            IsAdmin = true,
+        };
+        var unlinkedAdmin = new User
+        {
+            Email = $"telegram-admin-unlinked-{suffix}@example.test",
+            IsAdmin = true,
+        };
+        db.AddRange(
+            owner,
+            adminOne,
+            adminTwo,
+            invalidAdmin,
+            unlinkedAdmin);
+        await db.SaveChangesAsync();
+        var credential = new PlatformCredential
+        {
+            UserId = owner.Id,
+            PlatformId = steam.Id,
+            Active = true,
+        };
+        db.PlatformCredentials.Add(credential);
+        await db.SaveChangesAsync();
+
+        var telegramHandler = new RecordingHandler(
+            Json("{\"ok\":true,\"result\":{}}"),
+            Json("{\"ok\":true,\"result\":{}}"));
+        var handler = CreateEventHandler(db, telegramHandler);
+
+        await handler.Handle(
+            new PollFailed(credential.Id, "steam", "rate limited", TimeSpan.FromMinutes(1)),
+            CancellationToken.None);
+
+        Assert.Equal(2, telegramHandler.Requests.Count);
+        Assert.Contains(telegramHandler.Bodies, body => body.Contains("\"chat_id\":6101"));
+        Assert.Contains(telegramHandler.Bodies, body => body.Contains("\"chat_id\":6102"));
+        Assert.DoesNotContain(telegramHandler.Bodies, body => body.Contains("\"chat_id\":5100"));
+        Assert.All(telegramHandler.Bodies, body =>
+        {
+            Assert.Contains("rate limited", body);
+            Assert.Contains("Retrying in 60s", body);
+        });
+
+        await db.Users.Where(user => user.IsAdmin).ExecuteUpdateAsync(
+            setters => setters.SetProperty(user => user.IsAdmin, false));
+        await handler.Handle(
+            new PollFailed(credential.Id, "steam", "still limited", TimeSpan.FromMinutes(2)),
+            CancellationToken.None);
+        Assert.Equal(2, telegramHandler.Requests.Count);
+    }
+
+    [Fact]
+    public async Task PollFailureDeliveryContinuesAfterOneAdminChatFails()
+    {
+        if (!postgres.IsConfigured) return;
+
+        await using var db = CreateDb();
+        await using var transaction = await db.Database.BeginTransactionAsync();
+        await db.Users.Where(user => user.IsAdmin).ExecuteUpdateAsync(
+            setters => setters.SetProperty(user => user.IsAdmin, false));
+
+        var suffix = Guid.NewGuid().ToString("n");
+        db.Users.AddRange(
+            new User
+            {
+                Email = $"telegram-failing-admin-{suffix}@example.test",
+                ChatId = "7101",
+                IsAdmin = true,
+            },
+            new User
+            {
+                Email = $"telegram-success-admin-{suffix}@example.test",
+                ChatId = "7102",
+                IsAdmin = true,
+            });
+        await db.SaveChangesAsync();
+
+        var telegramHandler = new RecordingHandler(
+            Json("{\"ok\":false,\"description\":\"blocked\"}"),
+            Json("{\"ok\":true,\"result\":{}}"));
+        var logger = new RecordingLogger<TelegramEventHandlers>();
+        var handler = CreateEventHandler(db, telegramHandler, logger);
+
+        await handler.Handle(
+            new PollFailed(999, "steam", "provider unavailable", TimeSpan.FromSeconds(30)),
+            CancellationToken.None);
+
+        Assert.Equal(2, telegramHandler.Requests.Count);
+        Assert.Contains("\"chat_id\":7101", telegramHandler.Bodies[0]);
+        Assert.Contains("\"chat_id\":7102", telegramHandler.Bodies[1]);
+        Assert.Contains(logger.Entries, entry =>
+            entry.Level == LogLevel.Error &&
+            entry.Exception is TelegramApiException &&
+            entry.Message.Contains("admin chat 7101"));
     }
 
     private static byte[] CreateCover()
@@ -285,6 +418,26 @@ public sealed class TelegramNotificationTests(PostgresFixture postgres)
         new DbContextOptionsBuilder<PlaydexDbContext>()
             .UseNpgsql(postgres.DataSource!)
             .Options);
+
+    private static TelegramEventHandlers CreateEventHandler(
+        PlaydexDbContext db,
+        HttpMessageHandler telegramHandler,
+        ILogger<TelegramEventHandlers>? logger = null)
+    {
+        var client = new TelegramClient(
+            new HttpClient(telegramHandler) { BaseAddress = new Uri("https://api.telegram.test/") },
+            "test-token");
+        var renderer = new TelegramNotificationRenderer(new HttpClient(
+            new StaticHandler(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new ByteArrayContent(CreateCover()),
+            })));
+        return new TelegramEventHandlers(
+            new TelegramRepository(db),
+            client,
+            renderer,
+            logger ?? NullLogger<TelegramEventHandlers>.Instance);
+    }
 
     private static HttpResponseMessage Json(string value) => new(HttpStatusCode.OK)
     {
@@ -316,4 +469,25 @@ public sealed class TelegramNotificationTests(PostgresFixture postgres)
             return _responses.Dequeue();
         }
     }
+
+    private sealed class RecordingLogger<T> : ILogger<T>
+    {
+        public List<LogEntry> Entries { get; } = [];
+
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(
+            LogLevel logLevel,
+            EventId eventId,
+            TState state,
+            Exception? exception,
+            Func<TState, Exception?, string> formatter)
+        {
+            Entries.Add(new LogEntry(logLevel, exception, formatter(state, exception)));
+        }
+    }
+
+    private sealed record LogEntry(LogLevel Level, Exception? Exception, string Message);
 }

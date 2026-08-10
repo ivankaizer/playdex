@@ -31,18 +31,14 @@ public sealed class TelegramRepository(PlaydexDbContext db)
             .SingleOrDefaultAsync(ct);
     }
 
-    public async Task<TelegramCredentialTarget?> GetCredentialTarget(
-        long credentialId,
-        CancellationToken ct)
+    public async Task<List<string>> GetAdminChatIds(CancellationToken ct)
     {
-        return await (
-            from credential in db.PlatformCredentials
-            join user in db.Users on credential.UserId equals user.Id
-            join platform in db.Platforms on credential.PlatformId equals platform.Id
-            where credential.Id == credentialId
-            select new TelegramCredentialTarget(user.ChatId, platform.Name))
+        return await db.Users
+            .Where(user => user.IsAdmin && user.ChatId != null && user.ChatId != "")
+            .OrderBy(user => user.Id)
+            .Select(user => user.ChatId!)
             .AsNoTracking()
-            .SingleOrDefaultAsync(ct);
+            .ToListAsync(ct);
     }
 }
 
@@ -51,5 +47,3 @@ public sealed record TelegramNotificationTarget(
     string GameTitle,
     string Platform,
     string? CapsuleUrl);
-
-public sealed record TelegramCredentialTarget(string? ChatId, string Platform);
