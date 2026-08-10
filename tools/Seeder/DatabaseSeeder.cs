@@ -121,7 +121,11 @@ public class DatabaseSeeder(PlaydexDbContext db)
                 AccountId = "psn-account-id", UserId = user.Entity.Id, ApiKey = "psn-npsso", Active = true,
                 PlatformId = platformPlaystation.Id
             },
-
+            new PlatformCredential
+            {
+                ApiKey = "xbox-api-key", UserId = user.Entity.Id, Active = true,
+                PlatformId = platformXbox.Id
+            },
             new PlatformCredential
                 { AccountId = "pc-account-id", UserId = user.Entity.Id, Active = true, PlatformId = platformPc.Id },
             new PlatformCredential
