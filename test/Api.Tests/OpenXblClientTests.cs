@@ -34,6 +34,7 @@ public sealed class OpenXblClientTests
         Assert.Equal("Halo Infinite", result?.Game?.Title);
         Assert.Equal("1810924247", result?.Game?.ExternalId);
         Assert.Equal("xbox", result?.Game?.Platform);
+        Assert.Null(result?.Game?.CapsuleUrl);
         var request = Assert.Single(handler.Requests);
         Assert.Equal("https://openxbl.test/v2/presence", request.Uri.ToString());
         Assert.Equal("test-openxbl-key", request.ApiKey);
@@ -115,6 +116,33 @@ public sealed class OpenXblClientTests
 
         Assert.Contains("API key", failure.Message);
         Assert.Empty(handler.Requests);
+    }
+
+    [Fact]
+    public async Task GetsPosterFromMarketplaceForPersistedGame()
+    {
+        var handler = new RecordingHandler(Json("""
+                {
+                  "content": {
+                    "Products": [{ "LocalizedProperties": [{ "Images": [
+                      { "ImagePurpose": "Screenshot", "Uri": "//images.test/screenshot" },
+                      { "ImagePurpose": "Poster", "Uri": "//images.test/thymesia-poster" }
+                    ] }] }]
+                  },
+                  "code": 200
+                }
+                """));
+
+        var poster = await CreateClient(handler)
+            .GetCapsuleUrl(Credential(), "1963849763", CancellationToken.None);
+
+        Assert.Equal("https://images.test/thymesia-poster", poster);
+        var request = Assert.Single(handler.Requests);
+        Assert.Equal(
+            "https://openxbl.test/v2/marketplace/title/1963849763",
+            request.Uri.ToString());
+        Assert.Equal("test-openxbl-key", request.ApiKey);
+        Assert.Equal("application/json", request.Accept);
     }
 
     private static OpenXblClient CreateClient(HttpMessageHandler handler) => new(
