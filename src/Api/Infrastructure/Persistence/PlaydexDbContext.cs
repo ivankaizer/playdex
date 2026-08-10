@@ -15,6 +15,7 @@ public sealed class PlaydexDbContext(DbContextOptions<PlaydexDbContext> options)
     public DbSet<GameRating> GameRatings => Set<GameRating>();
     public DbSet<UserSettings> UserSettings => Set<UserSettings>();
     public DbSet<GameConnection> GameConnections => Set<GameConnection>();
+    public DbSet<NotificationChannel> NotificationChannels => Set<NotificationChannel>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -29,6 +30,7 @@ public sealed class PlaydexDbContext(DbContextOptions<PlaydexDbContext> options)
         ConfigureGameRatings(modelBuilder);
         ConfigureUserSettings(modelBuilder);
         ConfigureGameConnections(modelBuilder);
+        ConfigureNotificationChannels(modelBuilder);
     }
 
     private static void ConfigureUsers(ModelBuilder modelBuilder)
@@ -41,9 +43,21 @@ public sealed class PlaydexDbContext(DbContextOptions<PlaydexDbContext> options)
         entity.Property(row => row.Password).HasColumnName("password");
         entity.Property(row => row.CreatedAt).HasColumnName("created_at");
         entity.Property(row => row.UpdatedAt).HasColumnName("updated_at");
-        entity.Property(row => row.TelegramChatId).HasColumnName("chat_id");
         entity.Property(row => row.IsAdmin).HasColumnName("is_admin");
         entity.HasIndex(row => row.Email).IsUnique();
+    }
+
+    private static void ConfigureNotificationChannels(ModelBuilder modelBuilder)
+    {
+        var entity = modelBuilder.Entity<NotificationChannel>();
+        entity.ToTable("notification_channels");
+        entity.HasKey(row => new { row.UserId, row.Transport });
+        entity.Property(row => row.UserId).HasColumnName("user_id");
+        entity.Property(row => row.Transport).HasColumnName("transport");
+        entity.Property(row => row.Destination).HasColumnName("destination");
+        entity.Property(row => row.CreatedAt).HasColumnName("created_at");
+        entity.Property(row => row.UpdatedAt).HasColumnName("updated_at");
+        entity.HasOne<User>().WithMany().HasForeignKey(row => row.UserId).OnDelete(DeleteBehavior.Cascade);
     }
 
     private static void ConfigurePlatforms(ModelBuilder modelBuilder)

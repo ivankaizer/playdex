@@ -15,10 +15,14 @@ public class DatabaseSeeder(PlaydexDbContext db)
         await Truncate();
 
         // users
-        var user = await db.AddAsync(MakeUser("user@playdex.dev", "12345"));
+        var user = await db.AddAsync(MakeUser("user@playdex.dev"));
         var secondUser = await db.AddAsync(MakeUser("second_user@playdex.dev"));
-        var admin = await db.AddAsync(MakeUser("admin@playdex.dev", "67890", true));
+        var admin = await db.AddAsync(MakeUser("admin@playdex.dev", isAdmin: true));
         await db.SaveChangesAsync();
+
+        await db.NotificationChannels.AddRangeAsync(
+            MakeTelegramChannel(user.Entity, "12345"),
+            MakeTelegramChannel(admin.Entity, "67890"));
 
         // settings
         foreach (var entity in new[] { user, admin, secondUser })
@@ -161,14 +165,23 @@ public class DatabaseSeeder(PlaydexDbContext db)
         );
     }
 
-    private static User MakeUser(string email, string? chatId = null, bool isAdmin = false)
+    private static User MakeUser(string email, bool isAdmin = false)
     {
         return new User
         {
             Email = email,
             Password = BCrypt.Net.BCrypt.HashPassword("password"),
-            TelegramChatId = chatId,
             IsAdmin = isAdmin,
+        };
+    }
+
+    private static NotificationChannel MakeTelegramChannel(User user, string chatId)
+    {
+        return new NotificationChannel
+        {
+            UserId = user.Id,
+            Transport = NotificationChannel.Telegram,
+            Destination = chatId,
         };
     }
 

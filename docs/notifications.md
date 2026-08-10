@@ -13,7 +13,9 @@ container. Users never access Apprise and never handle the Telegram bot token.
 When settings are saved, Playdex calls Apprise's internal `/add/{key}` endpoint
 with `tgram://BOT_TOKEN/CHAT_ID`. The configuration is also created lazily if it
 is missing when a notification is sent, which makes existing `chat_id` records
-self-migrating. Users cannot reach Apprise because port 8000 is exposed only on
+self-migrating. The database migration copies those values into
+`notification_channels` as the `telegram` transport and removes the old user
+column. Users cannot reach Apprise because port 8000 is exposed only on
 the Docker network and the Apprise web UI is disabled.
 
 Configuration persists in the `apprise_config` Docker volume. Uploaded session
@@ -43,4 +45,6 @@ Authorization: Bearer <access-token>
 
 The endpoint uses the saved Telegram chat ID, provisions its Apprise
 configuration if necessary, sends a test message, and returns `{ "sent": true }`.
-It returns a validation error when the user has not configured a chat ID.
+It returns a validation error when the user has not configured a chat ID. The
+Settings page exposes the same operation through the **Send test** button after
+the chat ID has been saved.

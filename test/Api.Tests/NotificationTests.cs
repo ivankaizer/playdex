@@ -199,10 +199,16 @@ public sealed class AppriseNotificationTests(PostgresFixture postgres)
         var user = new User
         {
             Email = $"notifications-{suffix}@example.test",
-            TelegramChatId = "4242",
         };
         db.Users.Add(user);
         await db.SaveChangesAsync();
+        var notificationChannel = new NotificationChannel
+        {
+            UserId = user.Id,
+            Transport = NotificationChannel.Telegram,
+            Destination = "4242",
+        };
+        db.NotificationChannels.Add(notificationChannel);
         var credential = new PlatformCredential
         {
             UserId = user.Id,
@@ -255,7 +261,7 @@ public sealed class AppriseNotificationTests(PostgresFixture postgres)
                 new PollFailed(credential.Id, "steam", "rate limited", TimeSpan.FromMinutes(1)),
                 CancellationToken.None);
 
-            user.TelegramChatId = null;
+            db.NotificationChannels.Remove(notificationChannel);
             await db.SaveChangesAsync();
             await handler.Handle(
                 new SessionStarted(2, credential.Id, game.Id, now),

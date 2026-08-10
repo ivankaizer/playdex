@@ -4,7 +4,7 @@ using Microsoft.EntityFrameworkCore;
 namespace Api.Modules.Notifications;
 
 /// <summary>
-/// Resolves notification routing data from the user's Telegram chat ID.
+/// Resolves notification routing data from user-owned channels.
 /// </summary>
 public sealed class NotificationsRepository(PlaydexDbContext db)
 {
@@ -15,12 +15,12 @@ public sealed class NotificationsRepository(PlaydexDbContext db)
     {
         return await (
             from credential in db.PlatformCredentials
-            join user in db.Users on credential.UserId equals user.Id
+            join channel in db.NotificationChannels on credential.UserId equals channel.UserId
             join game in db.Games on gameId equals game.Id
             join platform in db.Platforms on game.PlatformId equals platform.Id
-            where credential.Id == credentialId
+            where credential.Id == credentialId && channel.Transport == NotificationChannel.Telegram
             select new NotificationTarget(
-                user.TelegramChatId,
+                channel.Destination,
                 game.Title,
                 platform.Name,
                 game.CapsuleUrl))
@@ -34,10 +34,10 @@ public sealed class NotificationsRepository(PlaydexDbContext db)
     {
         return await (
             from credential in db.PlatformCredentials
-            join user in db.Users on credential.UserId equals user.Id
+            join channel in db.NotificationChannels on credential.UserId equals channel.UserId
             join platform in db.Platforms on credential.PlatformId equals platform.Id
-            where credential.Id == credentialId
-            select new CredentialNotificationTarget(user.TelegramChatId, platform.Name))
+            where credential.Id == credentialId && channel.Transport == NotificationChannel.Telegram
+            select new CredentialNotificationTarget(channel.Destination, platform.Name))
             .AsNoTracking()
             .SingleOrDefaultAsync(ct);
     }

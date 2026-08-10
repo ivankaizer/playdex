@@ -32,6 +32,7 @@ internal sealed class SettingsState
 {
     private readonly HashSet<long> _updatingProviderIds = [];
     private readonly HashSet<long> _savingCredentialIds = [];
+    private string _savedTelegramChatId = string.Empty;
 
     public IReadOnlyList<ProviderStatus> Providers { get; private set; } = [];
     public bool IsProvidersLoading { get; private set; }
@@ -41,6 +42,15 @@ internal sealed class SettingsState
     public bool IsSettingsLoading { get; private set; }
     public bool IsSettingsSaving { get; private set; }
     public string SettingsError { get; private set; } = string.Empty;
+    public bool IsTestNotificationSending { get; private set; }
+    public string TestNotificationMessage { get; private set; } = string.Empty;
+    public string TestNotificationError { get; private set; } = string.Empty;
+    public bool CanSendTestNotification =>
+        !IsSettingsLoading &&
+        !IsSettingsSaving &&
+        !IsTestNotificationSending &&
+        _savedTelegramChatId.Length > 0 &&
+        TelegramChatId.Trim() == _savedTelegramChatId;
     public long? EditingCredentialId { get; private set; }
     public string EditingAccountId { get; private set; } = string.Empty;
     public string EditingApiKey { get; private set; } = string.Empty;
@@ -86,6 +96,7 @@ internal sealed class SettingsState
         IgnoreShortSessionsMinutes = response.IgnoreShortSessionsMinutes
             .ToString(CultureInfo.InvariantCulture);
         TelegramChatId = response.TelegramChatId ?? string.Empty;
+        _savedTelegramChatId = TelegramChatId;
         IsSettingsLoading = false;
     }
 
@@ -98,7 +109,12 @@ internal sealed class SettingsState
     public void SetIgnoreShortSessionsMinutes(string value) =>
         IgnoreShortSessionsMinutes = value;
 
-    public void SetTelegramChatId(string value) => TelegramChatId = value;
+    public void SetTelegramChatId(string value)
+    {
+        TelegramChatId = value;
+        TestNotificationMessage = string.Empty;
+        TestNotificationError = string.Empty;
+    }
 
     public bool TryBuildSettingsSubmission(out SettingsSubmission? submission)
     {
@@ -150,6 +166,8 @@ internal sealed class SettingsState
     {
         IsSettingsSaving = true;
         SettingsError = string.Empty;
+        TestNotificationMessage = string.Empty;
+        TestNotificationError = string.Empty;
     }
 
     public void CompleteSettingsSave(UserSettingsResponse response)
@@ -157,11 +175,36 @@ internal sealed class SettingsState
         IgnoreShortSessionsMinutes = response.IgnoreShortSessionsMinutes
             .ToString(CultureInfo.InvariantCulture);
         TelegramChatId = response.TelegramChatId ?? string.Empty;
+        _savedTelegramChatId = TelegramChatId;
     }
 
     public void FailSettingsSave(string error) => SettingsError = error;
 
     public void EndSettingsSave() => IsSettingsSaving = false;
+
+    public string BeginTestNotification()
+    {
+        IsTestNotificationSending = true;
+        TestNotificationMessage = string.Empty;
+        TestNotificationError = string.Empty;
+        return "/settings/notifications/test";
+    }
+
+    public void CompleteTestNotification(TestNotificationResponse response)
+    {
+        if (response.Sent)
+        {
+            TestNotificationMessage = "Test message sent.";
+        }
+        else
+        {
+            TestNotificationError = "The test message was not sent.";
+        }
+    }
+
+    public void FailTestNotification(string error) => TestNotificationError = error;
+
+    public void EndTestNotification() => IsTestNotificationSending = false;
 
     public SettingsSubmission BeginProviderUpdate(ProviderStatus provider)
     {
@@ -457,6 +500,32 @@ public partial class Settings : ComponentBase, IDisposable
         finally
         {
             _state.EndSettingsSave();
+        }
+    }
+
+    private async Task SendTestNotificationAsync()
+    {
+        if (!_state.CanSendTestNotification) return;
+
+        var path = _state.BeginTestNotification();
+        try
+        {
+            var response = await Api.SendAsync<TestNotificationResponse>(
+                path,
+                HttpMethod.Post,
+                cancellationToken: _lifetime.Token);
+            _state.CompleteTestNotification(response);
+        }
+        catch (OperationCanceledException) when (_lifetime.IsCancellationRequested)
+        {
+        }
+        catch (Exception exception)
+        {
+            _state.FailTestNotification(exception.Message);
+        }
+        finally
+        {
+            _state.EndTestNotification();
         }
     }
 
