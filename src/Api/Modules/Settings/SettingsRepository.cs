@@ -7,20 +7,30 @@ public sealed class SettingsRepository(PlaydexDbContext db)
 {
     public async Task<UserSettingsResponseDto> LoadUserSettings(long userId, CancellationToken ct)
     {
-        var settings = await db.UserSettings
+        var ignoreShortMinutes = await db.UserSettings
             .AsNoTracking()
             .Where(s => s.UserId == userId)
             .Select(s => s.IgnoreShortSessionsMinutes)
             .FirstOrDefaultAsync(ct);
+        var telegramChatId = await db.Users
+            .AsNoTracking()
+            .Where(user => user.Id == userId)
+            .Select(user => user.TelegramChatId)
+            .SingleAsync(ct);
 
-        return new UserSettingsResponseDto(settings);
+        return new UserSettingsResponseDto(ignoreShortMinutes, telegramChatId);
     }
 
-    public async Task<UserSettingsResponseDto> UpsertSettings(long userId, int ignoreShortMinutes, CancellationToken ct)
+    public async Task<UserSettingsResponseDto> UpsertSettings(
+        long userId,
+        int ignoreShortMinutes,
+        string? telegramChatId,
+        CancellationToken ct)
     {
         var existing = await db.UserSettings
             .Where(s => s.UserId == userId)
             .FirstOrDefaultAsync(ct);
+        var user = await db.Users.SingleAsync(row => row.Id == userId, ct);
 
         var now = DateTimeOffset.UtcNow;
         if (existing is null)
@@ -38,8 +48,10 @@ public sealed class SettingsRepository(PlaydexDbContext db)
             existing.IgnoreShortSessionsMinutes = ignoreShortMinutes;
             existing.UpdatedAt = now;
         }
+        user.TelegramChatId = telegramChatId;
+        user.UpdatedAt = now;
 
         await db.SaveChangesAsync(ct);
-        return new UserSettingsResponseDto(ignoreShortMinutes);
+        return new UserSettingsResponseDto(ignoreShortMinutes, telegramChatId);
     }
 }

@@ -167,7 +167,7 @@ public class DatabaseSeeder(PlaydexDbContext db)
         {
             Email = email,
             Password = BCrypt.Net.BCrypt.HashPassword("password"),
-            ChatId = chatId,
+            TelegramChatId = chatId,
             IsAdmin = isAdmin,
         };
     }

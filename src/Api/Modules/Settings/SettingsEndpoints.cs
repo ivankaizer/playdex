@@ -10,6 +10,7 @@ public static class SettingsEndpoints
         var group = api.MapGroup("/settings").RequireAuthorization();
         group.MapGet("", GetSettings);
         group.MapPut("", UpdateSettings);
+        group.MapPost("/notifications/test", SendTestNotification);
     }
 
     private static async Task<IResult> GetSettings(
@@ -30,5 +31,14 @@ public static class SettingsEndpoints
             return TypedResults.Problem("Request body is required.", statusCode: 400);
 
         return TypedResults.Ok(await service.UpdateSettings(principal.GetUserId(), request, ct));
+    }
+
+    private static async Task<IResult> SendTestNotification(
+        ClaimsPrincipal principal,
+        SettingsService service,
+        CancellationToken ct)
+    {
+        return TypedResults.Ok(await service.SendTestNotification(
+            principal.GetUserId(), ct));
     }
 }
