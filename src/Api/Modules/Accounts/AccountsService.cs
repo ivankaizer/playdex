@@ -11,7 +11,7 @@ public sealed class AccountsService(AccountsRepository repository)
 
     public async Task<SessionQueryResult> ListSessions(
         long userId, long? accountId, string? title, string? gameId,
-        string? from, string? to, string sort, string direction,
+        string? platform, string? from, string? to, string sort, string direction,
         int limit, int offset, int ignoreShortMinutes, CancellationToken ct)
     {
         IReadOnlyCollection<long>? gameIds = null;
@@ -21,7 +21,7 @@ public sealed class AccountsService(AccountsRepository repository)
             gameIds = await repository.ResolveConnectedGameIds(userId, parsedGameId, ct);
         }
         var range = AccountDateRange.ParseOptional(from, to);
-        return await repository.ListSessions(userId, accountId, title, gameIds, range.From, range.ToExclusive,
+        return await repository.ListSessions(userId, accountId, title, gameIds, platform, range.From, range.ToExclusive,
             sort, direction, limit, offset, ignoreShortMinutes, ct);
     }
 
@@ -49,7 +49,7 @@ public sealed class AccountsService(AccountsRepository repository)
     {
         var now = DateTimeOffset.UtcNow;
         var from = new DateTimeOffset(now.Year, now.Month, 1, 0, 0, 0, TimeSpan.Zero);
-        return repository.ComputeStats(userId, accountId, from, now, ignoreShortMinutes, ct);
+        return repository.ComputeStats(userId, accountId, from, now, null, ignoreShortMinutes, ct);
     }
 
     public Task<AccountStatsPeriodDto> ComputeYearlyStats(
@@ -57,16 +57,16 @@ public sealed class AccountsService(AccountsRepository repository)
     {
         var now = DateTimeOffset.UtcNow;
         var from = new DateTimeOffset(now.Year, 1, 1, 0, 0, 0, TimeSpan.Zero);
-        return repository.ComputeStats(userId, accountId, from, now, ignoreShortMinutes, ct);
+        return repository.ComputeStats(userId, accountId, from, now, null, ignoreShortMinutes, ct);
     }
 
     public Task<AccountStatsPeriodDto> ComputeStatsForRange(
-        long userId, long? accountId, string? from, string? to,
+        long userId, long? accountId, string? from, string? to, string? platform,
         int ignoreShortMinutes, CancellationToken ct)
     {
         var range = AccountDateRange.ParseRequired(from, to);
         return repository.ComputeStats(
-            userId, accountId, range.From!.Value, range.ToExclusive!.Value, ignoreShortMinutes, ct);
+            userId, accountId, range.From!.Value, range.ToExclusive!.Value, platform, ignoreShortMinutes, ct);
     }
 
     public async Task<AccountStatsResponseDto> ComputeAccountStats(

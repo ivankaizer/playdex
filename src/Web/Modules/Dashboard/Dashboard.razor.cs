@@ -54,7 +54,7 @@ internal sealed record DashboardSessionCard(
     string Platform,
     string? ImageUrl);
 
-internal sealed record DashboardPlatformView(string Label, double Value, string Hours);
+internal sealed record DashboardPlatformView(string Key, string Label, double Value, string Hours);
 internal sealed record DashboardTopGameView(string GameId, string Title, string Hours);
 internal sealed record DashboardStatsView(
     string Hours,
@@ -225,6 +225,7 @@ internal sealed class DashboardState
     {
         var safeTotal = Math.Max(totalSeconds, 1);
         return platforms.Select(item => new DashboardPlatformView(
+            item.Platform,
             Formatters.FormatStatsPlatformLabel(item.Platform),
             Math.Floor(item.TotalSeconds / safeTotal * 100 + 0.5),
             Formatters.FormatHours(item.TotalSeconds, 1))).ToArray();
@@ -262,8 +263,8 @@ public partial class Dashboard : ComponentBase, IDisposable
     private DashboardCurrentSessionView? CurrentSession => _state.GetCurrentSession(DateTimeOffset.Now);
     private DashboardStatsView Monthly => DashboardState.GetStatsView(_state.MonthlyStats);
     private DashboardStatsView Yearly => DashboardState.GetStatsView(_state.YearlyStats);
-    private IReadOnlyList<(string Label, double Value)> TodayPieSegments =>
-        TodayPlatforms.Select(item => (item.Label, item.Value)).ToArray();
+    private IReadOnlyList<(string Key, string Label, double Value)> TodayPieSegments =>
+        TodayPlatforms.Select(item => (item.Key, item.Label, item.Value)).ToArray();
     private IReadOnlyList<(string Label, string Value)> MonthlySummary =>
     [
         ("Hours played", Monthly.Hours),
@@ -276,10 +277,10 @@ public partial class Dashboard : ComponentBase, IDisposable
         ("Sessions", Yearly.Sessions),
         ("Top title", Yearly.TopTitle),
     ];
-    private IReadOnlyList<(string Label, double Value, string Hours)> MonthlyPlatforms =>
-        Monthly.Platforms.Select(item => (item.Label, item.Value, item.Hours)).ToArray();
-    private IReadOnlyList<(string Label, double Value, string Hours)> YearlyPlatforms =>
-        Yearly.Platforms.Select(item => (item.Label, item.Value, item.Hours)).ToArray();
+    private IReadOnlyList<(string Key, string Label, double Value, string Hours)> MonthlyPlatforms =>
+        Monthly.Platforms.Select(item => (item.Key, item.Label, item.Value, item.Hours)).ToArray();
+    private IReadOnlyList<(string Key, string Label, double Value, string Hours)> YearlyPlatforms =>
+        Yearly.Platforms.Select(item => (item.Key, item.Label, item.Value, item.Hours)).ToArray();
     private IReadOnlyList<(string GameId, string Title, string Hours)> MonthlyTopGames =>
         Monthly.TopGames.Select(item => (item.GameId, item.Title, item.Hours)).ToArray();
     private IReadOnlyList<(string GameId, string Title, string Hours)> YearlyTopGames =>

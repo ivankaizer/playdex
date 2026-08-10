@@ -51,6 +51,7 @@ internal sealed class SessionsState
     public string Preset { get; private set; } = "this-week";
     public string Title { get; private set; } = string.Empty;
     public string DebouncedTitle { get; private set; } = string.Empty;
+    public string Platform { get; private set; } = string.Empty;
     public string From { get; private set; }
     public string To { get; private set; }
     public string SortKey { get; private set; } = "date";
@@ -107,6 +108,15 @@ internal sealed class SessionsState
         Preset = "custom";
         Offset = 0;
     }
+
+    public void SetPlatform(string? platform)
+    {
+        Platform = platform?.Trim() ?? string.Empty;
+        Offset = 0;
+    }
+
+    public void TogglePlatform(string platform) =>
+        SetPlatform(Platform == platform ? null : platform);
 
     public void ApplyPreset(string preset, DateTimeOffset now)
     {
@@ -245,13 +255,18 @@ internal sealed class SessionsState
         var title = DebouncedTitle.Length == 0
             ? string.Empty
             : $"&title={EncodeQuery(DebouncedTitle)}";
+        var platform = Platform.Length == 0
+            ? string.Empty
+            : $"&platform={EncodeQuery(Platform)}";
         var from = From.Length == 0 ? string.Empty : $"&from={From}";
         var to = To.Length == 0 ? string.Empty : $"&to={To}";
-        return $"/sessions?limit={Limit}&offset={Offset}{title}{from}{to}&sort={SortKey}&direction={SortDirection}";
+        return $"/sessions?limit={Limit}&offset={Offset}{title}{platform}{from}{to}&sort={SortKey}&direction={SortDirection}";
     }
 
     public string? BuildStatsRequest() =>
-        From.Length == 0 || To.Length == 0 ? null : $"/stats?from={From}&to={To}";
+        From.Length == 0 || To.Length == 0
+            ? null
+            : $"/stats?from={From}&to={To}{(Platform.Length == 0 ? string.Empty : $"&platform={EncodeQuery(Platform)}")}";
 
     private static string EncodeQuery(string value) =>
         Uri.EscapeDataString(value)
@@ -297,7 +312,8 @@ public partial class Sessions : ComponentBase, IDisposable
 
     private IReadOnlyList<SessionsRowView> RowViews => _state.GetRowViews(DateTimeOffset.Now);
     private bool HasSessionFilters =>
-        _state.Title.Trim().Length > 0 || _state.From.Length > 0 || _state.To.Length > 0;
+        _state.Title.Trim().Length > 0 || _state.Platform.Length > 0 ||
+        _state.From.Length > 0 || _state.To.Length > 0;
     private IReadOnlyList<string> PieColors => _theme == "dark" ? DarkPieColors : LightPieColors;
     private IReadOnlyList<(string Label, string Value)> StatsSummary =>
     [
@@ -305,13 +321,14 @@ public partial class Sessions : ComponentBase, IDisposable
         ("Sessions", (_state.Stats?.SessionCount ?? 0).ToString(CultureInfo.InvariantCulture)),
         ("Top title", _state.Stats?.TopGameTitle ?? "—"),
     ];
-    private IReadOnlyList<(string Label, double Value, string Hours)> StatsPlatforms
+    private IReadOnlyList<(string Key, string Label, double Value, string Hours)> StatsPlatforms
     {
         get
         {
             if (_state.Stats is null) return [];
-            var total = Math.Max(_state.Stats.TotalSeconds, 1);
+            var total = Math.Max(_state.Stats.Platforms.Sum(item => item.TotalSeconds), 1);
             return _state.Stats.Platforms.Select(item => (
+                item.Platform,
                 Formatters.FormatStatsPlatformLabel(item.Platform),
                 Math.Floor(item.TotalSeconds / total * 100 + 0.5),
                 Formatters.FormatHours(item.TotalSeconds, 1))).ToArray();
@@ -322,6 +339,7 @@ public partial class Sessions : ComponentBase, IDisposable
             game.GameId,
             game.Title,
             Formatters.FormatHours(game.TotalSeconds, 1))).ToArray() ?? [];
+    private IReadOnlyList<AccountMonthStat> StatsMonths => _state.Stats?.Months ?? [];
     private string StatsRangeLabel
     {
         get
@@ -378,6 +396,18 @@ public partial class Sessions : ComponentBase, IDisposable
     private async Task ChangeToAsync(ChangeEventArgs eventArgs)
     {
         _state.SetTo(eventArgs.Value?.ToString() ?? string.Empty);
+        await RefreshAllAsync();
+    }
+
+    private async Task ChangePlatformAsync(ChangeEventArgs eventArgs)
+    {
+        _state.SetPlatform(eventArgs.Value?.ToString());
+        await RefreshAllAsync();
+    }
+
+    private async Task TogglePlatformAsync(string platform)
+    {
+        _state.TogglePlatform(platform);
         await RefreshAllAsync();
     }
 

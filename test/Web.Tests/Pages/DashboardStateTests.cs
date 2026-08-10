@@ -186,6 +186,7 @@ public sealed class DashboardStateTests
             2,
             null,
             [new AccountPlatformStat("psn", 3600, null), new AccountPlatformStat("ps5", 3600, null)],
+            [],
             []);
 
         var view = DashboardState.GetStatsView(stats);
@@ -295,19 +296,22 @@ public sealed class DashboardStateTests
             1,
             "Elden Ring",
             [new AccountPlatformStat("steam", 450, null), new AccountPlatformStat("psn", 3150, null)],
-            [new AccountTopGame("42", "Elden Ring", 3600)]);
+            [new AccountTopGame("42", "Elden Ring", 3600)],
+            []);
         var monthly = new AccountStatsPeriod(
             7200,
             2,
             "Elden Ring",
             [new AccountPlatformStat("steam", 7200, null)],
-            [new AccountTopGame("42", "Elden Ring", 7200)]);
+            [new AccountTopGame("42", "Elden Ring", 7200)],
+            []);
         var yearly = new AccountStatsPeriod(
             10800,
             3,
             "Hades II",
             [new AccountPlatformStat("manual", 10800, null)],
-            [new AccountTopGame("43", "Hades II", 10800)]);
+            [new AccountTopGame("43", "Hades II", 10800)],
+            []);
 
         return new DashboardSnapshot([completed], todayStats.Platforms, current, monthly, yearly);
     }

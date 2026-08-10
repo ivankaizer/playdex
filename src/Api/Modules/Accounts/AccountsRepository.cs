@@ -36,11 +36,12 @@ public sealed class AccountsRepository(PlaydexDbContext db, IGames games)
 
     public async Task<SessionQueryResult> ListSessions(
         long userId, long? accountId, string? title, IReadOnlyCollection<long>? gameIds,
-        DateTimeOffset? from, DateTimeOffset? to,
+        string? platform, DateTimeOffset? from, DateTimeOffset? to,
         string sort, string direction, int limit, int offset,
         int ignoreShortMinutes, CancellationToken ct)
     {
-        var (sql, parameters) = BuildSessionQuery(userId, accountId, title, gameIds, from, to, excludeIgnored: false);
+        var (sql, parameters) = BuildSessionQuery(
+            userId, accountId, title, gameIds, platform, from, to, excludeIgnored: false);
 
         var orderDirection = direction.Equals("asc", StringComparison.OrdinalIgnoreCase) ? "ASC" : "DESC";
         var orderBy = sort switch
@@ -73,7 +74,8 @@ public sealed class AccountsRepository(PlaydexDbContext db, IGames games)
         var todayStart = new DateTimeOffset(now.Year, now.Month, now.Day, 0, 0, 0, TimeSpan.Zero);
         var todayEnd = todayStart.AddDays(1);
 
-        var (sql, parameters) = BuildSessionQuery(userId, accountId, null, null, null, null, excludeIgnored: false);
+        var (sql, parameters) = BuildSessionQuery(
+            userId, accountId, null, null, null, null, null, excludeIgnored: false);
         sql += " AND ((ps.started_at >= @TodayStart AND ps.started_at < @TodayEnd)" +
             " OR (ps.ended_at IS NOT NULL AND ps.ended_at >= @TodayStart AND ps.ended_at < @TodayEnd))";
         parameters.Add(new NpgsqlParameter("TodayStart", todayStart));
@@ -88,7 +90,8 @@ public sealed class AccountsRepository(PlaydexDbContext db, IGames games)
     public async Task<AccountSessionDto?> LoadCurrentSession(
         long userId, long? accountId, CancellationToken ct)
     {
-        var (sql, parameters) = BuildSessionQuery(userId, accountId, null, null, null, null, excludeIgnored: false);
+        var (sql, parameters) = BuildSessionQuery(
+            userId, accountId, null, null, null, null, null, excludeIgnored: false);
         sql += " AND ps.ended_at IS NULL ORDER BY ps.started_at DESC LIMIT 1";
         var session = await db.Database.SqlQueryRaw<SessionDbRow?>(sql, [.. parameters])
             .FirstOrDefaultAsync(ct);
@@ -109,7 +112,8 @@ public sealed class AccountsRepository(PlaydexDbContext db, IGames games)
         long userId, long? accountId, DateTimeOffset? from, DateTimeOffset? to,
         int ignoreShortMinutes, CancellationToken ct)
     {
-        var (sql, parameters) = BuildSessionQuery(userId, accountId, null, null, from, to, excludeIgnored: true);
+        var (sql, parameters) = BuildSessionQuery(
+            userId, accountId, null, null, null, from, to, excludeIgnored: true);
         sql += " ORDER BY ps.started_at ASC";
         var sessions = await db.Database.SqlQueryRaw<SessionDbRow>(sql, [.. parameters])
             .ToListAsync(ct);
@@ -122,7 +126,8 @@ public sealed class AccountsRepository(PlaydexDbContext db, IGames games)
         IReadOnlyCollection<long> gameIds,
         CancellationToken ct)
     {
-        var (sql, parameters) = BuildSessionQuery(userId, null, null, gameIds, null, null, excludeIgnored: true);
+        var (sql, parameters) = BuildSessionQuery(
+            userId, null, null, gameIds, null, null, null, excludeIgnored: true);
         sql += " ORDER BY ps.started_at ASC";
         var sessions = await db.Database.SqlQueryRaw<SessionDbRow>(sql, [.. parameters])
             .ToListAsync(ct);
@@ -162,20 +167,27 @@ public sealed class AccountsRepository(PlaydexDbContext db, IGames games)
 
     public async Task<AccountStatsPeriodDto> ComputeStats(
         long userId, long? accountId, DateTimeOffset from, DateTimeOffset to,
-        int ignoreShortMinutes, CancellationToken ct)
+        string? platform, int ignoreShortMinutes, CancellationToken ct)
     {
-        var sessions = await ListSessionsForStats(userId, accountId, from, to, ignoreShortMinutes, ct);
-        if (sessions.Count == 0)
-            return new AccountStatsPeriodDto(0, 0, null, [], []);
-
-        var totalSeconds = sessions.Sum(MapDuration);
-
-        var platforms = sessions
-            .GroupBy(s => s.MappedPlatform ?? s.Platform)
+        var allSessions = await ListSessionsForStats(userId, accountId, from, to, ignoreShortMinutes, ct);
+        var platforms = allSessions
+            .GroupBy(EffectivePlatform)
             .Select(g => new AccountPlatformStatDto(
                 g.Key, g.Sum(MapDuration), null))
             .OrderBy(platform => platform.Platform)
             .ToList();
+
+        var normalizedPlatform = string.IsNullOrWhiteSpace(platform)
+            ? null
+            : NormalizePlatformKey(platform);
+        var sessions = normalizedPlatform is null
+            ? allSessions
+            : allSessions.Where(session => EffectivePlatform(session) == normalizedPlatform).ToList();
+        var months = BuildMonthStats(from, to, sessions);
+        if (sessions.Count == 0)
+            return new AccountStatsPeriodDto(0, 0, null, platforms, [], months);
+
+        var totalSeconds = sessions.Sum(MapDuration);
 
         var totals = sessions
             .GroupBy(session => GameId.Parse(session.GameId))
@@ -201,12 +213,13 @@ public sealed class AccountsRepository(PlaydexDbContext db, IGames games)
             .ToList();
         var topGame = topGames.FirstOrDefault()?.Title;
 
-        return new AccountStatsPeriodDto(totalSeconds, sessions.Count, topGame, platforms, topGames);
+        return new AccountStatsPeriodDto(
+            totalSeconds, sessions.Count, topGame, platforms, topGames, months);
     }
 
     private static (string Sql, List<NpgsqlParameter> Parameters) BuildSessionQuery(
         long userId, long? accountId, string? title, IReadOnlyCollection<long>? gameIds,
-        DateTimeOffset? from, DateTimeOffset? to, bool excludeIgnored)
+        string? platform, DateTimeOffset? from, DateTimeOffset? to, bool excludeIgnored)
     {
         var sql = """
             SELECT ps.id AS "SessionId", ps.started_at AS "StartedAt", ps.ended_at AS "EndedAt",
@@ -264,10 +277,17 @@ public sealed class AccountsRepository(PlaydexDbContext db, IGames games)
             sql += " AND g.id = @GameId";
             parameters.Add(new NpgsqlParameter("GameId", gameIds.First()));
         }
+
         else if (gameIds is { Count: > 1 })
         {
             sql += " AND g.id = ANY(@GameIds)";
             parameters.Add(new NpgsqlParameter("GameIds", gameIds.ToArray()));
+        }
+
+        if (!string.IsNullOrWhiteSpace(platform))
+        {
+            sql += $" AND ({EffectivePlatformSql}) = @Platform";
+            parameters.Add(new NpgsqlParameter("Platform", NormalizePlatformKey(platform)));
         }
 
         if (from.HasValue)
@@ -327,6 +347,55 @@ public sealed class AccountsRepository(PlaydexDbContext db, IGames games)
         s.EndedAt.HasValue
             ? (s.EndedAt.Value - s.StartedAt).TotalSeconds
             : (DateTimeOffset.UtcNow - s.StartedAt).TotalSeconds;
+
+    internal static string NormalizePlatformKey(string platform) => platform.Trim().ToLowerInvariant() switch
+    {
+        "psn" or "ps5" => "ps5",
+        var value => value,
+    };
+
+    private static string EffectivePlatform(AccountSessionDto session) =>
+        NormalizePlatformKey(session.MappedPlatform ?? session.Platform);
+
+    private static List<AccountMonthStatDto> BuildMonthStats(
+        DateTimeOffset from,
+        DateTimeOffset to,
+        IReadOnlyList<AccountSessionDto> sessions)
+    {
+        var totals = sessions
+            .GroupBy(session => (session.StartedAt.UtcDateTime.Year, session.StartedAt.UtcDateTime.Month))
+            .ToDictionary(group => group.Key, group => group.Sum(MapDuration));
+        var cursor = new DateTimeOffset(from.Year, from.Month, 1, 0, 0, 0, TimeSpan.Zero);
+        var months = new List<AccountMonthStatDto>();
+        while (cursor < to)
+        {
+            months.Add(new AccountMonthStatDto(
+                cursor.Year,
+                cursor.Month,
+                totals.GetValueOrDefault((cursor.Year, cursor.Month))));
+            cursor = cursor.AddMonths(1);
+        }
+        return months;
+    }
+
+    private const string EffectivePlatformSql = """
+        CASE
+            WHEN (
+                CASE
+                    WHEN p.key = 'manual' AND mg.id IS NOT NULL AND mp.key IS NOT NULL THEN mp.key
+                    WHEN p.key = 'manual' AND gp.key <> 'manual' THEN gp.key
+                    ELSE p.key
+                END
+            ) IN ('psn', 'ps5') THEN 'ps5'
+            ELSE (
+                CASE
+                    WHEN p.key = 'manual' AND mg.id IS NOT NULL AND mp.key IS NOT NULL THEN mp.key
+                    WHEN p.key = 'manual' AND gp.key <> 'manual' THEN gp.key
+                    ELSE p.key
+                END
+            )
+        END
+        """;
 }
 
 public sealed record SessionQueryResult(int Total, int Limit, int Offset, List<AccountSessionDto> Sessions);
