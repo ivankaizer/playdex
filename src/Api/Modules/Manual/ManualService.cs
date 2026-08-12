@@ -66,16 +66,17 @@ public sealed class ManualService(
 
         return await repository.ExecuteInTransaction(async () =>
         {
-            var credentialId = await repository.GetOrCreateManualCredential(userId, ct);
-            var canonicalTitle = games.NormalizeTitle(title);
-            var manualInput = await repository.UpsertManualGameInput(userId, title, canonicalTitle, ct);
             var startedAt = DateTimeOffset.UtcNow;
 
-            await repository.EndActiveSessions(credentialId, ct);
-            var gameId = manualInput.MappedGameId ??
-                await ResolveOrCreateGame(title, ManualPlatformKey, null, ct);
+            await repository.EndActiveSessions(userId, ct);
+            var platformKey = request.PlatformKey?.Trim().ToLowerInvariant() ?? "unknown";
+            var gameId = string.IsNullOrWhiteSpace(request.GameId)
+                ? await ResolveOrCreateGame(title, platformKey, null, ct)
+                : GameId.Parse(request.GameId);
+            var platformId = await repository.GetPlatformIdByKey(platformKey, ct)
+                ?? await repository.GetGamePlatformId(gameId, ct);
             var sessionId = await repository.CreatePlaySession(
-                credentialId, gameId, startedAt, null, ct);
+                userId, gameId, platformId, startedAt, null, ct);
 
             return new ManualSessionStartResponseDto(sessionId);
         }, ct);
@@ -86,9 +87,7 @@ public sealed class ManualService(
     /// </summary>
     public async Task<ManualSessionStopResponseDto> StopSession(long userId, CancellationToken ct)
     {
-        var credentialId = await repository.GetManualCredential(userId, ct);
-        if (!credentialId.HasValue) return new ManualSessionStopResponseDto(0);
-        var count = await repository.EndActiveSessions(credentialId.Value, ct);
+        var count = await repository.EndActiveSessions(userId, ct);
 
         return new ManualSessionStopResponseDto(count);
     }
@@ -116,8 +115,8 @@ public sealed class ManualService(
         var endTime = startTime.AddMinutes(request.DurationMinutes);
         return await repository.ExecuteInTransaction(async () =>
         {
-            var credentialId = await repository.GetOrCreateManualCredential(userId, ct);
             long gameId;
+            long platformId;
 
             if (!string.IsNullOrWhiteSpace(request.GameId))
             {
@@ -125,6 +124,10 @@ public sealed class ManualService(
                 var game = await repository.GetGameEntity(gameId, ct);
                 if (game is null)
                     throw AppProblemException.Validation("Game not found for the specified gameId.");
+                platformId = !string.IsNullOrWhiteSpace(request.PlatformKey)
+                    ? await repository.GetPlatformIdByKey(request.PlatformKey.Trim().ToLowerInvariant(), ct)
+                        ?? throw AppProblemException.Validation("Platform not found.")
+                    : game.PlatformId;
             }
             else
             {
@@ -140,10 +143,12 @@ public sealed class ManualService(
                     platformKey,
                     request.CapsuleUrl,
                     ct);
+                platformId = await repository.GetPlatformIdByKey(platformKey.ToLowerInvariant(), ct)
+                    ?? throw AppProblemException.Validation("Platform not found.");
             }
 
             var sessionId = await repository.CreatePlaySession(
-                credentialId, gameId, startTime, endTime, ct);
+                userId, gameId, platformId, startTime, endTime, ct);
             return new ManualEntryCreateResponseDto(sessionId);
         }, ct);
     }

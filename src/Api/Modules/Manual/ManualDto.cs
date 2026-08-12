@@ -2,7 +2,7 @@ namespace Api.Modules.Manual;
 
 // ── Request DTOs ──────────────────────────────────────────────
 
-public sealed record ManualSessionStartRequest(string Title);
+public sealed record ManualSessionStartRequest(string Title, string? GameId = null, string? PlatformKey = null);
 
 public sealed record ManualEntryCreateRequest(
     string Date,

@@ -119,26 +119,29 @@ public sealed class ManualRepository(PlaydexDbContext db)
         return new ManualInputLookupRow { Id = input.Id, MappedGameId = input.MappedGameId };
     }
 
-    public async Task<int> EndActiveSessions(long platformCredentialId, CancellationToken ct)
+    public async Task<int> EndActiveSessions(long userId, CancellationToken ct)
     {
         var now = DateTimeOffset.UtcNow;
         return await db.Database.ExecuteSqlInterpolatedAsync($"""
             UPDATE play_sessions
             SET ended_at = {now}, updated_at = {now}
-            WHERE platform_credential_id = {platformCredentialId} AND ended_at IS NULL
+            WHERE user_id = {userId} AND capture_method = 'manual' AND ended_at IS NULL
             """, ct);
     }
 
     public async Task<long> CreatePlaySession(
-        long platformCredentialId, long gameId,
+        long userId, long gameId, long platformId,
         DateTimeOffset startedAt, DateTimeOffset? endedAt,
         CancellationToken ct)
     {
         var now = DateTimeOffset.UtcNow;
         var session = new PlaySession
         {
-            PlatformCredentialId = platformCredentialId,
             GameId = gameId,
+            UserId = userId,
+            PlatformId = platformId,
+            CaptureMethod = CaptureMethod.Manual,
+            IntegrationId = null,
             StartedAt = startedAt,
             EndedAt = endedAt,
             CreatedAt = now,
@@ -148,6 +151,9 @@ public sealed class ManualRepository(PlaydexDbContext db)
         await db.SaveChangesAsync(ct);
         return session.Id;
     }
+
+    public async Task<long> GetGamePlatformId(long gameId, CancellationToken ct) =>
+        await db.Games.Where(row => row.Id == gameId).Select(row => row.PlatformId).SingleAsync(ct);
 
     public async Task<List<GameSearchRow>> SearchLocalGames(string query, int limit, CancellationToken ct)
     {

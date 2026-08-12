@@ -67,6 +67,7 @@ builder.Services.AddSingleton(new MigrationCatalog([
     new IntegrationsMigration(),
     new PlaySessionTargetFieldsMigration(),
     new PollingTargetModelMigration(),
+    new ManualTargetModelMigration(),
 ]));
 builder.Services.AddSingleton<MigrationRunner>();
 builder.Services.AddScoped<EventBus>();
