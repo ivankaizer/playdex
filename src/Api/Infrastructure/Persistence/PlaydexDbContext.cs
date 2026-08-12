@@ -7,6 +7,7 @@ public sealed class PlaydexDbContext(DbContextOptions<PlaydexDbContext> options)
     public DbSet<User> Users => Set<User>();
     public DbSet<Platform> Platforms => Set<Platform>();
     public DbSet<PlatformCredential> PlatformCredentials => Set<PlatformCredential>();
+    public DbSet<Integration> Integrations => Set<Integration>();
     public DbSet<Game> Games => Set<Game>();
     public DbSet<GameExternalIdentity> GameExternalIdentities => Set<GameExternalIdentity>();
     public DbSet<PlaySession> PlaySessions => Set<PlaySession>();
@@ -22,6 +23,7 @@ public sealed class PlaydexDbContext(DbContextOptions<PlaydexDbContext> options)
         ConfigureUsers(modelBuilder);
         ConfigurePlatforms(modelBuilder);
         ConfigurePlatformCredentials(modelBuilder);
+        ConfigureIntegrations(modelBuilder);
         ConfigureGames(modelBuilder);
         ConfigureGameExternalIdentities(modelBuilder);
         ConfigurePlaySessions(modelBuilder);
@@ -98,6 +100,31 @@ public sealed class PlaydexDbContext(DbContextOptions<PlaydexDbContext> options)
         entity.Property(row => row.CapsuleUrlLocked).HasColumnName("capsule_url_locked");
         entity.Property(row => row.TitleLocked).HasColumnName("title_locked");
         entity.HasIndex(row => row.CanonicalKey).IsUnique();
+        entity.HasOne<Platform>().WithMany().HasForeignKey(row => row.PlatformId).OnDelete(DeleteBehavior.NoAction);
+    }
+
+    private static void ConfigureIntegrations(ModelBuilder modelBuilder)
+    {
+        var entity = modelBuilder.Entity<Integration>();
+        entity.ToTable(
+            "integrations",
+            table => table.HasCheckConstraint(
+                "integrations_platform_ownership_check",
+                "(type = 'api' AND platform_id IS NULL) OR (type <> 'api' AND platform_id IS NOT NULL)"));
+        entity.HasKey(row => row.Id);
+        entity.Property(row => row.Id).HasColumnName("id").ValueGeneratedOnAdd();
+        entity.Property(row => row.UserId).HasColumnName("user_id");
+        entity.Property(row => row.Type).HasColumnName("type").HasColumnType("integration_type");
+        entity.Property(row => row.PlatformId).HasColumnName("platform_id");
+        entity.Property(row => row.ApiKey).HasColumnName("api_key");
+        entity.Property(row => row.AccountId).HasColumnName("account_id");
+        entity.Property(row => row.ApiKeyLocked).HasColumnName("api_key_locked");
+        entity.Property(row => row.Active).HasColumnName("active");
+        entity.Property(row => row.CreatedAt).HasColumnName("created_at");
+        entity.Property(row => row.UpdatedAt).HasColumnName("updated_at");
+        entity.HasIndex(row => row.UserId);
+        entity.HasIndex(row => row.PlatformId);
+        entity.HasOne<User>().WithMany().HasForeignKey(row => row.UserId).OnDelete(DeleteBehavior.Cascade);
         entity.HasOne<Platform>().WithMany().HasForeignKey(row => row.PlatformId).OnDelete(DeleteBehavior.NoAction);
     }
 

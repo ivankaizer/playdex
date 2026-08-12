@@ -35,6 +35,28 @@ public sealed class PlatformCredential : IHasTimestamps
     public long PlatformId { get; set; }
 }
 
+public enum IntegrationType
+{
+    Steam,
+    Psn,
+    Xbox,
+    Api,
+}
+
+public sealed class Integration : IHasTimestamps
+{
+    public long Id { get; set; }
+    public long UserId { get; set; }
+    public IntegrationType Type { get; set; }
+    public long? PlatformId { get; set; }
+    public string? ApiKey { get; set; }
+    public string? AccountId { get; set; }
+    public bool ApiKeyLocked { get; set; }
+    public bool Active { get; set; }
+    public DateTimeOffset CreatedAt { get; set; }
+    public DateTimeOffset UpdatedAt { get; set; }
+}
+
 public sealed class Game : IHasTimestamps
 {
     public long Id { get; set; }
