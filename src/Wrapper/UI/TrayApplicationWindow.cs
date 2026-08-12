@@ -580,22 +580,34 @@ internal sealed class ApiSettingsDialog : Form
 internal sealed class GameSettingsDialog : Form
 {
     public const string SteamDbUrl = "https://steamdb.info/";
+    internal const int ValidationTop = 234;
+    internal const int ValidationHeight = 40;
+    internal const int ButtonTop = 320;
 
     private readonly TextBox gameNameInput;
     private readonly TextBox gameIdInput;
+    private readonly TextBox launchOptionsInput;
     private readonly CheckBox dailyBackupInput;
     private readonly Label validation;
     private readonly ApiSettingsDialogMetrics layout;
 
     public string GameName { get; private set; }
     public string GameId { get; private set; }
+    public string LaunchOptions { get; private set; }
     public bool DailyBackupEnabled { get; private set; }
 
-    public GameSettingsDialog(string currentGameName, string currentGameId, bool dailyBackupEnabled, TrayPalette palette, int dpi)
+    public GameSettingsDialog(
+        string currentGameName,
+        string currentGameId,
+        IReadOnlyList<string> currentLaunchArguments,
+        bool dailyBackupEnabled,
+        TrayPalette palette,
+        int dpi)
     {
         layout = ApiSettingsDialogMetrics.ForDpi(dpi);
         GameName = currentGameName;
         GameId = currentGameId;
+        LaunchOptions = LaunchOptionsCodec.Format(currentLaunchArguments);
         DailyBackupEnabled = dailyBackupEnabled;
         AutoScaleMode = AutoScaleMode.None;
         AutoSize = false;
@@ -666,11 +678,31 @@ internal sealed class GameSettingsDialog : Form
         };
         Controls.Add(gameIdInput);
 
+        Controls.Add(new Label
+        {
+            Text = "Launch options (optional)",
+            Location = P(16, 139),
+            Size = Z(388, 20),
+            Font = new Font("Segoe UI", 9f),
+            ForeColor = palette.Text
+        });
+        launchOptionsInput = new TextBox
+        {
+            Text = LaunchOptions,
+            Location = P(16, 163),
+            Size = layout.InputSize,
+            MaxLength = LaunchConfig.MaximumLaunchOptionsLength,
+            BackColor = palette.Surface,
+            ForeColor = palette.Text,
+            AccessibleName = "Game launch options"
+        };
+        Controls.Add(launchOptionsInput);
+
         dailyBackupInput = new CheckBox
         {
             Text = "Back up saves daily with Ludusavi",
             Checked = dailyBackupEnabled,
-            Location = P(16, 139),
+            Location = P(16, 200),
             Size = Z(388, 26),
             ForeColor = palette.Text,
             AccessibleName = "Enable daily Ludusavi backup"
@@ -679,20 +711,20 @@ internal sealed class GameSettingsDialog : Form
 
         validation = new Label
         {
-            Location = P(16, 174),
-            Size = Z(388, 40),
+            Location = P(16, ValidationTop),
+            Size = Z(388, ValidationHeight),
             Font = new Font("Segoe UI", 8f),
             ForeColor = palette.Danger
         };
         Controls.Add(validation);
 
         var cancel = CreateDialogButton("Cancel", palette.Surface, palette.Text);
-        cancel.Location = P(260, 256);
+        cancel.Location = P(260, ButtonTop);
         cancel.DialogResult = DialogResult.Cancel;
         Controls.Add(cancel);
 
         var save = CreateDialogButton("Save", palette.Accent, palette == TrayTheme.Dark ? Color.FromArgb(20, 20, 20) : Color.White);
-        save.Location = P(336, 256);
+        save.Location = P(336, ButtonTop);
         save.Click += (_, _) => SaveGameSettings();
         Controls.Add(save);
 
@@ -726,6 +758,8 @@ internal sealed class GameSettingsDialog : Form
         {
             GameName = GameCatalog.NormalizeDisplayName(gameNameInput.Text);
             GameId = GameCatalog.NormalizeApiGameId(gameIdInput.Text);
+            _ = LaunchOptionsCodec.Parse(launchOptionsInput.Text);
+            LaunchOptions = launchOptionsInput.Text.Trim();
             DailyBackupEnabled = dailyBackupInput.Checked;
             DialogResult = DialogResult.OK;
             Close();

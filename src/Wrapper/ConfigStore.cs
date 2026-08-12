@@ -81,6 +81,7 @@ internal sealed class ConfigStore(string path)
         foreach (var game in config.Games.Values)
         {
             game.Launch ??= new LaunchConfig();
+            game.Launch.Arguments ??= [];
             game.Monitor ??= new MonitorConfig();
             game.Backup ??= new BackupConfig();
             game.Backup.LudusaviGameTitle = string.IsNullOrWhiteSpace(game.Backup.LudusaviGameTitle)

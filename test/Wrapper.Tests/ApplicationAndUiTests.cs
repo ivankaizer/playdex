@@ -138,6 +138,7 @@ public sealed class ApplicationAndUiTests
     public Task TestApiSettingsDialogMetrics()
     {
         Assert.Equal("https://steamdb.info/", GameSettingsDialog.SteamDbUrl);
+        Assert.True(GameSettingsDialog.ValidationTop + GameSettingsDialog.ValidationHeight <= GameSettingsDialog.ButtonTop);
         var expected = new[]
         {
             (Dpi: 96, Client: new Size(420, 364), Input: new Size(388, 27), Button: new Size(68, 28)),

@@ -15,6 +15,7 @@ public sealed class ConfigurationTests
         var config = await store.LoadOrCreateAsync();
         var game = config.GetOrCreateGame("demo");
         game.Launch.ExecutablePath = "C:\\Games\\Demo\\demo.exe";
+        game.Launch.Arguments = ["-windowed", "Player One"];
         game.ApiGameId = "1234";
         game.GameProvider = "steam";
         game.ApiKey = "game-key";
@@ -27,6 +28,7 @@ public sealed class ConfigurationTests
 
         var loaded = await store.LoadOrCreateAsync();
         Assert.Equal("C:\\Games\\Demo\\demo.exe", loaded.Games["demo"].Launch.ExecutablePath);
+        Assert.Equal(["-windowed", "Player One"], loaded.Games["demo"].Launch.Arguments);
         Assert.Equal("1234", loaded.Games["demo"].ApiGameId);
         Assert.Equal("steam", loaded.Games["demo"].GameProvider);
         Assert.Equal("game-key", loaded.Api.ResolveApiKey(loaded.Games["demo"]));
@@ -297,6 +299,25 @@ public sealed class ConfigurationTests
 
         Assert.Single(config.Games);
         Assert.Equal(existing.Launch.ExecutablePath, config.Games["Demo"].Launch.ExecutablePath);
+    }
+
+    [Fact]
+    public Task TestChangeLaunchOptions()
+    {
+        var config = new WrapperConfig();
+        var game = config.GetOrCreateGame("demo");
+        var expected = new[] { "-windowed", "Player One", "", "say \"hello\"", @"C:\Games\Demo\" };
+        var formatted = LaunchOptionsCodec.Format(expected);
+
+        var changed = GameCatalog.ChangeLaunchOptions(config, "demo", formatted);
+
+        Assert.Equal(game, changed);
+        Assert.Equal(expected, game.Launch.Arguments);
+        Assert.Equal(expected, LaunchOptionsCodec.Parse(LaunchOptionsCodec.Format(game.Launch.Arguments)));
+
+        GameCatalog.ChangeLaunchOptions(config, "demo", "   ");
+        Assert.Empty(game.Launch.Arguments);
+        return Task.CompletedTask;
     }
 
     [Fact]

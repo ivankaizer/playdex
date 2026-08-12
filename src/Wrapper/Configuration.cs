@@ -133,6 +133,17 @@ internal static class GameCatalog
         return game;
     }
 
+    public static GameConfig ChangeLaunchOptions(WrapperConfig config, string gameId, string? launchOptions)
+    {
+        if (!config.Games.TryGetValue(gameId, out var game))
+        {
+            throw new InvalidOperationException($"Game '{gameId}' is not configured.");
+        }
+
+        game.Launch.Arguments = LaunchOptionsCodec.Parse(launchOptions);
+        return game;
+    }
+
     public static string NormalizeDisplayName(string? displayName)
     {
         var normalized = displayName?.Trim();
@@ -256,8 +267,85 @@ internal static class SteamAppIdReader
 
 internal sealed class LaunchConfig
 {
+    public const int MaximumLaunchOptionsLength = 32767;
+
     public string? ExecutablePath { get; set; }
     public List<string> Arguments { get; set; } = [];
+}
+
+internal static class LaunchOptionsCodec
+{
+    public static List<string> Parse(string? launchOptions)
+    {
+        var normalized = launchOptions?.Trim() ?? "";
+        if (normalized.Length > LaunchConfig.MaximumLaunchOptionsLength)
+        {
+            throw new InvalidOperationException($"Launch options cannot exceed {LaunchConfig.MaximumLaunchOptionsLength} characters.");
+        }
+        if (normalized.Length == 0) return [];
+
+        var arguments = CommandLineToArgvW($"launcher.exe {normalized}", out var count);
+        if (arguments == IntPtr.Zero)
+        {
+            throw new InvalidOperationException("Launch options could not be parsed.");
+        }
+
+        try
+        {
+            var result = new List<string>(Math.Max(0, count - 1));
+            for (var index = 1; index < count; index++)
+            {
+                var value = Marshal.PtrToStringUni(Marshal.ReadIntPtr(arguments, index * IntPtr.Size));
+                if (value is not null) result.Add(value);
+            }
+            return result;
+        }
+        finally
+        {
+            _ = LocalFree(arguments);
+        }
+    }
+
+    public static string Format(IEnumerable<string> arguments) =>
+        string.Join(" ", arguments.Select(Quote));
+
+    private static string Quote(string argument)
+    {
+        if (argument.Length > 0 && !argument.Any(character => char.IsWhiteSpace(character) || character == '"'))
+        {
+            return argument;
+        }
+
+        var output = new StringBuilder(argument.Length + 2).Append('"');
+        var backslashes = 0;
+        foreach (var character in argument)
+        {
+            if (character == '\\')
+            {
+                backslashes++;
+                continue;
+            }
+            if (character == '"')
+            {
+                output.Append('\\', backslashes * 2 + 1).Append('"');
+                backslashes = 0;
+                continue;
+            }
+
+            output.Append('\\', backslashes).Append(character);
+            backslashes = 0;
+        }
+        output.Append('\\', backslashes * 2).Append('"');
+        return output.ToString();
+    }
+
+    [DllImport("shell32.dll", SetLastError = true)]
+    private static extern IntPtr CommandLineToArgvW(
+        [MarshalAs(UnmanagedType.LPWStr)] string commandLine,
+        out int argumentCount);
+
+    [DllImport("kernel32.dll")]
+    private static extern IntPtr LocalFree(IntPtr memory);
 }
 
 internal sealed class MonitorConfig

@@ -223,7 +223,13 @@ internal sealed partial class TraySetupApplication : IDisposable
         }
 
         var currentId = string.IsNullOrWhiteSpace(game.ApiGameId) ? game.GameId : game.ApiGameId;
-        using var editor = new GameSettingsDialog(game.DisplayName, currentId, game.Backup.DailyEnabled, TrayTheme.Current(), window.DeviceDpi);
+        using var editor = new GameSettingsDialog(
+            game.DisplayName,
+            currentId,
+            game.Launch.Arguments,
+            game.Backup.DailyEnabled,
+            TrayTheme.Current(),
+            window.DeviceDpi);
         if (editor.ShowDialog(window) != DialogResult.OK)
         {
             return;
@@ -231,6 +237,7 @@ internal sealed partial class TraySetupApplication : IDisposable
 
         GameCatalog.ChangeDisplayName(config, gameId, editor.GameName);
         GameCatalog.ChangeApiGameId(config, gameId, editor.GameId);
+        GameCatalog.ChangeLaunchOptions(config, gameId, editor.LaunchOptions);
         game.Backup.DailyEnabled = editor.DailyBackupEnabled;
         await store.SaveAsync(config);
         RefreshGameMenu();
