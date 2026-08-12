@@ -100,11 +100,11 @@ public enum CaptureMethod
 public sealed class PlaySession : IHasTimestamps
 {
     public long Id { get; set; }
-    public long PlatformCredentialId { get; set; }
+    public long? PlatformCredentialId { get; set; }
     public long GameId { get; set; }
-    public long? UserId { get; set; }
-    public long? PlatformId { get; set; }
-    public CaptureMethod? CaptureMethod { get; set; }
+    public long UserId { get; set; }
+    public long PlatformId { get; set; }
+    public CaptureMethod CaptureMethod { get; set; }
     public long? IntegrationId { get; set; }
     public DateTimeOffset StartedAt { get; set; }
     public DateTimeOffset? EndedAt { get; set; }

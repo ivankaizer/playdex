@@ -17,11 +17,11 @@ public sealed class TelegramRepository(PlaydexDbContext db)
         CancellationToken ct)
     {
         return await (
-            from credential in db.PlatformCredentials
-            join user in db.Users on credential.UserId equals user.Id
+            from integration in db.Integrations
+            join user in db.Users on integration.UserId equals user.Id
             join game in db.Games on gameId equals game.Id
-            join platform in db.Platforms on game.PlatformId equals platform.Id
-            where credential.Id == credentialId
+            join platform in db.Platforms on integration.PlatformId equals platform.Id
+            where integration.Id == credentialId
             select new TelegramNotificationTarget(
                 user.ChatId,
                 game.Title,

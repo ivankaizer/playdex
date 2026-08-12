@@ -147,7 +147,7 @@ public sealed partial class PlayniteService(
             {
                 await SafePublish(new SessionEnded(
                     session.Id,
-                    session.PlatformCredentialId,
+                    session.IntegrationId!.Value,
                     session.GameId,
                     session.StartedAt,
                     session.EndedAt!.Value), ct);
@@ -162,7 +162,7 @@ public sealed partial class PlayniteService(
         {
             await SafePublish(new SessionEnded(
                 session.Id,
-                session.PlatformCredentialId,
+                session.IntegrationId!.Value,
                 session.GameId,
                 session.StartedAt,
                 session.EndedAt!.Value), ct);

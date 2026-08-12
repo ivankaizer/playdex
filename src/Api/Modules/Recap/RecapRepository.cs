@@ -16,16 +16,14 @@ public sealed class RecapRepository(PlaydexDbContext db)
                 g.id AS GameId,
                 g.title AS Title,
                 g.capsule_url AS CapsuleUrl,
-                pc_platform.key AS Platform,
-                game_platform.key AS GamePlatform,
+                session_platform.key AS Platform,
+                session_platform.key AS GamePlatform,
                 g.canonical_key AS GameCanonicalKey
             FROM play_sessions ps
-            JOIN platform_credentials pc ON pc.id = ps.platform_credential_id
-            LEFT JOIN user_settings us ON us.user_id = pc.user_id
+            LEFT JOIN user_settings us ON us.user_id = ps.user_id
             JOIN games g ON g.id = ps.game_id
-            JOIN platforms pc_platform ON pc_platform.id = pc.platform_id
-            JOIN platforms game_platform ON game_platform.id = g.platform_id
-            WHERE pc.user_id = {userId}
+            JOIN platforms session_platform ON session_platform.id = ps.platform_id
+            WHERE ps.user_id = {userId}
               AND NOT (
                   COALESCE(us.ignore_short_sessions_minutes, 0) > 0
                   AND ps.ended_at IS NOT NULL
@@ -44,9 +42,8 @@ public sealed class RecapRepository(PlaydexDbContext db)
             SELECT DISTINCT
                 EXTRACT(YEAR FROM ps.started_at AT TIME ZONE 'utc')::int AS Year
             FROM play_sessions ps
-            JOIN platform_credentials pc ON pc.id = ps.platform_credential_id
-            LEFT JOIN user_settings us ON us.user_id = pc.user_id
-            WHERE pc.user_id = {userId}
+            LEFT JOIN user_settings us ON us.user_id = ps.user_id
+            WHERE ps.user_id = {userId}
               AND NOT (
                   COALESCE(us.ignore_short_sessions_minutes, 0) > 0
                   AND ps.ended_at IS NOT NULL
@@ -66,16 +63,14 @@ public sealed class RecapRepository(PlaydexDbContext db)
                 MIN(ps.started_at) AS FirstStartedAt,
                 g.title AS Title,
                 g.capsule_url AS CapsuleUrl,
-                pc_platform.key AS Platform,
-                game_platform.key AS GamePlatform,
+                session_platform.key AS Platform,
+                session_platform.key AS GamePlatform,
                 g.canonical_key AS GameCanonicalKey
             FROM play_sessions ps
-            JOIN platform_credentials pc ON pc.id = ps.platform_credential_id
-            LEFT JOIN user_settings us ON us.user_id = pc.user_id
+            LEFT JOIN user_settings us ON us.user_id = ps.user_id
             JOIN games g ON g.id = ps.game_id
-            JOIN platforms pc_platform ON pc_platform.id = pc.platform_id
-            JOIN platforms game_platform ON game_platform.id = g.platform_id
-            WHERE pc.user_id = {userId}
+            JOIN platforms session_platform ON session_platform.id = ps.platform_id
+            WHERE ps.user_id = {userId}
               AND NOT (
                   COALESCE(us.ignore_short_sessions_minutes, 0) > 0
                   AND ps.ended_at IS NOT NULL
@@ -84,7 +79,7 @@ public sealed class RecapRepository(PlaydexDbContext db)
               )
             GROUP BY
                 ps.game_id, g.title, g.capsule_url,
-                pc_platform.key, game_platform.key, g.canonical_key
+                session_platform.key, g.canonical_key
             ORDER BY FirstStartedAt ASC
             """).ToListAsync(ct);
     }

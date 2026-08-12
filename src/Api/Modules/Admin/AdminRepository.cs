@@ -19,8 +19,7 @@ public sealed class AdminRepository(PlaydexDbContext db)
                        ps.ended_at IS NULL AS Live,
                        ROW_NUMBER() OVER (PARTITION BY u.id ORDER BY ps.started_at DESC, ps.id DESC) AS rn
                 FROM play_sessions ps
-                JOIN platform_credentials pc ON pc.id = ps.platform_credential_id
-                JOIN users u ON u.id = pc.user_id
+                JOIN users u ON u.id = ps.user_id
                 JOIN games g ON g.id = ps.game_id
             )
             SELECT UserId, Email, SessionId, GameName, StartedAt, DurationSeconds, Live
@@ -36,10 +35,10 @@ public sealed class AdminRepository(PlaydexDbContext db)
         var likeQuery = $"%{query}%";
         var queryable =
             from session in db.PlaySessions.AsNoTracking()
-            join credential in db.PlatformCredentials.AsNoTracking()
-                on session.PlatformCredentialId equals credential.Id
-            join user in db.Users.AsNoTracking() on credential.UserId equals user.Id
-            join platform in db.Platforms.AsNoTracking() on credential.PlatformId equals platform.Id
+            join user in db.Users.AsNoTracking() on session.UserId equals user.Id
+            join platform in db.Platforms.AsNoTracking() on session.PlatformId equals platform.Id
+            join integration in db.Integrations.AsNoTracking() on session.IntegrationId equals integration.Id into integrations
+            from credential in integrations.DefaultIfEmpty()
             join game in db.Games.AsNoTracking() on session.GameId equals game.Id
             where EF.Functions.ILike(user.Email, likeQuery)
                 || EF.Functions.ILike(game.Title, likeQuery)
@@ -49,10 +48,10 @@ public sealed class AdminRepository(PlaydexDbContext db)
             select new
             {
                 SessionId = session.Id,
-                SourceCredentialId = credential.Id,
+                SourceCredentialId = session.IntegrationId ?? 0,
                 UserEmail = user.Email,
                 Platform = platform.Key,
-                AccountUser = credential.AccountId,
+                AccountUser = credential == null ? null : credential.AccountId,
                 GameName = game.Title,
                 session.StartedAt,
                 session.EndedAt,

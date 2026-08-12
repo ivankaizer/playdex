@@ -64,7 +64,7 @@ internal static class RecapRange
                 .AddDays(1);
 }
 
-public sealed class RecapService(RecapRepository repository, IGames games)
+public sealed class RecapService(RecapRepository repository)
 {
     private static readonly long DayMs = (long)TimeSpan.FromDays(1).TotalMilliseconds;
 
@@ -486,67 +486,10 @@ public sealed class RecapService(RecapRepository repository, IGames games)
 
     // ── Manual mapping logic ───────────────────────────────────
 
-    private async Task<List<SessionData>> MapSessionsForUser(
+    private static Task<List<SessionData>> MapSessionsForUser(
         long userId, List<RecapSessionRow> rows, CancellationToken ct)
     {
-        var hasManual = rows.Any(r => r.Platform == "manual");
-        if (!hasManual)
-            return rows.Select(ToSessionData).ToList();
-
-        var manualTitles = rows
-            .Where(r => r.Platform == "manual")
-            .Select(r => games.NormalizeTitle(r.Title))
-            .Distinct(StringComparer.Ordinal)
-            .ToArray();
-
-        var mappings = manualTitles.Length > 0
-            ? await repository.LoadManualMappings(userId, manualTitles, ct)
-            : [];
-
-        var mappingIndex = mappings
-            .Where(m => m.MappedGameId.HasValue && m.MappedTitle is not null)
-            .ToDictionary(
-                m => m.CanonicalTitle,
-                m => (
-                    GameId: m.MappedGameId!.Value,
-                    Title: m.MappedTitle!,
-                    Platform: m.MappedPlatform ?? "manual",
-                    CapsuleUrl: m.MappedCapsuleUrl,
-                    CanonicalKey: m.MappedCanonicalKey
-                ),
-                StringComparer.Ordinal);
-
-        return rows.Select(row =>
-        {
-            if (row.Platform != "manual")
-                return ToSessionData(row);
-
-            var normalized = games.NormalizeTitle(row.Title);
-            if (mappingIndex.TryGetValue(normalized, out var mapping))
-            {
-                var source = ResolveMappedSource(mapping.CanonicalKey);
-                return new SessionData(
-                    row.Id, row.StartedAt, row.EndedAt,
-                    mapping.GameId,
-                    mapping.Title,
-                    mapping.CapsuleUrl ?? row.CapsuleUrl,
-                    row.Platform,
-                    mapping.Platform,
-                    source);
-            }
-
-            // No manual mapping found — use game platform as mapped platform if available
-            if (row.GamePlatform != "manual")
-            {
-                return new SessionData(
-                    row.Id, row.StartedAt, row.EndedAt,
-                    row.GameId, row.Title, row.CapsuleUrl,
-                    row.Platform, row.GamePlatform,
-                    ResolveMappedSource(row.GameCanonicalKey));
-            }
-
-            return ToSessionData(row);
-        }).ToList();
+        return Task.FromResult(rows.Select(ToSessionData).ToList());
     }
 
     private async Task<List<SessionData>> MapFirstSessionsForUser(

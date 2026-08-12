@@ -23,7 +23,7 @@ public sealed class PollingRepository(PlaydexDbContext db, IGameResolver gameRes
                 (credential, _) => credential.Id);
         var expired = await db.PlaySessions
             .Where(row =>
-                playniteCredentialIds.Contains(row.PlatformCredentialId) &&
+                row.PlatformCredentialId.HasValue && playniteCredentialIds.Contains(row.PlatformCredentialId.Value) &&
                 row.EndedAt == null &&
                 row.UpdatedAt < timeoutBefore)
             .ToListAsync(ct);
@@ -255,7 +255,7 @@ public sealed record SessionTransition(
     public static SessionTransition Started(PlaySession session, bool notify) => new(
         SessionTransitionKind.Started,
         session.Id,
-        session.PlatformCredentialId,
+        session.IntegrationId!.Value,
         session.GameId,
         session.StartedAt,
         null,
@@ -267,7 +267,7 @@ public sealed record SessionTransition(
         bool notify) => new(
             SessionTransitionKind.Ended,
             session.Id,
-            session.PlatformCredentialId,
+            session.IntegrationId!.Value,
             session.GameId,
             session.StartedAt,
             endedAt,
