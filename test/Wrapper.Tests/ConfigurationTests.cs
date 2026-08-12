@@ -1,6 +1,7 @@
 using Wrapper;
 using Wrapper.UI;
 using static Wrapper.Tests.TestPaths;
+using System.Net;
 
 namespace Wrapper.Tests;
 
@@ -120,49 +121,73 @@ public sealed class ConfigurationTests
     }
 
     [Fact]
-    public Task TestAddGameFromExecutable()
+    public async Task TestAddGameFromExecutable()
     {
         var executable = Path.Combine(NewTempDir(), "Demo Game.exe");
         File.WriteAllBytes(executable, [0x4d, 0x5a]);
         var config = new WrapperConfig();
 
-        var game = GameCatalog.AddFromExecutable(config, executable);
+        var game = await GameCatalog.AddFromExecutableAsync(config, executable);
 
         Assert.Equal("Demo Game", game.GameId);
         Assert.Equal("Demo Game", game.DisplayName);
         Assert.Equal("Demo Game", game.ApiGameId);
         Assert.Equal(Path.GetFullPath(executable), game.Launch.ExecutablePath);
         Assert.Equal(game, config.GetGameForLaunch("Demo Game"));
-        return Task.CompletedTask;
     }
 
     [Fact]
-    public Task TestSteamAppIdDiscovery()
+    public async Task TestSteamAppIdDiscovery()
     {
         var directory = NewTempDir();
         var executable = Path.Combine(directory, "Portal 2.exe");
         File.WriteAllBytes(executable, [0x4d, 0x5a]);
         File.WriteAllText(Path.Combine(directory, "steam_appid.txt"), $"{Environment.NewLine}  620  {Environment.NewLine}");
 
-        var game = GameCatalog.AddFromExecutable(new WrapperConfig(), executable);
+        const string html = """
+            <html><body>
+                <div id="appHubAppName" class="apphub_AppName" role="heading" aria-level="1">
+                    Portal 2 &amp; Friends
+                </div>
+            </body></html>
+            """;
+        using var client = new HttpClient(new SteamStoreHandler(HttpStatusCode.OK, html));
+
+        var game = await GameCatalog.AddFromExecutableAsync(new WrapperConfig(), executable, client);
 
         Assert.Equal("Portal 2", game.GameId);
         Assert.Equal("620", game.ApiGameId);
-        return Task.CompletedTask;
+        Assert.Equal("Portal 2 & Friends", game.DisplayName);
     }
 
     [Fact]
-    public Task TestInvalidSteamAppIdFallback()
+    public async Task TestInvalidSteamAppIdFallback()
     {
         var directory = NewTempDir();
         var executable = Path.Combine(directory, "Demo.exe");
         File.WriteAllBytes(executable, [0x4d, 0x5a]);
         File.WriteAllText(Path.Combine(directory, "steam_appid.txt"), "not-an-app-id");
 
-        var game = GameCatalog.AddFromExecutable(new WrapperConfig(), executable);
+        var game = await GameCatalog.AddFromExecutableAsync(new WrapperConfig(), executable);
 
         Assert.Equal("Demo", game.ApiGameId);
-        return Task.CompletedTask;
+        Assert.Equal("Demo", game.DisplayName);
+    }
+
+    [Fact]
+    public async Task TestSteamTitleRequestFailureFallsBackToExecutableName()
+    {
+        var directory = NewTempDir();
+        var executable = Path.Combine(directory, "Game.exe");
+        File.WriteAllBytes(executable, [0x4d, 0x5a]);
+        File.WriteAllText(Path.Combine(directory, "steam_appid.txt"), "1234");
+        var handler = new SteamStoreHandler(HttpStatusCode.ServiceUnavailable, "");
+        using var client = new HttpClient(handler);
+
+        var game = await GameCatalog.AddFromExecutableAsync(new WrapperConfig(), executable, client);
+
+        Assert.Equal("Game", game.DisplayName);
+        Assert.Equal("https://store.steampowered.com/app/1234", handler.RequestUri);
     }
 
     [Fact]
@@ -248,7 +273,7 @@ public sealed class ConfigurationTests
     }
 
     [Fact]
-    public Task TestDuplicateGameRejected()
+    public async Task TestDuplicateGameRejected()
     {
         var firstDirectory = NewTempDir();
         var secondDirectory = NewTempDir();
@@ -257,11 +282,11 @@ public sealed class ConfigurationTests
         File.WriteAllBytes(firstExecutable, [0x4d, 0x5a, 0x01]);
         File.WriteAllBytes(secondExecutable, [0x4d, 0x5a, 0x02]);
         var config = new WrapperConfig();
-        var existing = GameCatalog.AddFromExecutable(config, firstExecutable);
+        var existing = await GameCatalog.AddFromExecutableAsync(config, firstExecutable);
 
         try
         {
-            GameCatalog.AddFromExecutable(config, secondExecutable);
+            await GameCatalog.AddFromExecutableAsync(config, secondExecutable);
             throw new InvalidOperationException("Expected duplicate game rejection.");
         }
         catch (InvalidOperationException ex) when (ex.Message.Contains("cannot change", StringComparison.OrdinalIgnoreCase))
@@ -270,7 +295,6 @@ public sealed class ConfigurationTests
 
         Assert.Single(config.Games);
         Assert.Equal(existing.Launch.ExecutablePath, config.Games["Demo"].Launch.ExecutablePath);
-        return Task.CompletedTask;
     }
 
     [Fact]
@@ -338,5 +362,21 @@ public sealed class ConfigurationTests
         Assert.Throws<InvalidOperationException>(() => LudusaviConfig.NormalizeExecutablePath(Path.Combine(directory, "other.exe")));
         Assert.Throws<InvalidOperationException>(() => LudusaviConfig.NormalizeExecutablePath(Path.Combine(directory, "missing", "ludusavi.exe")));
         return Task.CompletedTask;
+    }
+}
+
+internal sealed class SteamStoreHandler(HttpStatusCode statusCode, string content) : HttpMessageHandler
+{
+    public string? RequestUri { get; private set; }
+
+    protected override Task<HttpResponseMessage> SendAsync(
+        HttpRequestMessage request,
+        CancellationToken cancellationToken)
+    {
+        RequestUri = request.RequestUri?.ToString();
+        return Task.FromResult(new HttpResponseMessage(statusCode)
+        {
+            Content = new StringContent(content)
+        });
     }
 }

@@ -128,7 +128,7 @@ internal sealed partial class TraySetupApplication : IDisposable
             return;
         }
 
-        var game = GameCatalog.AddFromExecutable(config, picker.FileName);
+        var game = await GameCatalog.AddFromExecutableAsync(config, picker.FileName);
         await store.SaveAsync(config);
         RefreshGameMenu();
         try

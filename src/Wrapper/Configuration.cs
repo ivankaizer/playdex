@@ -1,5 +1,8 @@
 namespace Wrapper;
 
+using System.Net;
+using System.Text.RegularExpressions;
+
 internal sealed class WrapperConfig
 {
     public Dictionary<string, GameConfig> Games { get; set; } = new(StringComparer.OrdinalIgnoreCase);
@@ -53,7 +56,11 @@ internal static class GameCatalog
     public const int MaximumApiGameIdLength = 128;
     public const int MaximumDisplayNameLength = 128;
 
-    public static GameConfig AddFromExecutable(WrapperConfig config, string executablePath)
+    public static async Task<GameConfig> AddFromExecutableAsync(
+        WrapperConfig config,
+        string executablePath,
+        HttpClient? steamStoreClient = null,
+        CancellationToken cancellationToken = default)
     {
         var fullPath = Path.GetFullPath(executablePath);
         if (!File.Exists(fullPath) || !string.Equals(Path.GetExtension(fullPath), ".exe", StringComparison.OrdinalIgnoreCase))
@@ -72,11 +79,15 @@ internal static class GameCatalog
             throw new InvalidOperationException($"Game '{gameId}' already exists. Add a game cannot change an existing entry; use Settings instead.");
         }
 
+        var steamAppId = SteamAppIdReader.TryReadForExecutable(fullPath);
+        var displayName = steamAppId is null
+            ? gameId
+            : await SteamStoreTitleReader.TryReadAsync(steamAppId, steamStoreClient, cancellationToken) ?? gameId;
         var game = new GameConfig
         {
             GameId = gameId,
-            DisplayName = gameId,
-            ApiGameId = SteamAppIdReader.TryReadForExecutable(fullPath) ?? gameId,
+            DisplayName = displayName,
+            ApiGameId = steamAppId ?? gameId,
             Launch = new LaunchConfig { ExecutablePath = fullPath },
             Monitor = new MonitorConfig { Mode = MonitorMode.LaunchedProcess }
         };
@@ -152,6 +163,62 @@ internal static class GameCatalog
 
         return normalized;
     }
+}
+
+internal static partial class SteamStoreTitleReader
+{
+    private static readonly HttpClient SharedClient = new()
+    {
+        Timeout = TimeSpan.FromSeconds(10)
+    };
+
+    public static async Task<string?> TryReadAsync(
+        string appId,
+        HttpClient? httpClient = null,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            using var request = new HttpRequestMessage(
+                HttpMethod.Get,
+                $"https://store.steampowered.com/app/{Uri.EscapeDataString(appId)}");
+            request.Headers.UserAgent.ParseAdd($"{AppBrand.Name.Replace(' ', '-')}-Wrapper/1.0");
+
+            using var response = await (httpClient ?? SharedClient).SendAsync(request, cancellationToken);
+            if (!response.IsSuccessStatusCode)
+            {
+                return null;
+            }
+
+            var html = await response.Content.ReadAsStringAsync(cancellationToken);
+            var match = AppNameElementRegex().Match(html);
+            if (!match.Success)
+            {
+                return null;
+            }
+
+            var text = HtmlTagRegex().Replace(match.Groups["content"].Value, "");
+            var title = WebUtility.HtmlDecode(text).Trim();
+            return string.IsNullOrWhiteSpace(title)
+                ? null
+                : GameCatalog.NormalizeDisplayName(title);
+        }
+        catch (Exception ex) when (
+            ex is HttpRequestException or IOException ||
+            ex is OperationCanceledException && !cancellationToken.IsCancellationRequested ||
+            ex is InvalidOperationException)
+        {
+            return null;
+        }
+    }
+
+    [GeneratedRegex(
+        "<(?<tag>[a-z][a-z0-9:-]*)\\b(?=[^>]*\\bid\\s*=\\s*(?:\"appHubAppName\"|'appHubAppName'))[^>]*>(?<content>.*?)</\\k<tag>\\s*>",
+        RegexOptions.IgnoreCase | RegexOptions.Singleline)]
+    private static partial Regex AppNameElementRegex();
+
+    [GeneratedRegex("<[^>]+>", RegexOptions.Singleline)]
+    private static partial Regex HtmlTagRegex();
 }
 
 internal static class SteamAppIdReader
