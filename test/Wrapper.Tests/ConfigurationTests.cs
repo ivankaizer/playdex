@@ -19,6 +19,7 @@ public sealed class ConfigurationTests
         game.GameProvider = "steam";
         game.ApiKey = "game-key";
         config.Api.ApiKey = "global-key";
+        config.SteamGridDb.ApiKey = "artwork-key";
         config.Ludusavi.ExecutablePath = "C:\\Tools\\ludusavi.exe";
         game.Backup.DailyEnabled = true;
         game.Backup.LudusaviGameTitle = "Doom: The Dark Ages";
@@ -29,6 +30,7 @@ public sealed class ConfigurationTests
         Assert.Equal("1234", loaded.Games["demo"].ApiGameId);
         Assert.Equal("steam", loaded.Games["demo"].GameProvider);
         Assert.Equal("game-key", loaded.Api.ResolveApiKey(loaded.Games["demo"]));
+        Assert.Equal("artwork-key", loaded.SteamGridDb.ApiKey);
         Assert.Equal("C:\\Tools\\ludusavi.exe", loaded.Ludusavi.ExecutablePath);
         Assert.True(loaded.Games["demo"].Backup.DailyEnabled);
         Assert.Equal("Doom: The Dark Ages", loaded.Games["demo"].Backup.LudusaviGameTitle);

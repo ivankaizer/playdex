@@ -64,6 +64,8 @@ internal sealed class ConfigStore(string path)
             config.Games ?? new Dictionary<string, GameConfig>(),
             StringComparer.OrdinalIgnoreCase);
         config.Api ??= new ApiConfig();
+        config.SteamGridDb ??= new SteamGridDbConfig();
+        config.SteamGridDb.ApiKey = SteamGridDbConfig.NormalizeApiKey(config.SteamGridDb.ApiKey);
         config.Ludusavi ??= new LudusaviConfig();
         config.Ludusavi.ExecutablePath = LudusaviConfig.NormalizeExecutablePath(
             config.Ludusavi.ExecutablePath,

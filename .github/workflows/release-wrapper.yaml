@@ -28,9 +28,7 @@ jobs:
       - name: Publish single-file wrapper
         run: >
           dotnet publish src/Wrapper/Wrapper.csproj
-          --configuration Release
-          --runtime win-x64
-          --self-contained true
+          -p:PublishProfile=SingleFile
           --output artifacts/publish
 
       - name: Create release archive

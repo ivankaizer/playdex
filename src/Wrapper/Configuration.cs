@@ -7,6 +7,7 @@ internal sealed class WrapperConfig
 {
     public Dictionary<string, GameConfig> Games { get; set; } = new(StringComparer.OrdinalIgnoreCase);
     public ApiConfig Api { get; set; } = new();
+    public SteamGridDbConfig SteamGridDb { get; set; } = new();
     public LudusaviConfig Ludusavi { get; set; } = new();
     public StorageConfig Storage { get; set; } = new();
 
@@ -306,6 +307,25 @@ internal sealed class ApiConfig
             string.IsNullOrWhiteSpace(uri.Host))
         {
             throw new InvalidOperationException("API base URL must be an absolute HTTP or HTTPS URL.");
+        }
+
+        return normalized;
+    }
+}
+
+internal sealed class SteamGridDbConfig
+{
+    public const int MaximumApiKeyLength = 4096;
+
+    public string ApiKey { get; set; } = "";
+    public bool IsConfigured => !string.IsNullOrWhiteSpace(ApiKey);
+
+    public static string NormalizeApiKey(string? apiKey)
+    {
+        var normalized = apiKey?.Trim() ?? "";
+        if (normalized.Length > MaximumApiKeyLength)
+        {
+            throw new InvalidOperationException($"SteamGridDB API key cannot exceed {MaximumApiKeyLength} characters.");
         }
 
         return normalized;
