@@ -47,6 +47,7 @@ var corsOrigins = (builder.Configuration["CORS_ORIGINS"] ?? "")
 var dataSourceBuilder = new NpgsqlDataSourceBuilder(PostgresConnectionString.Normalize(databaseUrl));
 dataSourceBuilder.MapEnum<GameExternalIdentityType>("game_external_identity_type");
 dataSourceBuilder.MapEnum<IntegrationType>("integration_type");
+dataSourceBuilder.MapEnum<CaptureMethod>("capture_method");
 var dataSource = dataSourceBuilder.Build();
 
 builder.Services.AddSingleton(dataSource);
@@ -56,6 +57,7 @@ builder.Services.AddDbContext<PlaydexDbContext>(db => db.UseNpgsql(
     {
         npgsql.MapEnum<GameExternalIdentityType>("game_external_identity_type");
         npgsql.MapEnum<IntegrationType>("integration_type");
+        npgsql.MapEnum<CaptureMethod>("capture_method");
     }));
 builder.Services.AddSingleton(new MigrationCatalog([
     new CurrentSchemaMigration(),
@@ -63,6 +65,7 @@ builder.Services.AddSingleton(new MigrationCatalog([
     new OpenXblPlatformMigration(),
     new GameExternalIdentitiesMigration(),
     new IntegrationsMigration(),
+    new PlaySessionTargetFieldsMigration(),
 ]));
 builder.Services.AddSingleton<MigrationRunner>();
 builder.Services.AddScoped<EventBus>();

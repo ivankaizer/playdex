@@ -157,12 +157,19 @@ public sealed class PlaydexDbContext(DbContextOptions<PlaydexDbContext> options)
         entity.Property(row => row.Id).HasColumnName("id").ValueGeneratedOnAdd();
         entity.Property(row => row.PlatformCredentialId).HasColumnName("platform_credential_id");
         entity.Property(row => row.GameId).HasColumnName("game_id");
+        entity.Property(row => row.UserId).HasColumnName("user_id");
+        entity.Property(row => row.PlatformId).HasColumnName("platform_id");
+        entity.Property(row => row.CaptureMethod).HasColumnName("capture_method").HasColumnType("capture_method");
+        entity.Property(row => row.IntegrationId).HasColumnName("integration_id");
         entity.Property(row => row.StartedAt).HasColumnName("started_at");
         entity.Property(row => row.EndedAt).HasColumnName("ended_at");
         entity.Property(row => row.CreatedAt).HasColumnName("created_at");
         entity.Property(row => row.UpdatedAt).HasColumnName("updated_at");
         entity.HasOne<PlatformCredential>().WithMany().HasForeignKey(row => row.PlatformCredentialId).OnDelete(DeleteBehavior.Cascade);
         entity.HasOne<Game>().WithMany().HasForeignKey(row => row.GameId).OnDelete(DeleteBehavior.Cascade);
+        entity.HasOne<User>().WithMany().HasForeignKey(row => row.UserId).OnDelete(DeleteBehavior.Restrict);
+        entity.HasOne<Platform>().WithMany().HasForeignKey(row => row.PlatformId).OnDelete(DeleteBehavior.Restrict);
+        entity.HasOne<Integration>().WithMany().HasForeignKey(row => row.IntegrationId).OnDelete(DeleteBehavior.Restrict);
     }
 
     private static void ConfigurePollResults(ModelBuilder modelBuilder)
