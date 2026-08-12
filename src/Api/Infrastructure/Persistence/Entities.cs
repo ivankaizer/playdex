@@ -117,6 +117,8 @@ public sealed class PollResult
     public long Id { get; set; }
     public long PlatformCredentialId { get; set; }
     public long? GameId { get; set; }
+    public long? IntegrationId { get; set; }
+    public long? GameExternalIdentityId { get; set; }
     public DateTimeOffset PolledAt { get; set; }
     public string? RawPayload { get; set; }
     public DateTimeOffset CreatedAt { get; set; }

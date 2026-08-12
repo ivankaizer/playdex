@@ -53,7 +53,11 @@ public sealed class PollingRepository(PlaydexDbContext db, IGameResolver gameRes
         await db.Database.ExecuteSqlInterpolatedAsync(
             $"SELECT pg_advisory_xact_lock({credentialId})", ct);
 
+        var integration = await db.Integrations.SingleAsync(row => row.Id == credentialId, ct);
+        var platformId = integration.PlatformId
+            ?? throw new InvalidOperationException("Polling Integration requires a Platform.");
         long? gameId = null;
+        long? identityId = null;
         var ignored = false;
         var needsCapsule = false;
         if (detectedGame is not null)
@@ -67,10 +71,11 @@ public sealed class PollingRepository(PlaydexDbContext db, IGameResolver gameRes
                     detectedGame.CapsuleUrl),
                 ct);
             gameId = resolution.GameId;
+            identityId = resolution.GameExternalIdentityId;
             needsCapsule = resolution.NeedsCapsule;
             ignored = await db.IgnoredGames
                 .Join(
-                    db.PlatformCredentials.Where(row => row.Id == credentialId),
+                    db.Integrations.Where(row => row.Id == credentialId),
                     ignoredGame => ignoredGame.UserId,
                     credential => credential.UserId,
                     (ignoredGame, _) => ignoredGame)
@@ -81,13 +86,15 @@ public sealed class PollingRepository(PlaydexDbContext db, IGameResolver gameRes
         {
             PlatformCredentialId = credentialId,
             GameId = gameId,
+            IntegrationId = credentialId,
+            GameExternalIdentityId = identityId,
             PolledAt = polledAt,
             RawPayload = rawPayload,
             CreatedAt = DateTimeOffset.UtcNow,
         });
 
         var active = await db.PlaySessions
-            .Where(row => row.PlatformCredentialId == credentialId && row.EndedAt == null)
+            .Where(row => row.IntegrationId == credentialId && row.EndedAt == null)
             .OrderByDescending(row => row.StartedAt)
             .FirstOrDefaultAsync(ct);
         var transitions = new List<SessionTransition>();
@@ -112,6 +119,10 @@ public sealed class PollingRepository(PlaydexDbContext db, IGameResolver gameRes
             {
                 PlatformCredentialId = credentialId,
                 GameId = sessionGameId.Value,
+                UserId = integration.UserId,
+                PlatformId = platformId,
+                CaptureMethod = CaptureMethod.Polling,
+                IntegrationId = credentialId,
                 StartedAt = polledAt,
                 CreatedAt = DateTimeOffset.UtcNow,
                 UpdatedAt = polledAt,
@@ -142,10 +153,10 @@ public sealed class PollingRepository(PlaydexDbContext db, IGameResolver gameRes
                                                                         pc.active                    AS Active,
                                                                         pc.platform_id               AS PlatformId,
                                                                         p.key                        AS PlatformKey
-                                                                    FROM platform_credentials pc
+                                                                    FROM integrations pc
                                                                     JOIN platforms p ON p.id = pc.platform_id
                                                                     WHERE pc.active
-                                                                      AND p.key != 'playnite'
+                                                                      AND pc.type != 'api'
                                                                     """).ToListAsync(ct);
 
         return rows.Select(r => new ActiveCredential(
@@ -179,6 +190,7 @@ public sealed class PollingRepository(PlaydexDbContext db, IGameResolver gameRes
             {
                 PlatformCredentialId = credentialId,
                 GameId = gameId,
+                IntegrationId = credentialId,
                 PolledAt = polledAt,
                 RawPayload = rawPayload,
                 CreatedAt = DateTimeOffset.UtcNow,

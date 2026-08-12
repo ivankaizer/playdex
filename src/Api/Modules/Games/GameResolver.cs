@@ -11,7 +11,7 @@ public sealed record GameResolutionRequest(
     string LegacyPlatformKey,
     string? CapsuleUrl);
 
-public sealed record GameResolution(long GameId, bool NeedsCapsule);
+public sealed record GameResolution(long GameId, long? GameExternalIdentityId, bool NeedsCapsule);
 
 public interface IGameResolver
 {
@@ -169,7 +169,7 @@ public sealed class GameResolver(PlaydexDbContext db) : IGameResolver
             {
                 await ownedTransaction.CommitAsync(ct);
             }
-            return new GameResolution(game.Id, game.CapsuleUrl is null);
+            return new GameResolution(game.Id, identity?.Id, game.CapsuleUrl is null);
         }
         catch
         {
