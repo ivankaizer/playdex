@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Api.Modules.Games;
 using Api.Modules.Polling;
 using Api.Infrastructure.Persistence;
 using Xunit;
@@ -32,7 +33,7 @@ public sealed class PollingLifecycleIntegrationTests(PostgresFixture postgres)
 
         try
         {
-            var repository = new PollingRepository(db);
+            var repository = new PollingRepository(db, new GameResolver(db));
             var firstAt = DateTimeOffset.UtcNow.AddMinutes(-4);
             var first = await repository.ApplySuccessfulPoll(
                 credential.Id,
@@ -108,12 +109,17 @@ public sealed class PollingLifecycleIntegrationTests(PostgresFixture postgres)
         {
             db.Users.Remove(user);
             await db.SaveChangesAsync();
+            await db.GameExternalIdentities
+                .Where(row => row.ExternalId.EndsWith(suffix))
+                .ExecuteDeleteAsync();
             await db.Games.Where(row => row.CanonicalKey.EndsWith(suffix)).ExecuteDeleteAsync();
         }
     }
 
     private PlaydexDbContext CreateDb() => new(
         new DbContextOptionsBuilder<PlaydexDbContext>()
-            .UseNpgsql(postgres.DataSource!)
+            .UseNpgsql(
+                postgres.DataSource!,
+                npgsql => npgsql.MapEnum<GameExternalIdentityType>("game_external_identity_type"))
             .Options);
 }

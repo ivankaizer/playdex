@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Api.Modules.Games;
 using Api.Modules.Polling;
 using Api.Infrastructure.Persistence;
 using Xunit;
@@ -52,7 +53,7 @@ public sealed class PlayniteTimeoutIntegrationTests(PostgresFixture postgres)
 
         try
         {
-            var transitions = await new PollingRepository(db)
+            var transitions = await new PollingRepository(db, new GameResolver(db))
                 .EndTimedOutPlayniteSessions(
                     DateTimeOffset.UtcNow,
                     TimeSpan.FromMinutes(3),

@@ -2,12 +2,14 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Api.Infrastructure.Common;
 using Api.Infrastructure.Persistence;
+using Api.Modules.Games;
 
 namespace Api.Modules.Playnite;
 
 public sealed partial class PlayniteService(
     PlayniteRepository repository,
     PlaydexDbContext db,
+    IGameResolver gameResolver,
     EventBus eventBus,
     ILogger<PlayniteService> logger)
 {
@@ -28,9 +30,7 @@ public sealed partial class PlayniteService(
             return null;
         }
 
-        var canonicalKey = BuildCanonicalKey(gameProvider, gameId);
-        var capsuleUrl = GenerateCapsuleUrl(gameProvider, gameId);
-        var insertedGameId = await repository.UpsertGame(gameTitle, gameId, gameProvider, canonicalKey, capsuleUrl, ct);
+        var insertedGameId = await ResolveGame(gameTitle, gameId, gameProvider, ct);
 
         var now = DateTimeOffset.UtcNow;
         var startedAt = now.AddSeconds(-durationInSeconds);
@@ -52,9 +52,7 @@ public sealed partial class PlayniteService(
             return null;
         }
 
-        var canonicalKey = BuildCanonicalKey(gameProvider, gameId);
-        var capsuleUrl = GenerateCapsuleUrl(gameProvider, gameId);
-        var insertedGameId = await repository.UpsertGame(gameTitle, gameId, gameProvider, canonicalKey, capsuleUrl, ct);
+        var insertedGameId = await ResolveGame(gameTitle, gameId, gameProvider, ct);
 
         var now = DateTimeOffset.UtcNow;
         await repository.EndActiveSessionsForCredential(credential.Id, now, ct);
@@ -77,10 +75,7 @@ public sealed partial class PlayniteService(
         }
 
         var now = DateTimeOffset.UtcNow;
-        var canonicalKey = BuildCanonicalKey(gameProvider, gameId);
-        var capsuleUrl = GenerateCapsuleUrl(gameProvider, gameId);
-        var resolvedGameId = await repository.UpsertGame(
-            gameTitle, gameId, gameProvider, canonicalKey, capsuleUrl, ct);
+        var resolvedGameId = await ResolveGame(gameTitle, gameId, gameProvider, ct);
         var endedSessions = await db.PlaySessions
             .Where(row =>
                 row.PlatformCredentialId == credential.Id &&
@@ -115,9 +110,7 @@ public sealed partial class PlayniteService(
             return null;
         }
 
-        var canonicalKey = BuildCanonicalKey(gameProvider, gameId);
-        var capsuleUrl = GenerateCapsuleUrl(gameProvider, gameId);
-        var insertedGameId = await repository.UpsertGame(gameTitle, gameId, gameProvider, canonicalKey, capsuleUrl, ct);
+        var insertedGameId = await ResolveGame(gameTitle, gameId, gameProvider, ct);
 
         var now = DateTimeOffset.UtcNow;
         var timeoutBefore = now.AddMinutes(-PingTimeoutMinutes);
@@ -182,9 +175,21 @@ public sealed partial class PlayniteService(
         return await repository.EndTimedOutActiveSessions(timeoutBefore, now, PingTimeoutMinutes, ct);
     }
 
-    private static string BuildCanonicalKey(string gameProvider, string gameId)
+    private async Task<long> ResolveGame(
+        string gameTitle,
+        string gameId,
+        string gameProvider,
+        CancellationToken ct)
     {
-        return $"{gameProvider}:{gameId}";
+        var resolution = await gameResolver.Resolve(
+            new GameResolutionRequest(
+                GameExternalIdentityTypes.FromKey(gameProvider),
+                gameId,
+                gameTitle,
+                gameProvider,
+                GenerateCapsuleUrl(gameProvider, gameId)),
+            ct);
+        return resolution.GameId;
     }
 
     private static string? GenerateCapsuleUrl(string gameProvider, string gameId)

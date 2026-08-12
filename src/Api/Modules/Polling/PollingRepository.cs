@@ -1,9 +1,10 @@
 using Microsoft.EntityFrameworkCore;
 using Api.Infrastructure.Persistence;
+using Api.Modules.Games;
 
 namespace Api.Modules.Polling;
 
-public sealed class PollingRepository(PlaydexDbContext db)
+public sealed class PollingRepository(PlaydexDbContext db, IGameResolver gameResolver)
 {
     public async Task<IReadOnlyList<SessionTransition>> EndTimedOutPlayniteSessions(
         DateTimeOffset now,
@@ -57,9 +58,16 @@ public sealed class PollingRepository(PlaydexDbContext db)
         var needsCapsule = false;
         if (detectedGame is not null)
         {
-            var upserted = await UpsertGame(detectedGame, ct);
-            gameId = upserted.Id;
-            needsCapsule = upserted.NeedsCapsule;
+            var resolution = await gameResolver.Resolve(
+                new GameResolutionRequest(
+                    GameExternalIdentityTypes.FromKey(detectedGame.Platform),
+                    detectedGame.ExternalId,
+                    detectedGame.Title,
+                    detectedGame.Platform,
+                    detectedGame.CapsuleUrl),
+                ct);
+            gameId = resolution.GameId;
+            needsCapsule = resolution.NeedsCapsule;
             ignored = await db.IgnoredGames
                 .Join(
                     db.PlatformCredentials.Where(row => row.Id == credentialId),
@@ -193,51 +201,6 @@ public sealed class PollingRepository(PlaydexDbContext db)
                 ct);
     }
 
-    private async Task<UpsertedGameRow> UpsertGame(CurrentlyPlayingResult game, CancellationToken ct)
-    {
-        var platformId = await db.Platforms
-            .Where(row => row.Key == game.Platform)
-            .Select(row => (long?)row.Id)
-            .FirstOrDefaultAsync(ct)
-            ?? await db.Platforms
-                .Where(row => row.Key == "unknown")
-                .Select(row => row.Id)
-                .SingleAsync(ct);
-        var title = game.Title.Trim();
-        var externalId = string.IsNullOrWhiteSpace(game.ExternalId)
-            ? null
-            : game.ExternalId.Trim();
-        var canonicalKey = $"{game.Platform}:{externalId ?? NormalizeTitle(title)}";
-        var now = DateTimeOffset.UtcNow;
-
-        var rows = await db.Database.SqlQuery<UpsertedGameRow>($"""
-            INSERT INTO games
-                (platform_id, title, external_id, canonical_key, capsule_url, created_at, updated_at)
-            VALUES
-                ({platformId}, {title}, {externalId}, {canonicalKey}, {game.CapsuleUrl}, {now}, {now})
-            ON CONFLICT (canonical_key) DO UPDATE SET
-                title = CASE WHEN games.title_locked THEN games.title ELSE EXCLUDED.title END,
-                platform_id = EXCLUDED.platform_id,
-                external_id = EXCLUDED.external_id,
-                capsule_url = CASE
-                    WHEN games.capsule_url_locked THEN games.capsule_url
-                    ELSE COALESCE(EXCLUDED.capsule_url, games.capsule_url)
-                END,
-                updated_at = EXCLUDED.updated_at
-            RETURNING id AS "Id", capsule_url IS NULL AS "NeedsCapsule"
-            """).ToListAsync(ct);
-        return rows.Single();
-    }
-
-    private static string NormalizeTitle(string title)
-    {
-        var characters = title.ToLowerInvariant()
-            .Select(character => char.IsLetterOrDigit(character) ? character : ' ')
-            .ToArray();
-        return string.Join(' ',
-            new string(characters).Split(' ', StringSplitOptions.RemoveEmptyEntries));
-    }
-
     private sealed class ActiveCredentialRow
     {
         public long Id { get; set; }
@@ -251,11 +214,6 @@ public sealed class PollingRepository(PlaydexDbContext db)
         public string PlatformKey { get; set; } = string.Empty;
     }
 
-    private sealed class UpsertedGameRow
-    {
-        public long Id { get; set; }
-        public bool NeedsCapsule { get; set; }
-    }
 }
 
 /// <summary>

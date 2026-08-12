@@ -11,7 +11,8 @@ public sealed class ManualService(
     ManualRepository repository,
     IgdbClient igdbClient,
     IOptions<IgdbOptions> igdbOptions,
-    IGames games)
+    IGames games,
+    IGameResolver gameResolver)
 {
     private const int MaxLocalSearchResults = 5;
     private const string ManualPlatformKey = "manual";
@@ -246,17 +247,15 @@ public sealed class ManualService(
         string? capsuleUrl,
         CancellationToken ct)
     {
-        var platformId = await repository.GetPlatformIdByKey(platformKey, ct)
-            ?? await repository.GetPlatformIdByKey("unknown", ct);
-        if (!platformId.HasValue) throw AppProblemException.Validation($"Platform '{platformKey}' not found.");
-
-        return await repository.UpsertGame(
-            title,
-            $"igdb:{igdbId}",
-            igdbId,
-            platformId.Value,
-            capsuleUrl,
+        var resolution = await gameResolver.Resolve(
+            new GameResolutionRequest(
+                GameExternalIdentityTypes.FromKey("igdb"),
+                igdbId,
+                title,
+                platformKey,
+                capsuleUrl),
             ct);
+        return resolution.GameId;
     }
 
 }

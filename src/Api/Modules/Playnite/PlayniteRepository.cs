@@ -18,38 +18,6 @@ public sealed class PlayniteRepository(PlaydexDbContext db)
         return credentials.Count == 1 ? credentials[0] : null;
     }
 
-    public async Task<long> UpsertGame(
-        string title, string? externalId, string platformKey, string canonicalKey, string? capsuleUrl,
-        CancellationToken ct)
-    {
-        var platformId = await db.Platforms
-            .Where(row => row.Key == platformKey)
-            .Select(row => (long?)row.Id)
-            .FirstOrDefaultAsync(ct);
-
-        if (platformId is null)
-        {
-            platformId = await db.Platforms
-                .Where(row => row.Key == "unknown")
-                .Select(row => row.Id)
-                .SingleAsync(ct);
-        }
-
-        var now = DateTimeOffset.UtcNow;
-        var ids = await db.Database.SqlQuery<long>($"""
-            INSERT INTO games (platform_id, title, external_id, canonical_key, capsule_url, created_at, updated_at)
-            VALUES ({platformId!.Value}, {title}, {externalId}, {canonicalKey}, {capsuleUrl}, {now}, {now})
-            ON CONFLICT (canonical_key) DO UPDATE SET
-                title = CASE WHEN games.title_locked THEN games.title ELSE EXCLUDED.title END,
-                platform_id = EXCLUDED.platform_id,
-                external_id = EXCLUDED.external_id,
-                capsule_url = CASE WHEN games.capsule_url_locked THEN games.capsule_url ELSE COALESCE(EXCLUDED.capsule_url, games.capsule_url) END,
-                updated_at = NOW()
-            RETURNING id
-            """).ToListAsync(ct);
-        return ids.Single();
-    }
-
     public async Task<long> InsertCompletePlaySession(
         long credentialId, long gameId, DateTimeOffset startedAt, DateTimeOffset endedAt,
         CancellationToken ct)

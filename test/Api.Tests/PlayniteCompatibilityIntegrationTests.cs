@@ -117,6 +117,9 @@ public sealed class PlayniteCompatibilityIntegrationTests(PostgresFixture postgr
         {
             db.Users.Remove(user);
             await db.SaveChangesAsync();
+            await db.GameExternalIdentities
+                .Where(row => row.ExternalId.EndsWith(suffix) || row.ExternalId == "303")
+                .ExecuteDeleteAsync();
             await db.Games
                 .Where(row => row.CanonicalKey.EndsWith(suffix) || row.CanonicalKey == "steam:303")
                 .ExecuteDeleteAsync();

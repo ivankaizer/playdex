@@ -227,7 +227,21 @@ A Game referenced by an external identity cannot be deleted directly. Identities
 
 ### Stage 2: Resolve games by external identity
 
-Introduce a shared `GameResolver`, resolve by `(type, external_id)`, and dual-write identities from polling and API ingestion. The resolver accepts Game ID provider independently from the selected Platform, including a GOG session identified by a Steam or IGDB ID.
+**MR goal:** replace ingestion-specific Game upserts with one resolver while keeping the legacy Game model operational.
+
+```text
+Resolve(provider, externalId?, title, legacyPlatform, capsule?)
+    -> GameResolution(gameId, needsCapsule)
+```
+
+- Resolve exact `(type, external_id)` before consulting legacy keys or titles.
+- Create/update Game and identity atomically under a transaction-scoped advisory lock.
+- Join a caller transaction or own one when called independently.
+- Dual-write identities from Polling, Playnite/API, and manual IGDB mapping.
+- Keep identity provider independent from selected Platform, including GOG sessions identified by Steam or IGDB IDs.
+- Respect Game title/capsule locks while retaining the latest provider-reported title on the identity.
+- Preserve title-derived legacy resolution without an identity when a provider supplies no external ID.
+- Retain `games.external_id`, `canonical_key`, and `platform_id`; removing them remains out of scope.
 
 ### Stage 3: Define integration-to-platform ownership
 

@@ -26,8 +26,10 @@ public sealed class PostgresFixture : IAsyncLifetime
             return;
         }
 
-        DataSource = new NpgsqlDataSourceBuilder(
-            PostgresConnectionString.Normalize(databaseUrl)).Build();
+        var dataSourceBuilder = new NpgsqlDataSourceBuilder(
+            PostgresConnectionString.Normalize(databaseUrl));
+        dataSourceBuilder.MapEnum<GameExternalIdentityType>("game_external_identity_type");
+        DataSource = dataSourceBuilder.Build();
         await using var connection = await DataSource.OpenConnectionAsync();
         await using var command = new NpgsqlCommand("select 1", connection);
         await command.ExecuteScalarAsync();
