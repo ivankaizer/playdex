@@ -3,6 +3,7 @@ using System.Text.Json;
 using Api.Infrastructure.Auth;
 using Api.Infrastructure.Http;
 using Api.Infrastructure.Common;
+using Api.Modules.Games;
 
 namespace Api.Modules.Admin;
 
@@ -80,6 +81,14 @@ public static class AdminEndpoints
         admin.MapGet("/games/search", SearchGames);
         admin.MapPut("/games", (HttpContext http) => UpdateGame(null, http));
         admin.MapPut("/games/{gameId}", (string gameId, HttpContext http) => UpdateGame(gameId, http));
+        admin.MapPost("/games/merge", async (AdminGameMergeRequest request, ClaimsPrincipal principal,
+            AuthRepository authRepo, GameMergeService merger, CancellationToken ct) =>
+        {
+            var forbid = await principal.AssertAdminAsync(authRepo, ct);
+            if (forbid is not null) return forbid;
+            await merger.Merge(request.SourceGameId, request.TargetGameId, ct);
+            return TypedResults.Ok(new { request.TargetGameId });
+        });
     }
 
     private static async Task<IResult> GetRecentSessions(

@@ -2,6 +2,8 @@ using System.Text.Json.Serialization;
 
 namespace Api.Modules.Admin;
 
+public sealed record AdminGameMergeRequest(long SourceGameId, long TargetGameId);
+
 public sealed record AdminRecentSessionRow(
     long UserId,
     string Email,

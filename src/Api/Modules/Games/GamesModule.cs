@@ -8,6 +8,7 @@ public static class GamesModule
         services.AddScoped<GamesService>();
         services.AddScoped<IGames>(sp => sp.GetRequiredService<GamesService>());
         services.AddScoped<IGameResolver, GameResolver>();
+        services.AddScoped<GameMergeService>();
         return services;
     }
 
