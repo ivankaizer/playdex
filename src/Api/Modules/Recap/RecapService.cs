@@ -492,7 +492,7 @@ public sealed class RecapService(RecapRepository repository)
         return Task.FromResult(rows.Select(ToSessionData).ToList());
     }
 
-    private async Task<List<SessionData>> MapFirstSessionsForUser(
+    private static async Task<List<SessionData>> MapFirstSessionsForUser(
         long userId, List<RecapFirstSessionRow> rows, CancellationToken ct)
     {
         // Map first sessions similarly — used for "new games tried" computation.
@@ -506,9 +506,7 @@ public sealed class RecapService(RecapRepository repository)
             GameId = r.GameId,
             Title = r.Title,
             CapsuleUrl = r.CapsuleUrl,
-            Platform = r.Platform,
-            GamePlatform = r.GamePlatform,
-            GameCanonicalKey = r.GameCanonicalKey
+            Platform = r.Platform
         }).ToList();
 
         var mapped = await MapSessionsForUser(userId, sessionRows, ct);
@@ -527,14 +525,6 @@ public sealed class RecapService(RecapRepository repository)
 
     private static string ToUtcMonthKey(DateTimeOffset date) =>
         date.ToString("yyyy-MM", CultureInfo.InvariantCulture);
-
-    private static string? ResolveMappedSource(string? canonicalKey)
-    {
-        if (string.IsNullOrEmpty(canonicalKey))
-            return null;
-
-        return canonicalKey.StartsWith("igdb:", StringComparison.Ordinal) ? "igdb" : "local";
-    }
 
     private static double ComputeMedianSeconds(List<double> values)
     {

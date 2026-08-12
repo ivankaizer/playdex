@@ -128,7 +128,7 @@ public sealed class PsnClientTests
         }),
         tokenCache ?? new PsnTokenCache());
 
-    private static PlatformCredential Credential() => new()
+    private static IntegrationCredentials Credential() => new()
     {
         ApiKey = "test-npsso",
         AccountId = "account-2",

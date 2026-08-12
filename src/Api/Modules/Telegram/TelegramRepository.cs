@@ -20,7 +20,11 @@ public sealed class TelegramRepository(PlaydexDbContext db)
             from integration in db.Integrations
             join user in db.Users on integration.UserId equals user.Id
             join game in db.Games on gameId equals game.Id
-            join platform in db.Platforms on integration.PlatformId equals platform.Id
+            from session in db.PlaySessions
+                .Where(row => row.IntegrationId == integration.Id && row.GameId == gameId)
+                .OrderByDescending(row => row.StartedAt)
+                .Take(1)
+            join platform in db.Platforms on session.PlatformId equals platform.Id
             where integration.Id == credentialId
             select new TelegramNotificationTarget(
                 user.ChatId,

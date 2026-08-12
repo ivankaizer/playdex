@@ -1,27 +1,25 @@
 using System.Text.Json;
 using Api.Infrastructure.Http;
 
-namespace Api.Modules.Playnite;
+namespace Api.Modules.ApiCapture;
 
-public static class PlayniteEndpoints
+public static class ApiCaptureEndpoints
 {
-    private static readonly HashSet<string> AllowedGameProviders = ["steam", "psn", "xbox", "igdb"];
+    private static readonly HashSet<string> AllowedIdentityProviders = ["steam", "psn", "xbox", "igdb"];
 
-    public static void MapPlayniteEndpoints(this RouteGroupBuilder api)
+    public static void MapApiCaptureEndpoints(this RouteGroupBuilder api)
     {
-        var playnite = api.MapGroup("/playnite");
-        MapSessionEndpoints(playnite);
         var capture = api.MapGroup("/capture");
         MapSessionEndpoints(capture);
     }
 
-    private static void MapSessionEndpoints(RouteGroupBuilder playnite)
+    private static void MapSessionEndpoints(RouteGroupBuilder capture)
     {
 
-        playnite.MapPost("/sessions", async (HttpContext http) =>
+        capture.MapPost("/sessions", async (HttpContext http) =>
         {
             var request = await ReadRequest(http);
-            var service = http.RequestServices.GetRequiredService<PlayniteService>();
+            var service = http.RequestServices.GetRequiredService<ApiCaptureService>();
             var apiKey = ExtractApiKey(http);
 
             var payload = ValidateGamePayload(request);
@@ -45,10 +43,10 @@ public static class PlayniteEndpoints
             await TypedResults.Ok(result).ExecuteAsync(http);
         });
 
-        playnite.MapPost("/sessions/start", async (HttpContext http) =>
+        capture.MapPost("/sessions/start", async (HttpContext http) =>
         {
             var request = await ReadRequest(http);
-            var service = http.RequestServices.GetRequiredService<PlayniteService>();
+            var service = http.RequestServices.GetRequiredService<ApiCaptureService>();
             var apiKey = ExtractApiKey(http);
 
             var payload = ValidateGamePayload(request);
@@ -65,10 +63,10 @@ public static class PlayniteEndpoints
             await TypedResults.Ok(result).ExecuteAsync(http);
         });
 
-        playnite.MapPost("/sessions/ping", async (HttpContext http) =>
+        capture.MapPost("/sessions/ping", async (HttpContext http) =>
         {
             var request = await ReadRequest(http);
-            var service = http.RequestServices.GetRequiredService<PlayniteService>();
+            var service = http.RequestServices.GetRequiredService<ApiCaptureService>();
             var apiKey = ExtractApiKey(http);
 
             var payload = ValidateGamePayload(request);
@@ -85,10 +83,10 @@ public static class PlayniteEndpoints
             await TypedResults.Ok(result).ExecuteAsync(http);
         });
 
-        playnite.MapPost("/sessions/end", async (HttpContext http) =>
+        capture.MapPost("/sessions/end", async (HttpContext http) =>
         {
             var request = await ReadRequest(http);
-            var service = http.RequestServices.GetRequiredService<PlayniteService>();
+            var service = http.RequestServices.GetRequiredService<ApiCaptureService>();
             var apiKey = ExtractApiKey(http);
             var payload = ValidateGamePayload(request);
 
@@ -126,7 +124,7 @@ public static class PlayniteEndpoints
         return apiKey;
     }
 
-    private static async Task<PlayniteSessionRequest?> ReadRequest(HttpContext context)
+    private static async Task<ApiSessionRequest?> ReadRequest(HttpContext context)
     {
         if (context.Request.ContentLength is null or 0)
         {
@@ -135,7 +133,7 @@ public static class PlayniteEndpoints
 
         try
         {
-            return await context.Request.ReadFromJsonAsync<PlayniteSessionRequest>(
+            return await context.Request.ReadFromJsonAsync<ApiSessionRequest>(
                 context.RequestAborted);
         }
         catch (JsonException)
@@ -144,7 +142,7 @@ public static class PlayniteEndpoints
         }
     }
 
-    private static ValidatedGamePayload ValidateGamePayload(PlayniteSessionRequest? request)
+    private static ValidatedGamePayload ValidateGamePayload(ApiSessionRequest? request)
     {
         if (string.IsNullOrWhiteSpace(request?.GameTitle))
             throw AppProblemException.Validation("gameTitle is required.");
@@ -158,12 +156,11 @@ public static class PlayniteEndpoints
         if (string.IsNullOrWhiteSpace(gameId))
             throw AppProblemException.Validation("gameId is required.");
 
-        var provider = (request.GameIdProvider ?? request.GameProvider)?.Trim().ToLowerInvariant();
-        if (string.IsNullOrWhiteSpace(provider) || !AllowedGameProviders.Contains(provider))
+        var provider = request.GameIdProvider?.Trim().ToLowerInvariant();
+        if (string.IsNullOrWhiteSpace(provider) || !AllowedIdentityProviders.Contains(provider))
             throw AppProblemException.Validation("gameIdProvider must be steam, psn, xbox, or igdb.");
 
-        var platform = request.Platform?.Trim().ToLowerInvariant()
-            ?? request.GameProvider?.Trim().ToLowerInvariant();
+        var platform = request.Platform?.Trim().ToLowerInvariant();
         if (string.IsNullOrWhiteSpace(platform))
             throw AppProblemException.Validation("platform is required.");
 

@@ -27,11 +27,11 @@ public sealed class ProvidersService(ProvidersRepository repository)
         return new ProviderUpdateResponseDto(ToResponse(provider));
     }
 
-    public async Task<PlayniteKeyResponseDto> GetOrCreatePlayniteKey(long userId, CancellationToken ct)
+    public async Task<ApiKeyResponseDto> GetOrCreateApiKey(long userId, CancellationToken ct)
     {
         var apiKey = GenerateApiKey();
-        var key = await repository.GetOrCreatePlayniteKey(userId, apiKey, ct);
-        return new PlayniteKeyResponseDto(key);
+        var key = await repository.GetOrCreateApiKey(userId, apiKey, ct);
+        return new ApiKeyResponseDto(key);
     }
 
     public async Task<ProviderCredentialUpdateResponseDto> UpdateCredential(

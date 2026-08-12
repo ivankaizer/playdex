@@ -8,7 +8,6 @@ public sealed record GameResolutionRequest(
     GameExternalIdentityType? Provider,
     string? ExternalId,
     string Title,
-    string LegacyPlatformKey,
     string? CapsuleUrl);
 
 public sealed record GameResolution(long GameId, long? GameExternalIdentityId, bool NeedsCapsule);
@@ -49,22 +48,13 @@ public sealed class GameResolver(PlaydexDbContext db) : IGameResolver
             throw new ArgumentException("Game title is required.", nameof(request));
         }
 
-        var platformKey = request.LegacyPlatformKey.Trim().ToLowerInvariant();
-        if (platformKey.Length == 0)
-        {
-            platformKey = "unknown";
-        }
-
         var externalId = string.IsNullOrWhiteSpace(request.ExternalId)
             ? null
             : request.ExternalId.Trim();
         var identityType = externalId is null ? null : request.Provider;
         var identityKey = identityType?.ToKey();
-        var canonicalKey = externalId is not null && identityKey is not null
-            ? $"{identityKey}:{externalId}"
-            : $"{platformKey}:{externalId ?? GamesDomain.NormalizeTitle(title)}";
         var lockKey = identityType is null
-            ? $"legacy:{canonicalKey}"
+            ? $"new:{Guid.NewGuid():N}"
             : $"identity:{identityKey}:{externalId}";
 
         IDbContextTransaction? ownedTransaction = null;
@@ -78,15 +68,6 @@ public sealed class GameResolver(PlaydexDbContext db) : IGameResolver
             await db.Database.ExecuteSqlInterpolatedAsync(
                 $"SELECT pg_advisory_xact_lock(hashtextextended({lockKey}, 0))",
                 ct);
-
-            var platformId = await db.Platforms
-                .Where(row => row.Key == platformKey)
-                .Select(row => (long?)row.Id)
-                .FirstOrDefaultAsync(ct)
-                ?? await db.Platforms
-                    .Where(row => row.Key == "unknown")
-                    .Select(row => row.Id)
-                    .SingleAsync(ct);
 
             GameExternalIdentity? identity = null;
             Game? game = null;
@@ -102,23 +83,12 @@ public sealed class GameResolver(PlaydexDbContext db) : IGameResolver
                 }
             }
 
-            game ??= await db.Games.FirstOrDefaultAsync(row => row.CanonicalKey == canonicalKey, ct);
-            if (game is null && identityType is not null)
-            {
-                var legacyPrefix = $"{identityKey}:%";
-                game = await db.Games.SingleOrDefaultAsync(
-                    row => row.ExternalId == externalId && EF.Functions.ILike(row.CanonicalKey, legacyPrefix),
-                    ct);
-            }
             var now = DateTimeOffset.UtcNow;
             if (game is null)
             {
                 game = new Game
                 {
                     Title = title,
-                    ExternalId = externalId,
-                    CanonicalKey = canonicalKey,
-                    PlatformId = platformId,
                     CapsuleUrl = request.CapsuleUrl,
                     CreatedAt = now,
                     UpdatedAt = now,
@@ -135,8 +105,6 @@ public sealed class GameResolver(PlaydexDbContext db) : IGameResolver
                 {
                     game.CapsuleUrl = request.CapsuleUrl;
                 }
-                game.ExternalId = externalId;
-                game.PlatformId = platformId;
                 game.UpdatedAt = now;
             }
 

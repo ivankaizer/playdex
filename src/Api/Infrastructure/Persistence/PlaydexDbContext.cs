@@ -6,13 +6,11 @@ public sealed class PlaydexDbContext(DbContextOptions<PlaydexDbContext> options)
 {
     public DbSet<User> Users => Set<User>();
     public DbSet<Platform> Platforms => Set<Platform>();
-    public DbSet<PlatformCredential> PlatformCredentials => Set<PlatformCredential>();
     public DbSet<Integration> Integrations => Set<Integration>();
     public DbSet<Game> Games => Set<Game>();
     public DbSet<GameExternalIdentity> GameExternalIdentities => Set<GameExternalIdentity>();
     public DbSet<PlaySession> PlaySessions => Set<PlaySession>();
     public DbSet<PollResult> PollResults => Set<PollResult>();
-    public DbSet<ManualGameInput> ManualGameInputs => Set<ManualGameInput>();
     public DbSet<IgnoredGame> IgnoredGames => Set<IgnoredGame>();
     public DbSet<GameRating> GameRatings => Set<GameRating>();
     public DbSet<UserSettings> UserSettings => Set<UserSettings>();
@@ -22,13 +20,11 @@ public sealed class PlaydexDbContext(DbContextOptions<PlaydexDbContext> options)
     {
         ConfigureUsers(modelBuilder);
         ConfigurePlatforms(modelBuilder);
-        ConfigurePlatformCredentials(modelBuilder);
         ConfigureIntegrations(modelBuilder);
         ConfigureGames(modelBuilder);
         ConfigureGameExternalIdentities(modelBuilder);
         ConfigurePlaySessions(modelBuilder);
         ConfigurePollResults(modelBuilder);
-        ConfigureManualGameInputs(modelBuilder);
         ConfigureIgnoredGames(modelBuilder);
         ConfigureGameRatings(modelBuilder);
         ConfigureUserSettings(modelBuilder);
@@ -66,24 +62,6 @@ public sealed class PlaydexDbContext(DbContextOptions<PlaydexDbContext> options)
         entity.HasOne<Platform>().WithMany().HasForeignKey(row => row.ParentId).OnDelete(DeleteBehavior.SetNull);
     }
 
-    private static void ConfigurePlatformCredentials(ModelBuilder modelBuilder)
-    {
-        var entity = modelBuilder.Entity<PlatformCredential>();
-        entity.ToTable("platform_credentials");
-        entity.HasKey(row => row.Id);
-        entity.Property(row => row.Id).HasColumnName("id").ValueGeneratedOnAdd();
-        entity.Property(row => row.UserId).HasColumnName("user_id");
-        entity.Property(row => row.ApiKey).HasColumnName("api_key");
-        entity.Property(row => row.AccountId).HasColumnName("account_id");
-        entity.Property(row => row.ApiKeyLocked).HasColumnName("api_key_locked");
-        entity.Property(row => row.CreatedAt).HasColumnName("created_at");
-        entity.Property(row => row.UpdatedAt).HasColumnName("updated_at");
-        entity.Property(row => row.Active).HasColumnName("active");
-        entity.Property(row => row.PlatformId).HasColumnName("platform_id");
-        entity.HasOne<User>().WithMany().HasForeignKey(row => row.UserId).OnDelete(DeleteBehavior.Cascade);
-        entity.HasOne<Platform>().WithMany().HasForeignKey(row => row.PlatformId).OnDelete(DeleteBehavior.NoAction);
-    }
-
     private static void ConfigureGames(ModelBuilder modelBuilder)
     {
         var entity = modelBuilder.Entity<Game>();
@@ -91,16 +69,11 @@ public sealed class PlaydexDbContext(DbContextOptions<PlaydexDbContext> options)
         entity.HasKey(row => row.Id);
         entity.Property(row => row.Id).HasColumnName("id").ValueGeneratedOnAdd();
         entity.Property(row => row.Title).HasColumnName("title");
-        entity.Property(row => row.ExternalId).HasColumnName("external_id");
-        entity.Property(row => row.CanonicalKey).HasColumnName("canonical_key");
         entity.Property(row => row.CreatedAt).HasColumnName("created_at");
         entity.Property(row => row.UpdatedAt).HasColumnName("updated_at");
         entity.Property(row => row.CapsuleUrl).HasColumnName("capsule_url");
-        entity.Property(row => row.PlatformId).HasColumnName("platform_id");
         entity.Property(row => row.CapsuleUrlLocked).HasColumnName("capsule_url_locked");
         entity.Property(row => row.TitleLocked).HasColumnName("title_locked");
-        entity.HasIndex(row => row.CanonicalKey).IsUnique();
-        entity.HasOne<Platform>().WithMany().HasForeignKey(row => row.PlatformId).OnDelete(DeleteBehavior.NoAction);
     }
 
     private static void ConfigureIntegrations(ModelBuilder modelBuilder)
@@ -155,7 +128,6 @@ public sealed class PlaydexDbContext(DbContextOptions<PlaydexDbContext> options)
         entity.ToTable("play_sessions");
         entity.HasKey(row => row.Id);
         entity.Property(row => row.Id).HasColumnName("id").ValueGeneratedOnAdd();
-        entity.Property(row => row.PlatformCredentialId).HasColumnName("platform_credential_id");
         entity.Property(row => row.GameId).HasColumnName("game_id");
         entity.Property(row => row.UserId).HasColumnName("user_id");
         entity.Property(row => row.PlatformId).HasColumnName("platform_id");
@@ -165,7 +137,6 @@ public sealed class PlaydexDbContext(DbContextOptions<PlaydexDbContext> options)
         entity.Property(row => row.EndedAt).HasColumnName("ended_at");
         entity.Property(row => row.CreatedAt).HasColumnName("created_at");
         entity.Property(row => row.UpdatedAt).HasColumnName("updated_at");
-        entity.HasOne<PlatformCredential>().WithMany().HasForeignKey(row => row.PlatformCredentialId).OnDelete(DeleteBehavior.Cascade);
         entity.HasOne<Game>().WithMany().HasForeignKey(row => row.GameId).OnDelete(DeleteBehavior.Cascade);
         entity.HasOne<User>().WithMany().HasForeignKey(row => row.UserId).OnDelete(DeleteBehavior.Restrict);
         entity.HasOne<Platform>().WithMany().HasForeignKey(row => row.PlatformId).OnDelete(DeleteBehavior.Restrict);
@@ -178,34 +149,13 @@ public sealed class PlaydexDbContext(DbContextOptions<PlaydexDbContext> options)
         entity.ToTable("poll_results");
         entity.HasKey(row => row.Id);
         entity.Property(row => row.Id).HasColumnName("id").ValueGeneratedOnAdd();
-        entity.Property(row => row.PlatformCredentialId).HasColumnName("platform_credential_id");
-        entity.Property(row => row.GameId).HasColumnName("game_id");
         entity.Property(row => row.IntegrationId).HasColumnName("integration_id");
         entity.Property(row => row.GameExternalIdentityId).HasColumnName("game_external_identity_id");
         entity.Property(row => row.PolledAt).HasColumnName("polled_at");
         entity.Property(row => row.RawPayload).HasColumnName("raw_payload").HasColumnType("jsonb");
         entity.Property(row => row.CreatedAt).HasColumnName("created_at");
-        entity.HasOne<PlatformCredential>().WithMany().HasForeignKey(row => row.PlatformCredentialId).OnDelete(DeleteBehavior.Cascade);
-        entity.HasOne<Game>().WithMany().HasForeignKey(row => row.GameId).OnDelete(DeleteBehavior.SetNull);
         entity.HasOne<Integration>().WithMany().HasForeignKey(row => row.IntegrationId).OnDelete(DeleteBehavior.Restrict);
         entity.HasOne<GameExternalIdentity>().WithMany().HasForeignKey(row => row.GameExternalIdentityId).OnDelete(DeleteBehavior.SetNull);
-    }
-
-    private static void ConfigureManualGameInputs(ModelBuilder modelBuilder)
-    {
-        var entity = modelBuilder.Entity<ManualGameInput>();
-        entity.ToTable("manual_game_inputs");
-        entity.HasKey(row => row.Id);
-        entity.Property(row => row.Id).HasColumnName("id").ValueGeneratedOnAdd();
-        entity.Property(row => row.UserId).HasColumnName("user_id");
-        entity.Property(row => row.RawTitle).HasColumnName("raw_title");
-        entity.Property(row => row.CanonicalTitle).HasColumnName("canonical_title");
-        entity.Property(row => row.MappedGameId).HasColumnName("mapped_game_id");
-        entity.Property(row => row.CreatedAt).HasColumnName("created_at");
-        entity.Property(row => row.UpdatedAt).HasColumnName("updated_at");
-        entity.HasIndex(row => new { row.UserId, row.CanonicalTitle }).IsUnique();
-        entity.HasOne<User>().WithMany().HasForeignKey(row => row.UserId).OnDelete(DeleteBehavior.Cascade);
-        entity.HasOne<Game>().WithMany().HasForeignKey(row => row.MappedGameId).OnDelete(DeleteBehavior.SetNull);
     }
 
     private static void ConfigureIgnoredGames(ModelBuilder modelBuilder)

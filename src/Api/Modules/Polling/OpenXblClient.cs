@@ -18,7 +18,7 @@ public sealed class OpenXblClient(
     public string PlatformKey => "xbox";
 
     public async Task<ProviderPollResult?> GetCurrentlyPlaying(
-        PlatformCredential credential,
+        IntegrationCredentials credential,
         CancellationToken ct)
     {
         var apiKey = credential.ApiKey?.Trim();
@@ -100,7 +100,7 @@ public sealed class OpenXblClient(
     }
 
     public async Task<string?> GetCapsuleUrl(
-        PlatformCredential credential,
+        IntegrationCredentials credential,
         string externalId,
         CancellationToken ct)
     {

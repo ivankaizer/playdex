@@ -10,11 +10,13 @@ public sealed class AccountsRepository(PlaydexDbContext db, IGames games)
 {
     public async Task<List<AccountSummaryDto>> ListAccounts(long userId, CancellationToken ct)
     {
-        return await db.PlatformCredentials
+        return await db.Integrations
             .AsNoTracking()
             .Where(pc => pc.UserId == userId)
-            .Join(db.Platforms.AsNoTracking(), pc => pc.PlatformId, p => p.Id,
-                (pc, p) => new AccountSummaryDto(pc.Id, p.Key))
+            .Select(pc => new AccountSummaryDto(pc.Id,
+                pc.Type == IntegrationType.Steam ? "steam" :
+                pc.Type == IntegrationType.Psn ? "psn" :
+                pc.Type == IntegrationType.Xbox ? "xbox" : "api"))
             .OrderBy(account => account.Id)
             .ToListAsync(ct);
     }
@@ -225,10 +227,6 @@ public sealed class AccountsRepository(PlaydexDbContext db, IGames games)
             SELECT ps.id AS "SessionId", ps.started_at AS "StartedAt", ps.ended_at AS "EndedAt",
                    g.id AS "GameId", g.title AS "GameTitle",
                    p.key AS "Platform", g.capsule_url AS "CapsuleUrl",
-                   p.key AS "GamePlatform", g.canonical_key AS "GameCanonicalKey",
-                   NULL::bigint AS "MappedGameId", NULL::text AS "MappedGameTitle",
-                   NULL::text AS "MappedGamePlatform", NULL::text AS "MappedCapsuleUrl",
-                   NULL::text AS "MappedCanonicalKey",
                    CASE
                        WHEN COALESCE(us.ignore_short_sessions_minutes, 0) > 0
                            AND ps.ended_at IS NOT NULL
@@ -308,31 +306,17 @@ public sealed class AccountsRepository(PlaydexDbContext db, IGames games)
 
     private static AccountSessionDto MapSession(SessionDbRow row)
     {
-        var isManual = row.Platform == "manual";
-        var hasMappedGame = isManual && row.MappedGameId.HasValue && row.MappedGameTitle is not null;
-        var usesNonManualGame = isManual && row.GamePlatform != "manual";
-        var gameId = hasMappedGame ? row.MappedGameId!.Value : row.GameId;
-        var game = hasMappedGame ? row.MappedGameTitle! : row.GameTitle;
-        var capsule = hasMappedGame ? row.MappedCapsuleUrl ?? row.CapsuleUrl : row.CapsuleUrl;
-        var mappedPlatform = hasMappedGame
-            ? row.MappedGamePlatform
-            : usesNonManualGame ? row.GamePlatform : null;
-        var canonicalKey = hasMappedGame ? row.MappedCanonicalKey : row.GameCanonicalKey;
-        var mappedSource = mappedPlatform is null
-            ? null
-            : canonicalKey?.StartsWith("igdb:", StringComparison.Ordinal) == true ? "igdb" : "local";
-
         return new AccountSessionDto(
             row.SessionId,
             row.StartedAt,
             row.EndedAt,
-            GameId.Encode(gameId),
+            GameId.Encode(row.GameId),
             row.Platform,
-            game,
-            capsule,
+            row.GameTitle,
+            row.CapsuleUrl,
             row.Ignored,
-            mappedPlatform,
-            mappedSource);
+            null,
+            null);
     }
 
     private static double MapDuration(AccountSessionDto s) =>
@@ -370,24 +354,8 @@ public sealed class AccountsRepository(PlaydexDbContext db, IGames games)
         return months;
     }
 
-    private const string EffectivePlatformSql = """
-        CASE
-            WHEN (
-                CASE
-                    WHEN p.key = 'manual' AND mg.id IS NOT NULL AND mp.key IS NOT NULL THEN mp.key
-                    WHEN p.key = 'manual' AND gp.key <> 'manual' THEN gp.key
-                    ELSE p.key
-                END
-            ) IN ('psn', 'ps5') THEN 'ps5'
-            ELSE (
-                CASE
-                    WHEN p.key = 'manual' AND mg.id IS NOT NULL AND mp.key IS NOT NULL THEN mp.key
-                    WHEN p.key = 'manual' AND gp.key <> 'manual' THEN gp.key
-                    ELSE p.key
-                END
-            )
-        END
-        """;
+    private const string EffectivePlatformSql =
+        "CASE WHEN p.key IN ('psn', 'ps5') THEN 'ps5' ELSE p.key END";
 }
 
 public sealed record SessionQueryResult(int Total, int Limit, int Offset, List<AccountSessionDto> Sessions);
@@ -401,13 +369,6 @@ internal sealed class SessionDbRow
     public string GameTitle { get; set; } = string.Empty;
     public string Platform { get; set; } = string.Empty;
     public string? CapsuleUrl { get; set; }
-    public string GamePlatform { get; set; } = string.Empty;
-    public string GameCanonicalKey { get; set; } = string.Empty;
-    public long? MappedGameId { get; set; }
-    public string? MappedGameTitle { get; set; }
-    public string? MappedGamePlatform { get; set; }
-    public string? MappedCapsuleUrl { get; set; }
-    public string? MappedCanonicalKey { get; set; }
     public bool Ignored { get; set; }
     public int DurationSeconds { get; set; }
 }

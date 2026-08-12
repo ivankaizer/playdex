@@ -11,48 +11,9 @@ public sealed class ManualService(
     ManualRepository repository,
     IgdbClient igdbClient,
     IOptions<IgdbOptions> igdbOptions,
-    IGames games,
     IGameResolver gameResolver)
 {
     private const int MaxLocalSearchResults = 5;
-    private const string ManualPlatformKey = "manual";
-
-    /// <summary>
-    /// List all manual game inputs for the current user, including any
-    /// mapped-game information.
-    /// </summary>
-    public async Task<ManualInputsResponseDto> ListInputs(long userId, CancellationToken ct)
-    {
-        var rows = await repository.ListManualInputs(userId, ct);
-
-        var inputs = rows.Select(row =>
-        {
-            ManualGameDto? mappedGame = null;
-            if (row.GameId.HasValue && row.GameTitle is not null && row.Platform is not null)
-            {
-                mappedGame = new ManualGameDto(
-                    GameId.Encode(row.GameId.Value),
-                    row.GameTitle,
-                    row.Platform,
-                    row.CapsuleUrl);
-            }
-
-            return new ManualInputDto(
-                row.Id,
-                row.RawTitle,
-                row.CanonicalTitle,
-                row.MappedGameId.HasValue ? GameId.Encode(row.MappedGameId.Value) : null,
-                row.MappedGameId.HasValue
-                    ? row.CanonicalKey?.StartsWith("igdb:", StringComparison.Ordinal) == true
-                        ? "igdb"
-                        : "local"
-                    : null,
-                mappedGame);
-        }).ToList();
-
-        return new ManualInputsResponseDto(inputs);
-    }
-
     /// <summary>
     /// Start a new manual tracking session for the given game title.
     /// Ends any active manual sessions first, then creates a new one.
@@ -74,7 +35,7 @@ public sealed class ManualService(
                 ? await ResolveOrCreateGame(title, platformKey, null, ct)
                 : GameId.Parse(request.GameId);
             var platformId = await repository.GetPlatformIdByKey(platformKey, ct)
-                ?? await repository.GetGamePlatformId(gameId, ct);
+                ?? throw AppProblemException.Validation("Platform not found.");
             var sessionId = await repository.CreatePlaySession(
                 userId, gameId, platformId, startedAt, null, ct);
 
@@ -127,7 +88,7 @@ public sealed class ManualService(
                 platformId = !string.IsNullOrWhiteSpace(request.PlatformKey)
                     ? await repository.GetPlatformIdByKey(request.PlatformKey.Trim().ToLowerInvariant(), ct)
                         ?? throw AppProblemException.Validation("Platform not found.")
-                    : game.PlatformId;
+                    : throw AppProblemException.Validation("platformKey is required when gameId is provided.");
             }
             else
             {
@@ -140,7 +101,6 @@ public sealed class ManualService(
                 gameId = await ResolveOrCreateIgdbGame(
                     igdbId,
                     title,
-                    platformKey,
                     request.CapsuleUrl,
                     ct);
                 platformId = await repository.GetPlatformIdByKey(platformKey.ToLowerInvariant(), ct)
@@ -193,62 +153,19 @@ public sealed class ManualService(
         return new ManualMappingSearchResponseDto(trimmed, igdbAvailable, results);
     }
 
-    /// <summary>
-    /// Map a manual game input to a specific game.
-    /// Accepts either an explicit gameId or enough fields to resolve/create a game.
-    /// </summary>
-    public async Task<ManualMappingResponseDto> MapInput(
-        long inputId, long userId, ManualMapInputRequest request, CancellationToken ct)
-    {
-        return await repository.ExecuteInTransaction(async () =>
-        {
-            long gameId;
-            if (!string.IsNullOrWhiteSpace(request.GameId))
-            {
-                gameId = GameId.Parse(request.GameId);
-                if (await repository.GetGameEntity(gameId, ct) is null)
-                    throw AppProblemException.Validation("Game not found for the specified gameId.");
-            }
-            else
-            {
-                var igdbId = request.IgdbId?.Trim();
-                var title = request.Title?.Trim();
-                if (string.IsNullOrEmpty(igdbId) || string.IsNullOrEmpty(title))
-                    throw AppProblemException.Validation("igdbId and title are required.");
-
-                var platformKey = request.PlatformKey?.Trim();
-                if (string.IsNullOrEmpty(platformKey) && request.PlatformId.HasValue)
-                    platformKey = await repository.GetPlatformKeyByIgdbId(request.PlatformId.Value, ct);
-                gameId = await ResolveOrCreateIgdbGame(
-                    igdbId,
-                    title,
-                    platformKey ?? "unknown",
-                    request.CapsuleUrl,
-                    ct);
-            }
-
-            var updated = await repository.MapManualInput(userId, inputId, gameId, ct);
-            if (updated is null) throw AppProblemException.NotFound("Manual input not found.");
-            return new ManualMappingResponseDto(updated.Id, GameId.Encode(gameId));
-        }, ct);
-    }
-
     private async Task<long> ResolveOrCreateGame(
         string title, string platformKey, string? capsuleUrl, CancellationToken ct)
     {
-        var canonicalKey = $"{platformKey}:{games.NormalizeTitle(title)}";
-
         var platformId = await repository.GetPlatformIdByKey(platformKey, ct);
         if (platformId is null)
             throw AppProblemException.Validation($"Platform '{platformKey}' not found.");
 
-        return await repository.UpsertGame(title, canonicalKey, null, platformId.Value, capsuleUrl, ct);
+        return await repository.CreateGame(title, capsuleUrl, ct);
     }
 
     private async Task<long> ResolveOrCreateIgdbGame(
         string igdbId,
         string title,
-        string platformKey,
         string? capsuleUrl,
         CancellationToken ct)
     {
@@ -257,7 +174,6 @@ public sealed class ManualService(
                 GameExternalIdentityTypes.FromKey("igdb"),
                 igdbId,
                 title,
-                platformKey,
                 capsuleUrl),
             ct);
         return resolution.GameId;

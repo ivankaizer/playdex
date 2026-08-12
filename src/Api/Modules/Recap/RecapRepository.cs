@@ -16,9 +16,7 @@ public sealed class RecapRepository(PlaydexDbContext db)
                 g.id AS GameId,
                 g.title AS Title,
                 g.capsule_url AS CapsuleUrl,
-                session_platform.key AS Platform,
-                session_platform.key AS GamePlatform,
-                g.canonical_key AS GameCanonicalKey
+                session_platform.key AS Platform
             FROM play_sessions ps
             LEFT JOIN user_settings us ON us.user_id = ps.user_id
             JOIN games g ON g.id = ps.game_id
@@ -63,9 +61,7 @@ public sealed class RecapRepository(PlaydexDbContext db)
                 MIN(ps.started_at) AS FirstStartedAt,
                 g.title AS Title,
                 g.capsule_url AS CapsuleUrl,
-                session_platform.key AS Platform,
-                session_platform.key AS GamePlatform,
-                g.canonical_key AS GameCanonicalKey
+                session_platform.key AS Platform
             FROM play_sessions ps
             LEFT JOIN user_settings us ON us.user_id = ps.user_id
             JOIN games g ON g.id = ps.game_id
@@ -79,30 +75,8 @@ public sealed class RecapRepository(PlaydexDbContext db)
               )
             GROUP BY
                 ps.game_id, g.title, g.capsule_url,
-                session_platform.key, g.canonical_key
+                session_platform.key
             ORDER BY FirstStartedAt ASC
-            """).ToListAsync(ct);
-    }
-
-    public async Task<List<ManualMappingRow>> LoadManualMappings(
-        long userId, string[] canonicalTitles, CancellationToken ct)
-    {
-        if (canonicalTitles.Length == 0)
-            return [];
-
-        return await db.Database.SqlQuery<ManualMappingRow>($"""
-            SELECT
-                mgi.canonical_title AS CanonicalTitle,
-                mgi.mapped_game_id AS MappedGameId,
-                g.title AS MappedTitle,
-                gp.key AS MappedPlatform,
-                g.capsule_url AS MappedCapsuleUrl,
-                g.canonical_key AS MappedCanonicalKey
-            FROM manual_game_inputs mgi
-            LEFT JOIN games g ON g.id = mgi.mapped_game_id
-            LEFT JOIN platforms gp ON gp.id = g.platform_id
-            WHERE mgi.user_id = {userId}
-              AND mgi.canonical_title = ANY({canonicalTitles})
             """).ToListAsync(ct);
     }
 
@@ -127,8 +101,6 @@ public sealed class RecapSessionRow
     public string Title { get; set; } = string.Empty;
     public string? CapsuleUrl { get; set; }
     public string Platform { get; set; } = string.Empty;
-    public string GamePlatform { get; set; } = string.Empty;
-    public string GameCanonicalKey { get; set; } = string.Empty;
 }
 
 public sealed class RecapFirstSessionRow
@@ -138,16 +110,4 @@ public sealed class RecapFirstSessionRow
     public string Title { get; set; } = string.Empty;
     public string? CapsuleUrl { get; set; }
     public string Platform { get; set; } = string.Empty;
-    public string GamePlatform { get; set; } = string.Empty;
-    public string GameCanonicalKey { get; set; } = string.Empty;
-}
-
-public sealed class ManualMappingRow
-{
-    public string CanonicalTitle { get; set; } = string.Empty;
-    public long? MappedGameId { get; set; }
-    public string? MappedTitle { get; set; }
-    public string? MappedPlatform { get; set; }
-    public string? MappedCapsuleUrl { get; set; }
-    public string? MappedCanonicalKey { get; set; }
 }

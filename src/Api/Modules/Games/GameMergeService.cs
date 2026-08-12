@@ -27,8 +27,6 @@ public sealed class GameMergeService(PlaydexDbContext db)
 
         await db.Database.ExecuteSqlInterpolatedAsync($"update game_external_identities set game_id={targetGameId}, updated_at=now() where game_id={sourceGameId}", ct);
         await db.Database.ExecuteSqlInterpolatedAsync($"update play_sessions set game_id={targetGameId}, updated_at=now() where game_id={sourceGameId}", ct);
-        await db.Database.ExecuteSqlInterpolatedAsync($"update poll_results set game_id={targetGameId} where game_id={sourceGameId}", ct);
-        await db.Database.ExecuteSqlInterpolatedAsync($"update manual_game_inputs set mapped_game_id={targetGameId}, updated_at=now() where mapped_game_id={sourceGameId}", ct);
 
         await db.Database.ExecuteSqlInterpolatedAsync($"delete from ignored_games s where s.game_id={sourceGameId} and exists(select 1 from ignored_games t where t.user_id=s.user_id and t.game_id={targetGameId})", ct);
         await db.Database.ExecuteSqlInterpolatedAsync($"update ignored_games set game_id={targetGameId}, updated_at=now() where game_id={sourceGameId}", ct);

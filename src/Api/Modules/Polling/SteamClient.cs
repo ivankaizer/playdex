@@ -10,7 +10,7 @@ public sealed class SteamClient(HttpClient httpClient, IOptions<SteamOptions> op
 {
     public string PlatformKey => "steam";
 
-    public async Task<ProviderPollResult?> GetCurrentlyPlaying(PlatformCredential credential, CancellationToken ct)
+    public async Task<ProviderPollResult?> GetCurrentlyPlaying(IntegrationCredentials credential, CancellationToken ct)
     {
         var steamId = credential.AccountId;
         if (string.IsNullOrEmpty(steamId))

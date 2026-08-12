@@ -14,17 +14,7 @@ public sealed class GamesRepository(PlaydexDbContext db)
             .Where(game => EF.Functions.ILike(game.Title, pattern))
             .OrderByDescending(game => game.UpdatedAt)
             .Take(limit)
-            .Join(
-                db.Platforms.AsNoTracking(),
-                game => game.PlatformId,
-                platform => platform.Id,
-                (game, platform) => new
-                {
-                    game.Id,
-                    game.Title,
-                    Platform = platform.Key,
-                    game.CapsuleUrl,
-                })
+            .Select(game => new { game.Id, game.Title, Platform = "unknown", game.CapsuleUrl })
             .ToListAsync(ct);
         return rows.Select(r => new GameSearchResultDto(GameId.Encode(r.Id), r.Title, r.Platform, r.CapsuleUrl)).ToList();
     }
@@ -34,17 +24,7 @@ public sealed class GamesRepository(PlaydexDbContext db)
         var row = await db.Games
             .AsNoTracking()
             .Where(game => game.Id == gameId)
-            .Join(
-                db.Platforms.AsNoTracking(),
-                game => game.PlatformId,
-                platform => platform.Id,
-                (game, platform) => new
-                {
-                    game.Id,
-                    game.Title,
-                    Platform = platform.Key,
-                    game.CapsuleUrl,
-                })
+            .Select(game => new { game.Id, game.Title, Platform = "unknown", game.CapsuleUrl })
             .FirstOrDefaultAsync(ct);
         return row is null ? null : new GameResponseDto(GameId.Encode(row.Id), row.Title, row.Platform, row.CapsuleUrl);
     }
@@ -64,21 +44,18 @@ public sealed class GamesRepository(PlaydexDbContext db)
         var rows = await (
             from connection in db.GameConnections.AsNoTracking()
             join game in db.Games.AsNoTracking() on connection.GameId equals game.Id
-            join platform in db.Platforms.AsNoTracking() on game.PlatformId equals platform.Id
             join connectedGame in db.Games.AsNoTracking() on connection.ConnectedGameId equals connectedGame.Id
-            join connectedPlatform in db.Platforms.AsNoTracking()
-                on connectedGame.PlatformId equals connectedPlatform.Id
             where connection.UserId == userId
             orderby connection.GameId, connection.ConnectedGameId
             select new
             {
                 connection.GameId,
                 game.Title,
-                Platform = platform.Key,
+                Platform = "unknown",
                 game.CapsuleUrl,
                 connection.ConnectedGameId,
                 ConnectedTitle = connectedGame.Title,
-                ConnectedPlatform = connectedPlatform.Key,
+                ConnectedPlatform = "unknown",
                 ConnectedCapsuleUrl = connectedGame.CapsuleUrl,
             }).ToListAsync(ct);
         return rows.Select(r => new GameConnectionDto(

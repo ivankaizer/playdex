@@ -13,31 +13,7 @@ public sealed record ManualEntryCreateRequest(
     string? PlatformKey,
     string? CapsuleUrl);
 
-public sealed record ManualMapInputRequest(
-    string? GameId,
-    string? IgdbId,
-    string? Title,
-    string? PlatformKey,
-    int? PlatformId,
-    string? CapsuleUrl);
-
 // ── Response DTOs ─────────────────────────────────────────────
-
-public sealed record ManualGameDto(
-    string Id,
-    string Title,
-    string Platform,
-    string? CapsuleUrl);
-
-public sealed record ManualInputDto(
-    long Id,
-    string Input,
-    string CanonicalTitle,
-    string? MappedGameId,
-    string? MappedSource,
-    ManualGameDto? MappedGame);
-
-public sealed record ManualInputsResponseDto(IReadOnlyList<ManualInputDto> Inputs);
 
 public sealed record ManualSessionStartResponseDto(long SessionId);
 
@@ -56,7 +32,5 @@ public sealed record ManualMappingSearchResponseDto(
     string Query,
     bool IgdbAvailable,
     IReadOnlyList<ManualMappingSearchResultDto> Results);
-
-public sealed record ManualMappingResponseDto(long InputId, string? MappedGameId);
 
 public sealed record ManualEntryCreateResponseDto(long SessionId);

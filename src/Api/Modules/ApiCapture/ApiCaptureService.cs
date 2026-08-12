@@ -4,21 +4,21 @@ using Api.Infrastructure.Common;
 using Api.Infrastructure.Persistence;
 using Api.Modules.Games;
 
-namespace Api.Modules.Playnite;
+namespace Api.Modules.ApiCapture;
 
-public sealed partial class PlayniteService(
-    PlayniteRepository repository,
+public sealed partial class ApiCaptureService(
+    ApiCaptureRepository repository,
     PlaydexDbContext db,
     IGameResolver gameResolver,
     EventBus eventBus,
-    ILogger<PlayniteService> logger)
+    ILogger<ApiCaptureService> logger)
 {
     private const int PingTimeoutMinutes = 3;
 
-    [LoggerMessage(Level = LogLevel.Error, Message = "Playnite event handler failed for {EventType}")]
-    private partial void LogPlayniteEventHandlerFailed(Exception exception, string eventType);
+    [LoggerMessage(Level = LogLevel.Error, Message = "API capture event handler failed for {EventType}")]
+    private partial void LogApiEventHandlerFailed(Exception exception, string eventType);
 
-    public async Task<PlayniteSessionResponseDto?> RecordSession(
+    public async Task<ApiSessionResponseDto?> RecordSession(
         string apiKey, int durationInSeconds, string gameTitle, string gameId, string? gameProvider, string platform,
         CancellationToken ct)
     {
@@ -37,10 +37,10 @@ public sealed partial class PlayniteService(
         var sessionId = await repository.InsertCompletePlaySession(credential, insertedGameId, platformId, startedAt, now, ct);
 
         await tx.CommitAsync(ct);
-        return new PlayniteSessionResponseDto(sessionId);
+        return new ApiSessionResponseDto(sessionId);
     }
 
-    public async Task<PlayniteSessionStartResponseDto?> StartSession(
+    public async Task<ApiSessionStartResponseDto?> StartSession(
         string apiKey, string gameTitle, string gameId, string? gameProvider, string platform,
         CancellationToken ct)
     {
@@ -60,10 +60,10 @@ public sealed partial class PlayniteService(
         var sessionId = await repository.InsertActivePlaySession(credential, insertedGameId, platformId, now, ct);
 
         await tx.CommitAsync(ct);
-        return new PlayniteSessionStartResponseDto(sessionId);
+        return new ApiSessionStartResponseDto(sessionId);
     }
 
-    public async Task<PlayniteSessionEndResponseDto?> EndSessions(
+    public async Task<ApiSessionEndResponseDto?> EndSessions(
         string apiKey, string gameTitle, string gameId, string? gameProvider, string platform,
         CancellationToken ct)
     {
@@ -96,10 +96,10 @@ public sealed partial class PlayniteService(
                 session.Id, credential.Id, session.GameId, session.StartedAt, now), ct);
         }
 
-        return new PlayniteSessionEndResponseDto(endedSessions.Count);
+        return new ApiSessionEndResponseDto(endedSessions.Count);
     }
 
-    public async Task<PlayniteSessionPingResponseDto?> PingSession(
+    public async Task<ApiSessionPingResponseDto?> PingSession(
         string apiKey, string gameTitle, string gameId, string? gameProvider, string platform,
         CancellationToken ct)
     {
@@ -152,7 +152,7 @@ public sealed partial class PlayniteService(
                     session.StartedAt,
                     session.EndedAt!.Value), ct);
             }
-            return new PlayniteSessionPingResponseDto(active.Id, false, timedOut.Count);
+            return new ApiSessionPingResponseDto(active.Id, false, timedOut.Count);
         }
 
         await repository.EndActiveSessionsForCredential(credential.Id, now, ct);
@@ -168,7 +168,7 @@ public sealed partial class PlayniteService(
                 session.EndedAt!.Value), ct);
         }
         await SafePublish(new SessionStarted(sessionId, credential.Id, insertedGameId, now), ct);
-        return new PlayniteSessionPingResponseDto(sessionId, true, timedOut.Count);
+        return new ApiSessionPingResponseDto(sessionId, true, timedOut.Count);
     }
 
     public async Task<int> EndTimedOutSessions(CancellationToken ct)
@@ -195,7 +195,6 @@ public sealed partial class PlayniteService(
                 provider,
                 gameId,
                 gameTitle,
-                platformKey,
                 GenerateCapsuleUrl(gameProvider ?? "", gameId)),
             ct);
         return (resolution.GameId, platformId);
@@ -219,7 +218,7 @@ public sealed partial class PlayniteService(
         }
         catch (Exception ex)
         {
-            LogPlayniteEventHandlerFailed(ex, typeof(T).Name);
+            LogApiEventHandlerFailed(ex, typeof(T).Name);
         }
     }
 }

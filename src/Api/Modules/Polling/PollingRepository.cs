@@ -6,42 +6,6 @@ namespace Api.Modules.Polling;
 
 public sealed class PollingRepository(PlaydexDbContext db, IGameResolver gameResolver)
 {
-    public async Task<IReadOnlyList<SessionTransition>> EndTimedOutPlayniteSessions(
-        DateTimeOffset now,
-        TimeSpan timeout,
-        CancellationToken ct)
-    {
-        await using var transaction = await db.Database.BeginTransactionAsync(ct);
-        await db.Database.ExecuteSqlRawAsync(
-            "SELECT pg_advisory_xact_lock(-783521)", ct);
-        var timeoutBefore = now - timeout;
-        var playniteCredentialIds = db.PlatformCredentials
-            .Join(
-                db.Platforms.Where(row => row.Key == "playnite"),
-                credential => credential.PlatformId,
-                platform => platform.Id,
-                (credential, _) => credential.Id);
-        var expired = await db.PlaySessions
-            .Where(row =>
-                row.PlatformCredentialId.HasValue && playniteCredentialIds.Contains(row.PlatformCredentialId.Value) &&
-                row.EndedAt == null &&
-                row.UpdatedAt < timeoutBefore)
-            .ToListAsync(ct);
-
-        var transitions = new List<SessionTransition>(expired.Count);
-        foreach (var session in expired)
-        {
-            var endedAt = session.UpdatedAt + timeout;
-            session.EndedAt = endedAt;
-            session.UpdatedAt = now;
-            transitions.Add(SessionTransition.Ended(session, endedAt, notify: true));
-        }
-
-        await db.SaveChangesAsync(ct);
-        await transaction.CommitAsync(ct);
-        return transitions;
-    }
-
     public async Task<SuccessfulPollOutcome> ApplySuccessfulPoll(
         long credentialId,
         CurrentlyPlayingResult? detectedGame,
@@ -67,7 +31,6 @@ public sealed class PollingRepository(PlaydexDbContext db, IGameResolver gameRes
                     GameExternalIdentityTypes.FromKey(detectedGame.Platform),
                     detectedGame.ExternalId,
                     detectedGame.Title,
-                    detectedGame.Platform,
                     detectedGame.CapsuleUrl),
                 ct);
             gameId = resolution.GameId;
@@ -84,8 +47,6 @@ public sealed class PollingRepository(PlaydexDbContext db, IGameResolver gameRes
 
         db.PollResults.Add(new PollResult
         {
-            PlatformCredentialId = credentialId,
-            GameId = gameId,
             IntegrationId = credentialId,
             GameExternalIdentityId = identityId,
             PolledAt = polledAt,
@@ -117,7 +78,6 @@ public sealed class PollingRepository(PlaydexDbContext db, IGameResolver gameRes
         {
             var session = new PlaySession
             {
-                PlatformCredentialId = credentialId,
                 GameId = sessionGameId.Value,
                 UserId = integration.UserId,
                 PlatformId = platformId,
@@ -160,7 +120,7 @@ public sealed class PollingRepository(PlaydexDbContext db, IGameResolver gameRes
                                                                     """).ToListAsync(ct);
 
         return rows.Select(r => new ActiveCredential(
-            new PlatformCredential
+            new IntegrationCredentials
             {
                 Id = r.Id,
                 UserId = r.UserId,
@@ -188,8 +148,6 @@ public sealed class PollingRepository(PlaydexDbContext db, IGameResolver gameRes
         db.PollResults.Add(
             new PollResult
             {
-                PlatformCredentialId = credentialId,
-                GameId = gameId,
                 IntegrationId = credentialId,
                 PolledAt = polledAt,
                 RawPayload = rawPayload,
@@ -233,7 +191,7 @@ public sealed class PollingRepository(PlaydexDbContext db, IGameResolver gameRes
 /// to the correct <see cref="IProviderClient"/>.
 /// </summary>
 public sealed record ActiveCredential(
-    PlatformCredential Credential,
+    IntegrationCredentials Credential,
     string PlatformKey
 );
 

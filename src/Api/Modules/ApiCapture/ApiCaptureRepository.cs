@@ -1,13 +1,13 @@
 using Microsoft.EntityFrameworkCore;
 using Api.Infrastructure.Persistence;
 
-namespace Api.Modules.Playnite;
+namespace Api.Modules.ApiCapture;
 
-public sealed class PlayniteRepository(PlaydexDbContext db)
+public sealed class ApiCaptureRepository(PlaydexDbContext db)
 {
-    public async Task<PlayniteCredentialRow?> LoadCredentialByApiKey(string apiKey, CancellationToken ct)
+    public async Task<ApiIntegrationRow?> LoadCredentialByApiKey(string apiKey, CancellationToken ct)
     {
-        var credentials = await db.Database.SqlQuery<PlayniteCredentialRow>($"""
+        var credentials = await db.Database.SqlQuery<ApiIntegrationRow>($"""
             SELECT pc.id AS "Id", pc.user_id AS "UserId"
             FROM integrations pc
             WHERE pc.api_key = {apiKey}
@@ -18,26 +18,26 @@ public sealed class PlayniteRepository(PlaydexDbContext db)
     }
 
     public async Task<long> InsertCompletePlaySession(
-        PlayniteCredentialRow integration, long gameId, long platformId, DateTimeOffset startedAt, DateTimeOffset endedAt,
+        ApiIntegrationRow integration, long gameId, long platformId, DateTimeOffset startedAt, DateTimeOffset endedAt,
         CancellationToken ct)
     {
         var now = DateTimeOffset.UtcNow;
         var ids = await db.Database.SqlQuery<long>($"""
-            INSERT INTO play_sessions (platform_credential_id, game_id, user_id, platform_id, capture_method, integration_id, started_at, ended_at, created_at, updated_at)
-            VALUES ({integration.Id}, {gameId}, {integration.UserId}, {platformId}, 'api', {integration.Id}, {startedAt}, {endedAt}, {now}, {now})
+            INSERT INTO play_sessions (game_id, user_id, platform_id, capture_method, integration_id, started_at, ended_at, created_at, updated_at)
+            VALUES ({gameId}, {integration.UserId}, {platformId}, 'api', {integration.Id}, {startedAt}, {endedAt}, {now}, {now})
             RETURNING id
             """).ToListAsync(ct);
         return ids.Single();
     }
 
     public async Task<long> InsertActivePlaySession(
-        PlayniteCredentialRow integration, long gameId, long platformId, DateTimeOffset startedAt,
+        ApiIntegrationRow integration, long gameId, long platformId, DateTimeOffset startedAt,
         CancellationToken ct)
     {
         var now = DateTimeOffset.UtcNow;
         var ids = await db.Database.SqlQuery<long>($"""
-            INSERT INTO play_sessions (platform_credential_id, game_id, user_id, platform_id, capture_method, integration_id, started_at, created_at, updated_at)
-            VALUES ({integration.Id}, {gameId}, {integration.UserId}, {platformId}, 'api', {integration.Id}, {startedAt}, {now}, {now})
+            INSERT INTO play_sessions (game_id, user_id, platform_id, capture_method, integration_id, started_at, created_at, updated_at)
+            VALUES ({gameId}, {integration.UserId}, {platformId}, 'api', {integration.Id}, {startedAt}, {now}, {now})
             RETURNING id
             """).ToListAsync(ct);
         return ids.Single();
@@ -127,7 +127,7 @@ public sealed class PlayniteRepository(PlaydexDbContext db)
     }
 }
 
-public sealed class PlayniteCredentialRow
+public sealed class ApiIntegrationRow
 {
     public long Id { get; set; }
     public long UserId { get; set; }

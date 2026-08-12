@@ -12,7 +12,7 @@ using Api.Modules.Admin;
 using Api.Modules.Games;
 using Api.Modules.Manual;
 using Api.Modules.Metrics;
-using Api.Modules.Playnite;
+using Api.Modules.ApiCapture;
 using Api.Modules.Polling;
 using Api.Modules.Providers;
 using Api.Modules.Recap;
@@ -68,6 +68,7 @@ builder.Services.AddSingleton(new MigrationCatalog([
     new PlaySessionTargetFieldsMigration(),
     new PollingTargetModelMigration(),
     new ManualTargetModelMigration(),
+    new DropLegacyModelMigration(),
 ]));
 builder.Services.AddSingleton<MigrationRunner>();
 builder.Services.AddScoped<EventBus>();
@@ -78,7 +79,7 @@ builder.Services
     .AddSettings()
     .AddGames()
     .AddManual()
-    .AddPlaynite()
+    .AddApiCapture()
     .AddProviders()
     .AddAdmin()
     .AddRecap()
@@ -137,7 +138,7 @@ api
     .MapSettings()
     .MapGames()
     .MapManual()
-    .MapPlaynite()
+    .MapApiCapture()
     .MapProviders()
     .MapAdmin()
     .MapRecap()

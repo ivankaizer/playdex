@@ -1,6 +1,6 @@
 # Game, integration, and play-session architecture
 
-Status: target architecture and migration outline. Each migration stage is implemented as one independently deployable MR. Stage details will be expanded in this document before implementation.
+Status: implemented. Stages are preserved as stacked MR boundaries; production may deploy the complete ordered transition in one release.
 
 ## Goal
 
@@ -172,6 +172,19 @@ User selects or creates Game + Platform
 - Remove legacy columns only after all readers and writers use the target model.
 
 ## Ordered migration stages
+
+| Stage | Migration / runtime boundary | Status |
+|---|---|---|
+| 1 | `004_game_external_identities` | Complete |
+| 2 | external-identity `GameResolver` | Complete |
+| 3 | `005_integrations` | Complete |
+| 4 | `006_play_session_target_fields` | Complete |
+| 5 | `007_polling_target_model` | Complete |
+| 6 | generic `/api/capture` contract | Complete |
+| 7 | `008_manual_target_model` | Complete |
+| 8 | target-model presentation and analytics | Complete |
+| 9 | transactional Game merge | Complete |
+| 10 | `009_drop_legacy_model` | Complete |
 
 ### Stage 1: Introduce game external identities
 

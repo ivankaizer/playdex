@@ -22,7 +22,7 @@ public sealed class Platform : IHasTimestamps
     public DateTimeOffset UpdatedAt { get; set; }
 }
 
-public sealed class PlatformCredential : IHasTimestamps
+public sealed class IntegrationCredentials : IHasTimestamps
 {
     public long Id { get; set; }
     public long UserId { get; set; }
@@ -61,12 +61,9 @@ public sealed class Game : IHasTimestamps
 {
     public long Id { get; set; }
     public required string Title { get; set; }
-    public string? ExternalId { get; set; }
-    public required string CanonicalKey { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }
     public string? CapsuleUrl { get; set; }
-    public long PlatformId { get; set; }
     public bool CapsuleUrlLocked { get; set; }
     public bool TitleLocked { get; set; }
 }
@@ -100,7 +97,6 @@ public enum CaptureMethod
 public sealed class PlaySession : IHasTimestamps
 {
     public long Id { get; set; }
-    public long? PlatformCredentialId { get; set; }
     public long GameId { get; set; }
     public long UserId { get; set; }
     public long PlatformId { get; set; }
@@ -115,24 +111,11 @@ public sealed class PlaySession : IHasTimestamps
 public sealed class PollResult
 {
     public long Id { get; set; }
-    public long PlatformCredentialId { get; set; }
-    public long? GameId { get; set; }
     public long? IntegrationId { get; set; }
     public long? GameExternalIdentityId { get; set; }
     public DateTimeOffset PolledAt { get; set; }
     public string? RawPayload { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
-}
-
-public sealed class ManualGameInput : IHasTimestamps
-{
-    public long Id { get; set; }
-    public long UserId { get; set; }
-    public required string RawTitle { get; set; }
-    public required string CanonicalTitle { get; set; }
-    public long? MappedGameId { get; set; }
-    public DateTimeOffset CreatedAt { get; set; }
-    public DateTimeOffset UpdatedAt { get; set; }
 }
 
 public sealed class IgnoredGame : IHasTimestamps
