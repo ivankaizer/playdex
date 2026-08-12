@@ -44,14 +44,19 @@ var corsOrigins = (builder.Configuration["CORS_ORIGINS"] ?? "")
     .Distinct(StringComparer.Ordinal)
     .ToArray();
 
-var dataSource = new NpgsqlDataSourceBuilder(PostgresConnectionString.Normalize(databaseUrl)).Build();
+var dataSourceBuilder = new NpgsqlDataSourceBuilder(PostgresConnectionString.Normalize(databaseUrl));
+dataSourceBuilder.MapEnum<GameExternalIdentityType>("game_external_identity_type");
+var dataSource = dataSourceBuilder.Build();
 
 builder.Services.AddSingleton(dataSource);
-builder.Services.AddDbContext<PlaydexDbContext>(db => db.UseNpgsql(dataSource));
+builder.Services.AddDbContext<PlaydexDbContext>(db => db.UseNpgsql(
+    dataSource,
+    npgsql => npgsql.MapEnum<GameExternalIdentityType>("game_external_identity_type")));
 builder.Services.AddSingleton(new MigrationCatalog([
     new CurrentSchemaMigration(),
     new CredentialApiKeyLockMigration(),
     new OpenXblPlatformMigration(),
+    new GameExternalIdentitiesMigration(),
 ]));
 builder.Services.AddSingleton<MigrationRunner>();
 builder.Services.AddScoped<EventBus>();

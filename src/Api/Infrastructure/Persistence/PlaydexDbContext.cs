@@ -8,6 +8,7 @@ public sealed class PlaydexDbContext(DbContextOptions<PlaydexDbContext> options)
     public DbSet<Platform> Platforms => Set<Platform>();
     public DbSet<PlatformCredential> PlatformCredentials => Set<PlatformCredential>();
     public DbSet<Game> Games => Set<Game>();
+    public DbSet<GameExternalIdentity> GameExternalIdentities => Set<GameExternalIdentity>();
     public DbSet<PlaySession> PlaySessions => Set<PlaySession>();
     public DbSet<PollResult> PollResults => Set<PollResult>();
     public DbSet<ManualGameInput> ManualGameInputs => Set<ManualGameInput>();
@@ -22,6 +23,7 @@ public sealed class PlaydexDbContext(DbContextOptions<PlaydexDbContext> options)
         ConfigurePlatforms(modelBuilder);
         ConfigurePlatformCredentials(modelBuilder);
         ConfigureGames(modelBuilder);
+        ConfigureGameExternalIdentities(modelBuilder);
         ConfigurePlaySessions(modelBuilder);
         ConfigurePollResults(modelBuilder);
         ConfigureManualGameInputs(modelBuilder);
@@ -97,6 +99,27 @@ public sealed class PlaydexDbContext(DbContextOptions<PlaydexDbContext> options)
         entity.Property(row => row.TitleLocked).HasColumnName("title_locked");
         entity.HasIndex(row => row.CanonicalKey).IsUnique();
         entity.HasOne<Platform>().WithMany().HasForeignKey(row => row.PlatformId).OnDelete(DeleteBehavior.NoAction);
+    }
+
+    private static void ConfigureGameExternalIdentities(ModelBuilder modelBuilder)
+    {
+        var entity = modelBuilder.Entity<GameExternalIdentity>();
+        entity.ToTable(
+            "game_external_identities",
+            table => table.HasCheckConstraint(
+                "game_external_identities_external_id_check",
+                "external_id = btrim(external_id) AND external_id <> ''"));
+        entity.HasKey(row => row.Id);
+        entity.Property(row => row.Id).HasColumnName("id").ValueGeneratedOnAdd();
+        entity.Property(row => row.GameId).HasColumnName("game_id");
+        entity.Property(row => row.Type).HasColumnName("type").HasColumnType("game_external_identity_type");
+        entity.Property(row => row.ExternalId).HasColumnName("external_id");
+        entity.Property(row => row.Title).HasColumnName("title");
+        entity.Property(row => row.CreatedAt).HasColumnName("created_at");
+        entity.Property(row => row.UpdatedAt).HasColumnName("updated_at");
+        entity.HasIndex(row => new { row.Type, row.ExternalId }).IsUnique();
+        entity.HasIndex(row => row.GameId);
+        entity.HasOne<Game>().WithMany().HasForeignKey(row => row.GameId).OnDelete(DeleteBehavior.Restrict);
     }
 
     private static void ConfigurePlaySessions(ModelBuilder modelBuilder)

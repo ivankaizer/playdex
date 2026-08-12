@@ -35,7 +35,7 @@ public sealed class PlatformCredential : IHasTimestamps
     public long PlatformId { get; set; }
 }
 
-public sealed class Game: IHasTimestamps
+public sealed class Game : IHasTimestamps
 {
     public long Id { get; set; }
     public required string Title { get; set; }
@@ -47,6 +47,25 @@ public sealed class Game: IHasTimestamps
     public long PlatformId { get; set; }
     public bool CapsuleUrlLocked { get; set; }
     public bool TitleLocked { get; set; }
+}
+
+public enum GameExternalIdentityType
+{
+    Steam,
+    Psn,
+    Xbox,
+    Igdb,
+}
+
+public sealed class GameExternalIdentity : IHasTimestamps
+{
+    public long Id { get; set; }
+    public long GameId { get; set; }
+    public GameExternalIdentityType Type { get; set; }
+    public required string ExternalId { get; set; }
+    public required string Title { get; set; }
+    public DateTimeOffset CreatedAt { get; set; }
+    public DateTimeOffset UpdatedAt { get; set; }
 }
 
 public sealed class PlaySession : IHasTimestamps

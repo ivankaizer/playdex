@@ -28,6 +28,8 @@ public sealed partial class MigrationRunner(
             {
                 await ApplyMigration(connection, migration, cancellationToken);
             }
+
+            await connection.ReloadTypesAsync(cancellationToken);
         }
         finally
         {
