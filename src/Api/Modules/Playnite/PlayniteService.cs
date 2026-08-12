@@ -19,7 +19,7 @@ public sealed partial class PlayniteService(
     private partial void LogPlayniteEventHandlerFailed(Exception exception, string eventType);
 
     public async Task<PlayniteSessionResponseDto?> RecordSession(
-        string apiKey, int durationInSeconds, string gameTitle, string gameId, string gameProvider,
+        string apiKey, int durationInSeconds, string gameTitle, string gameId, string? gameProvider, string platform,
         CancellationToken ct)
     {
         await using var tx = await db.Database.BeginTransactionAsync(ct);
@@ -30,18 +30,18 @@ public sealed partial class PlayniteService(
             return null;
         }
 
-        var insertedGameId = await ResolveGame(gameTitle, gameId, gameProvider, ct);
+        var (insertedGameId, platformId) = await ResolveGame(gameTitle, gameId, gameProvider, platform, ct);
 
         var now = DateTimeOffset.UtcNow;
         var startedAt = now.AddSeconds(-durationInSeconds);
-        var sessionId = await repository.InsertCompletePlaySession(credential.Id, insertedGameId, startedAt, now, ct);
+        var sessionId = await repository.InsertCompletePlaySession(credential, insertedGameId, platformId, startedAt, now, ct);
 
         await tx.CommitAsync(ct);
         return new PlayniteSessionResponseDto(sessionId);
     }
 
     public async Task<PlayniteSessionStartResponseDto?> StartSession(
-        string apiKey, string gameTitle, string gameId, string gameProvider,
+        string apiKey, string gameTitle, string gameId, string? gameProvider, string platform,
         CancellationToken ct)
     {
         await using var tx = await db.Database.BeginTransactionAsync(ct);
@@ -52,19 +52,19 @@ public sealed partial class PlayniteService(
             return null;
         }
 
-        var insertedGameId = await ResolveGame(gameTitle, gameId, gameProvider, ct);
+        var (insertedGameId, platformId) = await ResolveGame(gameTitle, gameId, gameProvider, platform, ct);
 
         var now = DateTimeOffset.UtcNow;
         await repository.EndActiveSessionsForCredential(credential.Id, now, ct);
 
-        var sessionId = await repository.InsertActivePlaySession(credential.Id, insertedGameId, now, ct);
+        var sessionId = await repository.InsertActivePlaySession(credential, insertedGameId, platformId, now, ct);
 
         await tx.CommitAsync(ct);
         return new PlayniteSessionStartResponseDto(sessionId);
     }
 
     public async Task<PlayniteSessionEndResponseDto?> EndSessions(
-        string apiKey, string gameTitle, string gameId, string gameProvider,
+        string apiKey, string gameTitle, string gameId, string? gameProvider, string platform,
         CancellationToken ct)
     {
         await using var tx = await db.Database.BeginTransactionAsync(ct);
@@ -75,11 +75,12 @@ public sealed partial class PlayniteService(
         }
 
         var now = DateTimeOffset.UtcNow;
-        var resolvedGameId = await ResolveGame(gameTitle, gameId, gameProvider, ct);
+        var (resolvedGameId, platformId) = await ResolveGame(gameTitle, gameId, gameProvider, platform, ct);
         var endedSessions = await db.PlaySessions
             .Where(row =>
-                row.PlatformCredentialId == credential.Id &&
+                row.IntegrationId == credential.Id &&
                 row.GameId == resolvedGameId &&
+                row.PlatformId == platformId &&
                 row.EndedAt == null)
             .ToListAsync(ct);
         foreach (var session in endedSessions)
@@ -99,7 +100,7 @@ public sealed partial class PlayniteService(
     }
 
     public async Task<PlayniteSessionPingResponseDto?> PingSession(
-        string apiKey, string gameTitle, string gameId, string gameProvider,
+        string apiKey, string gameTitle, string gameId, string? gameProvider, string platform,
         CancellationToken ct)
     {
         await using var tx = await db.Database.BeginTransactionAsync(ct);
@@ -110,14 +111,14 @@ public sealed partial class PlayniteService(
             return null;
         }
 
-        var insertedGameId = await ResolveGame(gameTitle, gameId, gameProvider, ct);
+        var (insertedGameId, platformId) = await ResolveGame(gameTitle, gameId, gameProvider, platform, ct);
 
         var now = DateTimeOffset.UtcNow;
         var timeoutBefore = now.AddMinutes(-PingTimeoutMinutes);
 
         var timedOut = await db.PlaySessions
             .Where(row =>
-                row.PlatformCredentialId == credential.Id &&
+                row.IntegrationId == credential.Id &&
                 row.EndedAt == null &&
                 row.UpdatedAt < timeoutBefore)
             .ToListAsync(ct);
@@ -130,8 +131,9 @@ public sealed partial class PlayniteService(
 
         var active = await db.PlaySessions
             .Where(row =>
-                row.PlatformCredentialId == credential.Id &&
+                row.IntegrationId == credential.Id &&
                 row.GameId == insertedGameId &&
+                row.PlatformId == platformId &&
                 row.EndedAt == null)
             .OrderByDescending(row => row.StartedAt)
             .FirstOrDefaultAsync(ct);
@@ -153,7 +155,8 @@ public sealed partial class PlayniteService(
             return new PlayniteSessionPingResponseDto(active.Id, false, timedOut.Count);
         }
 
-        var sessionId = await repository.InsertActivePlaySession(credential.Id, insertedGameId, now, ct);
+        await repository.EndActiveSessionsForCredential(credential.Id, now, ct);
+        var sessionId = await repository.InsertActivePlaySession(credential, insertedGameId, platformId, now, ct);
         await tx.CommitAsync(ct);
         foreach (var session in timedOut)
         {
@@ -175,21 +178,27 @@ public sealed partial class PlayniteService(
         return await repository.EndTimedOutActiveSessions(timeoutBefore, now, PingTimeoutMinutes, ct);
     }
 
-    private async Task<long> ResolveGame(
+    private async Task<(long GameId, long PlatformId)> ResolveGame(
         string gameTitle,
         string gameId,
-        string gameProvider,
+        string? gameProvider,
+        string platform,
         CancellationToken ct)
     {
+        var platformKey = platform.Trim().ToLowerInvariant();
+        var platformId = await db.Platforms.Where(row => row.Key == platformKey)
+            .Select(row => (long?)row.Id).SingleOrDefaultAsync(ct)
+            ?? throw Api.Infrastructure.Http.AppProblemException.Validation("Unknown platform.");
+        var provider = gameProvider is null ? null : GameExternalIdentityTypes.FromKey(gameProvider);
         var resolution = await gameResolver.Resolve(
             new GameResolutionRequest(
-                GameExternalIdentityTypes.FromKey(gameProvider),
+                provider,
                 gameId,
                 gameTitle,
-                gameProvider,
-                GenerateCapsuleUrl(gameProvider, gameId)),
+                platformKey,
+                GenerateCapsuleUrl(gameProvider ?? "", gameId)),
             ct);
-        return resolution.GameId;
+        return (resolution.GameId, platformId);
     }
 
     private static string? GenerateCapsuleUrl(string gameProvider, string gameId)
