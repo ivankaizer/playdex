@@ -293,7 +293,14 @@ public sealed class AppriseNotificationTests(PostgresFixture postgres)
 
     private PlaydexDbContext CreateDb() => new(
         new DbContextOptionsBuilder<PlaydexDbContext>()
-            .UseNpgsql(postgres.DataSource!)
+            .UseNpgsql(
+                postgres.DataSource!,
+                npgsql =>
+                {
+                    npgsql.MapEnum<GameExternalIdentityType>("game_external_identity_type");
+                    npgsql.MapEnum<IntegrationType>("integration_type");
+                    npgsql.MapEnum<CaptureMethod>("capture_method");
+                })
             .Options);
 
     private static HttpResponseMessage Json(string value) => new(HttpStatusCode.OK)

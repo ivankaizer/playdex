@@ -168,67 +168,36 @@ public sealed class GameExternalIdentitiesMigrationTests(PostgresFixture postgre
             return;
         }
 
-        var schema = $"game_identity_{Guid.NewGuid():N}";
-        var quotedSchema = new NpgsqlCommandBuilder().QuoteIdentifier(schema);
-        await using var setupConnection = await postgres.DataSource!.OpenConnectionAsync();
-        try
-        {
-            await Execute(setupConnection, null, $"create schema {quotedSchema};");
-            await Execute(setupConnection, null, $"set search_path to {quotedSchema};");
-            await Execute(setupConnection, null, LegacyGamesTableSql);
-            await Execute(setupConnection, null, """
-                insert into games (title, external_id, canonical_key)
-                values ('Existing Game', null, 'unknown:existing');
-                """);
-            await using (var transaction = await setupConnection.BeginTransactionAsync())
-            {
-                await new GameExternalIdentitiesMigration().ApplyAsync(
-                    setupConnection,
-                    transaction,
-                    CancellationToken.None);
-                await transaction.CommitAsync();
-            }
-
-            var databaseUrl = Environment.GetEnvironmentVariable("PLAYDEX_INTEGRATION_DATABASE_URL")!;
-            var connectionString = new NpgsqlConnectionStringBuilder(
-                PostgresConnectionString.Normalize(databaseUrl))
-            {
-                SearchPath = schema,
-            }.ConnectionString;
-            var dataSourceBuilder = new NpgsqlDataSourceBuilder(connectionString);
-            dataSourceBuilder.MapEnum<GameExternalIdentityType>("game_external_identity_type");
-            await using var dataSource = dataSourceBuilder.Build();
-            var options = new DbContextOptionsBuilder<PlaydexDbContext>()
-                .UseNpgsql(
-                    dataSource,
-                    npgsql => npgsql.MapEnum<GameExternalIdentityType>("game_external_identity_type"))
-                .Options;
-
-            await using (var db = new PlaydexDbContext(options))
-            {
-                db.GameExternalIdentities.Add(new GameExternalIdentity
+        var options = new DbContextOptionsBuilder<PlaydexDbContext>()
+            .UseNpgsql(
+                postgres.DataSource!,
+                npgsql =>
                 {
-                    GameId = 1,
-                    Type = GameExternalIdentityType.Igdb,
-                    ExternalId = "123",
-                    Title = "Existing Game",
-                });
-                await db.SaveChangesAsync();
-            }
-
-            await using (var db = new PlaydexDbContext(options))
-            {
-                var identity = await db.GameExternalIdentities.AsNoTracking().SingleAsync();
-                Assert.Equal(GameExternalIdentityType.Igdb, identity.Type);
-                Assert.Equal("123", identity.ExternalId);
-                Assert.Equal("Existing Game", identity.Title);
-            }
-        }
-        finally
+                    npgsql.MapEnum<GameExternalIdentityType>("game_external_identity_type");
+                    npgsql.MapEnum<IntegrationType>("integration_type");
+                    npgsql.MapEnum<CaptureMethod>("capture_method");
+                })
+            .Options;
+        await using var db = new PlaydexDbContext(options);
+        await using var transaction = await db.Database.BeginTransactionAsync();
+        var suffix = Guid.NewGuid().ToString("N");
+        var game = new Game { Title = $"EF enum mapping {suffix}" };
+        db.Games.Add(game);
+        await db.SaveChangesAsync();
+        db.GameExternalIdentities.Add(new GameExternalIdentity
         {
-            await Execute(setupConnection, null, "set search_path to public;");
-            await Execute(setupConnection, null, $"drop schema if exists {quotedSchema} cascade;");
-        }
+            GameId = game.Id,
+            Type = GameExternalIdentityType.Igdb,
+            ExternalId = suffix,
+            Title = game.Title,
+        });
+        await db.SaveChangesAsync();
+
+        db.ChangeTracker.Clear();
+        var identity = await db.GameExternalIdentities.AsNoTracking()
+            .SingleAsync(row => row.ExternalId == suffix);
+        Assert.Equal(GameExternalIdentityType.Igdb, identity.Type);
+        Assert.Equal(game.Title, identity.Title);
     }
 
     [Fact]
