@@ -1,3 +1,5 @@
+using OpenTelemetry.Trace;
+
 namespace Api.Modules.Polling;
 
 public static class PollingModule
@@ -20,6 +22,8 @@ public static class PollingModule
             });
         services.AddHttpClient<IProviderClient, OpenXblClient>(c => c.Timeout = TimeSpan.FromSeconds(15));
         services.AddHttpClient<IgdbClient>(c => c.Timeout = TimeSpan.FromSeconds(15));
+        services.AddOpenTelemetry()
+            .WithTracing(tracing => tracing.AddSource(PollingBackgroundService.ActivitySourceName));
         services.AddHostedService<PollingBackgroundService>();
         return services;
     }

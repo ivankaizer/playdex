@@ -9,15 +9,15 @@ using Api.Infrastructure.Persistence;
 using Api.Infrastructure.Persistence.Migrations;
 using Api.Modules.Accounts;
 using Api.Modules.Admin;
+using Api.Modules.ApiCapture;
 using Api.Modules.Games;
 using Api.Modules.Manual;
 using Api.Modules.Metrics;
-using Api.Modules.ApiCapture;
+using Api.Modules.Notifications;
 using Api.Modules.Polling;
 using Api.Modules.Providers;
 using Api.Modules.Recap;
 using Api.Modules.Settings;
-using Api.Modules.Telegram;
 using Api.Observability;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -85,7 +85,7 @@ builder.Services
     .AddRecap()
     .AddPlaydexMetrics()
     .AddPolling(builder.Configuration)
-    .AddTelegram(builder.Configuration);
+    .AddNotifications(builder.Configuration);
 
 builder.Services.AddExceptionHandler<ApiExceptionHandler>();
 builder.Services.AddProblemDetails();

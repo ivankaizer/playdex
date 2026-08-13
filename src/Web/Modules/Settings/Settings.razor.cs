@@ -37,6 +37,7 @@ internal sealed class SettingsState
     public bool IsProvidersLoading { get; private set; }
     public string ProvidersError { get; private set; } = string.Empty;
     public string IgnoreShortSessionsMinutes { get; private set; } = "0";
+    public string TelegramChatId { get; private set; } = string.Empty;
     public bool IsSettingsLoading { get; private set; }
     public bool IsSettingsSaving { get; private set; }
     public string SettingsError { get; private set; } = string.Empty;
@@ -84,6 +85,7 @@ internal sealed class SettingsState
     {
         IgnoreShortSessionsMinutes = response.IgnoreShortSessionsMinutes
             .ToString(CultureInfo.InvariantCulture);
+        TelegramChatId = response.TelegramChatId ?? string.Empty;
         IsSettingsLoading = false;
     }
 
@@ -95,6 +97,8 @@ internal sealed class SettingsState
 
     public void SetIgnoreShortSessionsMinutes(string value) =>
         IgnoreShortSessionsMinutes = value;
+
+    public void SetTelegramChatId(string value) => TelegramChatId = value;
 
     public bool TryBuildSettingsSubmission(out SettingsSubmission? submission)
     {
@@ -119,12 +123,25 @@ internal sealed class SettingsState
             return FailSettingsValidation();
         }
 
+        var telegramChatId = TelegramChatId.Trim();
+        if (telegramChatId.Length > 0 &&
+            (!long.TryParse(
+                telegramChatId,
+                NumberStyles.AllowLeadingSign,
+                CultureInfo.InvariantCulture,
+                out var parsedChatId) || parsedChatId == 0))
+        {
+            SettingsError = "Enter a valid Telegram chat ID.";
+            return false;
+        }
+
         submission = new SettingsSubmission(
             "/settings",
             HttpMethod.Put,
             new Dictionary<string, object?>
             {
                 ["ignoreShortSessionsMinutes"] = (int)parsed,
+                ["telegramChatId"] = telegramChatId.Length == 0 ? null : telegramChatId,
             });
         return true;
     }
@@ -135,9 +152,12 @@ internal sealed class SettingsState
         SettingsError = string.Empty;
     }
 
-    public void CompleteSettingsSave(UserSettingsResponse response) =>
+    public void CompleteSettingsSave(UserSettingsResponse response)
+    {
         IgnoreShortSessionsMinutes = response.IgnoreShortSessionsMinutes
             .ToString(CultureInfo.InvariantCulture);
+        TelegramChatId = response.TelegramChatId ?? string.Empty;
+    }
 
     public void FailSettingsSave(string error) => SettingsError = error;
 
@@ -410,6 +430,9 @@ public partial class Settings : ComponentBase, IDisposable
 
     private void ChangeIgnoreShortSessionsMinutes(ChangeEventArgs eventArgs) =>
         _state.SetIgnoreShortSessionsMinutes(eventArgs.Value?.ToString() ?? string.Empty);
+
+    private void ChangeTelegramChatId(ChangeEventArgs eventArgs) =>
+        _state.SetTelegramChatId(eventArgs.Value?.ToString() ?? string.Empty);
 
     private async Task SaveSettingsAsync()
     {

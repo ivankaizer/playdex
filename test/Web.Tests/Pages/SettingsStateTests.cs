@@ -56,13 +56,14 @@ public sealed class SettingsStateTests
         var state = new SettingsState();
         var provider = Provider(1, "steam", "active");
         state.CompleteProvidersLoad(new ProvidersResponse([provider]));
-        state.CompleteSettingsLoad(new UserSettingsResponse(30));
+        state.CompleteSettingsLoad(new UserSettingsResponse(30, "123456789"));
 
         state.BeginProvidersLoad();
         state.BeginSettingsLoad();
 
         Assert.Same(provider, Assert.Single(state.Providers));
         Assert.Equal("30", state.IgnoreShortSessionsMinutes);
+        Assert.Equal("123456789", state.TelegramChatId);
 
         state.FailProvidersLoad("Provider error.");
 
@@ -107,8 +108,9 @@ public sealed class SettingsStateTests
         Assert.NotNull(submission);
         Assert.Equal("/settings", submission.Path);
         Assert.Equal(HttpMethod.Put, submission.Method);
-        Assert.Equal(["ignoreShortSessionsMinutes"], submission.Body.Keys);
+        Assert.Equal(["ignoreShortSessionsMinutes", "telegramChatId"], submission.Body.Keys);
         Assert.Equal(expected, submission.Body["ignoreShortSessionsMinutes"]);
+        Assert.Null(submission.Body["telegramChatId"]);
     }
 
     [Theory]
@@ -125,6 +127,31 @@ public sealed class SettingsStateTests
         Assert.Equal("Enter a non-negative number of minutes.", state.SettingsError);
     }
 
+    [Theory]
+    [InlineData("123456789", "123456789")]
+    [InlineData("  -100123456789  ", "-100123456789")]
+    public void SaveAcceptsTelegramChatIds(string draft, string expected)
+    {
+        var state = new SettingsState();
+        state.SetTelegramChatId(draft);
+
+        Assert.True(state.TryBuildSettingsSubmission(out var submission));
+        Assert.Equal(expected, submission!.Body["telegramChatId"]);
+    }
+
+    [Theory]
+    [InlineData("0")]
+    [InlineData("@username")]
+    [InlineData("12.5")]
+    public void SaveRejectsInvalidTelegramChatIds(string draft)
+    {
+        var state = new SettingsState();
+        state.SetTelegramChatId(draft);
+
+        Assert.False(state.TryBuildSettingsSubmission(out _));
+        Assert.Equal("Enter a valid Telegram chat ID.", state.SettingsError);
+    }
+
     [Fact]
     public void SettingsSaveDisablesThenUsesTheResponseWithoutSuccessState()
     {
@@ -135,11 +162,12 @@ public sealed class SettingsStateTests
         Assert.True(state.IsSettingsSaving);
         Assert.Empty(state.SettingsError);
 
-        state.CompleteSettingsSave(new UserSettingsResponse(20));
+        state.CompleteSettingsSave(new UserSettingsResponse(20, "987654321"));
         state.EndSettingsSave();
 
         Assert.False(state.IsSettingsSaving);
         Assert.Equal("20", state.IgnoreShortSessionsMinutes);
+        Assert.Equal("987654321", state.TelegramChatId);
         Assert.Empty(state.SettingsError);
 
         state.BeginSettingsSave();
@@ -327,6 +355,8 @@ public sealed class SettingsStateTests
         Assert.Contains("min=\"0\"", markup);
         Assert.Contains("step=\"1\"", markup);
         Assert.Contains("inputmode=\"numeric\"", markup);
+        Assert.Contains("Telegram chat ID", markup);
+        Assert.Contains("ChangeTelegramChatId", markup);
         Assert.Contains("No providers connected yet. Add one to start syncing playtime.", markup);
         Assert.Contains("Updating...", markup);
         Assert.Contains("Managed by administrator", markup);

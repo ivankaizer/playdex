@@ -68,6 +68,13 @@ public sealed class DeploymentContractTests
         Assert.Contains("dotnet_nuget", compose);
         Assert.Contains("web_bun_cache", compose);
         Assert.Contains("PLAYDEX_API_URL", compose);
+        Assert.Contains("caronc/apprise:1.3.3", compose);
+        Assert.Contains("Apprise__BaseUrl: http://apprise:8000", compose);
+        Assert.Contains("Apprise__TelegramBotToken", compose);
+        Assert.Contains("apprise_config:/config", compose);
+        Assert.Contains("http://localhost:8000/status", compose);
+        Assert.Contains("APPRISE_API_ONLY", compose);
+        Assert.DoesNotContain("\"8000:8000\"", compose);
 
         Assert.Contains("src/Api", apiWorkflow);
         Assert.Contains("src/Web", uiWorkflow);

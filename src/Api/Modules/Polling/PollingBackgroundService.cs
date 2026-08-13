@@ -14,6 +14,8 @@ public sealed partial class PollingBackgroundService(
     MetricsCollector metrics,
     ILogger<PollingBackgroundService> logger) : BackgroundService
 {
+    internal const string ActivitySourceName = "Playdex.Api.Polling";
+    private static readonly ActivitySource ActivitySource = new(ActivitySourceName);
     private readonly CredentialBackoffTracker _backoff = new();
 
     [LoggerMessage(Level = LogLevel.Information, Message = "PollingBackgroundService will start after {Delay} ms")]
@@ -56,72 +58,78 @@ public sealed partial class PollingBackgroundService(
         while (!stoppingToken.IsCancellationRequested)
         {
             var cycleStart = Stopwatch.StartNew();
-            LogStartingPollCycle();
-
-            try
+            using (var activity = ActivitySource.StartActivity("polling.cycle", ActivityKind.Internal))
             {
-                List<ActiveCredential> credentials;
-                using (var scope = serviceProvider.GetRequiredService<IServiceScopeFactory>().CreateScope())
+                LogStartingPollCycle();
+
+                try
                 {
-                    credentials = await scope.ServiceProvider
-                        .GetRequiredService<PollingRepository>()
-                        .LoadActiveCredentials(stoppingToken);
-                }
-                LogLoadedCredentials(credentials.Count);
-                _backoff.Prune(credentials.Select(row => row.Credential.Id));
+                    List<ActiveCredential> credentials;
+                    using (var scope = serviceProvider.GetRequiredService<IServiceScopeFactory>().CreateScope())
+                    {
+                        credentials = await scope.ServiceProvider
+                            .GetRequiredService<PollingRepository>()
+                            .LoadActiveCredentials(stoppingToken);
+                    }
+                    activity?.SetTag("polling.credentials.count", credentials.Count);
+                    LogLoadedCredentials(credentials.Count);
+                    _backoff.Prune(credentials.Select(row => row.Credential.Id));
 
-                foreach (var active in credentials)
+                    foreach (var active in credentials)
+                    {
+                        if (stoppingToken.IsCancellationRequested) break;
+                        var now = DateTimeOffset.UtcNow;
+                        if (!_backoff.IsEligible(active.Credential.Id, now, out var nextEligibleAt))
+                        {
+                            LogSkippingCredential(active.Credential.Id, nextEligibleAt);
+                            continue;
+                        }
+
+                        try
+                        {
+                            using var credentialScope = serviceProvider
+                                .GetRequiredService<IServiceScopeFactory>()
+                                .CreateScope();
+                            await ProcessCredential(active, credentialScope.ServiceProvider, stoppingToken);
+                            _backoff.Reset(active.Credential.Id);
+                        }
+                        catch (Exception ex)
+                        {
+                            var retryAfter = ex is ProviderPollException providerFailure
+                                ? providerFailure.RetryAfter
+                                : null;
+                            var delay = _backoff.RecordFailure(
+                                active.Credential.Id, DateTimeOffset.UtcNow, retryAfter);
+                            LogCredentialFailed(ex, active.Credential.Id, active.PlatformKey, delay, ex.Message);
+                            metrics.RecordPollFailure(active.PlatformKey, DateTimeOffset.UtcNow);
+                            using var notificationScope = serviceProvider
+                                .GetRequiredService<IServiceScopeFactory>()
+                                .CreateScope();
+                            await SafePublish(
+                                notificationScope.ServiceProvider.GetRequiredService<EventBus>(),
+                                new PollFailed(
+                                    active.Credential.Id,
+                                    active.PlatformKey,
+                                    ex.Message,
+                                    delay),
+                                stoppingToken);
+                        }
+                    }
+                }
+                catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
                 {
-                    if (stoppingToken.IsCancellationRequested) break;
-                    var now = DateTimeOffset.UtcNow;
-                    if (!_backoff.IsEligible(active.Credential.Id, now, out var nextEligibleAt))
-                    {
-                        LogSkippingCredential(active.Credential.Id, nextEligibleAt);
-                        continue;
-                    }
-
-                    try
-                    {
-                        using var credentialScope = serviceProvider
-                            .GetRequiredService<IServiceScopeFactory>()
-                            .CreateScope();
-                        await ProcessCredential(active, credentialScope.ServiceProvider, stoppingToken);
-                        _backoff.Reset(active.Credential.Id);
-                    }
-                    catch (Exception ex)
-                    {
-                        var retryAfter = ex is ProviderPollException providerFailure
-                            ? providerFailure.RetryAfter
-                            : null;
-                        var delay = _backoff.RecordFailure(
-                            active.Credential.Id, DateTimeOffset.UtcNow, retryAfter);
-                        LogCredentialFailed(ex, active.Credential.Id, active.PlatformKey, delay, ex.Message);
-                        metrics.RecordPollFailure(active.PlatformKey, DateTimeOffset.UtcNow);
-                        using var notificationScope = serviceProvider
-                            .GetRequiredService<IServiceScopeFactory>()
-                            .CreateScope();
-                        await SafePublish(
-                            notificationScope.ServiceProvider.GetRequiredService<EventBus>(),
-                            new PollFailed(
-                                active.Credential.Id,
-                                active.PlatformKey,
-                                ex.Message,
-                                delay),
-                            stoppingToken);
-                    }
+                    break;
                 }
-            }
-            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
-            {
-                break;
-            }
-            catch (Exception ex)
-            {
-                LogPollCycleFailed(ex);
-                metrics.RecordPollFailure("all", DateTimeOffset.UtcNow);
+                catch (Exception ex)
+                {
+                    activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
+                    LogPollCycleFailed(ex);
+                    metrics.RecordPollFailure("all", DateTimeOffset.UtcNow);
 
-                await Task.Delay(TimeSpan.FromSeconds(5), stoppingToken);
-                continue;
+                    activity?.Stop();
+                    await Task.Delay(TimeSpan.FromSeconds(5), stoppingToken);
+                    continue;
+                }
             }
 
             var elapsed = cycleStart.ElapsedMilliseconds;

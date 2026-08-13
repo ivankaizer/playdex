@@ -2,15 +2,15 @@ using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using SkiaSharp;
 
-namespace Api.Modules.Telegram;
+namespace Api.Modules.Notifications;
 
-public sealed record TelegramNotificationCard(
+public sealed record NotificationCard(
     string Title,
     string Platform,
     bool Ended,
     string? Duration);
 
-public sealed class TelegramNotificationRenderer(HttpClient httpClient)
+public sealed class NotificationRenderer(HttpClient httpClient)
 {
     public const int Width = 1280;
     public const int Height = 1024;
@@ -25,18 +25,15 @@ public sealed class TelegramNotificationRenderer(HttpClient httpClient)
     private static SKTypeface LoadEmbeddedFont(string resourceName)
     {
         var assembly = Assembly.GetExecutingAssembly();
-        using var stream = assembly.GetManifestResourceStream(
-            $"Api.{resourceName}");
-        return stream is null
-            ? SKTypeface.Default
-            : SKTypeface.FromStream(stream);
+        using var stream = assembly.GetManifestResourceStream($"Api.{resourceName}");
+        return stream is null ? SKTypeface.Default : SKTypeface.FromStream(stream);
     }
 
     public static SKTypeface GetRegularTypeface() => RegularTypeface.Value;
     public static SKTypeface GetBoldTypeface() => BoldTypeface.Value;
 
     public async Task<byte[]> RenderAsync(
-        TelegramNotificationCard card,
+        NotificationCard card,
         string capsuleUrl,
         CancellationToken ct)
     {
@@ -51,30 +48,24 @@ public sealed class TelegramNotificationRenderer(HttpClient httpClient)
         canvas.Clear(new SKColor(10, 13, 18));
         DrawCover(canvas, cover);
         using (var overlay = new SKPaint { Color = new SKColor(10, 13, 18, 184) })
-        {
             canvas.DrawRect(0, 0, Width, Height, overlay);
-        }
 
         var panel = new SKRoundRect(new SKRect(64, 600, 1216, 960), 24, 24);
         using (var panelPaint = new SKPaint { Color = new SKColor(9, 12, 18, 220) })
-        {
             canvas.DrawRoundRect(panel, panelPaint);
-        }
         using (var border = new SKPaint
         {
             Color = new SKColor(255, 255, 255, 20),
             Style = SKPaintStyle.Stroke,
             StrokeWidth = 1,
         })
-        {
             canvas.DrawRoundRect(panel, border);
-        }
 
         var regular = RegularTypeface.Value;
         var bold = BoldTypeface.Value;
         DrawText(canvas, card.Ended ? "SESSION ENDED" : "SESSION STARTED",
             96, 666, 30, new SKColor(249, 216, 74), bold);
-        DrawWrappedTitle(canvas, card.Title, bold, regular);
+        DrawWrappedTitle(canvas, card.Title, bold);
         DrawText(canvas, $"Platform: {card.Platform}",
             96, 892, 30, new SKColor(247, 247, 242, 210), regular);
         if (card.Ended && !string.IsNullOrWhiteSpace(card.Duration))
@@ -106,7 +97,7 @@ public sealed class TelegramNotificationRenderer(HttpClient httpClient)
             null);
     }
 
-    private static void DrawWrappedTitle(SKCanvas canvas, string title, SKTypeface bold, SKTypeface regular)
+    private static void DrawWrappedTitle(SKCanvas canvas, string title, SKTypeface bold)
     {
         var size = title.Length > 35 ? 48 : 60;
         var words = title.Split(' ', StringSplitOptions.RemoveEmptyEntries);
@@ -143,10 +134,7 @@ public sealed class TelegramNotificationRenderer(HttpClient httpClient)
         SKColor color,
         SKTypeface typeface)
     {
-        using var font = new SKFont(typeface, size)
-        {
-            Edging = SKFontEdging.Antialias,
-        };
+        using var font = new SKFont(typeface, size) { Edging = SKFontEdging.Antialias };
         using var paint = new SKPaint { Color = color, IsAntialias = true };
         canvas.DrawText(text, x, y, SKTextAlign.Left, font, paint);
     }

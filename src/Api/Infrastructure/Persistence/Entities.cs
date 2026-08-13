@@ -7,7 +7,7 @@ public sealed class User : IHasTimestamps
     public string? Password { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }
-    public string? ChatId { get; set; }
+    public string? TelegramChatId { get; set; }
     public bool IsAdmin { get; set; }
 }
 

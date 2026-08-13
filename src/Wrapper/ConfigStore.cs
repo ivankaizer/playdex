@@ -64,6 +64,8 @@ internal sealed class ConfigStore(string path)
             config.Games ?? new Dictionary<string, GameConfig>(),
             StringComparer.OrdinalIgnoreCase);
         config.Api ??= new ApiConfig();
+        config.SteamGridDb ??= new SteamGridDbConfig();
+        config.SteamGridDb.ApiKey = SteamGridDbConfig.NormalizeApiKey(config.SteamGridDb.ApiKey);
         config.Ludusavi ??= new LudusaviConfig();
         config.Ludusavi.ExecutablePath = LudusaviConfig.NormalizeExecutablePath(
             config.Ludusavi.ExecutablePath,
@@ -79,6 +81,7 @@ internal sealed class ConfigStore(string path)
         foreach (var game in config.Games.Values)
         {
             game.Launch ??= new LaunchConfig();
+            game.Launch.Arguments ??= [];
             game.Monitor ??= new MonitorConfig();
             game.Backup ??= new BackupConfig();
             game.Backup.LudusaviGameTitle = string.IsNullOrWhiteSpace(game.Backup.LudusaviGameTitle)

@@ -156,6 +156,7 @@ internal sealed class TrayApplicationWindow : Form
             row.LaunchRequested += async (_, _) => await actions.LaunchGame(game.GameId);
             row.BackupRequested += async (_, _) => await actions.BackupGame(game.GameId);
             row.EditGameSettingsRequested += async (_, _) => await actions.EditGameSettings(game.GameId);
+            row.AddToSteamRequested += async (_, _) => await actions.AddGameToSteam(game.GameId);
             row.RemoveRequested += async (_, _) => await actions.RemoveGame(game.GameId);
             panel.AddContent(row);
         }
@@ -393,19 +394,28 @@ internal sealed class ApiSettingsDialog : Form
 {
     private readonly TextBox baseUrlInput;
     private readonly TextBox apiKeyInput;
+    private readonly TextBox steamGridDbApiKeyInput;
     private readonly TextBox ludusaviPathInput;
     private readonly Label validation;
     private readonly ApiSettingsDialogMetrics layout;
 
     public string BaseUrl { get; private set; }
     public string ApiKey { get; private set; }
+    public string SteamGridDbApiKey { get; private set; }
     public string LudusaviExecutablePath { get; private set; }
 
-    public ApiSettingsDialog(string baseUrl, string apiKey, string ludusaviExecutablePath, TrayPalette palette, int dpi)
+    public ApiSettingsDialog(
+        string baseUrl,
+        string apiKey,
+        string steamGridDbApiKey,
+        string ludusaviExecutablePath,
+        TrayPalette palette,
+        int dpi)
     {
         layout = ApiSettingsDialogMetrics.ForDpi(dpi);
         BaseUrl = baseUrl;
         ApiKey = apiKey;
+        SteamGridDbApiKey = steamGridDbApiKey;
         LudusaviExecutablePath = ludusaviExecutablePath;
         AutoScaleMode = AutoScaleMode.None;
         AutoSize = false;
@@ -448,11 +458,25 @@ internal sealed class ApiSettingsDialog : Form
         };
         Controls.Add(apiKeyInput);
 
-        Controls.Add(CreateLabel("Ludusavi executable", 16, 142, palette));
+        Controls.Add(CreateLabel("SteamGridDB API key (optional)", 16, 142, palette));
+        steamGridDbApiKeyInput = new TextBox
+        {
+            Text = steamGridDbApiKey,
+            Location = P(16, 166),
+            Size = layout.InputSize,
+            MaxLength = SteamGridDbConfig.MaximumApiKeyLength,
+            UseSystemPasswordChar = true,
+            BackColor = palette.Surface,
+            ForeColor = palette.Text,
+            AccessibleName = "SteamGridDB API key"
+        };
+        Controls.Add(steamGridDbApiKeyInput);
+
+        Controls.Add(CreateLabel("Ludusavi executable", 16, 206, palette));
         ludusaviPathInput = new TextBox
         {
             Text = ludusaviExecutablePath,
-            Location = P(16, 166),
+            Location = P(16, 230),
             Size = Z(310, 27),
             MaxLength = LudusaviConfig.MaximumExecutablePathLength,
             BackColor = palette.Surface,
@@ -461,13 +485,13 @@ internal sealed class ApiSettingsDialog : Form
         };
         Controls.Add(ludusaviPathInput);
         var browse = CreateDialogButton("Browse...", palette.Surface, palette.Text);
-        browse.Location = P(336, 165);
+        browse.Location = P(336, 229);
         browse.Click += (_, _) => BrowseForLudusavi();
         Controls.Add(browse);
 
         validation = new Label
         {
-            Location = P(16, 205),
+            Location = P(16, 269),
             Size = Z(388, 34),
             Font = new Font("Segoe UI", 8f),
             ForeColor = palette.Danger
@@ -475,12 +499,12 @@ internal sealed class ApiSettingsDialog : Form
         Controls.Add(validation);
 
         var cancel = CreateDialogButton("Cancel", palette.Surface, palette.Text);
-        cancel.Location = P(260, 256);
+        cancel.Location = P(260, 320);
         cancel.DialogResult = DialogResult.Cancel;
         Controls.Add(cancel);
 
         var save = CreateDialogButton("Save", palette.Accent, palette == TrayTheme.Dark ? Color.FromArgb(20, 20, 20) : Color.White);
-        save.Location = P(336, 256);
+        save.Location = P(336, 320);
         save.Click += (_, _) => SaveSettings();
         Controls.Add(save);
 
@@ -523,6 +547,7 @@ internal sealed class ApiSettingsDialog : Form
         {
             BaseUrl = ApiConfig.NormalizeBaseUrl(baseUrlInput.Text);
             ApiKey = apiKeyInput.Text.Trim();
+            SteamGridDbApiKey = SteamGridDbConfig.NormalizeApiKey(steamGridDbApiKeyInput.Text);
             LudusaviExecutablePath = LudusaviConfig.NormalizeExecutablePath(ludusaviPathInput.Text);
             DialogResult = DialogResult.OK;
             Close();
@@ -555,22 +580,34 @@ internal sealed class ApiSettingsDialog : Form
 internal sealed class GameSettingsDialog : Form
 {
     public const string SteamDbUrl = "https://steamdb.info/";
+    internal const int ValidationTop = 234;
+    internal const int ValidationHeight = 40;
+    internal const int ButtonTop = 320;
 
     private readonly TextBox gameNameInput;
     private readonly TextBox gameIdInput;
+    private readonly TextBox launchOptionsInput;
     private readonly CheckBox dailyBackupInput;
     private readonly Label validation;
     private readonly ApiSettingsDialogMetrics layout;
 
     public string GameName { get; private set; }
     public string GameId { get; private set; }
+    public string LaunchOptions { get; private set; }
     public bool DailyBackupEnabled { get; private set; }
 
-    public GameSettingsDialog(string currentGameName, string currentGameId, bool dailyBackupEnabled, TrayPalette palette, int dpi)
+    public GameSettingsDialog(
+        string currentGameName,
+        string currentGameId,
+        IReadOnlyList<string> currentLaunchArguments,
+        bool dailyBackupEnabled,
+        TrayPalette palette,
+        int dpi)
     {
         layout = ApiSettingsDialogMetrics.ForDpi(dpi);
         GameName = currentGameName;
         GameId = currentGameId;
+        LaunchOptions = LaunchOptionsCodec.Format(currentLaunchArguments);
         DailyBackupEnabled = dailyBackupEnabled;
         AutoScaleMode = AutoScaleMode.None;
         AutoSize = false;
@@ -641,11 +678,31 @@ internal sealed class GameSettingsDialog : Form
         };
         Controls.Add(gameIdInput);
 
+        Controls.Add(new Label
+        {
+            Text = "Launch options (optional)",
+            Location = P(16, 139),
+            Size = Z(388, 20),
+            Font = new Font("Segoe UI", 9f),
+            ForeColor = palette.Text
+        });
+        launchOptionsInput = new TextBox
+        {
+            Text = LaunchOptions,
+            Location = P(16, 163),
+            Size = layout.InputSize,
+            MaxLength = LaunchConfig.MaximumLaunchOptionsLength,
+            BackColor = palette.Surface,
+            ForeColor = palette.Text,
+            AccessibleName = "Game launch options"
+        };
+        Controls.Add(launchOptionsInput);
+
         dailyBackupInput = new CheckBox
         {
             Text = "Back up saves daily with Ludusavi",
             Checked = dailyBackupEnabled,
-            Location = P(16, 139),
+            Location = P(16, 200),
             Size = Z(388, 26),
             ForeColor = palette.Text,
             AccessibleName = "Enable daily Ludusavi backup"
@@ -654,20 +711,20 @@ internal sealed class GameSettingsDialog : Form
 
         validation = new Label
         {
-            Location = P(16, 174),
-            Size = Z(388, 40),
+            Location = P(16, ValidationTop),
+            Size = Z(388, ValidationHeight),
             Font = new Font("Segoe UI", 8f),
             ForeColor = palette.Danger
         };
         Controls.Add(validation);
 
         var cancel = CreateDialogButton("Cancel", palette.Surface, palette.Text);
-        cancel.Location = P(260, 256);
+        cancel.Location = P(260, ButtonTop);
         cancel.DialogResult = DialogResult.Cancel;
         Controls.Add(cancel);
 
         var save = CreateDialogButton("Save", palette.Accent, palette == TrayTheme.Dark ? Color.FromArgb(20, 20, 20) : Color.White);
-        save.Location = P(336, 256);
+        save.Location = P(336, ButtonTop);
         save.Click += (_, _) => SaveGameSettings();
         Controls.Add(save);
 
@@ -701,6 +758,8 @@ internal sealed class GameSettingsDialog : Form
         {
             GameName = GameCatalog.NormalizeDisplayName(gameNameInput.Text);
             GameId = GameCatalog.NormalizeApiGameId(gameIdInput.Text);
+            _ = LaunchOptionsCodec.Parse(launchOptionsInput.Text);
+            LaunchOptions = launchOptionsInput.Text.Trim();
             DailyBackupEnabled = dailyBackupInput.Checked;
             DialogResult = DialogResult.OK;
             Close();
@@ -738,6 +797,7 @@ internal sealed class TrayGameRow : UserControl
     public event EventHandler? LaunchRequested;
     public event EventHandler? BackupRequested;
     public event EventHandler? EditGameSettingsRequested;
+    public event EventHandler? AddToSteamRequested;
     public event EventHandler? RemoveRequested;
 
     public TrayGameRow(GameConfig game, BackupStatusPresentation backupStatus, TrayPalette palette, TrayLayoutMetrics layout, int width)
@@ -901,6 +961,7 @@ internal sealed class TrayGameRow : UserControl
         };
         var backup = new ToolStripMenuItem("Back up saves now") { AutoSize = false, ForeColor = palette.Text };
         var gameSettings = new ToolStripMenuItem("Game settings") { AutoSize = false, ForeColor = palette.Text };
+        var addToSteam = new ToolStripMenuItem("Add to Steam") { AutoSize = false, ForeColor = palette.Text };
         var separator = new ToolStripSeparator { AutoSize = false };
         var remove = new ToolStripMenuItem($"Remove {title}")
         {
@@ -910,12 +971,13 @@ internal sealed class TrayGameRow : UserControl
         };
         var backupTextSize = TextRenderer.MeasureText(backup.Text, backup.Font, Size.Empty, TextFormatFlags.NoPadding);
         var settingsTextSize = TextRenderer.MeasureText(gameSettings.Text, gameSettings.Font, Size.Empty, TextFormatFlags.NoPadding);
+        var steamTextSize = TextRenderer.MeasureText(addToSteam.Text, addToSteam.Font, Size.Empty, TextFormatFlags.NoPadding);
         var removeTextSize = TextRenderer.MeasureText(remove.Text, remove.Font, Size.Empty, TextFormatFlags.NoPadding);
-        var itemWidth = Math.Max(backupTextSize.Width, Math.Max(settingsTextSize.Width, removeTextSize.Width)) + menuLayout.HorizontalPadding * 2;
+        var itemWidth = new[] { backupTextSize.Width, settingsTextSize.Width, steamTextSize.Width, removeTextSize.Width }.Max() + menuLayout.HorizontalPadding * 2;
         menu.Size = new Size(
             itemWidth + menuLayout.OuterPadding,
-            menuLayout.ItemHeight * 3 + menuLayout.SeparatorHeight + menuLayout.OuterPadding);
-        foreach (var item in new[] { backup, gameSettings, remove })
+            menuLayout.ItemHeight * 4 + menuLayout.SeparatorHeight + menuLayout.OuterPadding);
+        foreach (var item in new[] { backup, gameSettings, addToSteam, remove })
         {
             item.Size = new Size(itemWidth, menuLayout.ItemHeight);
             item.Padding = new Padding(menuLayout.HorizontalPadding, 0, menuLayout.HorizontalPadding, 0);
@@ -925,12 +987,15 @@ internal sealed class TrayGameRow : UserControl
         separator.Margin = Padding.Empty;
         var backupSelected = false;
         var settingsSelected = false;
+        var steamSelected = false;
         var removeSelected = false;
         backup.Click += (_, _) => backupSelected = true;
         gameSettings.Click += (_, _) => settingsSelected = true;
+        addToSteam.Click += (_, _) => steamSelected = true;
         remove.Click += (_, _) => removeSelected = true;
         menu.Items.Add(backup);
         menu.Items.Add(gameSettings);
+        menu.Items.Add(addToSteam);
         menu.Items.Add(separator);
         menu.Items.Add(remove);
         menu.Opening += (_, _) => TrayContextMenuRenderer.ApplyRoundedRegion(menu, menuLayout.CornerRadius);
@@ -944,6 +1009,10 @@ internal sealed class TrayGameRow : UserControl
             else if (settingsSelected)
             {
                 EditGameSettingsRequested?.Invoke(this, EventArgs.Empty);
+            }
+            else if (steamSelected)
+            {
+                AddToSteamRequested?.Invoke(this, EventArgs.Empty);
             }
             else if (removeSelected)
             {

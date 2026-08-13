@@ -138,12 +138,13 @@ public sealed class ApplicationAndUiTests
     public Task TestApiSettingsDialogMetrics()
     {
         Assert.Equal("https://steamdb.info/", GameSettingsDialog.SteamDbUrl);
+        Assert.True(GameSettingsDialog.ValidationTop + GameSettingsDialog.ValidationHeight <= GameSettingsDialog.ButtonTop);
         var expected = new[]
         {
-            (Dpi: 96, Client: new Size(420, 300), Input: new Size(388, 27), Button: new Size(68, 28)),
-            (Dpi: 120, Client: new Size(525, 375), Input: new Size(485, 34), Button: new Size(85, 35)),
-            (Dpi: 144, Client: new Size(630, 450), Input: new Size(582, 41), Button: new Size(102, 42)),
-            (Dpi: 192, Client: new Size(840, 600), Input: new Size(776, 54), Button: new Size(136, 56))
+            (Dpi: 96, Client: new Size(420, 364), Input: new Size(388, 27), Button: new Size(68, 28)),
+            (Dpi: 120, Client: new Size(525, 455), Input: new Size(485, 34), Button: new Size(85, 35)),
+            (Dpi: 144, Client: new Size(630, 546), Input: new Size(582, 41), Button: new Size(102, 42)),
+            (Dpi: 192, Client: new Size(840, 728), Input: new Size(776, 54), Button: new Size(136, 56))
         };
 
         foreach (var item in expected)

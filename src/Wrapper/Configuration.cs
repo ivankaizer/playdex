@@ -1,9 +1,13 @@
 namespace Wrapper;
 
+using System.Net;
+using System.Text.RegularExpressions;
+
 internal sealed class WrapperConfig
 {
     public Dictionary<string, GameConfig> Games { get; set; } = new(StringComparer.OrdinalIgnoreCase);
     public ApiConfig Api { get; set; } = new();
+    public SteamGridDbConfig SteamGridDb { get; set; } = new();
     public LudusaviConfig Ludusavi { get; set; } = new();
     public StorageConfig Storage { get; set; } = new();
 
@@ -53,7 +57,11 @@ internal static class GameCatalog
     public const int MaximumApiGameIdLength = 128;
     public const int MaximumDisplayNameLength = 128;
 
-    public static GameConfig AddFromExecutable(WrapperConfig config, string executablePath)
+    public static async Task<GameConfig> AddFromExecutableAsync(
+        WrapperConfig config,
+        string executablePath,
+        HttpClient? steamStoreClient = null,
+        CancellationToken cancellationToken = default)
     {
         var fullPath = Path.GetFullPath(executablePath);
         if (!File.Exists(fullPath) || !string.Equals(Path.GetExtension(fullPath), ".exe", StringComparison.OrdinalIgnoreCase))
@@ -72,11 +80,15 @@ internal static class GameCatalog
             throw new InvalidOperationException($"Game '{gameId}' already exists. Add a game cannot change an existing entry; use Settings instead.");
         }
 
+        var steamAppId = SteamAppIdReader.TryReadForExecutable(fullPath);
+        var displayName = steamAppId is null
+            ? gameId
+            : await SteamStoreTitleReader.TryReadAsync(steamAppId, steamStoreClient, cancellationToken) ?? gameId;
         var game = new GameConfig
         {
             GameId = gameId,
-            DisplayName = gameId,
-            ApiGameId = SteamAppIdReader.TryReadForExecutable(fullPath) ?? gameId,
+            DisplayName = displayName,
+            ApiGameId = steamAppId ?? gameId,
             Launch = new LaunchConfig { ExecutablePath = fullPath },
             Monitor = new MonitorConfig { Mode = MonitorMode.LaunchedProcess }
         };
@@ -121,6 +133,17 @@ internal static class GameCatalog
         return game;
     }
 
+    public static GameConfig ChangeLaunchOptions(WrapperConfig config, string gameId, string? launchOptions)
+    {
+        if (!config.Games.TryGetValue(gameId, out var game))
+        {
+            throw new InvalidOperationException($"Game '{gameId}' is not configured.");
+        }
+
+        game.Launch.Arguments = LaunchOptionsCodec.Parse(launchOptions);
+        return game;
+    }
+
     public static string NormalizeDisplayName(string? displayName)
     {
         var normalized = displayName?.Trim();
@@ -152,6 +175,62 @@ internal static class GameCatalog
 
         return normalized;
     }
+}
+
+internal static partial class SteamStoreTitleReader
+{
+    private static readonly HttpClient SharedClient = new()
+    {
+        Timeout = TimeSpan.FromSeconds(10)
+    };
+
+    public static async Task<string?> TryReadAsync(
+        string appId,
+        HttpClient? httpClient = null,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            using var request = new HttpRequestMessage(
+                HttpMethod.Get,
+                $"https://store.steampowered.com/app/{Uri.EscapeDataString(appId)}");
+            request.Headers.UserAgent.ParseAdd($"{AppBrand.Name.Replace(' ', '-')}-Wrapper/1.0");
+
+            using var response = await (httpClient ?? SharedClient).SendAsync(request, cancellationToken);
+            if (!response.IsSuccessStatusCode)
+            {
+                return null;
+            }
+
+            var html = await response.Content.ReadAsStringAsync(cancellationToken);
+            var match = AppNameElementRegex().Match(html);
+            if (!match.Success)
+            {
+                return null;
+            }
+
+            var text = HtmlTagRegex().Replace(match.Groups["content"].Value, "");
+            var title = WebUtility.HtmlDecode(text).Trim();
+            return string.IsNullOrWhiteSpace(title)
+                ? null
+                : GameCatalog.NormalizeDisplayName(title);
+        }
+        catch (Exception ex) when (
+            ex is HttpRequestException or IOException ||
+            ex is OperationCanceledException && !cancellationToken.IsCancellationRequested ||
+            ex is InvalidOperationException)
+        {
+            return null;
+        }
+    }
+
+    [GeneratedRegex(
+        "<(?<tag>[a-z][a-z0-9:-]*)\\b(?=[^>]*\\bid\\s*=\\s*(?:\"appHubAppName\"|'appHubAppName'))[^>]*>(?<content>.*?)</\\k<tag>\\s*>",
+        RegexOptions.IgnoreCase | RegexOptions.Singleline)]
+    private static partial Regex AppNameElementRegex();
+
+    [GeneratedRegex("<[^>]+>", RegexOptions.Singleline)]
+    private static partial Regex HtmlTagRegex();
 }
 
 internal static class SteamAppIdReader
@@ -188,8 +267,85 @@ internal static class SteamAppIdReader
 
 internal sealed class LaunchConfig
 {
+    public const int MaximumLaunchOptionsLength = 32767;
+
     public string? ExecutablePath { get; set; }
     public List<string> Arguments { get; set; } = [];
+}
+
+internal static class LaunchOptionsCodec
+{
+    public static List<string> Parse(string? launchOptions)
+    {
+        var normalized = launchOptions?.Trim() ?? "";
+        if (normalized.Length > LaunchConfig.MaximumLaunchOptionsLength)
+        {
+            throw new InvalidOperationException($"Launch options cannot exceed {LaunchConfig.MaximumLaunchOptionsLength} characters.");
+        }
+        if (normalized.Length == 0) return [];
+
+        var arguments = CommandLineToArgvW($"launcher.exe {normalized}", out var count);
+        if (arguments == IntPtr.Zero)
+        {
+            throw new InvalidOperationException("Launch options could not be parsed.");
+        }
+
+        try
+        {
+            var result = new List<string>(Math.Max(0, count - 1));
+            for (var index = 1; index < count; index++)
+            {
+                var value = Marshal.PtrToStringUni(Marshal.ReadIntPtr(arguments, index * IntPtr.Size));
+                if (value is not null) result.Add(value);
+            }
+            return result;
+        }
+        finally
+        {
+            _ = LocalFree(arguments);
+        }
+    }
+
+    public static string Format(IEnumerable<string> arguments) =>
+        string.Join(" ", arguments.Select(Quote));
+
+    private static string Quote(string argument)
+    {
+        if (argument.Length > 0 && !argument.Any(character => char.IsWhiteSpace(character) || character == '"'))
+        {
+            return argument;
+        }
+
+        var output = new StringBuilder(argument.Length + 2).Append('"');
+        var backslashes = 0;
+        foreach (var character in argument)
+        {
+            if (character == '\\')
+            {
+                backslashes++;
+                continue;
+            }
+            if (character == '"')
+            {
+                output.Append('\\', backslashes * 2 + 1).Append('"');
+                backslashes = 0;
+                continue;
+            }
+
+            output.Append('\\', backslashes).Append(character);
+            backslashes = 0;
+        }
+        output.Append('\\', backslashes * 2).Append('"');
+        return output.ToString();
+    }
+
+    [DllImport("shell32.dll", SetLastError = true)]
+    private static extern IntPtr CommandLineToArgvW(
+        [MarshalAs(UnmanagedType.LPWStr)] string commandLine,
+        out int argumentCount);
+
+    [DllImport("kernel32.dll")]
+    private static extern IntPtr LocalFree(IntPtr memory);
 }
 
 internal sealed class MonitorConfig
@@ -239,6 +395,25 @@ internal sealed class ApiConfig
             string.IsNullOrWhiteSpace(uri.Host))
         {
             throw new InvalidOperationException("API base URL must be an absolute HTTP or HTTPS URL.");
+        }
+
+        return normalized;
+    }
+}
+
+internal sealed class SteamGridDbConfig
+{
+    public const int MaximumApiKeyLength = 4096;
+
+    public string ApiKey { get; set; } = "";
+    public bool IsConfigured => !string.IsNullOrWhiteSpace(ApiKey);
+
+    public static string NormalizeApiKey(string? apiKey)
+    {
+        var normalized = apiKey?.Trim() ?? "";
+        if (normalized.Length > MaximumApiKeyLength)
+        {
+            throw new InvalidOperationException($"SteamGridDB API key cannot exceed {MaximumApiKeyLength} characters.");
         }
 
         return normalized;
