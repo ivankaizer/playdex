@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Text;
 using Api.Infrastructure.Persistence;
 using Api.Modules.Polling;
 using Microsoft.Extensions.Options;
@@ -92,6 +93,27 @@ public sealed class PsnClientTests
     }
 
     [Fact]
+    public async Task GetCurrentlyPlayingDoesNotReplaceConfiguredTargetAfterNotFound()
+    {
+        var accessToken = JwtWithAccountId("1234567890123456789");
+        var handler = new RecordingHandler(
+            Response(HttpStatusCode.Found, response =>
+                response.Headers.Location = new Uri("https://redirect.test/callback?code=access-code")),
+            Json($$"""{"access_token":"{{accessToken}}","expires_in":3600}"""),
+            Response(HttpStatusCode.NotFound));
+        var client = CreateClient(handler);
+
+        var failure = await Assert.ThrowsAsync<ProviderPollException>(() =>
+            client.GetCurrentlyPlaying(Credential(), CancellationToken.None));
+
+        Assert.Contains("404", failure.Message);
+        Assert.Equal(
+            "https://presence.test/api/userProfile/v1/internal/users/account-2/basicPresences?type=primary",
+            handler.Requests[2].Uri.ToString());
+        Assert.Equal(3, handler.Requests.Count);
+    }
+
+    [Fact]
     public async Task AccessTokenCacheIsSharedAcrossClientInstances()
     {
         var handler = new RecordingHandler(
@@ -133,6 +155,16 @@ public sealed class PsnClientTests
         ApiKey = "test-npsso",
         AccountId = "account-2",
     };
+
+    private static string JwtWithAccountId(string accountId)
+    {
+        var payload = Convert.ToBase64String(
+                Encoding.UTF8.GetBytes($$"""{"account_id":"{{accountId}}"}"""))
+            .TrimEnd('=')
+            .Replace('+', '-')
+            .Replace('/', '_');
+        return $"header.{payload}.signature";
+    }
 
     private static HttpResponseMessage Json(string json) => new(HttpStatusCode.OK)
     {

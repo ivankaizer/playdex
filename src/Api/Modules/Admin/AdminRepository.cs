@@ -121,21 +121,20 @@ public sealed class AdminRepository(PlaydexDbContext db)
 
     public async Task<List<AdminCredentialRow>> ListCredentials(CancellationToken ct)
     {
-        var rows = await db.Integrations
-            .AsNoTracking()
-            .Join(
-                db.Users.AsNoTracking(),
-                credential => credential.UserId,
-                user => user.Id,
-                (credential, user) => new { credential, user })
-            .Select(value => new
+        var rows = await (
+            from credential in db.Integrations.AsNoTracking()
+            join user in db.Users.AsNoTracking() on credential.UserId equals user.Id
+            join platform in db.Platforms.AsNoTracking()
+                on credential.PlatformId equals (long?)platform.Id into platforms
+            from platform in platforms.DefaultIfEmpty()
+            select new
             {
-                value.credential.Id,
-                UserEmail = value.user.Email,
-                Platform = value.credential.Type == IntegrationType.Api ? "api" : value.credential.Type.ToString().ToLowerInvariant(),
-                value.credential.ApiKey,
-                AccountUser = value.credential.AccountId,
-                value.credential.Active,
+                credential.Id,
+                UserEmail = user.Email,
+                Platform = credential.Type == IntegrationType.Api ? "api" : platform!.Key,
+                credential.ApiKey,
+                AccountUser = credential.AccountId,
+                credential.Active,
             })
             .OrderBy(row => row.UserEmail)
             .ThenBy(row => row.Platform)
@@ -172,22 +171,21 @@ public sealed class AdminRepository(PlaydexDbContext db)
 
     private async Task<AdminCredentialRow?> LoadCredentialRow(long credentialId, CancellationToken ct)
     {
-        var row = await db.Integrations
-            .AsNoTracking()
-            .Where(credential => credential.Id == credentialId)
-            .Join(
-                db.Users.AsNoTracking(),
-                credential => credential.UserId,
-                user => user.Id,
-                (credential, user) => new { credential, user })
-            .Select(value => new
+        var row = await (
+            from credential in db.Integrations.AsNoTracking()
+            join user in db.Users.AsNoTracking() on credential.UserId equals user.Id
+            join platform in db.Platforms.AsNoTracking()
+                on credential.PlatformId equals (long?)platform.Id into platforms
+            from platform in platforms.DefaultIfEmpty()
+            where credential.Id == credentialId
+            select new
             {
-                value.credential.Id,
-                UserEmail = value.user.Email,
-                Platform = value.credential.Type == IntegrationType.Api ? "api" : value.credential.Type.ToString().ToLowerInvariant(),
-                value.credential.ApiKey,
-                AccountUser = value.credential.AccountId,
-                value.credential.Active,
+                credential.Id,
+                UserEmail = user.Email,
+                Platform = credential.Type == IntegrationType.Api ? "api" : platform!.Key,
+                credential.ApiKey,
+                AccountUser = credential.AccountId,
+                credential.Active,
             })
             .FirstOrDefaultAsync(ct);
         return row is null

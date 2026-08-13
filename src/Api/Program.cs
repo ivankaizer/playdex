@@ -69,6 +69,7 @@ builder.Services.AddSingleton(new MigrationCatalog([
     new PollingTargetModelMigration(),
     new ManualTargetModelMigration(),
     new DropLegacyModelMigration(),
+    new CorrectLegacyApiSessionPlatformsMigration(),
 ]));
 builder.Services.AddSingleton<MigrationRunner>();
 builder.Services.AddScoped<EventBus>();

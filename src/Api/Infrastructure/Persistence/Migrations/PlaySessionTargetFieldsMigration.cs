@@ -27,6 +27,7 @@ public sealed class PlaySessionTargetFieldsMigration : IPlaydexMigration
         set user_id = pc.user_id,
             platform_id = case
                 when cp.key in ('steam', 'psn', 'xbox') then pc.platform_id
+                when cp.key = 'playnite' then (select id from platforms where key = 'pc')
                 else g.platform_id
             end,
             capture_method = case
@@ -97,7 +98,11 @@ public sealed class PlaySessionTargetFieldsMigration : IPlaydexMigration
                 new.integration_id := null;
             elsif credential_platform_key in ('playnite', 'custom', 'pc') then
                 new.capture_method := 'api';
-                new.platform_id := selected_game_platform_id;
+                new.platform_id := case
+                    when credential_platform_key = 'playnite'
+                        then (select id from platforms where key = 'pc')
+                    else selected_game_platform_id
+                end;
                 new.integration_id := new.platform_credential_id;
             elsif credential_platform_key in ('steam', 'psn', 'xbox') then
                 new.capture_method := 'polling';

@@ -24,7 +24,7 @@ public sealed partial class NotificationEventHandlers(
     public async Task Handle(SessionStarted @event, CancellationToken ct)
     {
         if (!client.IsEnabled) return;
-        var target = await repository.GetNotificationTarget(@event.CredentialId, @event.GameId, ct);
+        var target = await repository.GetSessionStartedTarget(@event.SessionId, ct);
         if (target is null || string.IsNullOrWhiteSpace(target.TelegramChatId)) return;
         await SendSessionCard(
             target.TelegramChatId,
@@ -37,7 +37,7 @@ public sealed partial class NotificationEventHandlers(
     public async Task Handle(SessionEnded @event, CancellationToken ct)
     {
         if (!client.IsEnabled) return;
-        var target = await repository.GetNotificationTarget(@event.CredentialId, @event.GameId, ct);
+        var target = await repository.GetSessionEndedTarget(@event.SessionId, ct);
         if (target is null || string.IsNullOrWhiteSpace(target.TelegramChatId)) return;
         var duration = FormatDuration(@event.EndedAt - @event.StartedAt);
         await SendSessionCard(

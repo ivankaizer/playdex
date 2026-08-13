@@ -28,7 +28,10 @@ public sealed class ManualTargetModelMigration : IPlaydexMigration
             select platform_id into strict selected_game_platform_id from games where id=new.game_id;
             new.user_id:=credential_user_id;
             if credential_platform_key='manual' then new.capture_method:='manual'; new.platform_id:=selected_game_platform_id; new.integration_id:=null;
-            elsif credential_platform_key in ('playnite','custom','pc') then new.capture_method:='api'; new.platform_id:=selected_game_platform_id; new.integration_id:=new.platform_credential_id;
+            elsif credential_platform_key in ('playnite','custom','pc') then
+                new.capture_method:='api';
+                new.platform_id:=case when credential_platform_key='playnite' then (select id from platforms where key='pc') else selected_game_platform_id end;
+                new.integration_id:=new.platform_credential_id;
             else new.capture_method:='polling'; new.platform_id:=credential_platform_id; new.integration_id:=new.platform_credential_id; end if;
             return new;
         end $$;

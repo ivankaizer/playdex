@@ -99,5 +99,8 @@ public sealed class ProvidersService(ProvidersRepository repository)
     }
 
     internal static ProviderStatusDto ToResponse(ProviderStatusDto provider) =>
-        provider with { ApiKey = provider.ApiKeyLocked ? null : provider.ApiKey };
+        provider with
+        {
+            ApiKey = provider.ApiKeyLocked && provider.Platform != "api" ? null : provider.ApiKey,
+        };
 }

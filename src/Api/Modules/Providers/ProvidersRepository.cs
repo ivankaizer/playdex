@@ -20,7 +20,7 @@ public sealed class ProvidersRepository(PlaydexDbContext db)
                 credential.AccountId,
                 Status = credential.Active ? "active" : "paused",
                 credential.ApiKey,
-                credential.ApiKeyLocked,
+                ApiKeyLocked = credential.ApiKeyLocked || credential.Type == IntegrationType.Api,
             })
             .ToListAsync(ct);
 
@@ -50,7 +50,7 @@ public sealed class ProvidersRepository(PlaydexDbContext db)
             credential.AccountId,
             credential.Active ? "active" : "paused",
             credential.ApiKey,
-            credential.ApiKeyLocked);
+            credential.ApiKeyLocked || credential.Type == IntegrationType.Api);
     }
 
     public async Task<ProviderStatusDto?> UpdateCredential(
@@ -83,14 +83,14 @@ public sealed class ProvidersRepository(PlaydexDbContext db)
             credential.AccountId,
             credential.Active ? "active" : "paused",
             credential.ApiKey,
-            credential.ApiKeyLocked);
+            credential.ApiKeyLocked || credential.Type == IntegrationType.Api);
     }
 
     public async Task<bool> IsApiKeyLocked(long userId, long providerId, CancellationToken ct) =>
         await db.Integrations
             .AsNoTracking()
             .Where(item => item.Id == providerId && item.UserId == userId)
-            .Select(item => item.ApiKeyLocked)
+            .Select(item => item.ApiKeyLocked || item.Type == IntegrationType.Api)
             .FirstOrDefaultAsync(ct);
 
     public Task<bool> IsPlatformApiKeyLocked(long userId, string platformKey, CancellationToken ct) =>
