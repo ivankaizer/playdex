@@ -31,7 +31,7 @@ public sealed class NotificationChannelsMigrationTests(PostgresFixture postgres)
                       and constraint_row.table_name = 'notification_channels'
                       and constraint_row.constraint_type = 'PRIMARY KEY'
                     group by constraint_row.constraint_name
-                    having array_agg(key_row.column_name order by key_row.ordinal_position)
+                    having array_agg(key_row.column_name::text order by key_row.ordinal_position)
                         = array['user_id', 'transport'])
             """);
         await using var reader = await command.ExecuteReaderAsync();
