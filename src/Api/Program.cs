@@ -52,6 +52,7 @@ builder.Services.AddSingleton(new MigrationCatalog([
     new CurrentSchemaMigration(),
     new CredentialApiKeyLockMigration(),
     new OpenXblPlatformMigration(),
+    new NotificationChannelsMigration(),
 ]));
 builder.Services.AddSingleton<MigrationRunner>();
 builder.Services.AddScoped<EventBus>();

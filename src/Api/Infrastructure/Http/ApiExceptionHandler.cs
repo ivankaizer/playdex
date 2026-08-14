@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.Extensions.Logging;
+using Api.Modules.Notifications;
 
 namespace Api.Infrastructure.Http;
 
@@ -18,8 +19,15 @@ public sealed partial class ApiExceptionHandler(ILogger<ApiExceptionHandler> log
     {
         var appProblem = exception as AppProblemException;
         var invalidJson = exception is System.Text.Json.JsonException or BadHttpRequestException;
-        var statusCode = appProblem?.StatusCode ?? (invalidJson ? 400 : 500);
-        var detail = appProblem?.Message ?? (invalidJson ? "Invalid JSON body." : "Internal server error.");
+        var appriseFailure = exception is AppriseApiException;
+        var statusCode = appProblem?.StatusCode ??
+            (invalidJson ? 400 : appriseFailure ? StatusCodes.Status502BadGateway : 500);
+        var detail = appProblem?.Message ??
+            (invalidJson
+                ? "Invalid JSON body."
+                : appriseFailure
+                    ? "Notification delivery failed. Check the Telegram chat ID and try again."
+                    : "Internal server error.");
 
         if (appProblem is null && !invalidJson)
         {
