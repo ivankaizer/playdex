@@ -6,52 +6,91 @@
         <div class="space-y-6">
             <div class="rounded-3xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/60 p-5 sm:p-6">
                 <p class="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-700 dark:text-emerald-300">
-                    Session filters
+                    Preferences
                 </p>
                 <h2 class="mt-2 text-xl font-semibold text-slate-900 dark:text-white">
-                    Ignore short sessions
+                    Sessions &amp; notifications
                 </h2>
                 <p class="mt-2 text-xs text-slate-500 dark:text-slate-400">
-                    Sessions shorter than this duration are marked ignored and excluded from stats. Set to 0 to disable.
+                    Tune how Playdex records short sessions and reaches you.
                 </p>
-                <div class="mt-5 flex flex-wrap items-end gap-4">
-                    <label class="text-xs font-medium text-slate-600 dark:text-slate-300">
-                        <span class="block">Minimum minutes</span>
-                        <input type="number"
-                               min="0"
-                               step="1"
-                               inputmode="numeric"
-                               value="@_state.IgnoreShortSessionsMinutes"
-                               @oninput="ChangeIgnoreShortSessionsMinutes"
-                               disabled="@(_state.IsSettingsLoading || _state.IsSettingsSaving)"
-                               class="mt-3 w-32 rounded-xl border border-slate-300 dark:border-slate-700 bg-white/90 dark:bg-slate-950/80 px-3 py-2 text-sm text-slate-900 dark:text-white outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/30 disabled:cursor-not-allowed disabled:opacity-60" />
-                    </label>
-                    <label class="min-w-64 flex-1 text-xs font-medium text-slate-600 dark:text-slate-300">
-                        <span class="block">Telegram chat ID</span>
-                        <input type="text"
-                               inputmode="numeric"
-                               placeholder="123456789"
-                               value="@_state.TelegramChatId"
-                               @oninput="ChangeTelegramChatId"
-                               disabled="@(_state.IsSettingsLoading || _state.IsSettingsSaving)"
-                               class="mt-3 w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white/90 dark:bg-slate-950/80 px-3 py-2 text-sm text-slate-900 dark:text-white outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/30 disabled:cursor-not-allowed disabled:opacity-60" />
-                        <span class="mt-2 block font-normal text-slate-500 dark:text-slate-400">
-                            Message the Playdex bot once before enabling notifications. Leave blank to disable.
-                        </span>
-                    </label>
-                    <button type="button"
-                            @onclick="SaveSettingsAsync"
-                            disabled="@(_state.IsSettingsLoading || _state.IsSettingsSaving)"
-                            class="rounded-full bg-emerald-400 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-slate-900 transition hover:bg-emerald-300 disabled:cursor-not-allowed disabled:bg-emerald-300/60">
-                        @(_state.IsSettingsSaving ? "Saving..." : _state.IsSettingsLoading ? "Loading..." : "Save")
-                    </button>
+                <div class="mt-6 divide-y divide-slate-200 dark:divide-slate-800">
+                    <div class="grid gap-4 pb-6 sm:grid-cols-[minmax(0,1fr)_11rem] sm:items-start">
+                        <div>
+                            <h3 class="text-sm font-semibold text-slate-900 dark:text-white">Ignore short sessions</h3>
+                            <p class="mt-1 max-w-xl text-xs leading-5 text-slate-500 dark:text-slate-400">
+                                Sessions shorter than this duration are marked ignored and excluded from stats. Set to 0 to disable.
+                            </p>
+                        </div>
+                        <label class="text-xs font-medium text-slate-600 dark:text-slate-300">
+                            <span class="block">Minimum minutes</span>
+                            <input type="number"
+                                   min="0"
+                                   step="1"
+                                   inputmode="numeric"
+                                   value="@_state.IgnoreShortSessionsMinutes"
+                                   @oninput="ChangeIgnoreShortSessionsMinutes"
+                                   disabled="@(_state.IsSettingsLoading || _state.IsSettingsSaving || _state.IsTestNotificationSending)"
+                                   class="mt-2 w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white/90 dark:bg-slate-950/80 px-3 py-2.5 text-sm text-slate-900 dark:text-white outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/30 disabled:cursor-not-allowed disabled:opacity-60" />
+                        </label>
+                    </div>
+
+                    <div class="grid gap-4 py-6 sm:grid-cols-[minmax(0,1fr)_minmax(16rem,22rem)] sm:items-start">
+                        <div>
+                            <h3 class="text-sm font-semibold text-slate-900 dark:text-white">Telegram notifications</h3>
+                            <p class="mt-1 max-w-xl text-xs leading-5 text-slate-500 dark:text-slate-400">
+                                Message the Playdex bot once, then save your chat ID. Leave it blank to disable notifications.
+                            </p>
+                        </div>
+                        <label class="text-xs font-medium text-slate-600 dark:text-slate-300">
+                            <span class="block">Chat ID</span>
+                            <input type="text"
+                                   inputmode="numeric"
+                                   placeholder="123456789"
+                                   value="@_state.TelegramChatId"
+                                   @oninput="ChangeTelegramChatId"
+                                   disabled="@(_state.IsSettingsLoading || _state.IsSettingsSaving || _state.IsTestNotificationSending)"
+                                   class="mt-2 w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white/90 dark:bg-slate-950/80 px-3 py-2.5 text-sm text-slate-900 dark:text-white outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/30 disabled:cursor-not-allowed disabled:opacity-60" />
+                        </label>
+                    </div>
+
+                    <div class="flex flex-col gap-4 pt-5 sm:flex-row sm:items-center sm:justify-between">
+                        <div class="min-h-10 flex-1" aria-live="polite">
+                            @if (!string.IsNullOrEmpty(_state.SettingsError))
+                            {
+                                <p class="rounded-xl border border-rose-200 dark:border-rose-900/60 bg-rose-50 dark:bg-rose-950/30 px-3 py-2.5 text-xs text-rose-700 dark:text-rose-300">
+                                    @_state.SettingsError
+                                </p>
+                            }
+                            else if (!string.IsNullOrEmpty(_state.TestNotificationMessage))
+                            {
+                                <p class="rounded-xl border border-emerald-200 dark:border-emerald-900/60 bg-emerald-50 dark:bg-emerald-950/30 px-3 py-2.5 text-xs text-emerald-700 dark:text-emerald-300">
+                                    @_state.TestNotificationMessage
+                                </p>
+                            }
+                            else if (!string.IsNullOrEmpty(_state.TestNotificationError))
+                            {
+                                <p class="rounded-xl border border-rose-200 dark:border-rose-900/60 bg-rose-50 dark:bg-rose-950/30 px-3 py-2.5 text-xs text-rose-700 dark:text-rose-300">
+                                    @_state.TestNotificationError
+                                </p>
+                            }
+                        </div>
+                        <div class="flex shrink-0 flex-wrap gap-2 sm:justify-end">
+                            <button type="button"
+                                    @onclick="SendTestNotificationAsync"
+                                    disabled="@(!_state.CanSendTestNotification)"
+                                    class="rounded-xl border border-slate-300 dark:border-slate-700 px-4 py-2.5 text-sm font-semibold text-slate-700 dark:text-slate-200 transition hover:border-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-200 disabled:cursor-not-allowed disabled:opacity-50">
+                                @(_state.IsTestNotificationSending ? "Sending..." : "Send test")
+                            </button>
+                            <button type="button"
+                                    @onclick="SaveSettingsAsync"
+                                    disabled="@(_state.IsSettingsLoading || _state.IsSettingsSaving || _state.IsTestNotificationSending)"
+                                    class="rounded-xl bg-emerald-400 px-4 py-2.5 text-sm font-semibold text-slate-900 transition hover:bg-emerald-300 disabled:cursor-not-allowed disabled:bg-emerald-300/60">
+                                @(_state.IsSettingsSaving ? "Saving..." : _state.IsSettingsLoading ? "Loading..." : "Save")
+                            </button>
+                        </div>
+                    </div>
                 </div>
-                @if (!string.IsNullOrEmpty(_state.SettingsError))
-                {
-                    <p class="mt-3 text-xs text-rose-700 dark:text-rose-300">
-                        @_state.SettingsError
-                    </p>
-                }
             </div>
         </div>
 

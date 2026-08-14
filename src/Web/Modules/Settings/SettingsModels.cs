@@ -7,3 +7,5 @@ public sealed record UserSettingsResponse(
 public sealed record UpdateSettingsRequest(
     int? IgnoreShortSessionsMinutes,
     string? TelegramChatId);
+
+public sealed record TestNotificationResponse(bool Sent);

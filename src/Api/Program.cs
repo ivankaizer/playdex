@@ -63,6 +63,7 @@ builder.Services.AddSingleton(new MigrationCatalog([
     new CurrentSchemaMigration(),
     new CredentialApiKeyLockMigration(),
     new OpenXblPlatformMigration(),
+    new NotificationChannelsMigration(),
     new GameExternalIdentitiesMigration(),
     new IntegrationsMigration(),
     new PlaySessionTargetFieldsMigration(),

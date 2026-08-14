@@ -7,8 +7,18 @@ public sealed class User : IHasTimestamps
     public string? Password { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }
-    public string? TelegramChatId { get; set; }
     public bool IsAdmin { get; set; }
+}
+
+public sealed class NotificationChannel : IHasTimestamps
+{
+    public const string Telegram = "telegram";
+
+    public long UserId { get; set; }
+    public required string Transport { get; set; }
+    public required string Destination { get; set; }
+    public DateTimeOffset CreatedAt { get; set; }
+    public DateTimeOffset UpdatedAt { get; set; }
 }
 
 public sealed class Platform : IHasTimestamps

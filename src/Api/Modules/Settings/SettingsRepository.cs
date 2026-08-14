@@ -12,11 +12,13 @@ public sealed class SettingsRepository(PlaydexDbContext db)
             .Where(s => s.UserId == userId)
             .Select(s => s.IgnoreShortSessionsMinutes)
             .FirstOrDefaultAsync(ct);
-        var telegramChatId = await db.Users
+        var telegramChatId = await db.NotificationChannels
             .AsNoTracking()
-            .Where(user => user.Id == userId)
-            .Select(user => user.TelegramChatId)
-            .SingleAsync(ct);
+            .Where(channel =>
+                channel.UserId == userId &&
+                channel.Transport == NotificationChannel.Telegram)
+            .Select(channel => channel.Destination)
+            .SingleOrDefaultAsync(ct);
 
         return new UserSettingsResponseDto(ignoreShortMinutes, telegramChatId);
     }
@@ -30,7 +32,11 @@ public sealed class SettingsRepository(PlaydexDbContext db)
         var existing = await db.UserSettings
             .Where(s => s.UserId == userId)
             .FirstOrDefaultAsync(ct);
-        var user = await db.Users.SingleAsync(row => row.Id == userId, ct);
+        var telegramChannel = await db.NotificationChannels.SingleOrDefaultAsync(
+            channel =>
+                channel.UserId == userId &&
+                channel.Transport == NotificationChannel.Telegram,
+            ct);
 
         var now = DateTimeOffset.UtcNow;
         if (existing is null)
@@ -48,8 +54,26 @@ public sealed class SettingsRepository(PlaydexDbContext db)
             existing.IgnoreShortSessionsMinutes = ignoreShortMinutes;
             existing.UpdatedAt = now;
         }
-        user.TelegramChatId = telegramChatId;
-        user.UpdatedAt = now;
+        if (telegramChatId is null && telegramChannel is not null)
+        {
+            db.NotificationChannels.Remove(telegramChannel);
+        }
+        else if (telegramChatId is not null && telegramChannel is null)
+        {
+            db.NotificationChannels.Add(new NotificationChannel
+            {
+                UserId = userId,
+                Transport = NotificationChannel.Telegram,
+                Destination = telegramChatId,
+                CreatedAt = now,
+                UpdatedAt = now,
+            });
+        }
+        else if (telegramChatId is not null && telegramChannel is not null)
+        {
+            telegramChannel.Destination = telegramChatId;
+            telegramChannel.UpdatedAt = now;
+        }
 
         await db.SaveChangesAsync(ct);
         return new UserSettingsResponseDto(ignoreShortMinutes, telegramChatId);

@@ -4,7 +4,7 @@ using Microsoft.EntityFrameworkCore;
 namespace Api.Modules.Notifications;
 
 /// <summary>
-/// Resolves notification routing data from the user's Telegram chat ID.
+/// Resolves notification routing data from user-owned channels.
 /// </summary>
 public sealed class NotificationsRepository(PlaydexDbContext db)
 {
@@ -14,10 +14,10 @@ public sealed class NotificationsRepository(PlaydexDbContext db)
     {
         return (
             from session in db.PlaySessions
-            join user in db.Users on session.UserId equals user.Id
+            join channel in db.NotificationChannels on session.UserId equals channel.UserId
             join game in db.Games on session.GameId equals game.Id
             join platform in db.Platforms on session.PlatformId equals platform.Id
-            where session.Id == sessionId
+            where session.Id == sessionId && channel.Transport == NotificationChannel.Telegram
             where !db.PlaySessions.Any(other =>
                 other.Id != session.Id &&
                 other.UserId == session.UserId &&
@@ -27,7 +27,7 @@ public sealed class NotificationsRepository(PlaydexDbContext db)
                  other.StartedAt == session.StartedAt && other.Id < session.Id) &&
                 (other.EndedAt == null || other.EndedAt > session.StartedAt))
             select new NotificationTarget(
-                user.TelegramChatId,
+                channel.Destination,
                 game.Title,
                 platform.Name,
                 game.CapsuleUrl))
@@ -41,10 +41,11 @@ public sealed class NotificationsRepository(PlaydexDbContext db)
     {
         return (
             from session in db.PlaySessions
-            join user in db.Users on session.UserId equals user.Id
+            join channel in db.NotificationChannels on session.UserId equals channel.UserId
             join game in db.Games on session.GameId equals game.Id
             join platform in db.Platforms on session.PlatformId equals platform.Id
             where session.Id == sessionId && session.EndedAt != null
+                && channel.Transport == NotificationChannel.Telegram
             where !db.PlaySessions.Any(other =>
                 other.Id != session.Id &&
                 other.UserId == session.UserId &&
@@ -55,7 +56,7 @@ public sealed class NotificationsRepository(PlaydexDbContext db)
                  other.EndedAt > session.EndedAt ||
                  other.EndedAt == session.EndedAt && other.Id > session.Id))
             select new NotificationTarget(
-                user.TelegramChatId,
+                channel.Destination,
                 game.Title,
                 platform.Name,
                 game.CapsuleUrl))
@@ -69,10 +70,10 @@ public sealed class NotificationsRepository(PlaydexDbContext db)
     {
         return await (
             from integration in db.Integrations
-            join user in db.Users on integration.UserId equals user.Id
+            join channel in db.NotificationChannels on integration.UserId equals channel.UserId
             join platform in db.Platforms on integration.PlatformId equals platform.Id
-            where integration.Id == credentialId
-            select new CredentialNotificationTarget(user.TelegramChatId, platform.Name))
+            where integration.Id == credentialId && channel.Transport == NotificationChannel.Telegram
+            select new CredentialNotificationTarget(channel.Destination, platform.Name))
             .AsNoTracking()
             .SingleOrDefaultAsync(ct);
     }

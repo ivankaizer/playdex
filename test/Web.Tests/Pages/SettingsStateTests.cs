@@ -178,6 +178,38 @@ public sealed class SettingsStateTests
     }
 
     [Fact]
+    public void TestNotificationRequiresAnUnchangedSavedChatIdAndReportsItsOutcome()
+    {
+        var state = new SettingsState();
+
+        Assert.False(state.CanSendTestNotification);
+        state.CompleteSettingsLoad(new UserSettingsResponse(0, "123456789"));
+        Assert.True(state.CanSendTestNotification);
+
+        state.SetTelegramChatId("987654321");
+        Assert.False(state.CanSendTestNotification);
+
+        state.CompleteSettingsSave(new UserSettingsResponse(0, "987654321"));
+        Assert.True(state.CanSendTestNotification);
+        Assert.Equal("/settings/notifications/test", state.BeginTestNotification());
+        Assert.True(state.IsTestNotificationSending);
+        Assert.False(state.CanSendTestNotification);
+
+        state.CompleteTestNotification(new TestNotificationResponse(true));
+        state.EndTestNotification();
+        Assert.False(state.IsTestNotificationSending);
+        Assert.True(state.CanSendTestNotification);
+        Assert.Equal("Test message sent.", state.TestNotificationMessage);
+        Assert.Empty(state.TestNotificationError);
+
+        state.BeginTestNotification();
+        state.FailTestNotification("Apprise unavailable.");
+        state.EndTestNotification();
+        Assert.Equal("Apprise unavailable.", state.TestNotificationError);
+        Assert.Empty(state.TestNotificationMessage);
+    }
+
+    [Fact]
     public void ProviderUpdatesArePerIdNonOptimisticAndReplaceFromTheResponse()
     {
         var state = new SettingsState();
@@ -372,8 +404,12 @@ public sealed class SettingsStateTests
         Assert.Contains("min=\"0\"", markup);
         Assert.Contains("step=\"1\"", markup);
         Assert.Contains("inputmode=\"numeric\"", markup);
-        Assert.Contains("Telegram chat ID", markup);
+        Assert.Contains("Telegram notifications", markup);
+        Assert.Contains("Chat ID", markup);
         Assert.Contains("ChangeTelegramChatId", markup);
+        Assert.Contains("Send test", markup);
+        Assert.Contains("SendTestNotificationAsync", markup);
+        Assert.Contains("aria-live=\"polite\"", markup);
         Assert.Contains("No providers connected yet. Add one to start syncing playtime.", markup);
         Assert.Contains("Updating...", markup);
         Assert.Contains("Managed by administrator", markup);
@@ -389,6 +425,8 @@ public sealed class SettingsStateTests
         Assert.Contains("SendAsync<ProvidersResponse>(path", code);
         Assert.Contains("SendAsync<UserSettingsResponse>(path", code);
         Assert.Contains("SendAsync<UserSettingsResponse>(submission!.Path", code);
+        Assert.Contains("SendAsync<TestNotificationResponse>", code);
+        Assert.Contains("HttpMethod.Post", code);
         Assert.Contains("SendAsync<ProviderUpdateResponse>(submission.Path", code);
         Assert.Contains("SendAsync<ProviderCredentialUpdateResponse>(submission!.Path", code);
         Assert.Contains("CancellationTokenSource.CreateLinkedTokenSource", code);

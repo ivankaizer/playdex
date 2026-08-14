@@ -199,10 +199,16 @@ public sealed class AppriseNotificationTests(PostgresFixture postgres)
         var user = new User
         {
             Email = $"notifications-{suffix}@example.test",
-            TelegramChatId = "4242",
         };
         db.Users.Add(user);
         await db.SaveChangesAsync();
+        var notificationChannel = new NotificationChannel
+        {
+            UserId = user.Id,
+            Transport = NotificationChannel.Telegram,
+            Destination = "4242",
+        };
+        db.NotificationChannels.Add(notificationChannel);
         var integration = new Integration
         {
             UserId = user.Id,
@@ -266,7 +272,7 @@ public sealed class AppriseNotificationTests(PostgresFixture postgres)
                 new PollFailed(integration.Id, "steam", "rate limited", TimeSpan.FromMinutes(1)),
                 CancellationToken.None);
 
-            user.TelegramChatId = null;
+            db.NotificationChannels.Remove(notificationChannel);
             await db.SaveChangesAsync();
             await handler.Handle(
                 new SessionStarted(session.Id, integration.Id, game.Id, now),
@@ -296,10 +302,15 @@ public sealed class AppriseNotificationTests(PostgresFixture postgres)
         {
             Id = idBase,
             Email = $"notification-dedup-{suffix}@example.test",
-            TelegramChatId = "4343",
         };
         var game = new Game { Id = idBase + 1, Title = "Skate Story" };
-        db.AddRange(user, game);
+        var notificationChannel = new NotificationChannel
+        {
+            UserId = user.Id,
+            Transport = NotificationChannel.Telegram,
+            Destination = "4343",
+        };
+        db.AddRange(user, game, notificationChannel);
         await db.SaveChangesAsync();
 
         var firstIntegration = new Integration
