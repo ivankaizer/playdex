@@ -11,7 +11,8 @@ internal sealed record SessionData(
     long GameId,
     string Game,
     string? CapsuleUrl,
-    string Platform,
+    string PlatformKey,
+    string PlatformName,
     string? MappedPlatform,
     string? MappedSource);
 
@@ -30,7 +31,8 @@ internal sealed record GroupAccum(
     int SessionCount);
 
 internal sealed record PlatformAccum(
-    string Platform,
+    string PlatformKey,
+    string PlatformName,
     int SessionCount,
     double TotalSeconds);
 
@@ -141,7 +143,7 @@ public sealed class RecapService(RecapRepository repository)
                 weekdaySeconds += durationSeconds;
 
             // Platform totals
-            var platformKey = session.MappedPlatform ?? session.Platform;
+            var platformKey = session.PlatformKey;
             if (platformTotals.TryGetValue(platformKey, out var existingPt))
             {
                 platformTotals[platformKey] = existingPt with
@@ -152,7 +154,8 @@ public sealed class RecapService(RecapRepository repository)
             }
             else
             {
-                platformTotals[platformKey] = new PlatformAccum(platformKey, 1, durationSeconds);
+                platformTotals[platformKey] = new PlatformAccum(
+                    platformKey, session.PlatformName, 1, durationSeconds);
             }
 
             // Game totals
@@ -431,14 +434,16 @@ public sealed class RecapService(RecapRepository repository)
 
         var platformTotalsList = platformTotals.Values
             .OrderByDescending(p => p.TotalSeconds)
-            .Select(p => new RecapPlatformStatDto(p.Platform, p.SessionCount, p.TotalSeconds, null))
+            .Select(p => new RecapPlatformStatDto(
+                p.PlatformKey, p.PlatformName, p.SessionCount, p.TotalSeconds, null))
             .ToList();
 
         PlatformSummaryDto? mostUsedPlatform = null;
         if (platformTotalsList.Count > 0)
         {
             var top = platformTotalsList[0];
-            mostUsedPlatform = new PlatformSummaryDto(top.Platform, top.TotalSeconds, top.SessionCount);
+            mostUsedPlatform = new PlatformSummaryDto(
+                top.PlatformKey, top.PlatformName, top.TotalSeconds, top.SessionCount);
         }
 
         // ── Build response ─────────────────────────────────────
@@ -506,7 +511,8 @@ public sealed class RecapService(RecapRepository repository)
             GameId = r.GameId,
             Title = r.Title,
             CapsuleUrl = r.CapsuleUrl,
-            Platform = r.Platform
+            PlatformKey = r.PlatformKey,
+            PlatformName = r.PlatformName
         }).ToList();
 
         var mapped = await MapSessionsForUser(userId, sessionRows, ct);
@@ -518,7 +524,7 @@ public sealed class RecapService(RecapRepository repository)
     private static SessionData ToSessionData(RecapSessionRow row) =>
         new(row.Id, row.StartedAt, row.EndedAt,
             row.GameId, row.Title, row.CapsuleUrl,
-            row.Platform, null, null);
+            row.PlatformKey, row.PlatformName, null, null);
 
     private static string ToUtcDateKey(DateTimeOffset date) =>
         date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);

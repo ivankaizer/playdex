@@ -161,6 +161,7 @@ public sealed class GameStateTests
             DateTimeOffset.Parse(ended, CultureInfo.InvariantCulture),
             "42",
             "steam",
+            "Steam",
             "Game",
             capsule,
             ignored,

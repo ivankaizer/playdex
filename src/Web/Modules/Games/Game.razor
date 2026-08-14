@@ -145,7 +145,7 @@
                                     <div>
                                         <p class="text-sm font-semibold text-slate-900 dark:text-white">@Formatters.FormatDateLabel(session.StartedAt)</p>
                                         <p class="text-xs text-slate-500 dark:text-slate-400">
-                                            @Formatters.FormatSessionPlatformLabel(session.Platform, session.MappedPlatform) · @Formatters.FormatTimeLabel(session.StartedAt)
+                                            @session.PlatformName · @Formatters.FormatTimeLabel(session.StartedAt)
                                         </p>
                                     </div>
                                 </div>

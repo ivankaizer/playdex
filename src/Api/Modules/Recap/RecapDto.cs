@@ -12,7 +12,8 @@ public sealed record RecapGameStatDto(
     bool IsAbandoned);
 
 public sealed record RecapPlatformStatDto(
-    string Platform,
+    string PlatformKey,
+    string PlatformName,
     int SessionCount,
     double TotalSeconds,
     string? Source);
@@ -36,7 +37,8 @@ public sealed record BingedGameDto(
     int SessionCount);
 
 public sealed record PlatformSummaryDto(
-    string Platform,
+    string PlatformKey,
+    string PlatformName,
     double TotalSeconds,
     int SessionCount);
 

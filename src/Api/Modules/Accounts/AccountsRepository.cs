@@ -173,18 +173,18 @@ public sealed class AccountsRepository(PlaydexDbContext db, IGames games)
     {
         var allSessions = await ListSessionsForStats(userId, accountId, from, to, ignoreShortMinutes, ct);
         var platforms = allSessions
-            .GroupBy(EffectivePlatform)
+            .GroupBy(session => session.PlatformKey)
             .Select(g => new AccountPlatformStatDto(
-                g.Key, g.Sum(MapDuration), null))
-            .OrderBy(platform => platform.Platform)
+                g.Key, g.First().PlatformName, g.Sum(MapDuration), null))
+            .OrderBy(platform => platform.PlatformKey)
             .ToList();
 
         var normalizedPlatform = string.IsNullOrWhiteSpace(platform)
             ? null
-            : NormalizePlatformKey(platform);
+            : platform.Trim().ToLowerInvariant();
         var sessions = normalizedPlatform is null
             ? allSessions
-            : allSessions.Where(session => EffectivePlatform(session) == normalizedPlatform).ToList();
+            : allSessions.Where(session => session.PlatformKey == normalizedPlatform).ToList();
         var months = BuildMonthStats(from, to, sessions);
         if (sessions.Count == 0)
             return new AccountStatsPeriodDto(0, 0, null, platforms, [], months);
@@ -226,7 +226,8 @@ public sealed class AccountsRepository(PlaydexDbContext db, IGames games)
         var sql = """
             SELECT ps.id AS "SessionId", ps.started_at AS "StartedAt", ps.ended_at AS "EndedAt",
                    g.id AS "GameId", g.title AS "GameTitle",
-                   p.key AS "Platform", g.capsule_url AS "CapsuleUrl",
+                   p.key AS "PlatformKey", p.name AS "PlatformName",
+                   g.capsule_url AS "CapsuleUrl",
                    CASE
                        WHEN COALESCE(us.ignore_short_sessions_minutes, 0) > 0
                            AND ps.ended_at IS NOT NULL
@@ -276,8 +277,8 @@ public sealed class AccountsRepository(PlaydexDbContext db, IGames games)
 
         if (!string.IsNullOrWhiteSpace(platform))
         {
-            sql += $" AND ({EffectivePlatformSql}) = @Platform";
-            parameters.Add(new NpgsqlParameter("Platform", NormalizePlatformKey(platform)));
+            sql += " AND p.key = @Platform";
+            parameters.Add(new NpgsqlParameter("Platform", platform.Trim().ToLowerInvariant()));
         }
 
         if (from.HasValue)
@@ -311,7 +312,8 @@ public sealed class AccountsRepository(PlaydexDbContext db, IGames games)
             row.StartedAt,
             row.EndedAt,
             GameId.Encode(row.GameId),
-            row.Platform,
+            row.PlatformKey,
+            row.PlatformName,
             row.GameTitle,
             row.CapsuleUrl,
             row.Ignored,
@@ -323,15 +325,6 @@ public sealed class AccountsRepository(PlaydexDbContext db, IGames games)
         s.EndedAt.HasValue
             ? (s.EndedAt.Value - s.StartedAt).TotalSeconds
             : (DateTimeOffset.UtcNow - s.StartedAt).TotalSeconds;
-
-    internal static string NormalizePlatformKey(string platform) => platform.Trim().ToLowerInvariant() switch
-    {
-        "psn" or "ps5" => "ps5",
-        var value => value,
-    };
-
-    private static string EffectivePlatform(AccountSessionDto session) =>
-        NormalizePlatformKey(session.MappedPlatform ?? session.Platform);
 
     private static List<AccountMonthStatDto> BuildMonthStats(
         DateTimeOffset from,
@@ -354,8 +347,6 @@ public sealed class AccountsRepository(PlaydexDbContext db, IGames games)
         return months;
     }
 
-    private const string EffectivePlatformSql =
-        "CASE WHEN p.key IN ('psn', 'ps5') THEN 'ps5' ELSE p.key END";
 }
 
 public sealed record SessionQueryResult(int Total, int Limit, int Offset, List<AccountSessionDto> Sessions);
@@ -367,7 +358,8 @@ internal sealed class SessionDbRow
     public DateTimeOffset? EndedAt { get; set; }
     public long GameId { get; set; }
     public string GameTitle { get; set; } = string.Empty;
-    public string Platform { get; set; } = string.Empty;
+    public string PlatformKey { get; set; } = string.Empty;
+    public string PlatformName { get; set; } = string.Empty;
     public string? CapsuleUrl { get; set; }
     public bool Ignored { get; set; }
     public int DurationSeconds { get; set; }

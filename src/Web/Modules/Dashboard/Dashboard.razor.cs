@@ -180,7 +180,7 @@ internal sealed class DashboardState
             Formatters.FormatDuration(
                 SessionDates.GetDurationSeconds(session.StartedAt, session.EndedAt, now),
                 DurationFormat.Full),
-            Formatters.FormatSessionPlatformLabel(session.Platform, session.MappedPlatform),
+            session.PlatformName,
             session.CapsuleUrl)).ToArray();
 
     public IReadOnlyList<DashboardPlatformView> GetTodayPlatforms() =>
@@ -194,7 +194,7 @@ internal sealed class DashboardState
             CurrentSession.GameId,
             $"/games/{GameHash.EncodeGameId(CurrentSession.GameId)}",
             CurrentSession.Game,
-            Formatters.FormatSessionPlatformLabel(CurrentSession.Platform, CurrentSession.MappedPlatform),
+            CurrentSession.PlatformName,
             Formatters.FormatTimeLabel(CurrentSession.StartedAt),
             Formatters.FormatDuration(
                 SessionDates.GetDurationSeconds(CurrentSession.StartedAt, CurrentSession.EndedAt, now),
@@ -225,8 +225,8 @@ internal sealed class DashboardState
     {
         var safeTotal = Math.Max(totalSeconds, 1);
         return platforms.Select(item => new DashboardPlatformView(
-            item.Platform,
-            Formatters.FormatStatsPlatformLabel(item.Platform),
+            item.PlatformKey,
+            item.PlatformName,
             Math.Floor(item.TotalSeconds / safeTotal * 100 + 0.5),
             Formatters.FormatHours(item.TotalSeconds, 1))).ToArray();
     }

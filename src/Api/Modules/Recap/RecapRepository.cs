@@ -16,7 +16,8 @@ public sealed class RecapRepository(PlaydexDbContext db)
                 g.id AS GameId,
                 g.title AS Title,
                 g.capsule_url AS CapsuleUrl,
-                session_platform.key AS Platform
+                session_platform.key AS PlatformKey,
+                session_platform.name AS PlatformName
             FROM play_sessions ps
             LEFT JOIN user_settings us ON us.user_id = ps.user_id
             JOIN games g ON g.id = ps.game_id
@@ -61,7 +62,8 @@ public sealed class RecapRepository(PlaydexDbContext db)
                 MIN(ps.started_at) AS FirstStartedAt,
                 g.title AS Title,
                 g.capsule_url AS CapsuleUrl,
-                session_platform.key AS Platform
+                session_platform.key AS PlatformKey,
+                session_platform.name AS PlatformName
             FROM play_sessions ps
             LEFT JOIN user_settings us ON us.user_id = ps.user_id
             JOIN games g ON g.id = ps.game_id
@@ -75,7 +77,7 @@ public sealed class RecapRepository(PlaydexDbContext db)
               )
             GROUP BY
                 ps.game_id, g.title, g.capsule_url,
-                session_platform.key
+                session_platform.key, session_platform.name
             ORDER BY FirstStartedAt ASC
             """).ToListAsync(ct);
     }
@@ -100,7 +102,8 @@ public sealed class RecapSessionRow
     public long GameId { get; set; }
     public string Title { get; set; } = string.Empty;
     public string? CapsuleUrl { get; set; }
-    public string Platform { get; set; } = string.Empty;
+    public string PlatformKey { get; set; } = string.Empty;
+    public string PlatformName { get; set; } = string.Empty;
 }
 
 public sealed class RecapFirstSessionRow
@@ -109,5 +112,6 @@ public sealed class RecapFirstSessionRow
     public DateTimeOffset FirstStartedAt { get; set; }
     public string Title { get; set; } = string.Empty;
     public string? CapsuleUrl { get; set; }
-    public string Platform { get; set; } = string.Empty;
+    public string PlatformKey { get; set; } = string.Empty;
+    public string PlatformName { get; set; } = string.Empty;
 }

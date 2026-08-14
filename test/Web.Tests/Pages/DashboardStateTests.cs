@@ -105,7 +105,7 @@ public sealed class DashboardStateTests
         var card = Assert.Single(state.TodaySessionCards);
         Assert.Equal("Elden Ring", card.Title);
         Assert.Equal("1h 1m", card.Duration);
-        Assert.Equal("PS5", card.Platform);
+        Assert.Equal("Steam", card.Platform);
         Assert.Equal("/games/3H4h3", card.GamePath);
 
         Assert.Equal("1h", state.TodayHours);
@@ -156,6 +156,7 @@ public sealed class DashboardStateTests
                     Now.AddHours(-index).AddSeconds(3600),
                     "42",
                     "steam",
+                    "Steam",
                     $"Game {index}",
                     null,
                     false,
@@ -179,19 +180,24 @@ public sealed class DashboardStateTests
     }
 
     [Fact]
-    public void PlatformRenderingPreservesRowsWhenRawPlatformsShareADisplayLabel()
+    public void PlatformRenderingUsesNamesWhilePreservingDistinctKeys()
     {
         var stats = new AccountStatsPeriod(
             7200,
             2,
             null,
-            [new AccountPlatformStat("psn", 3600, null), new AccountPlatformStat("ps5", 3600, null)],
+            [
+                new AccountPlatformStat("psn", "PlayStation Network", 3600, null),
+                new AccountPlatformStat("ps5", "PlayStation 5", 3600, null),
+            ],
             [],
             []);
 
         var view = DashboardState.GetStatsView(stats);
 
-        Assert.Equal(["PS5", "PS5"], view.Platforms.Select(item => item.Label));
+        Assert.Equal(
+            ["PlayStation Network", "PlayStation 5"],
+            view.Platforms.Select(item => item.Label));
 
         var root = FindWebRoot();
         var dashboard = File.ReadAllText(Path.Combine(root, "Modules", "Dashboard", "Dashboard.razor"));
@@ -275,6 +281,7 @@ public sealed class DashboardStateTests
             Now.AddSeconds(-3539),
             "42",
             "steam",
+            "Steam",
             "Elden Ring",
             "https://images.test/elden.jpg",
             false,
@@ -286,6 +293,7 @@ public sealed class DashboardStateTests
             null,
             "43",
             "manual",
+            "Manual",
             "Hades II",
             null,
             false,
@@ -295,21 +303,24 @@ public sealed class DashboardStateTests
             3600,
             1,
             "Elden Ring",
-            [new AccountPlatformStat("steam", 450, null), new AccountPlatformStat("psn", 3150, null)],
+            [
+                new AccountPlatformStat("steam", "Steam", 450, null),
+                new AccountPlatformStat("psn", "PlayStation Network", 3150, null),
+            ],
             [new AccountTopGame("42", "Elden Ring", 3600)],
             []);
         var monthly = new AccountStatsPeriod(
             7200,
             2,
             "Elden Ring",
-            [new AccountPlatformStat("steam", 7200, null)],
+            [new AccountPlatformStat("steam", "Steam", 7200, null)],
             [new AccountTopGame("42", "Elden Ring", 7200)],
             []);
         var yearly = new AccountStatsPeriod(
             10800,
             3,
             "Hades II",
-            [new AccountPlatformStat("manual", 10800, null)],
+            [new AccountPlatformStat("manual", "Manual", 10800, null)],
             [new AccountTopGame("43", "Hades II", 10800)],
             []);
 
