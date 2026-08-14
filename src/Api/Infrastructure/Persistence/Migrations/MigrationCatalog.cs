@@ -33,19 +33,49 @@ public sealed class MigrationCatalog
 
     public void ValidateApplied(IReadOnlyList<string> applied)
     {
-        if (applied.Count > Migrations.Count)
-        {
-            throw new InvalidOperationException(
-                $"Database migration history contains unknown migration '{applied[Migrations.Count]}'.");
-        }
+        var indexes = Migrations
+            .Select((migration, index) => (migration.Id, index))
+            .ToDictionary(item => item.Id, item => item.index, StringComparer.Ordinal);
+        var appliedIds = new HashSet<string>(StringComparer.Ordinal);
+        var appliedStages = new HashSet<string>(StringComparer.Ordinal);
+        var previousIndex = -1;
 
-        for (var index = 0; index < applied.Count; index++)
+        foreach (var migrationId in applied)
         {
-            if (!string.Equals(applied[index], Migrations[index].Id, StringComparison.Ordinal))
+            if (!indexes.TryGetValue(migrationId, out var index))
             {
                 throw new InvalidOperationException(
-                    $"Database migration history '{applied[index]}' does not match expected ordered migration '{Migrations[index].Id}'.");
+                    $"Database migration history contains unknown migration '{migrationId}'.");
+            }
+
+            if (index <= previousIndex)
+            {
+                throw new InvalidOperationException(
+                    $"Database migration history '{migrationId}' is out of order.");
+            }
+
+            previousIndex = index;
+            appliedIds.Add(migrationId);
+            appliedStages.Add(GetStage(migrationId));
+        }
+
+        for (var index = 0; index < previousIndex; index++)
+        {
+            var migrationId = Migrations[index].Id;
+            if (!appliedIds.Contains(migrationId) && !appliedStages.Contains(GetStage(migrationId)))
+            {
+                throw new InvalidOperationException(
+                    $"Database migration history is missing required migration '{migrationId}'.");
             }
         }
     }
+
+    public IReadOnlyList<IPlaydexMigration> GetPendingMigrations(IReadOnlyList<string> applied)
+    {
+        ValidateApplied(applied);
+        var appliedIds = applied.ToHashSet(StringComparer.Ordinal);
+        return Migrations.Where(migration => !appliedIds.Contains(migration.Id)).ToArray();
+    }
+
+    private static string GetStage(string migrationId) => migrationId[..3];
 }

@@ -31,15 +31,12 @@ public sealed partial class MigrationHealthCheck(
                 applied.Add(reader.GetString(0));
             }
 
-            catalog.ValidateApplied(applied);
+            var pending = catalog.GetPendingMigrations(applied);
 
-            if (applied.Count < catalog.Migrations.Count)
+            if (pending.Count > 0)
             {
-                var pending = catalog.Migrations
-                    .Skip(applied.Count)
-                    .Select(m => m.Id);
-
-                return HealthCheckResult.Degraded($"Pending migrations: {string.Join(", ", pending)}");
+                return HealthCheckResult.Degraded(
+                    $"Pending migrations: {string.Join(", ", pending.Select(migration => migration.Id))}");
             }
 
             return HealthCheckResult.Healthy("All migrations applied.");
