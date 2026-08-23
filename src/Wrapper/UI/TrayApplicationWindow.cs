@@ -7,6 +7,7 @@ internal sealed class TrayApplicationWindow : Form
 {
     private readonly Func<IEnumerable<GameConfig>> gamesProvider;
     private readonly Func<string, BackupStatusPresentation> backupStatusProvider;
+    private readonly Func<UpdateState> updateStateProvider;
     private readonly TrayWindowActions actions;
     private TrayGameListPanel? gamesPanel;
     private TrayPalette palette = TrayTheme.Light;
@@ -15,10 +16,12 @@ internal sealed class TrayApplicationWindow : Form
     public TrayApplicationWindow(
         Func<IEnumerable<GameConfig>> gamesProvider,
         Func<string, BackupStatusPresentation> backupStatusProvider,
+        Func<UpdateState> updateStateProvider,
         TrayWindowActions actions)
     {
         this.gamesProvider = gamesProvider;
         this.backupStatusProvider = backupStatusProvider;
+        this.updateStateProvider = updateStateProvider;
         this.actions = actions;
         AutoScaleMode = AutoScaleMode.None;
         FormBorderStyle = FormBorderStyle.FixedSingle;
@@ -109,11 +112,31 @@ internal sealed class TrayApplicationWindow : Form
         management.Controls.Add(CreateSecondaryButton("Sync", actions.SynchronizeLaunchers), 2, 0);
         Controls.Add(management);
 
+        var updateState = updateStateProvider();
+        var actionRow = new TableLayoutPanel
+        {
+            Location = new Point(S(6), addTop + S(78)),
+            Size = new Size(layout.PopupWidth - S(12), S(32)),
+            ColumnCount = 2,
+            RowCount = 1,
+            BackColor = palette.Background
+        };
+        actionRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 58f));
+        actionRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 42f));
+
+        var update = CreateButton(updateState.Message, palette.Background, palette.Accent, actions.Update);
+        update.Dock = DockStyle.Fill;
+        update.Margin = new Padding(S(2));
+        update.TextAlign = ContentAlignment.MiddleLeft;
+        update.Enabled = updateState.Kind is not UpdateStateKind.Checking and not UpdateStateKind.Downloading and not UpdateStateKind.Applying;
+
         var exit = CreateButton($"Exit {AppBrand.ProductName}", palette.Background, palette.MutedText, actions.Exit);
-        exit.Location = new Point(S(10), addTop + S(80));
-        exit.Size = new Size(layout.PopupWidth - S(20), layout.ExitButtonHeight);
+        exit.Dock = DockStyle.Fill;
+        exit.Margin = new Padding(S(2));
         exit.TextAlign = ContentAlignment.MiddleLeft;
-        Controls.Add(exit);
+        actionRow.Controls.Add(update, 0, 0);
+        actionRow.Controls.Add(exit, 1, 0);
+        Controls.Add(actionRow);
         ResumeLayout(true);
         Invalidate();
     }

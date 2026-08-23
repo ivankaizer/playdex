@@ -13,6 +13,9 @@ internal sealed partial class TraySetupApplication : IDisposable
     private readonly TrayApplicationWindow window;
     private readonly LudusaviRunner ludusaviRunner;
     private readonly BackupCoordinator backupCoordinator;
+    private readonly UpdateCoordinator? updateCoordinator;
+    private int activeGameSessions;
+    private bool updateReadyNotificationShown;
 
     public TraySetupApplication(ConfigStore store, WrapperConfig config, AppLoggerFactory logging)
     {
@@ -22,6 +25,15 @@ internal sealed partial class TraySetupApplication : IDisposable
         logger = logging.CreateLogger<TraySetupApplication>();
         launcherManager = new LauncherManager(logging.CreateLogger<LauncherManager>());
         sourceExecutable = Environment.ProcessPath ?? throw new InvalidOperationException("Cannot determine the wrapper executable path.");
+        if (!File.Exists(Path.ChangeExtension(sourceExecutable, ".dll")))
+        {
+            updateCoordinator = new UpdateCoordinator(
+                new GitHubReleaseClient(),
+                new UpdatePackageStager(AppBrand.DefaultUpdateDirectory),
+                StableVersion.Running(),
+                sourceExecutable,
+                logging.CreateLogger<UpdateCoordinator>());
+        }
         ludusaviRunner = new LudusaviRunner(new LudusaviProcess());
         var backupStateStore = new BackupStateStore(Path.Combine(config.Storage.StateDirectory, "ludusavi-backups.json"));
         var backupState = backupStateStore.LoadAsync().GetAwaiter().GetResult();
@@ -47,6 +59,7 @@ internal sealed partial class TraySetupApplication : IDisposable
                 config.Games[gameId],
                 backupCoordinator.GetState(gameId),
                 DateTimeOffset.Now),
+            () => updateCoordinator?.State ?? UpdateState.Idle,
             new TrayWindowActions(
                 gameId => RunTrayActionAsync("Game launch", () => LaunchGameAsync(gameId)),
                 gameId => RunTrayActionAsync("Save backup", () => BackupGameAsync(gameId)),
@@ -61,6 +74,7 @@ internal sealed partial class TraySetupApplication : IDisposable
                     return Task.CompletedTask;
                 }),
                 () => RunTrayActionAsync("Launcher regeneration", () => SynchronizeLaunchersAsync(showConfirmation: true)),
+                () => RunTrayActionAsync("Wrapper update", HandleUpdateActionAsync),
                 () =>
                 {
                     Application.ExitThread();
@@ -74,6 +88,16 @@ internal sealed partial class TraySetupApplication : IDisposable
             }
         };
         window.ShowWindow(Cursor.Position);
+        if (updateCoordinator is not null)
+        {
+            updateCoordinator.StateChanged += UpdateCoordinatorOnStateChanged;
+            var previousFailure = UpdateFailureStore.Consume(AppBrand.DefaultUpdateDirectory);
+            if (previousFailure is not null)
+            {
+                icon.ShowBalloonTip(6000, "Update was rolled back", previousFailure, ToolTipIcon.Warning);
+            }
+            _ = updateCoordinator.CheckAsync(explicitCheck: false);
+        }
         _ = RunTrayActionAsync("Launcher synchronization", () => SynchronizeLaunchersAsync(showConfirmation: false));
         _ = backupCoordinator.RunSchedulerAsync();
     }
@@ -156,6 +180,7 @@ internal sealed partial class TraySetupApplication : IDisposable
 
     private async Task RunGameSessionAsync(GameConfig game)
     {
+        Interlocked.Increment(ref activeGameSessions);
         try
         {
             using var coordinator = SessionCoordinator.Create(config, game, logging);
@@ -165,6 +190,67 @@ internal sealed partial class TraySetupApplication : IDisposable
         {
             LogTrayActionFailed(logger, "Game session", ex);
             icon.ShowBalloonTip(5000, "Game session failed", $"Could not monitor {game.DisplayName}. See the wrapper log for details.", ToolTipIcon.Error);
+        }
+        finally
+        {
+            Interlocked.Decrement(ref activeGameSessions);
+        }
+    }
+
+    private void UpdateCoordinatorOnStateChanged(object? sender, UpdateState state)
+    {
+        if (window.IsDisposed || !window.IsHandleCreated) return;
+        try
+        {
+            window.BeginInvoke(new Action(() =>
+            {
+                RefreshGameMenu();
+                if (state.Kind == UpdateStateKind.Ready && !updateReadyNotificationShown)
+                {
+                    updateReadyNotificationShown = true;
+                    icon.ShowBalloonTip(
+                        6000,
+                        "Wrapper update ready",
+                        $"Version {state.Version} is verified and ready. Open the wrapper and choose restart to update.",
+                        ToolTipIcon.Info);
+                }
+            }));
+        }
+        catch (InvalidOperationException)
+        {
+        }
+    }
+
+    private async Task HandleUpdateActionAsync()
+    {
+        if (updateCoordinator is null)
+        {
+            icon.ShowBalloonTip(3500, "Updates unavailable", "Automatic updates are enabled in published wrapper builds.", ToolTipIcon.Info);
+            return;
+        }
+
+        if (updateCoordinator.IsReady)
+        {
+            if (Volatile.Read(ref activeGameSessions) > 0)
+            {
+                icon.ShowBalloonTip(5000, "Update deferred", "Close the active game session before restarting to update.", ToolTipIcon.Warning);
+                return;
+            }
+
+            var startInfo = await updateCoordinator.PrepareApplyAsync();
+            using var helper = Process.Start(startInfo) ?? throw new InvalidOperationException("The update helper did not start.");
+            Application.ExitThread();
+            return;
+        }
+
+        await updateCoordinator.CheckAsync(explicitCheck: true);
+        if (updateCoordinator.State.Kind == UpdateStateKind.Idle)
+        {
+            icon.ShowBalloonTip(3000, "Wrapper update", $"{AppBrand.ProductName} is up to date.", ToolTipIcon.Info);
+        }
+        else if (updateCoordinator.State.Kind == UpdateStateKind.Failed)
+        {
+            icon.ShowBalloonTip(5000, "Update check failed", "Could not check GitHub Releases. Try again later.", ToolTipIcon.Warning);
         }
     }
 
@@ -392,6 +478,11 @@ internal sealed partial class TraySetupApplication : IDisposable
 
     public void Dispose()
     {
+        if (updateCoordinator is not null)
+        {
+            updateCoordinator.StateChanged -= UpdateCoordinatorOnStateChanged;
+            updateCoordinator.Dispose();
+        }
         backupCoordinator.Dispose();
         window.Dispose();
         icon.Dispose();

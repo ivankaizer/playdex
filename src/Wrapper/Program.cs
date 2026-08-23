@@ -3,19 +3,31 @@ namespace Wrapper;
 internal static partial class Program
 {
     [STAThread]
-    public static int Main()
+    public static int Main(string[] args)
     {
         using var logging = AppLoggerFactory.Create();
 
         try
         {
+            if (UpdateCommandLine.TryGetApply(args, out var updateManifestPath, out var parentProcessId))
+            {
+                return UpdateApplier.RunAsync(updateManifestPath, parentProcessId).GetAwaiter().GetResult()
+                    ? (int)CommandCode.Success
+                    : (int)CommandCode.Failure;
+            }
+
+            var hasHealthSignal = UpdateCommandLine.TryGetHealthSignal(args, out var healthSignalPath);
+            if (args.Length > 0 && !hasHealthSignal)
+            {
+                throw new InvalidDataException("The wrapper command line is invalid.");
+            }
             var launcherManifest = LauncherRouting.Resolve(Environment.ProcessPath);
             var configStore = new ConfigStore(launcherManifest?.ConfigPath ?? ConfigStore.DefaultPath);
             var config = configStore.LoadOrCreateAsync().GetAwaiter().GetResult();
             logging.UseDirectory(config.Storage.LogDirectory);
 
             return launcherManifest is null
-                ? (int)RunTrayApplication(configStore, config, logging)
+                ? (int)RunTrayApplication(configStore, config, logging, hasHealthSignal ? healthSignalPath : null)
                 : (int)RunGeneratedLauncher(launcherManifest, config, logging);
         }
         catch (Exception ex)
@@ -28,10 +40,15 @@ internal static partial class Program
     private static CommandCode RunTrayApplication(
         ConfigStore configStore,
         WrapperConfig config,
-        AppLoggerFactory logging)
+        AppLoggerFactory logging,
+        string? healthSignalPath)
     {
         ApplicationConfiguration.Initialize();
         using var trayApplication = new UI.TraySetupApplication(configStore, config, logging);
+        if (healthSignalPath is not null)
+        {
+            UpdateHealthSignal.Confirm(healthSignalPath);
+        }
         Application.Run();
 
         return CommandCode.Success;
