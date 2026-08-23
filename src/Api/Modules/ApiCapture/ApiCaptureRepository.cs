@@ -128,11 +128,11 @@ public sealed class ApiCaptureRepository(PlaydexDbContext db)
         return affected > 0;
     }
 
-    public async Task<int> EndTimedOutActiveSessions(
+    public async Task<List<TimedOutSessionRow>> EndTimedOutActiveSessions(
         DateTimeOffset timeoutBefore, DateTimeOffset endedAt, int timeoutMinutes,
         CancellationToken ct)
     {
-        return await db.Database.ExecuteSqlInterpolatedAsync($"""
+        return await db.Database.SqlQuery<TimedOutSessionRow>($"""
             UPDATE play_sessions ps
             SET ended_at = LEAST({endedAt}, ps.updated_at + ({timeoutMinutes} * INTERVAL '1 minute')),
                 updated_at = NOW()
@@ -141,7 +141,13 @@ public sealed class ApiCaptureRepository(PlaydexDbContext db)
               AND i.type = 'api'
               AND ps.ended_at IS NULL
               AND ps.updated_at < {timeoutBefore}
-            """, ct);
+            RETURNING
+                ps.id AS "Id",
+                ps.integration_id AS "IntegrationId",
+                ps.game_id AS "GameId",
+                ps.started_at AS "StartedAt",
+                ps.ended_at AS "EndedAt"
+            """).ToListAsync(ct);
     }
 }
 
@@ -157,4 +163,13 @@ public sealed class ActiveSessionRow
     public long GameId { get; set; }
     public DateTimeOffset StartedAt { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }
+}
+
+public sealed class TimedOutSessionRow
+{
+    public long Id { get; set; }
+    public long IntegrationId { get; set; }
+    public long GameId { get; set; }
+    public DateTimeOffset StartedAt { get; set; }
+    public DateTimeOffset EndedAt { get; set; }
 }

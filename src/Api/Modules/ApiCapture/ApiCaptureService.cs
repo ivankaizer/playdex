@@ -6,12 +6,17 @@ using Api.Modules.Games;
 
 namespace Api.Modules.ApiCapture;
 
+public interface IApiSessionTimeoutCleaner
+{
+    Task<int> EndTimedOutSessions(CancellationToken ct);
+}
+
 public sealed partial class ApiCaptureService(
     ApiCaptureRepository repository,
     PlaydexDbContext db,
     IGameResolver gameResolver,
     EventBus eventBus,
-    ILogger<ApiCaptureService> logger)
+    ILogger<ApiCaptureService> logger) : IApiSessionTimeoutCleaner
 {
     private const int PingTimeoutMinutes = 3;
 
@@ -181,9 +186,24 @@ public sealed partial class ApiCaptureService(
 
     public async Task<int> EndTimedOutSessions(CancellationToken ct)
     {
+        await using var tx = await db.Database.BeginTransactionAsync(ct);
         var now = DateTimeOffset.UtcNow;
         var timeoutBefore = now.AddMinutes(-PingTimeoutMinutes);
-        return await repository.EndTimedOutActiveSessions(timeoutBefore, now, PingTimeoutMinutes, ct);
+        var timedOut = await repository.EndTimedOutActiveSessions(
+            timeoutBefore, now, PingTimeoutMinutes, ct);
+        await tx.CommitAsync(ct);
+
+        foreach (var session in timedOut)
+        {
+            await SafePublish(new SessionEnded(
+                session.Id,
+                session.IntegrationId,
+                session.GameId,
+                session.StartedAt,
+                session.EndedAt), ct);
+        }
+
+        return timedOut.Count;
     }
 
     private async Task<(long GameId, long PlatformId)> ResolveGame(

@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Api.Infrastructure.Common;
 using Api.Infrastructure.Persistence;
+using Api.Modules.ApiCapture;
 using Api.Modules.Metrics;
 
 namespace Api.Modules.Polling;
@@ -64,6 +65,8 @@ public sealed partial class PollingBackgroundService(
 
                 try
                 {
+                    await EndTimedOutApiSessions(serviceProvider, stoppingToken);
+
                     List<ActiveCredential> credentials;
                     using (var scope = serviceProvider.GetRequiredService<IServiceScopeFactory>().CreateScope())
                     {
@@ -138,6 +141,16 @@ public sealed partial class PollingBackgroundService(
             var delayMs = Math.Max(0, (pollingOptions.Value.IntervalSeconds * 1000L) - elapsed);
             await Task.Delay((int)delayMs, stoppingToken);
         }
+    }
+
+    internal static async Task<int> EndTimedOutApiSessions(
+        IServiceProvider serviceProvider,
+        CancellationToken ct)
+    {
+        using var scope = serviceProvider.GetRequiredService<IServiceScopeFactory>().CreateScope();
+        return await scope.ServiceProvider
+            .GetRequiredService<IApiSessionTimeoutCleaner>()
+            .EndTimedOutSessions(ct);
     }
 
     private async Task ProcessCredential(
