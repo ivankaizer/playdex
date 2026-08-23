@@ -99,6 +99,13 @@ public sealed class ApiCapturePlatformCatalogTests(PostgresFixture postgres)
 
     private PlaydexDbContext CreateDb() => new(
         new DbContextOptionsBuilder<PlaydexDbContext>()
-            .UseNpgsql(postgres.DataSource!)
+            .UseNpgsql(
+                postgres.DataSource!,
+                npgsql =>
+                {
+                    npgsql.MapEnum<GameExternalIdentityType>("game_external_identity_type");
+                    npgsql.MapEnum<IntegrationType>("integration_type");
+                    npgsql.MapEnum<CaptureMethod>("capture_method");
+                })
             .Options);
 }
