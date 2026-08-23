@@ -279,6 +279,23 @@ public sealed class SettingsStateTests
     }
 
     [Fact]
+    public void ApiCredentialEditPresentsKeyButNeverSubmitsAKeyChange()
+    {
+        var state = new SettingsState();
+        var api = new ProviderStatus(2, "api", "local", "active", "plx_secret", true);
+        state.CompleteProvidersLoad(new ProvidersResponse([api]));
+
+        state.BeginCredentialEdit(api);
+
+        Assert.Equal("plx_secret", state.EditingApiKey);
+        state.SetEditingApiKey("replacement");
+        state.SetEditingAccountId("renamed");
+        Assert.True(state.TryBuildCredentialSubmission(out var submission));
+        Assert.NotNull(submission);
+        Assert.Equal(["accountId"], submission.Body.Keys);
+    }
+
+    [Fact]
     public void CredentialEditRejectsNoChangesAndCompletesByReplacingTheProvider()
     {
         var state = new SettingsState();
@@ -396,6 +413,9 @@ public sealed class SettingsStateTests
         Assert.Contains("No providers connected yet. Add one to start syncing playtime.", markup);
         Assert.Contains("Updating...", markup);
         Assert.Contains("Managed by administrator", markup);
+        Assert.Contains("provider.Platform == \"api\"", markup);
+        Assert.Contains("aria-readonly=\"true\"", markup);
+        Assert.Contains("Generated locally and read-only.", markup);
         Assert.Contains("ToggleCredentialEditorAsync", markup);
         Assert.Contains("SaveCredentialAsync", markup);
         Assert.DoesNotContain("EditForm", markup);

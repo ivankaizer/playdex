@@ -27,7 +27,7 @@ public sealed class PsnClient(
 
     public string PlatformKey => "psn";
 
-    public async Task<ProviderPollResult?> GetCurrentlyPlaying(PlatformCredential credential, CancellationToken ct)
+    public async Task<ProviderPollResult?> GetCurrentlyPlaying(IntegrationCredentials credential, CancellationToken ct)
     {
         var npsso = credential.ApiKey;
         var accountId = credential.AccountId;

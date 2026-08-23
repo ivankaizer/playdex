@@ -54,7 +54,7 @@ public static class ProvidersEndpoints
             await result.ExecuteAsync(http);
         });
 
-        api.MapPost("/playnite/key", GetPlayniteKey).RequireAuthorization();
+        api.MapPost("/api/key", GetApiKey).RequireAuthorization();
     }
 
     private static async Task<IResult> ListProviders(
@@ -65,12 +65,12 @@ public static class ProvidersEndpoints
         return TypedResults.Ok(await service.ListProviders(principal.GetUserId(), ct));
     }
 
-    private static async Task<IResult> GetPlayniteKey(
+    private static async Task<IResult> GetApiKey(
         ClaimsPrincipal principal,
         ProvidersService service,
         CancellationToken ct)
     {
-        return TypedResults.Ok(await service.GetOrCreatePlayniteKey(principal.GetUserId(), ct));
+        return TypedResults.Ok(await service.GetOrCreateApiKey(principal.GetUserId(), ct));
     }
 
     private static ProviderCredentialChanges ParseCredentialChanges(JsonElement payload)

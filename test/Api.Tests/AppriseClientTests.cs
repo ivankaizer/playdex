@@ -90,9 +90,9 @@ public sealed class AppriseClientTests
     private static HttpResponseMessage Json(
         string payload,
         HttpStatusCode status = HttpStatusCode.OK) => new(status)
-    {
-        Content = new StringContent(payload, Encoding.UTF8, "application/json"),
-    };
+        {
+            Content = new StringContent(payload, Encoding.UTF8, "application/json"),
+        };
 
     private sealed class RecordingHandler(params HttpResponseMessage[] responses)
         : HttpMessageHandler

@@ -6,38 +6,12 @@ namespace Web.Tests.Utilities;
 public sealed class FormattersTests
 {
     [Theory]
-    [InlineData("ps5", "PS5")]
-    [InlineData("psn", "PS5")]
-    [InlineData("switch-1", "Nintendo Switch 1")]
-    [InlineData("switch-2", "Nintendo Switch 2")]
-    [InlineData("xbox-series-xs", "Xbox Series X|S")]
-    [InlineData("xbox", "Xbox")]
-    [InlineData("other", "other")]
-    public void FormatPlatformLabelUsesTheReactMappingOrFallsBack(string platform, string expected)
-    {
-        Assert.Equal(expected, Formatters.FormatPlatformLabel(platform));
-    }
-
-    [Theory]
     [InlineData("psn", "PlayStation")]
     [InlineData("steam", "Steam")]
     [InlineData("other", "other")]
     public void FormatProviderNameUsesTheReactMappingOrFallsBack(string platform, string expected)
     {
         Assert.Equal(expected, Formatters.FormatProviderName(platform));
-    }
-
-    [Fact]
-    public void FormatSessionPlatformLabelPrefersTheMappedPlatform()
-    {
-        Assert.Equal("Nintendo Switch 2", Formatters.FormatSessionPlatformLabel("steam", "switch-2"));
-        Assert.Equal("Steam", Formatters.FormatSessionPlatformLabel("steam", null));
-    }
-
-    [Fact]
-    public void FormatStatsPlatformLabelUsesTheSharedPlatformMapping()
-    {
-        Assert.Equal("Xbox Series X|S", Formatters.FormatStatsPlatformLabel("xbox-series-xs"));
     }
 
     [Fact]

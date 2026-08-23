@@ -7,8 +7,9 @@ namespace Seeder;
 
 public class DatabaseSeeder(PlaydexDbContext db)
 {
-    private List<PlatformCredential> _credentials = [];
+    private List<Integration> _integrations = [];
     private List<Game> _games = [];
+    private readonly Dictionary<Game, (Platform Platform, string ExternalId)> _gameSources = [];
 
     public async Task Seed()
     {
@@ -80,6 +81,16 @@ public class DatabaseSeeder(PlaydexDbContext db)
         ];
         await db.AddRangeAsync(_games);
         await db.SaveChangesAsync();
+        await db.AddRangeAsync(_gameSources
+            .Where(entry => TryGetExternalIdentityType(entry.Value.Platform, out _))
+            .Select(entry => new GameExternalIdentity
+            {
+                GameId = entry.Key.Id,
+                Type = GetExternalIdentityType(entry.Value.Platform),
+                ExternalId = entry.Value.ExternalId,
+                Title = entry.Key.Title,
+            }));
+        await db.SaveChangesAsync();
 
 
         // game connections
@@ -99,52 +110,67 @@ public class DatabaseSeeder(PlaydexDbContext db)
 
         await db.AddAsync(new GameRating
         {
-            GameId = _games.FirstOrDefault(g => g.Title == "Baldur's Gate 3")!.Id, Rating = 5, UserId = user.Entity.Id
+            GameId = _games.FirstOrDefault(g => g.Title == "Baldur's Gate 3")!.Id,
+            Rating = 5,
+            UserId = user.Entity.Id
         });
         await db.AddAsync(new GameRating
         {
-            GameId = _games.FirstOrDefault(g => g.Title == "Baldur's Gate 3")!.Id, Rating = 3,
+            GameId = _games.FirstOrDefault(g => g.Title == "Baldur's Gate 3")!.Id,
+            Rating = 3,
             UserId = secondUser.Entity.Id
         });
 
         // ignored games
         await db.AddAsync(new IgnoredGame
-            { GameId = _games.FirstOrDefault(g => g.Title == "DSX")!.Id, UserId = user.Entity.Id });
+        { GameId = _games.FirstOrDefault(g => g.Title == "DSX")!.Id, UserId = user.Entity.Id });
 
-        // platform credentials
-        _credentials =
+        // integrations
+        _integrations =
         [
-            new PlatformCredential
+            new Integration
             {
+                Type = IntegrationType.Steam,
                 AccountId = "steam-account-id", UserId = user.Entity.Id, ApiKey = "steam-api-key", Active = true,
                 PlatformId = platformSteam.Id
             },
 
-            new PlatformCredential
+            new Integration
             {
+                Type = IntegrationType.Psn,
                 AccountId = "psn-account-id", UserId = user.Entity.Id, ApiKey = "psn-npsso", Active = true,
                 PlatformId = platformPlaystation.Id
             },
-            new PlatformCredential
+            new Integration
             {
+                Type = IntegrationType.Xbox,
                 ApiKey = "xbox-api-key", UserId = user.Entity.Id, Active = true,
                 PlatformId = platformXbox.Id
             },
-            new PlatformCredential
-                { AccountId = "pc-account-id", UserId = user.Entity.Id, Active = true, PlatformId = platformPc.Id },
-            new PlatformCredential
-                { AccountId = "custom-account-id", UserId = user.Entity.Id, Active = false, PlatformId = platformCustom.Id }
+            new Integration
+            {
+                Type = IntegrationType.Api,
+                AccountId = "api-account-id",
+                UserId = user.Entity.Id,
+                Active = true,
+            }
         ];
-        await db.AddRangeAsync(_credentials);
+        await db.AddRangeAsync(_integrations);
         await db.SaveChangesAsync();
 
         // play sessions
         await SeedPlaySessions(FirstMinuteOfTheYear(DateTime.UtcNow.Year), 2);
         await SeedPlaySessions(FirstMinuteOfTheYear(DateTime.UtcNow.Year - 1), 2);
+        var recentGame = _games[0];
+        var recentPlatform = _gameSources[recentGame].Platform;
+        var recentIntegration = FindIntegration(recentPlatform);
         await db.AddAsync(new PlaySession
         {
-            PlatformCredentialId = _credentials[0].Id,
-            GameId = _games[0].Id,
+            UserId = recentIntegration.UserId,
+            GameId = recentGame.Id,
+            PlatformId = recentPlatform.Id,
+            CaptureMethod = GetCaptureMethod(recentIntegration),
+            IntegrationId = recentIntegration.Id,
             StartedAt = DateTime.UtcNow.Subtract(TimeSpan.FromMinutes(10)),
         });
 
@@ -205,18 +231,17 @@ public class DatabaseSeeder(PlaydexDbContext db)
         };
     }
 
-    private static Game MakeGame(string title, string imageUrl, Platform platform)
+    private Game MakeGame(string title, string imageUrl, Platform platform)
     {
-        var externalId = Random.Shared.Next();
+        var externalId = Random.Shared.Next().ToString(CultureInfo.InvariantCulture);
 
-        return new Game
+        var game = new Game
         {
             Title = title,
-            CanonicalKey = $"{platform.Key}:{externalId}",
-            ExternalId = externalId.ToString(CultureInfo.InvariantCulture),
-            PlatformId = platform.Id,
             CapsuleUrl = imageUrl
         };
+        _gameSources[game] = (platform, externalId);
+        return game;
     }
 
     private async Task SeedPlaySessions(DateTime date, int averageDaysBetweenPlay)
@@ -240,23 +265,58 @@ public class DatabaseSeeder(PlaydexDbContext db)
             {
                 foreach (var game in _games)
                 {
-                    var credential = _credentials.FirstOrDefault(c => c.PlatformId == game.PlatformId);
-                    if (credential is null)
-                    {
-                        throw new InvalidOperationException("Platform does not have required credentials");
-                    }
+                    var platform = _gameSources[game].Platform;
+                    var integration = FindIntegration(platform);
 
                     var startedAt = alteredDate.AddHours(Random.Shared.Next(1, 23));
                     await db.AddAsync(new PlaySession
                     {
-                        PlatformCredentialId = credential.Id,
+                        UserId = integration.UserId,
                         GameId = game.Id,
+                        PlatformId = platform.Id,
+                        CaptureMethod = GetCaptureMethod(integration),
+                        IntegrationId = integration.Id,
                         StartedAt = startedAt,
                         EndedAt = startedAt.AddMinutes(Random.Shared.Next(1, 120)),
                     });
                 }
             }
         }
+    }
+
+    private Integration FindIntegration(Platform platform)
+    {
+        var type = platform.Key switch
+        {
+            "steam" => IntegrationType.Steam,
+            "psn" => IntegrationType.Psn,
+            "xbox" => IntegrationType.Xbox,
+            _ => IntegrationType.Api,
+        };
+        return _integrations.Single(integration => integration.Type == type);
+    }
+
+    private static CaptureMethod GetCaptureMethod(Integration integration) =>
+        integration.Type == IntegrationType.Api ? CaptureMethod.Api : CaptureMethod.Polling;
+
+    private static bool TryGetExternalIdentityType(
+        Platform platform,
+        out GameExternalIdentityType type)
+    {
+        type = platform.Key switch
+        {
+            "steam" => GameExternalIdentityType.Steam,
+            "psn" => GameExternalIdentityType.Psn,
+            "xbox" => GameExternalIdentityType.Xbox,
+            _ => default,
+        };
+        return platform.Key is "steam" or "psn" or "xbox";
+    }
+
+    private static GameExternalIdentityType GetExternalIdentityType(Platform platform)
+    {
+        if (TryGetExternalIdentityType(platform, out var type)) return type;
+        throw new InvalidOperationException($"Platform {platform.Key} has no external identity type.");
     }
 
     private static DateTime FirstMinuteOfTheYear(int year) => new(year, 1, 1, 0, 0, 0, DateTimeKind.Utc);

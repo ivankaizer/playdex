@@ -44,7 +44,7 @@ public interface IProviderClient
     /// but <see cref="ProviderPollResult.RawPayload"/> still
     /// contains the raw response for debugging.
     /// </summary>
-    Task<ProviderPollResult?> GetCurrentlyPlaying(PlatformCredential credential, CancellationToken ct);
+    Task<ProviderPollResult?> GetCurrentlyPlaying(IntegrationCredentials credential, CancellationToken ct);
 }
 
 /// <summary>
@@ -53,7 +53,7 @@ public interface IProviderClient
 public interface IProviderGameMetadataClient
 {
     Task<string?> GetCapsuleUrl(
-        PlatformCredential credential,
+        IntegrationCredentials credential,
         string externalId,
         CancellationToken ct);
 }

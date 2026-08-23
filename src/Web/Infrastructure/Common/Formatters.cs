@@ -13,21 +13,6 @@ public static class Formatters
 {
     private static readonly CultureInfo EnUs = CultureInfo.GetCultureInfo("en-US");
 
-    public static string FormatPlatformLabel(string platform) => platform switch
-    {
-        "ps5" or "psn" => "PS5",
-        "xbox-series-xs" => "Xbox Series X|S",
-        "xbox" => "Xbox",
-        "pc" => "PC",
-        "switch-1" => "Nintendo Switch 1",
-        "switch-2" => "Nintendo Switch 2",
-        "steam" => "Steam",
-        "playnite" => "Playnite",
-        "manual" => "Manual",
-        "unknown" => "Unknown",
-        _ => platform,
-    };
-
     public static string FormatProviderName(string platform) => platform switch
     {
         "steam" => "Steam",
@@ -37,11 +22,6 @@ public static class Formatters
         "manual" => "Manual",
         _ => platform,
     };
-
-    public static string FormatSessionPlatformLabel(string platform, string? mappedPlatform) =>
-        FormatPlatformLabel(mappedPlatform ?? platform);
-
-    public static string FormatStatsPlatformLabel(string platform) => FormatPlatformLabel(platform);
 
     public static string FormatDateLabel(DateTimeOffset date) =>
         date.ToLocalTime().ToString("MMM d, yyyy", EnUs);

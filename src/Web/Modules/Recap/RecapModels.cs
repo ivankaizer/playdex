@@ -9,14 +9,23 @@ public sealed record RecapGameStat(
     int SessionCount,
     double AverageSessionSeconds,
     bool IsAbandoned);
-public sealed record RecapPlatformStat(string Platform, int SessionCount, double TotalSeconds, string? Source);
+public sealed record RecapPlatformStat(
+    string PlatformKey,
+    string PlatformName,
+    int SessionCount,
+    double TotalSeconds,
+    string? Source);
 public sealed record MostActiveDay(string Date, int SessionCount);
 public sealed record MostActiveMonth(string Month, int SessionCount);
 public sealed record WeekdayStat(int Weekday, int SessionCount);
 public sealed record HourStat(int Hour, int SessionCount);
 public sealed record LongestSessionGame(string GameId, string Title, double SessionSeconds);
 public sealed record BingedGame(string GameId, string Title, int SessionCount);
-public sealed record PlatformSummary(string Platform, double TotalSeconds, int SessionCount);
+public sealed record PlatformSummary(
+    string PlatformKey,
+    string PlatformName,
+    double TotalSeconds,
+    int SessionCount);
 public sealed record RecapRange(string? From, string? To);
 public sealed record RecapResponse(
     RecapRange Range,

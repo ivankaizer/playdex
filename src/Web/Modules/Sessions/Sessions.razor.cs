@@ -242,7 +242,7 @@ internal sealed class SessionsState
             session.GameId,
             $"/games/{GameHash.EncodeGameId(session.GameId)}",
             session.Game,
-            Formatters.FormatSessionPlatformLabel(session.Platform, session.MappedPlatform),
+            session.PlatformName,
             Formatters.FormatDateLabel(session.StartedAt),
             Formatters.FormatDuration(
                 SessionDates.GetDurationSeconds(session.StartedAt, session.EndedAt, now),
@@ -328,8 +328,8 @@ public partial class Sessions : ComponentBase, IDisposable
             if (_state.Stats is null) return [];
             var total = Math.Max(_state.Stats.Platforms.Sum(item => item.TotalSeconds), 1);
             return _state.Stats.Platforms.Select(item => (
-                item.Platform,
-                Formatters.FormatStatsPlatformLabel(item.Platform),
+                item.PlatformKey,
+                item.PlatformName,
                 Math.Floor(item.TotalSeconds / total * 100 + 0.5),
                 Formatters.FormatHours(item.TotalSeconds, 1))).ToArray();
         }

@@ -16,16 +16,13 @@ public sealed class RecapRepository(PlaydexDbContext db)
                 g.id AS GameId,
                 g.title AS Title,
                 g.capsule_url AS CapsuleUrl,
-                pc_platform.key AS Platform,
-                game_platform.key AS GamePlatform,
-                g.canonical_key AS GameCanonicalKey
+                session_platform.key AS PlatformKey,
+                session_platform.name AS PlatformName
             FROM play_sessions ps
-            JOIN platform_credentials pc ON pc.id = ps.platform_credential_id
-            LEFT JOIN user_settings us ON us.user_id = pc.user_id
+            LEFT JOIN user_settings us ON us.user_id = ps.user_id
             JOIN games g ON g.id = ps.game_id
-            JOIN platforms pc_platform ON pc_platform.id = pc.platform_id
-            JOIN platforms game_platform ON game_platform.id = g.platform_id
-            WHERE pc.user_id = {userId}
+            JOIN platforms session_platform ON session_platform.id = ps.platform_id
+            WHERE ps.user_id = {userId}
               AND NOT (
                   COALESCE(us.ignore_short_sessions_minutes, 0) > 0
                   AND ps.ended_at IS NOT NULL
@@ -44,9 +41,8 @@ public sealed class RecapRepository(PlaydexDbContext db)
             SELECT DISTINCT
                 EXTRACT(YEAR FROM ps.started_at AT TIME ZONE 'utc')::int AS Year
             FROM play_sessions ps
-            JOIN platform_credentials pc ON pc.id = ps.platform_credential_id
-            LEFT JOIN user_settings us ON us.user_id = pc.user_id
-            WHERE pc.user_id = {userId}
+            LEFT JOIN user_settings us ON us.user_id = ps.user_id
+            WHERE ps.user_id = {userId}
               AND NOT (
                   COALESCE(us.ignore_short_sessions_minutes, 0) > 0
                   AND ps.ended_at IS NOT NULL
@@ -66,16 +62,13 @@ public sealed class RecapRepository(PlaydexDbContext db)
                 MIN(ps.started_at) AS FirstStartedAt,
                 g.title AS Title,
                 g.capsule_url AS CapsuleUrl,
-                pc_platform.key AS Platform,
-                game_platform.key AS GamePlatform,
-                g.canonical_key AS GameCanonicalKey
+                session_platform.key AS PlatformKey,
+                session_platform.name AS PlatformName
             FROM play_sessions ps
-            JOIN platform_credentials pc ON pc.id = ps.platform_credential_id
-            LEFT JOIN user_settings us ON us.user_id = pc.user_id
+            LEFT JOIN user_settings us ON us.user_id = ps.user_id
             JOIN games g ON g.id = ps.game_id
-            JOIN platforms pc_platform ON pc_platform.id = pc.platform_id
-            JOIN platforms game_platform ON game_platform.id = g.platform_id
-            WHERE pc.user_id = {userId}
+            JOIN platforms session_platform ON session_platform.id = ps.platform_id
+            WHERE ps.user_id = {userId}
               AND NOT (
                   COALESCE(us.ignore_short_sessions_minutes, 0) > 0
                   AND ps.ended_at IS NOT NULL
@@ -84,30 +77,8 @@ public sealed class RecapRepository(PlaydexDbContext db)
               )
             GROUP BY
                 ps.game_id, g.title, g.capsule_url,
-                pc_platform.key, game_platform.key, g.canonical_key
+                session_platform.key, session_platform.name
             ORDER BY FirstStartedAt ASC
-            """).ToListAsync(ct);
-    }
-
-    public async Task<List<ManualMappingRow>> LoadManualMappings(
-        long userId, string[] canonicalTitles, CancellationToken ct)
-    {
-        if (canonicalTitles.Length == 0)
-            return [];
-
-        return await db.Database.SqlQuery<ManualMappingRow>($"""
-            SELECT
-                mgi.canonical_title AS CanonicalTitle,
-                mgi.mapped_game_id AS MappedGameId,
-                g.title AS MappedTitle,
-                gp.key AS MappedPlatform,
-                g.capsule_url AS MappedCapsuleUrl,
-                g.canonical_key AS MappedCanonicalKey
-            FROM manual_game_inputs mgi
-            LEFT JOIN games g ON g.id = mgi.mapped_game_id
-            LEFT JOIN platforms gp ON gp.id = g.platform_id
-            WHERE mgi.user_id = {userId}
-              AND mgi.canonical_title = ANY({canonicalTitles})
             """).ToListAsync(ct);
     }
 
@@ -131,9 +102,8 @@ public sealed class RecapSessionRow
     public long GameId { get; set; }
     public string Title { get; set; } = string.Empty;
     public string? CapsuleUrl { get; set; }
-    public string Platform { get; set; } = string.Empty;
-    public string GamePlatform { get; set; } = string.Empty;
-    public string GameCanonicalKey { get; set; } = string.Empty;
+    public string PlatformKey { get; set; } = string.Empty;
+    public string PlatformName { get; set; } = string.Empty;
 }
 
 public sealed class RecapFirstSessionRow
@@ -142,17 +112,6 @@ public sealed class RecapFirstSessionRow
     public DateTimeOffset FirstStartedAt { get; set; }
     public string Title { get; set; } = string.Empty;
     public string? CapsuleUrl { get; set; }
-    public string Platform { get; set; } = string.Empty;
-    public string GamePlatform { get; set; } = string.Empty;
-    public string GameCanonicalKey { get; set; } = string.Empty;
-}
-
-public sealed class ManualMappingRow
-{
-    public string CanonicalTitle { get; set; } = string.Empty;
-    public long? MappedGameId { get; set; }
-    public string? MappedTitle { get; set; }
-    public string? MappedPlatform { get; set; }
-    public string? MappedCapsuleUrl { get; set; }
-    public string? MappedCanonicalKey { get; set; }
+    public string PlatformKey { get; set; } = string.Empty;
+    public string PlatformName { get; set; } = string.Empty;
 }

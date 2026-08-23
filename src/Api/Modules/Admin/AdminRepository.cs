@@ -19,8 +19,7 @@ public sealed class AdminRepository(PlaydexDbContext db)
                        ps.ended_at IS NULL AS Live,
                        ROW_NUMBER() OVER (PARTITION BY u.id ORDER BY ps.started_at DESC, ps.id DESC) AS rn
                 FROM play_sessions ps
-                JOIN platform_credentials pc ON pc.id = ps.platform_credential_id
-                JOIN users u ON u.id = pc.user_id
+                JOIN users u ON u.id = ps.user_id
                 JOIN games g ON g.id = ps.game_id
             )
             SELECT UserId, Email, SessionId, GameName, StartedAt, DurationSeconds, Live
@@ -36,10 +35,10 @@ public sealed class AdminRepository(PlaydexDbContext db)
         var likeQuery = $"%{query}%";
         var queryable =
             from session in db.PlaySessions.AsNoTracking()
-            join credential in db.PlatformCredentials.AsNoTracking()
-                on session.PlatformCredentialId equals credential.Id
-            join user in db.Users.AsNoTracking() on credential.UserId equals user.Id
-            join platform in db.Platforms.AsNoTracking() on credential.PlatformId equals platform.Id
+            join user in db.Users.AsNoTracking() on session.UserId equals user.Id
+            join platform in db.Platforms.AsNoTracking() on session.PlatformId equals platform.Id
+            join integration in db.Integrations.AsNoTracking() on session.IntegrationId equals integration.Id into integrations
+            from credential in integrations.DefaultIfEmpty()
             join game in db.Games.AsNoTracking() on session.GameId equals game.Id
             where EF.Functions.ILike(user.Email, likeQuery)
                 || EF.Functions.ILike(game.Title, likeQuery)
@@ -49,10 +48,10 @@ public sealed class AdminRepository(PlaydexDbContext db)
             select new
             {
                 SessionId = session.Id,
-                SourceCredentialId = credential.Id,
+                SourceCredentialId = session.IntegrationId ?? 0,
                 UserEmail = user.Email,
                 Platform = platform.Key,
-                AccountUser = credential.AccountId,
+                AccountUser = credential == null ? null : credential.AccountId,
                 GameName = game.Title,
                 session.StartedAt,
                 session.EndedAt,
@@ -84,8 +83,12 @@ public sealed class AdminRepository(PlaydexDbContext db)
     {
         return await db.Database.ExecuteSqlRawAsync("""
             UPDATE play_sessions
-            SET platform_credential_id = @TargetId, updated_at = NOW()
-            WHERE id = ANY(@Ids) AND platform_credential_id != @TargetId
+            SET integration_id = i.id, user_id = i.user_id,
+                platform_id = COALESCE(i.platform_id, play_sessions.platform_id), updated_at = NOW()
+            FROM integrations i
+            WHERE i.id = @TargetId
+              AND play_sessions.id = ANY(@Ids)
+              AND play_sessions.integration_id IS DISTINCT FROM @TargetId
             """,
             new NpgsqlParameter("TargetId", targetCredentialId),
             new NpgsqlParameter("Ids", sessionIds));
@@ -97,7 +100,7 @@ public sealed class AdminRepository(PlaydexDbContext db)
             SELECT p.key AS Platform,
                    COUNT(*) AS TotalCredentials,
                    COUNT(*) FILTER (WHERE pc.active) AS ActiveCredentials
-            FROM platform_credentials pc
+            FROM integrations pc
             JOIN platforms p ON p.id = pc.platform_id
             GROUP BY p.key
             ORDER BY p.key
@@ -107,7 +110,7 @@ public sealed class AdminRepository(PlaydexDbContext db)
     public async Task<int> UpdatePlatformStatus(string platform, bool enabled, CancellationToken ct)
     {
         return await db.Database.ExecuteSqlInterpolatedAsync($"""
-            UPDATE platform_credentials
+            UPDATE integrations
             SET active = {enabled}, updated_at = NOW()
             WHERE platform_id = (SELECT id FROM platforms WHERE key = {platform})
             """, ct);
@@ -118,26 +121,21 @@ public sealed class AdminRepository(PlaydexDbContext db)
 
     public async Task<List<AdminCredentialRow>> ListCredentials(CancellationToken ct)
     {
-        var rows = await db.PlatformCredentials
-            .AsNoTracking()
-            .Join(
-                db.Users.AsNoTracking(),
-                credential => credential.UserId,
-                user => user.Id,
-                (credential, user) => new { credential, user })
-            .Join(
-                db.Platforms.AsNoTracking(),
-                value => value.credential.PlatformId,
-                platform => platform.Id,
-                (value, platform) => new
-                {
-                    value.credential.Id,
-                    UserEmail = value.user.Email,
-                    Platform = platform.Key,
-                    value.credential.ApiKey,
-                    AccountUser = value.credential.AccountId,
-                    value.credential.Active,
-                })
+        var rows = await (
+            from credential in db.Integrations.AsNoTracking()
+            join user in db.Users.AsNoTracking() on credential.UserId equals user.Id
+            join platform in db.Platforms.AsNoTracking()
+                on credential.PlatformId equals (long?)platform.Id into platforms
+            from platform in platforms.DefaultIfEmpty()
+            select new
+            {
+                credential.Id,
+                UserEmail = user.Email,
+                Platform = credential.Type == IntegrationType.Api ? "api" : platform!.Key,
+                credential.ApiKey,
+                AccountUser = credential.AccountId,
+                credential.Active,
+            })
             .OrderBy(row => row.UserEmail)
             .ThenBy(row => row.Platform)
             .ThenBy(row => row.Id)
@@ -162,7 +160,7 @@ public sealed class AdminRepository(PlaydexDbContext db)
         string? accountUser,
         CancellationToken ct)
     {
-        var credential = await db.PlatformCredentials.FirstOrDefaultAsync(item => item.Id == credentialId, ct);
+        var credential = await db.Integrations.FirstOrDefaultAsync(item => item.Id == credentialId, ct);
         if (credential is null) return null;
         if (apiKeyChanged) credential.ApiKey = apiKey;
         if (accountUserChanged) credential.AccountId = accountUser;
@@ -173,27 +171,22 @@ public sealed class AdminRepository(PlaydexDbContext db)
 
     private async Task<AdminCredentialRow?> LoadCredentialRow(long credentialId, CancellationToken ct)
     {
-        var row = await db.PlatformCredentials
-            .AsNoTracking()
-            .Where(credential => credential.Id == credentialId)
-            .Join(
-                db.Users.AsNoTracking(),
-                credential => credential.UserId,
-                user => user.Id,
-                (credential, user) => new { credential, user })
-            .Join(
-                db.Platforms.AsNoTracking(),
-                value => value.credential.PlatformId,
-                platform => platform.Id,
-                (value, platform) => new
-                {
-                    value.credential.Id,
-                    UserEmail = value.user.Email,
-                    Platform = platform.Key,
-                    value.credential.ApiKey,
-                    AccountUser = value.credential.AccountId,
-                    value.credential.Active,
-                })
+        var row = await (
+            from credential in db.Integrations.AsNoTracking()
+            join user in db.Users.AsNoTracking() on credential.UserId equals user.Id
+            join platform in db.Platforms.AsNoTracking()
+                on credential.PlatformId equals (long?)platform.Id into platforms
+            from platform in platforms.DefaultIfEmpty()
+            where credential.Id == credentialId
+            select new
+            {
+                credential.Id,
+                UserEmail = user.Email,
+                Platform = credential.Type == IntegrationType.Api ? "api" : platform!.Key,
+                credential.ApiKey,
+                AccountUser = credential.AccountId,
+                credential.Active,
+            })
             .FirstOrDefaultAsync(ct);
         return row is null
             ? null
@@ -214,10 +207,9 @@ public sealed class AdminRepository(PlaydexDbContext db)
         if (exactId.HasValue)
         {
             return await db.Database.SqlQueryRaw<AdminGameSearchRow>("""
-                SELECT g.id, g.title, g.title_locked, p.key AS Platform,
+                SELECT g.id, g.title, g.title_locked, 'unknown'::text AS Platform,
                        g.capsule_url AS ImageUrl, g.capsule_url_locked AS ImageLocked
                 FROM games g
-                JOIN platforms p ON p.id = g.platform_id
                 WHERE g.title ILIKE @Query OR g.capsule_url ILIKE @Query OR g.id = @ExactId
                 ORDER BY g.updated_at DESC
                 LIMIT @Limit
@@ -229,10 +221,9 @@ public sealed class AdminRepository(PlaydexDbContext db)
         }
 
         return await db.Database.SqlQueryRaw<AdminGameSearchRow>("""
-            SELECT g.id, g.title, g.title_locked, p.key AS Platform,
+            SELECT g.id, g.title, g.title_locked, 'unknown'::text AS Platform,
                    g.capsule_url AS ImageUrl, g.capsule_url_locked AS ImageLocked
             FROM games g
-            JOIN platforms p ON p.id = g.platform_id
             WHERE g.title ILIKE @Query OR g.capsule_url ILIKE @Query
             ORDER BY g.updated_at DESC
             LIMIT @Limit
@@ -269,25 +260,11 @@ public sealed class AdminRepository(PlaydexDbContext db)
 
     public async Task<AdminGameUpdateRow?> GetGameById(long gameId, CancellationToken ct)
     {
-        var row = await db.Games
-            .AsNoTracking()
-            .Where(game => game.Id == gameId)
-            .Join(
-                db.Platforms.AsNoTracking(),
-                game => game.PlatformId,
-                platform => platform.Id,
-                (game, platform) => new { game, PlatformKey = platform.Key })
-            .FirstOrDefaultAsync(ct);
-        return row is null
+        var game = await db.Games.AsNoTracking().FirstOrDefaultAsync(game => game.Id == gameId, ct);
+        return game is null
             ? null
             : new AdminGameUpdateRow(
-                row.game.Id,
-                row.game.Title,
-                row.game.TitleLocked,
-                row.game.CapsuleUrl,
-                row.game.CapsuleUrlLocked,
-                row.game.PlatformId,
-                row.PlatformKey);
+                game.Id, game.Title, game.TitleLocked, game.CapsuleUrl, game.CapsuleUrlLocked, 0, null);
     }
 
     private static (long? Id, bool IsEncoded) TryParseGameId(string value)

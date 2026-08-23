@@ -9,11 +9,11 @@ using Api.Infrastructure.Persistence;
 using Api.Infrastructure.Persistence.Migrations;
 using Api.Modules.Accounts;
 using Api.Modules.Admin;
+using Api.Modules.ApiCapture;
 using Api.Modules.Games;
 using Api.Modules.Manual;
 using Api.Modules.Metrics;
 using Api.Modules.Notifications;
-using Api.Modules.Playnite;
 using Api.Modules.Polling;
 using Api.Modules.Providers;
 using Api.Modules.Recap;
@@ -44,15 +44,33 @@ var corsOrigins = (builder.Configuration["CORS_ORIGINS"] ?? "")
     .Distinct(StringComparer.Ordinal)
     .ToArray();
 
-var dataSource = new NpgsqlDataSourceBuilder(PostgresConnectionString.Normalize(databaseUrl)).Build();
+var dataSourceBuilder = new NpgsqlDataSourceBuilder(PostgresConnectionString.Normalize(databaseUrl));
+dataSourceBuilder.MapEnum<GameExternalIdentityType>("game_external_identity_type");
+dataSourceBuilder.MapEnum<IntegrationType>("integration_type");
+dataSourceBuilder.MapEnum<CaptureMethod>("capture_method");
+var dataSource = dataSourceBuilder.Build();
 
 builder.Services.AddSingleton(dataSource);
-builder.Services.AddDbContext<PlaydexDbContext>(db => db.UseNpgsql(dataSource));
+builder.Services.AddDbContext<PlaydexDbContext>(db => db.UseNpgsql(
+    dataSource,
+    npgsql =>
+    {
+        npgsql.MapEnum<GameExternalIdentityType>("game_external_identity_type");
+        npgsql.MapEnum<IntegrationType>("integration_type");
+        npgsql.MapEnum<CaptureMethod>("capture_method");
+    }));
 builder.Services.AddSingleton(new MigrationCatalog([
     new CurrentSchemaMigration(),
     new CredentialApiKeyLockMigration(),
     new OpenXblPlatformMigration(),
     new NotificationChannelsMigration(),
+    new GameExternalIdentitiesMigration(),
+    new IntegrationsMigration(),
+    new PlaySessionTargetFieldsMigration(),
+    new PollingTargetModelMigration(),
+    new ManualTargetModelMigration(),
+    new DropLegacyModelMigration(),
+    new CorrectLegacyApiSessionPlatformsMigration(),
 ]));
 builder.Services.AddSingleton<MigrationRunner>();
 builder.Services.AddScoped<EventBus>();
@@ -63,7 +81,7 @@ builder.Services
     .AddSettings()
     .AddGames()
     .AddManual()
-    .AddPlaynite()
+    .AddApiCapture()
     .AddProviders()
     .AddAdmin()
     .AddRecap()
@@ -122,7 +140,7 @@ api
     .MapSettings()
     .MapGames()
     .MapManual()
-    .MapPlaynite()
+    .MapApiCapture()
     .MapProviders()
     .MapAdmin()
     .MapRecap()

@@ -9,8 +9,6 @@ public static class ManualEndpoints
     {
         var manual = api.MapGroup("/manual").RequireAuthorization();
 
-        manual.MapGet("/inputs", ListInputs);
-
         manual.MapPost("/sessions/start", async (HttpContext http) =>
         {
             var request = await http.Request.ReadFromJsonAsync<ManualSessionStartRequest>();
@@ -34,23 +32,6 @@ public static class ManualEndpoints
             await result.ExecuteAsync(http);
         });
 
-        manual.MapPost("/inputs/{inputId:long}/map", async (long inputId, HttpContext http) =>
-        {
-            var request = await http.Request.ReadFromJsonAsync<ManualMapInputRequest>();
-            var service = http.RequestServices.GetRequiredService<ManualService>();
-            IResult result = request is null
-                ? TypedResults.Problem("Request body is required.", statusCode: 400)
-                : TypedResults.Ok(await service.MapInput(inputId, http.User.GetUserId(), request, http.RequestAborted));
-            await result.ExecuteAsync(http);
-        });
-    }
-
-    private static async Task<IResult> ListInputs(
-        ClaimsPrincipal principal,
-        ManualService service,
-        CancellationToken ct)
-    {
-        return TypedResults.Ok(await service.ListInputs(principal.GetUserId(), ct));
     }
 
     private static async Task<IResult> StopSession(

@@ -209,20 +209,30 @@ public sealed class AppriseNotificationTests(PostgresFixture postgres)
             Destination = "4242",
         };
         db.NotificationChannels.Add(notificationChannel);
-        var credential = new PlatformCredential
+        var integration = new Integration
         {
             UserId = user.Id,
             PlatformId = steam.Id,
+            Type = IntegrationType.Steam,
             Active = true,
         };
         var game = new Game
         {
-            PlatformId = steam.Id,
             Title = "Hades",
-            CanonicalKey = $"steam:{suffix}",
             CapsuleUrl = "https://covers.test/hades.png",
         };
-        db.AddRange(credential, game);
+        db.AddRange(integration, game);
+        await db.SaveChangesAsync();
+        var session = new PlaySession
+        {
+            UserId = user.Id,
+            GameId = game.Id,
+            PlatformId = steam.Id,
+            CaptureMethod = CaptureMethod.Polling,
+            IntegrationId = integration.Id,
+            StartedAt = DateTimeOffset.UtcNow,
+        };
+        db.PlaySessions.Add(session);
         await db.SaveChangesAsync();
 
         try
@@ -246,32 +256,169 @@ public sealed class AppriseNotificationTests(PostgresFixture postgres)
             var now = DateTimeOffset.UtcNow;
 
             await handler.Handle(
-                new SessionStarted(1, credential.Id, game.Id, now),
+                new SessionStarted(session.Id, integration.Id, game.Id, now),
                 CancellationToken.None);
             Assert.EndsWith("/notify/telegram_4242", appriseHandler.Requests[0]);
 
             game.CapsuleUrl = null;
+            session.EndedAt = now.AddMinutes(65);
             await db.SaveChangesAsync();
             await handler.Handle(
-                new SessionEnded(1, credential.Id, game.Id, now, now.AddMinutes(65)),
+                new SessionEnded(session.Id, integration.Id, game.Id, now, session.EndedAt.Value),
                 CancellationToken.None);
             Assert.EndsWith("/notify/telegram_4242", appriseHandler.Requests[1]);
 
             await handler.Handle(
-                new PollFailed(credential.Id, "steam", "rate limited", TimeSpan.FromMinutes(1)),
+                new PollFailed(integration.Id, "steam", "rate limited", TimeSpan.FromMinutes(1)),
                 CancellationToken.None);
 
             db.NotificationChannels.Remove(notificationChannel);
             await db.SaveChangesAsync();
             await handler.Handle(
-                new SessionStarted(2, credential.Id, game.Id, now),
+                new SessionStarted(session.Id, integration.Id, game.Id, now),
                 CancellationToken.None);
             Assert.Equal(3, appriseHandler.Requests.Count);
         }
         finally
         {
+            db.PlaySessions.Remove(session);
+            db.Integrations.Remove(integration);
             db.Users.Remove(user);
+            db.Games.Remove(game);
             await db.SaveChangesAsync();
+        }
+    }
+
+    [Fact]
+    public async Task OverlappingSessionsForSameUserGameAndPlatformNotifyOnce()
+    {
+        if (!postgres.IsConfigured) return;
+
+        await using var db = CreateDb();
+        var suffix = Guid.NewGuid().ToString("n");
+        var idBase = DateTimeOffset.UtcNow.UtcTicks;
+        var psn = await db.Platforms.SingleAsync(row => row.Key == "psn");
+        var user = new User
+        {
+            Id = idBase,
+            Email = $"notification-dedup-{suffix}@example.test",
+        };
+        var game = new Game { Id = idBase + 1, Title = "Skate Story" };
+        var notificationChannel = new NotificationChannel
+        {
+            UserId = user.Id,
+            Transport = NotificationChannel.Telegram,
+            Destination = "4343",
+        };
+        db.AddRange(user, game, notificationChannel);
+        await db.SaveChangesAsync();
+
+        var firstIntegration = new Integration
+        {
+            Id = idBase + 2,
+            UserId = user.Id,
+            PlatformId = psn.Id,
+            Type = IntegrationType.Psn,
+            Active = true,
+        };
+        var secondIntegration = new Integration
+        {
+            Id = idBase + 3,
+            UserId = user.Id,
+            PlatformId = psn.Id,
+            Type = IntegrationType.Psn,
+            Active = true,
+        };
+        db.AddRange(firstIntegration, secondIntegration);
+        await db.SaveChangesAsync();
+
+        var startedAt = DateTimeOffset.UtcNow;
+        var firstSession = new PlaySession
+        {
+            Id = idBase + 4,
+            UserId = user.Id,
+            GameId = game.Id,
+            PlatformId = psn.Id,
+            CaptureMethod = CaptureMethod.Polling,
+            IntegrationId = firstIntegration.Id,
+            StartedAt = startedAt,
+        };
+        db.PlaySessions.Add(firstSession);
+        await db.SaveChangesAsync();
+        PlaySession? secondSession = null;
+
+        try
+        {
+            var appriseHandler = new RecordingHandler(Json("{}"), Json("{}"), Json("{}"), Json("{}"));
+            var handler = new NotificationEventHandlers(
+                new NotificationsRepository(db),
+                new AppriseClient(
+                    new HttpClient(appriseHandler) { BaseAddress = new Uri("https://apprise.test/") }),
+                new NotificationRenderer(new HttpClient()),
+                NullLogger<NotificationEventHandlers>.Instance);
+
+            await handler.Handle(
+                new SessionStarted(
+                    firstSession.Id,
+                    firstIntegration.Id,
+                    game.Id,
+                    firstSession.StartedAt),
+                CancellationToken.None);
+
+            secondSession = new PlaySession
+            {
+                Id = idBase + 5,
+                UserId = user.Id,
+                GameId = game.Id,
+                PlatformId = psn.Id,
+                CaptureMethod = CaptureMethod.Polling,
+                IntegrationId = secondIntegration.Id,
+                StartedAt = startedAt.AddMilliseconds(300),
+            };
+            db.PlaySessions.Add(secondSession);
+            await db.SaveChangesAsync();
+
+            await handler.Handle(
+                new SessionStarted(
+                    secondSession.Id,
+                    secondIntegration.Id,
+                    game.Id,
+                    secondSession.StartedAt),
+                CancellationToken.None);
+            Assert.Single(appriseHandler.Requests);
+
+            firstSession.EndedAt = startedAt.AddMinutes(10);
+            await db.SaveChangesAsync();
+            await handler.Handle(
+                new SessionEnded(
+                    firstSession.Id,
+                    firstIntegration.Id,
+                    game.Id,
+                    firstSession.StartedAt,
+                    firstSession.EndedAt.Value),
+                CancellationToken.None);
+            Assert.Single(appriseHandler.Requests);
+
+            secondSession.EndedAt = startedAt.AddMinutes(11);
+            await db.SaveChangesAsync();
+            await handler.Handle(
+                new SessionEnded(
+                    secondSession.Id,
+                    secondIntegration.Id,
+                    game.Id,
+                    secondSession.StartedAt,
+                    secondSession.EndedAt.Value),
+                CancellationToken.None);
+            Assert.Equal(2, appriseHandler.Requests.Count);
+
+        }
+        finally
+        {
+            if (secondSession is not null)
+                db.PlaySessions.Remove(secondSession);
+            db.PlaySessions.Remove(firstSession);
+            db.Integrations.RemoveRange(firstIntegration, secondIntegration);
+            db.Users.Remove(user);
             db.Games.Remove(game);
             await db.SaveChangesAsync();
         }
@@ -288,7 +435,14 @@ public sealed class AppriseNotificationTests(PostgresFixture postgres)
 
     private PlaydexDbContext CreateDb() => new(
         new DbContextOptionsBuilder<PlaydexDbContext>()
-            .UseNpgsql(postgres.DataSource!)
+            .UseNpgsql(
+                postgres.DataSource!,
+                npgsql =>
+                {
+                    npgsql.MapEnum<GameExternalIdentityType>("game_external_identity_type");
+                    npgsql.MapEnum<IntegrationType>("integration_type");
+                    npgsql.MapEnum<CaptureMethod>("capture_method");
+                })
             .Options);
 
     private static HttpResponseMessage Json(string value) => new(HttpStatusCode.OK)

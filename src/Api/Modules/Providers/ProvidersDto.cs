@@ -10,7 +10,7 @@ public sealed record ProviderStatusDto(
 public sealed record ProvidersResponseDto(IReadOnlyList<ProviderStatusDto> Providers);
 public sealed record ProviderUpdateRequest(long ProviderId, string Status);
 public sealed record ProviderUpdateResponseDto(ProviderStatusDto Provider);
-public sealed record PlayniteKeyResponseDto(string ApiKey);
+public sealed record ApiKeyResponseDto(string ApiKey);
 public sealed record ProviderCredentialUpdateRequest(
     string? ApiKey,
     string? AccountId);

@@ -210,7 +210,7 @@ public sealed class SessionsStateTests
         state.SetOffset(20);
         state.BeginListLoad();
         var row = new AccountSession(1, DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch,
-            "42", "steam", "Hades II", null, false, null, null);
+            "42", "steam", "Steam", "Hades II", null, false, null, null);
 
         state.CompleteListLoad(new AccountSessionsResponse(1, [row], 47, 10, 20));
 
@@ -286,11 +286,11 @@ public sealed class SessionsStateTests
     }
 
     [Fact]
-    public void RowViewUsesMappedPlatformCapsuleIgnoredFlagHashAndShortDuration()
+    public void RowViewUsesPlatformNameCapsuleIgnoredFlagHashAndShortDuration()
     {
         var now = new DateTimeOffset(2026, 7, 13, 12, 0, 0, TimeSpan.Zero);
         var state = new SessionsState(now);
-        var row = new AccountSession(7, now.AddMinutes(-65), now, "42", "manual", "Hades II",
+        var row = new AccountSession(7, now.AddMinutes(-65), now, "42", "manual", "Manual", "Hades II",
             "https://images.test/hades.jpg", true, "psn", "igdb");
         state.CompleteListLoad(new AccountSessionsResponse(1, [row], 1, 10, 0));
 
@@ -299,7 +299,7 @@ public sealed class SessionsStateTests
         Assert.Equal(7, view.SessionId);
         Assert.Equal("/games/3H4h3", view.GamePath);
         Assert.Equal("Hades II", view.Title);
-        Assert.Equal("PS5", view.Platform);
+        Assert.Equal("Manual", view.Platform);
         Assert.Equal("1h 05m", view.Duration);
         Assert.Equal("https://images.test/hades.jpg", view.ImageUrl);
         Assert.True(view.Ignored);

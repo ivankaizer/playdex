@@ -11,7 +11,8 @@ internal sealed record SessionData(
     long GameId,
     string Game,
     string? CapsuleUrl,
-    string Platform,
+    string PlatformKey,
+    string PlatformName,
     string? MappedPlatform,
     string? MappedSource);
 
@@ -30,7 +31,8 @@ internal sealed record GroupAccum(
     int SessionCount);
 
 internal sealed record PlatformAccum(
-    string Platform,
+    string PlatformKey,
+    string PlatformName,
     int SessionCount,
     double TotalSeconds);
 
@@ -64,7 +66,7 @@ internal static class RecapRange
                 .AddDays(1);
 }
 
-public sealed class RecapService(RecapRepository repository, IGames games)
+public sealed class RecapService(RecapRepository repository)
 {
     private static readonly long DayMs = (long)TimeSpan.FromDays(1).TotalMilliseconds;
 
@@ -141,7 +143,7 @@ public sealed class RecapService(RecapRepository repository, IGames games)
                 weekdaySeconds += durationSeconds;
 
             // Platform totals
-            var platformKey = session.MappedPlatform ?? session.Platform;
+            var platformKey = session.PlatformKey;
             if (platformTotals.TryGetValue(platformKey, out var existingPt))
             {
                 platformTotals[platformKey] = existingPt with
@@ -152,7 +154,8 @@ public sealed class RecapService(RecapRepository repository, IGames games)
             }
             else
             {
-                platformTotals[platformKey] = new PlatformAccum(platformKey, 1, durationSeconds);
+                platformTotals[platformKey] = new PlatformAccum(
+                    platformKey, session.PlatformName, 1, durationSeconds);
             }
 
             // Game totals
@@ -431,14 +434,16 @@ public sealed class RecapService(RecapRepository repository, IGames games)
 
         var platformTotalsList = platformTotals.Values
             .OrderByDescending(p => p.TotalSeconds)
-            .Select(p => new RecapPlatformStatDto(p.Platform, p.SessionCount, p.TotalSeconds, null))
+            .Select(p => new RecapPlatformStatDto(
+                p.PlatformKey, p.PlatformName, p.SessionCount, p.TotalSeconds, null))
             .ToList();
 
         PlatformSummaryDto? mostUsedPlatform = null;
         if (platformTotalsList.Count > 0)
         {
             var top = platformTotalsList[0];
-            mostUsedPlatform = new PlatformSummaryDto(top.Platform, top.TotalSeconds, top.SessionCount);
+            mostUsedPlatform = new PlatformSummaryDto(
+                top.PlatformKey, top.PlatformName, top.TotalSeconds, top.SessionCount);
         }
 
         // ── Build response ─────────────────────────────────────
@@ -486,70 +491,13 @@ public sealed class RecapService(RecapRepository repository, IGames games)
 
     // ── Manual mapping logic ───────────────────────────────────
 
-    private async Task<List<SessionData>> MapSessionsForUser(
+    private static Task<List<SessionData>> MapSessionsForUser(
         long userId, List<RecapSessionRow> rows, CancellationToken ct)
     {
-        var hasManual = rows.Any(r => r.Platform == "manual");
-        if (!hasManual)
-            return rows.Select(ToSessionData).ToList();
-
-        var manualTitles = rows
-            .Where(r => r.Platform == "manual")
-            .Select(r => games.NormalizeTitle(r.Title))
-            .Distinct(StringComparer.Ordinal)
-            .ToArray();
-
-        var mappings = manualTitles.Length > 0
-            ? await repository.LoadManualMappings(userId, manualTitles, ct)
-            : [];
-
-        var mappingIndex = mappings
-            .Where(m => m.MappedGameId.HasValue && m.MappedTitle is not null)
-            .ToDictionary(
-                m => m.CanonicalTitle,
-                m => (
-                    GameId: m.MappedGameId!.Value,
-                    Title: m.MappedTitle!,
-                    Platform: m.MappedPlatform ?? "manual",
-                    CapsuleUrl: m.MappedCapsuleUrl,
-                    CanonicalKey: m.MappedCanonicalKey
-                ),
-                StringComparer.Ordinal);
-
-        return rows.Select(row =>
-        {
-            if (row.Platform != "manual")
-                return ToSessionData(row);
-
-            var normalized = games.NormalizeTitle(row.Title);
-            if (mappingIndex.TryGetValue(normalized, out var mapping))
-            {
-                var source = ResolveMappedSource(mapping.CanonicalKey);
-                return new SessionData(
-                    row.Id, row.StartedAt, row.EndedAt,
-                    mapping.GameId,
-                    mapping.Title,
-                    mapping.CapsuleUrl ?? row.CapsuleUrl,
-                    row.Platform,
-                    mapping.Platform,
-                    source);
-            }
-
-            // No manual mapping found — use game platform as mapped platform if available
-            if (row.GamePlatform != "manual")
-            {
-                return new SessionData(
-                    row.Id, row.StartedAt, row.EndedAt,
-                    row.GameId, row.Title, row.CapsuleUrl,
-                    row.Platform, row.GamePlatform,
-                    ResolveMappedSource(row.GameCanonicalKey));
-            }
-
-            return ToSessionData(row);
-        }).ToList();
+        return Task.FromResult(rows.Select(ToSessionData).ToList());
     }
 
-    private async Task<List<SessionData>> MapFirstSessionsForUser(
+    private static async Task<List<SessionData>> MapFirstSessionsForUser(
         long userId, List<RecapFirstSessionRow> rows, CancellationToken ct)
     {
         // Map first sessions similarly — used for "new games tried" computation.
@@ -563,9 +511,8 @@ public sealed class RecapService(RecapRepository repository, IGames games)
             GameId = r.GameId,
             Title = r.Title,
             CapsuleUrl = r.CapsuleUrl,
-            Platform = r.Platform,
-            GamePlatform = r.GamePlatform,
-            GameCanonicalKey = r.GameCanonicalKey
+            PlatformKey = r.PlatformKey,
+            PlatformName = r.PlatformName
         }).ToList();
 
         var mapped = await MapSessionsForUser(userId, sessionRows, ct);
@@ -577,21 +524,13 @@ public sealed class RecapService(RecapRepository repository, IGames games)
     private static SessionData ToSessionData(RecapSessionRow row) =>
         new(row.Id, row.StartedAt, row.EndedAt,
             row.GameId, row.Title, row.CapsuleUrl,
-            row.Platform, null, null);
+            row.PlatformKey, row.PlatformName, null, null);
 
     private static string ToUtcDateKey(DateTimeOffset date) =>
         date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
 
     private static string ToUtcMonthKey(DateTimeOffset date) =>
         date.ToString("yyyy-MM", CultureInfo.InvariantCulture);
-
-    private static string? ResolveMappedSource(string? canonicalKey)
-    {
-        if (string.IsNullOrEmpty(canonicalKey))
-            return null;
-
-        return canonicalKey.StartsWith("igdb:", StringComparison.Ordinal) ? "igdb" : "local";
-    }
 
     private static double ComputeMedianSeconds(List<double> values)
     {

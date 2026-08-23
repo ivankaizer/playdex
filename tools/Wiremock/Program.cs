@@ -1,4 +1,4 @@
-﻿using WireMock;
+using WireMock;
 using WireMock.RequestBuilders;
 using WireMock.ResponseBuilders;
 using WireMock.Server;
@@ -9,7 +9,7 @@ SetupAdminEndpoint("steam");
 SetupAdminEndpoint("psn");
 SetupAdminEndpoint("xbl", ["playing", "not_playing", "not_playing_online"]);
 SetupProviderEndpoint("steam", "/ISteamUser/GetPlayerSummaries/v0002/");
-SetupProviderEndpoint("psn", "/api/userProfile/v1/internal/users/psn-account-id/basicPresences");
+SetupProviderEndpoint("psn", "/api/userProfile/v1/internal/users/*/basicPresences");
 SetupProviderEndpoint("xbl", "/v2/presence");
 SetupProviderEndpoint("xbl", "/v2/presence/*");
 SetupXboxMarketplaceEndpoint();

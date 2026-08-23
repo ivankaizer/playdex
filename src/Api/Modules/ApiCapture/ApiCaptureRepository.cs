@@ -1,76 +1,43 @@
 using Microsoft.EntityFrameworkCore;
 using Api.Infrastructure.Persistence;
 
-namespace Api.Modules.Playnite;
+namespace Api.Modules.ApiCapture;
 
-public sealed class PlayniteRepository(PlaydexDbContext db)
+public sealed class ApiCaptureRepository(PlaydexDbContext db)
 {
-    public async Task<PlayniteCredentialRow?> LoadCredentialByApiKey(string apiKey, CancellationToken ct)
+    public async Task<ApiIntegrationRow?> LoadCredentialByApiKey(string apiKey, CancellationToken ct)
     {
-        var credentials = await db.Database.SqlQuery<PlayniteCredentialRow>($"""
-            SELECT pc.id AS "Id"
-            FROM platform_credentials pc
-            JOIN platforms p ON p.id = pc.platform_id
+        var credentials = await db.Database.SqlQuery<ApiIntegrationRow>($"""
+            SELECT pc.id AS "Id", pc.user_id AS "UserId"
+            FROM integrations pc
             WHERE pc.api_key = {apiKey}
-              AND p.key = 'playnite'
+              AND pc.type = 'api'
               AND pc.active = true
             """).Take(2).ToListAsync(ct);
         return credentials.Count == 1 ? credentials[0] : null;
     }
 
-    public async Task<long> UpsertGame(
-        string title, string? externalId, string platformKey, string canonicalKey, string? capsuleUrl,
-        CancellationToken ct)
-    {
-        var platformId = await db.Platforms
-            .Where(row => row.Key == platformKey)
-            .Select(row => (long?)row.Id)
-            .FirstOrDefaultAsync(ct);
-
-        if (platformId is null)
-        {
-            platformId = await db.Platforms
-                .Where(row => row.Key == "unknown")
-                .Select(row => row.Id)
-                .SingleAsync(ct);
-        }
-
-        var now = DateTimeOffset.UtcNow;
-        var ids = await db.Database.SqlQuery<long>($"""
-            INSERT INTO games (platform_id, title, external_id, canonical_key, capsule_url, created_at, updated_at)
-            VALUES ({platformId!.Value}, {title}, {externalId}, {canonicalKey}, {capsuleUrl}, {now}, {now})
-            ON CONFLICT (canonical_key) DO UPDATE SET
-                title = CASE WHEN games.title_locked THEN games.title ELSE EXCLUDED.title END,
-                platform_id = EXCLUDED.platform_id,
-                external_id = EXCLUDED.external_id,
-                capsule_url = CASE WHEN games.capsule_url_locked THEN games.capsule_url ELSE COALESCE(EXCLUDED.capsule_url, games.capsule_url) END,
-                updated_at = NOW()
-            RETURNING id
-            """).ToListAsync(ct);
-        return ids.Single();
-    }
-
     public async Task<long> InsertCompletePlaySession(
-        long credentialId, long gameId, DateTimeOffset startedAt, DateTimeOffset endedAt,
+        ApiIntegrationRow integration, long gameId, long platformId, DateTimeOffset startedAt, DateTimeOffset endedAt,
         CancellationToken ct)
     {
         var now = DateTimeOffset.UtcNow;
         var ids = await db.Database.SqlQuery<long>($"""
-            INSERT INTO play_sessions (platform_credential_id, game_id, started_at, ended_at, created_at, updated_at)
-            VALUES ({credentialId}, {gameId}, {startedAt}, {endedAt}, {now}, {now})
+            INSERT INTO play_sessions (game_id, user_id, platform_id, capture_method, integration_id, started_at, ended_at, created_at, updated_at)
+            VALUES ({gameId}, {integration.UserId}, {platformId}, 'api', {integration.Id}, {startedAt}, {endedAt}, {now}, {now})
             RETURNING id
             """).ToListAsync(ct);
         return ids.Single();
     }
 
     public async Task<long> InsertActivePlaySession(
-        long credentialId, long gameId, DateTimeOffset startedAt,
+        ApiIntegrationRow integration, long gameId, long platformId, DateTimeOffset startedAt,
         CancellationToken ct)
     {
         var now = DateTimeOffset.UtcNow;
         var ids = await db.Database.SqlQuery<long>($"""
-            INSERT INTO play_sessions (platform_credential_id, game_id, started_at, created_at, updated_at)
-            VALUES ({credentialId}, {gameId}, {startedAt}, {now}, {now})
+            INSERT INTO play_sessions (game_id, user_id, platform_id, capture_method, integration_id, started_at, created_at, updated_at)
+            VALUES ({gameId}, {integration.UserId}, {platformId}, 'api', {integration.Id}, {startedAt}, {now}, {now})
             RETURNING id
             """).ToListAsync(ct);
         return ids.Single();
@@ -84,7 +51,7 @@ public sealed class PlayniteRepository(PlaydexDbContext db)
         return await db.Database.ExecuteSqlInterpolatedAsync($"""
             UPDATE play_sessions
             SET ended_at = {endedAt}, updated_at = {now}
-            WHERE platform_credential_id = {credentialId} AND ended_at IS NULL
+            WHERE integration_id = {credentialId} AND ended_at IS NULL
             """, ct);
     }
 
@@ -96,7 +63,7 @@ public sealed class PlayniteRepository(PlaydexDbContext db)
         return await db.Database.ExecuteSqlInterpolatedAsync($"""
             UPDATE play_sessions
             SET ended_at = {endedAt}, updated_at = {now}
-            WHERE platform_credential_id = {credentialId}
+            WHERE integration_id = {credentialId}
               AND ended_at IS NULL
               AND game_id <> {gameId}
             """, ct);
@@ -110,7 +77,7 @@ public sealed class PlayniteRepository(PlaydexDbContext db)
             UPDATE play_sessions
             SET ended_at = LEAST({endedAt}, updated_at + ({timeoutMinutes} * INTERVAL '1 minute')),
                 updated_at = NOW()
-            WHERE platform_credential_id = {credentialId}
+            WHERE integration_id = {credentialId}
               AND ended_at IS NULL
               AND updated_at < {timeoutBefore}
             """, ct);
@@ -127,7 +94,7 @@ public sealed class PlayniteRepository(PlaydexDbContext db)
                 started_at AS "StartedAt",
                 updated_at AS "UpdatedAt"
             FROM play_sessions
-            WHERE platform_credential_id = {credentialId} AND ended_at IS NULL
+            WHERE integration_id = {credentialId} AND ended_at IS NULL
             ORDER BY started_at DESC
             LIMIT 1
             """).FirstOrDefaultAsync(ct);
@@ -151,19 +118,19 @@ public sealed class PlayniteRepository(PlaydexDbContext db)
             UPDATE play_sessions ps
             SET ended_at = LEAST({endedAt}, ps.updated_at + ({timeoutMinutes} * INTERVAL '1 minute')),
                 updated_at = NOW()
-            FROM platform_credentials pc
-            JOIN platforms p ON p.id = pc.platform_id
-            WHERE ps.platform_credential_id = pc.id
-              AND p.key = 'playnite'
+            FROM integrations i
+            WHERE ps.integration_id = i.id
+              AND i.type = 'api'
               AND ps.ended_at IS NULL
               AND ps.updated_at < {timeoutBefore}
             """, ct);
     }
 }
 
-public sealed class PlayniteCredentialRow
+public sealed class ApiIntegrationRow
 {
     public long Id { get; set; }
+    public long UserId { get; set; }
 }
 
 public sealed class ActiveSessionRow

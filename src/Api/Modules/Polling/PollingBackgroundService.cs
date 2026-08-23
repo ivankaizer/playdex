@@ -45,9 +45,6 @@ public sealed partial class PollingBackgroundService(
     [LoggerMessage(Level = LogLevel.Warning, Message = "Game metadata enrichment failed for credential {CredentialId}, game {GameId}")]
     private partial void LogMetadataEnrichmentFailed(Exception exception, long credentialId, long gameId);
 
-    [LoggerMessage(Level = LogLevel.Error, Message = "Playnite timeout cleanup failed")]
-    private partial void LogPlayniteTimeoutCleanupFailed(Exception exception);
-
     [LoggerMessage(Level = LogLevel.Error, Message = "Event handler failed for {EventType}")]
     private partial void LogEventHandlerFailed(Exception exception, string eventType);
 
@@ -67,7 +64,6 @@ public sealed partial class PollingBackgroundService(
 
                 try
                 {
-                    await CleanupTimedOutPlayniteSessions(stoppingToken);
                     List<ActiveCredential> credentials;
                     using (var scope = serviceProvider.GetRequiredService<IServiceScopeFactory>().CreateScope())
                     {
@@ -204,7 +200,7 @@ public sealed partial class PollingBackgroundService(
 
     private async Task EnrichGameIfNeeded(
         IProviderClient client,
-        PlatformCredential credential,
+        IntegrationCredentials credential,
         CurrentlyPlayingResult? detectedGame,
         SuccessfulPollOutcome outcome,
         PollingRepository repository,
@@ -231,36 +227,6 @@ public sealed partial class PollingBackgroundService(
         catch (Exception ex) when (ex is not OperationCanceledException || !ct.IsCancellationRequested)
         {
             LogMetadataEnrichmentFailed(ex, credential.Id, gameId);
-        }
-    }
-
-    private async Task CleanupTimedOutPlayniteSessions(CancellationToken ct)
-    {
-        try
-        {
-            using var scope = serviceProvider
-                .GetRequiredService<IServiceScopeFactory>()
-                .CreateScope();
-            var transitions = await scope.ServiceProvider
-                .GetRequiredService<PollingRepository>()
-                .EndTimedOutPlayniteSessions(
-                    DateTimeOffset.UtcNow,
-                    TimeSpan.FromMinutes(3),
-                    ct);
-            var bus = scope.ServiceProvider.GetRequiredService<EventBus>();
-            foreach (var transition in transitions)
-            {
-                await SafePublish(bus, new SessionEnded(
-                    transition.SessionId,
-                    transition.CredentialId,
-                    transition.GameId,
-                    transition.StartedAt,
-                    transition.EndedAt!.Value), ct);
-            }
-        }
-        catch (Exception ex)
-        {
-            LogPlayniteTimeoutCleanupFailed(ex);
         }
     }
 

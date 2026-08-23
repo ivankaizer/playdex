@@ -179,13 +179,13 @@ public sealed class OpenXblClientTests
         new HttpClient(handler),
         Options.Create(new OpenXblOptions { BaseUrl = "https://openxbl.test" }));
 
-    private static PlatformCredential Credential(
+    private static IntegrationCredentials Credential(
         string? apiKey = "test-openxbl-key",
         string? accountId = null) => new()
-    {
-        ApiKey = apiKey,
-        AccountId = accountId,
-    };
+        {
+            ApiKey = apiKey,
+            AccountId = accountId,
+        };
 
     private static HttpResponseMessage Json(string json) => new(HttpStatusCode.OK)
     {

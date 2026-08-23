@@ -75,7 +75,7 @@
                                     }
                                     <div>
                                         <p class="font-semibold">@selectedPrimary.Title</p>
-                                        <p class="text-xs text-emerald-700 dark:text-emerald-200">@(string.IsNullOrEmpty(selectedPrimary.Platform) ? "Unknown platform" : Formatters.FormatPlatformLabel(selectedPrimary.Platform))</p>
+                                        <p class="text-xs text-emerald-700 dark:text-emerald-200">@(string.IsNullOrEmpty(selectedPrimary.Platform) ? "Unknown platform" : selectedPrimary.Platform)</p>
                                     </div>
                                 </div>
                             }
@@ -99,7 +99,7 @@
                                             }
                                             <div>
                                                 <p class="font-semibold">@result.Title</p>
-                                                <p class="text-xs text-slate-500 dark:text-slate-400">@(string.IsNullOrEmpty(result.Platform) ? "Unknown platform" : Formatters.FormatPlatformLabel(result.Platform))</p>
+                                                <p class="text-xs text-slate-500 dark:text-slate-400">@(string.IsNullOrEmpty(result.Platform) ? "Unknown platform" : result.Platform)</p>
                                             </div>
                                         </button>
                                     }
@@ -141,7 +141,7 @@
                                     }
                                     <div>
                                         <p class="font-semibold">@selectedSecondary.Title</p>
-                                        <p class="text-xs text-emerald-700 dark:text-emerald-200">@(string.IsNullOrEmpty(selectedSecondary.Platform) ? "Unknown platform" : Formatters.FormatPlatformLabel(selectedSecondary.Platform))</p>
+                                        <p class="text-xs text-emerald-700 dark:text-emerald-200">@(string.IsNullOrEmpty(selectedSecondary.Platform) ? "Unknown platform" : selectedSecondary.Platform)</p>
                                     </div>
                                 </div>
                             }
@@ -165,7 +165,7 @@
                                             }
                                             <div>
                                                 <p class="font-semibold">@result.Title</p>
-                                                <p class="text-xs text-slate-500 dark:text-slate-400">@(string.IsNullOrEmpty(result.Platform) ? "Unknown platform" : Formatters.FormatPlatformLabel(result.Platform))</p>
+                                                <p class="text-xs text-slate-500 dark:text-slate-400">@(string.IsNullOrEmpty(result.Platform) ? "Unknown platform" : result.Platform)</p>
                                             </div>
                                         </button>
                                     }
@@ -234,7 +234,7 @@
                                             }
                                             <div class="min-w-0 flex-1">
                                                 <button type="button" @onclick="() => NavigateToGameAsync(connection.GameId)" class="block w-full break-words text-left text-sm font-semibold text-slate-900 dark:text-white transition hover:text-emerald-700 dark:hover:text-emerald-200">@connection.Title</button>
-                                                <p class="text-xs text-slate-500 dark:text-slate-400">@(string.IsNullOrEmpty(connection.Platform) ? "Unknown platform" : Formatters.FormatPlatformLabel(connection.Platform))</p>
+                                                <p class="text-xs text-slate-500 dark:text-slate-400">@(string.IsNullOrEmpty(connection.Platform) ? "Unknown platform" : connection.Platform)</p>
                                             </div>
                                         </div>
                                         <div class="flex items-center gap-2 text-xs uppercase tracking-[0.3em] text-slate-500">
@@ -253,7 +253,7 @@
                                             }
                                             <div class="min-w-0 flex-1">
                                                 <button type="button" @onclick="() => NavigateToGameAsync(connection.ConnectedGameId)" class="block w-full break-words text-left text-sm font-semibold text-slate-900 dark:text-white transition hover:text-emerald-700 dark:hover:text-emerald-200">@connection.ConnectedTitle</button>
-                                                <p class="text-xs text-slate-500 dark:text-slate-400">@(string.IsNullOrEmpty(connection.ConnectedPlatform) ? "Unknown platform" : Formatters.FormatPlatformLabel(connection.ConnectedPlatform))</p>
+                                                <p class="text-xs text-slate-500 dark:text-slate-400">@(string.IsNullOrEmpty(connection.ConnectedPlatform) ? "Unknown platform" : connection.ConnectedPlatform)</p>
                                             </div>
                                         </div>
                                     </div>

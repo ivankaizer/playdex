@@ -10,11 +10,13 @@ public sealed class AccountsRepository(PlaydexDbContext db, IGames games)
 {
     public async Task<List<AccountSummaryDto>> ListAccounts(long userId, CancellationToken ct)
     {
-        return await db.PlatformCredentials
+        return await db.Integrations
             .AsNoTracking()
             .Where(pc => pc.UserId == userId)
-            .Join(db.Platforms.AsNoTracking(), pc => pc.PlatformId, p => p.Id,
-                (pc, p) => new AccountSummaryDto(pc.Id, p.Key))
+            .Select(pc => new AccountSummaryDto(pc.Id,
+                pc.Type == IntegrationType.Steam ? "steam" :
+                pc.Type == IntegrationType.Psn ? "psn" :
+                pc.Type == IntegrationType.Xbox ? "xbox" : "api"))
             .OrderBy(account => account.Id)
             .ToListAsync(ct);
     }
@@ -101,7 +103,7 @@ public sealed class AccountsRepository(PlaydexDbContext db, IGames games)
     public async Task<long> DeleteSession(long sessionId, long userId, CancellationToken ct)
     {
         var affected = await db.Database.ExecuteSqlRawAsync("""
-            DELETE FROM play_sessions USING platform_credentials WHERE play_sessions.id = @Id AND platform_credentials.user_id = @UserId AND platform_credentials.id = play_sessions.platform_credential_id
+            DELETE FROM play_sessions WHERE id = @Id AND user_id = @UserId
             """,
             [new NpgsqlParameter("Id", sessionId), new NpgsqlParameter("UserId", userId)],
             ct);
@@ -171,18 +173,18 @@ public sealed class AccountsRepository(PlaydexDbContext db, IGames games)
     {
         var allSessions = await ListSessionsForStats(userId, accountId, from, to, ignoreShortMinutes, ct);
         var platforms = allSessions
-            .GroupBy(EffectivePlatform)
+            .GroupBy(session => session.PlatformKey)
             .Select(g => new AccountPlatformStatDto(
-                g.Key, g.Sum(MapDuration), null))
-            .OrderBy(platform => platform.Platform)
+                g.Key, g.First().PlatformName, g.Sum(MapDuration), null))
+            .OrderBy(platform => platform.PlatformKey)
             .ToList();
 
         var normalizedPlatform = string.IsNullOrWhiteSpace(platform)
             ? null
-            : NormalizePlatformKey(platform);
+            : platform.Trim().ToLowerInvariant();
         var sessions = normalizedPlatform is null
             ? allSessions
-            : allSessions.Where(session => EffectivePlatform(session) == normalizedPlatform).ToList();
+            : allSessions.Where(session => session.PlatformKey == normalizedPlatform).ToList();
         var months = BuildMonthStats(from, to, sessions);
         if (sessions.Count == 0)
             return new AccountStatsPeriodDto(0, 0, null, platforms, [], months);
@@ -224,11 +226,8 @@ public sealed class AccountsRepository(PlaydexDbContext db, IGames games)
         var sql = """
             SELECT ps.id AS "SessionId", ps.started_at AS "StartedAt", ps.ended_at AS "EndedAt",
                    g.id AS "GameId", g.title AS "GameTitle",
-                   p.key AS "Platform", g.capsule_url AS "CapsuleUrl",
-                   gp.key AS "GamePlatform", g.canonical_key AS "GameCanonicalKey",
-                   mg.id AS "MappedGameId", mg.title AS "MappedGameTitle",
-                   mp.key AS "MappedGamePlatform", mg.capsule_url AS "MappedCapsuleUrl",
-                   mg.canonical_key AS "MappedCanonicalKey",
+                   p.key AS "PlatformKey", p.name AS "PlatformName",
+                   g.capsule_url AS "CapsuleUrl",
                    CASE
                        WHEN COALESCE(us.ignore_short_sessions_minutes, 0) > 0
                            AND ps.ended_at IS NOT NULL
@@ -241,18 +240,10 @@ public sealed class AccountsRepository(PlaydexDbContext db, IGames games)
                        ELSE GREATEST(0, FLOOR(EXTRACT(EPOCH FROM (NOW() AT TIME ZONE 'utc' - ps.started_at))))::int
                    END AS "DurationSeconds"
             FROM play_sessions ps
-            JOIN platform_credentials pc ON pc.id = ps.platform_credential_id
-            JOIN platforms p ON p.id = pc.platform_id
+            JOIN platforms p ON p.id = ps.platform_id
             JOIN games g ON g.id = ps.game_id
-            JOIN platforms gp ON gp.id = g.platform_id
-            LEFT JOIN user_settings us ON us.user_id = pc.user_id
-            LEFT JOIN manual_game_inputs mgi
-                ON p.key = 'manual'
-                AND mgi.user_id = pc.user_id
-                AND mgi.canonical_title = TRIM(regexp_replace(lower(g.title), '[^a-z0-9]+', ' ', 'g'))
-            LEFT JOIN games mg ON mg.id = mgi.mapped_game_id
-            LEFT JOIN platforms mp ON mp.id = mg.platform_id
-            WHERE pc.user_id = @UserId
+            LEFT JOIN user_settings us ON us.user_id = ps.user_id
+            WHERE ps.user_id = @UserId
             """;
 
         var parameters = new List<NpgsqlParameter>
@@ -262,7 +253,7 @@ public sealed class AccountsRepository(PlaydexDbContext db, IGames games)
 
         if (accountId.HasValue)
         {
-            sql += " AND pc.id = @AccountId";
+            sql += " AND ps.integration_id = @AccountId";
             parameters.Add(new NpgsqlParameter("AccountId", accountId.Value));
         }
 
@@ -286,8 +277,8 @@ public sealed class AccountsRepository(PlaydexDbContext db, IGames games)
 
         if (!string.IsNullOrWhiteSpace(platform))
         {
-            sql += $" AND ({EffectivePlatformSql}) = @Platform";
-            parameters.Add(new NpgsqlParameter("Platform", NormalizePlatformKey(platform)));
+            sql += " AND p.key = @Platform";
+            parameters.Add(new NpgsqlParameter("Platform", platform.Trim().ToLowerInvariant()));
         }
 
         if (from.HasValue)
@@ -316,46 +307,24 @@ public sealed class AccountsRepository(PlaydexDbContext db, IGames games)
 
     private static AccountSessionDto MapSession(SessionDbRow row)
     {
-        var isManual = row.Platform == "manual";
-        var hasMappedGame = isManual && row.MappedGameId.HasValue && row.MappedGameTitle is not null;
-        var usesNonManualGame = isManual && row.GamePlatform != "manual";
-        var gameId = hasMappedGame ? row.MappedGameId!.Value : row.GameId;
-        var game = hasMappedGame ? row.MappedGameTitle! : row.GameTitle;
-        var capsule = hasMappedGame ? row.MappedCapsuleUrl ?? row.CapsuleUrl : row.CapsuleUrl;
-        var mappedPlatform = hasMappedGame
-            ? row.MappedGamePlatform
-            : usesNonManualGame ? row.GamePlatform : null;
-        var canonicalKey = hasMappedGame ? row.MappedCanonicalKey : row.GameCanonicalKey;
-        var mappedSource = mappedPlatform is null
-            ? null
-            : canonicalKey?.StartsWith("igdb:", StringComparison.Ordinal) == true ? "igdb" : "local";
-
         return new AccountSessionDto(
             row.SessionId,
             row.StartedAt,
             row.EndedAt,
-            GameId.Encode(gameId),
-            row.Platform,
-            game,
-            capsule,
+            GameId.Encode(row.GameId),
+            row.PlatformKey,
+            row.PlatformName,
+            row.GameTitle,
+            row.CapsuleUrl,
             row.Ignored,
-            mappedPlatform,
-            mappedSource);
+            null,
+            null);
     }
 
     private static double MapDuration(AccountSessionDto s) =>
         s.EndedAt.HasValue
             ? (s.EndedAt.Value - s.StartedAt).TotalSeconds
             : (DateTimeOffset.UtcNow - s.StartedAt).TotalSeconds;
-
-    internal static string NormalizePlatformKey(string platform) => platform.Trim().ToLowerInvariant() switch
-    {
-        "psn" or "ps5" => "ps5",
-        var value => value,
-    };
-
-    private static string EffectivePlatform(AccountSessionDto session) =>
-        NormalizePlatformKey(session.MappedPlatform ?? session.Platform);
 
     private static List<AccountMonthStatDto> BuildMonthStats(
         DateTimeOffset from,
@@ -378,24 +347,6 @@ public sealed class AccountsRepository(PlaydexDbContext db, IGames games)
         return months;
     }
 
-    private const string EffectivePlatformSql = """
-        CASE
-            WHEN (
-                CASE
-                    WHEN p.key = 'manual' AND mg.id IS NOT NULL AND mp.key IS NOT NULL THEN mp.key
-                    WHEN p.key = 'manual' AND gp.key <> 'manual' THEN gp.key
-                    ELSE p.key
-                END
-            ) IN ('psn', 'ps5') THEN 'ps5'
-            ELSE (
-                CASE
-                    WHEN p.key = 'manual' AND mg.id IS NOT NULL AND mp.key IS NOT NULL THEN mp.key
-                    WHEN p.key = 'manual' AND gp.key <> 'manual' THEN gp.key
-                    ELSE p.key
-                END
-            )
-        END
-        """;
 }
 
 public sealed record SessionQueryResult(int Total, int Limit, int Offset, List<AccountSessionDto> Sessions);
@@ -407,15 +358,9 @@ internal sealed class SessionDbRow
     public DateTimeOffset? EndedAt { get; set; }
     public long GameId { get; set; }
     public string GameTitle { get; set; } = string.Empty;
-    public string Platform { get; set; } = string.Empty;
+    public string PlatformKey { get; set; } = string.Empty;
+    public string PlatformName { get; set; } = string.Empty;
     public string? CapsuleUrl { get; set; }
-    public string GamePlatform { get; set; } = string.Empty;
-    public string GameCanonicalKey { get; set; } = string.Empty;
-    public long? MappedGameId { get; set; }
-    public string? MappedGameTitle { get; set; }
-    public string? MappedGamePlatform { get; set; }
-    public string? MappedCapsuleUrl { get; set; }
-    public string? MappedCanonicalKey { get; set; }
     public bool Ignored { get; set; }
     public int DurationSeconds { get; set; }
 }

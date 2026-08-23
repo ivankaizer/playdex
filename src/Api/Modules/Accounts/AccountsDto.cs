@@ -7,7 +7,8 @@ public sealed record AccountSessionDto(
     DateTimeOffset StartedAt,
     DateTimeOffset? EndedAt,
     string GameId,
-    string Platform,
+    string PlatformKey,
+    string PlatformName,
     string Game,
     string? CapsuleUrl,
     bool Ignored,
@@ -39,7 +40,11 @@ public sealed record AccountStatsPeriodDto(
     IReadOnlyList<AccountTopGameDto> TopGames,
     IReadOnlyList<AccountMonthStatDto> Months);
 
-public sealed record AccountPlatformStatDto(string Platform, double TotalSeconds, string? Source);
+public sealed record AccountPlatformStatDto(
+    string PlatformKey,
+    string PlatformName,
+    double TotalSeconds,
+    string? Source);
 
 public sealed record AccountTopGameDto(string GameId, string Title, double TotalSeconds);
 

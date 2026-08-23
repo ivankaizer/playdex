@@ -22,12 +22,14 @@ public sealed partial class MigrationRunner(
         {
             await EnsureMetadataTable(connection, cancellationToken);
             var applied = await ReadAppliedMigrations(connection, cancellationToken);
-            catalog.ValidateApplied(applied);
+            var pending = catalog.GetPendingMigrations(applied);
 
-            foreach (var migration in catalog.Migrations.Skip(applied.Count))
+            foreach (var migration in pending)
             {
                 await ApplyMigration(connection, migration, cancellationToken);
             }
+
+            await connection.ReloadTypesAsync(cancellationToken);
         }
         finally
         {

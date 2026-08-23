@@ -7,23 +7,21 @@ public sealed class ProvidersRepository(PlaydexDbContext db)
 {
     public async Task<List<ProviderStatusDto>> ListProviders(long userId, CancellationToken ct)
     {
-        var rows = await db.PlatformCredentials
+        var rows = await db.Integrations
             .AsNoTracking()
             .Where(credential => credential.UserId == userId)
             .OrderBy(credential => credential.Id)
-            .Join(
-                db.Platforms.AsNoTracking(),
-                credential => credential.PlatformId,
-                platform => platform.Id,
-                (credential, platform) => new
-                {
-                    credential.Id,
-                    Platform = platform.Key,
-                    credential.AccountId,
-                    Status = credential.Active ? "active" : "paused",
-                    credential.ApiKey,
-                    credential.ApiKeyLocked,
-                })
+            .Select(credential => new
+            {
+                credential.Id,
+                Platform = credential.Type == IntegrationType.Steam ? "steam" :
+                        credential.Type == IntegrationType.Psn ? "psn" :
+                        credential.Type == IntegrationType.Xbox ? "xbox" : "api",
+                credential.AccountId,
+                Status = credential.Active ? "active" : "paused",
+                credential.ApiKey,
+                ApiKeyLocked = credential.ApiKeyLocked || credential.Type == IntegrationType.Api,
+            })
             .ToListAsync(ct);
 
         return rows.Select(r => new ProviderStatusDto(
@@ -32,7 +30,7 @@ public sealed class ProvidersRepository(PlaydexDbContext db)
 
     public async Task<ProviderStatusDto?> UpdateProviderStatus(long userId, long providerId, string status, CancellationToken ct)
     {
-        var credential = await db.PlatformCredentials
+        var credential = await db.Integrations
             .FirstOrDefaultAsync(
                 item => item.Id == providerId && item.UserId == userId,
                 ct);
@@ -41,9 +39,9 @@ public sealed class ProvidersRepository(PlaydexDbContext db)
         credential.Active = status == "active";
         credential.UpdatedAt = DateTimeOffset.UtcNow;
         await db.SaveChangesAsync(ct);
-        var platform = await db.Platforms
+        var platform = credential.PlatformId is null ? "api" : await db.Platforms
             .AsNoTracking()
-            .Where(item => item.Id == credential.PlatformId)
+            .Where(item => item.Id == credential.PlatformId.Value)
             .Select(item => item.Key)
             .FirstAsync(ct);
         return new ProviderStatusDto(
@@ -52,7 +50,7 @@ public sealed class ProvidersRepository(PlaydexDbContext db)
             credential.AccountId,
             credential.Active ? "active" : "paused",
             credential.ApiKey,
-            credential.ApiKeyLocked);
+            credential.ApiKeyLocked || credential.Type == IntegrationType.Api);
     }
 
     public async Task<ProviderStatusDto?> UpdateCredential(
@@ -64,7 +62,7 @@ public sealed class ProvidersRepository(PlaydexDbContext db)
         string? accountId,
         CancellationToken ct)
     {
-        var credential = await db.PlatformCredentials
+        var credential = await db.Integrations
             .FirstOrDefaultAsync(
                 item => item.Id == providerId && item.UserId == userId,
                 ct);
@@ -74,9 +72,9 @@ public sealed class ProvidersRepository(PlaydexDbContext db)
         if (accountIdChanged) credential.AccountId = accountId;
         credential.UpdatedAt = DateTimeOffset.UtcNow;
         await db.SaveChangesAsync(ct);
-        var platform = await db.Platforms
+        var platform = credential.PlatformId is null ? "api" : await db.Platforms
             .AsNoTracking()
-            .Where(item => item.Id == credential.PlatformId)
+            .Where(item => item.Id == credential.PlatformId.Value)
             .Select(item => item.Key)
             .FirstAsync(ct);
         return new ProviderStatusDto(
@@ -85,18 +83,18 @@ public sealed class ProvidersRepository(PlaydexDbContext db)
             credential.AccountId,
             credential.Active ? "active" : "paused",
             credential.ApiKey,
-            credential.ApiKeyLocked);
+            credential.ApiKeyLocked || credential.Type == IntegrationType.Api);
     }
 
     public async Task<bool> IsApiKeyLocked(long userId, long providerId, CancellationToken ct) =>
-        await db.PlatformCredentials
+        await db.Integrations
             .AsNoTracking()
             .Where(item => item.Id == providerId && item.UserId == userId)
-            .Select(item => item.ApiKeyLocked)
+            .Select(item => item.ApiKeyLocked || item.Type == IntegrationType.Api)
             .FirstOrDefaultAsync(ct);
 
     public Task<bool> IsPlatformApiKeyLocked(long userId, string platformKey, CancellationToken ct) =>
-        db.PlatformCredentials
+        db.Integrations
             .AsNoTracking()
             .Where(item => item.UserId == userId && item.ApiKeyLocked)
             .Join(
@@ -119,20 +117,22 @@ public sealed class ProvidersRepository(PlaydexDbContext db)
             .FirstOrDefaultAsync(ct);
         if (!platformId.HasValue) return null;
 
-        var credential = await db.PlatformCredentials
+        var credential = await db.Integrations
             .FirstOrDefaultAsync(
                 item => item.UserId == userId && item.PlatformId == platformId.Value,
                 ct);
         var now = DateTimeOffset.UtcNow;
         if (credential is null)
         {
-            credential = new PlatformCredential
+            credential = new Integration
             {
                 UserId = userId,
+                Type = IntegrationType.Xbox,
                 PlatformId = platformId.Value,
                 CreatedAt = now,
+                UpdatedAt = now,
             };
-            db.PlatformCredentials.Add(credential);
+            db.Integrations.Add(credential);
         }
 
         credential.ApiKey = apiKey;
@@ -150,15 +150,10 @@ public sealed class ProvidersRepository(PlaydexDbContext db)
             credential.ApiKeyLocked);
     }
 
-    public async Task<string> GetOrCreatePlayniteKey(long userId, string apiKey, CancellationToken ct)
+    public async Task<string> GetOrCreateApiKey(long userId, string apiKey, CancellationToken ct)
     {
-        var existing = await db.PlatformCredentials
-            .Where(credential => credential.UserId == userId)
-            .Join(
-                db.Platforms.AsNoTracking().Where(platform => platform.Key == "playnite"),
-                credential => credential.PlatformId,
-                platform => platform.Id,
-                (credential, _) => credential)
+        var existing = await db.Integrations
+            .Where(credential => credential.UserId == userId && credential.Type == IntegrationType.Api)
             .FirstOrDefaultAsync(ct);
 
         if (!string.IsNullOrEmpty(existing?.ApiKey)) return existing.ApiKey;
@@ -171,26 +166,19 @@ public sealed class ProvidersRepository(PlaydexDbContext db)
             return apiKey;
         }
 
-        var platformId = await db.Platforms
-            .AsNoTracking()
-            .Where(platform => platform.Key == "playnite")
-            .Select(platform => (long?)platform.Id)
-            .FirstOrDefaultAsync(ct);
-        if (platformId.HasValue)
+        var now = DateTimeOffset.UtcNow;
+        db.Integrations.Add(new Integration
         {
-            var now = DateTimeOffset.UtcNow;
-            db.PlatformCredentials.Add(new PlatformCredential
-            {
-                UserId = userId,
-                PlatformId = platformId.Value,
-                ApiKey = apiKey,
-                AccountId = "local",
-                Active = true,
-                CreatedAt = now,
-                UpdatedAt = now,
-            });
-            await db.SaveChangesAsync(ct);
-        }
+            UserId = userId,
+            Type = IntegrationType.Api,
+            PlatformId = null,
+            ApiKey = apiKey,
+            AccountId = "api",
+            Active = true,
+            CreatedAt = now,
+            UpdatedAt = now,
+        });
+        await db.SaveChangesAsync(ct);
 
         return apiKey;
     }
