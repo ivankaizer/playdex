@@ -64,6 +64,7 @@ internal sealed class ConfigStore(string path)
             config.Games ?? new Dictionary<string, GameConfig>(),
             StringComparer.OrdinalIgnoreCase);
         config.Api ??= new ApiConfig();
+        config.Api.Platform = ApiConfig.NormalizePlatform(config.Api.Platform);
         config.SteamGridDb ??= new SteamGridDbConfig();
         config.SteamGridDb.ApiKey = SteamGridDbConfig.NormalizeApiKey(config.SteamGridDb.ApiKey);
         config.Ludusavi ??= new LudusaviConfig();
@@ -80,6 +81,7 @@ internal sealed class ConfigStore(string path)
 
         foreach (var game in config.Games.Values)
         {
+            game.Platform = ApiConfig.NormalizePlatformOverride(game.Platform);
             game.Launch ??= new LaunchConfig();
             game.Launch.Arguments ??= [];
             game.Monitor ??= new MonitorConfig();

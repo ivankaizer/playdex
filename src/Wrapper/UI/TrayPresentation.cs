@@ -121,7 +121,7 @@ internal sealed class TrayLayoutMetrics
 internal sealed class ApiSettingsDialogMetrics
 {
     public int Dpi { get; }
-    public Size ClientSize => new(Scale(420), Scale(364));
+    public Size ClientSize => new(Scale(420), Scale(428));
     public Size InputSize => new(Scale(388), Scale(27));
     public Size ButtonSize => new(Scale(68), Scale(28));
 

@@ -18,6 +18,14 @@ public sealed partial class ApiCaptureService(
     [LoggerMessage(Level = LogLevel.Error, Message = "API capture event handler failed for {EventType}")]
     private partial void LogApiEventHandlerFailed(Exception exception, string eventType);
 
+    public async Task<IReadOnlyList<ApiCapturePlatformDto>?> ListPlatforms(
+        string apiKey,
+        CancellationToken ct)
+    {
+        var credential = await repository.LoadCredentialByApiKey(apiKey, ct);
+        return credential is null ? null : await repository.ListPcPlatforms(ct);
+    }
+
     public async Task<ApiSessionResponseDto?> RecordSession(
         string apiKey, int durationInSeconds, string gameTitle, string gameId, string? gameProvider, string platform,
         CancellationToken ct)

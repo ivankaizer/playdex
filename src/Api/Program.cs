@@ -71,6 +71,7 @@ builder.Services.AddSingleton(new MigrationCatalog([
     new ManualTargetModelMigration(),
     new DropLegacyModelMigration(),
     new CorrectLegacyApiSessionPlatformsMigration(),
+    new PcPlatformHierarchyMigration(),
 ]));
 builder.Services.AddSingleton<MigrationRunner>();
 builder.Services.AddScoped<EventBus>();

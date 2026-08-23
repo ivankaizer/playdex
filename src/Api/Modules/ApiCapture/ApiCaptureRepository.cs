@@ -17,6 +17,24 @@ public sealed class ApiCaptureRepository(PlaydexDbContext db)
         return credentials.Count == 1 ? credentials[0] : null;
     }
 
+    public Task<List<ApiCapturePlatformDto>> ListPcPlatforms(CancellationToken ct) =>
+        db.Database.SqlQuery<ApiCapturePlatformDto>($"""
+            WITH RECURSIVE pc_platforms AS (
+                SELECT id, key, name, parent_id, 0 AS depth
+                FROM platforms
+                WHERE key = 'pc'
+
+                UNION ALL
+
+                SELECT child.id, child.key, child.name, child.parent_id, parent.depth + 1
+                FROM platforms child
+                JOIN pc_platforms parent ON child.parent_id = parent.id
+            )
+            SELECT key AS "Key", name AS "Name"
+            FROM pc_platforms
+            ORDER BY CASE WHEN key = 'pc' THEN 0 ELSE 1 END, name, key
+            """).ToListAsync(ct);
+
     public async Task<long> InsertCompletePlaySession(
         ApiIntegrationRow integration, long gameId, long platformId, DateTimeOffset startedAt, DateTimeOffset endedAt,
         CancellationToken ct)

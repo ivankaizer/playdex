@@ -21,3 +21,5 @@ public sealed record ApiSessionPingResponseDto(
     bool Started,
     int EndedSessionCount
 );
+
+public sealed record ApiCapturePlatformDto(string Key, string Name);
