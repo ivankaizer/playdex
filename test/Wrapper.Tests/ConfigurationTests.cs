@@ -18,8 +18,10 @@ public sealed class ConfigurationTests
         game.Launch.Arguments = ["-windowed", "Player One"];
         game.ApiGameId = "1234";
         game.GameProvider = "steam";
+        game.Platform = "gog";
         game.ApiKey = "game-key";
         config.Api.ApiKey = "global-key";
+        config.Api.Platform = "steam";
         config.SteamGridDb.ApiKey = "artwork-key";
         config.Ludusavi.ExecutablePath = "C:\\Tools\\ludusavi.exe";
         game.Backup.DailyEnabled = true;
@@ -31,11 +33,31 @@ public sealed class ConfigurationTests
         Assert.Equal(["-windowed", "Player One"], loaded.Games["demo"].Launch.Arguments);
         Assert.Equal("1234", loaded.Games["demo"].ApiGameId);
         Assert.Equal("steam", loaded.Games["demo"].GameProvider);
+        Assert.Equal("gog", loaded.Games["demo"].Platform);
+        Assert.Equal("gog", loaded.Api.ResolvePlatform(loaded.Games["demo"]));
         Assert.Equal("game-key", loaded.Api.ResolveApiKey(loaded.Games["demo"]));
         Assert.Equal("artwork-key", loaded.SteamGridDb.ApiKey);
         Assert.Equal("C:\\Tools\\ludusavi.exe", loaded.Ludusavi.ExecutablePath);
         Assert.True(loaded.Games["demo"].Backup.DailyEnabled);
         Assert.Equal("Doom: The Dark Ages", loaded.Games["demo"].Backup.LudusaviGameTitle);
+    }
+
+    [Fact]
+    public async Task TestLegacyConfigDefaultsToPcPlatform()
+    {
+        var path = Path.Combine(NewTempDir(), "config.json");
+        await File.WriteAllTextAsync(path, """
+            {
+              "api": { "baseUrl": "https://example.test/api", "apiKey": "key" },
+              "games": { "demo": { "gameId": "demo", "displayName": "Demo" } }
+            }
+            """);
+
+        var loaded = await new ConfigStore(path).LoadOrCreateAsync();
+
+        Assert.Equal("pc", loaded.Api.Platform);
+        Assert.Null(loaded.Games["demo"].Platform);
+        Assert.Equal("pc", loaded.Api.ResolvePlatform(loaded.Games["demo"]));
     }
 
     [Fact]
@@ -356,6 +378,14 @@ public sealed class ConfigurationTests
         Assert.Equal("https://example.test/api", ApiConfig.NormalizeBaseUrl("https://example.test/api"));
         Assert.True(!new ApiConfig { BaseUrl = "" }.IsEnabled);
         Assert.True(new ApiConfig { BaseUrl = "https://example.test/api" }.IsEnabled);
+        Assert.Equal("pc", ApiConfig.NormalizePlatform(null));
+        Assert.Equal("gog", ApiConfig.NormalizePlatform(" GOG "));
+        Assert.Null(ApiConfig.NormalizePlatformOverride(" "));
+        var api = new ApiConfig { Platform = "steam" };
+        var game = new GameConfig();
+        Assert.Equal("steam", api.ResolvePlatform(game));
+        game.Platform = "gog";
+        Assert.Equal("gog", api.ResolvePlatform(game));
 
         foreach (var invalid in new[] { "example.test/api", "file:///C:/example", "http://" })
         {

@@ -141,10 +141,10 @@ public sealed class ApplicationAndUiTests
         Assert.True(GameSettingsDialog.ValidationTop + GameSettingsDialog.ValidationHeight <= GameSettingsDialog.ButtonTop);
         var expected = new[]
         {
-            (Dpi: 96, Client: new Size(420, 364), Input: new Size(388, 27), Button: new Size(68, 28)),
-            (Dpi: 120, Client: new Size(525, 455), Input: new Size(485, 34), Button: new Size(85, 35)),
-            (Dpi: 144, Client: new Size(630, 546), Input: new Size(582, 41), Button: new Size(102, 42)),
-            (Dpi: 192, Client: new Size(840, 728), Input: new Size(776, 54), Button: new Size(136, 56))
+            (Dpi: 96, Client: new Size(420, 428), Input: new Size(388, 27), Button: new Size(68, 28)),
+            (Dpi: 120, Client: new Size(525, 535), Input: new Size(485, 34), Button: new Size(85, 35)),
+            (Dpi: 144, Client: new Size(630, 642), Input: new Size(582, 41), Button: new Size(102, 42)),
+            (Dpi: 192, Client: new Size(840, 856), Input: new Size(776, 54), Button: new Size(136, 56))
         };
 
         foreach (var item in expected)
@@ -157,6 +157,29 @@ public sealed class ApplicationAndUiTests
         }
 
         Assert.Equal(96, ApiSettingsDialogMetrics.ForDpi(72).Dpi);
+        return Task.CompletedTask;
+    }
+
+    [Fact]
+    public Task TestPlatformSelectorsPreserveInheritanceAndUnavailableValues()
+    {
+        var palette = TrayTheme.Light;
+        var catalog = new PlatformCatalogLoad(
+            [new PlatformOption("pc", "PC"), new PlatformOption("gog", "GOG")],
+            null);
+        using var inherited = PlatformSelector.Create(catalog, null, true, "pc", palette);
+        using var overridden = PlatformSelector.Create(catalog, "gog", true, "pc", palette);
+        using var unavailable = PlatformSelector.Create(
+            new PlatformCatalogLoad([], "offline"),
+            "steam",
+            false,
+            "pc",
+            palette);
+
+        Assert.Null(PlatformSelector.SelectedKey(inherited));
+        Assert.Equal("gog", PlatformSelector.SelectedKey(overridden));
+        Assert.Equal("steam", PlatformSelector.SelectedKey(unavailable));
+        Assert.Contains("unavailable", unavailable.SelectedItem!.ToString(), StringComparison.OrdinalIgnoreCase);
         return Task.CompletedTask;
     }
 

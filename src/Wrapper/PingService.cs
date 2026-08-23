@@ -1,6 +1,6 @@
 namespace Wrapper;
 
-internal sealed record GamePing(string GameTitle, string GameId, string GameProvider);
+internal sealed record GamePing(string GameTitle, string GameId, string GameIdProvider, string Platform);
 
 internal sealed partial class PingApiClient : IDisposable
 {
@@ -8,7 +8,7 @@ internal sealed partial class PingApiClient : IDisposable
     private readonly GameConfig _game;
     private readonly ILogger<PingApiClient> _logger;
     private readonly HttpClient _http;
-    private const string _pingPath = "playnite/sessions/ping";
+    private const string _pingPath = "capture/sessions/ping";
 
     public PingApiClient(ApiConfig config, GameConfig game, ILogger<PingApiClient> logger, HttpMessageHandler? handler = null)
     {
@@ -23,7 +23,11 @@ internal sealed partial class PingApiClient : IDisposable
     public async Task<bool> PingAsync(CancellationToken cancellationToken)
     {
         var apiGameId = string.IsNullOrWhiteSpace(_game.ApiGameId) ? _game.GameId : _game.ApiGameId;
-        var ping = new GamePing(_game.DisplayName, apiGameId, _game.GameProvider);
+        var ping = new GamePing(
+            _game.DisplayName,
+            apiGameId,
+            _game.GameProvider,
+            _config.ResolvePlatform(_game));
         var apiKey = _config.ResolveApiKey(_game);
         if (string.IsNullOrWhiteSpace(apiKey))
         {

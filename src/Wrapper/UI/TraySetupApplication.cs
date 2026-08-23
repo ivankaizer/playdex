@@ -223,11 +223,15 @@ internal sealed partial class TraySetupApplication : IDisposable
         }
 
         var currentId = string.IsNullOrWhiteSpace(game.ApiGameId) ? game.GameId : game.ApiGameId;
+        var catalog = await LoadPlatformCatalogAsync(config.Api.ResolveApiKey(game));
         using var editor = new GameSettingsDialog(
             game.DisplayName,
             currentId,
             game.Launch.Arguments,
             game.Backup.DailyEnabled,
+            game.Platform,
+            config.Api.Platform,
+            catalog,
             TrayTheme.Current(),
             window.DeviceDpi);
         if (editor.ShowDialog(window) != DialogResult.OK)
@@ -238,6 +242,7 @@ internal sealed partial class TraySetupApplication : IDisposable
         GameCatalog.ChangeDisplayName(config, gameId, editor.GameName);
         GameCatalog.ChangeApiGameId(config, gameId, editor.GameId);
         GameCatalog.ChangeLaunchOptions(config, gameId, editor.LaunchOptions);
+        game.Platform = editor.Platform;
         game.Backup.DailyEnabled = editor.DailyBackupEnabled;
         await store.SaveAsync(config);
         RefreshGameMenu();
@@ -314,9 +319,12 @@ internal sealed partial class TraySetupApplication : IDisposable
 
     private async Task OpenSettingsAsync()
     {
+        var catalog = await LoadPlatformCatalogAsync(config.Api.ApiKey);
         using var editor = new ApiSettingsDialog(
             config.Api.BaseUrl,
             config.Api.ApiKey,
+            config.Api.Platform,
+            catalog,
             config.SteamGridDb.ApiKey,
             config.Ludusavi.ExecutablePath,
             TrayTheme.Current(),
@@ -341,6 +349,7 @@ internal sealed partial class TraySetupApplication : IDisposable
 
         config.Api.BaseUrl = editor.BaseUrl;
         config.Api.ApiKey = editor.ApiKey;
+        config.Api.Platform = editor.Platform;
         config.SteamGridDb.ApiKey = editor.SteamGridDbApiKey;
         config.Ludusavi.ExecutablePath = editor.LudusaviExecutablePath;
         await store.SaveAsync(config);
@@ -350,6 +359,17 @@ internal sealed partial class TraySetupApplication : IDisposable
             config.Api.ApiKey);
         icon.ShowBalloonTip(2500, "Settings saved", "Settings were updated.", ToolTipIcon.Info);
         RefreshGameMenu();
+    }
+
+    private async Task<PlatformCatalogLoad> LoadPlatformCatalogAsync(string apiKey)
+    {
+        if (!config.Api.IsEnabled)
+        {
+            return new PlatformCatalogLoad([], "Configure an API base URL to load Platforms.");
+        }
+
+        using var client = new PlatformCatalogClient(config.Api);
+        return await client.LoadAsync(apiKey);
     }
 
     private Task SynchronizeLaunchersAsync(bool showConfirmation)

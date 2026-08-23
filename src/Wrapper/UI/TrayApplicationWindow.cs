@@ -394,6 +394,7 @@ internal sealed class ApiSettingsDialog : Form
 {
     private readonly TextBox baseUrlInput;
     private readonly TextBox apiKeyInput;
+    private readonly ComboBox platformInput;
     private readonly TextBox steamGridDbApiKeyInput;
     private readonly TextBox ludusaviPathInput;
     private readonly Label validation;
@@ -401,12 +402,15 @@ internal sealed class ApiSettingsDialog : Form
 
     public string BaseUrl { get; private set; }
     public string ApiKey { get; private set; }
+    public string Platform { get; private set; }
     public string SteamGridDbApiKey { get; private set; }
     public string LudusaviExecutablePath { get; private set; }
 
     public ApiSettingsDialog(
         string baseUrl,
         string apiKey,
+        string platform,
+        PlatformCatalogLoad platformCatalog,
         string steamGridDbApiKey,
         string ludusaviExecutablePath,
         TrayPalette palette,
@@ -415,6 +419,7 @@ internal sealed class ApiSettingsDialog : Form
         layout = ApiSettingsDialogMetrics.ForDpi(dpi);
         BaseUrl = baseUrl;
         ApiKey = apiKey;
+        Platform = ApiConfig.NormalizePlatform(platform);
         SteamGridDbApiKey = steamGridDbApiKey;
         LudusaviExecutablePath = ludusaviExecutablePath;
         AutoScaleMode = AutoScaleMode.None;
@@ -458,11 +463,22 @@ internal sealed class ApiSettingsDialog : Form
         };
         Controls.Add(apiKeyInput);
 
-        Controls.Add(CreateLabel("SteamGridDB API key (optional)", 16, 142, palette));
+        Controls.Add(CreateLabel("Default play Platform", 16, 142, palette));
+        platformInput = PlatformSelector.Create(
+            catalog: platformCatalog,
+            selectedKey: Platform,
+            includeDefault: false,
+            defaultPlatform: Platform,
+            palette: palette);
+        platformInput.Location = P(16, 166);
+        platformInput.Size = layout.InputSize;
+        Controls.Add(platformInput);
+
+        Controls.Add(CreateLabel("SteamGridDB API key (optional)", 16, 206, palette));
         steamGridDbApiKeyInput = new TextBox
         {
             Text = steamGridDbApiKey,
-            Location = P(16, 166),
+            Location = P(16, 230),
             Size = layout.InputSize,
             MaxLength = SteamGridDbConfig.MaximumApiKeyLength,
             UseSystemPasswordChar = true,
@@ -472,11 +488,11 @@ internal sealed class ApiSettingsDialog : Form
         };
         Controls.Add(steamGridDbApiKeyInput);
 
-        Controls.Add(CreateLabel("Ludusavi executable", 16, 206, palette));
+        Controls.Add(CreateLabel("Ludusavi executable", 16, 270, palette));
         ludusaviPathInput = new TextBox
         {
             Text = ludusaviExecutablePath,
-            Location = P(16, 230),
+            Location = P(16, 294),
             Size = Z(310, 27),
             MaxLength = LudusaviConfig.MaximumExecutablePathLength,
             BackColor = palette.Surface,
@@ -485,26 +501,27 @@ internal sealed class ApiSettingsDialog : Form
         };
         Controls.Add(ludusaviPathInput);
         var browse = CreateDialogButton("Browse...", palette.Surface, palette.Text);
-        browse.Location = P(336, 229);
+        browse.Location = P(336, 293);
         browse.Click += (_, _) => BrowseForLudusavi();
         Controls.Add(browse);
 
         validation = new Label
         {
-            Location = P(16, 269),
+            Location = P(16, 333),
             Size = Z(388, 34),
             Font = new Font("Segoe UI", 8f),
             ForeColor = palette.Danger
         };
         Controls.Add(validation);
+        validation.Text = platformCatalog.Error ?? "";
 
         var cancel = CreateDialogButton("Cancel", palette.Surface, palette.Text);
-        cancel.Location = P(260, 320);
+        cancel.Location = P(260, 384);
         cancel.DialogResult = DialogResult.Cancel;
         Controls.Add(cancel);
 
         var save = CreateDialogButton("Save", palette.Accent, palette == TrayTheme.Dark ? Color.FromArgb(20, 20, 20) : Color.White);
-        save.Location = P(336, 320);
+        save.Location = P(336, 384);
         save.Click += (_, _) => SaveSettings();
         Controls.Add(save);
 
@@ -547,6 +564,7 @@ internal sealed class ApiSettingsDialog : Form
         {
             BaseUrl = ApiConfig.NormalizeBaseUrl(baseUrlInput.Text);
             ApiKey = apiKeyInput.Text.Trim();
+            Platform = PlatformSelector.SelectedKey(platformInput) ?? ApiConfig.DefaultPlatform;
             SteamGridDbApiKey = SteamGridDbConfig.NormalizeApiKey(steamGridDbApiKeyInput.Text);
             LudusaviExecutablePath = LudusaviConfig.NormalizeExecutablePath(ludusaviPathInput.Text);
             DialogResult = DialogResult.OK;
@@ -580,13 +598,14 @@ internal sealed class ApiSettingsDialog : Form
 internal sealed class GameSettingsDialog : Form
 {
     public const string SteamDbUrl = "https://steamdb.info/";
-    internal const int ValidationTop = 234;
+    internal const int ValidationTop = 298;
     internal const int ValidationHeight = 40;
-    internal const int ButtonTop = 320;
+    internal const int ButtonTop = 384;
 
     private readonly TextBox gameNameInput;
     private readonly TextBox gameIdInput;
     private readonly TextBox launchOptionsInput;
+    private readonly ComboBox platformInput;
     private readonly CheckBox dailyBackupInput;
     private readonly Label validation;
     private readonly ApiSettingsDialogMetrics layout;
@@ -595,12 +614,16 @@ internal sealed class GameSettingsDialog : Form
     public string GameId { get; private set; }
     public string LaunchOptions { get; private set; }
     public bool DailyBackupEnabled { get; private set; }
+    public string? Platform { get; private set; }
 
     public GameSettingsDialog(
         string currentGameName,
         string currentGameId,
         IReadOnlyList<string> currentLaunchArguments,
         bool dailyBackupEnabled,
+        string? currentPlatform,
+        string defaultPlatform,
+        PlatformCatalogLoad platformCatalog,
         TrayPalette palette,
         int dpi)
     {
@@ -609,6 +632,7 @@ internal sealed class GameSettingsDialog : Form
         GameId = currentGameId;
         LaunchOptions = LaunchOptionsCodec.Format(currentLaunchArguments);
         DailyBackupEnabled = dailyBackupEnabled;
+        Platform = ApiConfig.NormalizePlatformOverride(currentPlatform);
         AutoScaleMode = AutoScaleMode.None;
         AutoSize = false;
         ClientSize = layout.ClientSize;
@@ -698,11 +722,29 @@ internal sealed class GameSettingsDialog : Form
         };
         Controls.Add(launchOptionsInput);
 
+        Controls.Add(new Label
+        {
+            Text = "Play Platform",
+            Location = P(16, 200),
+            Size = Z(388, 20),
+            Font = new Font("Segoe UI", 9f),
+            ForeColor = palette.Text
+        });
+        platformInput = PlatformSelector.Create(
+            catalog: platformCatalog,
+            selectedKey: Platform,
+            includeDefault: true,
+            defaultPlatform: defaultPlatform,
+            palette: palette);
+        platformInput.Location = P(16, 224);
+        platformInput.Size = layout.InputSize;
+        Controls.Add(platformInput);
+
         dailyBackupInput = new CheckBox
         {
             Text = "Back up saves daily with Ludusavi",
             Checked = dailyBackupEnabled,
-            Location = P(16, 200),
+            Location = P(16, 264),
             Size = Z(388, 26),
             ForeColor = palette.Text,
             AccessibleName = "Enable daily Ludusavi backup"
@@ -717,6 +759,7 @@ internal sealed class GameSettingsDialog : Form
             ForeColor = palette.Danger
         };
         Controls.Add(validation);
+        validation.Text = platformCatalog.Error ?? "";
 
         var cancel = CreateDialogButton("Cancel", palette.Surface, palette.Text);
         cancel.Location = P(260, ButtonTop);
@@ -760,6 +803,7 @@ internal sealed class GameSettingsDialog : Form
             GameId = GameCatalog.NormalizeApiGameId(gameIdInput.Text);
             _ = LaunchOptionsCodec.Parse(launchOptionsInput.Text);
             LaunchOptions = launchOptionsInput.Text.Trim();
+            Platform = PlatformSelector.SelectedKey(platformInput);
             DailyBackupEnabled = dailyBackupInput.Checked;
             DialogResult = DialogResult.OK;
             Close();

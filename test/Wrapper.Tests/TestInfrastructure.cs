@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Net;
+using System.Text;
 using Wrapper;
 
 namespace Wrapper.Tests;
@@ -42,9 +43,9 @@ internal static class TestProcess
     }
 }
 
-internal sealed record RecordedRequest(string Uri, string Authorization, string Body);
+internal sealed record RecordedRequest(string Method, string Uri, string Authorization, string Body);
 
-internal sealed class RecordingHandler(HttpStatusCode statusCode) : HttpMessageHandler
+internal sealed class RecordingHandler(HttpStatusCode statusCode, string responseBody = "") : HttpMessageHandler
 {
     public List<RecordedRequest> Requests { get; } = [];
 
@@ -52,9 +53,13 @@ internal sealed class RecordingHandler(HttpStatusCode statusCode) : HttpMessageH
     {
         var body = request.Content is null ? "" : await request.Content.ReadAsStringAsync(cancellationToken);
         Requests.Add(new RecordedRequest(
+            request.Method.Method,
             request.RequestUri?.ToString() ?? "",
             request.Headers.Authorization?.ToString() ?? "",
             body));
-        return new HttpResponseMessage(statusCode);
+        return new HttpResponseMessage(statusCode)
+        {
+            Content = new StringContent(responseBody, Encoding.UTF8, "application/json")
+        };
     }
 }

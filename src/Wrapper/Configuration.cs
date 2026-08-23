@@ -40,6 +40,7 @@ internal sealed class GameConfig
     public string DisplayName { get; set; } = "Default Game";
     public string? ApiGameId { get; set; }
     public string GameProvider { get; set; } = "steam";
+    public string? Platform { get; set; }
     public string? ApiKey { get; set; }
     public LaunchConfig Launch { get; set; } = new();
     public MonitorConfig Monitor { get; set; } = new();
@@ -367,15 +368,37 @@ internal sealed class ApiConfig
 {
     public const int MaximumBaseUrlLength = 2048;
     public const int MaximumApiKeyLength = 4096;
+    public const int MaximumPlatformKeyLength = 64;
+    public const string DefaultPlatform = "pc";
 
     public string BaseUrl { get; set; } = AppBrand.DefaultApiBaseUrl;
     public string ApiKey { get; set; } = "";
+    public string Platform { get; set; } = DefaultPlatform;
     public int PingIntervalSeconds { get; set; } = 30;
     public int RequestTimeoutSeconds { get; set; } = 10;
     public bool IsEnabled => !string.IsNullOrWhiteSpace(BaseUrl);
 
     public string ResolveApiKey(GameConfig game) =>
         string.IsNullOrWhiteSpace(game.ApiKey) ? ApiKey.Trim() : game.ApiKey.Trim();
+
+    public string ResolvePlatform(GameConfig game) =>
+        NormalizePlatform(string.IsNullOrWhiteSpace(game.Platform) ? Platform : game.Platform);
+
+    public static string NormalizePlatform(string? platform)
+    {
+        var normalized = string.IsNullOrWhiteSpace(platform)
+            ? DefaultPlatform
+            : platform.Trim().ToLowerInvariant();
+        if (normalized.Length > MaximumPlatformKeyLength)
+        {
+            throw new InvalidOperationException($"Platform key cannot exceed {MaximumPlatformKeyLength} characters.");
+        }
+
+        return normalized;
+    }
+
+    public static string? NormalizePlatformOverride(string? platform) =>
+        string.IsNullOrWhiteSpace(platform) ? null : NormalizePlatform(platform);
 
     public static string NormalizeBaseUrl(string? baseUrl)
     {

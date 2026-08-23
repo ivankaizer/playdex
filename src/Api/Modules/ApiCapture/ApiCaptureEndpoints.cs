@@ -10,7 +10,24 @@ public static class ApiCaptureEndpoints
     public static void MapApiCaptureEndpoints(this RouteGroupBuilder api)
     {
         var capture = api.MapGroup("/capture");
+        MapPlatformEndpoints(capture);
         MapSessionEndpoints(capture);
+    }
+
+    private static void MapPlatformEndpoints(RouteGroupBuilder capture)
+    {
+        capture.MapGet("/platforms", async (HttpContext http) =>
+        {
+            var service = http.RequestServices.GetRequiredService<ApiCaptureService>();
+            var result = await service.ListPlatforms(ExtractApiKey(http), http.RequestAborted);
+            if (result is null)
+            {
+                await TypedResults.Problem("Invalid api key.", statusCode: 401).ExecuteAsync(http);
+                return;
+            }
+
+            await TypedResults.Ok(result).ExecuteAsync(http);
+        });
     }
 
     private static void MapSessionEndpoints(RouteGroupBuilder capture)

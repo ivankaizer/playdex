@@ -17,6 +17,7 @@ public sealed class SessionTests
         {
             BaseUrl = "https://example.test/api",
             ApiKey = "global-key",
+            Platform = "pc",
             RequestTimeoutSeconds = 10
         };
         var game = new GameConfig
@@ -25,19 +26,67 @@ public sealed class SessionTests
             ApiGameId = "1234",
             DisplayName = "Demo Game",
             GameProvider = "steam",
+            Platform = "gog",
             ApiKey = "game-key"
         };
         using var api = new PingApiClient(config, game, logging.CreateLogger<PingApiClient>(), handler);
 
         Assert.True(await api.PingAsync(CancellationToken.None));
         var request = handler.Requests.Single();
-        Assert.Equal("https://example.test/api/playnite/sessions/ping", request.Uri);
+        Assert.Equal("POST", request.Method);
+        Assert.Equal("https://example.test/api/capture/sessions/ping", request.Uri);
         Assert.Equal("Bearer game-key", request.Authorization);
 
         using var json = JsonDocument.Parse(request.Body);
         Assert.Equal("Demo Game", json.RootElement.GetProperty("gameTitle").GetString());
         Assert.Equal("1234", json.RootElement.GetProperty("gameId").GetString());
-        Assert.Equal("steam", json.RootElement.GetProperty("gameProvider").GetString());
+        Assert.Equal("steam", json.RootElement.GetProperty("gameIdProvider").GetString());
+        Assert.Equal("gog", json.RootElement.GetProperty("platform").GetString());
+        Assert.True(!json.RootElement.TryGetProperty("gameProvider", out _));
+    }
+
+    [Fact]
+    public async Task TestPingUsesGlobalPlatformDefault()
+    {
+        var handler = new RecordingHandler(HttpStatusCode.OK);
+        using var logging = AppLoggerFactory.CreateInDirectory(NewTempDir());
+        using var api = new PingApiClient(
+            new ApiConfig { BaseUrl = "https://example.test/api", ApiKey = "key", Platform = "steam" },
+            new GameConfig { GameId = "demo", DisplayName = "Demo", Platform = null },
+            logging.CreateLogger<PingApiClient>(),
+            handler);
+
+        Assert.True(await api.PingAsync(CancellationToken.None));
+        using var json = JsonDocument.Parse(handler.Requests.Single().Body);
+        Assert.Equal("steam", json.RootElement.GetProperty("platform").GetString());
+    }
+
+    [Fact]
+    public async Task TestPlatformCatalogContractAndFailure()
+    {
+        const string response = """
+            {"data":[{"key":"pc","name":"PC"},{"key":"gog","name":"GOG"}],"error":null}
+            """;
+        var handler = new RecordingHandler(HttpStatusCode.OK, response);
+        using var client = new PlatformCatalogClient(
+            new ApiConfig { BaseUrl = "https://example.test/api" },
+            handler);
+
+        var loaded = await client.LoadAsync("key");
+
+        Assert.True(loaded.IsAvailable);
+        Assert.Equal(["pc", "gog"], loaded.Platforms.Select(platform => platform.Key));
+        var request = handler.Requests.Single();
+        Assert.Equal("GET", request.Method);
+        Assert.Equal("https://example.test/api/capture/platforms", request.Uri);
+        Assert.Equal("Bearer key", request.Authorization);
+
+        using var failedClient = new PlatformCatalogClient(
+            new ApiConfig { BaseUrl = "https://example.test/api" },
+            new RecordingHandler(HttpStatusCode.ServiceUnavailable));
+        var failed = await failedClient.LoadAsync("key");
+        Assert.True(!failed.IsAvailable);
+        Assert.Empty(failed.Platforms);
     }
 
     [Fact]
