@@ -186,4 +186,5 @@ internal sealed record TrayWindowActions(
     Func<Task> OpenSettings,
     Func<Task> OpenLauncherFolder,
     Func<Task> SynchronizeLaunchers,
+    Func<Task> Update,
     Func<Task> Exit);

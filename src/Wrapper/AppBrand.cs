@@ -11,6 +11,8 @@ internal static class AppBrand
     public const string LauncherManifestExtension = ".playdex.json";
     public const string DefaultApiBaseUrl = "https://playdex.ejwan.dev/api";
     public const string PublishedWrapperEnvironmentVariable = "PLAYDEX_PUBLISHED_WRAPPER";
+    public const string GitHubLatestReleaseUrl = "https://api.github.com/repos/ivankaizer/playdex/releases/latest";
+    public const string ReleaseAssetPrefix = "playdex-wrapper-windows-";
 
     public static string DefaultStorageDirectory { get; } = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
@@ -19,6 +21,7 @@ internal static class AppBrand
     public static string DefaultStateDirectory { get; } = Path.Combine(DefaultStorageDirectory, "state");
     public static string DefaultLogDirectory { get; } = Path.Combine(DefaultStorageDirectory, "logs");
     public static string DefaultLauncherDirectory { get; } = Path.Combine(DefaultStorageDirectory, "launchers");
+    public static string DefaultUpdateDirectory { get; } = Path.Combine(DefaultStorageDirectory, "updates");
 
     public static Icon LoadApplicationIcon()
     {

@@ -25,10 +25,25 @@ jobs:
       - name: Run wrapper tests
         run: dotnet test test/Wrapper.Tests/Wrapper.Tests.csproj --configuration Release
 
+      - name: Validate release tag
+        id: version
+        shell: pwsh
+        run: |
+          $tag = "${{ github.ref_name }}"
+          if ($tag -notmatch '^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$') {
+            throw "Release tag '$tag' must use v<major>.<minor>.<patch>."
+          }
+          "number=$($tag.Substring(1))" >> $env:GITHUB_OUTPUT
+
       - name: Publish single-file wrapper
         run: >
           dotnet publish src/Wrapper/Wrapper.csproj
           -p:PublishProfile=SingleFile
+          -p:Version=${{ steps.version.outputs.number }}
+          -p:AssemblyVersion=${{ steps.version.outputs.number }}.0
+          -p:FileVersion=${{ steps.version.outputs.number }}.0
+          -p:InformationalVersion=${{ steps.version.outputs.number }}
+          -p:IncludeSourceRevisionInInformationalVersion=false
           --output artifacts/publish
 
       - name: Create release archive
@@ -38,9 +53,40 @@ jobs:
           -Path artifacts/publish/*
           -DestinationPath "artifacts/playdex-wrapper-windows-${{ github.ref_name }}.zip"
 
+      - name: Create release checksum
+        shell: pwsh
+        run: |
+          $archiveName = "playdex-wrapper-windows-${{ github.ref_name }}.zip"
+          $archivePath = Join-Path "artifacts" $archiveName
+          $hash = (Get-FileHash -LiteralPath $archivePath -Algorithm SHA256).Hash.ToLowerInvariant()
+          Set-Content -LiteralPath "$archivePath.sha256" -Value "$hash  $archiveName" -Encoding ascii -NoNewline
+
+      - name: Verify release contract
+        shell: pwsh
+        run: |
+          $expectedVersion = "${{ steps.version.outputs.number }}"
+          $productVersion = (Get-Item -LiteralPath "artifacts/publish/Wrapper.exe").VersionInfo.ProductVersion
+          if ($productVersion -ne $expectedVersion) {
+            throw "Wrapper product version '$productVersion' does not match tag version '$expectedVersion'."
+          }
+
+          $archiveName = "playdex-wrapper-windows-${{ github.ref_name }}.zip"
+          $archivePath = Join-Path "artifacts" $archiveName
+          $checksumPath = "$archivePath.sha256"
+          $checksum = (Get-Content -LiteralPath $checksumPath -Raw).Trim()
+          if ($checksum -notmatch '^([0-9a-f]{64})  (.+)$' -or $Matches[2] -cne $archiveName) {
+            throw "The checksum asset does not identify the release archive."
+          }
+          $actualHash = (Get-FileHash -LiteralPath $archivePath -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($Matches[1] -cne $actualHash) {
+            throw "The checksum asset does not match the release archive."
+          }
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v3
         with:
           generate_release_notes: true
           fail_on_unmatched_files: true
-          files: artifacts/playdex-wrapper-windows-${{ github.ref_name }}.zip
+          files: |
+            artifacts/playdex-wrapper-windows-${{ github.ref_name }}.zip
+            artifacts/playdex-wrapper-windows-${{ github.ref_name }}.zip.sha256

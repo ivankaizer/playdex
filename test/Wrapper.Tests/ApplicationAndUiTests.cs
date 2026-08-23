@@ -17,7 +17,8 @@ public sealed class ApplicationAndUiTests
             ?? throw new InvalidOperationException("Program.Main was not found.");
 
         Assert.Equal(typeof(int), main.ReturnType);
-        Assert.Empty(main.GetParameters());
+        var mainParameter = Assert.Single(main.GetParameters());
+        Assert.Equal(typeof(string[]), mainParameter.ParameterType);
         Assert.True(main.GetCustomAttribute<STAThreadAttribute>() is not null);
         var runConfiguredGame = typeof(Wrapper.Program).GetMethod(
             "RunConfiguredGame",
