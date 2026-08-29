@@ -1,14 +1,12 @@
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
-using Npgsql;
 using Api.Infrastructure.Auth;
 using Api.Infrastructure.Common;
 using Api.Infrastructure.Http;
-using Api.Infrastructure.Persistence;
-using Api.Infrastructure.Persistence.Migrations;
+using Shared.Persistence;
+using Shared.Persistence.Migrations;
 using Api.Modules.Accounts;
-using Api.Modules.Admin;
 using Api.Modules.ApiCapture;
 using Api.Modules.Games;
 using Api.Modules.Manual;
@@ -44,21 +42,10 @@ var corsOrigins = (builder.Configuration["CORS_ORIGINS"] ?? "")
     .Distinct(StringComparer.Ordinal)
     .ToArray();
 
-var dataSourceBuilder = new NpgsqlDataSourceBuilder(PostgresConnectionString.Normalize(databaseUrl));
-dataSourceBuilder.MapEnum<GameExternalIdentityType>("game_external_identity_type");
-dataSourceBuilder.MapEnum<IntegrationType>("integration_type");
-dataSourceBuilder.MapEnum<CaptureMethod>("capture_method");
-var dataSource = dataSourceBuilder.Build();
+var dataSource = PostgresServices.CreateDataSource(databaseUrl);
 
 builder.Services.AddSingleton(dataSource);
-builder.Services.AddDbContext<PlaydexDbContext>(db => db.UseNpgsql(
-    dataSource,
-    npgsql =>
-    {
-        npgsql.MapEnum<GameExternalIdentityType>("game_external_identity_type");
-        npgsql.MapEnum<IntegrationType>("integration_type");
-        npgsql.MapEnum<CaptureMethod>("capture_method");
-    }));
+builder.Services.AddPlaydexDbContext(dataSource);
 builder.Services.AddSingleton(new MigrationCatalog([
     new CurrentSchemaMigration(),
     new CredentialApiKeyLockMigration(),
@@ -84,7 +71,6 @@ builder.Services
     .AddManual()
     .AddApiCapture()
     .AddProviders()
-    .AddAdmin()
     .AddRecap()
     .AddPlaydexMetrics()
     .AddPolling(builder.Configuration)
@@ -143,7 +129,6 @@ api
     .MapManual()
     .MapApiCapture()
     .MapProviders()
-    .MapAdmin()
     .MapRecap()
     .MapMetrics();
 

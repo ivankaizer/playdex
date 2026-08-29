@@ -14,16 +14,4 @@ public static class ClaimsPrincipalExtensions
 
         return userId;
     }
-
-    public static async Task<IResult?> AssertAdminAsync(
-        this ClaimsPrincipal principal,
-        AuthRepository authRepo,
-        CancellationToken ct)
-    {
-        var user = await authRepo.FindById(principal.GetUserId(), ct);
-        if (user is not null && user.IsAdmin)
-            return null;
-
-        throw AppProblemException.Forbidden("Admin access required.");
-    }
 }

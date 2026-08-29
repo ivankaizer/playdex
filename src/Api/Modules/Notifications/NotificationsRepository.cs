@@ -1,4 +1,4 @@
-using Api.Infrastructure.Persistence;
+using Shared.Persistence;
 using Microsoft.EntityFrameworkCore;
 
 namespace Api.Modules.Notifications;

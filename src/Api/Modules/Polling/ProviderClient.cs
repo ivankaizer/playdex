@@ -1,4 +1,4 @@
-using Api.Infrastructure.Persistence;
+using Shared.Persistence;
 
 namespace Api.Modules.Polling;
 

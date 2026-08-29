@@ -94,6 +94,24 @@ services:
     depends_on:
       - app
 
+  admin:
+    build:
+      context: .
+      dockerfile: src/Admin/Dockerfile
+    restart: "no"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_URLS: http://0.0.0.0:3100
+      DATABASE_URL: postgresql://playdex:playdex@db:5432/playdex
+      Admin__AllowedOrigin: "http://admin.playdex.orb.local"
+    ports:
+      - "3100:3100"
+    depends_on:
+      db:
+        condition: service_healthy
+      app:
+        condition: service_started
+
 volumes:
   db_data:
   apprise_config:

@@ -1,7 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Api.Infrastructure.Common;
-using Api.Infrastructure.Persistence;
+using Shared.Persistence;
 using Api.Modules.Games;
 
 namespace Api.Modules.ApiCapture;

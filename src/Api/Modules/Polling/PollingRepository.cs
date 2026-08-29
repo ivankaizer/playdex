@@ -1,5 +1,5 @@
 using Microsoft.EntityFrameworkCore;
-using Api.Infrastructure.Persistence;
+using Shared.Persistence;
 using Api.Modules.Games;
 
 namespace Api.Modules.Polling;

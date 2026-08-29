@@ -1,4 +1,4 @@
-using Api.Infrastructure.Persistence;
+using Shared.Persistence;
 using Api.Modules.Providers;
 using Microsoft.EntityFrameworkCore;
 using Xunit;

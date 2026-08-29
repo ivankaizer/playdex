@@ -1,0 +1,16 @@
+@inherits LayoutComponentBase
+@using Microsoft.AspNetCore.Components.Authorization
+@using Radzen
+<RadzenLayout>
+    <RadzenDialog />
+    <RadzenNotification />
+    <RadzenHeader><RadzenText Text="Playdex Admin" TagName="TagName.H3" /></RadzenHeader>
+    <RadzenSidebar Expanded="true"><RadzenPanelMenu>
+        <RadzenPanelMenuItem Text="Dashboard" Path="/" />
+        <RadzenPanelMenuItem Text="Integrations" Path="/integrations" />
+        <RadzenPanelMenuItem Text="Sessions" Path="/sessions" />
+        <RadzenPanelMenuItem Text="Games" Path="/games" />
+        <RadzenPanelMenuItem Text="Logout" Path="/logout" />
+    </RadzenPanelMenu></RadzenSidebar>
+    <RadzenBody><div class="admin-content">@Body</div></RadzenBody>
+</RadzenLayout>

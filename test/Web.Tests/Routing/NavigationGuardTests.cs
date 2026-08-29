@@ -1,7 +1,3 @@
-using System.Reflection;
-using Microsoft.AspNetCore.Components;
-using Microsoft.AspNetCore.Components.Routing;
-using Web;
 using Web.Routing;
 using Xunit;
 
@@ -9,43 +5,12 @@ namespace Web.Tests.Routing;
 
 public sealed class NavigationGuardTests
 {
-    [Fact]
-    public async Task CancelledAdminNavigationCannotOverrideNewerRoute()
-    {
-        var app = new App();
-        var navigation = new RecordingNavigationManager();
-        var profile = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        SetProperty(app, "Navigation", navigation);
-        SetField(app, "_initializationTask", Task.CompletedTask);
-        SetField(app, "_profileTask", profile.Task);
-        SetField(app, "_isLoggedIn", true);
-        SetField(app, "_isProfileResolved", false);
-        SetField(app, "_isAdmin", false);
-
-        using var staleNavigationCancellation = new CancellationTokenSource();
-        var staleNavigation = NavigateAsync(app, "/admin", staleNavigationCancellation.Token);
-        Assert.False(staleNavigation.IsCompleted);
-
-        staleNavigationCancellation.Cancel();
-        await NavigateAsync(app, "/sessions", CancellationToken.None);
-        SetField(app, "_isProfileResolved", true);
-        profile.SetResult();
-
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => staleNavigation);
-        Assert.Equal(
-            NavigationOutcome.Render,
-            GetField<NavigationDecision>(app, "_currentDecision").Outcome);
-        Assert.Empty(navigation.Navigations);
-        Assert.True(profile.Task.IsCompletedSuccessfully);
-    }
-
     [Theory]
-    [InlineData(false, true, false)]
-    [InlineData(true, true, false)]
-    [InlineData(true, true, true)]
-    public void RootAlwaysRenders(bool isLoggedIn, bool isProfileResolved, bool isAdmin)
+    [InlineData(false)]
+    [InlineData(true)]
+    public void RootAlwaysRenders(bool isLoggedIn)
     {
-        var decision = NavigationGuard.Resolve("/", isLoggedIn, isProfileResolved, isAdmin);
+        var decision = NavigationGuard.Resolve("/", isLoggedIn);
 
         Assert.Equal(NavigationOutcome.Render, decision.Outcome);
     }
@@ -56,50 +21,25 @@ public sealed class NavigationGuardTests
     [InlineData("/recap")]
     [InlineData("/mapping")]
     [InlineData("/settings")]
-    [InlineData("/admin")]
     [InlineData("/games/3H4h3")]
     public void AnonymousProtectedRoutesReplaceWithHome(string path)
     {
-        var decision = NavigationGuard.Resolve(path, false, true, false);
+        var decision = NavigationGuard.Resolve(path, false);
 
         Assert.Equal(NavigationOutcome.Redirect, decision.Outcome);
         Assert.Equal("/", decision.RedirectPath);
     }
 
     [Fact]
-    public void LoggedInStandardProtectedRoutesRenderWhileProfileIsPending()
+    public void LoggedInProtectedRoutesRender()
     {
         string[] paths = ["/dashboard", "/sessions", "/recap", "/mapping", "/settings", "/games/3H4h3"];
 
         foreach (var path in paths)
         {
-            var decision = NavigationGuard.Resolve(path, true, false, false);
+            var decision = NavigationGuard.Resolve(path, true);
             Assert.Equal(NavigationOutcome.Render, decision.Outcome);
         }
-    }
-
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public void AdminWaitsForProfileEvenWhenCachedAdminExists(bool isAdmin)
-    {
-        var decision = NavigationGuard.Resolve("/admin", true, false, isAdmin);
-
-        Assert.Equal(NavigationOutcome.Wait, decision.Outcome);
-    }
-
-    [Theory]
-    [InlineData(false, NavigationOutcome.Redirect, "/dashboard")]
-    [InlineData(true, NavigationOutcome.Render, null)]
-    public void ResolvedAdminRouteUsesCurrentRole(
-        bool isAdmin,
-        NavigationOutcome outcome,
-        string? redirectPath)
-    {
-        var decision = NavigationGuard.Resolve("/admin", true, true, isAdmin);
-
-        Assert.Equal(outcome, decision.Outcome);
-        Assert.Equal(redirectPath, decision.RedirectPath);
     }
 
     [Theory]
@@ -111,7 +51,7 @@ public sealed class NavigationGuardTests
     [InlineData("/unknown")]
     public void NonExactAndUnknownPathsUseHomeFallback(string path)
     {
-        var decision = NavigationGuard.Resolve(path, true, true, true);
+        var decision = NavigationGuard.Resolve(path, true);
 
         Assert.Equal(NavigationOutcome.HomeFallback, decision.Outcome);
     }
@@ -129,7 +69,7 @@ public sealed class NavigationGuardTests
     [InlineData("/games/%E0%A4%A", null)]
     public void GameRoutesMatchReactNormalization(string path, string? expectedHash)
     {
-        var decision = NavigationGuard.Resolve(path, true, true, false);
+        var decision = NavigationGuard.Resolve(path, true);
 
         Assert.Equal(NavigationOutcome.Render, decision.Outcome);
         Assert.Equal(expectedHash, decision.GameHash);
@@ -164,65 +104,11 @@ public sealed class NavigationGuardTests
     [Fact]
     public void RedirectNavigationReplacesWithoutScrolling()
     {
-        var instruction = NavigationGuard.PlanNavigation("/admin", "/dashboard", replaceHistory: true);
+        var instruction = NavigationGuard.PlanNavigation("/sessions", "/dashboard", replaceHistory: true);
 
         Assert.Equal(NavigationInstructionKind.Navigate, instruction.Kind);
         Assert.Equal("/dashboard", instruction.Target);
         Assert.True(instruction.ReplaceHistory);
         Assert.False(instruction.ScrollToTop);
-    }
-
-    private static Task NavigateAsync(App app, string path, CancellationToken cancellationToken)
-    {
-        var constructor = typeof(NavigationContext).GetConstructor(
-            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
-            binder: null,
-            [typeof(string), typeof(CancellationToken)],
-            modifiers: null);
-        Assert.NotNull(constructor);
-
-        var context = (NavigationContext)constructor.Invoke([path, cancellationToken]);
-        var handler = typeof(App).GetMethod(
-            "HandleNavigationAsync",
-            BindingFlags.Instance | BindingFlags.NonPublic);
-        Assert.NotNull(handler);
-
-        return (Task)handler.Invoke(app, [context])!;
-    }
-
-    private static void SetField<T>(App app, string name, T value)
-    {
-        var field = typeof(App).GetField(name, BindingFlags.Instance | BindingFlags.NonPublic);
-        Assert.NotNull(field);
-        field.SetValue(app, value);
-    }
-
-    private static T GetField<T>(App app, string name)
-    {
-        var field = typeof(App).GetField(name, BindingFlags.Instance | BindingFlags.NonPublic);
-        Assert.NotNull(field);
-        return (T)field.GetValue(app)!;
-    }
-
-    private static void SetProperty<T>(App app, string name, T value)
-    {
-        var property = typeof(App).GetProperty(name, BindingFlags.Instance | BindingFlags.NonPublic);
-        Assert.NotNull(property);
-        property.SetValue(app, value);
-    }
-
-    private sealed class RecordingNavigationManager : NavigationManager
-    {
-        public RecordingNavigationManager()
-        {
-            Initialize("https://playdex.test/", "https://playdex.test/admin");
-        }
-
-        public List<string> Navigations { get; } = [];
-
-        protected override void NavigateToCore(string uri, bool forceLoad) => Navigations.Add(uri);
-
-        protected override void NavigateToCore(string uri, NavigationOptions options) =>
-            Navigations.Add(uri);
     }
 }

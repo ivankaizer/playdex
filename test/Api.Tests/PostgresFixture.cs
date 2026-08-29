@@ -1,5 +1,5 @@
 using Npgsql;
-using Api.Infrastructure.Persistence;
+using Shared.Persistence;
 using Xunit;
 
 namespace Api.Tests;

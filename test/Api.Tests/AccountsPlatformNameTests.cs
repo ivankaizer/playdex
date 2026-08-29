@@ -1,4 +1,4 @@
-using Api.Infrastructure.Persistence;
+using Shared.Persistence;
 using Api.Modules.Accounts;
 using Api.Modules.Games;
 using Microsoft.EntityFrameworkCore;

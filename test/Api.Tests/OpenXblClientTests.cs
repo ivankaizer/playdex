@@ -1,6 +1,6 @@
 using System.Net;
 using System.Net.Http.Headers;
-using Api.Infrastructure.Persistence;
+using Shared.Persistence;
 using Api.Modules.Polling;
 using Microsoft.Extensions.Options;
 using Xunit;

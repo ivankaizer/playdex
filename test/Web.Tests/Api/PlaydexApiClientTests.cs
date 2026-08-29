@@ -6,7 +6,6 @@ using Web.Infrastructure.Http;
 using Web.Infrastructure.Auth;
 using Web.Infrastructure.Browser;
 using Web.Infrastructure.Models;
-using Web.Modules.Admin;
 using Xunit;
 
 namespace Web.Tests.Api;
@@ -80,7 +79,6 @@ public sealed class PlaydexApiClientTests
 
         Assert.Equal(42, response.UserId);
         Assert.Equal("player@example.com", response.Email);
-        Assert.True(response.IsAdmin);
     }
 
     [Fact]
@@ -271,25 +269,6 @@ public sealed class PlaydexApiClientTests
         await client.SendAsync<object?>(path, authenticated: false);
 
         Assert.Equal(expected, handler.Requests[0].Uri);
-    }
-
-    [Fact]
-    public async Task RequestBodiesUseExactWebCamelCaseIncludingAdminUser()
-    {
-        using var handler = new RecordingHandler(
-            (_, _) => Json(HttpStatusCode.OK, "{}"),
-            (_, _) => Json(HttpStatusCode.OK, "{}"));
-        var client = CreateClient(handler);
-
-        await client.SendAsync<object?>(
-            "/admin/credentials/7",
-            HttpMethod.Put,
-            new AdminCredentialUpdateRequest("key", "account-user"),
-            authenticated: false);
-
-        using var admin = JsonDocument.Parse(handler.Requests[0].Body!);
-        Assert.Equal("account-user", admin.RootElement.GetProperty("user").GetString());
-        Assert.False(admin.RootElement.TryGetProperty("accountUser", out _));
     }
 
     [Theory]

@@ -1,6 +1,6 @@
 using Api.Modules.Providers;
 using Api.Infrastructure.Http;
-using Api.Infrastructure.Persistence;
+using Shared.Persistence;
 using Xunit;
 
 namespace Api.Tests;

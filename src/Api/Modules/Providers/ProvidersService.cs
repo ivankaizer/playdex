@@ -1,6 +1,6 @@
 using System.Security.Cryptography;
 using Api.Infrastructure.Http;
-using Api.Infrastructure.Persistence;
+using Shared.Persistence;
 
 namespace Api.Modules.Providers;
 

@@ -1,0 +1,45 @@
+@page "/"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "Administrator")]
+@using Radzen
+@using Admin.Features
+@inject IAdminOperations Operations
+<PageTitle>Dashboard</PageTitle>
+<RadzenHeading Size="H1" Text="Dashboard" />
+@if (_loading) { <RadzenProgressBar Mode="ProgressBarMode.Indeterminate" /> }
+else if (_error is not null) { <RadzenAlert AlertStyle="AlertStyle.Danger">@_error</RadzenAlert><RadzenButton Text="Retry" Click="LoadAsync" /> }
+else {
+    <RadzenHeading Size="H2" Text="Recent sessions" />
+    @if (_users.Count == 0) { <RadzenAlert AlertStyle="AlertStyle.Info">No sessions found.</RadzenAlert> }
+    @foreach (var user in _users) {
+        <RadzenCard><RadzenHeading Size="H3" Text="@user.Email" />
+            <RadzenDataGrid Data="@user.Sessions" TItem="RecentSession">
+                <Columns><RadzenDataGridColumn TItem="RecentSession" Property="Game" Title="Game" />
+                    <RadzenDataGridColumn TItem="RecentSession" Property="StartedAt" Title="Started" />
+                    <RadzenDataGridColumn TItem="RecentSession" Title="State"><Template Context="session">@(session.Live ? "Live" : "Ended") (@TimeSpan.FromSeconds(session.DurationSeconds).ToString("g"))</Template></RadzenDataGridColumn>
+                </Columns>
+            </RadzenDataGrid>
+        </RadzenCard>
+    }
+    <RadzenHeading Size="H2" Text="Platforms" />
+    <RadzenDataGrid Data="@_platforms" TItem="PlatformSummary">
+        <Columns><RadzenDataGridColumn TItem="PlatformSummary" Property="Key" Title="Platform" />
+            <RadzenDataGridColumn TItem="PlatformSummary" Property="Total" Title="Total" />
+            <RadzenDataGridColumn TItem="PlatformSummary" Property="Active" Title="Active" />
+            <RadzenDataGridColumn TItem="PlatformSummary" Title="Status"><Template Context="platform">@(platform.Enabled ? "Enabled" : "Disabled")</Template></RadzenDataGridColumn>
+        </Columns>
+    </RadzenDataGrid>
+}
+@code {
+    private IReadOnlyList<UserRecentSessions> _users = [];
+    private IReadOnlyList<PlatformSummary> _platforms = [];
+    private bool _loading = true;
+    private string? _error;
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        try { _users = await Operations.GetRecentSessionsAsync(); _platforms = await Operations.GetPlatformSummariesAsync(); _error = null; }
+        catch (Exception exception) { _error = exception.Message; }
+        finally { _loading = false; }
+    }
+}

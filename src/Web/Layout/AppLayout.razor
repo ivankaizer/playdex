@@ -12,7 +12,7 @@
     <Background />
     <div class="relative mx-auto w-full max-w-6xl p-3 sm:px-6 sm:py-12">
         <AppHeader Title="@Title"
-                   NavItems="@ResolvedNavItems"
+                   NavItems="@NavItems"
                    Path="@CurrentPath"
                    OnNavigate="NavigateAsync"
                    OnLogout="LogoutAsync"
@@ -28,23 +28,13 @@
 @code {
     private const string ThemeKey = "playdex.theme";
 
-    private static readonly IReadOnlyList<(string Label, string Path)> UserNavItems =
+    private static readonly IReadOnlyList<(string Label, string Path)> NavItems =
     [
         ("Dashboard", "/dashboard"),
         ("Sessions", "/sessions"),
         ("Recap", "/recap"),
         ("Mapping", "/mapping"),
         ("Settings", "/settings"),
-    ];
-
-    private static readonly IReadOnlyList<(string Label, string Path)> AdminNavItems =
-    [
-        ("Dashboard", "/dashboard"),
-        ("Sessions", "/sessions"),
-        ("Recap", "/recap"),
-        ("Mapping", "/mapping"),
-        ("Settings", "/settings"),
-        ("Admin", "/admin"),
     ];
 
     private string _theme = "light";
@@ -60,12 +50,6 @@
 
     [Parameter]
     public EventCallback<string> OnThemeChanged { get; set; }
-
-    [CascadingParameter(Name = "IsAdmin")]
-    public bool IsAdmin { get; set; }
-
-    private IReadOnlyList<(string Label, string Path)> ResolvedNavItems =>
-        IsAdmin ? AdminNavItems : UserNavItems;
 
     private string CurrentPath => new Uri(Navigation.Uri).AbsolutePath;
 

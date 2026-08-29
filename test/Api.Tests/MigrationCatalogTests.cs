@@ -1,4 +1,4 @@
-using Api.Infrastructure.Persistence.Migrations;
+using Shared.Persistence.Migrations;
 using Xunit;
 
 namespace Api.Tests;

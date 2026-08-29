@@ -3,7 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Api.Infrastructure.Common;
-using Api.Infrastructure.Persistence;
+using Shared.Persistence;
 using Api.Modules.ApiCapture;
 using Api.Modules.Metrics;
 
