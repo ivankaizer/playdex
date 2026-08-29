@@ -1,5 +1,5 @@
 using Microsoft.EntityFrameworkCore;
-using Shared.Persistence;
+using Playdex.Persistence;
 
 namespace Api.Modules.Settings;
 

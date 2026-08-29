@@ -1,6 +1,6 @@
 using Npgsql;
 
-namespace Shared.Persistence.Migrations;
+namespace Playdex.Persistence.Migrations;
 
 /// <summary>
 /// Moves Telegram routing out of users and into generic, user-owned

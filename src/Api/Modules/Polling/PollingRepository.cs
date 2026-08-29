@@ -1,5 +1,5 @@
 using Microsoft.EntityFrameworkCore;
-using Shared.Persistence;
+using Playdex.Persistence;
 using Api.Modules.Games;
 
 namespace Api.Modules.Polling;

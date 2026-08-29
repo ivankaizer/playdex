@@ -76,7 +76,7 @@ else {
             Interactions.Success("Game updated", "The game metadata was saved.");
             await SearchAsync();
         }
-        catch (Exception exception) { _error = exception.Message; Interactions.Error("Game update failed", exception.Message); }
+        catch (Exception exception) { _error = exception.Message; Interactions.ShowError("Game update failed", exception.Message); }
         finally { _saving = false; }
     }
     private async Task MergeAsync()
@@ -92,7 +92,7 @@ else {
             _sourceId = _targetId = null;
             await SearchAsync();
         }
-        catch (Exception exception) { _error = exception.Message; Interactions.Error("Merge failed", exception.Message); }
+        catch (Exception exception) { _error = exception.Message; Interactions.ShowError("Merge failed", exception.Message); }
         finally { _saving = false; }
     }
 }

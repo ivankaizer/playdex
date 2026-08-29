@@ -1,6 +1,6 @@
 using Npgsql;
 
-namespace Shared.Persistence.Migrations;
+namespace Playdex.Persistence.Migrations;
 
 /// <summary>Adds target Integration ownership without switching legacy runtime paths.</summary>
 public sealed class IntegrationsMigration : IPlaydexMigration

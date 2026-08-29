@@ -1,7 +1,8 @@
 using System.Security.Claims;
 using System.Diagnostics;
+using Admin.Infrastructure;
 using Microsoft.EntityFrameworkCore;
-using Shared.Persistence;
+using Playdex.Persistence;
 
 namespace Admin.Features;
 
@@ -37,7 +38,7 @@ public interface IAdminOperations
     Task MergeGamesAsync(ClaimsPrincipal principal, long sourceId, long targetId, CancellationToken ct = default);
 }
 
-public sealed class AdminOperations(IDbContextFactory<PlaydexDbContext> factory, AdminOperationGuard guard, ILogger<AdminOperations> logger) : IAdminOperations
+public sealed partial class AdminOperations(IDbContextFactory<PlaydexDbContext> factory, AdminOperationGuard guard, ILogger<AdminOperations> logger) : IAdminOperations
 {
     public async Task<IReadOnlyList<UserRecentSessions>> GetRecentSessionsAsync(CancellationToken ct = default)
     {
@@ -75,7 +76,7 @@ public sealed class AdminOperations(IDbContextFactory<PlaydexDbContext> factory,
         var integrations = await db.Integrations.Where(row => row.PlatformId == platformRow.Id).ToListAsync(ct);
         foreach (var integration in integrations) { integration.Active = enabled; integration.UpdatedAt = DateTimeOffset.UtcNow; }
         await db.SaveChangesAsync(ct);
-        logger.LogInformation("Admin mutation {Operation} platform {Platform} count {Count} enabled {Enabled} correlation {CorrelationId}", "set-platform-enabled", platformRow.Key, integrations.Count, enabled, CorrelationId());
+        LogPlatformMutation(logger, "set-platform-enabled", platformRow.Key, integrations.Count, enabled, CorrelationId());
         return integrations.Count;
     }
 
@@ -106,7 +107,7 @@ public sealed class AdminOperations(IDbContextFactory<PlaydexDbContext> factory,
         if (accountIdChanged) integration.AccountId = NormalizeOptional(accountId);
         integration.UpdatedAt = DateTimeOffset.UtcNow;
         await db.SaveChangesAsync(ct);
-        logger.LogInformation("Admin mutation {Operation} integration {IntegrationId} correlation {CorrelationId}", "update-integration", id, CorrelationId());
+        LogIntegrationMutation(logger, "update-integration", id, CorrelationId());
         return true;
     }
 
@@ -129,7 +130,7 @@ public sealed class AdminOperations(IDbContextFactory<PlaydexDbContext> factory,
                 .SetProperty(row => row.IntegrationId, target.Id)
                 .SetProperty(row => row.UserId, target.UserId)
                 .SetProperty(row => row.UpdatedAt, updatedAt), ct);
-        logger.LogInformation("Admin mutation {Operation} integration {IntegrationId} count {Count} correlation {CorrelationId}", "transfer-sessions", targetIntegrationId, updated, CorrelationId());
+        LogSessionTransfer(logger, "transfer-sessions", targetIntegrationId, updated, CorrelationId());
         return updated;
     }
 
@@ -152,7 +153,7 @@ public sealed class AdminOperations(IDbContextFactory<PlaydexDbContext> factory,
         if (capsuleUrlLocked.HasValue) game.CapsuleUrlLocked = capsuleUrlLocked.Value;
         game.UpdatedAt = DateTimeOffset.UtcNow;
         await db.SaveChangesAsync(ct);
-        logger.LogInformation("Admin mutation {Operation} game {GameId} correlation {CorrelationId}", "update-game", id, CorrelationId());
+        LogGameMutation(logger, "update-game", id, CorrelationId());
         return true;
     }
 
@@ -249,7 +250,7 @@ public sealed class AdminOperations(IDbContextFactory<PlaydexDbContext> factory,
         db.Games.Remove(source);
         await db.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
-        logger.LogInformation("Admin mutation {Operation} source {SourceGameId} target {TargetGameId} correlation {CorrelationId}", "merge-games", sourceId, targetId, CorrelationId());
+        LogGameMerge(logger, "merge-games", sourceId, targetId, CorrelationId());
     }
 
     private static string CorrelationId() => Activity.Current?.Id ?? Guid.NewGuid().ToString("N");
@@ -258,6 +259,21 @@ public sealed class AdminOperations(IDbContextFactory<PlaydexDbContext> factory,
         var normalized = value?.Trim();
         return string.IsNullOrEmpty(normalized) ? null : normalized;
     }
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Admin mutation {Operation} platform {Platform} count {Count} enabled {Enabled} correlation {CorrelationId}")]
+    private static partial void LogPlatformMutation(ILogger logger, string operation, string platform, int count, bool enabled, string correlationId);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Admin mutation {Operation} integration {IntegrationId} correlation {CorrelationId}")]
+    private static partial void LogIntegrationMutation(ILogger logger, string operation, long integrationId, string correlationId);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Admin mutation {Operation} integration {IntegrationId} count {Count} correlation {CorrelationId}")]
+    private static partial void LogSessionTransfer(ILogger logger, string operation, long integrationId, int count, string correlationId);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Admin mutation {Operation} game {GameId} correlation {CorrelationId}")]
+    private static partial void LogGameMutation(ILogger logger, string operation, long gameId, string correlationId);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Admin mutation {Operation} source {SourceGameId} target {TargetGameId} correlation {CorrelationId}")]
+    private static partial void LogGameMerge(ILogger logger, string operation, long sourceGameId, long targetGameId, string correlationId);
 }
 
 internal static class GameIdentifier

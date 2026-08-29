@@ -1,6 +1,6 @@
 using Npgsql;
 
-namespace Shared.Persistence.Migrations;
+namespace Playdex.Persistence.Migrations;
 
 /// <summary>Corrects legacy Playnite sessions that inherited a Game catalog platform.</summary>
 public sealed class CorrectLegacyApiSessionPlatformsMigration : IPlaydexMigration

@@ -1,4 +1,4 @@
-using Shared.Persistence;
+using Playdex.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 

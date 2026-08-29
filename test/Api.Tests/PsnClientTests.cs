@@ -1,7 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text;
-using Shared.Persistence;
+using Playdex.Persistence;
 using Api.Modules.Polling;
 using Microsoft.Extensions.Options;
 using Xunit;

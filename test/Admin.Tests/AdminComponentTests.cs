@@ -210,7 +210,7 @@ public sealed class AdminComponentTests
         public List<string> Errors { get; } = [];
         public Task<bool> ConfirmAsync(string message, string title) { LastConfirmation = message; return Task.FromResult(Confirmed); }
         public void Success(string summary, string detail) => Successes.Add($"{summary}: {detail}");
-        public void Error(string summary, string detail) => Errors.Add($"{summary}: {detail}");
+        public void ShowError(string summary, string detail) => Errors.Add($"{summary}: {detail}");
     }
 
     private sealed class FakeOperations : IAdminOperations

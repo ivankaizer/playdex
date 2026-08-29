@@ -1,4 +1,4 @@
-using Shared.Persistence;
+using Playdex.Persistence;
 using Microsoft.EntityFrameworkCore;
 
 namespace Api.Modules.Notifications;

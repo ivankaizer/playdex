@@ -1,6 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 
-namespace Shared.Persistence;
+namespace Playdex.Persistence;
 
 public sealed class PlaydexDbContext(DbContextOptions<PlaydexDbContext> options) : DbContext(options)
 {

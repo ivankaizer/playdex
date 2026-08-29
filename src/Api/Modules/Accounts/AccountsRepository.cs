@@ -1,7 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 using Api.Infrastructure.Common;
-using Shared.Persistence;
+using Playdex.Persistence;
 using Api.Modules.Games;
 
 namespace Api.Modules.Accounts;

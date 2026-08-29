@@ -1,6 +1,6 @@
 using Npgsql;
 
-namespace Shared.Persistence;
+namespace Playdex.Persistence;
 
 public static class PostgresConnectionString
 {

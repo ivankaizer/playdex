@@ -1,6 +1,6 @@
 using System.Net;
 using System.Net.Http.Headers;
-using Shared.Persistence;
+using Playdex.Persistence;
 using Api.Modules.Polling;
 using Microsoft.Extensions.Options;
 using Xunit;

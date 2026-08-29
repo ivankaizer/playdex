@@ -1,6 +1,6 @@
 using System.Globalization;
 using System.Text.RegularExpressions;
-using Shared.Persistence;
+using Playdex.Persistence;
 using Microsoft.EntityFrameworkCore;
 
 namespace Seeder;

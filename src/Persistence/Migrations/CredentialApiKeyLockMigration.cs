@@ -1,6 +1,6 @@
 using Npgsql;
 
-namespace Shared.Persistence.Migrations;
+namespace Playdex.Persistence.Migrations;
 
 /// <summary>
 /// Adds an admin-managed lock flag so a credential's API key cannot be

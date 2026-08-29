@@ -1,4 +1,4 @@
-using Shared.Persistence.Migrations;
+using Playdex.Persistence.Migrations;
 using Xunit;
 
 namespace Api.Tests;

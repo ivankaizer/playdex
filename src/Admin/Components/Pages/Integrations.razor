@@ -71,7 +71,7 @@ else {
             Interactions.Success("Platform updated", $"Updated {count} integrations.");
             await RefreshAsync();
         }
-        catch (Exception exception) { _error = exception.Message; Interactions.Error("Platform update failed", exception.Message); }
+        catch (Exception exception) { _error = exception.Message; Interactions.ShowError("Platform update failed", exception.Message); }
         finally { _loading = false; }
     }
 
@@ -97,7 +97,7 @@ else {
             _editing = null;
             await RefreshAsync();
         }
-        catch (Exception exception) { _error = exception.Message; Interactions.Error("Credential update failed", exception.Message); }
+        catch (Exception exception) { _error = exception.Message; Interactions.ShowError("Credential update failed", exception.Message); }
         finally { _loading = false; }
     }
 }

@@ -1,4 +1,4 @@
-using Shared.Persistence;
+using Playdex.Persistence;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Npgsql;
 using Wrapper;

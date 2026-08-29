@@ -1,7 +1,7 @@
 using Npgsql;
 using Microsoft.Extensions.Logging;
 
-namespace Shared.Persistence.Migrations;
+namespace Playdex.Persistence.Migrations;
 
 public sealed partial class MigrationRunner(
     NpgsqlDataSource dataSource,

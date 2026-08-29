@@ -1,4 +1,4 @@
-using Shared.Persistence;
+using Playdex.Persistence;
 using Api.Modules.Providers;
 using Microsoft.EntityFrameworkCore;
 using Xunit;

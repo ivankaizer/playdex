@@ -1,6 +1,6 @@
 using System.Security.Cryptography;
 using Api.Infrastructure.Http;
-using Shared.Persistence;
+using Playdex.Persistence;
 
 namespace Api.Modules.Providers;
 

@@ -1,7 +1,7 @@
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Logging;
 using Npgsql;
-using Shared.Persistence.Migrations;
+using Playdex.Persistence.Migrations;
 
 namespace Api.Observability;
 

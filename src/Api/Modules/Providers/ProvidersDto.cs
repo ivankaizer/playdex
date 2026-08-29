@@ -26,7 +26,7 @@ public sealed record OpenXblConnectRequest(string? ApiKey, string? Xuid);
 public sealed record OpenXblConnectResponseDto(ProviderStatusDto Provider);
 internal sealed record ValidatedProviderCreation(
     string Platform,
-    Shared.Persistence.IntegrationType Type,
+    Playdex.Persistence.IntegrationType Type,
     string ApiKey,
     string? AccountId);
 public sealed record ProviderCreateResult(ProviderStatusDto? Provider, bool LimitReached);

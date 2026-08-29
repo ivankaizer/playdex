@@ -1,18 +1,19 @@
 using System.Net;
 using System.Reflection;
 using System.Security.Claims;
+using Admin.Infrastructure;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-using Shared.Persistence;
+using Playdex.Persistence;
 using Xunit;
 
 namespace Admin.Tests;
 
 [CollectionDefinition(Name, DisableParallelization = true)]
-public sealed class AdminAuthenticationCollection : ICollectionFixture<AdminAuthenticationFixture>
+public sealed class AdminAuthenticationFixtureGroup : ICollectionFixture<AdminAuthenticationFixture>
 {
     public const string Name = "Admin authentication integration";
 }
@@ -94,7 +95,7 @@ public sealed class AdminAuthenticationFixture : IAsyncLifetime
         Assert.Equal(1, updated);
     }
 
-    private static Task RemoveTestUsersAsync(PlaydexDbContext db) =>
+    private static Task<int> RemoveTestUsersAsync(PlaydexDbContext db) =>
         db.Users.Where(user => user.Email == AdminEmail || user.Email == UserEmail).ExecuteDeleteAsync();
 
     public const string AdminEmail = "admin-auth-test@playdex.local";
@@ -102,7 +103,7 @@ public sealed class AdminAuthenticationFixture : IAsyncLifetime
     public const string Password = "correct horse battery staple";
 }
 
-[Collection(AdminAuthenticationCollection.Name)]
+[Collection(AdminAuthenticationFixtureGroup.Name)]
 public sealed class AdminAuthenticationIntegrationTests(AdminAuthenticationFixture fixture)
 {
     [Fact]

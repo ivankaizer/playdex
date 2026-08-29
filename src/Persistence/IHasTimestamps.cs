@@ -1,4 +1,4 @@
-namespace Shared.Persistence;
+namespace Playdex.Persistence;
 
 public interface IHasTimestamps
 {

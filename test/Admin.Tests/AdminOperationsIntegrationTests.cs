@@ -2,20 +2,24 @@ using System.Diagnostics;
 using System.Data.Common;
 using System.Security.Claims;
 using Admin.Features;
+using Admin.Infrastructure;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Npgsql;
-using Shared.Persistence;
+using Playdex.Persistence;
 using Xunit;
 
 namespace Admin.Tests;
 
-[Collection(AdminAuthenticationCollection.Name)]
+[Collection(AdminAuthenticationFixtureGroup.Name)]
 public sealed class AdminOperationsIntegrationTests(AdminAuthenticationFixture fixture)
 {
+    private static readonly string[] OperationNames =
+        ["set-platform-enabled", "update-integration", "transfer-sessions", "update-game", "merge-games"];
+
     [Fact]
     public async Task RecentSessionsAreLimitedAndDeterministicallyOrderedWithLiveDuration()
     {
@@ -287,7 +291,7 @@ public sealed class AdminOperationsIntegrationTests(AdminAuthenticationFixture f
         var entry = Assert.Single(scenario.Logger.Entries, row => row.Contains("update-integration", StringComparison.Ordinal));
         Assert.Contains(activity.Id!, entry, StringComparison.Ordinal);
         Assert.DoesNotContain(secret, entry, StringComparison.Ordinal);
-        Assert.All(new[] { "set-platform-enabled", "update-integration", "transfer-sessions", "update-game", "merge-games" }, operation =>
+        Assert.All(OperationNames, operation =>
             Assert.Single(scenario.Logger.Entries, row => row.Contains(operation, StringComparison.Ordinal)));
         Assert.All(scenario.Logger.Entries, row => Assert.Contains(activity.Id!, row, StringComparison.Ordinal));
         Assert.DoesNotContain(scenario.Logger.Entries, row => row.Contains(secret, StringComparison.Ordinal));

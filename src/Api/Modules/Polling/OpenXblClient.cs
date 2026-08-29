@@ -1,7 +1,7 @@
 using System.Net;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using Shared.Persistence;
+using Playdex.Persistence;
 using Microsoft.Extensions.Options;
 
 namespace Api.Modules.Polling;

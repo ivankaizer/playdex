@@ -2,7 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Api.Infrastructure.Common;
-using Shared.Persistence;
+using Playdex.Persistence;
 using Api.Modules.ApiCapture;
 using Api.Modules.Games;
 using Api.Modules.Polling;

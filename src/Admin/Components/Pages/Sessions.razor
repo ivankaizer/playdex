@@ -68,7 +68,7 @@ else {
             _loading = false;
             await GoToPageAsync(_result?.Page ?? 0);
         }
-        catch (Exception exception) { _error = exception.Message; Interactions.Error("Transfer failed", exception.Message); }
+        catch (Exception exception) { _error = exception.Message; Interactions.ShowError("Transfer failed", exception.Message); }
         finally { _loading = false; }
     }
 }
