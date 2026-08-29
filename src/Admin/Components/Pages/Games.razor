@@ -6,39 +6,59 @@
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @inject IAdminInteractions Interactions
 <PageTitle>Games</PageTitle>
-<RadzenHeading Size="H1" Text="Games" />
+<RadzenHeading Size="H1" Text="Games"/>
 <div class="session-toolbar">
-    <RadzenTextBox @bind-Value="_query" Placeholder="Title, capsule URL, or game identifier" />
-    <RadzenButton Text="Search" Click="SearchAsync" Disabled="@_loading" />
+    <RadzenTextBox @bind-Value="_query" Placeholder="Title, capsule URL, or game identifier"/>
+    <RadzenButton Text="Search" Click="SearchAsync" Disabled="@_loading"/>
 </div>
-@if (_error is not null) { <RadzenAlert AlertStyle="AlertStyle.Danger">@_error</RadzenAlert> }
-else if (_loading) { <RadzenProgressBar Mode="ProgressBarMode.Indeterminate" /> }
-else {
+@if (_error is not null)
+{
+    <RadzenAlert AlertStyle="AlertStyle.Danger">@_error</RadzenAlert>
+}
+else if (_loading)
+{
+    <RadzenProgressBar Mode="ProgressBarMode.Indeterminate"/>
+}
+else if (_games.Count == 0)
+{
+    <RadzenAlert AlertStyle="AlertStyle.Info">No games found.</RadzenAlert>
+}
+else
+{
     <RadzenDataGrid Data="@_games" TItem="GameSummary" RowSelect="SelectGame">
-        <Columns><RadzenDataGridColumn TItem="GameSummary" Property="Id" Title="Id" />
-            <RadzenDataGridColumn TItem="GameSummary" Property="Title" Title="Title" />
-            <RadzenDataGridColumn TItem="GameSummary" Property="CapsuleUrl" Title="Capsule URL" />
-            <RadzenDataGridColumn TItem="GameSummary" Property="TitleLocked" Title="Title locked" />
-            <RadzenDataGridColumn TItem="GameSummary" Property="CapsuleUrlLocked" Title="Image locked" />
+        <Columns>
+            <RadzenDataGridColumn TItem="GameSummary" Property="Id" Title="Id"/>
+            <RadzenDataGridColumn TItem="GameSummary" Property="Title" Title="Title"/>
+            <RadzenDataGridColumn TItem="GameSummary" Property="CapsuleUrl" Title="Capsule URL"/>
+            <RadzenDataGridColumn TItem="GameSummary" Property="TitleLocked" Title="Title locked"/>
+            <RadzenDataGridColumn TItem="GameSummary" Property="CapsuleUrlLocked" Title="Image locked"/>
         </Columns>
     </RadzenDataGrid>
-    @if (_selected is not null) {
-        <RadzenCard><RadzenHeading Size="H2" Text="Edit game" />
-            <RadzenTextBox @bind-Value="_title" Placeholder="Title" />
-            <RadzenTextBox @bind-Value="_capsuleUrl" Placeholder="Capsule URL (clear to remove)" />
-            <label><input type="checkbox" @bind="_titleLocked" /> Title locked</label>
-            <label><input type="checkbox" @bind="_capsuleUrlLocked" /> Image locked</label>
-            <RadzenButton Text="Save" Click="SaveAsync" Disabled="@_saving" />
+    @if (_selected is not null)
+    {
+        <RadzenCard>
+            <RadzenHeading Size="H2" Text="Edit game"/>
+            <RadzenTextBox @bind-Value="_title" Placeholder="Title"/>
+            <RadzenTextBox @bind-Value="_capsuleUrl" Placeholder="Capsule URL (clear to remove)"/>
+            <label><input type="checkbox" @bind="_titleLocked"/> Title locked</label>
+            <label><input type="checkbox" @bind="_capsuleUrlLocked"/> Image locked</label>
+            <RadzenButton Text="Save" Click="SaveAsync" Disabled="@_saving"/>
         </RadzenCard>
     }
-    @if (_games.Count > 1) {
-        <RadzenCard><RadzenHeading Size="H2" Text="Merge games" />
-            <RadzenDropDown @bind-Value="_sourceId" Data="@_games" TextProperty="Title" ValueProperty="Id" Placeholder="Source game" />
-            <RadzenDropDown @bind-Value="_targetId" Data="@_games" TextProperty="Title" ValueProperty="Id" Placeholder="Target game" />
-            <RadzenButton Text="Merge" Click="MergeAsync" Disabled="@_saving" />
+
+    @if (_games.Count > 1)
+    {
+        <RadzenCard>
+            <RadzenHeading Size="H2" Text="Merge games"/>
+            <RadzenDropDown @bind-Value="_sourceId" Data="@_games" TextProperty="Title" ValueProperty="Id"
+                            Placeholder="Source game"/>
+            <RadzenDropDown @bind-Value="_targetId" Data="@_games" TextProperty="Title" ValueProperty="Id"
+                            Placeholder="Target game"/>
+            <RadzenButton Text="Merge" Click="MergeAsync" Disabled="@_saving"/>
         </RadzenCard>
     }
 }
+
 @code {
     private string _query = "";
     private IReadOnlyList<GameSummary> _games = [];
@@ -52,18 +72,58 @@ else {
     private long? _sourceId;
     private long? _targetId;
     private string? _error;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        if (_loading) return;
+        _loading = true;
+        _selected = null;
+        try
+        {
+            _games = await Operations.ListGamesAsync();
+            _error = null;
+        }
+        catch (Exception exception)
+        {
+            _error = exception.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
     private async Task SearchAsync()
     {
         if (_loading) return;
-        _loading = true; _selected = null;
-        try { _games = await Operations.SearchGamesAsync(_query); _error = null; }
-        catch (Exception exception) { _error = exception.Message; }
-        finally { _loading = false; }
+        _loading = true;
+        _selected = null;
+        try
+        {
+            _games = await Operations.SearchGamesAsync(_query);
+            _error = null;
+        }
+        catch (Exception exception)
+        {
+            _error = exception.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
     }
+
     private void SelectGame(GameSummary game)
     {
-        _selected = game; _title = game.Title; _capsuleUrl = game.CapsuleUrl; _titleLocked = game.TitleLocked; _capsuleUrlLocked = game.CapsuleUrlLocked;
+        _selected = game;
+        _title = game.Title;
+        _capsuleUrl = game.CapsuleUrl;
+        _titleLocked = game.TitleLocked;
+        _capsuleUrlLocked = game.CapsuleUrlLocked;
     }
+
     private async Task SaveAsync()
     {
         if (_selected is null || _saving) return;
@@ -76,12 +136,25 @@ else {
             Interactions.Success("Game updated", "The game metadata was saved.");
             await SearchAsync();
         }
-        catch (Exception exception) { _error = exception.Message; Interactions.ShowError("Game update failed", exception.Message); }
-        finally { _saving = false; }
+        catch (Exception exception)
+        {
+            _error = exception.Message;
+            Interactions.ShowError("Game update failed", exception.Message);
+        }
+        finally
+        {
+            _saving = false;
+        }
     }
+
     private async Task MergeAsync()
     {
-        if (_saving || !_sourceId.HasValue || !_targetId.HasValue || _sourceId == _targetId) { _error = "Select two different games."; return; }
+        if (_saving || !_sourceId.HasValue || !_targetId.HasValue || _sourceId == _targetId)
+        {
+            _error = "Select two different games.";
+            return;
+        }
+
         if (!await Interactions.ConfirmAsync("This permanently removes the source game and reassigns its relationships. Continue?", "Confirm game merge")) return;
         _saving = true;
         try
@@ -92,7 +165,15 @@ else {
             _sourceId = _targetId = null;
             await SearchAsync();
         }
-        catch (Exception exception) { _error = exception.Message; Interactions.ShowError("Merge failed", exception.Message); }
-        finally { _saving = false; }
+        catch (Exception exception)
+        {
+            _error = exception.Message;
+            Interactions.ShowError("Merge failed", exception.Message);
+        }
+        finally
+        {
+            _saving = false;
+        }
     }
+
 }

@@ -1,6 +1,7 @@
 using System.Reflection;
 using System.Security.Claims;
 using Admin.Features;
+using Admin.Infrastructure;
 using Bunit;
 using Microsoft.Extensions.DependencyInjection;
 using Radzen;
@@ -51,7 +52,7 @@ public sealed class AdminComponentTests
                 new(1, "owner@example.test", "steam", "steam-account", true),
                 new(2, "owner@example.test", "api", "api-account", true),
             ]),
-            Platforms = _ => Task.FromResult<IReadOnlyList<PlatformSummary>>([new("steam", 1, 1)]),
+            Platforms = _ => Task.FromResult<IReadOnlyList<PlatformSummary>>([new("steam", "Steam", 1, 1)]),
         };
         using var context = CreateContext(fake, out _);
         var component = context.Render<global::Admin.Components.Pages.Integrations>();
@@ -79,7 +80,7 @@ public sealed class AdminComponentTests
         var fake = new FakeOperations
         {
             Integrations = _ => Task.FromResult<IReadOnlyList<IntegrationSummary>>([]),
-            Platforms = _ => Task.FromResult<IReadOnlyList<PlatformSummary>>([new("steam", 3, 3)]),
+            Platforms = _ => Task.FromResult<IReadOnlyList<PlatformSummary>>([new("steam", "Steam", 3, 3)]),
             SetPlatform = (_, _, _, _) => update.Task,
         };
         using var context = CreateContext(fake, out var interactions);
@@ -94,7 +95,7 @@ public sealed class AdminComponentTests
         toggle.Click();
         component.WaitForAssertion(() => Assert.Equal(1, fake.PlatformMutationCalls));
         Assert.NotEmpty(component.FindComponents<RadzenProgressBar>());
-        await InvokePrivateAsync(component.Instance, "TogglePlatformAsync", new PlatformSummary("steam", 3, 3));
+        await InvokePrivateAsync(component.Instance, "TogglePlatformAsync", new PlatformSummary("steam", "Steam", 3, 3));
         Assert.Equal(1, fake.PlatformMutationCalls);
         await component.InvokeAsync(() => update.SetResult(3));
         component.WaitForAssertion(() => Assert.Contains(interactions.Successes, message => message.Contains("Updated 3", StringComparison.Ordinal)));
@@ -185,6 +186,7 @@ public sealed class AdminComponentTests
         context.JSInterop.Mode = JSRuntimeMode.Loose;
         context.Services.AddRadzenComponents();
         context.Services.AddSingleton<IAdminOperations>(operations);
+        context.Services.AddSingleton<BrowserTimeZone>();
         interactions = new FakeInteractions();
         context.Services.AddSingleton<IAdminInteractions>(interactions);
         var authorization = context.AddAuthorization();
@@ -234,8 +236,9 @@ public sealed class AdminComponentTests
         public Task<IReadOnlyList<PlatformSummary>> GetPlatformSummariesAsync(CancellationToken ct = default) => Platforms(ct);
         public Task<IReadOnlyList<IntegrationSummary>> GetIntegrationsAsync(CancellationToken ct = default) => Integrations(ct);
         public Task<IReadOnlyList<GameSummary>> SearchGamesAsync(string query, CancellationToken ct = default) => Games(query, ct);
+        public Task<IReadOnlyList<GameSummary>> ListGamesAsync(CancellationToken ct = default) => Games("", ct);
         public Task<IReadOnlyList<SessionSummary>> SearchSessionsAsync(string query, int page, CancellationToken ct = default) => Task.FromResult<IReadOnlyList<SessionSummary>>([]);
-        public Task<SessionSearchResult> SearchSessionsPageAsync(string query, int page, CancellationToken ct = default) { LastSessionPage = page; return SessionPage(query, page, ct); }
+        public Task<SessionSearchResult> SearchSessionsPageAsync(string query, int page, string? status = null, CancellationToken ct = default) { LastSessionPage = page; return SessionPage(query, page, ct); }
         public Task<int> SetPlatformEnabledAsync(ClaimsPrincipal principal, string platform, bool enabled, CancellationToken ct = default) { PlatformMutationCalls++; return SetPlatform(principal, platform, enabled, ct); }
         public Task<int> TransferSessionsAsync(ClaimsPrincipal principal, IReadOnlyCollection<long> sessionIds, long targetIntegrationId, CancellationToken ct = default) { TransferCalls++; return Transfer(principal, sessionIds, targetIntegrationId, ct); }
         public Task<bool> UpdateIntegrationAsync(ClaimsPrincipal principal, long id, bool apiKeyChanged, string? apiKey, bool accountIdChanged, string? accountId, CancellationToken ct = default) { LastCredentialIntent = (apiKeyChanged, accountIdChanged, accountId); return Task.FromResult(true); }

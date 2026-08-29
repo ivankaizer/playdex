@@ -18,6 +18,7 @@ builder.Services.AddSingleton(dataSource);
 builder.Services.AddPlaydexDbContextFactory(dataSource);
 builder.Services.AddScoped<AdminAuthenticationService>();
 builder.Services.AddScoped<AdminOperationGuard>();
+builder.Services.AddScoped<BrowserTimeZone>();
 builder.Services.AddScoped<Admin.Features.AdminOperations>();
 builder.Services.AddScoped<Admin.Features.IAdminOperations>(services =>
     services.GetRequiredService<Admin.Features.AdminOperations>());

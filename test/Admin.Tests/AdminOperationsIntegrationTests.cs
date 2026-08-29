@@ -106,6 +106,10 @@ public sealed class AdminOperationsIntegrationTests(AdminAuthenticationFixture f
         Assert.Equal(2, (await scenario.Operations.SearchSessionsPageAsync(scenario.Game.Title, 1)).Sessions.Count);
         Assert.Equal(27, (await scenario.Operations.SearchSessionsPageAsync(source.AccountId!, 0)).Total);
         Assert.Equal(27, (await scenario.Operations.SearchSessionsPageAsync(scenario.Platform.Key, 0)).Total);
+        Assert.Equal(1, (await scenario.Operations.SearchSessionsPageAsync("", 0, "live")).Total);
+        Assert.Equal(26, (await scenario.Operations.SearchSessionsPageAsync("", 0, "ended")).Total);
+        Assert.All((await scenario.Operations.SearchSessionsPageAsync("", 0, "live")).Sessions, row => Assert.True(row.Live));
+        Assert.All((await scenario.Operations.SearchSessionsPageAsync("", 0, "ended")).Sessions, row => Assert.False(row.Live));
 
         var selected = byEmail.Sessions.Take(2).Select(row => row.Id).ToArray();
         Assert.Equal(2, selected.Distinct().Count());

@@ -1,3 +1,62 @@
 html, body { font-family: system-ui, sans-serif; margin: 0; }
 .admin-content { padding: 2rem; max-width: 1400px; margin: auto; }
 .login-card { max-width: 28rem; margin: 10vh auto; display: grid; gap: 1rem; }
+
+.admin-user-chip { display: flex; align-items: center; gap: 0.6rem; padding: 0.75rem 1.25rem; }
+.admin-user-avatar {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.9rem;
+    height: 1.9rem;
+    border-radius: 9999px;
+    background: #10b981;
+    color: #022c22;
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+}
+.admin-user-email { font-size: 0.8rem; font-weight: 500; color: #ffffff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.admin-brand { display: flex; align-items: center; gap: 0.75rem; padding: 1rem 1.25rem; }
+.admin-logo { display: inline-flex; line-height: 0; }
+.admin-brand-text { display: flex; flex-direction: column; line-height: 1.1; }
+.admin-brand-name {
+    font-size: 1.15rem;
+    font-weight: 700;
+    letter-spacing: 0.25em;
+    text-transform: uppercase;
+    color: #10b981;
+}
+.admin-brand-sub {
+    font-size: 0.6rem;
+    font-weight: 600;
+    letter-spacing: 0.45em;
+    text-transform: uppercase;
+    color: #64748b;
+}
+
+.admin-sidebar { display: flex; flex-direction: column; height: 100%; }
+.admin-sidebar-menu { flex: 1 1 auto; }
+.admin-sidebar-footer {
+    flex: 0 0 auto;
+    margin-top: auto;
+    border-top: 1px solid rgba(100, 116, 139, 0.25);
+    padding-top: 0.25rem;
+}
+
+.rz-button { padding-left: 1.25rem; padding-right: 1.25rem; }
+.admin-content .rz-button { margin-bottom: 0.5rem; }
+.admin-content .session-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem; margin-top: 1rem; margin-bottom: 1.25rem; }
+.admin-content .session-toolbar .rz-button { margin-bottom: 0; }
+.admin-content .rz-dropdown { margin-right: 0.75rem; }
+.admin-content .rz-textbox { margin-right: 0.75rem; }
+.admin-content .rz-button + .rz-button,
+.admin-content .rz-dropdown + .rz-button,
+.admin-content .rz-textbox + .rz-button { margin-left: 0.75rem; }
+
+.admin-content h2.rz-heading { margin-block-start: 2.5rem; margin-block-end: 1rem; }
+.admin-content h3.rz-heading { margin-block-start: 1.25rem; margin-block-end: 0.75rem; }
+.admin-content .rz-card { margin-top: 1rem; margin-bottom: 1.5rem; }
+.admin-content .rz-data-grid { margin-top: 1rem; margin-bottom: 1.5rem; }
+.admin-content .rz-alert { margin-top: 1rem; margin-bottom: 1.5rem; }

@@ -2,9 +2,12 @@
 @attribute [Authorize(Policy = "Administrator")]
 @inject NavigationManager Navigation
 <p>Signing out…</p>
+
 @code {
+
     protected override void OnInitialized()
     {
         Navigation.NavigateTo("/auth/logout", true);
     }
+
 }
