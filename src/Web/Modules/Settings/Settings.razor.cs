@@ -30,6 +30,8 @@ internal static class SettingsInitialLoadFlow
 
 internal sealed class SettingsState
 {
+    private const int MaxIntegrationsPerPlatform = 3;
+    private static readonly string[] SupportedCreationPlatforms = ["steam", "psn", "xbox"];
     private readonly HashSet<long> _updatingProviderIds = [];
     private readonly HashSet<long> _savingCredentialIds = [];
     private string _savedTelegramChatId = string.Empty;
@@ -55,11 +57,15 @@ internal sealed class SettingsState
     public string EditingAccountId { get; private set; } = string.Empty;
     public string EditingApiKey { get; private set; } = string.Empty;
     public string CredentialError { get; private set; } = string.Empty;
-    public string OpenXblApiKey { get; private set; } = string.Empty;
-    public string OpenXblXuid { get; private set; } = string.Empty;
-    public string OpenXblError { get; private set; } = string.Empty;
-    public bool IsOpenXblConnecting { get; private set; }
-    public bool HasXboxProvider => Providers.Any(provider => provider.Platform == "xbox");
+    public bool IsIntegrationCreatorOpen { get; private set; }
+    public string? SelectedCreationPlatform { get; private set; }
+    public string CreationApiKey { get; private set; } = string.Empty;
+    public string CreationAccountId { get; private set; } = string.Empty;
+    public string CreationError { get; private set; } = string.Empty;
+    public bool IsCreatingIntegration { get; private set; }
+    public IReadOnlyList<string> AvailableIntegrationPlatforms => SupportedCreationPlatforms
+        .Where(platform => Providers.Count(provider => provider.Platform == platform) < MaxIntegrationsPerPlatform)
+        .ToArray();
     public IReadOnlyList<ProviderStatus> VisibleProviders => Providers
         .Where(provider => provider.Platform != "manual" && provider.Platform != "local")
         .ToArray();
@@ -315,58 +321,93 @@ internal sealed class SettingsState
 
     public void EndCredentialSave(long providerId) => _savingCredentialIds.Remove(providerId);
 
-    public void SetOpenXblApiKey(string value) => OpenXblApiKey = value;
+    public void OpenIntegrationCreator()
+    {
+        if (AvailableIntegrationPlatforms.Count == 0) return;
+        IsIntegrationCreatorOpen = true;
+        CreationError = string.Empty;
+    }
 
-    public void SetOpenXblXuid(string value) => OpenXblXuid = value;
+    public bool SelectCreationPlatform(string platform)
+    {
+        if (!IsIntegrationCreatorOpen || !AvailableIntegrationPlatforms.Contains(platform)) return false;
+        SelectedCreationPlatform = platform;
+        CreationApiKey = string.Empty;
+        CreationAccountId = string.Empty;
+        CreationError = string.Empty;
+        return true;
+    }
 
-    public bool TryBuildOpenXblSubmission(out SettingsSubmission? submission)
+    public void CancelIntegrationCreation() => ResetIntegrationCreator();
+
+    public void SetCreationApiKey(string value) => CreationApiKey = value;
+
+    public void SetCreationAccountId(string value) => CreationAccountId = value;
+
+    public bool TryBuildIntegrationCreationSubmission(out SettingsSubmission? submission)
     {
         submission = null;
-        OpenXblError = string.Empty;
-        var apiKey = OpenXblApiKey.Trim();
+        CreationError = string.Empty;
+        if (SelectedCreationPlatform is not { } platform) return false;
+
+        var apiKey = CreationApiKey.Trim();
         if (apiKey.Length == 0)
         {
-            OpenXblError = "Enter an OpenXBL API key.";
+            CreationError = platform switch
+            {
+                "steam" => "Enter a Steam Web API key.",
+                "psn" => "Enter a PlayStation NPSSO token.",
+                _ => "Enter an OpenXBL API key.",
+            };
             return false;
         }
 
-        var xuid = OpenXblXuid.Trim();
-        if (xuid.Any(character => !char.IsAsciiDigit(character)))
+        var accountId = CreationAccountId.Trim();
+        if (platform == "steam" && accountId.Length == 0)
         {
-            OpenXblError = "Xbox XUID must contain digits only.";
+            CreationError = "Enter a Steam ID.";
+            return false;
+        }
+        if (platform == "xbox" && accountId.Any(character => !char.IsAsciiDigit(character)))
+        {
+            CreationError = "Xbox XUID must contain digits only.";
             return false;
         }
 
         submission = new SettingsSubmission(
-            "/providers/openxbl",
+            "/providers",
             HttpMethod.Post,
             new Dictionary<string, object?>
             {
+                ["platform"] = platform,
                 ["apiKey"] = apiKey,
-                ["xuid"] = xuid.Length == 0 ? null : xuid,
+                ["accountId"] = accountId.Length == 0 ? null : accountId,
             });
         return true;
     }
 
-    public void BeginOpenXblConnect()
+    public void BeginIntegrationCreation()
     {
-        IsOpenXblConnecting = true;
-        OpenXblError = string.Empty;
+        IsCreatingIntegration = true;
+        CreationError = string.Empty;
     }
 
-    public void CompleteOpenXblConnect(ProviderStatus provider)
+    public void CompleteIntegrationCreation(ProviderStatus provider)
     {
-        Providers = Providers
-            .Where(item => item.Platform != "xbox")
-            .Append(provider)
-            .ToArray();
-        OpenXblApiKey = string.Empty;
-        OpenXblXuid = string.Empty;
+        Providers = Providers.Append(provider).ToArray();
+        ResetIntegrationCreator();
     }
 
-    public void FailOpenXblConnect(string error) => OpenXblError = error;
+    public void FailIntegrationCreation(string error) => CreationError = error;
 
-    public void EndOpenXblConnect() => IsOpenXblConnecting = false;
+    public void EndIntegrationCreation() => IsCreatingIntegration = false;
+
+    public static string CreationPlatformName(string platform) => platform switch
+    {
+        "steam" => "Steam",
+        "psn" => "PlayStation",
+        _ => "Xbox",
+    };
 
     public static SettingsProviderPresentation Present(ProviderStatus provider)
     {
@@ -393,6 +434,15 @@ internal sealed class SettingsState
     {
         SettingsError = "Enter a non-negative number of minutes.";
         return false;
+    }
+
+    private void ResetIntegrationCreator()
+    {
+        IsIntegrationCreatorOpen = false;
+        SelectedCreationPlatform = null;
+        CreationApiKey = string.Empty;
+        CreationAccountId = string.Empty;
+        CreationError = string.Empty;
     }
 }
 
@@ -576,35 +626,41 @@ public partial class Settings : ComponentBase, IDisposable
     private void ChangeEditingApiKey(ChangeEventArgs eventArgs) =>
         _state.SetEditingApiKey(eventArgs.Value?.ToString() ?? string.Empty);
 
-    private void ChangeOpenXblApiKey(ChangeEventArgs eventArgs) =>
-        _state.SetOpenXblApiKey(eventArgs.Value?.ToString() ?? string.Empty);
+    private void OpenIntegrationCreator() => _state.OpenIntegrationCreator();
 
-    private void ChangeOpenXblXuid(ChangeEventArgs eventArgs) =>
-        _state.SetOpenXblXuid(eventArgs.Value?.ToString() ?? string.Empty);
+    private void SelectCreationPlatform(string platform) => _state.SelectCreationPlatform(platform);
 
-    private async Task ConnectOpenXblAsync()
+    private void CancelIntegrationCreation() => _state.CancelIntegrationCreation();
+
+    private void ChangeCreationApiKey(ChangeEventArgs eventArgs) =>
+        _state.SetCreationApiKey(eventArgs.Value?.ToString() ?? string.Empty);
+
+    private void ChangeCreationAccountId(ChangeEventArgs eventArgs) =>
+        _state.SetCreationAccountId(eventArgs.Value?.ToString() ?? string.Empty);
+
+    private async Task CreateIntegrationAsync()
     {
-        if (!_state.TryBuildOpenXblSubmission(out var submission)) return;
+        if (!_state.TryBuildIntegrationCreationSubmission(out var submission)) return;
 
-        _state.BeginOpenXblConnect();
+        _state.BeginIntegrationCreation();
         try
         {
-            var response = await Api.SendAsync<OpenXblConnectResponse>(submission!.Path,
+            var response = await Api.SendAsync<ProviderCreateResponse>(submission!.Path,
                 submission.Method,
                 submission.Body,
                 cancellationToken: _lifetime.Token);
-            _state.CompleteOpenXblConnect(response.Provider);
+            _state.CompleteIntegrationCreation(response.Provider);
         }
         catch (OperationCanceledException) when (_lifetime.IsCancellationRequested)
         {
         }
         catch (Exception exception)
         {
-            _state.FailOpenXblConnect(exception.Message);
+            _state.FailIntegrationCreation(exception.Message);
         }
         finally
         {
-            _state.EndOpenXblConnect();
+            _state.EndIntegrationCreation();
         }
     }
 
@@ -634,11 +690,18 @@ public partial class Settings : ComponentBase, IDisposable
         }
     }
 
-    private static string ProviderStatusButtonClass(ProviderStatus provider) =>
-        "rounded-full px-3 py-2 font-semibold uppercase tracking-[0.3em] disabled:cursor-not-allowed disabled:opacity-60 " +
+    private static string IntegrationStatusClass(ProviderStatus provider) =>
+        "rounded-full px-3 py-1.5 font-semibold uppercase tracking-[0.2em] " +
         (provider.Status == "active"
             ? "bg-emerald-400 text-slate-900"
             : "border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200");
+
+    private static string IntegrationActionButtonClass(ProviderStatus provider) =>
+        "rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] transition " +
+        "disabled:cursor-not-allowed disabled:opacity-60 " +
+        (provider.Status == "active"
+            ? "border-rose-300 text-rose-700 hover:border-rose-400 dark:border-rose-900/70 dark:text-rose-300"
+            : "border-emerald-300 text-emerald-700 hover:border-emerald-400 dark:border-emerald-900/70 dark:text-emerald-300");
 
     public void Dispose()
     {

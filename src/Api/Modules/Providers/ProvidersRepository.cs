@@ -5,6 +5,8 @@ namespace Api.Modules.Providers;
 
 public sealed class ProvidersRepository(PlaydexDbContext db)
 {
+    public const int MaxIntegrationsPerType = 3;
+
     public async Task<List<ProviderStatusDto>> ListProviders(long userId, CancellationToken ct)
     {
         var rows = await db.Integrations
@@ -26,6 +28,55 @@ public sealed class ProvidersRepository(PlaydexDbContext db)
 
         return rows.Select(r => new ProviderStatusDto(
             r.Id, r.Platform, r.AccountId, r.Status, r.ApiKey, r.ApiKeyLocked)).ToList();
+    }
+
+    public async Task<ProviderCreateResult> CreateProvider(
+        long userId,
+        string platform,
+        IntegrationType type,
+        string apiKey,
+        string? accountId,
+        CancellationToken ct)
+    {
+        var existingCount = await db.Integrations.AsNoTracking()
+            .CountAsync(item => item.UserId == userId && item.Type == type, ct);
+        if (existingCount >= MaxIntegrationsPerType)
+        {
+            return new ProviderCreateResult(null, LimitReached: true);
+        }
+
+        var platformId = await db.Platforms
+            .AsNoTracking()
+            .Where(item => item.Key == platform)
+            .Select(item => (long?)item.Id)
+            .FirstOrDefaultAsync(ct);
+        if (!platformId.HasValue)
+            return new ProviderCreateResult(null, LimitReached: false);
+
+        var now = DateTimeOffset.UtcNow;
+        var integration = new Integration
+        {
+            UserId = userId,
+            Type = type,
+            PlatformId = platformId.Value,
+            ApiKey = apiKey,
+            AccountId = accountId,
+            Active = true,
+            CreatedAt = now,
+            UpdatedAt = now,
+        };
+        db.Integrations.Add(integration);
+        await db.SaveChangesAsync(ct);
+
+        return new ProviderCreateResult(
+            new ProviderStatusDto(
+                integration.Id,
+                platform,
+                integration.AccountId,
+                "active",
+                integration.ApiKey,
+                integration.ApiKeyLocked),
+            LimitReached: false);
     }
 
     public async Task<ProviderStatusDto?> UpdateProviderStatus(long userId, long providerId, string status, CancellationToken ct)

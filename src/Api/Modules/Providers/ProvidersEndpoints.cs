@@ -12,6 +12,17 @@ public static class ProvidersEndpoints
         var providers = api.MapGroup("/providers").RequireAuthorization();
         providers.MapGet("", ListProviders);
 
+        providers.MapPost("", async (HttpContext http) =>
+        {
+            var request = await http.Request.ReadFromJsonAsync<CreateProviderRequest>();
+            var service = http.RequestServices.GetRequiredService<ProvidersService>();
+            IResult result = request is null
+                ? TypedResults.Problem("Request body is required.", statusCode: 400)
+                : TypedResults.Ok(await service.CreateProvider(
+                    http.User.GetUserId(), request, http.RequestAborted));
+            await result.ExecuteAsync(http);
+        });
+
         providers.MapPut("/status", async (HttpContext http) =>
         {
             var request = await http.Request.ReadFromJsonAsync<ProviderUpdateRequest>();

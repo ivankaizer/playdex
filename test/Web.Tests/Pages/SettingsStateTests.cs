@@ -337,39 +337,115 @@ public sealed class SettingsStateTests
     }
 
     [Fact]
-    public void OpenXblConnectionValidatesAndAddsXboxProvider()
+    public void IntegrationCreatorIsClosedByDefaultAndOffersTypesBelowTheirLimitInOrder()
     {
         var state = new SettingsState();
-        state.CompleteProvidersLoad(new ProvidersResponse([Provider(1, "steam", "active")]));
+        state.CompleteProvidersLoad(new ProvidersResponse([
+            Provider(1, "steam", "active"),
+            Provider(2, "api", "active"),
+        ]));
 
-        Assert.False(state.HasXboxProvider);
-        Assert.False(state.TryBuildOpenXblSubmission(out _));
-        Assert.Equal("Enter an OpenXBL API key.", state.OpenXblError);
+        Assert.False(state.IsIntegrationCreatorOpen);
+        Assert.Null(state.SelectedCreationPlatform);
+        Assert.Equal(["steam", "psn", "xbox"], state.AvailableIntegrationPlatforms);
+    }
 
-        state.SetOpenXblApiKey("  openxbl-key  ");
-        state.SetOpenXblXuid("not-a-xuid");
-        Assert.False(state.TryBuildOpenXblSubmission(out _));
-        Assert.Equal("Xbox XUID must contain digits only.", state.OpenXblError);
+    [Theory]
+    [InlineData(0, true)]
+    [InlineData(1, true)]
+    [InlineData(2, true)]
+    [InlineData(3, false)]
+    public void IntegrationCreatorOffersAServiceUntilItsThirdAccount(int steamCount, bool expectedAvailable)
+    {
+        var state = new SettingsState();
+        state.CompleteProvidersLoad(new ProvidersResponse(
+            Enumerable.Range(1, steamCount)
+                .Select(id => Provider(id, "steam", "active"))
+                .ToArray()));
 
-        state.SetOpenXblXuid(" 2533274817903789 ");
-        Assert.True(state.TryBuildOpenXblSubmission(out var submission));
+        Assert.Equal(expectedAvailable, state.AvailableIntegrationPlatforms.Contains("steam"));
+        Assert.Contains("psn", state.AvailableIntegrationPlatforms);
+        Assert.Contains("xbox", state.AvailableIntegrationPlatforms);
+    }
+
+    [Fact]
+    public void IntegrationCreatorSelectionAndCancellationClearLocalDraftState()
+    {
+        var state = new SettingsState();
+        state.CompleteProvidersLoad(new ProvidersResponse([]));
+
+        state.OpenIntegrationCreator();
+        Assert.True(state.IsIntegrationCreatorOpen);
+        Assert.True(state.SelectCreationPlatform("xbox"));
+        state.SetCreationApiKey("openxbl-key");
+        state.SetCreationAccountId("invalid-xuid");
+        Assert.False(state.TryBuildIntegrationCreationSubmission(out _));
+        Assert.Equal("Xbox XUID must contain digits only.", state.CreationError);
+
+        state.CancelIntegrationCreation();
+
+        Assert.False(state.IsIntegrationCreatorOpen);
+        Assert.Null(state.SelectedCreationPlatform);
+        Assert.Empty(state.CreationApiKey);
+        Assert.Empty(state.CreationAccountId);
+        Assert.Empty(state.CreationError);
+    }
+
+    [Theory]
+    [InlineData("steam", " steam-key ", " steam-id ", "steam-key", "steam-id")]
+    [InlineData("psn", " npsso-token ", " ", "npsso-token", null)]
+    [InlineData("xbox", " openxbl-key ", " 2533274817903789 ", "openxbl-key", "2533274817903789")]
+    public void IntegrationCreatorBuildsPlatformSpecificGenericSubmissions(
+        string platform,
+        string apiKey,
+        string accountId,
+        string expectedApiKey,
+        string? expectedAccountId)
+    {
+        var state = new SettingsState();
+        state.CompleteProvidersLoad(new ProvidersResponse([]));
+        state.OpenIntegrationCreator();
+        Assert.True(state.SelectCreationPlatform(platform));
+        state.SetCreationApiKey(apiKey);
+        state.SetCreationAccountId(accountId);
+
+        Assert.True(state.TryBuildIntegrationCreationSubmission(out var submission));
         Assert.NotNull(submission);
-        Assert.Equal("/providers/openxbl", submission.Path);
+        Assert.Equal("/providers", submission.Path);
         Assert.Equal(HttpMethod.Post, submission.Method);
-        Assert.Equal("openxbl-key", submission.Body["apiKey"]);
-        Assert.Equal("2533274817903789", submission.Body["xuid"]);
+        Assert.Equal(["platform", "apiKey", "accountId"], submission.Body.Keys);
+        Assert.Equal(platform, submission.Body["platform"]);
+        Assert.Equal(expectedApiKey, submission.Body["apiKey"]);
+        Assert.Equal(expectedAccountId, submission.Body["accountId"]);
+    }
 
-        state.BeginOpenXblConnect();
-        Assert.True(state.IsOpenXblConnecting);
-        var xbox = new ProviderStatus(2, "xbox", "2533274817903789", "active", "openxbl-key", false);
-        state.CompleteOpenXblConnect(xbox);
-        state.EndOpenXblConnect();
+    [Fact]
+    public void SuccessfulIntegrationCreationAddsProviderAndClosesCreator()
+    {
+        var state = new SettingsState();
+        state.CompleteProvidersLoad(new ProvidersResponse([
+            Provider(1, "steam", "active"),
+            Provider(2, "xbox", "active"),
+            Provider(3, "xbox", "active"),
+        ]));
+        state.OpenIntegrationCreator();
+        Assert.True(state.SelectCreationPlatform("xbox"));
+        state.SetCreationApiKey("openxbl-key");
+        state.SetCreationAccountId("2533274817903789");
 
-        Assert.True(state.HasXboxProvider);
-        Assert.Equal([1, 2], state.Providers.Select(provider => provider.Id));
-        Assert.False(state.IsOpenXblConnecting);
-        Assert.Empty(state.OpenXblApiKey);
-        Assert.Empty(state.OpenXblXuid);
+        state.BeginIntegrationCreation();
+        Assert.True(state.IsCreatingIntegration);
+        var xbox = new ProviderStatus(4, "xbox", "2533274817903789", "active", "openxbl-key", false);
+        state.CompleteIntegrationCreation(xbox);
+        state.EndIntegrationCreation();
+
+        Assert.Equal([1, 2, 3, 4], state.Providers.Select(provider => provider.Id));
+        Assert.Equal(["steam", "psn"], state.AvailableIntegrationPlatforms);
+        Assert.False(state.IsIntegrationCreatorOpen);
+        Assert.False(state.IsCreatingIntegration);
+        Assert.Null(state.SelectedCreationPlatform);
+        Assert.Empty(state.CreationApiKey);
+        Assert.Empty(state.CreationAccountId);
     }
 
     [Fact]
@@ -398,7 +474,9 @@ public sealed class SettingsStateTests
 
         Assert.Contains("@page \"/settings\"", markup);
         Assert.Contains("<AppLayout Title=\"Settings\">", markup);
-        Assert.Contains("mt-10 grid gap-6 lg:grid-cols-[1.05fr_0.95fr]", markup);
+        Assert.Contains("data-settings-section=\"preferences\"", markup);
+        Assert.Contains("data-settings-section=\"integrations\"", markup);
+        Assert.Contains("grid gap-5 lg:grid-cols-2", markup);
         Assert.Contains("Sessions shorter than this duration are marked ignored and excluded from stats. Set to 0 to disable.", markup);
         Assert.Contains("type=\"number\"", markup);
         Assert.Contains("min=\"0\"", markup);
@@ -410,7 +488,7 @@ public sealed class SettingsStateTests
         Assert.Contains("Send test", markup);
         Assert.Contains("SendTestNotificationAsync", markup);
         Assert.Contains("aria-live=\"polite\"", markup);
-        Assert.Contains("No providers connected yet. Add one to start syncing playtime.", markup);
+        Assert.Contains("No integrations connected yet. Add one to start syncing playtime.", markup);
         Assert.Contains("Updating...", markup);
         Assert.Contains("Managed by administrator", markup);
         Assert.Contains("provider.Platform == \"api\"", markup);
@@ -433,6 +511,71 @@ public sealed class SettingsStateTests
         Assert.Contains("_lifetime.Cancel()", code);
         Assert.DoesNotContain("onAuthFailure", code);
         Assert.DoesNotContain("LogoutAsync", code);
+    }
+
+    [Fact]
+    public void SettingsPagePlacesResponsivePreferencesBeforeIntegrations()
+    {
+        var markup = File.ReadAllText(Path.Combine(
+            FindWebRoot(), "Modules", "Settings", "Settings.razor"));
+
+        var preferences = markup.IndexOf("data-settings-section=\"preferences\"", StringComparison.Ordinal);
+        var sessions = markup.IndexOf("data-settings-group=\"sessions\"", StringComparison.Ordinal);
+        var telegram = markup.IndexOf("data-settings-group=\"telegram\"", StringComparison.Ordinal);
+        var integrations = markup.IndexOf("data-settings-section=\"integrations\"", StringComparison.Ordinal);
+
+        Assert.True(preferences >= 0);
+        Assert.True(preferences < sessions);
+        Assert.True(sessions < telegram);
+        Assert.True(telegram < integrations);
+    }
+
+    [Fact]
+    public void IntegrationStatusIsInformationalAndManagementOwnsExplicitStatusAction()
+    {
+        var markup = File.ReadAllText(Path.Combine(
+            FindWebRoot(), "Modules", "Settings", "Settings.razor"));
+
+        Assert.Contains("data-integration-status=\"@provider.Status\"", markup);
+        Assert.Contains("IntegrationStatusClass(provider)", markup);
+        Assert.Contains("@(_state.IsEditingCredential(provider.Id) ? \"Close\" : \"Manage\")", markup);
+        Assert.Contains("@onclick=\"() => ToggleProviderAsync(provider)\"", markup);
+        Assert.Contains("provider.Status == \"active\" ? \"Pause\" : \"Resume\"", markup);
+
+        var status = markup.IndexOf("data-integration-status=\"@provider.Status\"", StringComparison.Ordinal);
+        var statusAction = markup.IndexOf("@onclick=\"() => ToggleProviderAsync(provider)\"", StringComparison.Ordinal);
+        var management = markup.IndexOf("@if (_state.IsEditingCredential(provider.Id))", StringComparison.Ordinal);
+        Assert.True(status >= 0);
+        Assert.True(management < statusAction);
+        Assert.True(status < statusAction);
+    }
+
+    [Fact]
+    public void ExistingIntegrationsPrecedeCollapsedGenericCreator()
+    {
+        var markup = File.ReadAllText(Path.Combine(
+            FindWebRoot(), "Modules", "Settings", "Settings.razor"));
+
+        var existing = markup.IndexOf("@foreach (var provider in _state.VisibleProviders)", StringComparison.Ordinal);
+        var creator = markup.IndexOf("data-integration-creator", StringComparison.Ordinal);
+
+        Assert.True(existing >= 0);
+        Assert.True(existing < creator);
+        Assert.Contains("Add integration", markup);
+        Assert.Contains("Connect up to 3 accounts per service.", markup);
+        Assert.Contains("You can connect up to 3 accounts per service.", markup);
+        Assert.Contains("SelectCreationPlatform(\"steam\")", markup);
+        Assert.Contains("SelectCreationPlatform(\"psn\")", markup);
+        Assert.Contains("SelectCreationPlatform(\"xbox\")", markup);
+        Assert.Contains("Steam Web API key", markup);
+        Assert.Contains("Steam ID", markup);
+        Assert.Contains("NPSSO token", markup);
+        Assert.Contains("Account ID", markup);
+        Assert.Contains("OpenXBL API key", markup);
+        Assert.Contains("Xbox XUID", markup);
+        Assert.Contains("OpenXBL", markup);
+        Assert.DoesNotContain("data-available-integration=\"xbox\"", markup);
+        Assert.DoesNotContain("experimental", markup, StringComparison.OrdinalIgnoreCase);
     }
 
     private static ProviderStatus Provider(long id, string platform, string status) =>
