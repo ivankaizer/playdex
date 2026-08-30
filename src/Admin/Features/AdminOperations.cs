@@ -120,8 +120,10 @@ public sealed partial class AdminOperations(
         }
 
         await db.SaveChangesAsync(ct);
+#pragma warning disable CA1873 // Correlation id is required for every mutation log and cheap to compute
         LogPlatformMutation(logger, "set-platform-enabled", platformRow.Key, integrations.Count, enabled,
             CorrelationId());
+#pragma warning restore CA1873
         return integrations.Count;
     }
 
@@ -155,7 +157,9 @@ public sealed partial class AdminOperations(
         if (accountIdChanged) integration.AccountId = NormalizeOptional(accountId);
         integration.UpdatedAt = DateTimeOffset.UtcNow;
         await db.SaveChangesAsync(ct);
+#pragma warning disable CA1873 // Correlation id is required for every mutation log and cheap to compute
         LogIntegrationMutation(logger, "update-integration", id, CorrelationId());
+#pragma warning restore CA1873
         return true;
     }
 
@@ -180,7 +184,9 @@ public sealed partial class AdminOperations(
                 .SetProperty(row => row.IntegrationId, target.Id)
                 .SetProperty(row => row.UserId, target.UserId)
                 .SetProperty(row => row.UpdatedAt, updatedAt), ct);
+#pragma warning disable CA1873 // Correlation id is required for every mutation log and cheap to compute
         LogSessionTransfer(logger, "transfer-sessions", targetIntegrationId, updated, CorrelationId());
+#pragma warning restore CA1873
         return updated;
     }
 
@@ -212,7 +218,9 @@ public sealed partial class AdminOperations(
         if (capsuleUrlLocked.HasValue) game.CapsuleUrlLocked = capsuleUrlLocked.Value;
         game.UpdatedAt = DateTimeOffset.UtcNow;
         await db.SaveChangesAsync(ct);
+#pragma warning disable CA1873 // Correlation id is required for every mutation log and cheap to compute
         LogGameMutation(logger, "update-game", id, CorrelationId());
+#pragma warning restore CA1873
         return true;
     }
 
@@ -347,7 +355,9 @@ public sealed partial class AdminOperations(
         db.Games.Remove(source);
         await db.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
+#pragma warning disable CA1873 // Correlation id is required for every mutation log and cheap to compute
         LogGameMerge(logger, "merge-games", sourceId, targetId, CorrelationId());
+#pragma warning restore CA1873
     }
 
     private static string CorrelationId() => Activity.Current?.Id ?? Guid.NewGuid().ToString("N");

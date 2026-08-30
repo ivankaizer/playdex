@@ -1,3 +1,4 @@
+using System.Globalization;
 using Microsoft.JSInterop;
 
 namespace Admin.Infrastructure;
@@ -29,5 +30,5 @@ public sealed class BrowserTimeZone(IJSRuntime js)
         value is null ? null : TimeZoneInfo.ConvertTime(value.Value, _timeZone);
 
     public string Format(DateTimeOffset? value) =>
-        ToLocal(value)?.ToString("yyyy-MM-dd HH:mm") ?? "-";
+        ToLocal(value)?.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture) ?? "-";
 }
