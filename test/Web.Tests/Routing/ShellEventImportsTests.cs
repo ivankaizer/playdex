@@ -11,13 +11,15 @@ public sealed class ShellEventImportsTests
         var webRoot = FindWebRoot();
         var directives = Directory
             .EnumerateFiles(Path.Combine(webRoot, Path.Combine("Infrastructure", "Components")), "*.razor")
-            .SelectMany(path => Regex.Matches(File.ReadAllText(path), "@on(?:change|click|input)\\b"))
+            .SelectMany(path => Regex.Matches(
+                File.ReadAllText(path),
+                "@on(?:change|click|input|keydown|mouseenter)\\b"))
             .Select(match => match.Value)
             .Distinct(StringComparer.Ordinal)
             .Order(StringComparer.Ordinal)
             .ToArray();
 
-        Assert.Equal(["@onclick"], directives);
+        Assert.Equal(["@onclick", "@oninput", "@onkeydown", "@onmouseenter"], directives);
         Assert.Contains(
             "@using Microsoft.AspNetCore.Components.Web",
             File.ReadAllText(Path.Combine(webRoot, "_Imports.razor")),
