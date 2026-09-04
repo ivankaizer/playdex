@@ -14,6 +14,7 @@ public static class AccountsEndpoints
         sessions.MapGet("", ListSessions);
         sessions.MapGet("/today", ListSessionsToday);
         sessions.MapGet("/current", ListCurrentSession);
+        sessions.MapPut("/{sessionId}", UpdateSession);
         sessions.MapDelete("/{sessionId}", DeleteSession);
 
         api.MapGet("/stats", ListStatsForRange).RequireAuthorization();
@@ -132,6 +133,23 @@ public static class AccountsEndpoints
     {
         return TypedResults.Ok(await service.DeleteSession(
             ParseId(sessionId, "sessionId"), principal.GetUserId(), ct));
+    }
+
+    private static async Task<IResult> UpdateSession(
+        string sessionId,
+        ClaimsPrincipal principal,
+        AccountsService service,
+        AccountSessionUpdateRequest? request,
+        CancellationToken ct)
+    {
+        if (request is null)
+            return TypedResults.Problem("Request body is required.", statusCode: 400);
+
+        return TypedResults.Ok(await service.UpdateSession(
+            ParseId(sessionId, "sessionId"),
+            principal.GetUserId(),
+            request,
+            ct));
     }
 
     private static int ValidateLimit(int? limit)

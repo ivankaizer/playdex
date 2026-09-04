@@ -223,12 +223,10 @@
                                 </div>
                                 <div class="mt-3 flex items-center justify-between">
                                     <span class="text-[11px] uppercase tracking-[0.3em] text-slate-500">@session.Platform</span>
-                                    <button type="button"
-                                            @onclick="() => RemoveSessionAsync(session.SessionId)"
-                                            disabled="@_state.DeletingSessionIds.Contains(session.SessionId)"
-                                            class="rounded-full border border-rose-500/60 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.3em] text-rose-700 dark:text-rose-200 transition hover:border-rose-400 disabled:cursor-not-allowed disabled:opacity-60">
-                                        Remove
-                                    </button>
+                                    <SessionActions CanEdit="@session.CanEdit"
+                                                    Disabled="@_state.DeletingSessionIds.Contains(session.SessionId)"
+                                                    OnEdit="() => OpenSessionEditor(session.SessionId)"
+                                                    OnRemove="() => RemoveSessionAsync(session.SessionId)" />
                                 </div>
                             </div>
                         }
@@ -322,9 +320,10 @@
                                         </div>
                                     </td>
                                     <td class="px-4 py-3 text-right">
-                                        <button type="button" @onclick="() => RemoveSessionAsync(session.SessionId)" disabled="@_state.DeletingSessionIds.Contains(session.SessionId)" class="rounded-full border border-rose-500/60 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.3em] text-rose-700 dark:text-rose-200 transition hover:border-rose-400 disabled:cursor-not-allowed disabled:opacity-60">
-                                            Remove
-                                        </button>
+                                        <SessionActions CanEdit="@session.CanEdit"
+                                                        Disabled="@_state.DeletingSessionIds.Contains(session.SessionId)"
+                                                        OnEdit="() => OpenSessionEditor(session.SessionId)"
+                                                        OnRemove="() => RemoveSessionAsync(session.SessionId)" />
                                     </td>
                                 </tr>
                             }
@@ -363,4 +362,18 @@
             </div>
         </section>
     </ChildContent>
+    <Overlay>
+        @if (_editState.Session is not null)
+        {
+            <SessionEditModal GameTitle="@_editState.Session.Game"
+                              StartedAt="@_editState.StartedAt"
+                              EndedAt="@_editState.EndedAt"
+                              IsSaving="@_editState.IsSaving"
+                              Error="@_editState.Error"
+                              OnStartedAtChanged="_editState.SetStartedAt"
+                              OnEndedAtChanged="_editState.SetEndedAt"
+                              OnSave="SaveSessionEditAsync"
+                              OnCancel="CancelSessionEdit" />
+        }
+    </Overlay>
 </AppLayout>

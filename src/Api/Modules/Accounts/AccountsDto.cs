@@ -32,6 +32,15 @@ public sealed record AccountCurrentSessionResponseDto(
 
 public sealed record AccountSessionDeleteResponseDto(long SessionId);
 
+public sealed record AccountSessionUpdateRequest(
+    DateTimeOffset StartedAt,
+    DateTimeOffset EndedAt);
+
+public sealed record AccountSessionUpdateResponseDto(
+    long SessionId,
+    DateTimeOffset StartedAt,
+    DateTimeOffset EndedAt);
+
 public sealed record AccountStatsPeriodDto(
     double TotalSeconds,
     int SessionCount,

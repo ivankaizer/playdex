@@ -1,11 +1,57 @@
 using Api.Infrastructure.Http;
 using Api.Infrastructure.Common;
 using Api.Modules.Games;
+using Playdex.Persistence;
 
 namespace Api.Modules.Accounts;
 
 public sealed class AccountsService(AccountsRepository repository)
 {
+    internal static AccountSessionUpdateRequest ValidateSessionUpdate(
+        PlaySession? session,
+        long userId,
+        AccountSessionUpdateRequest request)
+    {
+        if (session is null || session.UserId != userId)
+        {
+            throw AppProblemException.NotFound("Session not found.");
+        }
+
+        if (session.EndedAt is null)
+        {
+            throw AppProblemException.Validation("Only finished sessions can be edited.");
+        }
+
+        if (request.StartedAt == default || request.EndedAt == default)
+        {
+            throw AppProblemException.Validation("Start and end time are required.");
+        }
+
+        if (request.EndedAt <= request.StartedAt)
+        {
+            throw AppProblemException.Validation("End time must be later than start time.");
+        }
+
+        return request;
+    }
+
+    internal static AccountSessionUpdateResponseDto ApplySessionUpdate(
+        PlaySession? session,
+        long userId,
+        AccountSessionUpdateRequest request,
+        DateTimeOffset updatedAt)
+    {
+        var validated = ValidateSessionUpdate(session, userId, request);
+        var editableSession = session!;
+        editableSession.StartedAt = validated.StartedAt;
+        editableSession.EndedAt = validated.EndedAt;
+        editableSession.UpdatedAt = updatedAt;
+        return new AccountSessionUpdateResponseDto(
+            editableSession.Id,
+            editableSession.StartedAt,
+            editableSession.EndedAt.Value);
+    }
+
     public Task<List<AccountSummaryDto>> ListAccounts(long userId, CancellationToken ct) =>
         repository.ListAccounts(userId, ct);
 
@@ -23,6 +69,18 @@ public sealed class AccountsService(AccountsRepository repository)
         var range = AccountDateRange.ParseOptional(from, to);
         return await repository.ListSessions(userId, accountId, title, gameIds, platform, range.From, range.ToExclusive,
             sort, direction, limit, offset, ignoreShortMinutes, ct);
+    }
+
+    public async Task<AccountSessionUpdateResponseDto> UpdateSession(
+        long sessionId,
+        long userId,
+        AccountSessionUpdateRequest request,
+        CancellationToken ct)
+    {
+        var session = await repository.GetSession(sessionId, ct);
+        var response = ApplySessionUpdate(session, userId, request, DateTimeOffset.UtcNow);
+        await repository.SaveChanges(ct);
+        return response;
     }
 
     public Task<List<AccountSessionDto>> ListSessionsToday(

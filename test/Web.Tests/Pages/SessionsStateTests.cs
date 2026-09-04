@@ -8,6 +8,121 @@ namespace Web.Tests.Pages;
 public sealed class SessionsStateTests
 {
     [Fact]
+    public void FinishedSessionOpensAnEditDraftWithLocalDateAndTime()
+    {
+        var localStart = new DateTimeOffset(
+            2026, 8, 4, 18, 30, 15,
+            TimeZoneInfo.Local.GetUtcOffset(new DateTime(2026, 8, 4, 18, 30, 15)));
+        var session = new AccountSession(
+            7, localStart, localStart.AddHours(2), "42", "steam", "Steam",
+            "Hades II", null, false, null, null);
+        var state = new SessionEditState();
+
+        Assert.True(state.TryOpen(session));
+
+        Assert.Same(session, state.Session);
+        Assert.Equal("2026-08-04T18:30:15", state.StartedAt);
+        Assert.Equal("2026-08-04T20:30:15", state.EndedAt);
+        Assert.True(state.IsOpen);
+    }
+
+    [Fact]
+    public void ActiveSessionCannotOpenAnEditDraft()
+    {
+        var session = new AccountSession(
+            7, DateTimeOffset.UtcNow, null, "42", "steam", "Steam",
+            "Hades II", null, false, null, null);
+        var state = new SessionEditState();
+
+        Assert.False(state.TryOpen(session));
+
+        Assert.False(state.IsOpen);
+    }
+
+    [Fact]
+    public void ValidLocalInputsBuildTheOwnedSessionUpdateRequest()
+    {
+        var state = new SessionEditState();
+        var originalStart = DateTimeOffset.UtcNow.AddHours(-3);
+        state.TryOpen(new AccountSession(
+            7, originalStart, originalStart.AddHours(1), "42", "steam", "Steam",
+            "Hades II", null, false, null, null));
+        state.SetStartedAt("2026-08-04T18:30:15");
+        state.SetEndedAt("2026-08-04T20:45:30");
+
+        Assert.True(state.TryBuildSubmission(out var submission));
+
+        var expectedStart = new DateTimeOffset(
+            2026, 8, 4, 18, 30, 15,
+            TimeZoneInfo.Local.GetUtcOffset(new DateTime(2026, 8, 4, 18, 30, 15)));
+        var expectedEnd = new DateTimeOffset(
+            2026, 8, 4, 20, 45, 30,
+            TimeZoneInfo.Local.GetUtcOffset(new DateTime(2026, 8, 4, 20, 45, 30)));
+        Assert.NotNull(submission);
+        Assert.Equal("/sessions/7", submission.Path);
+        Assert.Equal(HttpMethod.Put, submission.Method);
+        Assert.Equal(expectedStart, submission.Body.StartedAt);
+        Assert.Equal(expectedEnd, submission.Body.EndedAt);
+    }
+
+    [Fact]
+    public void EditDraftRejectsAnEndThatIsNotLaterThanTheStart()
+    {
+        var state = new SessionEditState();
+        var originalStart = DateTimeOffset.UtcNow.AddHours(-3);
+        state.TryOpen(new AccountSession(
+            7, originalStart, originalStart.AddHours(1), "42", "steam", "Steam",
+            "Hades II", null, false, null, null));
+        state.SetStartedAt("2026-08-04T20:45:30");
+        state.SetEndedAt("2026-08-04T20:45:30");
+
+        Assert.False(state.TryBuildSubmission(out var submission));
+
+        Assert.Null(submission);
+        Assert.Equal("End time must be later than start time.", state.Error);
+    }
+
+    [Fact]
+    public void FailedEditStaysOpenAndSuccessfulRetryClosesIt()
+    {
+        var state = new SessionEditState();
+        var startedAt = DateTimeOffset.UtcNow.AddHours(-2);
+        state.TryOpen(new AccountSession(
+            7, startedAt, startedAt.AddHours(1), "42", "steam", "Steam",
+            "Hades II", null, false, null, null));
+
+        state.BeginSave();
+        Assert.True(state.IsSaving);
+        state.FailSave("Update failed.");
+        Assert.True(state.IsOpen);
+        Assert.False(state.IsSaving);
+        Assert.Equal("Update failed.", state.Error);
+
+        state.BeginSave();
+        state.CompleteSave();
+        Assert.False(state.IsOpen);
+        Assert.False(state.IsSaving);
+        Assert.Empty(state.Error);
+    }
+
+    [Fact]
+    public void CancelEditDiscardsTheDraft()
+    {
+        var state = new SessionEditState();
+        var startedAt = DateTimeOffset.UtcNow.AddHours(-2);
+        state.TryOpen(new AccountSession(
+            7, startedAt, startedAt.AddHours(1), "42", "steam", "Steam",
+            "Hades II", null, false, null, null));
+        state.SetStartedAt("2026-08-04T18:30:15");
+
+        state.Cancel();
+
+        Assert.False(state.IsOpen);
+        Assert.Empty(state.StartedAt);
+        Assert.Empty(state.EndedAt);
+    }
+
+    [Fact]
     public void InitialStateUsesTheUtcMondayThroughSundayRangeAndExactReactUrls()
     {
         var state = new SessionsState(
@@ -306,6 +421,23 @@ public sealed class SessionsStateTests
     }
 
     [Fact]
+    public void RowViewsMarkOnlyFinishedSessionsAsEditable()
+    {
+        var startedAt = DateTimeOffset.UtcNow.AddHours(-2);
+        var finished = new AccountSession(
+            7, startedAt, startedAt.AddHours(1), "42", "steam", "Steam",
+            "Hades II", null, false, null, null);
+        var active = finished with { SessionId = 8, EndedAt = null };
+        var state = new SessionsState(DateTimeOffset.UtcNow);
+        state.CompleteListLoad(new AccountSessionsResponse(null, [finished, active], 2, 10, 0));
+
+        var views = state.GetRowViews(DateTimeOffset.UtcNow);
+
+        Assert.True(views[0].CanEdit);
+        Assert.False(views[1].CanEdit);
+    }
+
+    [Fact]
     public void SessionsPageWiresReactRequestsResponsiveRowsModalAndCancellationWithoutMappedBadges()
     {
         var root = FindWebRoot();
@@ -318,7 +450,8 @@ public sealed class SessionsStateTests
 
         Assert.Contains("@page \"/sessions\"", markup);
         Assert.Contains("<AppLayout Title=\"Sessions\"", markup);
-        Assert.DoesNotContain("<Overlay>", markup);
+        Assert.Contains("<Overlay>", markup);
+        Assert.Contains("<SessionEditModal", markup);
         Assert.DoesNotContain("<ManualEntryModal", markup);
         Assert.DoesNotContain("Add entry", markup);
         Assert.Contains("mt-6 space-y-3 md:hidden", markup);

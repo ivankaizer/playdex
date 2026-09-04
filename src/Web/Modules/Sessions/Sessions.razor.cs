@@ -14,6 +14,11 @@ internal sealed record SessionsDeleteRequest(string Confirmation, string Path, H
         new("Remove this session entry?", $"/sessions/{sessionId}", HttpMethod.Delete);
 }
 
+internal sealed record SessionUpdateSubmission(
+    string Path,
+    HttpMethod Method,
+    AccountSessionUpdateRequest Body);
+
 internal sealed class SessionsRequestVersions
 {
     private long _stats;
@@ -32,7 +37,104 @@ internal sealed record SessionsRowView(
     string Date,
     string Duration,
     string? ImageUrl,
-    bool Ignored);
+    bool Ignored,
+    bool CanEdit);
+
+internal sealed class SessionEditState
+{
+    private const string LocalDateTimeFormat = "yyyy-MM-ddTHH:mm:ss";
+
+    public AccountSession? Session { get; private set; }
+    public string StartedAt { get; private set; } = string.Empty;
+    public string EndedAt { get; private set; } = string.Empty;
+    public bool IsOpen => Session is not null;
+    public string Error { get; private set; } = string.Empty;
+    public bool IsSaving { get; private set; }
+
+    public bool TryOpen(AccountSession session)
+    {
+        if (session.EndedAt is null) return false;
+        Session = session;
+        StartedAt = session.StartedAt.ToLocalTime().ToString(LocalDateTimeFormat, CultureInfo.InvariantCulture);
+        EndedAt = session.EndedAt.Value.ToLocalTime().ToString(LocalDateTimeFormat, CultureInfo.InvariantCulture);
+        return true;
+    }
+
+    public void BeginSave()
+    {
+        IsSaving = true;
+        Error = string.Empty;
+    }
+
+    public void FailSave(string error)
+    {
+        IsSaving = false;
+        Error = error;
+    }
+
+    public void CompleteSave()
+    {
+        Session = null;
+        StartedAt = string.Empty;
+        EndedAt = string.Empty;
+        IsSaving = false;
+        Error = string.Empty;
+    }
+
+    public void Cancel() => CompleteSave();
+
+    public void SetStartedAt(string value)
+    {
+        StartedAt = value;
+        Error = string.Empty;
+    }
+
+    public void SetEndedAt(string value)
+    {
+        EndedAt = value;
+        Error = string.Empty;
+    }
+
+    public bool TryBuildSubmission(out SessionUpdateSubmission? submission)
+    {
+        submission = null;
+        if (Session is null ||
+            !TryParseLocal(StartedAt, out var startedAt) ||
+            !TryParseLocal(EndedAt, out var endedAt))
+        {
+            Error = "Enter a valid start and end date and time.";
+            return false;
+        }
+        if (endedAt <= startedAt)
+        {
+            Error = "End time must be later than start time.";
+            return false;
+        }
+        submission = new SessionUpdateSubmission(
+            $"/sessions/{Session.SessionId}",
+            HttpMethod.Put,
+            new AccountSessionUpdateRequest(startedAt, endedAt));
+        return true;
+    }
+
+    private static bool TryParseLocal(string value, out DateTimeOffset result)
+    {
+        result = default;
+        if (!DateTime.TryParseExact(
+                value,
+                LocalDateTimeFormat,
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.None,
+                out var local) ||
+            TimeZoneInfo.Local.IsInvalidTime(local))
+        {
+            return false;
+        }
+
+        result = new DateTimeOffset(local, TimeZoneInfo.Local.GetUtcOffset(local));
+        return true;
+    }
+}
 
 internal sealed class SessionsState
 {
@@ -248,7 +350,8 @@ internal sealed class SessionsState
                 SessionDates.GetDurationSeconds(session.StartedAt, session.EndedAt, now),
                 DurationFormat.Compact),
             session.CapsuleUrl,
-            session.Ignored)).ToArray();
+            session.Ignored,
+            session.EndedAt is not null)).ToArray();
 
     public string BuildListRequest()
     {
@@ -294,6 +397,7 @@ public partial class Sessions : ComponentBase, IDisposable
 
     private readonly CancellationTokenSource _lifetime = new();
     private readonly SessionsState _state = new(DateTimeOffset.Now);
+    private readonly SessionEditState _editState = new();
     private readonly SessionsRequestVersions _requestVersions = new();
     private CancellationTokenSource? _titleDebounce;
     private CancellationTokenSource? _listRequest;
@@ -528,6 +632,37 @@ public partial class Sessions : ComponentBase, IDisposable
         finally
         {
             _state.EndDelete(sessionId);
+        }
+    }
+
+    private void OpenSessionEditor(long sessionId)
+    {
+        var session = _state.Rows.FirstOrDefault(row => row.SessionId == sessionId);
+        if (session is not null) _editState.TryOpen(session);
+    }
+
+    private void CancelSessionEdit() => _editState.Cancel();
+
+    private async Task SaveSessionEditAsync()
+    {
+        if (!_editState.TryBuildSubmission(out var submission)) return;
+        _editState.BeginSave();
+        try
+        {
+            await Api.SendAsync<AccountSessionUpdateResponse>(
+                submission!.Path,
+                submission.Method,
+                submission.Body,
+                cancellationToken: _lifetime.Token);
+            _editState.CompleteSave();
+            await RefreshAllAsync();
+        }
+        catch (OperationCanceledException) when (_lifetime.IsCancellationRequested)
+        {
+        }
+        catch (Exception exception)
+        {
+            _editState.FailSave(exception.Message);
         }
     }
 

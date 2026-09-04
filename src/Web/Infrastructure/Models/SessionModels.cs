@@ -22,3 +22,5 @@ public sealed record AccountSessionsResponse(
 
 public sealed record AccountTodaySessionsResponse(long? AccountId, IReadOnlyList<AccountSession> Sessions);
 public sealed record AccountCurrentSessionResponse(long? AccountId, AccountSession? Session);
+public sealed record AccountSessionUpdateRequest(DateTimeOffset StartedAt, DateTimeOffset EndedAt);
+public sealed record AccountSessionUpdateResponse(long SessionId, DateTimeOffset StartedAt, DateTimeOffset EndedAt);
