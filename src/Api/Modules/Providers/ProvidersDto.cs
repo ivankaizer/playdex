@@ -1,12 +1,15 @@
 namespace Api.Modules.Providers;
 
+public sealed record ProviderPlatformDto(string Key, string Name);
 public sealed record ProviderStatusDto(
     long Id,
     string Platform,
     string? AccountId,
     string Status,
     string? ApiKey,
-    bool ApiKeyLocked);
+    bool ApiKeyLocked,
+    ProviderPlatformDto? SessionPlatform = null,
+    IReadOnlyList<ProviderPlatformDto>? SessionPlatformOptions = null);
 public sealed record ProvidersResponseDto(IReadOnlyList<ProviderStatusDto> Providers);
 public sealed record ProviderUpdateRequest(long ProviderId, string Status);
 public sealed record ProviderUpdateResponseDto(ProviderStatusDto Provider);
@@ -22,6 +25,10 @@ public sealed record ProviderCredentialChanges(
     bool AccountIdChanged,
     string? AccountId);
 public sealed record ProviderCredentialUpdateResponseDto(ProviderStatusDto Provider);
+public sealed record ProviderSessionPlatformUpdateRequest(
+    string? Platform,
+    bool RewriteExistingSessions);
+public sealed record ProviderSessionPlatformUpdateResponseDto(ProviderStatusDto Provider);
 public sealed record OpenXblConnectRequest(string? ApiKey, string? Xuid);
 public sealed record OpenXblConnectResponseDto(ProviderStatusDto Provider);
 internal sealed record ValidatedProviderCreation(
@@ -30,3 +37,7 @@ internal sealed record ValidatedProviderCreation(
     string ApiKey,
     string? AccountId);
 public sealed record ProviderCreateResult(ProviderStatusDto? Provider, bool LimitReached);
+public sealed record ProviderSessionPlatformUpdateResult(
+    ProviderStatusDto? Provider,
+    bool InvalidPlatform,
+    bool UnsupportedIntegration = false);

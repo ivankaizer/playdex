@@ -18,8 +18,7 @@ public sealed class PollingRepository(PlaydexDbContext db, IGameResolver gameRes
             $"SELECT pg_advisory_xact_lock({credentialId})", ct);
 
         var integration = await db.Integrations.SingleAsync(row => row.Id == credentialId, ct);
-        var platformId = integration.PlatformId
-            ?? throw new InvalidOperationException("Polling Integration requires a Platform.");
+        var platformId = GetEffectiveSessionPlatformId(integration);
         long? gameId = null;
         long? identityId = null;
         var ignored = false;
@@ -112,9 +111,8 @@ public sealed class PollingRepository(PlaydexDbContext db, IGameResolver gameRes
                                                                         pc.updated_at                AS UpdatedAt,
                                                                         pc.active                    AS Active,
                                                                         pc.platform_id               AS PlatformId,
-                                                                        p.key                        AS PlatformKey
+                                                                        pc.type                      AS Type
                                                                     FROM integrations pc
-                                                                    JOIN platforms p ON p.id = pc.platform_id
                                                                     WHERE pc.active
                                                                       AND pc.type != 'api'
                                                                     """).ToListAsync(ct);
@@ -131,7 +129,7 @@ public sealed class PollingRepository(PlaydexDbContext db, IGameResolver gameRes
                 Active = r.Active,
                 PlatformId = r.PlatformId,
             },
-            r.PlatformKey
+            GetProviderKey(r.Type)
         )).ToList();
     }
 
@@ -181,9 +179,20 @@ public sealed class PollingRepository(PlaydexDbContext db, IGameResolver gameRes
         public DateTimeOffset UpdatedAt { get; set; }
         public bool Active { get; set; }
         public long PlatformId { get; set; }
-        public string PlatformKey { get; set; } = string.Empty;
+        public IntegrationType Type { get; set; }
     }
 
+    internal static long GetEffectiveSessionPlatformId(Integration integration) =>
+        integration.SessionPlatformId ?? integration.PlatformId
+        ?? throw new InvalidOperationException("Polling Integration requires a Platform.");
+
+    internal static string GetProviderKey(IntegrationType type) => type switch
+    {
+        IntegrationType.Steam => "steam",
+        IntegrationType.Psn => "psn",
+        IntegrationType.Xbox => "xbox",
+        _ => throw new InvalidOperationException($"Integration type '{type}' does not support polling."),
+    };
 }
 
 /// <summary>

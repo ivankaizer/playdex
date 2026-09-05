@@ -33,6 +33,20 @@ public static class ProvidersEndpoints
             await result.ExecuteAsync(http);
         });
 
+        providers.MapPut("/{providerId}/session-platform", async (string providerId, HttpContext http) =>
+        {
+            var request = await http.Request.ReadFromJsonAsync<ProviderSessionPlatformUpdateRequest>();
+            var service = http.RequestServices.GetRequiredService<ProvidersService>();
+            IResult result = request is null
+                ? TypedResults.Problem("Request body is required.", statusCode: 400)
+                : TypedResults.Ok(await service.UpdateSessionPlatform(
+                    http.User.GetUserId(),
+                    ParseProviderId(providerId),
+                    request,
+                    http.RequestAborted));
+            await result.ExecuteAsync(http);
+        });
+
         providers.MapPut("/{providerId}", async (string providerId, HttpContext http) =>
         {
             var payload = await http.Request.ReadFromJsonAsync<JsonElement>();

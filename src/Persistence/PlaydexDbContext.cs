@@ -103,6 +103,7 @@ public sealed class PlaydexDbContext(DbContextOptions<PlaydexDbContext> options)
         entity.Property(row => row.UserId).HasColumnName("user_id");
         entity.Property(row => row.Type).HasColumnName("type").HasColumnType("integration_type");
         entity.Property(row => row.PlatformId).HasColumnName("platform_id");
+        entity.Property(row => row.SessionPlatformId).HasColumnName("session_platform_id");
         entity.Property(row => row.ApiKey).HasColumnName("api_key");
         entity.Property(row => row.AccountId).HasColumnName("account_id");
         entity.Property(row => row.ApiKeyLocked).HasColumnName("api_key_locked");
@@ -111,8 +112,10 @@ public sealed class PlaydexDbContext(DbContextOptions<PlaydexDbContext> options)
         entity.Property(row => row.UpdatedAt).HasColumnName("updated_at");
         entity.HasIndex(row => row.UserId);
         entity.HasIndex(row => row.PlatformId);
+        entity.HasIndex(row => row.SessionPlatformId);
         entity.HasOne<User>().WithMany().HasForeignKey(row => row.UserId).OnDelete(DeleteBehavior.Cascade);
         entity.HasOne<Platform>().WithMany().HasForeignKey(row => row.PlatformId).OnDelete(DeleteBehavior.NoAction);
+        entity.HasOne<Platform>().WithMany().HasForeignKey(row => row.SessionPlatformId).OnDelete(DeleteBehavior.NoAction);
     }
 
     private static void ConfigureGameExternalIdentities(ModelBuilder modelBuilder)

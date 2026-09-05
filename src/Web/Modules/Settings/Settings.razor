@@ -144,6 +144,8 @@
                     {
                         var presentation = SettingsState.Present(provider);
                         var isUpdating = _state.IsProviderUpdating(provider.Id);
+                        var isProviderMutationInProgress = _state.IsProviderMutationInProgress(provider.Id);
+                        var isProviderActionBlocked = _state.IsProviderActionBlocked(provider.Id);
                         <article @key="provider.Id"
                                  class="rounded-2xl border border-slate-200 bg-slate-100/60 p-4 dark:border-slate-800 dark:bg-slate-950/50 sm:p-5">
                             <div class="flex flex-wrap items-center justify-between gap-4">
@@ -169,6 +171,7 @@
                                     </span>
                                     <button type="button"
                                             @onclick="() => ToggleCredentialEditorAsync(provider)"
+                                            disabled="@(_state.IsAnySessionPlatformSaving || isProviderMutationInProgress)"
                                             class="rounded-full border border-slate-300 px-3 py-2 font-semibold uppercase tracking-[0.2em] text-slate-700 transition hover:border-emerald-400/60 hover:text-emerald-700 dark:border-slate-700 dark:text-slate-200 dark:hover:text-emerald-100">
                                         @(_state.IsEditingCredential(provider.Id) ? "Close" : "Manage")
                                     </button>
@@ -222,6 +225,63 @@
                                         }
                                     </div>
 
+                                    @if (provider.SessionPlatform is not null &&
+                                         provider.SessionPlatformOptions is { Count: > 0 })
+                                    {
+                                        var isSessionPlatformSaving = _state.IsSessionPlatformSaving(provider.Id);
+                                        <div class="mt-4 rounded-xl border border-slate-200 bg-white/60 p-3 dark:border-slate-800 dark:bg-slate-900/50">
+                                            <label class="text-xs font-medium text-slate-600 dark:text-slate-300">
+                                                <span class="block">Recording platform</span>
+                                                <select value="@_state.GetSelectedSessionPlatformKey(provider)"
+                                                        @onchange="eventArgs => ChangeSessionPlatform(provider, eventArgs)"
+                                                        disabled="@isProviderMutationInProgress"
+                                                        class="mt-2 w-full rounded-xl border border-slate-300 bg-white/90 px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/30 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-slate-950/80 dark:text-white">
+                                                    @foreach (var option in provider.SessionPlatformOptions)
+                                                    {
+                                                        <option value="@option.Key">@option.Name</option>
+                                                    }
+                                                </select>
+                                                <span class="mt-1 block font-normal text-slate-500 dark:text-slate-400">
+                                                    New sessions recorded by this integration use this platform.
+                                                </span>
+                                            </label>
+
+                                            @if (_state.PendingSessionPlatformProviderId == provider.Id)
+                                            {
+                                                <div role="alertdialog" aria-label="Confirm recording platform change" class="mt-3 border-t border-slate-200 pt-3 dark:border-slate-800">
+                                                    <p class="text-xs text-slate-600 dark:text-slate-300">
+                                                        Should existing sessions from this integration also use the new platform?
+                                                    </p>
+                                                    <div class="mt-3 flex flex-wrap gap-2">
+                                                        <button type="button"
+                                                                @onclick="() => SaveSessionPlatformAsync(provider, true)"
+                                                                disabled="@isSessionPlatformSaving"
+                                                                class="rounded-full bg-emerald-400 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-900 disabled:cursor-not-allowed disabled:opacity-60">
+                                                            Future and existing sessions
+                                                        </button>
+                                                        <button type="button"
+                                                                @onclick="() => SaveSessionPlatformAsync(provider, false)"
+                                                                disabled="@isSessionPlatformSaving"
+                                                                class="rounded-full border border-slate-300 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-700 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:text-slate-200">
+                                                            Future sessions only
+                                                        </button>
+                                                        <button type="button"
+                                                                @onclick="CancelSessionPlatformChange"
+                                                                disabled="@isSessionPlatformSaving"
+                                                                class="px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500 disabled:cursor-not-allowed disabled:opacity-60 dark:text-slate-400">
+                                                            Cancel
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            }
+
+                                            @if (!string.IsNullOrEmpty(_state.SessionPlatformError))
+                                            {
+                                                <p class="mt-3 text-xs text-rose-700 dark:text-rose-300">@_state.SessionPlatformError</p>
+                                            }
+                                        </div>
+                                    }
+
                                     @if (!string.IsNullOrEmpty(_state.CredentialError))
                                     {
                                         <p class="mt-3 text-xs text-rose-700 dark:text-rose-300">@_state.CredentialError</p>
@@ -230,13 +290,13 @@
                                     <div class="mt-4 flex flex-wrap items-center justify-between gap-3">
                                         <button type="button"
                                                 @onclick="() => ToggleProviderAsync(provider)"
-                                                disabled="@isUpdating"
+                                                disabled="@isProviderActionBlocked"
                                                 class="@IntegrationActionButtonClass(provider)">
                                             @(isUpdating ? "Updating..." : provider.Status == "active" ? "Pause" : "Resume")
                                         </button>
                                         <button type="button"
                                                 @onclick="() => SaveCredentialAsync(provider)"
-                                                disabled="@_state.IsCredentialSaving(provider.Id)"
+                                                disabled="@isProviderActionBlocked"
                                                 class="rounded-full bg-emerald-400 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-900 transition hover:bg-emerald-300 disabled:cursor-not-allowed disabled:bg-emerald-300/60">
                                             @(_state.IsCredentialSaving(provider.Id) ? "Saving..." : "Save credentials")
                                         </button>

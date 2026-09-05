@@ -6,6 +6,15 @@ namespace Api.Tests;
 public sealed class TargetArchitectureContractTests
 {
     [Fact]
+    public void IntegrationOwnsNullableSessionPlatformOverride()
+    {
+        var property = typeof(Integration).GetProperty("SessionPlatformId");
+
+        Assert.NotNull(property);
+        Assert.Equal(typeof(long?), property.PropertyType);
+    }
+
+    [Fact]
     public void PlaySessionOwnsRequiredDimensionsAndOptionalIntegration()
     {
         var properties = typeof(PlaySession).GetProperties().Select(p => p.Name).ToHashSet();

@@ -5,6 +5,133 @@ namespace Web.Tests.Pages;
 
 public sealed class SettingsStateTests
 {
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void SessionPlatformChangeBuildsAnExplicitAllOrNoneRewrite(bool rewriteExistingSessions)
+    {
+        var state = new SettingsState();
+        var provider = new ProviderStatus(
+            7,
+            "psn",
+            "account",
+            "active",
+            null,
+            false,
+            new ProviderPlatform("psn", "PSN"),
+            [new ProviderPlatform("psn", "PSN"), new ProviderPlatform("ps5", "PS5")]);
+        state.CompleteProvidersLoad(new ProvidersResponse([provider]));
+        Assert.True(state.SelectSessionPlatform(provider, "ps5"));
+        var submission = state.BuildSessionPlatformSubmission(rewriteExistingSessions);
+
+        Assert.Equal("/providers/7/session-platform", submission.Path);
+        Assert.Equal(HttpMethod.Put, submission.Method);
+        Assert.Equal("ps5", submission.Body["platform"]);
+        Assert.Equal(rewriteExistingSessions, submission.Body["rewriteExistingSessions"]);
+    }
+
+    [Fact]
+    public void CancellingSessionPlatformChangeRestoresTheEffectivePlatform()
+    {
+        var state = new SettingsState();
+        var provider = new ProviderStatus(
+            7,
+            "psn",
+            "account",
+            "active",
+            null,
+            false,
+            new ProviderPlatform("psn", "PSN"),
+            [new ProviderPlatform("psn", "PSN"), new ProviderPlatform("ps5", "PS5")]);
+        state.CompleteProvidersLoad(new ProvidersResponse([provider]));
+        state.SelectSessionPlatform(provider, "ps5");
+        state.CancelSessionPlatformChange();
+
+        Assert.Null(state.PendingSessionPlatformProviderId);
+        Assert.Equal("psn", state.SelectedSessionPlatformKey);
+    }
+
+    [Fact]
+    public void ClosingIntegrationManagementCancelsPendingSessionPlatformChange()
+    {
+        var state = new SettingsState();
+        var provider = new ProviderStatus(
+            7,
+            "psn",
+            "account",
+            "active",
+            null,
+            false,
+            new ProviderPlatform("psn", "PSN"),
+            [new ProviderPlatform("psn", "PSN"), new ProviderPlatform("ps5", "PS5")]);
+        state.CompleteProvidersLoad(new ProvidersResponse([provider]));
+        state.BeginCredentialEdit(provider);
+        state.SelectSessionPlatform(provider, "ps5");
+
+        state.CancelCredentialEdit();
+
+        Assert.Null(state.PendingSessionPlatformProviderId);
+        Assert.Equal("psn", state.SelectedSessionPlatformKey);
+    }
+
+    [Fact]
+    public void SwitchingManagedIntegrationCancelsThePreviousPlatformDraft()
+    {
+        var state = new SettingsState();
+        var first = ProviderWithPlatforms(7);
+        var second = ProviderWithPlatforms(8);
+        state.CompleteProvidersLoad(new ProvidersResponse([first, second]));
+        state.BeginCredentialEdit(first);
+        state.SelectSessionPlatform(first, "ps5");
+
+        state.BeginCredentialEdit(second);
+
+        Assert.Equal(8, state.EditingCredentialId);
+        Assert.Null(state.PendingSessionPlatformProviderId);
+        Assert.Equal("psn", state.SelectedSessionPlatformKey);
+    }
+
+    [Fact]
+    public void InFlightPlatformSavePreventsAnotherIntegrationFromReplacingItsDraft()
+    {
+        var state = new SettingsState();
+        var first = ProviderWithPlatforms(7);
+        var second = ProviderWithPlatforms(8);
+        state.CompleteProvidersLoad(new ProvidersResponse([first, second]));
+        state.BeginCredentialEdit(first);
+        state.SelectSessionPlatform(first, "ps5");
+        state.BeginSessionPlatformSave(first.Id);
+
+        state.BeginCredentialEdit(second);
+
+        Assert.Equal(7, state.EditingCredentialId);
+        Assert.False(state.SelectSessionPlatform(second, "ps5"));
+        Assert.Equal(7, state.PendingSessionPlatformProviderId);
+        Assert.Equal("ps5", state.SelectedSessionPlatformKey);
+    }
+
+    [Fact]
+    public void ProviderMutationsAreMutuallyExclusiveWithPlatformChanges()
+    {
+        var state = new SettingsState();
+        var provider = ProviderWithPlatforms(7);
+        state.CompleteProvidersLoad(new ProvidersResponse([provider]));
+        state.BeginCredentialEdit(provider);
+        state.SelectSessionPlatform(provider, "ps5");
+
+        Assert.Throws<InvalidOperationException>(() => state.BeginProviderUpdate(provider));
+        Assert.Throws<InvalidOperationException>(() => state.BeginCredentialSave(provider.Id));
+
+        state.BeginSessionPlatformSave(provider.Id);
+        Assert.True(state.IsProviderMutationInProgress(provider.Id));
+        Assert.False(state.SelectSessionPlatform(provider, "psn"));
+        state.EndSessionPlatformSave(provider.Id);
+        state.CancelSessionPlatformChange();
+
+        state.BeginProviderUpdate(provider);
+        Assert.Throws<InvalidOperationException>(() => state.BeginSessionPlatformSave(provider.Id));
+    }
+
     [Fact]
     public void InitialLoadsBeginInReactOrderAndRemainIndependent()
     {
@@ -496,6 +623,12 @@ public sealed class SettingsStateTests
         Assert.Contains("Generated locally and read-only.", markup);
         Assert.Contains("ToggleCredentialEditorAsync", markup);
         Assert.Contains("SaveCredentialAsync", markup);
+        Assert.Contains("Recording platform", markup);
+        Assert.Contains("ChangeSessionPlatform", markup);
+        Assert.Contains("Future and existing sessions", markup);
+        Assert.Contains("Future sessions only", markup);
+        Assert.Contains("SaveSessionPlatformAsync", code);
+        Assert.Contains("SendAsync<ProviderSessionPlatformUpdateResponse>", code);
         Assert.DoesNotContain("EditForm", markup);
         Assert.DoesNotContain("success", markup, StringComparison.OrdinalIgnoreCase);
 
@@ -580,6 +713,16 @@ public sealed class SettingsStateTests
 
     private static ProviderStatus Provider(long id, string platform, string status) =>
         new(id, platform, $"account-{id}", status, platform == "playnite" ? $"key-{id}" : null, false);
+
+    private static ProviderStatus ProviderWithPlatforms(long id) => new(
+        id,
+        "psn",
+        $"account-{id}",
+        "active",
+        null,
+        false,
+        new ProviderPlatform("psn", "PSN"),
+        [new ProviderPlatform("psn", "PSN"), new ProviderPlatform("ps5", "PS5")]);
 
     private static string FindWebRoot()
     {

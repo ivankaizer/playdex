@@ -34,6 +34,7 @@ internal sealed class SettingsState
     private static readonly string[] SupportedCreationPlatforms = ["steam", "psn", "xbox"];
     private readonly HashSet<long> _updatingProviderIds = [];
     private readonly HashSet<long> _savingCredentialIds = [];
+    private readonly HashSet<long> _savingSessionPlatformIds = [];
     private string _savedTelegramChatId = string.Empty;
 
     public IReadOnlyList<ProviderStatus> Providers { get; private set; } = [];
@@ -57,6 +58,10 @@ internal sealed class SettingsState
     public string EditingAccountId { get; private set; } = string.Empty;
     public string EditingApiKey { get; private set; } = string.Empty;
     public string CredentialError { get; private set; } = string.Empty;
+    public long? PendingSessionPlatformProviderId { get; private set; }
+    public string SelectedSessionPlatformKey { get; private set; } = string.Empty;
+    public string SessionPlatformError { get; private set; } = string.Empty;
+    public bool IsAnySessionPlatformSaving => _savingSessionPlatformIds.Count > 0;
     public bool IsIntegrationCreatorOpen { get; private set; }
     public string? SelectedCreationPlatform { get; private set; }
     public string CreationApiKey { get; private set; } = string.Empty;
@@ -214,6 +219,8 @@ internal sealed class SettingsState
 
     public SettingsSubmission BeginProviderUpdate(ProviderStatus provider)
     {
+        if (IsProviderActionBlocked(provider.Id))
+            throw new InvalidOperationException("Another provider change is already pending.");
         _updatingProviderIds.Add(provider.Id);
         ProvidersError = string.Empty;
         return new SettingsSubmission(
@@ -237,16 +244,30 @@ internal sealed class SettingsState
 
     public bool IsProviderUpdating(long providerId) => _updatingProviderIds.Contains(providerId);
 
+    public bool IsProviderMutationInProgress(long providerId) =>
+        _updatingProviderIds.Contains(providerId) ||
+        _savingCredentialIds.Contains(providerId) ||
+        _savingSessionPlatformIds.Contains(providerId);
+
+    public bool IsProviderActionBlocked(long providerId) =>
+        IsProviderMutationInProgress(providerId) ||
+        PendingSessionPlatformProviderId == providerId;
+
     public void BeginCredentialEdit(ProviderStatus provider)
     {
+        if (IsAnySessionPlatformSaving) return;
+        if (PendingSessionPlatformProviderId != provider.Id)
+            CancelSessionPlatformChange();
         EditingCredentialId = provider.Id;
         EditingAccountId = provider.AccountId ?? string.Empty;
         EditingApiKey = provider.ApiKey ?? string.Empty;
+        SelectedSessionPlatformKey = provider.SessionPlatform?.Key ?? string.Empty;
         CredentialError = string.Empty;
     }
 
     public void CancelCredentialEdit()
     {
+        CancelSessionPlatformChange();
         EditingCredentialId = null;
         EditingAccountId = string.Empty;
         EditingApiKey = string.Empty;
@@ -302,6 +323,8 @@ internal sealed class SettingsState
 
     public void BeginCredentialSave(long providerId)
     {
+        if (IsProviderActionBlocked(providerId))
+            throw new InvalidOperationException("Another provider change is already pending.");
         _savingCredentialIds.Add(providerId);
         CredentialError = string.Empty;
     }
@@ -315,11 +338,85 @@ internal sealed class SettingsState
         EditingAccountId = string.Empty;
         EditingApiKey = string.Empty;
         _savingCredentialIds.Remove(updated.Id);
+        CancelSessionPlatformChange();
     }
 
     public void FailCredentialSave(string error) => CredentialError = error;
 
     public void EndCredentialSave(long providerId) => _savingCredentialIds.Remove(providerId);
+
+    public bool SelectSessionPlatform(ProviderStatus provider, string platformKey)
+    {
+        if (IsAnySessionPlatformSaving || IsProviderMutationInProgress(provider.Id)) return false;
+        if (provider.SessionPlatformOptions?.Any(option => option.Key == platformKey) != true)
+            return false;
+
+        SelectedSessionPlatformKey = platformKey;
+        SessionPlatformError = string.Empty;
+        PendingSessionPlatformProviderId = platformKey == provider.SessionPlatform?.Key
+            ? null
+            : provider.Id;
+        return true;
+    }
+
+    public string GetSelectedSessionPlatformKey(ProviderStatus provider) =>
+        PendingSessionPlatformProviderId == provider.Id
+            ? SelectedSessionPlatformKey
+            : provider.SessionPlatform?.Key ?? string.Empty;
+
+    public SettingsSubmission BuildSessionPlatformSubmission(bool rewriteExistingSessions)
+    {
+        if (PendingSessionPlatformProviderId is not { } providerId ||
+            string.IsNullOrEmpty(SelectedSessionPlatformKey))
+        {
+            throw new InvalidOperationException("No session platform change is pending.");
+        }
+
+        return new SettingsSubmission(
+            $"/providers/{providerId}/session-platform",
+            HttpMethod.Put,
+            new Dictionary<string, object?>
+            {
+                ["platform"] = SelectedSessionPlatformKey,
+                ["rewriteExistingSessions"] = rewriteExistingSessions,
+            });
+    }
+
+    public void CancelSessionPlatformChange()
+    {
+        var provider = PendingSessionPlatformProviderId is { } providerId
+            ? Providers.FirstOrDefault(item => item.Id == providerId)
+            : null;
+        SelectedSessionPlatformKey = provider?.SessionPlatform?.Key ?? string.Empty;
+        PendingSessionPlatformProviderId = null;
+        SessionPlatformError = string.Empty;
+    }
+
+    public void BeginSessionPlatformSave(long providerId)
+    {
+        if (IsProviderMutationInProgress(providerId))
+            throw new InvalidOperationException("Another provider change is already in progress.");
+        _savingSessionPlatformIds.Add(providerId);
+        SessionPlatformError = string.Empty;
+    }
+
+    public bool IsSessionPlatformSaving(long providerId) =>
+        _savingSessionPlatformIds.Contains(providerId);
+
+    public void CompleteSessionPlatformSave(ProviderStatus updated)
+    {
+        Providers = Providers
+            .Select(provider => provider.Id == updated.Id ? updated : provider)
+            .ToArray();
+        SelectedSessionPlatformKey = updated.SessionPlatform?.Key ?? string.Empty;
+        PendingSessionPlatformProviderId = null;
+        SessionPlatformError = string.Empty;
+    }
+
+    public void FailSessionPlatformSave(string error) => SessionPlatformError = error;
+
+    public void EndSessionPlatformSave(long providerId) =>
+        _savingSessionPlatformIds.Remove(providerId);
 
     public void OpenIntegrationCreator()
     {
@@ -625,6 +722,39 @@ public partial class Settings : ComponentBase, IDisposable
 
     private void ChangeEditingApiKey(ChangeEventArgs eventArgs) =>
         _state.SetEditingApiKey(eventArgs.Value?.ToString() ?? string.Empty);
+
+    private void ChangeSessionPlatform(ProviderStatus provider, ChangeEventArgs eventArgs) =>
+        _state.SelectSessionPlatform(provider, eventArgs.Value?.ToString() ?? string.Empty);
+
+    private void CancelSessionPlatformChange() => _state.CancelSessionPlatformChange();
+
+    private async Task SaveSessionPlatformAsync(
+        ProviderStatus provider,
+        bool rewriteExistingSessions)
+    {
+        var submission = _state.BuildSessionPlatformSubmission(rewriteExistingSessions);
+        _state.BeginSessionPlatformSave(provider.Id);
+        try
+        {
+            var response = await Api.SendAsync<ProviderSessionPlatformUpdateResponse>(
+                submission.Path,
+                submission.Method,
+                submission.Body,
+                cancellationToken: _lifetime.Token);
+            _state.CompleteSessionPlatformSave(response.Provider);
+        }
+        catch (OperationCanceledException) when (_lifetime.IsCancellationRequested)
+        {
+        }
+        catch (Exception exception)
+        {
+            _state.FailSessionPlatformSave(exception.Message);
+        }
+        finally
+        {
+            _state.EndSessionPlatformSave(provider.Id);
+        }
+    }
 
     private void OpenIntegrationCreator() => _state.OpenIntegrationCreator();
 

@@ -9,6 +9,198 @@ namespace Api.Tests;
 public sealed class ProvidersRepositoryTests(PostgresFixture postgres)
 {
     [Fact]
+    public void SessionPlatformOptionsContainMainAndRecursiveChildrenOnly()
+    {
+        var main = new Platform { Id = 10, Key = "psn", Name = "PSN" };
+        var child = new Platform { Id = 11, Key = "ps5", Name = "PS5", ParentId = main.Id };
+        var grandchild = new Platform { Id = 12, Key = "ps5-pro", Name = "PS5 Pro", ParentId = child.Id };
+        var unrelated = new Platform { Id = 20, Key = "pc", Name = "PC" };
+        var result = ProvidersRepository.BuildSessionPlatformOptions(
+            main.Id,
+            [unrelated, grandchild, main, child]);
+        var keys = result.Select(item => item.Key).ToArray();
+
+        Assert.Equal(["psn", "ps5", "ps5-pro"], keys);
+    }
+
+    [Fact]
+    public async Task SessionPlatformUpdateRewritesAllExistingSessionsOrNone()
+    {
+        if (!postgres.IsConfigured) return;
+
+        await using var db = CreateDb();
+        var now = DateTimeOffset.UtcNow;
+        var suffix = Guid.NewGuid().ToString("n");
+        var psn = await db.Platforms.SingleAsync(platform => platform.Key == "psn");
+        var ps4 = await db.Platforms.SingleAsync(platform => platform.Key == "ps4");
+        var ps5 = await db.Platforms.SingleAsync(platform => platform.Key == "ps5");
+        var user = new User
+        {
+            Email = $"provider-platform-{suffix}@example.test",
+            CreatedAt = now,
+            UpdatedAt = now,
+        };
+        var game = new Game { Title = $"Platform test {suffix}", CreatedAt = now, UpdatedAt = now };
+        db.AddRange(user, game);
+        await db.SaveChangesAsync();
+        var integration = new Integration
+        {
+            UserId = user.Id,
+            Type = IntegrationType.Psn,
+            PlatformId = psn.Id,
+            Active = true,
+            CreatedAt = now,
+            UpdatedAt = now,
+        };
+        var apiIntegration = new Integration
+        {
+            UserId = user.Id,
+            Type = IntegrationType.Api,
+            PlatformId = null,
+            Active = true,
+            CreatedAt = now,
+            UpdatedAt = now,
+        };
+        db.Integrations.AddRange(integration, apiIntegration);
+        await db.SaveChangesAsync();
+        var session = new PlaySession
+        {
+            UserId = user.Id,
+            GameId = game.Id,
+            PlatformId = psn.Id,
+            CaptureMethod = CaptureMethod.Polling,
+            IntegrationId = integration.Id,
+            StartedAt = now.AddHours(-1),
+            EndedAt = now,
+            CreatedAt = now,
+            UpdatedAt = now,
+        };
+        db.PlaySessions.Add(session);
+        await db.SaveChangesAsync();
+
+        try
+        {
+            var repository = new ProvidersRepository(db);
+            var futureOnly = await repository.UpdateSessionPlatform(
+                user.Id, integration.Id, "ps5", rewriteExistingSessions: false, default);
+
+            Assert.False(futureOnly.InvalidPlatform);
+            Assert.Equal("ps5", futureOnly.Provider!.SessionPlatform!.Key);
+            Assert.Equal(psn.Id, await db.PlaySessions.AsNoTracking()
+                .Where(item => item.Id == session.Id)
+                .Select(item => item.PlatformId)
+                .SingleAsync());
+
+            var rewriteAll = await repository.UpdateSessionPlatform(
+                user.Id, integration.Id, "ps4", rewriteExistingSessions: true, default);
+
+            Assert.False(rewriteAll.InvalidPlatform);
+            Assert.Equal(ps4.Id, await db.PlaySessions.AsNoTracking()
+                .Where(item => item.Id == session.Id)
+                .Select(item => item.PlatformId)
+                .SingleAsync());
+
+            var selectMain = await repository.UpdateSessionPlatform(
+                user.Id, integration.Id, "psn", rewriteExistingSessions: true, default);
+
+            Assert.Null((await db.Integrations.AsNoTracking()
+                .SingleAsync(item => item.Id == integration.Id)).SessionPlatformId);
+            Assert.Equal(psn.Id, await db.PlaySessions.AsNoTracking()
+                .Where(item => item.Id == session.Id)
+                .Select(item => item.PlatformId)
+                .SingleAsync());
+
+            var unrelated = await repository.UpdateSessionPlatform(
+                user.Id, integration.Id, "pc", rewriteExistingSessions: true, default);
+            Assert.True(unrelated.InvalidPlatform);
+            Assert.Null(unrelated.Provider);
+
+            var unsupported = await repository.UpdateSessionPlatform(
+                user.Id, apiIntegration.Id, "psn", rewriteExistingSessions: false, default);
+            Assert.True(unsupported.UnsupportedIntegration);
+            Assert.False(unsupported.InvalidPlatform);
+
+            var missing = await repository.UpdateSessionPlatform(
+                user.Id, long.MaxValue, "psn", rewriteExistingSessions: false, default);
+            Assert.False(missing.UnsupportedIntegration);
+            Assert.False(missing.InvalidPlatform);
+            Assert.Null(missing.Provider);
+        }
+        finally
+        {
+            db.PlaySessions.RemoveRange(db.PlaySessions.Where(item => item.IntegrationId == integration.Id));
+            db.Integrations.RemoveRange(integration, apiIntegration);
+            db.Games.Remove(game);
+            db.Users.Remove(user);
+            await db.SaveChangesAsync();
+        }
+    }
+
+    [Fact]
+    public async Task SessionPlatformUpdateWaitsForAnInFlightPollOnTheSameIntegration()
+    {
+        if (!postgres.IsConfigured) return;
+
+        await using var setupDb = CreateDb();
+        var now = DateTimeOffset.UtcNow;
+        var suffix = Guid.NewGuid().ToString("n");
+        var psn = await setupDb.Platforms.SingleAsync(platform => platform.Key == "psn");
+        var user = new User
+        {
+            Email = $"provider-lock-{suffix}@example.test",
+            CreatedAt = now,
+            UpdatedAt = now,
+        };
+        setupDb.Users.Add(user);
+        await setupDb.SaveChangesAsync();
+        var integration = new Integration
+        {
+            UserId = user.Id,
+            Type = IntegrationType.Psn,
+            PlatformId = psn.Id,
+            Active = true,
+            CreatedAt = now,
+            UpdatedAt = now,
+        };
+        setupDb.Integrations.Add(integration);
+        await setupDb.SaveChangesAsync();
+
+        try
+        {
+            await using var pollingDb = CreateDb();
+            await using var pollingTransaction = await pollingDb.Database.BeginTransactionAsync();
+            await pollingDb.Database.ExecuteSqlInterpolatedAsync(
+                $"SELECT pg_advisory_xact_lock({integration.Id})");
+
+            await using var updateDb = CreateDb();
+            var updateTask = new ProvidersRepository(updateDb).UpdateSessionPlatform(
+                user.Id,
+                integration.Id,
+                "ps5",
+                rewriteExistingSessions: true,
+                default);
+            try
+            {
+                var firstCompleted = await Task.WhenAny(updateTask, Task.Delay(250));
+                Assert.NotSame(updateTask, firstCompleted);
+            }
+            finally
+            {
+                await pollingTransaction.CommitAsync();
+            }
+
+            var result = await updateTask.WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.Equal("ps5", result.Provider!.SessionPlatform!.Key);
+        }
+        finally
+        {
+            setupDb.Integrations.Remove(integration);
+            setupDb.Users.Remove(user);
+            await setupDb.SaveChangesAsync();
+        }
+    }
+
+    [Fact]
     public async Task CreateProviderAllowsThreeOfATypeAndRejectsTheFourth()
     {
         if (!postgres.IsConfigured) return;

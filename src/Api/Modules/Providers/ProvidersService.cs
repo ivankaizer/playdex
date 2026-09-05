@@ -89,6 +89,35 @@ public sealed class ProvidersService(ProvidersRepository repository)
         return new ProviderCredentialUpdateResponseDto(ToResponse(provider));
     }
 
+    public async Task<ProviderSessionPlatformUpdateResponseDto> UpdateSessionPlatform(
+        long userId,
+        long providerId,
+        ProviderSessionPlatformUpdateRequest request,
+        CancellationToken ct)
+    {
+        var platform = NormalizeSessionPlatformKey(request.Platform);
+        var result = await repository.UpdateSessionPlatform(
+            userId,
+            providerId,
+            platform,
+            request.RewriteExistingSessions,
+            ct);
+        if (result.UnsupportedIntegration)
+        {
+            throw AppProblemException.Validation(
+                "This integration does not define a main platform.");
+        }
+        if (result.InvalidPlatform)
+        {
+            throw AppProblemException.Validation(
+                "Platform must be the integration's main platform or one of its children.");
+        }
+        if (result.Provider is null)
+            throw AppProblemException.NotFound("Provider not found.");
+
+        return new ProviderSessionPlatformUpdateResponseDto(ToResponse(result.Provider));
+    }
+
     public async Task<OpenXblConnectResponseDto> ConnectOpenXbl(
         long userId,
         OpenXblConnectRequest request,
@@ -119,6 +148,14 @@ public sealed class ProvidersService(ProvidersRepository repository)
     {
         var bytes = RandomNumberGenerator.GetBytes(16);
         return "plx_" + Convert.ToHexString(bytes).ToLowerInvariant();
+    }
+
+    internal static string NormalizeSessionPlatformKey(string? value)
+    {
+        var platform = value?.Trim().ToLowerInvariant();
+        if (string.IsNullOrEmpty(platform))
+            throw AppProblemException.Validation("Platform is required.");
+        return platform;
     }
 
     internal static ValidatedProviderCreation ValidateCreation(CreateProviderRequest request)

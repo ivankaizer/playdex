@@ -59,6 +59,7 @@ public sealed class Integration : IHasTimestamps
     public long UserId { get; set; }
     public IntegrationType Type { get; set; }
     public long? PlatformId { get; set; }
+    public long? SessionPlatformId { get; set; }
     public string? ApiKey { get; set; }
     public string? AccountId { get; set; }
     public bool ApiKeyLocked { get; set; }

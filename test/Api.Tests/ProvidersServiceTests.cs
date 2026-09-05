@@ -8,6 +8,14 @@ namespace Api.Tests;
 public sealed class ProvidersServiceTests
 {
     [Theory]
+    [InlineData(" PS5 ", "ps5")]
+    [InlineData("psn", "psn")]
+    public void SessionPlatformKeysAreNormalized(string value, string expected)
+    {
+        Assert.Equal(expected, ProvidersService.NormalizeSessionPlatformKey(value));
+    }
+
+    [Theory]
     [InlineData(" steam ", " steam-key ", " 76561198000000000 ", "steam", IntegrationType.Steam, "steam-key", "76561198000000000")]
     [InlineData("psn", " npsso-token ", null, "psn", IntegrationType.Psn, "npsso-token", null)]
     [InlineData("xbox", " openxbl-key ", " 2533274817903789 ", "xbox", IntegrationType.Xbox, "openxbl-key", "2533274817903789")]

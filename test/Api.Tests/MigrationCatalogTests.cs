@@ -22,6 +22,7 @@ public sealed class MigrationCatalogTests
             "009_drop_legacy_model",
             "010_correct_legacy_api_session_platforms",
             "011_pc_platform_hierarchy",
+            "012_integration_session_platform",
         };
 
         var pending = catalog.GetPendingMigrations(applied);
@@ -54,6 +55,7 @@ public sealed class MigrationCatalogTests
                 "009_drop_legacy_model",
                 "010_correct_legacy_api_session_platforms",
                 "011_pc_platform_hierarchy",
+                "012_integration_session_platform",
             ],
             pending.Select(migration => migration.Id));
     }
@@ -88,5 +90,6 @@ public sealed class MigrationCatalogTests
         new DropLegacyModelMigration(),
         new CorrectLegacyApiSessionPlatformsMigration(),
         new PcPlatformHierarchyMigration(),
+        new IntegrationSessionPlatformMigration(),
     ]);
 }
