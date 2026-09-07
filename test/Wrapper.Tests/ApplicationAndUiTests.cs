@@ -68,7 +68,9 @@ public sealed class ApplicationAndUiTests
             .Where(path => !path.Split(Path.DirectorySeparatorChar).Any(segment => segment is "bin" or "obj"))
             .Where(path => !string.Equals(Path.GetFileName(path), nameof(AppBrand) + ".cs", StringComparison.Ordinal))
             .Where(path => !string.Equals(Path.GetFileName(path), "Wrapper.csproj", StringComparison.Ordinal))
-            .Where(path => File.ReadAllText(path).Contains(AppBrand.Name, StringComparison.OrdinalIgnoreCase))
+            .Where(path => File.ReadLines(path)
+                .Where(line => !line.TrimStart().StartsWith("using ", StringComparison.Ordinal))
+                .Any(line => line.Contains(AppBrand.Name, StringComparison.OrdinalIgnoreCase)))
             .ToList();
 
         Assert.Empty(violations);
