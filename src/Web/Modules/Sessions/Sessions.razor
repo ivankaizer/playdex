@@ -19,7 +19,34 @@
                         Every session tracked
                     </h2>
                 </div>
+                <button type="button"
+                        @onclick="OpenSessionCreator"
+                        class="rounded-full bg-emerald-400 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-950 transition hover:bg-emerald-300">
+                    Add session
+                </button>
             </div>
+
+            @if (_state.ActiveManualSession is not null)
+            {
+                <div class="mt-5 flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-emerald-300/60 bg-emerald-50 px-4 py-3 dark:border-emerald-400/30 dark:bg-emerald-400/10">
+                    <div class="min-w-0">
+                        <p class="text-[10px] font-semibold uppercase tracking-[0.3em] text-emerald-700 dark:text-emerald-300">Live manual session</p>
+                        <p class="mt-1 truncate text-sm font-semibold text-slate-900 dark:text-white">
+                            @_state.ActiveManualSession.Title · @_state.ActiveManualSession.PlatformName
+                        </p>
+                    </div>
+                    <button type="button"
+                            disabled="@_isStoppingManualSession"
+                            @onclick="StopManualSessionAsync"
+                            class="rounded-full border border-rose-500/60 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-rose-700 transition hover:border-rose-400 disabled:opacity-60 dark:text-rose-200">
+                        @(_isStoppingManualSession ? "Stopping..." : "Stop session")
+                    </button>
+                </div>
+            }
+            @if (_manualActionError.Length > 0)
+            {
+                <p role="alert" class="mt-4 text-sm text-rose-700 dark:text-rose-300">@_manualActionError</p>
+            }
 
             <div class="mt-6 flex flex-wrap gap-2">
                 @foreach (var preset in Presets)
@@ -374,6 +401,15 @@
                               OnEndedAtChanged="_editState.SetEndedAt"
                               OnSave="SaveSessionEditAsync"
                               OnCancel="CancelSessionEdit" />
+        }
+        else if (_createState.IsOpen)
+        {
+            <SessionCreateModal State="_createState"
+                                Platforms="_state.Platforms"
+                                OnQueryChanged="ManualQueryChanged"
+                                OnSearch="SearchManualGamesAsync"
+                                OnSave="SaveCreatedSessionAsync"
+                                OnClose="CloseSessionCreator" />
         }
     </Overlay>
 </AppLayout>

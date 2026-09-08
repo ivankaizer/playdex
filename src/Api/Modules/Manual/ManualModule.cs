@@ -1,5 +1,3 @@
-using Api.Infrastructure.Common;
-
 namespace Api.Modules.Manual;
 
 public static class ManualModule
@@ -8,8 +6,6 @@ public static class ManualModule
     {
         services.AddScoped<ManualRepository>();
         services.AddScoped<ManualService>();
-        services.AddScoped<IEventSubscriber<StartSessionRequested>, ManualSessionHandler>();
-        services.AddScoped<IEventSubscriber<StopSessionRequested>, ManualStopHandler>();
         return services;
     }
 

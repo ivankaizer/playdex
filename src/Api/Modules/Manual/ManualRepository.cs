@@ -13,6 +13,14 @@ public sealed class ManualRepository(PlaydexDbContext db)
         return result;
     }
 
+    internal Task AcquireUserStartLock(long userId, CancellationToken ct)
+    {
+        var key = $"manual-session-user:{userId}";
+        return db.Database.ExecuteSqlInterpolatedAsync(
+            $"SELECT pg_advisory_xact_lock(hashtextextended({key}, 0))",
+            ct);
+    }
+
     public Task<int> EndActiveSessions(long userId, CancellationToken ct) =>
         db.Database.ExecuteSqlInterpolatedAsync($"update play_sessions set ended_at=now(),updated_at=now() where user_id={userId} and capture_method='manual' and ended_at is null", ct);
 
@@ -30,18 +38,30 @@ public sealed class ManualRepository(PlaydexDbContext db)
             .OrderByDescending(g => g.UpdatedAt).Take(limit)
             .Select(g => new GameSearchRow { Id = g.Id, Title = g.Title, Platform = "unknown", CapsuleUrl = g.CapsuleUrl }).ToListAsync(ct);
 
-    public async Task<long> CreateGame(string title, string? capsuleUrl, CancellationToken ct)
-    {
-        var now = DateTimeOffset.UtcNow;
-        var game = new Game { Title = title, CapsuleUrl = capsuleUrl, CreatedAt = now, UpdatedAt = now };
-        db.Games.Add(game); await db.SaveChangesAsync(ct); return game.Id;
-    }
-
     public Task<long?> GetPlatformIdByKey(string key, CancellationToken ct) =>
         db.Platforms.Where(p => p.Key == key).Select(p => (long?)p.Id).FirstOrDefaultAsync(ct);
-    public Task<string?> GetPlatformKeyByIgdbId(int id, CancellationToken ct) =>
-        db.Platforms.Where(p => p.IgdbPlatformId == id).Select(p => p.Key).FirstOrDefaultAsync(ct);
     public Task<Game?> GetGameEntity(long id, CancellationToken ct) => db.Games.AsNoTracking().FirstOrDefaultAsync(g => g.Id == id, ct);
+
+    public Task<List<Platform>> ListPlatforms(CancellationToken ct) =>
+        db.Platforms.AsNoTracking().ToListAsync(ct);
+
+    internal Task<ManualActiveSessionRow?> LoadActiveSession(long userId, CancellationToken ct) =>
+        (from session in db.PlaySessions.AsNoTracking()
+         join game in db.Games.AsNoTracking() on session.GameId equals game.Id
+         join platform in db.Platforms.AsNoTracking() on session.PlatformId equals platform.Id
+         where session.UserId == userId &&
+               session.CaptureMethod == CaptureMethod.Manual &&
+               session.EndedAt == null
+         orderby session.StartedAt descending
+         select new ManualActiveSessionRow(
+             session.Id,
+             game.Id,
+             game.Title,
+             platform.Key,
+             platform.Name,
+             session.StartedAt,
+             game.CapsuleUrl))
+        .FirstOrDefaultAsync(ct);
 }
 
 public sealed class GameSearchRow { public long Id { get; set; } public string Title { get; set; } = ""; public string Platform { get; set; } = ""; public string? CapsuleUrl { get; set; } }
