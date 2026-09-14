@@ -13,6 +13,34 @@ namespace Web.Tests.Api;
 public sealed class PlaydexApiClientTests
 {
     [Fact]
+    public async Task NoContentDeleteCompletesWithoutParsingJson()
+    {
+        using var handler = new RecordingHandler((_, _) => new HttpResponseMessage(HttpStatusCode.NoContent));
+        var client = CreateClient(handler);
+        Assert.Null(await client.SendAsync<object?>("/manual/draft-batches/b/rows/r?revision=1", HttpMethod.Delete));
+    }
+
+    [Fact]
+    public async Task MultipartFactoryIsRecreatedAfterAuthenticationRefresh()
+    {
+        using var handler = new RecordingHandler(
+            (_, _) => Json(HttpStatusCode.Unauthorized, "{}"),
+            (_, _) => Json(HttpStatusCode.OK, "{\"accessToken\":\"new\",\"refreshToken\":\"refresh\"}"),
+            (_, _) => Json(HttpStatusCode.OK, "{\"sessionId\":42}"));
+        var storage = new MemoryBrowserStorage(("playdex.refresh", "refresh"));
+        var client = CreateClient(handler, storage);
+        Func<HttpContent> factory = () => {
+            var content = new MultipartFormDataContent("test-boundary");
+            content.Add(new StringContent("yesterday Hades 60 minutes"), "text");
+            return content;
+        };
+        var response = await client.SendAsync<ManualEntryCreateResponse>("/manual/draft-batches", HttpMethod.Post, factory);
+        Assert.Equal(42, response.SessionId);
+        Assert.Equal(handler.Requests[0].Body, handler.Requests[2].Body);
+        Assert.Contains("yesterday Hades 60 minutes", handler.Requests[2].Body);
+    }
+
+    [Fact]
     public void RefreshResponseTokensMatchTheNonNullableBackendContract()
     {
         var nullability = new NullabilityInfoContext();

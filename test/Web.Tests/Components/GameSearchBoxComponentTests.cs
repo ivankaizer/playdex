@@ -26,12 +26,25 @@ public sealed class GameSearchBoxComponentTests : BunitContext
     {
         var cut = Render<AppHeader>(parameters => parameters
             .Add(component => component.Title, "Dashboard")
-            .Add(component => component.NavItems, [])
+            .Add(component => component.NavItems, [("Sessions", "/sessions")])
             .Add(component => component.Path, "/dashboard")
             .Add(component => component.Theme, "light")
             .Add(component => component.SearchAsync, (_, _) =>
                 Task.FromResult(new GameSearchResponse("", []))));
 
         Assert.Equal("Search games", cut.Find("input").GetAttribute("placeholder"));
+        var navigation = cut.Find("[data-header-nav]");
+        Assert.Contains("lg:ml-auto", navigation.ClassList);
+        Assert.NotNull(cut.Find("[data-header-search]"));
+        var utilities = cut.Find("[data-header-utilities]");
+        Assert.Contains("lg:ml-0", utilities.ClassList);
+        Assert.True(
+            cut.Markup.IndexOf("data-header-nav", StringComparison.Ordinal) <
+            cut.Markup.IndexOf("data-header-search", StringComparison.Ordinal));
+
+        var logout = cut.Find("button[aria-label='Log out']");
+        Assert.Equal("Log out", logout.GetAttribute("title"));
+        Assert.Equal(string.Empty, logout.TextContent.Trim());
+        Assert.NotNull(logout.QuerySelector("svg"));
     }
 }

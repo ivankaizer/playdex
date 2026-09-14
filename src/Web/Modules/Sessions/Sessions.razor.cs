@@ -413,16 +413,12 @@ public partial class Sessions : ComponentBase, IDisposable
     private readonly CancellationTokenSource _lifetime = new();
     private readonly SessionsState _state = new(DateTimeOffset.Now);
     private readonly SessionEditState _editState = new();
-    private readonly SessionCreateState _createState = new();
     private readonly SessionsRequestVersions _requestVersions = new();
     private CancellationTokenSource? _titleDebounce;
     private CancellationTokenSource? _listRequest;
     private CancellationTokenSource? _statsRequest;
-    private CancellationTokenSource? _manualSearchRequest;
-    private CancellationTokenSource? _manualSaveRequest;
     private CancellationTokenSource? _activeManualSessionRequest;
     private long _listRequestVersion;
-    private long _manualSearchVersion;
     private string _theme = "light";
     private bool _isStoppingManualSession;
     private string _manualActionError = string.Empty;
@@ -724,92 +720,7 @@ public partial class Sessions : ComponentBase, IDisposable
     private void OpenSessionCreator()
     {
         _manualActionError = string.Empty;
-        _createState.Open(SessionCreateMode.Live, DateTimeOffset.Now);
-    }
-
-    private void CloseSessionCreator()
-    {
-        InvalidateManualSearch();
-        _manualSaveRequest?.Cancel();
-        _createState.Close();
-    }
-
-    private void ManualQueryChanged(string _)
-    {
-        InvalidateManualSearch();
-        _createState.CancelSearch();
-    }
-
-    private async Task SearchManualGamesAsync()
-    {
-        if (!_createState.TryBeginSearch(out var path)) return;
-        InvalidateManualSearch();
-        var version = _manualSearchVersion;
-        var request = CancellationTokenSource.CreateLinkedTokenSource(_lifetime.Token);
-        _manualSearchRequest = request;
-        try
-        {
-            var response = await Api.SendAsync<ManualMappingSearchResponse>(
-                path!,
-                cancellationToken: request.Token);
-            if (version == _manualSearchVersion && !request.IsCancellationRequested)
-            {
-                _createState.CompleteSearch(response);
-            }
-        }
-        catch (OperationCanceledException) when (request.IsCancellationRequested)
-        {
-        }
-        catch (Exception exception)
-        {
-            if (version == _manualSearchVersion) _createState.FailSearch(exception.Message);
-        }
-        finally
-        {
-            if (ReferenceEquals(_manualSearchRequest, request)) _manualSearchRequest = null;
-            request.Dispose();
-        }
-    }
-
-    private async Task SaveCreatedSessionAsync()
-    {
-        if (_createState.IsSaving) return;
-        if (!_createState.TryBuildSubmission(out var submission)) return;
-        if (!_createState.TryBeginSave()) return;
-        _manualSaveRequest?.Cancel();
-        var request = CancellationTokenSource.CreateLinkedTokenSource(_lifetime.Token);
-        _manualSaveRequest = request;
-        try
-        {
-            switch (submission!.Body)
-            {
-                case ManualSessionStartRequest start:
-                    await Api.SendAsync<ManualSessionStartResponse>(
-                        submission.Path, submission.Method, start, cancellationToken: request.Token);
-                    break;
-                case ManualEntryCreateRequest entry:
-                    await Api.SendAsync<ManualEntryCreateResponse>(
-                        submission.Path, submission.Method, entry, cancellationToken: request.Token);
-                    break;
-                default:
-                    throw new InvalidOperationException("Unsupported session creation request.");
-            }
-
-            _createState.CompleteSave();
-            await RefreshAllAsync();
-        }
-        catch (OperationCanceledException) when (request.IsCancellationRequested)
-        {
-        }
-        catch (Exception exception)
-        {
-            _createState.FailSave(exception.Message);
-        }
-        finally
-        {
-            if (ReferenceEquals(_manualSaveRequest, request)) _manualSaveRequest = null;
-            request.Dispose();
-        }
+        Navigation.NavigateTo("/sessions/create");
     }
 
     private async Task StopManualSessionAsync()
@@ -838,10 +749,23 @@ public partial class Sessions : ComponentBase, IDisposable
         }
     }
 
-    private void InvalidateManualSearch()
+    private Task<ManualMappingSearchResponse> SearchLiveGamesAsync(string path, CancellationToken cancellationToken) =>
+        Api.SendAsync<ManualMappingSearchResponse>(path, cancellationToken: cancellationToken);
+
+    private async Task StartManualSessionAsync(ManualSessionStartRequest request)
     {
-        ++_manualSearchVersion;
-        _manualSearchRequest?.Cancel();
+        if (_isStoppingManualSession) return;
+        _isStoppingManualSession = true;
+        _manualActionError = string.Empty;
+        try
+        {
+            await Api.SendAsync<ManualSessionStartResponse>(
+                "/manual/sessions/start", HttpMethod.Post, request, cancellationToken: _lifetime.Token);
+            await RefreshAllAsync();
+        }
+        catch (OperationCanceledException) when (_lifetime.IsCancellationRequested) { }
+        catch (Exception exception) { _manualActionError = exception.Message; }
+        finally { _isStoppingManualSession = false; }
     }
 
     private async Task SaveSessionEditAsync()
@@ -903,14 +827,10 @@ public partial class Sessions : ComponentBase, IDisposable
         _titleDebounce?.Cancel();
         _listRequest?.Cancel();
         _statsRequest?.Cancel();
-        _manualSearchRequest?.Cancel();
-        _manualSaveRequest?.Cancel();
         _activeManualSessionRequest?.Cancel();
         _titleDebounce?.Dispose();
         _listRequest?.Dispose();
         _statsRequest?.Dispose();
-        _manualSearchRequest?.Dispose();
-        _manualSaveRequest?.Dispose();
         _activeManualSessionRequest?.Dispose();
         _lifetime.Dispose();
         GC.SuppressFinalize(this);

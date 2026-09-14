@@ -438,7 +438,7 @@ public sealed class SessionsStateTests
     }
 
     [Fact]
-    public void SessionsPageWiresReactRequestsResponsiveRowsModalAndCancellationWithoutMappedBadges()
+    public void SessionsPageWiresSessionNavigationLiveStopResponsiveRowsAndCancellationWithoutMappedBadges()
     {
         var root = FindWebRoot();
         var markupPath = Path.Combine(root, "Modules", "Sessions", "Sessions.razor");
@@ -452,9 +452,11 @@ public sealed class SessionsStateTests
         Assert.Contains("<AppLayout Title=\"Sessions\"", markup);
         Assert.Contains("<Overlay>", markup);
         Assert.Contains("<SessionEditModal", markup);
-        Assert.Contains("<SessionCreateModal", markup);
-        Assert.Contains("Add session", markup);
-        Assert.Contains("Stop session", markup);
+        Assert.Contains("Past sessions &amp; AI", markup);
+        Assert.Contains("data-session-action=\"extended\"", markup);
+        Assert.DoesNotContain("@onclick=\"OpenLiveCreator\"", markup);
+        Assert.DoesNotContain("Review AI batches", markup);
+        Assert.Contains("<LiveSessionControl", markup);
         Assert.Contains("mt-6 space-y-3 md:hidden", markup);
         Assert.Contains("mt-6 hidden overflow-hidden", markup);
         Assert.True(markup.Split("@foreach (var session in rowViews)").Length - 1 >= 2);
@@ -479,18 +481,34 @@ public sealed class SessionsStateTests
         Assert.DoesNotContain("onAuthFailure: LogoutAsync", code);
         Assert.Contains("Browser.ConfirmAsync(request.Confirmation)", code);
         Assert.Contains("SendAsync<object?>(request.Path, request.Method", code);
-        Assert.Contains("SendAsync<ManualMappingSearchResponse>", code);
-        Assert.Contains("SendAsync<ManualEntryCreateResponse>", code);
-        Assert.Contains("SendAsync<ManualSessionStartResponse>", code);
         Assert.Contains("SendAsync<ManualSessionStopResponse>", code);
+        Assert.Contains("SendAsync<ManualSessionStartResponse>", code);
         Assert.Contains("RefreshAllAsync()", code);
         Assert.Contains("TogglePlatformAsync", code);
         Assert.Contains("&platform=", code);
         Assert.Contains("_titleDebounce?.Cancel()", code);
         Assert.Contains("_listRequest?.Cancel()", code);
         Assert.Contains("_statsRequest?.Cancel()", code);
+        Assert.DoesNotContain("OpenLiveCreator", code);
+        Assert.DoesNotContain("OpenDrafts", code);
 
         var recap = File.ReadAllText(Path.Combine(root, "Infrastructure", "Components", "StatsRecapSection.razor"));
+        var liveSessionControl = File.ReadAllText(Path.Combine(root, "Infrastructure", "Components", "LiveSessionControl.razor"));
+        var creator = File.ReadAllText(Path.Combine(root, "Modules", "Sessions", "SessionCreatePage.razor"));
+        var creatorCode = File.ReadAllText(Path.Combine(root, "Modules", "Sessions", "SessionCreatePage.razor.cs"));
+        Assert.Contains("@page \"/sessions/create\"", creator);
+        Assert.Contains("<AppLayout Title=\"Session Creator\"", creator);
+        Assert.DoesNotContain("Extended session creator", creator);
+        Assert.Contains("<Breadcrumbs ParentLabel=\"Sessions\"", creator);
+        Assert.Contains("CurrentLabel=\"Session Creator\"", creator);
+        Assert.DoesNotContain("Back to sessions", creator);
+        Assert.Contains("role=\"tablist\"", creator);
+        Assert.Contains("data-workspace-tab=\"manual\"", creator);
+        Assert.Contains("data-workspace-tab=\"ai\"", creator);
+        Assert.Contains("<DraftWorkspace Embedded=\"true\"", creator);
+        Assert.Contains("<SessionCreateModal Embedded=\"true\"", creator);
+        Assert.Contains("mode=live", creatorCode);
+        Assert.Contains("Start live session", liveSessionControl);
         var pie = File.ReadAllText(Path.Combine(root, "Infrastructure", "Components", "StatsPieChart.razor"));
         var monthlyChart = File.ReadAllText(Path.Combine(root, "Infrastructure", "Components", "StatsMonthlyHoursChart.razor"));
         Assert.Contains("aria-pressed", recap);

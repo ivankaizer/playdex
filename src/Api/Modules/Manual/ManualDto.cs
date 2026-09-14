@@ -31,7 +31,8 @@ public sealed record ManualMappingSearchResultDto(
     string Title,
     string? Platform,
     int? PlatformId,
-    string? CapsuleUrl);
+    string? CapsuleUrl,
+    bool PreviouslyPlayed = false);
 
 public sealed record ManualMappingSearchResponseDto(
     string Query,

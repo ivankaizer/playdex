@@ -16,6 +16,7 @@ public sealed class ProjectContractTests
 
         Assert.Contains("<base href=\"/\">", index);
         Assert.Contains("css/app.css", index);
+        Assert.Contains("Web.styles.css", index);
         Assert.Contains("<body class=\"bg-slate-950 text-slate-100\">", index);
         Assert.True(headStart >= 0 && themeBootstrap > headStart && themeBootstrap < headEnd);
         Assert.Contains("prefers-color-scheme", index);

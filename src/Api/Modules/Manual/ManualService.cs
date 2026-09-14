@@ -218,7 +218,7 @@ public sealed class ManualService(
         return normalized;
     }
 
-    private async Task<ResolvedManualGameSelection> ResolveAuthoritativeSelection(
+    internal async Task<ResolvedManualGameSelection> ResolveAuthoritativeSelection(
         ValidatedManualGameSelection selection,
         CancellationToken ct)
     {
@@ -238,7 +238,7 @@ public sealed class ManualService(
                 authoritative.CoverUrl));
     }
 
-    private async Task<long> ResolveGame(
+    internal async Task<long> ResolveGame(
         ResolvedManualGameSelection selection,
         CancellationToken ct) =>
         selection.GameId ?? (await gameResolver.Resolve(selection.IgdbResolution!, ct)).GameId;

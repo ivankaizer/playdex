@@ -35,6 +35,7 @@ public static class NavigationGuard
     {
         "/dashboard",
         "/sessions",
+        "/sessions/create",
         "/recap",
         "/mapping",
         "/settings",

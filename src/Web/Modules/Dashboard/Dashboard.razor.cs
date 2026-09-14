@@ -17,10 +17,11 @@ internal sealed record DashboardRequests(
     string TodayStats,
     string MonthlyStats,
     string YearlyStats,
-    string CurrentSession)
+    string CurrentSession,
+    string ActiveManualSession)
 {
     public IReadOnlyList<string> All =>
-        [TodaySessions, TodayStats, MonthlyStats, YearlyStats, CurrentSession];
+        [TodaySessions, TodayStats, MonthlyStats, YearlyStats, CurrentSession, ActiveManualSession];
 
     public static DashboardRequests For(DateTimeOffset now)
     {
@@ -34,7 +35,8 @@ internal sealed record DashboardRequests(
             $"/stats?from={today}&to={today}",
             $"/stats?from={monthStart}&to={today}",
             $"/stats?from={yearStart}&to={today}",
-            "/sessions/current");
+            "/sessions/current",
+            "/manual/sessions/current");
     }
 }
 
@@ -42,6 +44,7 @@ internal sealed record DashboardSnapshot(
     IReadOnlyList<AccountSession> TodaySessions,
     IReadOnlyList<AccountPlatformStat> TodayPlatformTotals,
     AccountSession? CurrentSession,
+    ManualActiveSession? ActiveManualSession,
     AccountStatsPeriod MonthlyStats,
     AccountStatsPeriod YearlyStats);
 
@@ -68,7 +71,8 @@ internal sealed record DashboardCurrentSessionView(
     string Title,
     string Platform,
     string StartedAt,
-    string Elapsed);
+    string Elapsed,
+    bool CanStop);
 
 internal static class DashboardRequestFlow
 {
@@ -115,6 +119,7 @@ internal sealed class DashboardState
     public IReadOnlyList<DashboardSessionCard> TodaySessionCards { get; private set; } = [];
     public IReadOnlyList<AccountPlatformStat> TodayPlatformTotals { get; private set; } = [];
     public AccountSession? CurrentSession { get; private set; }
+    public ManualActiveSession? ActiveManualSession { get; private set; }
     public AccountStatsPeriod? MonthlyStats { get; private set; }
     public AccountStatsPeriod? YearlyStats { get; private set; }
     public bool IsDashboardLoading { get; private set; }
@@ -139,6 +144,7 @@ internal sealed class DashboardState
         TodaySessionCards = CreateTodaySessionCards(snapshot.TodaySessions, now);
         TodayPlatformTotals = snapshot.TodayPlatformTotals;
         CurrentSession = snapshot.CurrentSession;
+        ActiveManualSession = snapshot.ActiveManualSession;
         MonthlyStats = snapshot.MonthlyStats;
         YearlyStats = snapshot.YearlyStats;
         IsDashboardLoading = false;
@@ -151,6 +157,7 @@ internal sealed class DashboardState
         TodaySessionCards = [];
         TodayPlatformTotals = [];
         CurrentSession = null;
+        ActiveManualSession = null;
         MonthlyStats = null;
         YearlyStats = null;
         IsDashboardLoading = false;
@@ -188,6 +195,20 @@ internal sealed class DashboardState
 
     public DashboardCurrentSessionView? GetCurrentSession(DateTimeOffset now)
     {
+        if (ActiveManualSession is not null)
+        {
+            return new DashboardCurrentSessionView(
+                ActiveManualSession.GameId,
+                $"/games/{GameHash.EncodeGameId(ActiveManualSession.GameId)}",
+                ActiveManualSession.Title,
+                ActiveManualSession.PlatformName,
+                Formatters.FormatTimeLabel(ActiveManualSession.StartedAt),
+                Formatters.FormatDuration(
+                    SessionDates.GetDurationSeconds(ActiveManualSession.StartedAt, null, now),
+                    DurationFormat.Full),
+                true);
+        }
+
         if (CurrentSession is null) return null;
 
         return new DashboardCurrentSessionView(
@@ -198,7 +219,8 @@ internal sealed class DashboardState
             Formatters.FormatTimeLabel(CurrentSession.StartedAt),
             Formatters.FormatDuration(
                 SessionDates.GetDurationSeconds(CurrentSession.StartedAt, CurrentSession.EndedAt, now),
-                DurationFormat.Full));
+                DurationFormat.Full),
+            false);
     }
 
     public static DashboardStatsView GetStatsView(AccountStatsPeriod? stats)
@@ -243,6 +265,8 @@ public partial class Dashboard : ComponentBase, IDisposable
     private readonly CancellationTokenSource _lifetime = new();
     private readonly DashboardState _state = new();
     private string _theme = "light";
+    private bool _isStoppingManualSession;
+    private string _manualActionError = string.Empty;
 
     [Inject]
     private PlaydexApiClient Api { get; set; } = null!;
@@ -319,9 +343,12 @@ public partial class Dashboard : ComponentBase, IDisposable
             var currentSessionTask = Api.SendAsync<AccountCurrentSessionResponse>(requests.CurrentSession,
                 onAuthFailure: LogoutAsync,
                 cancellationToken: refreshToken);
+            var activeManualSessionTask = Api.SendAsync<ManualActiveSessionResponse>(requests.ActiveManualSession,
+                onAuthFailure: LogoutAsync,
+                cancellationToken: refreshToken);
 
             await DashboardRequestFlow.WaitAsync(
-                [todaySessionsTask, todayStatsTask, monthlyStatsTask, yearlyStatsTask, currentSessionTask],
+                [todaySessionsTask, todayStatsTask, monthlyStatsTask, yearlyStatsTask, currentSessionTask, activeManualSessionTask],
                 siblingCancellation);
             _lifetime.Token.ThrowIfCancellationRequested();
 
@@ -330,6 +357,7 @@ public partial class Dashboard : ComponentBase, IDisposable
                     (await todaySessionsTask).Sessions,
                     (await todayStatsTask).Stats.Platforms,
                     (await currentSessionTask).Session,
+                    (await activeManualSessionTask).Session,
                     (await monthlyStatsTask).Stats,
                     (await yearlyStatsTask).Stats),
                 DateTimeOffset.Now);
@@ -360,6 +388,32 @@ public partial class Dashboard : ComponentBase, IDisposable
     private Task NavigateToYearlyRecapAsync() => NavigateAsync(RecapPath(DateRangeKind.Year));
     private Task NavigateToSessionsAsync() => NavigateAsync("/sessions");
     private Task NavigateToGameAsync(string gameId) => NavigateAsync($"/games/{GameHash.EncodeGameId(gameId)}");
+
+    private async Task StopManualSessionAsync()
+    {
+        if (_isStoppingManualSession) return;
+        _isStoppingManualSession = true;
+        _manualActionError = string.Empty;
+        try
+        {
+            await Api.SendAsync<ManualSessionStopResponse>(
+                "/manual/sessions/stop",
+                HttpMethod.Post,
+                cancellationToken: _lifetime.Token);
+            await RefreshDashboardAsync(silent: true);
+        }
+        catch (OperationCanceledException) when (_lifetime.IsCancellationRequested)
+        {
+        }
+        catch (Exception exception)
+        {
+            _manualActionError = exception.Message;
+        }
+        finally
+        {
+            _isStoppingManualSession = false;
+        }
+    }
 
     private static string RecapPath(DateRangeKind range)
     {

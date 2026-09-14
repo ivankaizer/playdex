@@ -45,13 +45,15 @@ public sealed class DeploymentContractTests
     public void DevelopmentImageRunsTailwindAndDotnet()
     {
         var dockerfile = ReadWebFile("Dockerfile.dev");
+        var package = ReadWebFile("package.json");
 
         Assert.Contains("mcr.microsoft.com/dotnet/sdk:10.0", dockerfile);
         Assert.Contains("COPY --from=bun", dockerfile);
         Assert.Contains("bun run css:watch", dockerfile);
-        Assert.Contains("dotnet run", dockerfile);
+        Assert.Contains("dotnet watch run", dockerfile);
         Assert.Contains("http://0.0.0.0:5173", dockerfile);
         Assert.DoesNotContain("vite", dockerfile, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("--watch=always", package);
     }
 
     [Fact]

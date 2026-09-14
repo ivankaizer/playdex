@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Playdex.Persistence;
+using System.Text.RegularExpressions;
 
 namespace Api.Modules.Manual;
 
@@ -37,6 +38,49 @@ public sealed class ManualRepository(PlaydexDbContext db)
         await db.Games.AsNoTracking().Where(g => EF.Functions.ILike(g.Title, $"%{query}%"))
             .OrderByDescending(g => g.UpdatedAt).Take(limit)
             .Select(g => new GameSearchRow { Id = g.Id, Title = g.Title, Platform = "unknown", CapsuleUrl = g.CapsuleUrl }).ToListAsync(ct);
+
+    public async Task<List<GameSearchRow>> SearchRecentlyPlayedGames(
+        long userId,
+        string query,
+        int limit,
+        CancellationToken ct)
+    {
+        IQueryable<Game> games = db.Games.AsNoTracking();
+        foreach (var term in SignificantTitleTerms(query))
+        {
+            var pattern = $"%{term}%";
+            games = games.Where(game => EF.Functions.ILike(game.Title, pattern));
+        }
+
+        return await games
+            .Where(game => db.PlaySessions.Any(session =>
+                session.UserId == userId && session.GameId == game.Id))
+            .OrderByDescending(game => db.PlaySessions
+                .Where(session => session.UserId == userId && session.GameId == game.Id)
+                .Max(session => (DateTimeOffset?)session.StartedAt))
+            .Take(limit)
+            .Select(game => new GameSearchRow
+            {
+                Id = game.Id,
+                Title = game.Title,
+                Platform = (from session in db.PlaySessions
+                            join platform in db.Platforms on session.PlatformId equals platform.Id
+                            where session.UserId == userId && session.GameId == game.Id
+                            orderby session.StartedAt descending, session.Id descending
+                            select platform.Key).First(),
+                CapsuleUrl = game.CapsuleUrl,
+            })
+            .ToListAsync(ct);
+    }
+
+    private static string[] SignificantTitleTerms(string query)
+    {
+        var terms = Regex.Split(query.Trim().ToLowerInvariant(), "[^\\p{L}\\p{Nd}]+")
+            .Where(term => term.Length >= 3 && term is not ("the" or "and"))
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        return terms.Length > 0 ? terms : [query.Trim()];
+    }
 
     public Task<long?> GetPlatformIdByKey(string key, CancellationToken ct) =>
         db.Platforms.Where(p => p.Key == key).Select(p => (long?)p.Id).FirstOrDefaultAsync(ct);

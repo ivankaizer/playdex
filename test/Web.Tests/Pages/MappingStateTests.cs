@@ -104,18 +104,22 @@ public sealed class MappingStateTests
     }
 
     [Fact]
-    public void MappingPageWiresLiteralResponsiveEditorsRequestsAndCancellation()
+    public void MappingSettingsSectionWiresResponsiveEditorsRequestsAndLegacyRedirect()
     {
         var root = FindWebRoot();
         var markupPath = Path.Combine(root, "Modules", "Mapping", "Mapping.razor");
         var codePath = Path.Combine(root, "Modules", "Mapping", "Mapping.razor.cs");
+        var redirectPath = Path.Combine(root, "Modules", "Mapping", "MappingRedirect.razor");
         Assert.True(File.Exists(markupPath), "Missing Mapping Razor page.");
+        Assert.True(File.Exists(redirectPath), "Missing legacy Mapping redirect.");
 
         var markup = File.ReadAllText(markupPath);
         var code = File.ReadAllText(codePath);
+        var redirect = File.ReadAllText(redirectPath);
 
-        Assert.Contains("@page \"/mapping\"", markup);
-        Assert.Contains("<AppLayout Title=\"Mapping\"", markup);
+        Assert.DoesNotContain("@page", markup);
+        Assert.DoesNotContain("<AppLayout", markup);
+        Assert.Contains("data-settings-section=\"game-connections\"", markup);
         Assert.Contains("Game connections", markup);
         Assert.Contains("lg:grid-cols-[1.1fr_0.9fr]", markup);
         Assert.Contains("No game connections yet.", markup);
@@ -136,6 +140,9 @@ public sealed class MappingStateTests
         Assert.DoesNotContain("LogoutAsync", code);
         Assert.DoesNotContain("innerWidth", code);
         Assert.DoesNotContain("Prefers", code);
+        Assert.Contains("@page \"/mapping\"", redirect);
+        Assert.Contains("/settings#game-connections", redirect);
+        Assert.Contains("replace: true", redirect);
     }
 
     private static GameSearchResult Game(string id, string title) =>

@@ -62,6 +62,15 @@
                                     </svg>
                                     Elapsed @currentSession.Elapsed
                                 </span>
+                                @if (currentSession.CanStop)
+                                {
+                                    <button type="button"
+                                            disabled="@_isStoppingManualSession"
+                                            @onclick="StopManualSessionAsync"
+                                            class="rounded-full border border-rose-500/60 px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-rose-700 transition hover:border-rose-400 hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60 dark:text-rose-200 dark:hover:bg-rose-950/40">
+                                        @(_isStoppingManualSession ? "Stopping..." : "Stop session")
+                                    </button>
+                                }
                             </div>
                         }
                         else
@@ -71,6 +80,10 @@
                             </h2>
                         }
                     </div>
+                    @if (_manualActionError.Length > 0)
+                    {
+                        <p role="alert" class="mt-3 text-sm text-rose-700 dark:text-rose-300">@_manualActionError</p>
+                    }
                 }
             </div>
 

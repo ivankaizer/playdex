@@ -61,6 +61,22 @@ public sealed class IntegrationSessionPlatformMigrationTests(PostgresFixture pos
         Assert.Equal(["ps3", "ps4", "ps5"], childKeys);
     }
 
+    [Fact]
+    public async Task MigrationRepairsLegacyPlatformIdentityBeforeAddingForeignKey()
+    {
+        if (!postgres.IsConfigured) return;
+
+        await using var connection = await postgres.DataSource!.OpenConnectionAsync();
+        await using var transaction = await connection.BeginTransactionAsync();
+        await Execute(connection, transaction, "drop table if exists integrations cascade; drop table if exists platforms cascade;");
+        await Execute(connection, transaction, "create table platforms (id bigserial not null, key text not null, name text not null, igdb_platform_id integer, parent_id bigint, created_at timestamptz not null, updated_at timestamptz not null); insert into platforms (key, name, created_at, updated_at) values ('psn', 'PSN', now(), now()); create table integrations (id bigserial primary key);");
+
+        await new IntegrationSessionPlatformMigration().ApplyAsync(
+            connection, transaction, CancellationToken.None);
+
+        await Execute(connection, transaction, "insert into integrations (session_platform_id) values ((select id from platforms where key = 'ps5'));");
+    }
+
     private static async Task Execute(
         NpgsqlConnection connection,
         NpgsqlTransaction transaction,

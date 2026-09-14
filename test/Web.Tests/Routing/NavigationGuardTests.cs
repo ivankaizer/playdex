@@ -18,6 +18,7 @@ public sealed class NavigationGuardTests
     [Theory]
     [InlineData("/dashboard")]
     [InlineData("/sessions")]
+    [InlineData("/sessions/create")]
     [InlineData("/recap")]
     [InlineData("/mapping")]
     [InlineData("/settings")]
@@ -33,7 +34,7 @@ public sealed class NavigationGuardTests
     [Fact]
     public void LoggedInProtectedRoutesRender()
     {
-        string[] paths = ["/dashboard", "/sessions", "/recap", "/mapping", "/settings", "/games/3H4h3"];
+        string[] paths = ["/dashboard", "/sessions", "/sessions/create", "/recap", "/mapping", "/settings", "/games/3H4h3"];
 
         foreach (var path in paths)
         {

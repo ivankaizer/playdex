@@ -60,6 +60,7 @@ builder.Services.AddSingleton(new MigrationCatalog([
     new CorrectLegacyApiSessionPlatformsMigration(),
     new PcPlatformHierarchyMigration(),
     new IntegrationSessionPlatformMigration(),
+    new AiPlaySessionDraftsMigration(),
 ]));
 builder.Services.AddSingleton<MigrationRunner>();
 builder.Services.AddScoped<EventBus>();
@@ -90,7 +91,7 @@ builder.Services.AddCors(cfg =>
     cfg.AddDefaultPolicy(policy =>
     {
         policy.WithOrigins(corsOrigins)
-              .WithMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
+              .WithMethods("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS")
               .AllowAnyHeader();
     });
 });
