@@ -60,5 +60,6 @@ jobs:
         run: |
           dotnet test test/Api.Tests/Api.Tests.csproj --configuration Release --no-build
           dotnet test test/Web.Tests/Web.Tests.csproj --configuration Release --no-build
+          dotnet test test/Admin.Tests/Admin.Tests.csproj --configuration Release --no-build
         env:
           PLAYDEX_INTEGRATION_DATABASE_URL: postgresql://playdex:playdex@127.0.0.1:5432/playdex_db_test

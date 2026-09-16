@@ -77,7 +77,7 @@ public sealed class DraftServiceTests(PostgresFixture postgres)
         Assert.Empty(await db.PlaySessions.Where(s=>s.UserId==user.Id).ToListAsync());
     }
 
-    private DraftService Service(PlaydexDbContext db)
+    private static DraftService Service(PlaydexDbContext db)
     {
         var opts=Options.Create(new IgdbOptions());
         var manual=new ManualService(new(db),new IgdbClient(new HttpClient(),opts),opts,new GameResolver(db));

@@ -61,9 +61,9 @@ public class DraftWorkspaceTests : BunitContext
             ],
         };
         var batch = new DraftBatchDto(Guid.NewGuid(), DateTimeOffset.UtcNow, [row]);
-        var cut = Setup(request => Task.FromResult(request.RequestUri!.AbsolutePath.EndsWith(batch.Id.ToString()) ? Ok(batch) : Ok(new[] { batch })));
+        var cut = Setup(request => Task.FromResult(request.RequestUri!.AbsolutePath.EndsWith(batch.Id.ToString(), StringComparison.Ordinal) ? Ok(batch) : Ok(new[] { batch })));
         cut.WaitForAssertion(() => Assert.Contains("Resume", cut.Markup));
-        cut.FindAll("button").Single(b => b.TextContent.StartsWith("Resume")).Click();
+        cut.FindAll("button").Single(b => b.TextContent.StartsWith("Resume", StringComparison.Ordinal)).Click();
         cut.WaitForAssertion(() => Assert.Single(cut.FindAll("input[type=date]")));
         Assert.NotNull(cut.Find("nav[aria-label='Breadcrumb']"));
         Assert.Contains("Saved batches", cut.Find("nav[aria-label='Breadcrumb']").TextContent);
@@ -86,9 +86,9 @@ public class DraftWorkspaceTests : BunitContext
         var row = Row(); var batch = new DraftBatchDto(Guid.NewGuid(), DateTimeOffset.UtcNow, [row]);
         var cut = Setup(request => Task.FromResult(request.Method == HttpMethod.Patch
             ? new HttpResponseMessage(HttpStatusCode.Conflict) { Content = JsonContent.Create(new { detail = "Stale revision" }) }
-            : request.RequestUri!.AbsolutePath.EndsWith(batch.Id.ToString()) ? Ok(batch) : Ok(new[] { batch })));
+            : request.RequestUri!.AbsolutePath.EndsWith(batch.Id.ToString(), StringComparison.Ordinal) ? Ok(batch) : Ok(new[] { batch })));
         cut.WaitForAssertion(() => Assert.Contains("Resume", cut.Markup));
-        cut.FindAll("button").Single(b => b.TextContent.StartsWith("Resume")).Click();
+        cut.FindAll("button").Single(b => b.TextContent.StartsWith("Resume", StringComparison.Ordinal)).Click();
         cut.WaitForAssertion(() => Assert.Single(cut.FindAll("input[type=date]")));
         cut.FindAll("input[type=number]")[0].Change("3");
         cut.FindAll("button").Single(b => b.TextContent == "Save edits").Click();
@@ -104,9 +104,9 @@ public class DraftWorkspaceTests : BunitContext
         var refreshed = false;
         var cut = Setup(request => Task.FromResult(request.Method == HttpMethod.Post
             ? Ok(new DraftAcceptResponse([new(first.Id, 42, null), new(second.Id, null, "IGDB unavailable")]))
-            : request.RequestUri!.AbsolutePath.EndsWith(batch.Id.ToString()) ? Ok(batch) : Ok(new[] { batch })), () => refreshed = true);
+            : request.RequestUri!.AbsolutePath.EndsWith(batch.Id.ToString(), StringComparison.Ordinal) ? Ok(batch) : Ok(new[] { batch })), () => refreshed = true);
         cut.WaitForAssertion(() => Assert.Contains("Resume", cut.Markup));
-        cut.FindAll("button").Single(b => b.TextContent.StartsWith("Resume")).Click();
+        cut.FindAll("button").Single(b => b.TextContent.StartsWith("Resume", StringComparison.Ordinal)).Click();
         cut.WaitForAssertion(() => Assert.Equal(2, cut.FindAll("article").Count));
         cut.FindAll("button").Single(b => b.TextContent == "Accept all ready").Click();
         cut.WaitForAssertion(() => Assert.Contains("IGDB unavailable", cut.Markup));

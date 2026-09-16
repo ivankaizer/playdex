@@ -106,10 +106,10 @@ public sealed class AdminOperationsIntegrationTests(AdminAuthenticationFixture f
         Assert.Equal(2, (await scenario.Operations.SearchSessionsPageAsync(scenario.Game.Title, 1)).Sessions.Count);
         Assert.Equal(27, (await scenario.Operations.SearchSessionsPageAsync(source.AccountId!, 0)).Total);
         Assert.Equal(27, (await scenario.Operations.SearchSessionsPageAsync(scenario.Platform.Key, 0)).Total);
-        Assert.Equal(1, (await scenario.Operations.SearchSessionsPageAsync("", 0, "live")).Total);
-        Assert.Equal(26, (await scenario.Operations.SearchSessionsPageAsync("", 0, "ended")).Total);
-        Assert.All((await scenario.Operations.SearchSessionsPageAsync("", 0, "live")).Sessions, row => Assert.True(row.Live));
-        Assert.All((await scenario.Operations.SearchSessionsPageAsync("", 0, "ended")).Sessions, row => Assert.False(row.Live));
+        Assert.Equal(1, (await scenario.Operations.SearchSessionsPageAsync(scenario.User.Email, 0, "live")).Total);
+        Assert.Equal(26, (await scenario.Operations.SearchSessionsPageAsync(scenario.User.Email, 0, "ended")).Total);
+        Assert.All((await scenario.Operations.SearchSessionsPageAsync(scenario.User.Email, 0, "live")).Sessions, row => Assert.True(row.Live));
+        Assert.All((await scenario.Operations.SearchSessionsPageAsync(scenario.User.Email, 0, "ended")).Sessions, row => Assert.False(row.Live));
 
         var selected = byEmail.Sessions.Take(2).Select(row => row.Id).ToArray();
         Assert.Equal(2, selected.Distinct().Count());
@@ -195,8 +195,8 @@ public sealed class AdminOperationsIntegrationTests(AdminAuthenticationFixture f
                 new IgnoredGame { Id = scenario.NextEntityId(), UserId = scenario.User.Id, GameId = source.Id, CreatedAt = now, UpdatedAt = now },
                 new IgnoredGame { Id = scenario.NextEntityId(), UserId = scenario.User.Id, GameId = scenario.Game.Id, CreatedAt = now, UpdatedAt = now });
             db.GameRatings.AddRange(
-                new GameRating { Id = scenario.NextEntityId(), UserId = scenario.User.Id, GameId = source.Id, Rating = 8, CreatedAt = now, UpdatedAt = now },
-                new GameRating { Id = scenario.NextEntityId(), UserId = scenario.User.Id, GameId = scenario.Game.Id, Rating = 9, CreatedAt = now, UpdatedAt = now });
+                new GameRating { Id = scenario.NextEntityId(), UserId = scenario.User.Id, GameId = source.Id, Rating = 4, CreatedAt = now, UpdatedAt = now },
+                new GameRating { Id = scenario.NextEntityId(), UserId = scenario.User.Id, GameId = scenario.Game.Id, Rating = 5, CreatedAt = now, UpdatedAt = now });
             db.GameConnections.Add(new GameConnection
             {
                 UserId = scenario.User.Id,
@@ -222,6 +222,7 @@ public sealed class AdminOperationsIntegrationTests(AdminAuthenticationFixture f
             Assert.Equal(scenario.Game.Id, mergedSessions[0]);
             Assert.Single(await db.IgnoredGames.Where(row => row.UserId == scenario.User.Id && row.GameId == scenario.Game.Id).ToListAsync());
             Assert.Single(await db.GameRatings.Where(row => row.UserId == scenario.User.Id && row.GameId == scenario.Game.Id).ToListAsync());
+            Assert.Equal((short)5, await db.GameRatings.Where(row => row.UserId == scenario.User.Id && row.GameId == scenario.Game.Id).Select(row => row.Rating).SingleAsync());
             Assert.True(await db.GameConnections.AnyAsync(row => row.UserId == scenario.User.Id &&
                 (row.GameId == scenario.Game.Id || row.ConnectedGameId == scenario.Game.Id) &&
                 (row.GameId == neighbor.Id || row.ConnectedGameId == neighbor.Id)));
