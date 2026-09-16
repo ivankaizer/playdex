@@ -1,0 +1,142 @@
+@page "/ai-generations"
+@attribute [Authorize(Policy = "Administrator")]
+@using Admin.Features
+@using Admin.Infrastructure
+@using Microsoft.AspNetCore.Components.Authorization
+@inject IGenerationHistoryOperations History
+@inject IAdminInteractions Interactions
+@inject AuthenticationStateProvider Authentication
+@inject BrowserTimeZone Time
+@implements IDisposable
+
+<PageTitle>AI generations</PageTitle>
+<RadzenHeading Size="H1" Text="AI generations" />
+<p>Compare submitted evidence with generated sessions, including failed attempts and automatic retries.</p>
+<div class="session-toolbar">
+    <RadzenTextBox @bind-Value="_query" Placeholder="Search email or input text" aria-label="Search generation history" />
+    <RadzenDropDown @bind-Value="_status" Data="@Statuses" AllowClear="true" Placeholder="All outcomes" aria-label="Generation outcome" />
+    <RadzenButton Text="Search" Icon="search" Click="@(() => Load(0))" Disabled="@_busy" />
+</div>
+@if (_error is not null)
+{
+    <RadzenAlert AlertStyle="AlertStyle.Danger">@_error</RadzenAlert>
+}
+@if (_busy)
+{
+    <RadzenProgressBar Mode="ProgressBarMode.Indeterminate" />
+}
+@if (_detail is not null)
+{
+    <div class="generation-detail-header">
+        <RadzenHeading Size="H2" Text="Generation details" />
+        <div>
+            <RadzenButton Text="Close details" ButtonStyle="ButtonStyle.Light" Click="@(() => _detail = null)" Disabled="@_busy" />
+            <RadzenButton Text="Delete generation" Icon="delete" ButtonStyle="ButtonStyle.Danger" Click="Delete" Disabled="@_busy" />
+        </div>
+    </div>
+    <Admin.Components.GenerationDetails Detail="@_detail" />
+}
+@if (_result is not null && !_busy)
+{
+    @if (_result.Items.Count == 0)
+    {
+        <RadzenAlert AlertStyle="AlertStyle.Info">No generations found. History is collected for new submissions; older inputs were not retained.</RadzenAlert>
+    }
+    else
+    {
+        <RadzenDataGrid Data="@_result.Items" TItem="GenerationSummary" AllowPaging="false">
+            <Columns>
+                <RadzenDataGridColumn TItem="GenerationSummary" Property="Email" Title="User" />
+                <RadzenDataGridColumn TItem="GenerationSummary" Title="Submitted">
+                    <Template Context="item">@Time.Format(item.CreatedAt)</Template>
+                </RadzenDataGridColumn>
+                <RadzenDataGridColumn TItem="GenerationSummary" Property="Status" Title="Outcome" />
+                <RadzenDataGridColumn TItem="GenerationSummary" Property="Model" Title="Model" />
+                <RadzenDataGridColumn TItem="GenerationSummary" Title="Input">
+                    <Template Context="item">@item.InputPreview @(item.HasImage ? " · Screenshot" : "")</Template>
+                </RadzenDataGridColumn>
+                <RadzenDataGridColumn TItem="GenerationSummary" Title="Review" Width="120px">
+                    <Template Context="item"><RadzenButton Text="Inspect" ButtonStyle="ButtonStyle.Light" Click="@(() => Inspect(item.Id))" /></Template>
+                </RadzenDataGridColumn>
+            </Columns>
+        </RadzenDataGrid>
+    }
+    <div class="session-toolbar">
+        <span>@_result.Total generations · Page @(_result.Page + 1)</span>
+        <RadzenButton Text="Previous" Click="@(() => Load(_result.Page - 1))" Disabled="@(_result.Page == 0)" />
+        <RadzenButton Text="Next" Click="@(() => Load(_result.Page + 1))" Disabled="@((_result.Page + 1) * 25 >= _result.Total)" />
+    </div>
+}
+
+@code {
+    private static readonly string[] Statuses = ["success", "failure", "timeout", "cancelled", "running"];
+    private readonly CancellationTokenSource _lifetime = new();
+    private string _query = "";
+    private string? _status;
+    private GenerationSearchResult? _result;
+    private GenerationDetail? _detail;
+    private bool _busy;
+    private string? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Time.EnsureLoadedAsync();
+        await Load(0);
+    }
+
+    private async Task Load(int page)
+    {
+        if (_busy || page < 0) return;
+        _busy = true;
+        try
+        {
+            var principal = (await Authentication.GetAuthenticationStateAsync()).User;
+            _result = await History.Search(principal, _query, _status, page, _lifetime.Token);
+            _detail = null;
+            _error = null;
+        }
+        catch (OperationCanceledException) when (_lifetime.IsCancellationRequested) { }
+        catch (UnauthorizedAccessException) { _detail = null; _result = null; _error = "Administrator access is required."; }
+        catch (Exception) { _error = "Could not load generation history. Try searching again."; }
+        finally { _busy = false; }
+    }
+
+    private async Task Inspect(Guid id)
+    {
+        if (_busy) return;
+        _busy = true;
+        _detail = null;
+        try
+        {
+            var principal = (await Authentication.GetAuthenticationStateAsync()).User;
+            _detail = await History.GetDetailsAsync(principal, id, _lifetime.Token);
+            _error = _detail is null ? "This generation has been deleted or expired." : null;
+        }
+        catch (OperationCanceledException) when (_lifetime.IsCancellationRequested) { }
+        catch (UnauthorizedAccessException) { _result = null; _error = "Administrator access is required."; }
+        catch (Exception) { _error = "Could not load this generation. Try again."; }
+        finally { _busy = false; }
+    }
+
+    private async Task Delete()
+    {
+        if (_busy || _detail is null) return;
+        var id = _detail.Generation.Id;
+        if (!await Interactions.ConfirmAsync("Delete this generation and its retained input, screenshot, and results?", "Delete generation")) return;
+        _busy = true;
+        try
+        {
+            var principal = (await Authentication.GetAuthenticationStateAsync()).User;
+            await History.Delete(principal, id, _lifetime.Token);
+            _detail = null;
+            _busy = false;
+            await Load(0);
+        }
+        catch (OperationCanceledException) when (_lifetime.IsCancellationRequested) { }
+        catch (UnauthorizedAccessException) { _detail = null; _result = null; _error = "Administrator access is required."; }
+        catch (Exception) { _error = "Could not delete this generation. Try again."; }
+        finally { _busy = false; }
+    }
+
+    public void Dispose() { _lifetime.Cancel(); _lifetime.Dispose(); }
+}

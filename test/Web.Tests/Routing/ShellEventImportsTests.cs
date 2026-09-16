@@ -19,7 +19,7 @@ public sealed class ShellEventImportsTests
             .Order(StringComparer.Ordinal)
             .ToArray();
 
-        Assert.Equal(["@onclick", "@oninput", "@onkeydown", "@onmouseenter"], directives);
+        Assert.Equal(["@onchange", "@onclick", "@oninput", "@onkeydown", "@onmouseenter"], directives);
         Assert.Contains(
             "@using Microsoft.AspNetCore.Components.Web",
             File.ReadAllText(Path.Combine(webRoot, "_Imports.razor")),

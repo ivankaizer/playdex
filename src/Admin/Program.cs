@@ -18,6 +18,7 @@ builder.Services.AddSingleton(dataSource);
 builder.Services.AddPlaydexDbContextFactory(dataSource);
 builder.Services.AddScoped<AdminAuthenticationService>();
 builder.Services.AddScoped<AdminOperationGuard>();
+builder.Services.AddScoped<Admin.Features.IGenerationHistoryOperations, Admin.Features.GenerationHistoryOperations>();
 builder.Services.AddScoped<BrowserTimeZone>();
 builder.Services.AddScoped<Admin.Features.AdminOperations>();
 builder.Services.AddScoped<Admin.Features.IAdminOperations>(services =>
@@ -73,7 +74,20 @@ app.MapMethods("/auth/logout", ["GET", "POST"], async (HttpContext httpContext) 
     await httpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
     return Results.Redirect("/login");
 });
+app.MapStaticAssets();
 app.MapRazorComponents<Admin.Components.App>().AddInteractiveServerRenderMode();
+app.MapGet("/ai-generations/{id:guid}/image", async (Guid id, HttpContext context,
+    Admin.Features.IGenerationHistoryOperations history) =>
+{
+    context.Response.Headers.CacheControl = "no-store";
+    context.Response.Headers.XContentTypeOptions = "nosniff";
+    try
+    {
+        var image = await history.GetImage(context.User, id, context.RequestAborted);
+        return image is null ? Results.NotFound() : Results.File(image.Bytes, image.ContentType);
+    }
+    catch (UnauthorizedAccessException) { return Results.Forbid(); }
+}).RequireAuthorization("Administrator");
 app.Run();
 
 public partial class Program;

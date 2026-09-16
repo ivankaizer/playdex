@@ -20,6 +20,8 @@ public static class ManualEndpoints
         });
 
         manual.MapPost("/sessions/stop", StopSession);
+        manual.MapGet("/sessions/current", GetCurrentSession);
+        manual.MapGet("/platforms", ListPlatforms);
         manual.MapGet("/search", SearchMapping);
 
         manual.MapPost("/entries", async (HttpContext http) =>
@@ -40,6 +42,21 @@ public static class ManualEndpoints
         CancellationToken ct)
     {
         return TypedResults.Ok(await service.StopSession(principal.GetUserId(), ct));
+    }
+
+    private static async Task<IResult> GetCurrentSession(
+        ClaimsPrincipal principal,
+        ManualService service,
+        CancellationToken ct)
+    {
+        return TypedResults.Ok(await service.GetCurrentSession(principal.GetUserId(), ct));
+    }
+
+    private static async Task<IResult> ListPlatforms(
+        ManualService service,
+        CancellationToken ct)
+    {
+        return TypedResults.Ok(await service.ListPlatforms(ct));
     }
 
     private static async Task<IResult> SearchMapping(

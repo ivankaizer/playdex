@@ -17,8 +17,14 @@ public sealed class PlaydexDbContext(DbContextOptions<PlaydexDbContext> options)
     public DbSet<GameConnection> GameConnections => Set<GameConnection>();
     public DbSet<NotificationChannel> NotificationChannels => Set<NotificationChannel>();
 
+    public DbSet<SessionDraftBatch> SessionDraftBatches => Set<SessionDraftBatch>();
+    public DbSet<SessionDraftRow> SessionDraftRows => Set<SessionDraftRow>();
+    public DbSet<AiGeneration> AiGenerations => Set<AiGeneration>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        ConfigureSessionDrafts(modelBuilder);
+        ConfigureAiGenerations(modelBuilder);
         ConfigureUsers(modelBuilder);
         ConfigurePlatforms(modelBuilder);
         ConfigureIntegrations(modelBuilder);
@@ -31,6 +37,73 @@ public sealed class PlaydexDbContext(DbContextOptions<PlaydexDbContext> options)
         ConfigureUserSettings(modelBuilder);
         ConfigureGameConnections(modelBuilder);
         ConfigureNotificationChannels(modelBuilder);
+    }
+
+    private static void ConfigureAiGenerations(ModelBuilder modelBuilder)
+    {
+        var entity = modelBuilder.Entity<AiGeneration>();
+        entity.ToTable("ai_generations");
+        entity.HasKey(row => row.Id);
+        entity.Property(row => row.Id).HasColumnName("id").ValueGeneratedNever();
+        entity.Property(row => row.UserId).HasColumnName("user_id");
+        entity.Property(row => row.RequestId).HasColumnName("request_id");
+        entity.Property(row => row.CreatedAt).HasColumnName("created_at");
+        entity.Property(row => row.CompletedAt).HasColumnName("completed_at");
+        entity.Property(row => row.Provider).HasColumnName("provider");
+        entity.Property(row => row.Model).HasColumnName("model");
+        entity.Property(row => row.Timezone).HasColumnName("timezone");
+        entity.Property(row => row.ReferenceDate).HasColumnName("reference_date");
+        entity.Property(row => row.InputText).HasColumnName("input_text");
+        entity.Property(row => row.Image).HasColumnName("image");
+        entity.Property(row => row.ImageContentType).HasColumnName("image_content_type");
+        entity.Property(row => row.Status).HasColumnName("status");
+        entity.Property(row => row.Error).HasColumnName("error");
+        entity.Property(row => row.ResultJson).HasColumnName("result_json").HasColumnType("jsonb");
+        entity.Property(row => row.ResponsesJson).HasColumnName("responses_json").HasColumnType("jsonb");
+        entity.HasIndex(row => row.CreatedAt);
+        entity.HasOne<User>().WithMany().HasForeignKey(row => row.UserId).OnDelete(DeleteBehavior.Cascade);
+    }
+
+    private static void ConfigureSessionDrafts(ModelBuilder modelBuilder)
+    {
+        var batch = modelBuilder.Entity<SessionDraftBatch>();
+        batch.ToTable("session_draft_batches");
+        batch.HasKey(row => row.Id);
+        batch.Property(row => row.Id).HasColumnName("id").ValueGeneratedNever();
+        batch.Property(row => row.UserId).HasColumnName("user_id");
+        batch.Property(row => row.RequestId).HasColumnName("request_id");
+        batch.Property(row => row.CreatedAt).HasColumnName("created_at");
+        batch.Property(row => row.Timezone).HasColumnName("timezone");
+        batch.Property(row => row.ReferenceDate).HasColumnName("reference_date");
+        batch.HasIndex(row => new { row.UserId, row.RequestId }).IsUnique();
+        batch.HasIndex(row => new { row.UserId, row.CreatedAt });
+        batch.HasOne<User>().WithMany().HasForeignKey(row => row.UserId).OnDelete(DeleteBehavior.Cascade);
+        batch.HasMany(row => row.Rows).WithOne().HasForeignKey(row => row.BatchId).OnDelete(DeleteBehavior.Cascade);
+
+        var entity = modelBuilder.Entity<SessionDraftRow>();
+        entity.ToTable("session_draft_rows", table =>
+        {
+            table.HasCheckConstraint("session_draft_rows_revision_check", "revision >= 1");
+            table.HasCheckConstraint("session_draft_rows_status_check", "status in ('pending', 'accepted', 'deleted')");
+            table.HasCheckConstraint("session_draft_rows_accepted_link_check", "(status = 'accepted' and accepted_session_id is not null) or (status <> 'accepted' and accepted_session_id is null)");
+        });
+        entity.HasKey(row => row.Id);
+        entity.Property(row => row.Id).HasColumnName("id").ValueGeneratedNever();
+        entity.Property(row => row.BatchId).HasColumnName("batch_id");
+        entity.Property(row => row.Position).HasColumnName("position");
+        entity.Property(row => row.Title).HasColumnName("title");
+        entity.Property(row => row.Date).HasColumnName("date");
+        entity.Property(row => row.DurationMinutes).HasColumnName("duration_minutes");
+        entity.Property(row => row.PlatformKey).HasColumnName("platform_key");
+        entity.Property(row => row.GameId).HasColumnName("game_id");
+        entity.Property(row => row.IgdbId).HasColumnName("igdb_id");
+        entity.Property(row => row.Warnings).HasColumnName("warnings");
+        entity.Property(row => row.Revision).HasColumnName("revision");
+        entity.Property(row => row.Status).HasColumnName("status");
+        entity.Property(row => row.AcceptedSessionId).HasColumnName("accepted_session_id");
+        entity.Property(row => row.SelectionJson).HasColumnName("selection_json").HasColumnType("jsonb");
+        entity.HasIndex(row => new { row.BatchId, row.Position }).IsUnique();
+        entity.HasIndex(row => row.AcceptedSessionId).IsUnique().HasFilter("accepted_session_id is not null");
     }
 
     private static void ConfigureUsers(ModelBuilder modelBuilder)

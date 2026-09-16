@@ -28,7 +28,7 @@ public sealed class DashboardStateTests
     }
 
     [Fact]
-    public void RequestsPreserveTheFiveConcurrentReactUrlsAndUtcRanges()
+    public void RequestsIncludeManualLiveSessionAlongsideDashboardData()
     {
         var requests = DashboardRequests.For(Now);
 
@@ -39,6 +39,7 @@ public sealed class DashboardStateTests
                 "/stats?from=2026-07-01&to=2026-07-13",
                 "/stats?from=2026-01-01&to=2026-07-13",
                 "/sessions/current",
+                "/manual/sessions/current",
             ],
             requests.All);
     }
@@ -56,6 +57,7 @@ public sealed class DashboardStateTests
         Assert.False(state.IsDashboardLoading);
         Assert.Single(state.TodaySessions);
         Assert.Same(snapshot.CurrentSession, state.CurrentSession);
+        Assert.Same(snapshot.ActiveManualSession, state.ActiveManualSession);
         Assert.Same(snapshot.MonthlyStats, state.MonthlyStats);
         Assert.Same(snapshot.YearlyStats, state.YearlyStats);
 
@@ -66,6 +68,7 @@ public sealed class DashboardStateTests
         Assert.Empty(state.TodaySessions);
         Assert.Empty(state.TodayPlatformTotals);
         Assert.Null(state.CurrentSession);
+        Assert.Null(state.ActiveManualSession);
         Assert.Null(state.MonthlyStats);
         Assert.Null(state.YearlyStats);
         Assert.Equal("Dashboard unavailable.", state.DashboardError);
@@ -113,13 +116,26 @@ public sealed class DashboardStateTests
 
         var current = state.GetCurrentSession(Now);
         Assert.NotNull(current);
-        Assert.Equal("Manual", current.Platform);
+        Assert.Equal("PC", current.Platform);
         Assert.Equal("1h 1m", current.Elapsed);
+        Assert.True(current.CanStop);
 
         var monthly = DashboardState.GetStatsView(state.MonthlyStats);
         Assert.Equal("2h", monthly.Hours);
         Assert.Equal("2", monthly.Sessions);
         Assert.Equal("Elden Ring", monthly.TopTitle);
+    }
+
+    [Fact]
+    public void SyncedCurrentSessionRemainsVisibleWithoutManualStopAction()
+    {
+        var state = new DashboardState();
+        state.CompleteRefresh(Snapshot() with { ActiveManualSession = null }, Now);
+
+        var current = Assert.IsType<DashboardCurrentSessionView>(state.GetCurrentSession(Now));
+
+        Assert.Equal("Hades II", current.Title);
+        Assert.False(current.CanStop);
     }
 
     [Fact]
@@ -234,10 +250,15 @@ public sealed class DashboardStateTests
         Assert.Contains("SendAsync<AccountStatsRangeResponse>(requests.MonthlyStats", code);
         Assert.Contains("SendAsync<AccountStatsRangeResponse>(requests.YearlyStats", code);
         Assert.Contains("SendAsync<AccountCurrentSessionResponse>(requests.CurrentSession", code);
+        Assert.Contains("SendAsync<ManualActiveSessionResponse>(requests.ActiveManualSession", code);
         Assert.DoesNotContain("SendAsync<ManualInputsResponse>", code);
         Assert.DoesNotContain("SendAsync<ManualSessionStartResponse>", code);
-        Assert.DoesNotContain("SendAsync<ManualSessionStopResponse>", code);
-        Assert.DoesNotContain("RefreshDashboardAsync(silent: true)", code);
+        Assert.Contains("SendAsync<ManualSessionStopResponse>", code);
+        Assert.Contains("\"/manual/sessions/stop\"", code);
+        Assert.Contains("RefreshDashboardAsync(silent: true)", code);
+        Assert.Contains("Stop session", markup);
+        Assert.Contains("disabled=\"@_isStoppingManualSession\"", markup);
+        Assert.Contains("role=\"alert\"", markup);
         Assert.Contains("_lifetime.Token.ThrowIfCancellationRequested()", code);
         Assert.Contains("catch (OperationCanceledException) when (_lifetime.IsCancellationRequested)", code);
         Assert.Contains("_lifetime.Cancel()", code);
@@ -324,7 +345,17 @@ public sealed class DashboardStateTests
             [new AccountTopGame("43", "Hades II", 10800)],
             []);
 
-        return new DashboardSnapshot([completed], todayStats.Platforms, current, monthly, yearly);
+        var activeManualSession = new ManualActiveSession(
+            2,
+            "43",
+            "Hades II",
+            "pc",
+            "PC",
+            Now.AddSeconds(-3661),
+            null);
+
+        return new DashboardSnapshot(
+            [completed], todayStats.Platforms, current, activeManualSession, monthly, yearly);
     }
 
     private static string FindWebRoot()

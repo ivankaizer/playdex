@@ -53,7 +53,8 @@ public sealed class PlaydexApiClient(HttpClient httpClient, AuthSession auth, st
         var transaction = SentryApiTracing.Start(method, url);
         using var request = new HttpRequestMessage(method, url);
         SentryApiTracing.AddTraceHeader(request, transaction);
-        if (body is not null) request.Content = JsonContent.Create(body, options: JsonOptions);
+        if (body is Func<HttpContent> contentFactory) request.Content = contentFactory();
+        else if (body is not null) request.Content = JsonContent.Create(body, options: JsonOptions);
 
         if (authenticated)
         {
@@ -83,6 +84,7 @@ public sealed class PlaydexApiClient(HttpClient httpClient, AuthSession auth, st
                 return new Response<T>(default, await CreateExceptionAsync(response, cancellationToken));
             }
 
+            if (response.StatusCode == HttpStatusCode.NoContent) return new Response<T>(default, null);
             await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
             var root = await JsonSerializer.DeserializeAsync<JsonElement>(stream, JsonOptions, cancellationToken);
             var payload = root;

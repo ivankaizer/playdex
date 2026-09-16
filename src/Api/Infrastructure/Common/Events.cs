@@ -8,8 +8,6 @@ public interface IEventSubscriber<in T>
     Task Handle(T domainEvent, CancellationToken ct);
 }
 
-public sealed record StartSessionRequested(long UserId, long PlatformId, string? Title);
-public sealed record StopSessionRequested(long UserId);
 public sealed record SessionStarted(
     long SessionId,
     long CredentialId,

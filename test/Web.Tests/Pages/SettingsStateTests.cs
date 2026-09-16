@@ -603,6 +603,7 @@ public sealed class SettingsStateTests
         Assert.Contains("<AppLayout Title=\"Settings\">", markup);
         Assert.Contains("data-settings-section=\"preferences\"", markup);
         Assert.Contains("data-settings-section=\"integrations\"", markup);
+        Assert.Contains("<Mapping />", markup);
         Assert.Contains("grid gap-5 lg:grid-cols-2", markup);
         Assert.Contains("Sessions shorter than this duration are marked ignored and excluded from stats. Set to 0 to disable.", markup);
         Assert.Contains("type=\"number\"", markup);
@@ -661,6 +662,22 @@ public sealed class SettingsStateTests
         Assert.True(preferences < sessions);
         Assert.True(sessions < telegram);
         Assert.True(telegram < integrations);
+    }
+
+    [Fact]
+    public void SettingsOwnsGameConnectionsAndGlobalNavigationDoesNotExposeMapping()
+    {
+        var root = FindWebRoot();
+        var settings = File.ReadAllText(Path.Combine(root, "Modules", "Settings", "Settings.razor"));
+        var layout = File.ReadAllText(Path.Combine(root, "Layout", "AppLayout.razor"));
+
+        var integrations = settings.IndexOf("data-settings-section=\"integrations\"", StringComparison.Ordinal);
+        var mapping = settings.IndexOf("<Mapping />", StringComparison.Ordinal);
+
+        Assert.True(integrations >= 0);
+        Assert.True(integrations < mapping);
+        Assert.DoesNotContain("(\"Mapping\", \"/mapping\")", layout);
+        Assert.Contains("(\"Settings\", \"/settings\")", layout);
     }
 
     [Fact]

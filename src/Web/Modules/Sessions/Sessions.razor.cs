@@ -22,10 +22,16 @@ internal sealed record SessionUpdateSubmission(
 internal sealed class SessionsRequestVersions
 {
     private long _stats;
+    private long _activeManualSession;
 
     public long BeginStatsRequest() => ++_stats;
 
     public bool IsCurrentStatsRequest(long version) => version == _stats;
+
+    public long BeginActiveManualSessionRequest() => ++_activeManualSession;
+
+    public bool IsCurrentActiveManualSessionRequest(long version) =>
+        version == _activeManualSession;
 }
 
 internal sealed record SessionsRowView(
@@ -138,6 +144,8 @@ internal sealed class SessionEditState
 
 internal sealed class SessionsState
 {
+    public const string PlatformsRequest = "/manual/platforms";
+    public const string ActiveManualSessionRequest = "/manual/sessions/current";
     private long _titleVersion;
     private readonly HashSet<long> _deletingSessionIds = [];
 
@@ -167,6 +175,8 @@ internal sealed class SessionsState
     public string StatsError { get; private set; } = string.Empty;
     public int RefreshVersion { get; private set; }
     public IReadOnlyCollection<long> DeletingSessionIds => _deletingSessionIds;
+    public IReadOnlyList<ManualPlatform> Platforms { get; private set; } = [];
+    public ManualActiveSession? ActiveManualSession { get; private set; }
     public int Start => Total == 0 ? 0 : Offset + 1;
     public int End => Math.Min(Offset + Limit, Total);
     public int TotalPages => Math.Max(1, (int)Math.Ceiling(Total / (double)Limit));
@@ -338,6 +348,11 @@ internal sealed class SessionsState
 
     public void EndDelete(long sessionId) => _deletingSessionIds.Remove(sessionId);
 
+    public void CompletePlatforms(ManualPlatformsResponse response) => Platforms = response.Platforms;
+
+    public void CompleteActiveManualSession(ManualActiveSessionResponse response) =>
+        ActiveManualSession = response.Session;
+
     public IReadOnlyList<SessionsRowView> GetRowViews(DateTimeOffset now) =>
         Rows.Select(session => new SessionsRowView(
             session.SessionId,
@@ -402,8 +417,11 @@ public partial class Sessions : ComponentBase, IDisposable
     private CancellationTokenSource? _titleDebounce;
     private CancellationTokenSource? _listRequest;
     private CancellationTokenSource? _statsRequest;
+    private CancellationTokenSource? _activeManualSessionRequest;
     private long _listRequestVersion;
     private string _theme = "light";
+    private bool _isStoppingManualSession;
+    private string _manualActionError = string.Empty;
 
     [Inject]
     private PlaydexApiClient Api { get; set; } = null!;
@@ -459,7 +477,7 @@ public partial class Sessions : ComponentBase, IDisposable
         }
     }
 
-    protected override Task OnInitializedAsync() => RefreshAllAsync();
+    protected override Task OnInitializedAsync() => Task.WhenAll(RefreshAllAsync(), LoadPlatformsAsync());
 
     private void SetTheme(string theme) => _theme = theme;
 
@@ -539,7 +557,63 @@ public partial class Sessions : ComponentBase, IDisposable
         await LoadListAsync();
     }
 
-    private Task RefreshAllAsync() => Task.WhenAll(LoadListAsync(), LoadStatsAsync());
+    private Task RefreshAllAsync() =>
+        Task.WhenAll(LoadListAsync(), LoadStatsAsync(), LoadActiveManualSessionAsync());
+
+    private async Task LoadPlatformsAsync()
+    {
+        try
+        {
+            var response = await Api.SendAsync<ManualPlatformsResponse>(
+                SessionsState.PlatformsRequest,
+                cancellationToken: _lifetime.Token);
+            _state.CompletePlatforms(response);
+        }
+        catch (OperationCanceledException) when (_lifetime.IsCancellationRequested)
+        {
+        }
+        catch (Exception exception)
+        {
+            _manualActionError = exception.Message;
+        }
+    }
+
+    private async Task LoadActiveManualSessionAsync()
+    {
+        var version = _requestVersions.BeginActiveManualSessionRequest();
+        _activeManualSessionRequest?.Cancel();
+        var request = CancellationTokenSource.CreateLinkedTokenSource(_lifetime.Token);
+        _activeManualSessionRequest = request;
+        try
+        {
+            var response = await Api.SendAsync<ManualActiveSessionResponse>(
+                SessionsState.ActiveManualSessionRequest,
+                cancellationToken: request.Token);
+            if (_requestVersions.IsCurrentActiveManualSessionRequest(version) &&
+                !request.IsCancellationRequested)
+            {
+                _state.CompleteActiveManualSession(response);
+            }
+        }
+        catch (OperationCanceledException) when (request.IsCancellationRequested)
+        {
+        }
+        catch (Exception exception)
+        {
+            if (_requestVersions.IsCurrentActiveManualSessionRequest(version))
+            {
+                _manualActionError = exception.Message;
+            }
+        }
+        finally
+        {
+            if (ReferenceEquals(_activeManualSessionRequest, request))
+            {
+                _activeManualSessionRequest = null;
+            }
+            request.Dispose();
+        }
+    }
 
     private async Task LoadListAsync()
     {
@@ -643,6 +717,57 @@ public partial class Sessions : ComponentBase, IDisposable
 
     private void CancelSessionEdit() => _editState.Cancel();
 
+    private void OpenSessionCreator()
+    {
+        _manualActionError = string.Empty;
+        Navigation.NavigateTo("/sessions/create");
+    }
+
+    private async Task StopManualSessionAsync()
+    {
+        if (_isStoppingManualSession) return;
+        _isStoppingManualSession = true;
+        _manualActionError = string.Empty;
+        try
+        {
+            await Api.SendAsync<ManualSessionStopResponse>(
+                "/manual/sessions/stop",
+                HttpMethod.Post,
+                cancellationToken: _lifetime.Token);
+            await RefreshAllAsync();
+        }
+        catch (OperationCanceledException) when (_lifetime.IsCancellationRequested)
+        {
+        }
+        catch (Exception exception)
+        {
+            _manualActionError = exception.Message;
+        }
+        finally
+        {
+            _isStoppingManualSession = false;
+        }
+    }
+
+    private Task<ManualMappingSearchResponse> SearchLiveGamesAsync(string path, CancellationToken cancellationToken) =>
+        Api.SendAsync<ManualMappingSearchResponse>(path, cancellationToken: cancellationToken);
+
+    private async Task StartManualSessionAsync(ManualSessionStartRequest request)
+    {
+        if (_isStoppingManualSession) return;
+        _isStoppingManualSession = true;
+        _manualActionError = string.Empty;
+        try
+        {
+            await Api.SendAsync<ManualSessionStartResponse>(
+                "/manual/sessions/start", HttpMethod.Post, request, cancellationToken: _lifetime.Token);
+            await RefreshAllAsync();
+        }
+        catch (OperationCanceledException) when (_lifetime.IsCancellationRequested) { }
+        catch (Exception exception) { _manualActionError = exception.Message; }
+        finally { _isStoppingManualSession = false; }
+    }
+
     private async Task SaveSessionEditAsync()
     {
         if (!_editState.TryBuildSubmission(out var submission)) return;
@@ -697,13 +822,16 @@ public partial class Sessions : ComponentBase, IDisposable
     {
         _listRequestVersion++;
         _requestVersions.BeginStatsRequest();
+        _requestVersions.BeginActiveManualSessionRequest();
         _lifetime.Cancel();
         _titleDebounce?.Cancel();
         _listRequest?.Cancel();
         _statsRequest?.Cancel();
+        _activeManualSessionRequest?.Cancel();
         _titleDebounce?.Dispose();
         _listRequest?.Dispose();
         _statsRequest?.Dispose();
+        _activeManualSessionRequest?.Dispose();
         _lifetime.Dispose();
         GC.SuppressFinalize(this);
     }

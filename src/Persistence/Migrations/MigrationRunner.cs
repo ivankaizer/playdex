@@ -60,6 +60,13 @@ public sealed partial class MigrationRunner(
             """;
         await using var command = new NpgsqlCommand(sql, connection);
         await command.ExecuteNonQueryAsync(cancellationToken);
+
+        // Databases adopted from the legacy migration ledger may have the
+        // columns but not the defaults declared above.
+        await using var defaults = new NpgsqlCommand(
+            "alter table dotnet_schema_migrations alter column applied_at set default now()",
+            connection);
+        await defaults.ExecuteNonQueryAsync(cancellationToken);
     }
 
     private static async Task<IReadOnlyList<string>> ReadAppliedMigrations(
