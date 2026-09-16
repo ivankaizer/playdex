@@ -9,7 +9,7 @@
 
 <AppLayout Title="Sessions" OnThemeChanged="SetTheme">
     <ChildContent>
-        <section class="mt-10 rounded-3xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/60 p-5 sm:p-6">
+        <section data-session-heading-row class="mt-10 rounded-3xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/60 p-5 sm:p-6">
             <div class="flex flex-wrap items-start justify-between gap-4">
                 <div>
                     <p class="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-700 dark:text-emerald-300">
@@ -26,22 +26,20 @@
                     <svg aria-hidden="true" viewBox="0 0 20 20" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.7">
                         <path d="M4 4.75h12M4 10h12M4 15.25h7" stroke-linecap="round"></path>
                     </svg>
-                    Past sessions &amp; AI
+                    Session Creator
                 </button>
             </div>
+        </section>
 
-            <LiveSessionControl Platforms="_state.Platforms"
-                                ActiveSession="_state.ActiveManualSession"
-                                Busy="_isStoppingManualSession"
-                                Error="@_manualActionError"
-                                SearchGamesAsync="SearchLiveGamesAsync"
-                                OnStart="StartManualSessionAsync"
-                                OnStop="StopManualSessionAsync" />
-            @if (_manualActionError.Length > 0)
-            {
-                <p role="alert" class="mt-4 text-sm text-rose-700 dark:text-rose-300">@_manualActionError</p>
-            }
+        <LiveSessionControl Platforms="_state.Platforms"
+                            ActiveSession="_state.ActiveManualSession"
+                            Busy="_isStoppingManualSession"
+                            Error="@_manualActionError"
+                            SearchGamesAsync="SearchLiveGamesAsync"
+                            OnStart="StartManualSessionAsync"
+                            OnStop="StopManualSessionAsync" />
 
+        <section data-session-history-row class="mt-5 rounded-3xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/60 p-5 sm:p-6">
             <div class="mt-6 flex flex-wrap gap-2">
                 @foreach (var preset in Presets)
                 {

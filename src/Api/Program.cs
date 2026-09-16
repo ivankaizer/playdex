@@ -61,6 +61,7 @@ builder.Services.AddSingleton(new MigrationCatalog([
     new PcPlatformHierarchyMigration(),
     new IntegrationSessionPlatformMigration(),
     new AiPlaySessionDraftsMigration(),
+    new AiGenerationHistoryMigration(),
 ]));
 builder.Services.AddSingleton<MigrationRunner>();
 builder.Services.AddScoped<EventBus>();

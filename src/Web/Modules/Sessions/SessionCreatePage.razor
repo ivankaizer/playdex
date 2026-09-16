@@ -5,24 +5,16 @@
 <AppLayout Title="Session Creator" OnThemeChanged="SetTheme">
     <ChildContent>
         <section class="mt-10 space-y-6">
-            <header class="rounded-3xl border border-slate-200 bg-white/80 p-5 dark:border-slate-800 dark:bg-slate-900/60 sm:p-6">
+            <header class="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-white/80 p-4 dark:border-slate-800 dark:bg-slate-900/60">
                 <Breadcrumbs ParentLabel="Sessions"
                              CurrentLabel="Session Creator"
                              OnParent="BackToSessionsAsync" />
-                <div class="mt-4">
-                    <p class="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-700 dark:text-emerald-300">Extended mode</p>
-                </div>
-
-                <div role="tablist" aria-label="Session creation method" class="mt-6 inline-flex w-full rounded-2xl bg-slate-100 p-1 dark:bg-slate-950 sm:w-auto">
-                    <button type="button" role="tab" data-workspace-tab="manual" aria-selected="@WorkspaceTabSelected(false)" @onclick="ShowManual"
-                            class="@WorkspaceTabClass(false)">
-                        Manual session
-                    </button>
-                    <button type="button" role="tab" data-workspace-tab="ai" aria-selected="@WorkspaceTabSelected(true)" @onclick="OpenDrafts"
-                            class="@WorkspaceTabClass(true)">
-                        AI batches
-                    </button>
-                </div>
+                <button type="button"
+                        data-workspace-toggle
+                        @onclick="ToggleWorkspace"
+                        class="rounded-full border border-slate-300 px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-700 transition hover:border-emerald-400 hover:text-emerald-700 dark:border-slate-700 dark:text-slate-200 dark:hover:border-emerald-400 dark:hover:text-emerald-300">
+                    @(_draftsOpen ? "Manual session" : "AI batches")
+                </button>
             </header>
 
             @if (_draftsOpen)

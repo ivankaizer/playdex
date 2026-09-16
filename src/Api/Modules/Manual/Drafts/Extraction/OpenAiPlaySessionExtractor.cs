@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Net.Http.Headers;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Api.Infrastructure.Http;
@@ -10,52 +11,28 @@ namespace Api.Modules.Manual.Drafts.Extraction;
 public sealed class OpenAiPlaySessionExtractor(HttpClient client, IOptions<AiDraftOptions> configuredOptions) : IPlaySessionExtractor
 {
     private const int MaxResponseBytes = 1_048_576;
+    private const string InvalidOutputMessage = "AI returned an incomplete or invalid extraction. Please try again or use manual entry.";
 
     public async Task<IReadOnlyList<ExtractedSession>> Extract(ExtractionInput input, CancellationToken cancellationToken)
     {
         var options = configuredOptions.Value;
         if (!options.IsAvailable) throw new AppProblemException(503, "AI extraction is unavailable. Use manual entry or try again later.");
         ExtractionInputValidator.Validate(input, options);
-        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        timeout.CancelAfter(TimeSpan.FromSeconds(options.TimeoutSeconds));
         try
         {
-            using var request = new HttpRequestMessage(HttpMethod.Post, options.BaseUrl);
-            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", options.ApiKey);
-            request.Content = JsonContent.Create(options.Provider.Equals("openrouter", StringComparison.OrdinalIgnoreCase)
-                ? BuildOpenRouterRequest(input, options)
-                : BuildRequest(input, options));
-            using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, timeout.Token);
-            if (!response.IsSuccessStatusCode)
-                throw new AppProblemException(502, "AI extraction failed. Please try again or use manual entry.");
-            if (response.Content.Headers.ContentLength > MaxResponseBytes) throw InvalidOutput();
-            await using var stream = await response.Content.ReadAsStreamAsync(timeout.Token);
-            using var buffer = new MemoryStream();
-            var chunk = new byte[8192];
-            int count;
-            while ((count = await stream.ReadAsync(chunk, timeout.Token)) != 0)
+            for (var attempt = 0; ; attempt++)
             {
-                if (buffer.Length + count > MaxResponseBytes) throw InvalidOutput();
-                buffer.Write(chunk, 0, count);
-            }
-            using var envelope = JsonDocument.Parse(buffer.ToArray());
-            var root = envelope.RootElement;
-            if (options.Provider.Equals("openrouter", StringComparison.OrdinalIgnoreCase))
-                return ParseRows(ReadOpenRouterText(root), input.PlatformKeys, options.MaxRows, input.ReferenceDate);
-            if (root.GetProperty("status").GetString() != "completed") throw InvalidOutput();
-            var texts = new List<string>();
-            foreach (var item in root.GetProperty("output").EnumerateArray())
-            {
-                if (item.GetProperty("type").GetString() == "reasoning") continue;
-                if (item.GetProperty("type").GetString() != "message") throw InvalidOutput();
-                foreach (var content in item.GetProperty("content").EnumerateArray())
+                try
                 {
-                    if (content.GetProperty("type").GetString() != "output_text") throw InvalidOutput();
-                    texts.Add(content.GetProperty("text").GetString() ?? throw InvalidOutput());
+                    return await ExtractOnce(input, options, cancellationToken);
+                }
+                catch (AppProblemException exception) when (attempt == 0 && IsInvalidOutput(exception))
+                {
+                }
+                catch (Exception exception) when (attempt == 0 && IsMalformedOutput(exception))
+                {
                 }
             }
-            if (texts.Count != 1) throw InvalidOutput();
-            return ParseRows(texts[0], input.PlatformKeys, options.MaxRows, input.ReferenceDate);
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
@@ -65,11 +42,70 @@ public sealed class OpenAiPlaySessionExtractor(HttpClient client, IOptions<AiDra
         {
             throw new AppProblemException(502, "AI extraction is unavailable. Please try again or use manual entry.");
         }
-        catch (Exception exception) when (exception is JsonException or InvalidOperationException or KeyNotFoundException or FormatException or OverflowException)
+        catch (Exception exception) when (IsMalformedOutput(exception))
         {
             throw InvalidOutput();
         }
     }
+
+    private async Task<IReadOnlyList<ExtractedSession>> ExtractOnce(
+        ExtractionInput input,
+        AiDraftOptions options,
+        CancellationToken cancellationToken)
+    {
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(TimeSpan.FromSeconds(options.TimeoutSeconds));
+        using var request = new HttpRequestMessage(HttpMethod.Post, options.BaseUrl);
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", options.ApiKey);
+        request.Content = JsonContent.Create(options.Provider.Equals("openrouter", StringComparison.OrdinalIgnoreCase)
+            ? BuildOpenRouterRequest(input, options)
+            : BuildRequest(input, options));
+        using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, timeout.Token);
+        await using var stream = await response.Content.ReadAsStreamAsync(timeout.Token);
+        using var buffer = new MemoryStream();
+        var chunk = new byte[8192];
+        int count;
+        var truncated = false;
+        while ((count = await stream.ReadAsync(chunk, timeout.Token)) != 0)
+        {
+            if (buffer.Length + count > MaxResponseBytes)
+            {
+                buffer.Write(chunk, 0, (int)(MaxResponseBytes - buffer.Length));
+                truncated = true;
+                break;
+            }
+            buffer.Write(chunk, 0, count);
+        }
+        if (input.ObserveResponse is not null)
+            await input.ObserveResponse(new((int)response.StatusCode, Encoding.UTF8.GetString(buffer.ToArray()), truncated));
+        if (!response.IsSuccessStatusCode)
+            throw new AppProblemException(502, "AI extraction failed. Please try again or use manual entry.");
+        if (truncated) throw InvalidOutput();
+        using var envelope = JsonDocument.Parse(buffer.ToArray());
+        var root = envelope.RootElement;
+        if (options.Provider.Equals("openrouter", StringComparison.OrdinalIgnoreCase))
+            return ParseRows(ReadOpenRouterText(root), input.PlatformKeys, options.MaxRows, input.ReferenceDate);
+        if (root.GetProperty("status").GetString() != "completed") throw InvalidOutput();
+        var texts = new List<string>();
+        foreach (var item in root.GetProperty("output").EnumerateArray())
+        {
+            if (item.GetProperty("type").GetString() == "reasoning") continue;
+            if (item.GetProperty("type").GetString() != "message") throw InvalidOutput();
+            foreach (var content in item.GetProperty("content").EnumerateArray())
+            {
+                if (content.GetProperty("type").GetString() != "output_text") throw InvalidOutput();
+                texts.Add(content.GetProperty("text").GetString() ?? throw InvalidOutput());
+            }
+        }
+        if (texts.Count != 1) throw InvalidOutput();
+        return ParseRows(texts[0], input.PlatformKeys, options.MaxRows, input.ReferenceDate);
+    }
+
+    private static bool IsInvalidOutput(AppProblemException exception) =>
+        exception.StatusCode == 502 && exception.Message == InvalidOutputMessage;
+
+    private static bool IsMalformedOutput(Exception exception) =>
+        exception is JsonException or InvalidOperationException or KeyNotFoundException or FormatException or OverflowException;
 
     private static object BuildRequest(ExtractionInput input, AiDraftOptions options)
     {
@@ -147,14 +183,15 @@ public sealed class OpenAiPlaySessionExtractor(HttpClient client, IOptions<AiDra
         {
             ["model"] = options.Model,
             ["messages"] = new JsonArray { new JsonObject { ["role"] = "user", ["content"] = content } },
+            ["temperature"] = 0,
             ["response_format"] = new JsonObject
             {
                 ["type"] = "json_schema",
                 ["json_schema"] = new JsonObject { ["name"] = "play_session_drafts", ["strict"] = true, ["schema"] = schema },
             },
-            // Draft rows are small; a bounded completion keeps reasoning models from
-            // holding the response open while spending the full generic output budget.
-            ["max_tokens"] = 4_096,
+            ["plugins"] = new JsonArray { new JsonObject { ["id"] = "response-healing" } },
+            ["provider"] = new JsonObject { ["require_parameters"] = true },
+            ["max_tokens"] = 16_000,
             ["stream"] = false,
         };
     }
@@ -269,5 +306,5 @@ public sealed class OpenAiPlaySessionExtractor(HttpClient client, IOptions<AiDra
         if (actual.Length != properties.Length || !actual.Order().SequenceEqual(properties.Order())) throw InvalidOutput();
     }
 
-    private static AppProblemException InvalidOutput() => new(502, "AI returned an incomplete or invalid extraction. Please try again or use manual entry.");
+    private static AppProblemException InvalidOutput() => new(502, InvalidOutputMessage);
 }

@@ -11,6 +11,36 @@ namespace Api.Tests;
 
 public sealed class PlaySessionExtractorTests
 {
+    [Fact]
+    public async Task HistoryReceivesMalformedAndRetriedResponsesBeforeParsing()
+    {
+        var responses = new List<ExtractionResponse>();
+        var handler = new FakeHandler("not json") { Outputs = new Queue<string>(["not json", "{\"sessions\":[]}"]) };
+        var input = Input() with { ObserveResponse = response => { responses.Add(response); return Task.CompletedTask; } };
+
+        await Extractor(handler).Extract(input, CancellationToken.None);
+
+        Assert.Equal(2, responses.Count);
+        Assert.Contains("not json", responses[0].Body);
+        Assert.Contains("sessions", responses[1].Body);
+        Assert.All(responses, response => Assert.Equal(200, response.HttpStatus));
+        Assert.DoesNotContain("Bearer", JsonSerializer.Serialize(responses), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task HistoryReceivesProviderErrorWithoutLeakingItToTheUser()
+    {
+        ExtractionResponse? captured = null;
+        var input = Input() with { ObserveResponse = response => { captured = response; return Task.CompletedTask; } };
+        var error = await Assert.ThrowsAsync<AppProblemException>(() => Extractor(new("private provider error")
+            { Status = HttpStatusCode.TooManyRequests }).Extract(input, CancellationToken.None));
+
+        Assert.NotNull(captured);
+        Assert.Equal(429, captured.HttpStatus);
+        Assert.Contains("private provider error", captured.Body);
+        Assert.DoesNotContain("private provider error", error.Message, StringComparison.Ordinal);
+    }
+
     private static ExtractionInput Input(string? text = "Played Hades yesterday for an hour") =>
         new(text, null, null, new DateOnly(2026, 9, 9), ["unknown", "pc", "steam", "ps5"]);
 
@@ -98,6 +128,36 @@ public sealed class PlaySessionExtractorTests
         Assert.Equal(502, (await Assert.ThrowsAsync<AppProblemException>(() => Extractor(new(output)).Extract(Input(), CancellationToken.None))).StatusCode);
 
     [Fact]
+    public async Task OpenRouterRetriesOneMalformedStructuredResponse()
+    {
+        var handler = new FakeHandler("not json")
+        {
+            OpenRouterResponse = true,
+            Outputs = new Queue<string>(
+            [
+                "not json",
+                """{"sessions":[{"title":"Splatoon Raiders","date":"27","durationMinutes":70,"platformKey":null,"warnings":[]}]}""",
+            ]),
+        };
+
+        var row = Assert.Single(await Extractor(handler, new()
+        {
+            Enabled = true,
+            ApiKey = "test",
+            Model = "deepseek/deepseek-v4.1-flash",
+            Provider = "openrouter",
+        }).Extract(Input("Splatoon Raiders for 1 hour 10 minutes on the 27th"), CancellationToken.None));
+
+        Assert.Equal(2, handler.Calls);
+        Assert.Equal("Splatoon Raiders", row.Title);
+        Assert.Equal("2026-09-27", row.Date);
+        Assert.Equal(70, row.DurationMinutes);
+        Assert.Contains("\"plugins\":[{\"id\":\"response-healing\"}]", handler.Body);
+        Assert.Contains("\"require_parameters\":true", handler.Body);
+        Assert.Contains("\"max_tokens\":16000", handler.Body);
+    }
+
+    [Fact]
     public async Task ExcessRowsAreRejectedWithoutTruncation()
     {
         const string row = "{\"title\":\"Hades\",\"date\":null,\"durationMinutes\":null,\"platformKey\":null,\"warnings\":[]}";
@@ -176,13 +236,21 @@ public sealed class PlaySessionExtractorTests
         public string ResponseStatus { get; init; } = "completed";
         public string OutputType { get; init; } = "output_text";
         public bool WaitForCancellation { get; init; }
+        public bool OpenRouterResponse { get; init; }
+        public Queue<string>? Outputs { get; init; }
+        public int Calls { get; private set; }
         public string? Body { get; private set; }
         public HttpStatusCode Status { get; init; } = HttpStatusCode.OK;
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
             if (WaitForCancellation) await Task.Delay(Timeout.Infinite, cancellationToken);
+            Calls++;
             Body = await request.Content!.ReadAsStringAsync(cancellationToken);
-            return new(Status) { Content = new StringContent(JsonSerializer.Serialize(new { status = ResponseStatus, output = new[] { new { type = "message", content = new[] { new { type = OutputType, text = output } } } } }), Encoding.UTF8, "application/json") };
+            var responseOutput = Outputs?.Dequeue() ?? output;
+            var response = OpenRouterResponse
+                ? JsonSerializer.Serialize(new { choices = new[] { new { message = new { content = responseOutput } } } })
+                : JsonSerializer.Serialize(new { status = ResponseStatus, output = new[] { new { type = "message", content = new[] { new { type = OutputType, text = responseOutput } } } } });
+            return new(Status) { Content = new StringContent(response, Encoding.UTF8, "application/json") };
         }
     }
 }

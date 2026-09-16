@@ -24,7 +24,14 @@
 
         @if (_error.Length > 0)
         {
-            <p role="alert" class="mb-5 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700 dark:border-rose-400/20 dark:bg-rose-400/10 dark:text-rose-200">@_error</p>
+            <div role="alert" class="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700 dark:border-rose-400/20 dark:bg-rose-400/10 dark:text-rose-200">
+                <p>@_error</p>
+                @if (_generationFailed && _generationSource is not null && Capabilities?.Available == true)
+                {
+                    <button type="button" disabled="@_busy" @onclick="RetryGenerationAsync"
+                            class="shrink-0 rounded-full border border-rose-300 px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] disabled:opacity-60 dark:border-rose-400/40">Retry generation</button>
+                }
+            </div>
         }
         @if (_outcome.Length > 0)
         {
@@ -69,7 +76,7 @@
                         </div>
 
                         <div class="mt-5 flex flex-col gap-4 border-t border-slate-200 pt-5 dark:border-slate-800 sm:flex-row sm:items-center sm:justify-between">
-                            <p class="max-w-2xl text-xs leading-5 text-slate-500 dark:text-slate-400">Text and screenshots are sent to @Capabilities.Provider for processing and are not retained by Playdex. Supported: PNG, JPEG, WebP up to @(Capabilities.MaxImageBytes / 1024 / 1024) MiB and @(Capabilities.MaxImagePixels / 1000000) megapixels.</p>
+                            <p class="max-w-2xl text-xs leading-5 text-slate-500 dark:text-slate-400">Text and screenshots are sent to @Capabilities.Provider for processing. Playdex retains your input, screenshot, and AI results @(Capabilities.HistoryRetentionDays > 0 ? $"for {Capabilities.HistoryRetentionDays} days" : "until deleted") for administrator review to improve generation. Supported: PNG, JPEG, WebP up to @(Capabilities.MaxImageBytes / 1024 / 1024) MiB and @(Capabilities.MaxImagePixels / 1000000) megapixels.</p>
                             <button type="button" disabled="@(_busy || (string.IsNullOrWhiteSpace(_text) && _image is null))" @onclick="GenerateAsync"
                                     class="shrink-0 rounded-full bg-emerald-400 px-5 py-2.5 text-xs font-semibold uppercase tracking-[0.18em] text-slate-950 disabled:opacity-60">
                                 @(_busy ? "Generating drafts…" : "Generate drafts")
@@ -129,8 +136,12 @@
                         <h2 class="mt-2 text-xl font-semibold">Review extracted sessions</h2>
                         <p class="mt-1 text-sm text-slate-600 dark:text-slate-300">Correct the details and choose a verified game before accepting each session.</p>
                     </div>
-                    <button type="button" disabled="@(_busy || !_rows.Any(row => row.CanAccept))" @onclick="() => AcceptAsync(_rows.Where(row => row.CanAccept).ToArray())"
-                            class="shrink-0 rounded-full bg-emerald-400 px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-950 disabled:opacity-60">Accept all ready</button>
+                    <div class="flex flex-wrap items-center gap-2">
+                        <button type="button" disabled="@(_busy || Capabilities?.Available != true)" @onclick="RegenerateAsync"
+                                class="shrink-0 rounded-full border border-slate-300 px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-700 disabled:opacity-60 dark:border-slate-700 dark:text-slate-200">Generate again</button>
+                        <button type="button" disabled="@(_busy || !_rows.Any(row => row.CanAccept))" @onclick="() => AcceptAsync(_rows.Where(row => row.CanAccept).ToArray())"
+                                class="shrink-0 rounded-full bg-emerald-400 px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-950 disabled:opacity-60">Accept all ready</button>
+                    </div>
                 </div>
             </div>
 

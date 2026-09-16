@@ -60,3 +60,13 @@ html, body { font-family: system-ui, sans-serif; margin: 0; }
 .admin-content .rz-card { margin-top: 1rem; margin-bottom: 1.5rem; }
 .admin-content .rz-data-grid { margin-top: 1rem; margin-bottom: 1.5rem; }
 .admin-content .rz-alert { margin-top: 1rem; margin-bottom: 1.5rem; }
+
+.generation-detail-header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 1rem; }
+.generation-detail-header h2.rz-heading { margin: 0; }
+.generation-metadata { display: grid; gap: 0.5rem; overflow-wrap: anywhere; }
+.generation-comparison { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 2rem; }
+.generation-text { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 32rem; overflow: auto; padding: 1rem; border: 1px solid var(--rz-base-300); border-radius: 0.5rem; font-size: 0.85rem; line-height: 1.6; }
+.generation-screenshot { display: block; max-width: 100%; max-height: 36rem; object-fit: contain; margin-top: 1rem; border-radius: 0.5rem; }
+.generation-response { border-bottom: 1px solid var(--rz-base-300); padding: 1rem 0; }
+.generation-response summary { cursor: pointer; font-weight: 600; }
+@media (max-width: 850px) { .generation-comparison { grid-template-columns: 1fr; gap: 0; } .admin-content { padding: 1rem; } }

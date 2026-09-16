@@ -14,7 +14,8 @@ public static class DraftEndpoints
         manual.MapGet("/draft-capabilities", (IOptions<AiDraftOptions> options) =>
         {
             var o=options.Value;
-            return TypedResults.Ok(new { available=o.IsAvailable, provider=o.Provider, o.MaxTextCharacters,o.MaxImageBytes,o.MaxImagePixels,o.MaxRows });
+            return TypedResults.Ok(new { available=o.IsAvailable, provider=o.Provider, o.MaxTextCharacters,o.MaxImageBytes,o.MaxImagePixels,o.MaxRows,
+                historyRetentionDays=Math.Max(0,o.HistoryRetentionDays) });
         });
         manual.MapGet("/draft-batches", async (HttpContext http,DraftService service) =>
             TypedResults.Ok(await service.List(http.User.GetUserId(),http.RequestAborted)));

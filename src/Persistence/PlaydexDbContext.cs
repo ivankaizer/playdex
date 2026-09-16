@@ -19,10 +19,12 @@ public sealed class PlaydexDbContext(DbContextOptions<PlaydexDbContext> options)
 
     public DbSet<SessionDraftBatch> SessionDraftBatches => Set<SessionDraftBatch>();
     public DbSet<SessionDraftRow> SessionDraftRows => Set<SessionDraftRow>();
+    public DbSet<AiGeneration> AiGenerations => Set<AiGeneration>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         ConfigureSessionDrafts(modelBuilder);
+        ConfigureAiGenerations(modelBuilder);
         ConfigureUsers(modelBuilder);
         ConfigurePlatforms(modelBuilder);
         ConfigureIntegrations(modelBuilder);
@@ -35,6 +37,31 @@ public sealed class PlaydexDbContext(DbContextOptions<PlaydexDbContext> options)
         ConfigureUserSettings(modelBuilder);
         ConfigureGameConnections(modelBuilder);
         ConfigureNotificationChannels(modelBuilder);
+    }
+
+    private static void ConfigureAiGenerations(ModelBuilder modelBuilder)
+    {
+        var entity = modelBuilder.Entity<AiGeneration>();
+        entity.ToTable("ai_generations");
+        entity.HasKey(row => row.Id);
+        entity.Property(row => row.Id).HasColumnName("id").ValueGeneratedNever();
+        entity.Property(row => row.UserId).HasColumnName("user_id");
+        entity.Property(row => row.RequestId).HasColumnName("request_id");
+        entity.Property(row => row.CreatedAt).HasColumnName("created_at");
+        entity.Property(row => row.CompletedAt).HasColumnName("completed_at");
+        entity.Property(row => row.Provider).HasColumnName("provider");
+        entity.Property(row => row.Model).HasColumnName("model");
+        entity.Property(row => row.Timezone).HasColumnName("timezone");
+        entity.Property(row => row.ReferenceDate).HasColumnName("reference_date");
+        entity.Property(row => row.InputText).HasColumnName("input_text");
+        entity.Property(row => row.Image).HasColumnName("image");
+        entity.Property(row => row.ImageContentType).HasColumnName("image_content_type");
+        entity.Property(row => row.Status).HasColumnName("status");
+        entity.Property(row => row.Error).HasColumnName("error");
+        entity.Property(row => row.ResultJson).HasColumnName("result_json").HasColumnType("jsonb");
+        entity.Property(row => row.ResponsesJson).HasColumnName("responses_json").HasColumnType("jsonb");
+        entity.HasIndex(row => row.CreatedAt);
+        entity.HasOne<User>().WithMany().HasForeignKey(row => row.UserId).OnDelete(DeleteBehavior.Cascade);
     }
 
     private static void ConfigureSessionDrafts(ModelBuilder modelBuilder)

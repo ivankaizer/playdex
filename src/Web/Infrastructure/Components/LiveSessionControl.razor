@@ -21,10 +21,10 @@
                 <input type="search" value="@_query" @oninput="ChangeQuery" placeholder="Search saved games and IGDB" autocomplete="off" class="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-emerald-400 dark:border-slate-700 dark:bg-slate-950 dark:text-white" />
             </label>
             <button type="button" disabled="@(_busy || string.IsNullOrWhiteSpace(_query))" @onclick="SearchAsync" class="rounded-full border border-slate-300 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-700 disabled:opacity-60 dark:border-slate-700 dark:text-slate-200">@(_busy ? "Searching..." : "Search")</button>
-            <label class="min-w-[10rem] text-xs font-medium text-slate-600 dark:text-slate-300">
+            <label data-live-platform class="w-full text-xs font-medium text-slate-600 dark:text-slate-300 sm:w-36 sm:min-w-0">
                 Platform
                 <select value="@_platformKey" @onchange="ChangePlatform" class="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-950 dark:text-white">
-                    <option value="">Select platform</option>
+                    <option value="">Select</option>
                     @foreach (var platform in Platforms) { <option value="@platform.Key">@platform.Name</option> }
                 </select>
             </label>

@@ -21,8 +21,10 @@ public partial class DraftWorkspace
     private byte[]? _image;
     private bool _busy;
     private Guid _requestId = Guid.NewGuid();
-    private string? _requestText;
-    private byte[]? _requestImage;
+    private GenerationSource? _generationSource;
+    private Guid? _generatedBatchId;
+    private bool _generationFailed;
+    private sealed record GenerationSource(string Text, byte[]? Image, string MediaType, string FileName, string Timezone);
     private readonly string _pasteId = $"draft-paste-{Guid.NewGuid():N}";
     private DotNetObjectReference<DraftWorkspace>? _reference;
     private readonly CancellationTokenSource _lifetime = new();
@@ -46,7 +48,7 @@ public partial class DraftWorkspace
     }
     private async Task ResumeAsync(Guid id)
     {
-        _busy = true; _error = "";
+        _busy = true; _error = ""; _generationFailed = false;
         try { Show(await Api.SendAsync<DraftBatchDto>($"/manual/draft-batches/{id}", cancellationToken: _lifetime.Token)); }
         catch (Exception exception) { _error = exception.Message; }
         finally { _busy = false; }
@@ -66,7 +68,7 @@ public partial class DraftWorkspace
     private async Task BackAsync()
     {
         _busy = true;
-        try { if (!await SaveAllAsync()) return; _batch = null; _rows.Clear(); await LoadBatchesAsync(); }
+        try { if (!await SaveAllAsync()) return; _batch = null; _rows.Clear(); _generationFailed = false; _error = ""; await LoadBatchesAsync(); }
         finally { _busy = false; }
     }
     private async Task LoadImageAsync(InputFileChangeEventArgs args)
@@ -102,31 +104,88 @@ public partial class DraftWorkspace
     private async Task GenerateAsync()
     {
         if (_busy || Capabilities?.Available != true) return;
-        _busy = true; _error = "";
+        _busy = true; _error = ""; _generationFailed = false;
         try
         {
             if (_text.Length > Capabilities.MaxTextCharacters) throw new InvalidOperationException("Text exceeds the character limit.");
-            if (_requestText != _text || !ReferenceEquals(_requestImage, _image)) { _requestId = Guid.NewGuid(); _requestText = _text; _requestImage = _image; }
             var timezone = await JS.InvokeAsync<string>("playdex.drafts.timezone");
-            HttpContent BuildContent()
-            {
-                var content = new MultipartFormDataContent();
-                content.Add(new StringContent(_requestId.ToString()), "requestId");
-                content.Add(new StringContent(timezone), "timezone");
-                if (!string.IsNullOrWhiteSpace(_text)) content.Add(new StringContent(_text), "text");
-                if (_image is not null)
-                {
-                    var file = new ByteArrayContent(_image); file.Headers.ContentType = new MediaTypeHeaderValue(_mediaType);
-                    content.Add(file, "file", _fileName);
-                }
-                return content;
-            }
-            Show(await Api.SendAsync<DraftBatchDto>("/manual/draft-batches", HttpMethod.Post, (Func<HttpContent>)BuildContent, cancellationToken: _lifetime.Token));
-            _text = ""; RemoveImage(); _requestImage = null; _requestText = null;
+            _requestId = Guid.NewGuid();
+            _generationSource = new(_text, _image, _mediaType, _fileName, timezone);
+            await RunGenerationAsync();
         }
         catch (Exception exception) { _error = exception.Message; }
         finally { _busy = false; }
     }
+
+    private async Task RetryGenerationAsync()
+    {
+        if (_busy || !_generationFailed || _generationSource is null || Capabilities?.Available != true) return;
+        await RunGenerationAsync();
+    }
+
+    private async Task RegenerateAsync()
+    {
+        if (_busy || Capabilities?.Available != true) return;
+        _busy = true; _error = ""; _generationFailed = false;
+        try
+        {
+            if (!await SaveAllAsync()) return;
+            if (_generationSource is null || _generatedBatchId != _batch?.Id)
+            {
+                _batch = null;
+                _rows.Clear();
+                _text = "";
+                RemoveImage();
+                _outcome = "Add the original description or screenshot to generate again. Saved batches cannot reload the original input.";
+                await LoadBatchesAsync();
+                return;
+            }
+            _requestId = Guid.NewGuid();
+            await RunGenerationAsync();
+        }
+        finally { _busy = false; }
+    }
+
+    private async Task RunGenerationAsync()
+    {
+        var source = _generationSource!;
+        _busy = true; _error = ""; _generationFailed = false;
+        try
+        {
+            HttpContent BuildContent()
+            {
+                var content = new MultipartFormDataContent();
+                content.Add(new StringContent(_requestId.ToString()), "requestId");
+                content.Add(new StringContent(source.Timezone), "timezone");
+                if (!string.IsNullOrWhiteSpace(source.Text)) content.Add(new StringContent(source.Text), "text");
+                if (source.Image is not null)
+                {
+                    var file = new ByteArrayContent(source.Image); file.Headers.ContentType = new MediaTypeHeaderValue(source.MediaType);
+                    content.Add(file, "file", source.FileName);
+                }
+                return content;
+            }
+            Show(await CreateBatchAsync(BuildContent));
+            _generatedBatchId = _batch!.Id;
+            _text = ""; RemoveImage();
+        }
+        catch (Exception exception) { _error = exception.Message; _generationFailed = true; }
+        finally { _busy = false; }
+    }
+
+    private async Task<DraftBatchDto> CreateBatchAsync(Func<HttpContent> buildContent)
+    {
+        try
+        {
+            return await Api.SendAsync<DraftBatchDto>("/manual/draft-batches", HttpMethod.Post, buildContent, cancellationToken: _lifetime.Token);
+        }
+        catch (HttpRequestException) when (!_lifetime.IsCancellationRequested)
+        {
+            await Task.Delay(TimeSpan.FromMilliseconds(300), _lifetime.Token);
+            return await Api.SendAsync<DraftBatchDto>("/manual/draft-batches", HttpMethod.Post, buildContent, cancellationToken: _lifetime.Token);
+        }
+    }
+
     private string RowPath(DraftRowEdit row) => $"/manual/draft-batches/{_batch!.Id}/rows/{row.Id}";
     private async Task<bool> SaveAsync(DraftRowEdit row)
     {
@@ -198,6 +257,8 @@ public partial class DraftWorkspace
     public async ValueTask DisposeAsync()
     {
         _lifetime.Cancel();
+        _generationSource = null;
+        _image = null;
         try { await JS.InvokeVoidAsync("playdex.drafts.detachPaste", _pasteId); } catch (JSDisconnectedException) { }
         _reference?.Dispose(); _lifetime.Dispose(); GC.SuppressFinalize(this);
     }

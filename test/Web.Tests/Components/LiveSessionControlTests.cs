@@ -17,6 +17,9 @@ public sealed class LiveSessionControlTests : BunitContext
             .Add(component => component.SearchGamesAsync, (_, _) => Task.FromResult(new ManualMappingSearchResponse("Hades", true, [result])))
             .Add(component => component.OnStart, request => started = request));
 
+        var platform = cut.Find("[data-live-platform]");
+        Assert.Contains("sm:w-36", platform.ClassList);
+        Assert.DoesNotContain("min-w-[10rem]", platform.ClassList);
         Assert.True(cut.FindAll("button").Single(button => button.TextContent.Contains("Start live")).HasAttribute("disabled"));
         cut.Find("input[type=search]").Input("Hades");
         cut.FindAll("button").Single(button => button.TextContent == "Search").Click();

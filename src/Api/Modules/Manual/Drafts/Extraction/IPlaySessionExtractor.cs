@@ -13,13 +13,19 @@ public sealed class AiDraftOptions
     public int MaxRows { get; set; } = 50;
     public int TimeoutSeconds { get; set; } = 60;
     public int RequestsPerHour { get; set; } = 10;
+    public int HistoryRetentionDays { get; set; } = 30;
     public bool IsAvailable => Enabled && !string.IsNullOrWhiteSpace(ApiKey) && !string.IsNullOrWhiteSpace(Model)
         && MaxTextCharacters > 0 && MaxImageBytes > 0 && MaxImagePixels > 0 && MaxRows is > 0 and <= 50
         && TimeoutSeconds > 0 && RequestsPerHour > 0;
 }
 
 public sealed record ExtractionInput(string? Text, byte[]? Image, string? ImageContentType,
-    DateOnly ReferenceDate, IReadOnlyList<string> PlatformKeys);
+    DateOnly ReferenceDate, IReadOnlyList<string> PlatformKeys)
+{
+    public Func<ExtractionResponse, Task>? ObserveResponse { get; init; }
+}
+
+public sealed record ExtractionResponse(int HttpStatus, string Body, bool Truncated);
 
 public sealed record ExtractedSession(string Title, string? Date, int? DurationMinutes,
     string? PlatformKey, IReadOnlyList<string> Warnings);

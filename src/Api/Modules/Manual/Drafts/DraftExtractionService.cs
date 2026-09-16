@@ -10,7 +10,7 @@ namespace Api.Modules.Manual.Drafts;
 
 public sealed class DraftExtractionService(DraftRepository repository, DraftService drafts,
     ManualRepository manual, IPlaySessionExtractor extractor, IOptions<AiDraftOptions> options,
-    NpgsqlDataSource dataSource, TimeProvider clock)
+    NpgsqlDataSource dataSource, TimeProvider clock, GenerationHistoryRecorder history)
 {
     private static readonly Meter Meter = new("Playdex.AiDrafts");
     private static readonly Counter<long> Requests = Meter.CreateCounter<long>("playdex.ai_drafts.extractions");
@@ -35,13 +35,16 @@ public sealed class DraftExtractionService(DraftRepository repository, DraftServ
         acquire.Parameters.AddWithValue("key", key);
         if (await acquire.ExecuteScalarAsync(ct) is not true)
             throw AppProblemException.Conflict("An extraction is already running. Retry this request when it finishes.");
+        Guid? generationId = null;
         try
         {
             existing = await repository.FindRequest(userId, requestId, ct);
             if (existing is not null) return DraftService.ToDto(existing);
             await CheckQuota(connection, userId, opts.RequestsPerHour, ct);
+            generationId = await history.Begin(userId, requestId, timezone, input);
+            input = input with { ObserveResponse = response => history.RecordResponse(generationId, response) };
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
-            timeout.CancelAfter(TimeSpan.FromSeconds(opts.TimeoutSeconds));
+            timeout.CancelAfter(TimeSpan.FromSeconds((long)opts.TimeoutSeconds * 2));
             var rows = await extractor.Extract(input, timeout.Token);
             if (rows.Count == 0) throw AppProblemException.Validation("No individual play sessions could be found. Add dates and durations or try a clearer screenshot.");
             if (rows.Count > opts.MaxRows) throw new AppProblemException(502, "Too many sessions were extracted. Try a smaller input.");
@@ -69,16 +72,22 @@ public sealed class DraftExtractionService(DraftRepository repository, DraftServ
                     SelectionJson=selected is null ? null : JsonSerializer.Serialize(selected) });
             }
             var saved = await repository.CreateBatch(batch, ct);
+            var result = DraftService.ToDto(saved);
+            await history.Complete(generationId, "success", result: result);
             Requests.Add(1, new KeyValuePair<string,object?>("outcome","success"));
-            return DraftService.ToDto(saved);
+            return result;
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)
         {
+            await history.Complete(generationId, "timeout", "AI extraction timed out.");
             Requests.Add(1,new KeyValuePair<string,object?>("outcome","timeout"));
             throw new AppProblemException(504,"AI extraction timed out. Retry with a smaller input.");
         }
-        catch
+        catch (Exception exception)
         {
+            await history.Complete(generationId, ct.IsCancellationRequested ? "cancelled"
+                : exception is AppProblemException {StatusCode:504} ? "timeout" : "failure",
+                exception is AppProblemException problem ? problem.Message : "AI generation did not complete.");
             Requests.Add(1,new KeyValuePair<string,object?>("outcome","failure"));
             throw;
         }

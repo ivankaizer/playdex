@@ -13,6 +13,8 @@ public static class ManualModule
         services.AddScoped<DraftService>();
         services.AddScoped<DraftExtractionService>();
         services.AddSingleton(TimeProvider.System);
+        services.AddSingleton<GenerationHistoryRecorder>();
+        services.AddHostedService<GenerationHistoryCleanup>();
         services.AddOptions<AiDraftOptions>().BindConfiguration("AiDrafts");
         services.AddHttpClient<IPlaySessionExtractor, OpenAiPlaySessionExtractor>(client => client.Timeout = Timeout.InfiniteTimeSpan);
         return services;
