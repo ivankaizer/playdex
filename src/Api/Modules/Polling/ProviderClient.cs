@@ -1,4 +1,4 @@
-using Api.Infrastructure.Persistence;
+using Playdex.Persistence;
 
 namespace Api.Modules.Polling;
 

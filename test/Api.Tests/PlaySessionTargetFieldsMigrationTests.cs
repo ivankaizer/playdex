@@ -1,5 +1,5 @@
 using Npgsql;
-using Api.Infrastructure.Persistence.Migrations;
+using Playdex.Persistence.Migrations;
 using Xunit;
 
 namespace Api.Tests;

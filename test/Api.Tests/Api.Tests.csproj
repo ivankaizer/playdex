@@ -14,5 +14,6 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="../../src/Api/Api.csproj" />
+    <ProjectReference Include="../../src/Persistence/Persistence.csproj" />
   </ItemGroup>
 </Project>

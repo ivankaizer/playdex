@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "css:build": "tailwindcss -c tailwind.config.cjs -i ./Styles/app.css -o ./wwwroot/css/app.css --postcss --minify",
-    "css:watch": "tailwindcss -c tailwind.config.cjs -i ./Styles/app.css -o ./wwwroot/css/app.css --postcss --watch --poll"
+    "css:watch": "tailwindcss -c tailwind.config.cjs -i ./Styles/app.css -o ./wwwroot/css/app.css --postcss --watch=always --poll"
   },
   "devDependencies": {
     "autoprefixer": "^10.4.20",

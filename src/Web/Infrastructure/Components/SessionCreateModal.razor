@@ -1,0 +1,191 @@
+<div class="@(Embedded ? "w-full" : "fixed inset-0 z-[70] flex items-start justify-center overflow-y-auto bg-slate-950/65 p-4 sm:items-center")">
+    <section role="@(Embedded ? null : "dialog")"
+             aria-modal="@(Embedded ? null : "true")"
+             aria-labelledby="@(Embedded ? null : "session-create-title")"
+             data-layout="@(Embedded ? "extended-manual" : null)"
+             class="@(Embedded ? "w-full text-slate-900 dark:text-white" : "my-auto w-full max-w-2xl rounded-3xl border border-slate-200 bg-white p-5 text-slate-900 shadow-2xl dark:border-slate-700 dark:bg-slate-900 dark:text-white sm:p-6")">
+        @if (!Embedded)
+        {
+            <div class="flex items-start justify-between gap-4">
+                <div>
+                    <p class="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-700 dark:text-emerald-300">Add session</p>
+                    <h2 id="session-create-title" class="mt-2 text-xl font-semibold text-slate-900 dark:text-white">
+                        @(State.Mode == SessionCreateMode.Live ? "Start playing now" : "Log a past session")
+                    </h2>
+                </div>
+                <button type="button" aria-label="Close session creator" disabled="@State.IsSaving" @onclick="CloseAsync"
+                        class="rounded-full border border-slate-300 px-3 py-1 text-sm text-slate-600 dark:border-slate-700 dark:text-slate-300">×</button>
+            </div>
+
+            <div class="mt-5 grid grid-cols-2 gap-2 rounded-2xl bg-slate-100 p-1 dark:bg-slate-950">
+                <button type="button" data-mode="live" @onclick="() => State.SetMode(SessionCreateMode.Live)"
+                        class="@ModeClass(SessionCreateMode.Live)">Start now</button>
+                <button type="button" data-mode="historical" @onclick="() => State.SetMode(SessionCreateMode.Historical)"
+                        class="@ModeClass(SessionCreateMode.Historical)">Log past session</button>
+            </div>
+
+            @if (State.Mode == SessionCreateMode.Historical && AiAvailable)
+            {
+                <button type="button" class="mt-4 rounded-full bg-emerald-400 px-4 py-2 text-sm font-semibold text-slate-950" @onclick="OnUseAi">Use AI</button>
+            }
+        }
+
+        <div class="@(Embedded ? "grid gap-5 lg:grid-cols-[minmax(0,1.35fr)_minmax(20rem,0.65fr)]" : "mt-5 space-y-4")">
+            <section class="@(Embedded ? "rounded-3xl border border-slate-200 bg-white/80 p-5 dark:border-slate-800 dark:bg-slate-900/60 sm:p-6" : "space-y-4")">
+                @if (Embedded)
+                {
+                    <p class="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-700 dark:text-emerald-300">Game library</p>
+                    <h3 class="mt-2 text-xl font-semibold">Choose a game</h3>
+                    <p class="mt-1 text-sm text-slate-600 dark:text-slate-300">Search your saved games and IGDB, then select the exact game you played.</p>
+                }
+
+                <form class="mt-5 flex flex-col gap-3 sm:flex-row sm:items-end" @onsubmit="SearchAsync" @onsubmit:preventDefault>
+                    <label class="flex-1 text-xs font-medium text-slate-600 dark:text-slate-300">
+                        Game
+                        <input type="search" autocomplete="off" placeholder="Search saved games and IGDB" value="@State.Query"
+                               @oninput="ChangeQueryAsync"
+                               class="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-emerald-400 dark:border-slate-700 dark:bg-slate-950 dark:text-white" />
+                    </label>
+                    <button type="submit" disabled="@State.IsSearching"
+                            class="rounded-full bg-emerald-400 px-5 py-2.5 text-xs font-semibold uppercase tracking-[0.2em] text-slate-950 disabled:opacity-60">
+                        @(State.IsSearching ? "Searching..." : "Search")
+                    </button>
+                </form>
+
+                @if (State.SearchError.Length > 0)
+                {
+                    <p role="alert" class="mt-4 text-sm text-rose-700 dark:text-rose-300">@State.SearchError</p>
+                }
+                @if (!State.IsIgdbAvailable)
+                {
+                    <p class="mt-4 rounded-2xl bg-amber-50 p-3 text-sm text-amber-800 dark:bg-amber-400/10 dark:text-amber-200">IGDB search is unavailable. You can still select a saved game.</p>
+                }
+
+                @if (State.Results.Count > 0)
+                {
+                    <div class="mt-4 grid max-h-[30rem] gap-2 overflow-y-auto pr-1 sm:grid-cols-2">
+                        @foreach (var result in State.Results)
+                        {
+                            <button type="button" @key="@(result.GameId ?? $"igdb-{result.IgdbId}")" @onclick="() => State.SelectGame(result)"
+                                    class="flex w-full items-center gap-3 rounded-2xl border p-2.5 text-left transition @(State.SelectedGame == result ? "border-emerald-400 bg-emerald-50 dark:bg-emerald-400/10" : "border-slate-200 hover:border-emerald-300 dark:border-slate-700")">
+                                @if (result.CapsuleUrl is not null)
+                                {
+                                    <img src="@result.CapsuleUrl" alt="@result.Title poster" class="h-16 w-12 shrink-0 rounded-xl object-cover" />
+                                }
+                                else
+                                {
+                                    <span aria-hidden="true" class="flex h-16 w-12 shrink-0 items-center justify-center rounded-xl bg-slate-200 text-[8px] uppercase text-slate-500 dark:bg-slate-800 dark:text-slate-400">No art</span>
+                                }
+                                <span class="min-w-0 flex-1">
+                                    <span class="block truncate text-sm font-semibold text-slate-900 dark:text-white">@result.Title</span>
+                                    <span class="mt-1 block text-xs text-slate-500 dark:text-slate-400">@(result.Source == "local" ? "Saved game" : "IGDB")</span>
+                                </span>
+                            </button>
+                        }
+                    </div>
+                }
+
+                @if (State.SelectedGame is {} selectedGame)
+                {
+                    <div class="mt-4 flex items-center gap-4 rounded-2xl border border-emerald-300/60 bg-emerald-50 p-3 dark:border-emerald-400/30 dark:bg-emerald-400/10">
+                        @if (selectedGame.CapsuleUrl is not null)
+                        {
+                            <img src="@selectedGame.CapsuleUrl" alt="@selectedGame.Title poster" class="h-20 w-14 rounded-xl object-cover" />
+                        }
+                        else
+                        {
+                            <span aria-hidden="true" class="flex h-20 w-14 items-center justify-center rounded-xl bg-slate-200 text-[9px] uppercase text-slate-500 dark:bg-slate-800 dark:text-slate-400">No art</span>
+                        }
+                        <div class="min-w-0">
+                            <p class="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-700 dark:text-emerald-200">Selected game</p>
+                            <p class="mt-1 truncate font-semibold text-slate-900 dark:text-white">@selectedGame.Title</p>
+                        </div>
+                    </div>
+                }
+            </section>
+
+            <section class="@(Embedded ? "rounded-3xl border border-slate-200 bg-white/80 p-5 dark:border-slate-800 dark:bg-slate-900/60 sm:p-6" : "space-y-4")">
+                @if (Embedded)
+                {
+                    <p class="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-700 dark:text-emerald-300">Play details</p>
+                    <h3 class="mt-2 text-xl font-semibold">Session details</h3>
+                    <p class="mt-1 text-sm text-slate-600 dark:text-slate-300">Add the platform, date, and time played.</p>
+                }
+
+                <div class="mt-5 space-y-4">
+                    <label class="block text-xs font-medium text-slate-600 dark:text-slate-300">
+                        Platform
+                        <select data-field="platform" value="@State.PlatformKey" @onchange="ChangePlatformAsync"
+                                class="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-emerald-400 dark:border-slate-700 dark:bg-slate-950 dark:text-white">
+                            <option value="">Select a platform</option>
+                            @foreach (var platform in Platforms)
+                            {
+                                <option @key="platform.Key" value="@platform.Key">@platform.Name</option>
+                            }
+                        </select>
+                    </label>
+
+                    @if (State.Mode == SessionCreateMode.Historical)
+                    {
+                        <label class="block text-xs font-medium text-slate-600 dark:text-slate-300">Date
+                            <input type="date" value="@State.Date" @onchange="ChangeDateAsync" class="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm dark:border-slate-700 dark:bg-slate-950 dark:text-white" />
+                        </label>
+                        <div class="grid grid-cols-2 gap-3">
+                            <label class="text-xs font-medium text-slate-600 dark:text-slate-300">Hours
+                                <input type="number" min="0" value="@State.Hours" @oninput="ChangeHoursAsync" class="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm dark:border-slate-700 dark:bg-slate-950 dark:text-white" />
+                            </label>
+                            <label class="text-xs font-medium text-slate-600 dark:text-slate-300">Minutes
+                                <input type="number" min="0" value="@State.Minutes" @oninput="ChangeMinutesAsync" class="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm dark:border-slate-700 dark:bg-slate-950 dark:text-white" />
+                            </label>
+                        </div>
+                    }
+
+                    @if (State.Error.Length > 0)
+                    {
+                        <p role="alert" class="rounded-2xl bg-rose-50 p-3 text-sm text-rose-700 dark:bg-rose-400/10 dark:text-rose-200">@State.Error</p>
+                    }
+                </div>
+
+                <div class="mt-6 flex justify-end gap-3 border-t border-slate-200 pt-5 dark:border-slate-800">
+                    @if (!Embedded)
+                    {
+                        <button type="button" disabled="@State.IsSaving" @onclick="CloseAsync"
+                                class="rounded-full border border-slate-300 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] dark:border-slate-700">Cancel</button>
+                    }
+                    <button type="button" data-action="save" disabled="@State.IsSaving" @onclick="OnSave"
+                            class="w-full rounded-full bg-emerald-400 px-5 py-2.5 text-xs font-semibold uppercase tracking-[0.2em] text-slate-950 disabled:opacity-60 sm:w-auto">
+                        @(State.IsSaving ? "Saving..." : Embedded ? "Save past session" : State.Mode == SessionCreateMode.Live ? "Start session" : "Save session")
+                    </button>
+                </div>
+            </section>
+        </div>
+    </section>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public SessionCreateState State { get; set; } = null!;
+    [Parameter] public IReadOnlyList<ManualPlatform> Platforms { get; set; } = [];
+    [Parameter] public bool AiAvailable { get; set; }
+    [Parameter] public bool Embedded { get; set; }
+    [Parameter] public EventCallback OnUseAi { get; set; }
+    [Parameter] public EventCallback OnSearch { get; set; }
+    [Parameter] public EventCallback OnSave { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public EventCallback<string> OnQueryChanged { get; set; }
+
+    private string ModeClass(SessionCreateMode mode) =>
+        $"rounded-xl px-3 py-2 text-xs font-semibold uppercase tracking-[0.2em] transition {(State.Mode == mode ? "bg-white text-emerald-700 shadow-sm dark:bg-slate-800 dark:text-emerald-200" : "text-slate-500 dark:text-slate-400")}";
+
+    private Task SearchAsync() => OnSearch.InvokeAsync();
+    private Task CloseAsync() => OnClose.InvokeAsync();
+    private async Task ChangeQueryAsync(ChangeEventArgs args)
+    {
+        var value = args.Value?.ToString() ?? string.Empty;
+        State.SetQuery(value);
+        await OnQueryChanged.InvokeAsync(value);
+    }
+    private Task ChangePlatformAsync(ChangeEventArgs args) { State.SetPlatform(args.Value?.ToString() ?? string.Empty); return Task.CompletedTask; }
+    private Task ChangeDateAsync(ChangeEventArgs args) { State.SetDate(args.Value?.ToString() ?? string.Empty); return Task.CompletedTask; }
+    private Task ChangeHoursAsync(ChangeEventArgs args) { State.SetHours(args.Value?.ToString() ?? string.Empty); return Task.CompletedTask; }
+    private Task ChangeMinutesAsync(ChangeEventArgs args) { State.SetMinutes(args.Value?.ToString() ?? string.Empty); return Task.CompletedTask; }
+}

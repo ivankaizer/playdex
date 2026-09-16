@@ -1,0 +1,61 @@
+@inherits LayoutComponentBase
+@using System.Security.Claims
+@using Microsoft.AspNetCore.Components.Authorization
+@using Radzen
+@inject AuthenticationStateProvider AuthenticationStateProvider
+
+<RadzenLayout>
+    <RadzenDialog />
+    <RadzenNotification />
+    <RadzenSidebar Expanded="true">
+        <div class="admin-sidebar">
+            <div class="admin-brand">
+                <span class="admin-logo" aria-hidden="true">
+                    <svg width="34" height="34" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <rect width="24" height="24" rx="7" fill="#10b981" />
+                        <path d="M9.6 8.2v7.6l6.6-3.8-6.6-3.8Z" fill="#022c22" />
+                        <circle cx="8.2" cy="12" r="0.6" fill="#a7f3d0" />
+                        <circle cx="15.8" cy="12" r="0.6" fill="#a7f3d0" />
+                    </svg>
+                </span>
+                <div class="admin-brand-text">
+                    <span class="admin-brand-name">Playdex</span>
+                    <span class="admin-brand-sub">Admin</span>
+                </div>
+            </div>
+            <RadzenPanelMenu class="admin-sidebar-menu">
+                <RadzenPanelMenuItem Text="Dashboard" Path="/" />
+                <RadzenPanelMenuItem Text="Integrations" Path="/integrations" />
+                <RadzenPanelMenuItem Text="Sessions" Path="/sessions" />
+                <RadzenPanelMenuItem Text="AI generations" Path="/ai-generations" Icon="auto_awesome" />
+                <RadzenPanelMenuItem Text="Games" Path="/games" />
+            </RadzenPanelMenu>
+            <div class="admin-sidebar-footer">
+                <div class="admin-user-chip">
+                    <span class="admin-user-avatar">@UserInitials</span>
+                    <span class="admin-user-email">@UserEmail</span>
+                </div>
+                <RadzenPanelMenu>
+                    <RadzenPanelMenuItem Text="Logout" Path="/logout" />
+                </RadzenPanelMenu>
+            </div>
+        </div>
+    </RadzenSidebar>
+    <RadzenBody><div class="admin-content">@Body</div></RadzenBody>
+</RadzenLayout>
+
+@code {
+    private string UserEmail { get; set; } = "";
+    private string UserInitials { get; set; } = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        var state = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var user = state.User;
+        UserEmail = user.FindFirstValue(ClaimTypes.Email) ?? "";
+        var parts = UserEmail.Split(['@', '.', '-'], StringSplitOptions.RemoveEmptyEntries);
+        UserInitials = parts.Length >= 2
+            ? $"{char.ToUpperInvariant(parts[0][0])}{char.ToUpperInvariant(parts[1][0])}"
+            : UserEmail.Length > 0 ? char.ToUpperInvariant(UserEmail[0]).ToString() : "";
+    }
+}

@@ -1,14 +1,12 @@
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
-using Npgsql;
 using Api.Infrastructure.Auth;
 using Api.Infrastructure.Common;
 using Api.Infrastructure.Http;
-using Api.Infrastructure.Persistence;
-using Api.Infrastructure.Persistence.Migrations;
+using Playdex.Persistence;
+using Playdex.Persistence.Migrations;
 using Api.Modules.Accounts;
-using Api.Modules.Admin;
 using Api.Modules.ApiCapture;
 using Api.Modules.Games;
 using Api.Modules.Manual;
@@ -44,21 +42,10 @@ var corsOrigins = (builder.Configuration["CORS_ORIGINS"] ?? "")
     .Distinct(StringComparer.Ordinal)
     .ToArray();
 
-var dataSourceBuilder = new NpgsqlDataSourceBuilder(PostgresConnectionString.Normalize(databaseUrl));
-dataSourceBuilder.MapEnum<GameExternalIdentityType>("game_external_identity_type");
-dataSourceBuilder.MapEnum<IntegrationType>("integration_type");
-dataSourceBuilder.MapEnum<CaptureMethod>("capture_method");
-var dataSource = dataSourceBuilder.Build();
+var dataSource = PostgresServices.CreateDataSource(databaseUrl);
 
 builder.Services.AddSingleton(dataSource);
-builder.Services.AddDbContext<PlaydexDbContext>(db => db.UseNpgsql(
-    dataSource,
-    npgsql =>
-    {
-        npgsql.MapEnum<GameExternalIdentityType>("game_external_identity_type");
-        npgsql.MapEnum<IntegrationType>("integration_type");
-        npgsql.MapEnum<CaptureMethod>("capture_method");
-    }));
+builder.Services.AddPlaydexDbContext(dataSource);
 builder.Services.AddSingleton(new MigrationCatalog([
     new CurrentSchemaMigration(),
     new CredentialApiKeyLockMigration(),
@@ -72,6 +59,9 @@ builder.Services.AddSingleton(new MigrationCatalog([
     new DropLegacyModelMigration(),
     new CorrectLegacyApiSessionPlatformsMigration(),
     new PcPlatformHierarchyMigration(),
+    new IntegrationSessionPlatformMigration(),
+    new AiPlaySessionDraftsMigration(),
+    new AiGenerationHistoryMigration(),
 ]));
 builder.Services.AddSingleton<MigrationRunner>();
 builder.Services.AddScoped<EventBus>();
@@ -84,7 +74,6 @@ builder.Services
     .AddManual()
     .AddApiCapture()
     .AddProviders()
-    .AddAdmin()
     .AddRecap()
     .AddPlaydexMetrics()
     .AddPolling(builder.Configuration)
@@ -103,7 +92,7 @@ builder.Services.AddCors(cfg =>
     cfg.AddDefaultPolicy(policy =>
     {
         policy.WithOrigins(corsOrigins)
-              .WithMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
+              .WithMethods("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS")
               .AllowAnyHeader();
     });
 });
@@ -143,7 +132,6 @@ api
     .MapManual()
     .MapApiCapture()
     .MapProviders()
-    .MapAdmin()
     .MapRecap()
     .MapMetrics();
 

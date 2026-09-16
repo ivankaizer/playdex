@@ -6,13 +6,40 @@ using Web.Infrastructure.Http;
 using Web.Infrastructure.Auth;
 using Web.Infrastructure.Browser;
 using Web.Infrastructure.Models;
-using Web.Modules.Admin;
 using Xunit;
 
 namespace Web.Tests.Api;
 
 public sealed class PlaydexApiClientTests
 {
+    [Fact]
+    public async Task NoContentDeleteCompletesWithoutParsingJson()
+    {
+        using var handler = new RecordingHandler((_, _) => new HttpResponseMessage(HttpStatusCode.NoContent));
+        var client = CreateClient(handler);
+        Assert.Null(await client.SendAsync<object?>("/manual/draft-batches/b/rows/r?revision=1", HttpMethod.Delete));
+    }
+
+    [Fact]
+    public async Task MultipartFactoryIsRecreatedAfterAuthenticationRefresh()
+    {
+        using var handler = new RecordingHandler(
+            (_, _) => Json(HttpStatusCode.Unauthorized, "{}"),
+            (_, _) => Json(HttpStatusCode.OK, "{\"accessToken\":\"new\",\"refreshToken\":\"refresh\"}"),
+            (_, _) => Json(HttpStatusCode.OK, "{\"sessionId\":42}"));
+        var storage = new MemoryBrowserStorage(("playdex.refresh", "refresh"));
+        var client = CreateClient(handler, storage);
+        Func<HttpContent> factory = () => {
+            var content = new MultipartFormDataContent("test-boundary");
+            content.Add(new StringContent("yesterday Hades 60 minutes"), "text");
+            return content;
+        };
+        var response = await client.SendAsync<ManualEntryCreateResponse>("/manual/draft-batches", HttpMethod.Post, factory);
+        Assert.Equal(42, response.SessionId);
+        Assert.Equal(handler.Requests[0].Body, handler.Requests[2].Body);
+        Assert.Contains("yesterday Hades 60 minutes", handler.Requests[2].Body);
+    }
+
     [Fact]
     public void RefreshResponseTokensMatchTheNonNullableBackendContract()
     {
@@ -80,7 +107,6 @@ public sealed class PlaydexApiClientTests
 
         Assert.Equal(42, response.UserId);
         Assert.Equal("player@example.com", response.Email);
-        Assert.True(response.IsAdmin);
     }
 
     [Fact]
@@ -271,25 +297,6 @@ public sealed class PlaydexApiClientTests
         await client.SendAsync<object?>(path, authenticated: false);
 
         Assert.Equal(expected, handler.Requests[0].Uri);
-    }
-
-    [Fact]
-    public async Task RequestBodiesUseExactWebCamelCaseIncludingAdminUser()
-    {
-        using var handler = new RecordingHandler(
-            (_, _) => Json(HttpStatusCode.OK, "{}"),
-            (_, _) => Json(HttpStatusCode.OK, "{}"));
-        var client = CreateClient(handler);
-
-        await client.SendAsync<object?>(
-            "/admin/credentials/7",
-            HttpMethod.Put,
-            new AdminCredentialUpdateRequest("key", "account-user"),
-            authenticated: false);
-
-        using var admin = JsonDocument.Parse(handler.Requests[0].Body!);
-        Assert.Equal("account-user", admin.RootElement.GetProperty("user").GetString());
-        Assert.False(admin.RootElement.TryGetProperty("accountUser", out _));
     }
 
     [Theory]

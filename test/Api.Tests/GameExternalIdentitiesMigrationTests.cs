@@ -1,7 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
-using Api.Infrastructure.Persistence;
-using Api.Infrastructure.Persistence.Migrations;
+using Playdex.Persistence;
+using Playdex.Persistence.Migrations;
 using Xunit;
 
 namespace Api.Tests;

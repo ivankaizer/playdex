@@ -2,9 +2,11 @@ FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 COPY Directory.Build.props Directory.Packages.props ./
 COPY src/Api/Api.csproj Api/
+COPY src/Persistence/Persistence.csproj Persistence/
 COPY src/ServiceDefaults/ ServiceDefaults/
 RUN dotnet restore Api/Api.csproj
 COPY src/Api/ Api/
+COPY src/Persistence/ Persistence/
 RUN dotnet publish Api/Api.csproj -c Release -o /app
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime

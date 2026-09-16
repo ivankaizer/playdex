@@ -16,6 +16,7 @@ public sealed class ProjectContractTests
 
         Assert.Contains("<base href=\"/\">", index);
         Assert.Contains("css/app.css", index);
+        Assert.Contains("Web.styles.css", index);
         Assert.Contains("<body class=\"bg-slate-950 text-slate-100\">", index);
         Assert.True(headStart >= 0 && themeBootstrap > headStart && themeBootstrap < headEnd);
         Assert.Contains("prefers-color-scheme", index);
@@ -140,6 +141,37 @@ public sealed class ProjectContractTests
         Assert.Contains("tailwindcss", package);
         Assert.Contains("postcss", package);
         Assert.Contains("autoprefixer", package);
+    }
+
+    [Fact]
+    public void CustomerWebContainsNoAdministrativeSurface()
+    {
+        Assert.False(
+            Directory.Exists(Path.Combine(WebRoot, "Modules", "Admin")),
+            "The Admin feature module must live in the standalone Admin application.");
+
+        var modulePages = Directory
+            .EnumerateFiles(Path.Combine(WebRoot, "Modules"), "*.razor", SearchOption.AllDirectories)
+            .Select(path => File.ReadAllText(path));
+
+        Assert.DoesNotContain(modulePages, markup => markup.Contains("@page \"/admin\"", StringComparison.Ordinal));
+        Assert.DoesNotContain(modulePages, markup => markup.Contains("/api/admin", StringComparison.Ordinal));
+
+        var project = ReadRequiredFile("Web.csproj");
+        Assert.DoesNotContain("Admin", project, StringComparison.Ordinal);
+
+        Assert.DoesNotContain("playdex.isAdmin", ReadRequiredFile("Infrastructure/Auth/AuthSession.cs"));
+        Assert.DoesNotContain("IsAdmin", ReadRequiredFile("Infrastructure/Auth/AuthModels.cs"));
+    }
+
+    [Fact]
+    public void NavigationGuardOffersNoAdministrativeRoute()
+    {
+        var guard = ReadRequiredFile("Routing/NavigationGuard.cs");
+
+        Assert.DoesNotContain("\"/admin\"", guard);
+        Assert.DoesNotContain("isAdmin", guard, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("\"/settings\"", guard);
     }
 
     private static string ReadRequiredFile(string relativePath)

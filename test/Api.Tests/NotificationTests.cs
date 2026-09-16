@@ -4,7 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using Api.Modules.Notifications;
 using Api.Infrastructure.Common;
-using Api.Infrastructure.Persistence;
+using Playdex.Persistence;
 using SkiaSharp;
 using Xunit;
 

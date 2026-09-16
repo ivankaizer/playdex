@@ -30,38 +30,64 @@ public sealed class IgdbClient(HttpClient httpClient, IOptions<IgdbOptions> opti
         if (string.IsNullOrEmpty(opts.ClientId) || string.IsNullOrEmpty(opts.ClientSecret))
             return [];
 
-        var token = await EnsureToken(opts.ClientId, opts.ClientSecret, ct);
-        if (token is null)
-            return [];
+        return await QueryGames(
+            $"search \"{trimmed.Replace("\"", "")}\"; fields id,name,cover.image_id,platforms.id,platforms.name; limit 10;",
+            opts.ClientId!,
+            opts.ClientSecret!,
+            ct);
+    }
+
+    public async Task<IgdbSearchResult?> GetGameById(string id, CancellationToken ct)
+    {
+        if (!long.TryParse(id, NumberStyles.None, CultureInfo.InvariantCulture, out var parsedId) ||
+            parsedId <= 0)
+        {
+            return null;
+        }
+
+        var opts = options.Value;
+        if (string.IsNullOrEmpty(opts.ClientId) || string.IsNullOrEmpty(opts.ClientSecret))
+            return null;
+
+        var games = await QueryGames(
+            $"fields id,name,cover.image_id,platforms.id,platforms.name; where id = ({parsedId}); limit 1;",
+            opts.ClientId!,
+            opts.ClientSecret!,
+            ct);
+        return games.SingleOrDefault();
+    }
+
+    private async Task<List<IgdbSearchResult>> QueryGames(
+        string query,
+        string clientId,
+        string clientSecret,
+        CancellationToken ct)
+    {
+        var token = await EnsureToken(clientId, clientSecret, ct);
+        if (token is null) return [];
 
         using var request = new HttpRequestMessage(HttpMethod.Post, "https://api.igdb.com/v4/games")
         {
-            Content = new StringContent(
-                $"search \"{trimmed.Replace("\"", "")}\"; fields id,name,cover.image_id,platforms.id,platforms.name; limit 10;",
-                System.Text.Encoding.UTF8,
-                "text/plain")
+            Content = new StringContent(query, System.Text.Encoding.UTF8, "text/plain"),
         };
-        request.Headers.Add("Client-ID", opts.ClientId);
+        request.Headers.Add("Client-ID", clientId);
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
         var response = await httpClient.SendAsync(request, ct);
         response.EnsureSuccessStatusCode();
+        var games = await response.Content.ReadFromJsonAsync<List<IgdbGame>>(JsonOptions, ct) ?? [];
+        return games.Select(MapGame).ToList();
+    }
 
-        var games = await response.Content.ReadFromJsonAsync<List<IgdbGame>>(JsonOptions, ct);
-        if (games is null)
-            return [];
-
-        return games.Select(game =>
-        {
-            var platformInfo = game.Platforms?.FirstOrDefault(p => p?.Id is not null);
-            return new IgdbSearchResult(
-                Id: game.Id.ToString(CultureInfo.InvariantCulture),
-                Title: game.Name,
-                Platform: platformInfo?.Name,
-                PlatformId: platformInfo?.Id,
-                CoverUrl: FormatCover(game.Cover?.ImageId)
-            );
-        }).ToList();
+    private static IgdbSearchResult MapGame(IgdbGame game)
+    {
+        var platformInfo = game.Platforms?.FirstOrDefault(p => p?.Id is not null);
+        return new IgdbSearchResult(
+            game.Id.ToString(CultureInfo.InvariantCulture),
+            game.Name,
+            platformInfo?.Name,
+            platformInfo?.Id,
+            FormatCover(game.Cover?.ImageId));
     }
 
     private async Task<string?> EnsureToken(string clientId, string clientSecret, CancellationToken ct)

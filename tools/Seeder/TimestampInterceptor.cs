@@ -1,4 +1,4 @@
-using Api.Infrastructure.Persistence;
+using Playdex.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 

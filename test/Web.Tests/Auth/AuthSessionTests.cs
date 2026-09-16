@@ -7,19 +7,18 @@ namespace Web.Tests.Auth;
 public sealed class AuthSessionTests
 {
     [Fact]
-    public async Task StoreLoginWritesExactlyTheFourReactAuthKeys()
+    public async Task StoreLoginWritesExactlyTheThreeReactAuthKeys()
     {
         var storage = new MemoryBrowserStorage();
         var session = new AuthSession(storage);
 
-        await session.StoreLoginAsync(new LoginResponse(42, "player@example.com", true, "access", "refresh"));
+        await session.StoreLoginAsync(new LoginResponse(42, "player@example.com", "access", "refresh"));
 
         Assert.Equal(
             [
                 "set:playdex.token:access",
                 "set:playdex.refresh:refresh",
                 "set:playdex.email:player@example.com",
-                "set:playdex.isAdmin:1",
             ],
             storage.Operations);
     }
@@ -36,32 +35,18 @@ public sealed class AuthSessionTests
         Assert.Equal(expected, await session.IsLoggedInAsync());
     }
 
-    [Theory]
-    [InlineData("1", true)]
-    [InlineData("true", false)]
-    [InlineData("0", false)]
-    [InlineData(" 1", false)]
-    [InlineData(null, false)]
-    public async Task IsAdminAcceptsOnlyExactOne(string? value, bool expected)
-    {
-        var session = new AuthSession(new MemoryBrowserStorage(("playdex.isAdmin", value)));
-
-        Assert.Equal(expected, await session.IsAdminAsync());
-    }
-
     [Fact]
     public async Task ProfileAndTokenUpdatesWriteOnlyTheirOwnKeys()
     {
         var storage = new MemoryBrowserStorage();
         var session = new AuthSession(storage);
 
-        await session.StoreProfileAsync(new MeResponse(42, "new@example.com", false));
+        await session.StoreProfileAsync(new MeResponse(42, "new@example.com"));
         await session.StoreTokensAsync("new-access", "new-refresh");
 
         Assert.Equal(
             [
                 "set:playdex.email:new@example.com",
-                "set:playdex.isAdmin:0",
                 "set:playdex.token:new-access",
                 "set:playdex.refresh:new-refresh",
             ],
@@ -75,7 +60,6 @@ public sealed class AuthSessionTests
             ("playdex.token", "access"),
             ("playdex.refresh", "refresh"),
             ("playdex.email", "player@example.com"),
-            ("playdex.isAdmin", "1"),
             ("playdex.theme", "dark"));
         var session = new AuthSession(storage);
 
@@ -86,38 +70,9 @@ public sealed class AuthSessionTests
                 "remove:playdex.token",
                 "remove:playdex.refresh",
                 "remove:playdex.email",
-                "remove:playdex.isAdmin",
             ],
             storage.Operations);
         Assert.Equal("dark", await storage.GetAsync("playdex.theme"));
-    }
-
-    [Fact]
-    public async Task ClearAdminRemovesOnlyTheCachedAdminFlag()
-    {
-        var storage = new MemoryBrowserStorage(
-            ("playdex.token", "access"),
-            ("playdex.email", "player@example.com"),
-            ("playdex.isAdmin", "1"));
-        var session = new AuthSession(storage);
-
-        await session.ClearAdminAsync();
-
-        Assert.Equal(["remove:playdex.isAdmin"], storage.Operations);
-        Assert.Equal("access", await storage.GetAsync("playdex.token"));
-        Assert.Equal("player@example.com", await storage.GetAsync("playdex.email"));
-    }
-
-    [Fact]
-    public async Task StoreAdminUpdatesOnlyTheCachedAdminFlag()
-    {
-        var storage = new MemoryBrowserStorage(("playdex.email", "player@example.com"));
-        var session = new AuthSession(storage);
-
-        await session.StoreAdminAsync(true);
-
-        Assert.Equal(["set:playdex.isAdmin:1"], storage.Operations);
-        Assert.Equal("player@example.com", await storage.GetAsync("playdex.email"));
     }
 
     [Fact]

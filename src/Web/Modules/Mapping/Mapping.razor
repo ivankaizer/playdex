@@ -1,12 +1,10 @@
-@page "/mapping"
 @using Microsoft.AspNetCore.Components
-@using Web.Layout
 @using Web.Infrastructure.Models
 @using Web.Infrastructure.Common
 
-<AppLayout Title="Mapping">
-    <ChildContent>
-        <section class="mt-10 rounded-3xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/60 p-5 sm:p-6">
+<section id="game-connections"
+         data-settings-section="game-connections"
+         class="rounded-3xl border border-slate-200 bg-white/80 p-5 dark:border-slate-800 dark:bg-slate-900/60 sm:p-6">
             <div class="flex flex-wrap items-center justify-between gap-4">
                 <div>
                     <p class="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-700 dark:text-emerald-300">
@@ -271,6 +269,4 @@
                     </div>
                 </div>
             </div>
-        </section>
-    </ChildContent>
-</AppLayout>
+</section>

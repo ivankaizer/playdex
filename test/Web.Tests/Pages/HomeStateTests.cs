@@ -37,7 +37,7 @@ public sealed class HomeStateTests
         var state = new HomeState();
         state.BeginLogin();
 
-        state.CompleteLogin(new LoginResponse(42, "player@example.com", false, "access", "refresh"));
+        state.CompleteLogin(new LoginResponse(42, "player@example.com", "access", "refresh"));
 
         Assert.Equal(HomeLoginStatus.Success, state.LoginStatus);
         Assert.Equal("player@example.com", state.SessionEmail);
@@ -60,7 +60,7 @@ public sealed class HomeStateTests
         Assert.True(state.IsProfileLoading);
         Assert.Equal("Loading...", state.ProfileLabel);
 
-        state.CompleteProfile(new MeResponse(42, "loaded@example.com", true));
+        state.CompleteProfile(new MeResponse(42, "loaded@example.com"));
 
         Assert.False(state.IsProfileLoading);
         Assert.Equal("loaded@example.com", state.ProfileLabel);

@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using Api.Infrastructure.Http;
+using Playdex.Persistence;
 
 namespace Api.Modules.Providers;
 
@@ -9,6 +10,28 @@ public sealed class ProvidersService(ProvidersRepository repository)
     {
         var providers = await repository.ListProviders(userId, ct);
         return new ProvidersResponseDto(providers.Select(ToResponse).ToList());
+    }
+
+    public async Task<CreateProviderResponseDto> CreateProvider(
+        long userId,
+        CreateProviderRequest request,
+        CancellationToken ct)
+    {
+        var creation = ValidateCreation(request);
+        var result = await repository.CreateProvider(
+            userId,
+            creation.Platform,
+            creation.Type,
+            creation.ApiKey,
+            creation.AccountId,
+            ct);
+        if (result.LimitReached)
+            throw AppProblemException.Conflict(
+                $"{PlatformName(creation.Platform)} supports up to {ProvidersRepository.MaxIntegrationsPerType} integrations.");
+        if (result.Provider is null)
+            throw AppProblemException.NotFound($"{PlatformName(creation.Platform)} platform is not installed.");
+
+        return new CreateProviderResponseDto(ToResponse(result.Provider));
     }
 
     public async Task<ProviderUpdateResponseDto> UpdateProviderStatus(long userId, ProviderUpdateRequest request, CancellationToken ct)
@@ -66,6 +89,35 @@ public sealed class ProvidersService(ProvidersRepository repository)
         return new ProviderCredentialUpdateResponseDto(ToResponse(provider));
     }
 
+    public async Task<ProviderSessionPlatformUpdateResponseDto> UpdateSessionPlatform(
+        long userId,
+        long providerId,
+        ProviderSessionPlatformUpdateRequest request,
+        CancellationToken ct)
+    {
+        var platform = NormalizeSessionPlatformKey(request.Platform);
+        var result = await repository.UpdateSessionPlatform(
+            userId,
+            providerId,
+            platform,
+            request.RewriteExistingSessions,
+            ct);
+        if (result.UnsupportedIntegration)
+        {
+            throw AppProblemException.Validation(
+                "This integration does not define a main platform.");
+        }
+        if (result.InvalidPlatform)
+        {
+            throw AppProblemException.Validation(
+                "Platform must be the integration's main platform or one of its children.");
+        }
+        if (result.Provider is null)
+            throw AppProblemException.NotFound("Provider not found.");
+
+        return new ProviderSessionPlatformUpdateResponseDto(ToResponse(result.Provider));
+    }
+
     public async Task<OpenXblConnectResponseDto> ConnectOpenXbl(
         long userId,
         OpenXblConnectRequest request,
@@ -98,9 +150,58 @@ public sealed class ProvidersService(ProvidersRepository repository)
         return "plx_" + Convert.ToHexString(bytes).ToLowerInvariant();
     }
 
+    internal static string NormalizeSessionPlatformKey(string? value)
+    {
+        var platform = value?.Trim().ToLowerInvariant();
+        if (string.IsNullOrEmpty(platform))
+            throw AppProblemException.Validation("Platform is required.");
+        return platform;
+    }
+
+    internal static ValidatedProviderCreation ValidateCreation(CreateProviderRequest request)
+    {
+        var platform = request.Platform?.Trim().ToLowerInvariant();
+        var type = platform switch
+        {
+            "steam" => IntegrationType.Steam,
+            "psn" => IntegrationType.Psn,
+            "xbox" => IntegrationType.Xbox,
+            _ => throw AppProblemException.Validation("Platform must be steam, psn, or xbox."),
+        };
+        var apiKey = request.ApiKey?.Trim();
+        var accountId = request.AccountId?.Trim();
+        accountId = string.IsNullOrEmpty(accountId) ? null : accountId;
+
+        if (string.IsNullOrEmpty(apiKey))
+        {
+            throw AppProblemException.Validation(platform switch
+            {
+                "steam" => "Steam Web API key is required.",
+                "psn" => "PlayStation NPSSO token is required.",
+                _ => "OpenXBL API key is required.",
+            });
+        }
+        if (platform == "steam" && accountId is null)
+            throw AppProblemException.Validation("Steam ID is required.");
+        if (platform == "xbox" && accountId is not null &&
+            accountId.Any(character => !char.IsAsciiDigit(character)))
+        {
+            throw AppProblemException.Validation("Xbox XUID must contain digits only.");
+        }
+
+        return new ValidatedProviderCreation(platform, type, apiKey, accountId);
+    }
+
     internal static ProviderStatusDto ToResponse(ProviderStatusDto provider) =>
         provider with
         {
             ApiKey = provider.ApiKeyLocked && provider.Platform != "api" ? null : provider.ApiKey,
         };
+
+    private static string PlatformName(string platform) => platform switch
+    {
+        "steam" => "Steam",
+        "psn" => "PlayStation",
+        _ => "Xbox",
+    };
 }

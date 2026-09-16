@@ -2,7 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Api.Infrastructure.Common;
-using Api.Infrastructure.Persistence;
+using Playdex.Persistence;
 using Api.Modules.ApiCapture;
 using Api.Modules.Games;
 using Api.Modules.Polling;
@@ -35,7 +35,8 @@ public sealed class PollingSessionTimeoutTests(PostgresFixture postgres)
         if (!postgres.IsConfigured) return;
 
         await using var db = CreateDb();
-        var now = DateTimeOffset.UtcNow;
+        var clockNow = DateTimeOffset.UtcNow;
+        var now = clockNow.AddTicks(9 - (clockNow.Ticks % 10));
         var suffix = Guid.NewGuid().ToString("n");
         var platform = await db.Platforms.SingleAsync(row => row.Key == "steam");
         var user = new User
@@ -90,6 +91,8 @@ public sealed class PollingSessionTimeoutTests(PostgresFixture postgres)
         };
         db.AddRange(expired, current);
         await db.SaveChangesAsync();
+        await db.Entry(expired).ReloadAsync();
+        var persistedExpiredLastPing = expired.UpdatedAt;
 
         try
         {
@@ -116,7 +119,7 @@ public sealed class PollingSessionTimeoutTests(PostgresFixture postgres)
             var savedCurrent = await db.PlaySessions.SingleAsync(row => row.Id == current.Id);
             var endedEvent = Assert.Single(recorder.Events);
             Assert.Equal(1, endedCount);
-            Assert.Equal(expiredLastPing.AddMinutes(3), savedExpired.EndedAt);
+            Assert.Equal(persistedExpiredLastPing.AddMinutes(3), savedExpired.EndedAt);
             Assert.Null(savedCurrent.EndedAt);
             Assert.Equal(expired.Id, endedEvent.SessionId);
             Assert.Equal(savedExpired.EndedAt, endedEvent.EndedAt);

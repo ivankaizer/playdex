@@ -1,5 +1,5 @@
 using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Api.Infrastructure.Persistence;
+using Playdex.Persistence;
 
 namespace Api.Infrastructure.Auth;
 

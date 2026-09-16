@@ -35,17 +35,15 @@ public static class NavigationGuard
     {
         "/dashboard",
         "/sessions",
+        "/sessions/create",
         "/recap",
         "/mapping",
         "/settings",
-        "/admin",
     };
 
     public static NavigationDecision Resolve(
         string path,
-        bool isLoggedIn,
-        bool isProfileResolved,
-        bool isAdmin)
+        bool isLoggedIn)
     {
         if (path == "/") return new(NavigationOutcome.Render);
 
@@ -56,14 +54,6 @@ public static class NavigationGuard
         }
 
         if (!isLoggedIn) return new(NavigationOutcome.Redirect, "/");
-
-        if (path == "/admin")
-        {
-            if (!isProfileResolved) return new(NavigationOutcome.Wait);
-            return isAdmin
-                ? new(NavigationOutcome.Render)
-                : new(NavigationOutcome.Redirect, "/dashboard");
-        }
 
         return isGamePath
             ? new(NavigationOutcome.Render, GameHash: NormalizeGameHash(path[GamesPrefix.Length..]))

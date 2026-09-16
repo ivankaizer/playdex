@@ -1,0 +1,133 @@
+@page "/sessions"
+@attribute [Authorize(Policy = "Administrator")]
+@using Admin.Features
+@using Admin.Infrastructure
+@using Microsoft.AspNetCore.Components.Authorization
+@inject IAdminOperations Operations
+@inject IAdminInteractions Interactions
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject BrowserTimeZone Time
+<PageTitle>Sessions</PageTitle>
+<RadzenHeading Size="H1" Text="Sessions"/>
+<div class="session-toolbar">
+    <RadzenTextBox @bind-Value="_query" Placeholder="Email, game, account, or platform"/>
+    <RadzenDropDown @bind-Value="_status" Data="@StatusOptions" TextProperty="Label" ValueProperty="Value"
+                    AllowClear="true" Placeholder="Status"/>
+    <RadzenButton Text="Search" Click="SearchAsync" Disabled="@_loading"/>
+    <RadzenDropDown @bind-Value="_target" Data="@_integrations" TextProperty="AccountId" ValueProperty="Id"
+                    AllowClear="true" Placeholder="Target integration"/>
+    <RadzenButton Text="Transfer selected" Click="TransferAsync"
+                  Disabled="@(_loading || _selected.Count == 0 || _target is null)"/>
+</div>
+@if (_error is not null)
+{
+    <RadzenAlert AlertStyle="AlertStyle.Danger">@_error</RadzenAlert>
+}
+else if (_loading || _result is null)
+{
+    <RadzenProgressBar Mode="ProgressBarMode.Indeterminate"/>
+}
+else if (_result.Sessions.Count == 0)
+{
+    <RadzenAlert AlertStyle="AlertStyle.Info">No sessions found.</RadzenAlert>
+}
+else
+{
+    <RadzenDataGrid Data="@_result.Sessions" TItem="SessionSummary" AllowPaging="false">
+        <Columns>
+            <RadzenDataGridColumn TItem="SessionSummary" Title="Select">
+                <Template Context="session"><input type="checkbox" checked="@_selected.Contains(session.Id)"
+                                                   @onchange="@(_ => Toggle(session.Id))"/></Template>
+            </RadzenDataGridColumn>
+            <RadzenDataGridColumn TItem="SessionSummary" Property="Email" Title="Owner"/>
+            <RadzenDataGridColumn TItem="SessionSummary" Property="Game" Title="Game"/>
+            <RadzenDataGridColumn TItem="SessionSummary" Property="Platform" Title="Platform"/>
+            <RadzenDataGridColumn TItem="SessionSummary" Title="Started">
+                <Template Context="session">@Time.Format(session.StartedAt)</Template>
+            </RadzenDataGridColumn>
+            <RadzenDataGridColumn TItem="SessionSummary" Title="State">
+                <Template Context="session">@(session.Live ? "Live" : "Ended")</Template>
+            </RadzenDataGridColumn>
+        </Columns>
+    </RadzenDataGrid>
+    <div>Total: @_result.Total | Page: @(_result.Page + 1)</div>
+    <RadzenButton Text="Previous" Click="@(() => GoToPageAsync(_result.Page - 1))"
+                  Disabled="@(_result.Page == 0 || _loading)"/>
+    <RadzenButton Text="Next" Click="@(() => GoToPageAsync(_result.Page + 1))"
+                  Disabled="@((_result.Page + 1) * 25 >= _result.Total || _loading)"/>
+}
+
+@code {
+    private sealed record StatusOption(string Label, string Value);
+
+    private static readonly IReadOnlyList<StatusOption> StatusOptions =
+        [new("Live", "live"), new("Ended", "ended")];
+
+    private string _query = "";
+    private string? _status;
+    private long? _target;
+    private IReadOnlyList<IntegrationSummary> _integrations = [];
+    private SessionSearchResult? _result;
+    private readonly HashSet<long> _selected = [];
+    private bool _loading;
+    private string? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Time.EnsureLoadedAsync();
+        _integrations = await Operations.GetIntegrationsAsync();
+        await SearchAsync();
+    }
+
+    private void Toggle(long id)
+    {
+        if (!_selected.Add(id)) _selected.Remove(id);
+    }
+
+    private async Task SearchAsync() => await GoToPageAsync(0);
+
+    private async Task GoToPageAsync(int page)
+    {
+        if (page < 0 || _loading) return;
+        _loading = true;
+        try
+        {
+            _result = await Operations.SearchSessionsPageAsync(_query, page, _status);
+            _selected.Clear();
+            _error = null;
+        }
+        catch (Exception exception)
+        {
+            _error = exception.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task TransferAsync()
+    {
+        if (_loading || _target is null || _selected.Count == 0) return;
+        if (!await Interactions.ConfirmAsync($"Transfer {_selected.Count} selected sessions?", "Confirm transfer")) return;
+        _loading = true;
+        try
+        {
+            var state = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+            var count = await Operations.TransferSessionsAsync(state.User, _selected, _target.Value);
+            Interactions.Success("Sessions transferred", $"Transferred {count} sessions.");
+            _loading = false;
+            await GoToPageAsync(_result?.Page ?? 0);
+        }
+        catch (Exception exception)
+        {
+            _error = exception.Message;
+            Interactions.ShowError("Transfer failed", exception.Message);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+}

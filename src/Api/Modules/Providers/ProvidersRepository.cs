@@ -1,31 +1,96 @@
 using Microsoft.EntityFrameworkCore;
-using Api.Infrastructure.Persistence;
+using Playdex.Persistence;
 
 namespace Api.Modules.Providers;
 
 public sealed class ProvidersRepository(PlaydexDbContext db)
 {
+    public const int MaxIntegrationsPerType = 3;
+
+    internal static IReadOnlyList<ProviderPlatformDto> BuildSessionPlatformOptions(
+        long mainPlatformId,
+        IReadOnlyList<Platform> platforms)
+        => BuildSessionPlatformTree(mainPlatformId, platforms)
+            .Select(platform => new ProviderPlatformDto(platform.Key, platform.Name))
+            .ToArray();
+
+    private static List<Platform> BuildSessionPlatformTree(
+        long mainPlatformId,
+        IReadOnlyList<Platform> platforms)
+    {
+        var main = platforms.FirstOrDefault(platform => platform.Id == mainPlatformId);
+        if (main is null) return [];
+
+        var options = new List<Platform> { main };
+        var pending = new Queue<long>();
+        pending.Enqueue(main.Id);
+        while (pending.TryDequeue(out var parentId))
+        {
+            foreach (var child in platforms
+                         .Where(platform => platform.ParentId == parentId)
+                         .OrderBy(platform => platform.Name)
+                         .ThenBy(platform => platform.Key))
+            {
+                options.Add(child);
+                pending.Enqueue(child.Id);
+            }
+        }
+
+        return options;
+    }
+
     public async Task<List<ProviderStatusDto>> ListProviders(long userId, CancellationToken ct)
     {
-        var rows = await db.Integrations
+        var integrations = await db.Integrations
             .AsNoTracking()
-            .Where(credential => credential.UserId == userId)
-            .OrderBy(credential => credential.Id)
-            .Select(credential => new
-            {
-                credential.Id,
-                Platform = credential.Type == IntegrationType.Steam ? "steam" :
-                        credential.Type == IntegrationType.Psn ? "psn" :
-                        credential.Type == IntegrationType.Xbox ? "xbox" : "api",
-                credential.AccountId,
-                Status = credential.Active ? "active" : "paused",
-                credential.ApiKey,
-                ApiKeyLocked = credential.ApiKeyLocked || credential.Type == IntegrationType.Api,
-            })
+            .Where(integration => integration.UserId == userId)
+            .OrderBy(integration => integration.Id)
             .ToListAsync(ct);
+        var platforms = await db.Platforms.AsNoTracking().ToListAsync(ct);
 
-        return rows.Select(r => new ProviderStatusDto(
-            r.Id, r.Platform, r.AccountId, r.Status, r.ApiKey, r.ApiKeyLocked)).ToList();
+        return integrations.Select(integration => ToStatus(integration, platforms)).ToList();
+    }
+
+    public async Task<ProviderCreateResult> CreateProvider(
+        long userId,
+        string platform,
+        IntegrationType type,
+        string apiKey,
+        string? accountId,
+        CancellationToken ct)
+    {
+        var existingCount = await db.Integrations.AsNoTracking()
+            .CountAsync(item => item.UserId == userId && item.Type == type, ct);
+        if (existingCount >= MaxIntegrationsPerType)
+        {
+            return new ProviderCreateResult(null, LimitReached: true);
+        }
+
+        var platformId = await db.Platforms
+            .AsNoTracking()
+            .Where(item => item.Key == platform)
+            .Select(item => (long?)item.Id)
+            .FirstOrDefaultAsync(ct);
+        if (!platformId.HasValue)
+            return new ProviderCreateResult(null, LimitReached: false);
+
+        var now = DateTimeOffset.UtcNow;
+        var integration = new Integration
+        {
+            UserId = userId,
+            Type = type,
+            PlatformId = platformId.Value,
+            ApiKey = apiKey,
+            AccountId = accountId,
+            Active = true,
+            CreatedAt = now,
+            UpdatedAt = now,
+        };
+        db.Integrations.Add(integration);
+        await db.SaveChangesAsync(ct);
+
+        var platforms = await db.Platforms.AsNoTracking().ToListAsync(ct);
+        return new ProviderCreateResult(ToStatus(integration, platforms), LimitReached: false);
     }
 
     public async Task<ProviderStatusDto?> UpdateProviderStatus(long userId, long providerId, string status, CancellationToken ct)
@@ -39,18 +104,8 @@ public sealed class ProvidersRepository(PlaydexDbContext db)
         credential.Active = status == "active";
         credential.UpdatedAt = DateTimeOffset.UtcNow;
         await db.SaveChangesAsync(ct);
-        var platform = credential.PlatformId is null ? "api" : await db.Platforms
-            .AsNoTracking()
-            .Where(item => item.Id == credential.PlatformId.Value)
-            .Select(item => item.Key)
-            .FirstAsync(ct);
-        return new ProviderStatusDto(
-            credential.Id,
-            platform,
-            credential.AccountId,
-            credential.Active ? "active" : "paused",
-            credential.ApiKey,
-            credential.ApiKeyLocked || credential.Type == IntegrationType.Api);
+        var platforms = await db.Platforms.AsNoTracking().ToListAsync(ct);
+        return ToStatus(credential, platforms);
     }
 
     public async Task<ProviderStatusDto?> UpdateCredential(
@@ -72,18 +127,63 @@ public sealed class ProvidersRepository(PlaydexDbContext db)
         if (accountIdChanged) credential.AccountId = accountId;
         credential.UpdatedAt = DateTimeOffset.UtcNow;
         await db.SaveChangesAsync(ct);
-        var platform = credential.PlatformId is null ? "api" : await db.Platforms
-            .AsNoTracking()
-            .Where(item => item.Id == credential.PlatformId.Value)
-            .Select(item => item.Key)
-            .FirstAsync(ct);
-        return new ProviderStatusDto(
-            credential.Id,
-            platform,
-            credential.AccountId,
-            credential.Active ? "active" : "paused",
-            credential.ApiKey,
-            credential.ApiKeyLocked || credential.Type == IntegrationType.Api);
+        var platforms = await db.Platforms.AsNoTracking().ToListAsync(ct);
+        return ToStatus(credential, platforms);
+    }
+
+    public async Task<ProviderSessionPlatformUpdateResult> UpdateSessionPlatform(
+        long userId,
+        long providerId,
+        string platformKey,
+        bool rewriteExistingSessions,
+        CancellationToken ct)
+    {
+        await using var transaction = await db.Database.BeginTransactionAsync(ct);
+        await db.Database.ExecuteSqlInterpolatedAsync(
+            $"SELECT pg_advisory_xact_lock({providerId})",
+            ct);
+        var integration = await db.Integrations.FirstOrDefaultAsync(
+            item => item.Id == providerId && item.UserId == userId,
+            ct);
+        if (integration is null)
+            return new ProviderSessionPlatformUpdateResult(null, InvalidPlatform: false);
+        if (integration.PlatformId is not { } mainPlatformId)
+        {
+            return new ProviderSessionPlatformUpdateResult(
+                null,
+                InvalidPlatform: false,
+                UnsupportedIntegration: true);
+        }
+
+        var platforms = await db.Platforms.AsNoTracking().ToListAsync(ct);
+        var allowedPlatforms = BuildSessionPlatformTree(mainPlatformId, platforms);
+        var selectedPlatform = allowedPlatforms.FirstOrDefault(
+            platform => platform.Key == platformKey);
+        if (selectedPlatform is null)
+            return new ProviderSessionPlatformUpdateResult(null, InvalidPlatform: true);
+
+        var now = DateTimeOffset.UtcNow;
+        integration.SessionPlatformId = selectedPlatform.Id == mainPlatformId
+            ? null
+            : selectedPlatform.Id;
+        integration.UpdatedAt = now;
+        await db.SaveChangesAsync(ct);
+
+        if (rewriteExistingSessions)
+        {
+            await db.PlaySessions
+                .Where(session => session.IntegrationId == integration.Id)
+                .ExecuteUpdateAsync(
+                    updates => updates
+                        .SetProperty(session => session.PlatformId, selectedPlatform.Id)
+                        .SetProperty(session => session.UpdatedAt, now),
+                    ct);
+        }
+
+        await transaction.CommitAsync(ct);
+        return new ProviderSessionPlatformUpdateResult(
+            ToStatus(integration, platforms),
+            InvalidPlatform: false);
     }
 
     public async Task<bool> IsApiKeyLocked(long userId, long providerId, CancellationToken ct) =>
@@ -141,13 +241,8 @@ public sealed class ProvidersRepository(PlaydexDbContext db)
         credential.UpdatedAt = now;
         await db.SaveChangesAsync(ct);
 
-        return new ProviderStatusDto(
-            credential.Id,
-            "xbox",
-            credential.AccountId,
-            "active",
-            credential.ApiKey,
-            credential.ApiKeyLocked);
+        var platforms = await db.Platforms.AsNoTracking().ToListAsync(ct);
+        return ToStatus(credential, platforms);
     }
 
     public async Task<string> GetOrCreateApiKey(long userId, string apiKey, CancellationToken ct)
@@ -181,5 +276,36 @@ public sealed class ProvidersRepository(PlaydexDbContext db)
         await db.SaveChangesAsync(ct);
 
         return apiKey;
+    }
+
+    private static ProviderStatusDto ToStatus(
+        Integration integration,
+        IReadOnlyList<Platform> platforms)
+    {
+        var options = integration.PlatformId is { } mainPlatformId
+            ? BuildSessionPlatformOptions(mainPlatformId, platforms)
+            : [];
+        var effectivePlatformId = integration.SessionPlatformId ?? integration.PlatformId;
+        var effectivePlatform = effectivePlatformId is { } platformId
+            ? platforms.FirstOrDefault(platform => platform.Id == platformId)
+            : null;
+
+        return new ProviderStatusDto(
+            integration.Id,
+            integration.Type switch
+            {
+                IntegrationType.Steam => "steam",
+                IntegrationType.Psn => "psn",
+                IntegrationType.Xbox => "xbox",
+                _ => "api",
+            },
+            integration.AccountId,
+            integration.Active ? "active" : "paused",
+            integration.ApiKey,
+            integration.ApiKeyLocked || integration.Type == IntegrationType.Api,
+            effectivePlatform is null
+                ? null
+                : new ProviderPlatformDto(effectivePlatform.Key, effectivePlatform.Name),
+            options);
     }
 }

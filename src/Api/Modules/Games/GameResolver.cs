@@ -1,6 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
-using Api.Infrastructure.Persistence;
+using Playdex.Persistence;
 
 namespace Api.Modules.Games;
 

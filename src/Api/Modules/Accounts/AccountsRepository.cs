@@ -1,7 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 using Api.Infrastructure.Common;
-using Api.Infrastructure.Persistence;
+using Playdex.Persistence;
 using Api.Modules.Games;
 
 namespace Api.Modules.Accounts;
@@ -109,6 +109,11 @@ public sealed class AccountsRepository(PlaydexDbContext db, IGames games)
             ct);
         return affected == 1 ? sessionId : 0;
     }
+
+    public Task<PlaySession?> GetSession(long sessionId, CancellationToken ct) =>
+        db.PlaySessions.SingleOrDefaultAsync(session => session.Id == sessionId, ct);
+
+    public Task SaveChanges(CancellationToken ct) => db.SaveChangesAsync(ct);
 
     public async Task<List<AccountSessionDto>> ListSessionsForStats(
         long userId, long? accountId, DateTimeOffset? from, DateTimeOffset? to,

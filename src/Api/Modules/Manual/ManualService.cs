@@ -4,6 +4,7 @@ using Api.Modules.Games;
 using Api.Infrastructure.Http;
 using Api.Modules.Polling;
 using Microsoft.Extensions.Options;
+using Playdex.Persistence;
 
 namespace Api.Modules.Manual;
 
@@ -15,25 +16,29 @@ public sealed class ManualService(
 {
     private const int MaxLocalSearchResults = 5;
     /// <summary>
-    /// Start a new manual tracking session for the given game title.
+    /// Start a new manual tracking session for a saved game or verified IGDB selection.
     /// Ends any active manual sessions first, then creates a new one.
     /// </summary>
     public async Task<ManualSessionStartResponseDto> StartSession(
         long userId, ManualSessionStartRequest request, CancellationToken ct)
     {
-        var title = request.Title?.Trim();
-        if (string.IsNullOrWhiteSpace(title))
-            throw AppProblemException.Validation("Title is required.");
+        var selection = ValidateGameSelection(
+            request.GameId,
+            request.IgdbId);
+        var platformKey = RequirePlatform(request.PlatformKey);
+        var resolvedSelection = await ResolveAuthoritativeSelection(selection, ct);
 
         return await repository.ExecuteInTransaction(async () =>
         {
             var startedAt = DateTimeOffset.UtcNow;
 
+            await repository.AcquireUserStartLock(userId, ct);
+            if (resolvedSelection.GameId.HasValue)
+            {
+                RequireExistingGame(await repository.GetGameEntity(resolvedSelection.GameId.Value, ct));
+            }
             await repository.EndActiveSessions(userId, ct);
-            var platformKey = request.PlatformKey?.Trim().ToLowerInvariant() ?? "unknown";
-            var gameId = string.IsNullOrWhiteSpace(request.GameId)
-                ? await ResolveOrCreateGame(title, platformKey, null, ct)
-                : GameId.Parse(request.GameId);
+            var gameId = await ResolveGame(resolvedSelection, ct);
             var platformId = await repository.GetPlatformIdByKey(platformKey, ct)
                 ?? throw AppProblemException.Validation("Platform not found.");
             var sessionId = await repository.CreatePlaySession(
@@ -46,17 +51,25 @@ public sealed class ManualService(
     /// <summary>
     /// Stop all active manual tracking sessions for the current user.
     /// </summary>
-    public async Task<ManualSessionStopResponseDto> StopSession(long userId, CancellationToken ct)
-    {
-        var count = await repository.EndActiveSessions(userId, ct);
+    public Task<ManualSessionStopResponseDto> StopSession(long userId, CancellationToken ct) =>
+        repository.ExecuteInTransaction(async () =>
+        {
+            await repository.AcquireUserStartLock(userId, ct);
+            return new ManualSessionStopResponseDto(
+                await repository.EndActiveSessions(userId, ct));
+        }, ct);
 
-        return new ManualSessionStopResponseDto(count);
-    }
+    public async Task<ManualPlatformsResponseDto> ListPlatforms(CancellationToken ct) =>
+        BuildPlatformCatalog(await repository.ListPlatforms(ct));
+
+    public async Task<ManualActiveSessionResponseDto> GetCurrentSession(
+        long userId,
+        CancellationToken ct) =>
+        ToActiveSessionResponse(await repository.LoadActiveSession(userId, ct));
 
     /// <summary>
     /// Create a historical manual play session entry.
-    /// When no gameId is provided, the service resolves or creates a game
-    /// from the supplied title / platformKey / capsuleUrl fields.
+    /// When no gameId is provided, the service verifies and resolves the IGDB selection.
     /// </summary>
     public async Task<ManualEntryCreateResponseDto> CreateEntry(
         long userId, ManualEntryCreateRequest request, CancellationToken ct)
@@ -74,39 +87,21 @@ public sealed class ManualService(
             throw AppProblemException.Validation("durationMinutes must be a positive integer.");
 
         var endTime = startTime.AddMinutes(request.DurationMinutes);
+        var selection = ValidateGameSelection(
+            request.GameId,
+            request.IgdbId);
+        var platformKey = RequirePlatform(request.PlatformKey);
+        var resolvedSelection = await ResolveAuthoritativeSelection(selection, ct);
         return await repository.ExecuteInTransaction(async () =>
         {
-            long gameId;
-            long platformId;
-
-            if (!string.IsNullOrWhiteSpace(request.GameId))
+            if (resolvedSelection.GameId.HasValue)
             {
-                gameId = GameId.Parse(request.GameId);
-                var game = await repository.GetGameEntity(gameId, ct);
-                if (game is null)
-                    throw AppProblemException.Validation("Game not found for the specified gameId.");
-                platformId = !string.IsNullOrWhiteSpace(request.PlatformKey)
-                    ? await repository.GetPlatformIdByKey(request.PlatformKey.Trim().ToLowerInvariant(), ct)
-                        ?? throw AppProblemException.Validation("Platform not found.")
-                    : throw AppProblemException.Validation("platformKey is required when gameId is provided.");
-            }
-            else
-            {
-                var igdbId = request.IgdbId?.Trim();
-                var title = request.Title?.Trim();
-                var platformKey = request.PlatformKey?.Trim();
-                if (string.IsNullOrEmpty(igdbId) || string.IsNullOrEmpty(title) || string.IsNullOrEmpty(platformKey))
-                    throw AppProblemException.Validation("igdbId, title, and platformKey are required.");
-
-                gameId = await ResolveOrCreateIgdbGame(
-                    igdbId,
-                    title,
-                    request.CapsuleUrl,
-                    ct);
-                platformId = await repository.GetPlatformIdByKey(platformKey.ToLowerInvariant(), ct)
-                    ?? throw AppProblemException.Validation("Platform not found.");
+                RequireExistingGame(await repository.GetGameEntity(resolvedSelection.GameId.Value, ct));
             }
 
+            var gameId = await ResolveGame(resolvedSelection, ct);
+            var platformId = await repository.GetPlatformIdByKey(platformKey, ct)
+                ?? throw AppProblemException.Validation("Platform not found.");
             var sessionId = await repository.CreatePlaySession(
                 userId, gameId, platformId, startTime, endTime, ct);
             return new ManualEntryCreateResponseDto(sessionId);
@@ -124,13 +119,14 @@ public sealed class ManualService(
             throw AppProblemException.Validation("query is required.");
 
         var opts = igdbOptions.Value;
-        var igdbAvailable = !string.IsNullOrWhiteSpace(opts.ClientId) &&
+        var igdbConfigured = !string.IsNullOrWhiteSpace(opts.ClientId) &&
             !string.IsNullOrWhiteSpace(opts.ClientSecret);
         var localTask = repository.SearchLocalGames(trimmed, MaxLocalSearchResults, ct);
-        var igdbTask = igdbAvailable
-            ? igdbClient.SearchGames(trimmed, ct)
-            : Task.FromResult(new List<IgdbSearchResult>());
+        var igdbTask = igdbConfigured
+            ? SearchIgdbSafely(() => igdbClient.SearchGames(trimmed, ct), ct)
+            : Task.FromResult(new IgdbSearchAttempt(false, []));
         await Task.WhenAll(localTask, igdbTask);
+        var igdb = igdbTask.Result;
 
         var results = localTask.Result.Select(r => new ManualMappingSearchResultDto(
             Source: "local",
@@ -140,7 +136,7 @@ public sealed class ManualService(
             Platform: r.Platform,
             PlatformId: null,
             CapsuleUrl: r.CapsuleUrl
-        )).Concat(igdbTask.Result.Select(result => new ManualMappingSearchResultDto(
+        )).Concat(igdb.Results.Select(result => new ManualMappingSearchResultDto(
             Source: "igdb",
             GameId: null,
             IgdbId: result.Id,
@@ -150,33 +146,100 @@ public sealed class ManualService(
             CapsuleUrl: result.CoverUrl
         ))).ToList();
 
-        return new ManualMappingSearchResponseDto(trimmed, igdbAvailable, results);
+        return new ManualMappingSearchResponseDto(trimmed, igdb.Available, results);
     }
 
-    private async Task<long> ResolveOrCreateGame(
-        string title, string platformKey, string? capsuleUrl, CancellationToken ct)
+    internal static ValidatedManualGameSelection ValidateGameSelection(
+        string? gameId,
+        string? igdbId)
     {
-        var platformId = await repository.GetPlatformIdByKey(platformKey, ct);
-        if (platformId is null)
-            throw AppProblemException.Validation($"Platform '{platformKey}' not found.");
+        if (!string.IsNullOrWhiteSpace(gameId))
+        {
+            return new ValidatedManualGameSelection(GameId.Parse(gameId), null);
+        }
 
-        return await repository.CreateGame(title, capsuleUrl, ct);
+        var normalizedIgdbId = igdbId?.Trim();
+        if (string.IsNullOrEmpty(normalizedIgdbId))
+        {
+            throw AppProblemException.Validation("Select a saved game or an IGDB result.");
+        }
+
+        return new ValidatedManualGameSelection(null, normalizedIgdbId);
     }
 
-    private async Task<long> ResolveOrCreateIgdbGame(
-        string igdbId,
-        string title,
-        string? capsuleUrl,
+    internal static ManualPlatformsResponseDto BuildPlatformCatalog(
+        IEnumerable<Playdex.Persistence.Platform> platforms) =>
+        new(platforms
+            .Where(platform => platform.Key != "playnite")
+            .OrderBy(platform => platform.Name)
+            .ThenBy(platform => platform.Key)
+            .Select(platform => new ManualPlatformDto(platform.Key, platform.Name))
+            .ToArray());
+
+    internal static ManualActiveSessionResponseDto ToActiveSessionResponse(
+        ManualActiveSessionRow? row) =>
+        new(row is null
+            ? null
+            : new ManualActiveSessionDto(
+                row.SessionId,
+                GameId.Encode(row.GameId),
+                row.Title,
+                row.PlatformKey,
+                row.PlatformName,
+                row.StartedAt,
+                row.CapsuleUrl));
+
+    internal static Game RequireExistingGame(Game? game) =>
+        game ?? throw AppProblemException.Validation("Game not found for the specified gameId.");
+
+    internal static async Task<IgdbSearchAttempt> SearchIgdbSafely(
+        Func<Task<List<IgdbSearchResult>>> search,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            return new IgdbSearchAttempt(true, await search());
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception)
+        {
+            return new IgdbSearchAttempt(false, []);
+        }
+    }
+
+    private static string RequirePlatform(string? platformKey)
+    {
+        var normalized = platformKey?.Trim().ToLowerInvariant();
+        if (string.IsNullOrEmpty(normalized))
+            throw AppProblemException.Validation("platformKey is required.");
+        return normalized;
+    }
+
+    internal async Task<ResolvedManualGameSelection> ResolveAuthoritativeSelection(
+        ValidatedManualGameSelection selection,
         CancellationToken ct)
     {
-        var resolution = await gameResolver.Resolve(
+        if (selection.GameId.HasValue)
+            return new ResolvedManualGameSelection(selection.GameId, null);
+
+        var authoritative = await igdbClient.GetGameById(selection.IgdbId!, ct);
+        if (authoritative is null)
+            throw AppProblemException.Validation("IGDB game not found.");
+
+        return new ResolvedManualGameSelection(
+            null,
             new GameResolutionRequest(
                 GameExternalIdentityTypes.FromKey("igdb"),
-                igdbId,
-                title,
-                capsuleUrl),
-            ct);
-        return resolution.GameId;
+                authoritative.Id,
+                authoritative.Title,
+                authoritative.CoverUrl));
     }
 
+    internal async Task<long> ResolveGame(
+        ResolvedManualGameSelection selection,
+        CancellationToken ct) =>
+        selection.GameId ?? (await gameResolver.Resolve(selection.IgdbResolution!, ct)).GameId;
 }
