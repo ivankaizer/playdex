@@ -62,7 +62,23 @@ public sealed partial class MigrationRunner(
         await command.ExecuteNonQueryAsync(cancellationToken);
 
         // Databases adopted from the legacy migration ledger may have the
-        // columns but not the defaults declared above.
+        // columns but not the defaults declared above. Avoid ALTER TABLE when
+        // a default already exists: even an unchanged default requires an
+        // exclusive lock and can block startup behind a reading transaction.
+        await using var checkDefault = new NpgsqlCommand(
+            """
+            select atthasdef
+            from pg_catalog.pg_attribute
+            where attrelid = 'dotnet_schema_migrations'::regclass
+              and attname = 'applied_at'
+              and not attisdropped
+            """,
+            connection);
+        if (await checkDefault.ExecuteScalarAsync(cancellationToken) is true)
+        {
+            return;
+        }
+
         await using var defaults = new NpgsqlCommand(
             "alter table dotnet_schema_migrations alter column applied_at set default now()",
             connection);
