@@ -10,28 +10,42 @@
 @if (_error is not null) { <RadzenAlert AlertStyle="AlertStyle.Danger">@_error</RadzenAlert><RadzenButton Text="Retry" Click="RefreshAsync" Disabled="@_loading" /> }
 else if (_loading) { <RadzenProgressBar Mode="ProgressBarMode.Indeterminate" /> }
 else {
+    <div class="session-toolbar">
     <RadzenDropDown @bind-Value="_filter" Data="@_platforms" TextProperty="Key" ValueProperty="Key" AllowClear="true" Placeholder="Filter platform" />
     <RadzenButton Text="Refresh" Click="@RefreshAsync" Disabled="@_loading" />
+    </div>
     <RadzenDataGrid Data="@VisibleIntegrations" TItem="IntegrationSummary" AllowPaging="true" PageSize="25">
         <Columns><RadzenDataGridColumn TItem="IntegrationSummary" Property="Email" Title="Owner" />
             <RadzenDataGridColumn TItem="IntegrationSummary" Property="Platform" Title="Platform" />
             <RadzenDataGridColumn TItem="IntegrationSummary" Property="AccountId" Title="Account" />
-            <RadzenDataGridColumn TItem="IntegrationSummary" Property="Active" Title="Active" />
-            <RadzenDataGridColumn TItem="IntegrationSummary" Title="Credentials"><Template Context="integration">•••••••• <RadzenButton Text="Edit" Click="@(() => BeginEdit(integration))" /></Template></RadzenDataGridColumn>
+            <RadzenDataGridColumn TItem="IntegrationSummary" Property="Active" Title="Active" Width="96px" TextAlign="TextAlign.Center">
+                <Template Context="integration">@(integration.Active ? "Yes" : "No")</Template>
+            </RadzenDataGridColumn>
+            <RadzenDataGridColumn TItem="IntegrationSummary" Title="API key"><Template Context="integration"><span class="admin-api-key">@(integration.ApiKey ?? "Not set")</span> <RadzenButton Text="Edit" Click="@(() => BeginEdit(integration))" /></Template></RadzenDataGridColumn>
         </Columns>
     </RadzenDataGrid>
     <RadzenHeading Size="H2" Text="Platform controls" />
+    <div class="admin-actions">
     @foreach (var platform in _platforms) {
         <RadzenButton Text="@(platform.Enabled ? $"Disable {platform.Key}" : $"Enable {platform.Key}")" Click="@(() => TogglePlatformAsync(platform))" Disabled="@_loading" />
     }
+    </div>
     @if (_editing is not null) {
-        <RadzenCard><RadzenHeading Size="H2" Text="@($"Edit credentials for {_editing.Email}")" />
-            <label><input type="checkbox" @bind="_replaceApiKey" /> Replace or clear API key</label>
-            @if (_replaceApiKey) { <RadzenPassword @bind-Value="_apiKey" Placeholder="New API key (empty clears it)" /> }
-            <label><input type="checkbox" @bind="_changeAccountId" /> Change account identifier</label>
-            @if (_changeAccountId) { <RadzenTextBox @bind-Value="_accountId" Placeholder="Account identifier" /> }
-            <RadzenButton Text="Save credentials" Click="SaveCredentialsAsync" Disabled="@_loading" />
-            <RadzenButton Text="Cancel" Click="@(() => _editing = null)" Disabled="@_loading" />
+        <RadzenCard class="admin-form-card"><RadzenHeading Size="H2" Text="@($"Edit credentials for {_editing.Email}")" />
+            <div class="admin-form">
+                <div class="admin-field">
+                    <label class="admin-check"><input type="checkbox" @bind="_replaceApiKey" /> Replace or clear API key</label>
+                    @if (_replaceApiKey) { <RadzenTextBox @bind-Value="_apiKey" Placeholder="API key (empty clears it)" aria-label="API key" /> }
+                </div>
+                <div class="admin-field">
+                    <label class="admin-check"><input type="checkbox" @bind="_changeAccountId" /> Change account identifier</label>
+                    @if (_changeAccountId) { <RadzenTextBox @bind-Value="_accountId" Placeholder="Account identifier" aria-label="Account identifier" /> }
+                </div>
+                <div class="admin-actions">
+                    <RadzenButton Text="Save credentials" Click="SaveCredentialsAsync" Disabled="@_loading" />
+                    <RadzenButton Text="Cancel" ButtonStyle="ButtonStyle.Light" Click="@(() => _editing = null)" Disabled="@_loading" />
+                </div>
+            </div>
         </RadzenCard>
     }
 }
@@ -53,7 +67,13 @@ else {
     private async Task RefreshAsync()
     {
         _loading = true;
-        try { _integrations = await Operations.GetIntegrationsAsync(); _platforms = await Operations.GetPlatformSummariesAsync(); _error = null; }
+        try
+        {
+            var state = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+            _integrations = await Operations.GetIntegrationsAsync(state.User);
+            _platforms = await Operations.GetPlatformSummariesAsync();
+            _error = null;
+        }
         catch (Exception exception) { _error = exception.Message; }
         finally { _loading = false; }
     }
@@ -80,7 +100,7 @@ else {
         _editing = integration;
         _replaceApiKey = false;
         _changeAccountId = false;
-        _apiKey = null;
+        _apiKey = integration.ApiKey;
         _accountId = integration.AccountId;
     }
 

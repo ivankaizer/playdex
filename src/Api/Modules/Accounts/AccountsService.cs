@@ -43,8 +43,8 @@ public sealed class AccountsService(AccountsRepository repository)
     {
         var validated = ValidateSessionUpdate(session, userId, request);
         var editableSession = session!;
-        editableSession.StartedAt = validated.StartedAt;
-        editableSession.EndedAt = validated.EndedAt;
+        editableSession.StartedAt = validated.StartedAt.ToUniversalTime();
+        editableSession.EndedAt = validated.EndedAt.ToUniversalTime();
         editableSession.UpdatedAt = updatedAt;
         return new AccountSessionUpdateResponseDto(
             editableSession.Id,

@@ -13,7 +13,7 @@ public sealed record GenerationImage(byte[] Bytes, string ContentType);
 
 public interface IGenerationHistoryOperations
 {
-    Task<GenerationSearchResult> Search(ClaimsPrincipal principal, string query, string? status, int page, CancellationToken ct = default);
+    Task<GenerationSearchResult> Search(ClaimsPrincipal principal, string query, string? status, int page, DateTimeOffset? since = null, DateTimeOffset? until = null, CancellationToken ct = default);
     Task<GenerationDetail?> GetDetailsAsync(ClaimsPrincipal principal, Guid id, CancellationToken ct = default);
     Task<GenerationImage?> GetImage(ClaimsPrincipal principal, Guid id, CancellationToken ct = default);
     Task<bool> Delete(ClaimsPrincipal principal, Guid id, CancellationToken ct = default);
@@ -23,7 +23,7 @@ public sealed class GenerationHistoryOperations(IDbContextFactory<PlaydexDbConte
     AdminOperationGuard guard) : IGenerationHistoryOperations
 {
     public async Task<GenerationSearchResult> Search(ClaimsPrincipal principal, string query, string? status,
-        int page, CancellationToken ct = default)
+        int page, DateTimeOffset? since = null, DateTimeOffset? until = null, CancellationToken ct = default)
     {
         await DemandAdmin(principal, ct);
         page = Math.Clamp(page, 0, 100_000);
@@ -33,7 +33,10 @@ public sealed class GenerationHistoryOperations(IDbContextFactory<PlaydexDbConte
             join user in db.Users.AsNoTracking() on generation.UserId equals user.Id
             where EF.Functions.ILike(user.Email, like) || EF.Functions.ILike(generation.InputText!, like)
             select new { generation, user.Email };
-        if (!string.IsNullOrWhiteSpace(status)) rows = rows.Where(row => row.generation.Status == status);
+        if (status == "errors") rows = rows.Where(row => row.generation.Status == "failure" || row.generation.Status == "timeout" || row.generation.Status == "cancelled");
+        else if (!string.IsNullOrWhiteSpace(status)) rows = rows.Where(row => row.generation.Status == status);
+        if (since is not null) rows = rows.Where(row => row.generation.CreatedAt >= since);
+        if (until is not null) rows = rows.Where(row => row.generation.CreatedAt <= until);
         var total = await rows.CountAsync(ct);
         var items = await rows.OrderByDescending(row => row.generation.CreatedAt).ThenByDescending(row => row.generation.Id)
             .Skip(page * 25).Take(25)

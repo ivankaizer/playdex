@@ -27,34 +27,59 @@ else
 {
     <RadzenDataGrid Data="@_games" TItem="GameSummary" RowSelect="SelectGame">
         <Columns>
-            <RadzenDataGridColumn TItem="GameSummary" Property="Id" Title="Id"/>
+            <RadzenDataGridColumn TItem="GameSummary" Property="Id" Title="Id" Width="80px"/>
             <RadzenDataGridColumn TItem="GameSummary" Property="Title" Title="Title"/>
             <RadzenDataGridColumn TItem="GameSummary" Property="CapsuleUrl" Title="Capsule URL"/>
-            <RadzenDataGridColumn TItem="GameSummary" Property="TitleLocked" Title="Title locked"/>
-            <RadzenDataGridColumn TItem="GameSummary" Property="CapsuleUrlLocked" Title="Image locked"/>
+            <RadzenDataGridColumn TItem="GameSummary" Property="TitleLocked" Title="Title locked" Width="112px" TextAlign="TextAlign.Center">
+                <Template Context="game">@(game.TitleLocked ? "Yes" : "No")</Template>
+            </RadzenDataGridColumn>
+            <RadzenDataGridColumn TItem="GameSummary" Property="CapsuleUrlLocked" Title="Image locked" Width="112px" TextAlign="TextAlign.Center">
+                <Template Context="game">@(game.CapsuleUrlLocked ? "Yes" : "No")</Template>
+            </RadzenDataGridColumn>
         </Columns>
     </RadzenDataGrid>
     @if (_selected is not null)
     {
-        <RadzenCard>
+        <RadzenCard class="admin-form-card">
             <RadzenHeading Size="H2" Text="Edit game"/>
-            <RadzenTextBox @bind-Value="_title" Placeholder="Title"/>
-            <RadzenTextBox @bind-Value="_capsuleUrl" Placeholder="Capsule URL (clear to remove)"/>
-            <label><input type="checkbox" @bind="_titleLocked"/> Title locked</label>
-            <label><input type="checkbox" @bind="_capsuleUrlLocked"/> Image locked</label>
-            <RadzenButton Text="Save" Click="SaveAsync" Disabled="@_saving"/>
+            <div class="admin-form">
+                <div class="admin-form-grid">
+                    <div class="admin-field">
+                        <label for="game-title">Title</label>
+                        <RadzenTextBox id="game-title" @bind-Value="_title" Placeholder="Title"/>
+                    </div>
+                    <div class="admin-field">
+                        <label for="game-capsule">Capsule URL</label>
+                        <RadzenTextBox id="game-capsule" @bind-Value="_capsuleUrl" Placeholder="Image URL" aria-describedby="game-capsule-hint"/>
+                        <small id="game-capsule-hint">Leave empty to remove the image.</small>
+                    </div>
+                </div>
+                <div class="admin-checkbox-row">
+                    <label class="admin-check"><input type="checkbox" @bind="_titleLocked"/> Title locked</label>
+                    <label class="admin-check"><input type="checkbox" @bind="_capsuleUrlLocked"/> Image locked</label>
+                </div>
+                <div class="admin-actions"><RadzenButton Text="Save" Click="SaveAsync" Disabled="@_saving"/></div>
+            </div>
         </RadzenCard>
     }
 
     @if (_games.Count > 1)
     {
-        <RadzenCard>
+        <RadzenCard class="admin-form-card">
             <RadzenHeading Size="H2" Text="Merge games"/>
-            <RadzenDropDown @bind-Value="_sourceId" Data="@_games" TextProperty="Title" ValueProperty="Id"
-                            Placeholder="Source game"/>
-            <RadzenDropDown @bind-Value="_targetId" Data="@_games" TextProperty="Title" ValueProperty="Id"
-                            Placeholder="Target game"/>
-            <RadzenButton Text="Merge" Click="MergeAsync" Disabled="@_saving"/>
+            <div class="admin-form">
+                <div class="admin-form-grid">
+                    <div class="admin-field">
+                        <label for="merge-source">Source game</label>
+                        <RadzenDropDown id="merge-source" @bind-Value="_sourceId" Data="@_games" TextProperty="Title" ValueProperty="Id" Placeholder="Source game"/>
+                    </div>
+                    <div class="admin-field">
+                        <label for="merge-target">Target game</label>
+                        <RadzenDropDown id="merge-target" @bind-Value="_targetId" Data="@_games" TextProperty="Title" ValueProperty="Id" Placeholder="Target game"/>
+                    </div>
+                </div>
+                <div class="admin-actions"><RadzenButton Text="Merge" Click="MergeAsync" Disabled="@_saving"/></div>
+            </div>
         </RadzenCard>
     }
 }
@@ -97,6 +122,11 @@ else
 
     private async Task SearchAsync()
     {
+        if (string.IsNullOrWhiteSpace(_query))
+        {
+            await LoadAsync();
+            return;
+        }
         if (_loading) return;
         _loading = true;
         _selected = null;

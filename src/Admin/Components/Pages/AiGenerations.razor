@@ -12,6 +12,10 @@
 <PageTitle>AI generations</PageTitle>
 <RadzenHeading Size="H1" Text="AI generations" />
 <p>Compare submitted evidence with generated sessions, including failed attempts and automatic retries.</p>
+@if (Since is not null || Until is not null)
+{
+    <p>Submitted @Time.Format(ParseDate(Since)) – @Time.Format(ParseDate(Until)) · <a href="/ai-generations?status=errors">Clear time filter</a></p>
+}
 <div class="session-toolbar">
     <RadzenTextBox @bind-Value="_query" Placeholder="Search email or input text" aria-label="Search generation history" />
     <RadzenDropDown @bind-Value="_status" Data="@Statuses" AllowClear="true" Placeholder="All outcomes" aria-label="Generation outcome" />
@@ -29,7 +33,7 @@
 {
     <div class="generation-detail-header">
         <RadzenHeading Size="H2" Text="Generation details" />
-        <div>
+        <div class="admin-actions">
             <RadzenButton Text="Close details" ButtonStyle="ButtonStyle.Light" Click="@(() => _detail = null)" Disabled="@_busy" />
             <RadzenButton Text="Delete generation" Icon="delete" ButtonStyle="ButtonStyle.Danger" Click="Delete" Disabled="@_busy" />
         </div>
@@ -69,73 +73,111 @@
 }
 
 @code {
-    private static readonly string[] Statuses = ["success", "failure", "timeout", "cancelled", "running"];
+    private static DateTimeOffset? ParseDate(string? value) => DateTimeOffset.TryParse(value, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var date) ? date : null;
+    [SupplyParameterFromQuery(Name = "id")] public Guid? GenerationId { get; set; }
+    [SupplyParameterFromQuery(Name = "status")] public string? Status { get; set; }
+    [SupplyParameterFromQuery(Name = "since")] public string? Since { get; set; }
+    [SupplyParameterFromQuery(Name = "until")] public string? Until { get; set; }
+    private static readonly string[] Statuses = ["errors", "success", "failure", "timeout", "cancelled", "running"];
     private readonly CancellationTokenSource _lifetime = new();
+    private bool _scopeInitialized;
+    private (Guid? Id, string? Status, string? Since, string? Until) _scope;
     private string _query = "";
     private string? _status;
     private GenerationSearchResult? _result;
     private GenerationDetail? _detail;
     private bool _busy;
+    private TaskCompletionSource? _idle;
+    private long _scopeVersion;
+    private void SetBusy(bool busy)
+    {
+        _busy = busy;
+        if (busy) _idle = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        else _idle?.TrySetResult();
+    }
     private string? _error;
 
     protected override async Task OnInitializedAsync()
     {
         await Time.EnsureLoadedAsync();
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var scope = (GenerationId, Status, Since, Until);
+        if (_scopeInitialized && scope == _scope) return;
+        _scopeInitialized = true;
+        _scope = scope;
+        var version = ++_scopeVersion;
+        while (_busy && _idle is not null) await _idle.Task;
+        if (version != _scopeVersion || _lifetime.IsCancellationRequested) return;
+        _status = Status;
         await Load(0);
+        if (version != _scopeVersion || _lifetime.IsCancellationRequested) return;
+        if (GenerationId is { } id) await Inspect(id);
     }
 
     private async Task Load(int page)
     {
         if (_busy || page < 0) return;
-        _busy = true;
+        SetBusy(true);
+        var version = _scopeVersion;
         try
         {
             var principal = (await Authentication.GetAuthenticationStateAsync()).User;
-            _result = await History.Search(principal, _query, _status, page, _lifetime.Token);
+            var result = await History.Search(principal, _query, _status, page, ParseDate(Since), ParseDate(Until), _lifetime.Token);
+            if (version != _scopeVersion) return;
+            _result = result;
             _detail = null;
             _error = null;
         }
         catch (OperationCanceledException) when (_lifetime.IsCancellationRequested) { }
         catch (UnauthorizedAccessException) { _detail = null; _result = null; _error = "Administrator access is required."; }
         catch (Exception) { _error = "Could not load generation history. Try searching again."; }
-        finally { _busy = false; }
+        finally { SetBusy(false); }
     }
 
     private async Task Inspect(Guid id)
     {
         if (_busy) return;
-        _busy = true;
+        SetBusy(true);
+        var version = _scopeVersion;
         _detail = null;
         try
         {
             var principal = (await Authentication.GetAuthenticationStateAsync()).User;
-            _detail = await History.GetDetailsAsync(principal, id, _lifetime.Token);
+            var detail = await History.GetDetailsAsync(principal, id, _lifetime.Token);
+            if (version != _scopeVersion) return;
+            _detail = detail;
             _error = _detail is null ? "This generation has been deleted or expired." : null;
         }
         catch (OperationCanceledException) when (_lifetime.IsCancellationRequested) { }
         catch (UnauthorizedAccessException) { _result = null; _error = "Administrator access is required."; }
         catch (Exception) { _error = "Could not load this generation. Try again."; }
-        finally { _busy = false; }
+        finally { SetBusy(false); }
     }
 
     private async Task Delete()
     {
         if (_busy || _detail is null) return;
         var id = _detail.Generation.Id;
+        var version = _scopeVersion;
         if (!await Interactions.ConfirmAsync("Delete this generation and its retained input, screenshot, and results?", "Delete generation")) return;
-        _busy = true;
+        if (_busy || _lifetime.IsCancellationRequested || version != _scopeVersion) return;
+        SetBusy(true);
+        var reload = false;
         try
         {
             var principal = (await Authentication.GetAuthenticationStateAsync()).User;
             await History.Delete(principal, id, _lifetime.Token);
             _detail = null;
-            _busy = false;
-            await Load(0);
+            reload = true;
         }
         catch (OperationCanceledException) when (_lifetime.IsCancellationRequested) { }
         catch (UnauthorizedAccessException) { _detail = null; _result = null; _error = "Administrator access is required."; }
         catch (Exception) { _error = "Could not delete this generation. Try again."; }
-        finally { _busy = false; }
+        finally { SetBusy(false); }
+        if (reload) await Load(0);
     }
 
     public void Dispose() { _lifetime.Cancel(); _lifetime.Dispose(); }
