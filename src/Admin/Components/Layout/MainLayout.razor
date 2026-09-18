@@ -1,14 +1,37 @@
 @inherits LayoutComponentBase
+@implements IDisposable
 @using System.Security.Claims
 @using Microsoft.AspNetCore.Components.Authorization
 @using Radzen
 @inject AuthenticationStateProvider AuthenticationStateProvider
+@inject NavigationManager Navigation
 
-<RadzenLayout>
+<RadzenLayout class="@(_mobileMenuOpen ? "admin-layout admin-menu-open" : "admin-layout")">
     <RadzenDialog />
     <RadzenNotification />
-    <RadzenSidebar Expanded="true">
-        <div class="admin-sidebar">
+    <header class="admin-mobile-header" @onkeydown="HandleMenuKeyDown">
+        <button type="button" class="admin-menu-toggle" aria-label="Toggle navigation"
+                aria-controls="admin-navigation" aria-expanded="@(_mobileMenuOpen ? "true" : "false")"
+                @onclick="ToggleMenu">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                @if (_mobileMenuOpen)
+                {
+                    <path d="m6 6 12 12M6 18 18 6" />
+                }
+                else
+                {
+                    <path d="M4 6h16M4 12h16M4 18h16" />
+                }
+            </svg>
+        </button>
+        <span class="admin-mobile-title">Playdex <span>Admin</span></span>
+    </header>
+    @if (_mobileMenuOpen)
+    {
+        <button type="button" class="admin-menu-backdrop" aria-label="Close navigation" @onclick="CloseMenu"></button>
+    }
+    <RadzenSidebar id="admin-navigation" Expanded="true" Responsive="false">
+        <div class="admin-sidebar" @onkeydown="HandleMenuKeyDown">
             <div class="admin-brand">
                 <span class="admin-logo" aria-hidden="true">
                     <svg width="34" height="34" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -24,11 +47,11 @@
                 </div>
             </div>
             <RadzenPanelMenu class="admin-sidebar-menu">
-                <RadzenPanelMenuItem Text="Dashboard" Path="/" />
-                <RadzenPanelMenuItem Text="Integrations" Path="/integrations" />
-                <RadzenPanelMenuItem Text="Sessions" Path="/sessions" />
+                <RadzenPanelMenuItem Text="Dashboard" Path="/" Icon="dashboard" />
+                <RadzenPanelMenuItem Text="Integrations" Path="/integrations" Icon="extension" />
+                <RadzenPanelMenuItem Text="Sessions" Path="/sessions" Icon="schedule" />
                 <RadzenPanelMenuItem Text="AI generations" Path="/ai-generations" Icon="auto_awesome" />
-                <RadzenPanelMenuItem Text="Games" Path="/games" />
+                <RadzenPanelMenuItem Text="Games" Path="/games" Icon="sports_esports" />
             </RadzenPanelMenu>
             <div class="admin-sidebar-footer">
                 <div class="admin-user-chip">
@@ -36,7 +59,7 @@
                     <span class="admin-user-email">@UserEmail</span>
                 </div>
                 <RadzenPanelMenu>
-                    <RadzenPanelMenuItem Text="Logout" Path="/logout" />
+                    <RadzenPanelMenuItem Text="Logout" Path="/logout" Icon="logout" />
                 </RadzenPanelMenu>
             </div>
         </div>
@@ -47,9 +70,30 @@
 @code {
     private string UserEmail { get; set; } = "";
     private string UserInitials { get; set; } = "";
+    private bool _mobileMenuOpen;
+
+    private void ToggleMenu() => _mobileMenuOpen = !_mobileMenuOpen;
+    private void CloseMenu() => _mobileMenuOpen = false;
+
+    private void HandleMenuKeyDown(KeyboardEventArgs args)
+    {
+        if (args.Key == "Escape") CloseMenu();
+    }
+
+    private void OnLocationChanged(object? sender, LocationChangedEventArgs args)
+    {
+        _ = InvokeAsync(() =>
+        {
+            CloseMenu();
+            StateHasChanged();
+        });
+    }
+
+    public void Dispose() => Navigation.LocationChanged -= OnLocationChanged;
 
     protected override async Task OnInitializedAsync()
     {
+        Navigation.LocationChanged += OnLocationChanged;
         var state = await AuthenticationStateProvider.GetAuthenticationStateAsync();
         var user = state.User;
         UserEmail = user.FindFirstValue(ClaimTypes.Email) ?? "";

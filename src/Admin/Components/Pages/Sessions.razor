@@ -9,11 +9,17 @@
 @inject BrowserTimeZone Time
 <PageTitle>Sessions</PageTitle>
 <RadzenHeading Size="H1" Text="Sessions"/>
+@if (From is not null || To is not null)
+{
+    <p>Started @Time.Format(ParseDate(From)) – @Time.Format(ParseDate(To)) · <a href="/sessions">All sessions</a></p>
+}
 <div class="session-toolbar">
     <RadzenTextBox @bind-Value="_query" Placeholder="Email, game, account, or platform"/>
     <RadzenDropDown @bind-Value="_status" Data="@StatusOptions" TextProperty="Label" ValueProperty="Value"
                     AllowClear="true" Placeholder="Status"/>
     <RadzenButton Text="Search" Click="SearchAsync" Disabled="@_loading"/>
+</div>
+<div class="session-toolbar admin-transfer-toolbar">
     <RadzenDropDown @bind-Value="_target" Data="@_integrations" TextProperty="AccountId" ValueProperty="Id"
                     AllowClear="true" Placeholder="Target integration"/>
     <RadzenButton Text="Transfer selected" Click="TransferAsync"
@@ -35,7 +41,7 @@ else
 {
     <RadzenDataGrid Data="@_result.Sessions" TItem="SessionSummary" AllowPaging="false">
         <Columns>
-            <RadzenDataGridColumn TItem="SessionSummary" Title="Select">
+            <RadzenDataGridColumn TItem="SessionSummary" Title="Select" Width="80px" TextAlign="TextAlign.Center">
                 <Template Context="session"><input type="checkbox" checked="@_selected.Contains(session.Id)"
                                                    @onchange="@(_ => Toggle(session.Id))"/></Template>
             </RadzenDataGridColumn>
@@ -51,18 +57,26 @@ else
         </Columns>
     </RadzenDataGrid>
     <div>Total: @_result.Total | Page: @(_result.Page + 1)</div>
+    <div class="admin-actions admin-pagination">
     <RadzenButton Text="Previous" Click="@(() => GoToPageAsync(_result.Page - 1))"
                   Disabled="@(_result.Page == 0 || _loading)"/>
     <RadzenButton Text="Next" Click="@(() => GoToPageAsync(_result.Page + 1))"
                   Disabled="@((_result.Page + 1) * 25 >= _result.Total || _loading)"/>
+    </div>
 }
 
 @code {
+    private static DateTimeOffset? ParseDate(string? value) => DateTimeOffset.TryParse(value, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var date) ? date : null;
+    [SupplyParameterFromQuery(Name = "status")] public string? Status { get; set; }
+    [SupplyParameterFromQuery(Name = "from")] public string? From { get; set; }
+    [SupplyParameterFromQuery(Name = "to")] public string? To { get; set; }
     private sealed record StatusOption(string Label, string Value);
 
     private static readonly IReadOnlyList<StatusOption> StatusOptions =
         [new("Live", "live"), new("Ended", "ended")];
 
+    private bool _scopeInitialized;
+    private (string? Status, string? From, string? To) _scope;
     private string _query = "";
     private string? _status;
     private long? _target;
@@ -70,12 +84,33 @@ else
     private SessionSearchResult? _result;
     private readonly HashSet<long> _selected = [];
     private bool _loading;
+    private TaskCompletionSource? _idle;
+    private long _scopeVersion;
+    private void SetLoading(bool loading)
+    {
+        _loading = loading;
+        if (loading) _idle = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        else _idle?.TrySetResult();
+    }
     private string? _error;
 
     protected override async Task OnInitializedAsync()
     {
         await Time.EnsureLoadedAsync();
-        _integrations = await Operations.GetIntegrationsAsync();
+        var state = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        _integrations = await Operations.GetIntegrationsAsync(state.User);
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var scope = (Status, From, To);
+        if (_scopeInitialized && scope == _scope) return;
+        _scopeInitialized = true;
+        _scope = scope;
+        var version = ++_scopeVersion;
+        while (_loading && _idle is not null) await _idle.Task;
+        if (version != _scopeVersion) return;
+        _status = Status;
         await SearchAsync();
     }
 
@@ -89,10 +124,13 @@ else
     private async Task GoToPageAsync(int page)
     {
         if (page < 0 || _loading) return;
-        _loading = true;
+        SetLoading(true);
+        var version = _scopeVersion;
         try
         {
-            _result = await Operations.SearchSessionsPageAsync(_query, page, _status);
+            var result = await Operations.SearchSessionsPageAsync(_query, page, _status, startedFrom: ParseDate(From), startedBefore: ParseDate(To));
+            if (version != _scopeVersion) return;
+            _result = result;
             _selected.Clear();
             _error = null;
         }
@@ -102,22 +140,24 @@ else
         }
         finally
         {
-            _loading = false;
+            SetLoading(false);
         }
     }
 
     private async Task TransferAsync()
     {
         if (_loading || _target is null || _selected.Count == 0) return;
+        var version = _scopeVersion;
         if (!await Interactions.ConfirmAsync($"Transfer {_selected.Count} selected sessions?", "Confirm transfer")) return;
-        _loading = true;
+        if (_loading || version != _scopeVersion) return;
+        SetLoading(true);
+        var reload = false;
         try
         {
             var state = await AuthenticationStateProvider.GetAuthenticationStateAsync();
             var count = await Operations.TransferSessionsAsync(state.User, _selected, _target.Value);
             Interactions.Success("Sessions transferred", $"Transferred {count} sessions.");
-            _loading = false;
-            await GoToPageAsync(_result?.Page ?? 0);
+            reload = true;
         }
         catch (Exception exception)
         {
@@ -126,8 +166,9 @@ else
         }
         finally
         {
-            _loading = false;
+            SetLoading(false);
         }
+        if (reload) await GoToPageAsync(_result?.Page ?? 0);
     }
 
 }

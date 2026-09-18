@@ -19,7 +19,7 @@ public sealed record PlatformSummary(string Key, string Name, int Total, int Act
     public bool Enabled => Active > 0;
 }
 
-public sealed record IntegrationSummary(long Id, string Email, string Platform, string? AccountId, bool Active);
+public sealed record IntegrationSummary(long Id, string Email, string Platform, string? AccountId, bool Active, string? ApiKey = null);
 
 public sealed record SessionSummary(
     long Id,
@@ -46,7 +46,7 @@ public interface IAdminOperations
     Task<int> SetPlatformEnabledAsync(ClaimsPrincipal principal, string platform, bool enabled,
         CancellationToken ct = default);
 
-    Task<IReadOnlyList<IntegrationSummary>> GetIntegrationsAsync(CancellationToken ct = default);
+    Task<IReadOnlyList<IntegrationSummary>> GetIntegrationsAsync(ClaimsPrincipal principal, CancellationToken ct = default);
 
     Task<bool> UpdateIntegrationAsync(ClaimsPrincipal principal, long id, bool apiKeyChanged, string? apiKey,
         bool accountIdChanged, string? accountId, CancellationToken ct = default);
@@ -59,7 +59,7 @@ public interface IAdminOperations
 
     Task<IReadOnlyList<SessionSummary>> SearchSessionsAsync(string query, int page, CancellationToken ct = default);
     Task<SessionSearchResult> SearchSessionsPageAsync(string query, int page, string? status = null,
-        CancellationToken ct = default);
+        DateTimeOffset? startedFrom = null, DateTimeOffset? startedBefore = null, CancellationToken ct = default);
     Task<IReadOnlyList<GameSummary>> ListGamesAsync(CancellationToken ct = default);
     Task<IReadOnlyList<GameSummary>> SearchGamesAsync(string query, CancellationToken ct = default);
     Task MergeGamesAsync(ClaimsPrincipal principal, long sourceId, long targetId, CancellationToken ct = default);
@@ -127,8 +127,9 @@ public sealed partial class AdminOperations(
         return integrations.Count;
     }
 
-    public async Task<IReadOnlyList<IntegrationSummary>> GetIntegrationsAsync(CancellationToken ct = default)
+    public async Task<IReadOnlyList<IntegrationSummary>> GetIntegrationsAsync(ClaimsPrincipal principal, CancellationToken ct = default)
     {
+        if (!await guard.IsAdministratorAsync(principal, ct)) throw new UnauthorizedAccessException();
         await using var db = await factory.CreateDbContextAsync(ct);
         var rows = await (from integration in db.Integrations.AsNoTracking()
             join user in db.Users.AsNoTracking() on integration.UserId equals user.Id
@@ -140,7 +141,7 @@ public sealed partial class AdminOperations(
                 integration.Id
             select new IntegrationSummary(integration.Id, user.Email,
                 integration.Type == IntegrationType.Api ? "api" : platform!.Key,
-                integration.AccountId, integration.Active)).ToListAsync(ct);
+                integration.AccountId, integration.Active, integration.ApiKey)).ToListAsync(ct);
         return rows;
     }
 
@@ -248,7 +249,7 @@ public sealed partial class AdminOperations(
     }
 
     public async Task<SessionSearchResult> SearchSessionsPageAsync(string query, int page, string? status = null,
-        CancellationToken ct = default)
+        DateTimeOffset? startedFrom = null, DateTimeOffset? startedBefore = null, CancellationToken ct = default)
     {
         var term = query.Trim();
         await using var db = await factory.CreateDbContextAsync(ct);
@@ -276,6 +277,8 @@ public sealed partial class AdminOperations(
             };
         if (status is "live") rows = rows.Where(row => row.EndedAt == null);
         else if (status is "ended") rows = rows.Where(row => row.EndedAt != null);
+        if (startedFrom is not null) rows = rows.Where(row => row.StartedAt >= startedFrom);
+        if (startedBefore is not null) rows = rows.Where(row => row.StartedAt < startedBefore);
 
         var total = await rows.CountAsync(ct);
         var sessions = await rows.OrderByDescending(row => row.StartedAt).ThenByDescending(row => row.Id)

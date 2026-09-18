@@ -13,61 +13,89 @@ namespace Admin.Tests;
 public sealed class AdminComponentTests
 {
     [Fact]
-    public async Task DashboardShowsLoadingDataEmptyAndRecoverableErrorStates()
+    public void MobileNavigationCanBeOpenedDismissedAndClosesAfterNavigation()
     {
-        var recent = new TaskCompletionSource<IReadOnlyList<UserRecentSessions>>();
-        using var context = CreateContext(new FakeOperations { Recent = _ => recent.Task }, out _);
+        using var context = CreateContext(new FakeOperations(), out _);
+        var component = context.Render<global::Admin.Components.Layout.MainLayout>();
+        var toggle = component.Find("button[aria-controls=admin-navigation]");
+        Assert.Equal("false", toggle.GetAttribute("aria-expanded"));
 
-        var component = context.Render<global::Admin.Components.Pages.Home>();
-        Assert.NotEmpty(component.FindComponents<RadzenProgressBar>());
+        toggle.Click();
+        Assert.Equal("true", toggle.GetAttribute("aria-expanded"));
+        component.Find("button[aria-label='Close navigation']").Click();
+        Assert.Equal("false", toggle.GetAttribute("aria-expanded"));
 
-        using var dataContext = CreateContext(new FakeOperations
-        {
-            Recent = _ => Task.FromResult<IReadOnlyList<UserRecentSessions>>([
-                new UserRecentSessions(1, "admin@example.test", [new RecentSession(7, "Live game", DateTimeOffset.UtcNow.AddMinutes(-5), null)]),
-            ]),
-        }, out _);
-        var loaded = dataContext.Render<global::Admin.Components.Pages.Home>();
-        Assert.True(loaded.Markup.Contains("admin@example.test", StringComparison.Ordinal), loaded.Markup);
-        Assert.Contains("Live", loaded.Markup, StringComparison.Ordinal);
+        toggle.Click();
+        component.Find("header").KeyDown(new Microsoft.AspNetCore.Components.Web.KeyboardEventArgs { Key = "Escape" });
+        Assert.Equal("false", toggle.GetAttribute("aria-expanded"));
 
-        var recoveryFake = new FakeOperations
-        {
-            Recent = _ => Task.FromException<IReadOnlyList<UserRecentSessions>>(new InvalidOperationException("dashboard unavailable")),
-        };
-        using var recoveryContext = CreateContext(recoveryFake, out _);
-        var recovery = recoveryContext.Render<global::Admin.Components.Pages.Home>();
-        Assert.Contains("dashboard unavailable", recovery.Markup, StringComparison.Ordinal);
-        recoveryFake.Recent = _ => Task.FromResult<IReadOnlyList<UserRecentSessions>>([]);
-        await recovery.FindAll("button").Single(button => button.TextContent.Contains("Retry", StringComparison.Ordinal)).ClickAsync(new());
-        recovery.WaitForAssertion(() => Assert.Contains("No sessions found", recovery.Markup, StringComparison.Ordinal));
+        toggle.Click();
+        context.Services.GetRequiredService<Microsoft.AspNetCore.Components.NavigationManager>().NavigateTo("/sessions");
+        component.WaitForAssertion(() => Assert.Equal("false", toggle.GetAttribute("aria-expanded")));
     }
 
     [Fact]
-    public async Task IntegrationsFilterConcealsSecretsAndPreservesIntentionalEditSemantics()
+    public void SessionsNavigationDuringLoadingEventuallyAppliesLatestScope()
+    {
+        var pending = new TaskCompletionSource<SessionSearchResult>();
+        var fake = new FakeOperations { SessionPage = (_, _, _) => pending.Task };
+        using var context = CreateContext(fake, out _);
+        var navigation = context.Services.GetRequiredService<Microsoft.AspNetCore.Components.NavigationManager>();
+        navigation.NavigateTo("/sessions?status=live");
+        var component = context.Render<global::Admin.Components.Pages.Sessions>();
+        Assert.Equal("live", fake.SessionScope.Status);
+        navigation.NavigateTo("/sessions?status=ended");
+        fake.SessionPage = (_, _, _) => Task.FromResult(new SessionSearchResult([], 0, 0));
+        pending.SetResult(new SessionSearchResult([], 0, 0));
+        component.WaitForAssertion(() => Assert.Equal("ended", fake.SessionScope.Status));
+    }
+
+    [Fact]
+    public void SessionsApplyDashboardQueryScopeWithoutResettingPagingOnRerender()
+    {
+        var fake = new FakeOperations();
+        using var context = CreateContext(fake, out _);
+        var navigation = context.Services.GetRequiredService<Microsoft.AspNetCore.Components.NavigationManager>();
+        navigation.NavigateTo("/sessions?status=live&from=2026-09-15T22%3A00%3A00Z&to=2026-09-16T22%3A00%3A00Z");
+        var component = context.Render<global::Admin.Components.Pages.Sessions>();
+        component.WaitForAssertion(() => Assert.Equal("live", fake.SessionScope.Status));
+        Assert.Equal(new DateTimeOffset(2026, 9, 15, 22, 0, 0, TimeSpan.Zero), fake.SessionScope.From);
+        Assert.Equal(new DateTimeOffset(2026, 9, 16, 22, 0, 0, TimeSpan.Zero), fake.SessionScope.To);
+        navigation.NavigateTo("/sessions?status=ended");
+        component.WaitForAssertion(() => Assert.Equal("ended", fake.SessionScope.Status));
+        Assert.Null(fake.SessionScope.From);
+    }
+
+    [Fact]
+    public async Task IntegrationsShowApiKeysFilterAndPreserveIntentionalEditSemantics()
     {
         var fake = new FakeOperations
         {
             Integrations = _ => Task.FromResult<IReadOnlyList<IntegrationSummary>>([
-                new(1, "owner@example.test", "steam", "steam-account", true),
-                new(2, "owner@example.test", "api", "api-account", true),
+                new(1, "owner@example.test", "steam", "steam-account", true, "steam-test-key"),
+                new(2, "owner@example.test", "api", "api-account", true, "api-test-key"),
             ]),
             Platforms = _ => Task.FromResult<IReadOnlyList<PlatformSummary>>([new("steam", "Steam", 1, 1)]),
         };
         using var context = CreateContext(fake, out _);
         var component = context.Render<global::Admin.Components.Pages.Integrations>();
         component.WaitForAssertion(() => Assert.Contains("steam-account", component.Markup, StringComparison.Ordinal));
-        Assert.Contains("••••••••", component.Markup, StringComparison.Ordinal);
-        Assert.DoesNotContain("secret", component.Markup, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("steam-test-key", component.Markup, StringComparison.Ordinal);
+        Assert.Contains("api-test-key", component.Markup, StringComparison.Ordinal);
 
         SetField(component.Instance, "_filter", "steam");
         component.Render();
         Assert.Contains("steam-account", component.Markup, StringComparison.Ordinal);
         Assert.DoesNotContain("api-account", component.Markup, StringComparison.Ordinal);
+        Assert.DoesNotContain("api-test-key", component.Markup, StringComparison.Ordinal);
 
         component.FindAll("button").Single(button => button.TextContent.Contains("Edit", StringComparison.Ordinal)).Click();
-        var checkboxes = component.FindAll("input[type=checkbox]");
-        checkboxes[1].Change(true);
+        component.FindAll("input[type=checkbox]")[0].Change(true);
+        var keyInput = component.FindAll("input").Single(input => input.GetAttribute("placeholder") == "API key (empty clears it)");
+        Assert.Equal("steam-test-key", keyInput.GetAttribute("value"));
+        Assert.NotEqual("password", keyInput.GetAttribute("type"));
+        component.FindAll("input[type=checkbox]")[0].Change(false);
+        component.FindAll("input[type=checkbox]")[1].Change(true);
         component.FindAll("input").Single(input => input.GetAttribute("placeholder") == "Account identifier").Change("  changed-account  ");
         component.FindAll("button").Single(button => button.TextContent.Contains("Save credentials", StringComparison.Ordinal)).Click();
         component.WaitForAssertion(() => Assert.Equal((false, true, "  changed-account  "), fake.LastCredentialIntent));
@@ -180,6 +208,30 @@ public sealed class AdminComponentTests
         Assert.Contains(interactions.Errors, message => message.Contains("merge failed", StringComparison.Ordinal));
     }
 
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public async Task SavingGameFromDefaultListRefreshesWithoutRequiringSearch(string query)
+    {
+        var game = new GameSummary(1, "Original title", null, false, false);
+        var fake = new FakeOperations();
+        fake.Games = (_, _) => Task.FromResult<IReadOnlyList<GameSummary>>([
+            fake.UpdateGameCalls == 0 ? game : game with { Title = "Updated title" },
+        ]);
+        using var context = CreateContext(fake, out _);
+        var component = context.Render<global::Admin.Components.Pages.Games>();
+        SetField(component.Instance, "_query", query);
+        var grid = component.FindComponent<RadzenDataGrid<GameSummary>>();
+        await component.InvokeAsync(() => grid.Instance.RowSelect.InvokeAsync(game));
+        component.FindAll("input").Single(input => input.GetAttribute("placeholder") == "Title").Change("Updated title");
+        component.FindAll("button").Single(button => button.TextContent == "Save").Click();
+        component.WaitForAssertion(() =>
+        {
+            Assert.DoesNotContain("A game search query is required", component.Markup, StringComparison.Ordinal);
+            Assert.Contains("Updated title", component.Markup, StringComparison.Ordinal);
+        });
+    }
+
     private static BunitContext CreateContext(FakeOperations operations, out FakeInteractions interactions)
     {
         var context = new BunitContext();
@@ -230,15 +282,19 @@ public sealed class AdminComponentTests
         public int UpdateGameCalls { get; private set; }
         public int MergeCalls { get; private set; }
         public int LastSessionPage { get; private set; }
+        public (string? Status, DateTimeOffset? From, DateTimeOffset? To) SessionScope { get; private set; }
         public (bool ApiKeyChanged, bool AccountChanged, string? Account) LastCredentialIntent { get; private set; }
 
         public Task<IReadOnlyList<UserRecentSessions>> GetRecentSessionsAsync(CancellationToken ct = default) => Recent(ct);
         public Task<IReadOnlyList<PlatformSummary>> GetPlatformSummariesAsync(CancellationToken ct = default) => Platforms(ct);
-        public Task<IReadOnlyList<IntegrationSummary>> GetIntegrationsAsync(CancellationToken ct = default) => Integrations(ct);
-        public Task<IReadOnlyList<GameSummary>> SearchGamesAsync(string query, CancellationToken ct = default) => Games(query, ct);
+        public Task<IReadOnlyList<IntegrationSummary>> GetIntegrationsAsync(ClaimsPrincipal principal, CancellationToken ct = default) => Integrations(ct);
+        public Task<IReadOnlyList<GameSummary>> SearchGamesAsync(string query, CancellationToken ct = default) =>
+            string.IsNullOrWhiteSpace(query)
+                ? Task.FromException<IReadOnlyList<GameSummary>>(new ArgumentException("A game search query is required.", nameof(query)))
+                : Games(query, ct);
         public Task<IReadOnlyList<GameSummary>> ListGamesAsync(CancellationToken ct = default) => Games("", ct);
         public Task<IReadOnlyList<SessionSummary>> SearchSessionsAsync(string query, int page, CancellationToken ct = default) => Task.FromResult<IReadOnlyList<SessionSummary>>([]);
-        public Task<SessionSearchResult> SearchSessionsPageAsync(string query, int page, string? status = null, CancellationToken ct = default) { LastSessionPage = page; return SessionPage(query, page, ct); }
+        public Task<SessionSearchResult> SearchSessionsPageAsync(string query, int page, string? status = null, DateTimeOffset? startedFrom = null, DateTimeOffset? startedBefore = null, CancellationToken ct = default) { LastSessionPage = page; SessionScope = (status, startedFrom, startedBefore); return SessionPage(query, page, ct); }
         public Task<int> SetPlatformEnabledAsync(ClaimsPrincipal principal, string platform, bool enabled, CancellationToken ct = default) { PlatformMutationCalls++; return SetPlatform(principal, platform, enabled, ct); }
         public Task<int> TransferSessionsAsync(ClaimsPrincipal principal, IReadOnlyCollection<long> sessionIds, long targetIntegrationId, CancellationToken ct = default) { TransferCalls++; return Transfer(principal, sessionIds, targetIntegrationId, ct); }
         public Task<bool> UpdateIntegrationAsync(ClaimsPrincipal principal, long id, bool apiKeyChanged, string? apiKey, bool accountIdChanged, string? accountId, CancellationToken ct = default) { LastCredentialIntent = (apiKeyChanged, accountIdChanged, accountId); return Task.FromResult(true); }

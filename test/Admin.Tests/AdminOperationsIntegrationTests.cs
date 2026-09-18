@@ -17,6 +17,80 @@ namespace Admin.Tests;
 [Collection(AdminAuthenticationFixtureGroup.Name)]
 public sealed class AdminOperationsIntegrationTests(AdminAuthenticationFixture fixture)
 {
+    [Fact]
+    public async Task DashboardIncludesAllSourcesGlobalCountsCombinedFiltersAndBoundedRecents()
+    {
+        if (fixture.Factory is null) return;
+        await using var scenario = await Scenario.CreateAsync(fixture);
+        var now = new DateTimeOffset(2026, 9, 16, 12, 0, 0, TimeSpan.Zero);
+        var factory = fixture.Factory.Services.GetRequiredService<IDbContextFactory<PlaydexDbContext>>();
+        var operations = new DashboardOperations(factory, new AdminOperationGuard(factory), new FixedClock(now));
+        var before = await operations.Read(scenario.Admin, "", null, now.Date, now.Date.AddDays(1));
+        var polling = await scenario.AddIntegrationAsync(IntegrationType.Steam, scenario.Platform.Id, true, $"account-{scenario.Suffix}");
+        var otherPlatform = await scenario.AddPlatformAsync($"other-{scenario.Suffix}");
+        var otherUser = await scenario.AddUserAsync($"other-{scenario.Suffix}@test.local");
+        var other = await scenario.AddIntegrationAsync(IntegrationType.Api, null, true, "api-account", userId: otherUser.Id);
+        for (var i = 0; i < 4; i++) await scenario.AddSessionAsync(scenario.Game.Id, polling.Id, now.AddHours(-5).AddMinutes(i));
+        var api = await scenario.AddSessionAsync(scenario.Game.Id, other.Id, now.AddHours(-1));
+        var manual = await scenario.AddSessionAsync(scenario.Game.Id, polling.Id, now.AddHours(-2));
+        await using var db = await scenario.CreateDbAsync();
+        await db.PlaySessions.Where(r => r.Id == manual.Id).ExecuteUpdateAsync(set => set
+            .SetProperty(r => r.IntegrationId, (long?)null).SetProperty(r => r.CaptureMethod, CaptureMethod.Manual));
+        await db.PlaySessions.Where(r => r.Id == api.Id).ExecuteUpdateAsync(set => set.SetProperty(r => r.CaptureMethod, CaptureMethod.Api).SetProperty(r => r.PlatformId, otherPlatform.Id));
+        db.PollResults.AddRange(new PollResult { Id = scenario.NextEntityId(), IntegrationId = polling.Id, PolledAt = now.AddMinutes(-3), CreatedAt = now },
+            new PollResult { Id = scenario.NextEntityId(), IntegrationId = polling.Id, PolledAt = now.AddMinutes(-1), CreatedAt = now });
+        for (var i = 0; i < 12; i++)
+        {
+            await scenario.AddSessionAsync(scenario.Game.Id, polling.Id, now.AddDays(-2).AddMinutes(-i), now.AddMinutes(-i));
+            db.AiGenerations.Add(new AiGeneration { Id = Guid.NewGuid(), RequestId = Guid.NewGuid(), UserId = scenario.User.Id,
+                CreatedAt = now.AddMinutes(-i), Provider = "test", Model = "test", Timezone = "UTC", Status = i % 2 == 0 ? "failure" : "timeout" });
+        }
+        db.AiGenerations.AddRange(new AiGeneration { Id = Guid.NewGuid(), RequestId = Guid.NewGuid(), UserId = scenario.User.Id,
+            CreatedAt = now.AddHours(-25), Provider = "test", Model = "test", Timezone = "UTC", Status = "cancelled" },
+            new AiGeneration { Id = Guid.NewGuid(), RequestId = Guid.NewGuid(), UserId = scenario.User.Id,
+            CreatedAt = now, Provider = "test", Model = "test", Timezone = "UTC", Status = "success" });
+        await db.SaveChangesAsync();
+        var baseline = await operations.Read(scenario.Admin, "", null, now.Date, now.Date.AddDays(1));
+        var all = baseline.LiveSessions.Where(r => r.Email == scenario.User.Email || r.Email == otherUser.Email).ToList();
+        Assert.Equal(6, all.Count);
+        Assert.Equal(all.OrderBy(r => r.StartedAt).Select(r => r.Id), all.Select(r => r.Id));
+        Assert.Equal(now.AddMinutes(-1), all.First(r => r.Source == CaptureMethod.Polling).LastPolledAt);
+        Assert.Null(all.Single(r => r.Source == CaptureMethod.Manual).LastPolledAt);
+        Assert.Null(all.Single(r => r.Source == CaptureMethod.Api).LastPolledAt);
+        var filtered = await operations.Read(scenario.Admin, scenario.Suffix.ToUpperInvariant(), scenario.Platform.Key, now.Date, now.Date.AddDays(1));
+        Assert.Equal(baseline.Counts, filtered.Counts);
+        Assert.Equal(5, filtered.LiveSessions.Count);
+        Assert.All(filtered.LiveSessions, r => Assert.Equal(scenario.Platform.Key, r.PlatformKey));
+        Assert.Equal(10, baseline.EndedSessions.Count);
+        Assert.Equal(baseline.EndedSessions.OrderByDescending(r => r.EndedAt).Select(r => r.Id), baseline.EndedSessions.Select(r => r.Id));
+        Assert.Equal(10, baseline.FailedGenerations.Count);
+        Assert.Equal(before.Counts.LiveSessions + 6, baseline.Counts.LiveSessions);
+        Assert.Equal(before.Counts.LiveUsers + 2, baseline.Counts.LiveUsers);
+        Assert.Equal(before.Counts.SessionsToday + 6, baseline.Counts.SessionsToday);
+        Assert.Equal(before.Counts.AiErrors + 12, baseline.Counts.AiErrors);
+        Assert.All(baseline.FailedGenerations, r => Assert.True(r.Status is "failure" or "timeout" or "cancelled"));
+        var localDayStart = now.AddHours(-14); // browser-local midnight at UTC-02h
+        var localDayEnd = localDayStart.AddDays(1);
+        var today = await scenario.Operations.SearchSessionsPageAsync(scenario.User.Email, 0, startedFrom: localDayStart, startedBefore: localDayEnd);
+        Assert.Equal(5, today.Total);
+        var errors = await new GenerationHistoryOperations(factory, new AdminOperationGuard(factory))
+            .Search(scenario.Admin, scenario.User.Email, "errors", 0, since: now.AddHours(-24), until: now);
+        Assert.Equal(12, errors.Total);
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => operations.Read(new ClaimsPrincipal(), "", null, now.Date, now.Date.AddDays(1)));
+        var ordinary = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, scenario.User.Id.ToString(System.Globalization.CultureInfo.InvariantCulture))], "test"));
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => operations.Read(ordinary, "", null, now.Date, now.Date.AddDays(1)));
+        await fixture.SetAdminAsync(false);
+        try
+        {
+            await Assert.ThrowsAsync<UnauthorizedAccessException>(() => operations.Read(scenario.Admin, "", null, now.Date, now.Date.AddDays(1)));
+        }
+        finally { await fixture.SetAdminAsync(true); }
+        await db.PollResults.Where(r => r.IntegrationId == polling.Id).ExecuteDeleteAsync();
+        await db.AiGenerations.Where(r => r.UserId == scenario.User.Id).ExecuteDeleteAsync();
+    }
+    private sealed class FixedClock(DateTimeOffset now) : TimeProvider
+    { public override DateTimeOffset GetUtcNow() => now; }
+
     private static readonly string[] OperationNames =
         ["set-platform-enabled", "update-integration", "transfer-sessions", "update-game", "merge-games"];
 
@@ -69,7 +143,9 @@ public sealed class AdminOperationsIntegrationTests(AdminAuthenticationFixture f
         var platformIntegration = await scenario.AddIntegrationAsync(IntegrationType.Steam, scenario.Platform.Id, true, "z-account", "old-secret");
         var apiIntegration = await scenario.AddIntegrationAsync(IntegrationType.Api, null, true, "a-account", "api-secret");
 
-        var rows = (await scenario.Operations.GetIntegrationsAsync()).Where(row => row.Email == scenario.User.Email).ToList();
+        var rows = (await scenario.Operations.GetIntegrationsAsync(scenario.Admin)).Where(row => row.Email == scenario.User.Email).ToList();
+        Assert.Equal("old-secret", Assert.Single(rows, row => row.Id == platformIntegration.Id).ApiKey);
+        Assert.Equal("api-secret", Assert.Single(rows, row => row.Id == apiIntegration.Id).ApiKey);
         Assert.Equal(new[] { "api", scenario.Platform.Key }.Order(), rows.Select(row => row.Platform));
 
         Assert.True(await scenario.Operations.UpdateIntegrationAsync(
@@ -314,6 +390,35 @@ public sealed class AdminOperationsIntegrationTests(AdminAuthenticationFixture f
             scenario.Operations.UpdateGameAsync(revoked, scenario.Game.Id, "not-written", true, null, false, null, null));
         await Assert.ThrowsAsync<UnauthorizedAccessException>(() =>
             scenario.Operations.MergeGamesAsync(revoked, scenario.Game.Id, long.MaxValue));
+    }
+
+    [Fact]
+    public async Task IntegrationApiKeysRequireCurrentAdministrator()
+    {
+        if (fixture.Factory is null) return;
+        await using var scenario = await Scenario.CreateAsync(fixture);
+        const string secret = "integration-read-test-key";
+        var integration = await scenario.AddIntegrationAsync(IntegrationType.Api, null, true, "read-key", secret);
+        var rows = await scenario.Operations.GetIntegrationsAsync(scenario.Admin);
+        Assert.Equal(secret, Assert.Single(rows, row => row.Id == integration.Id).ApiKey);
+        Assert.DoesNotContain(scenario.Logger.Entries, row => row.Contains(secret, StringComparison.Ordinal));
+
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() =>
+            scenario.Operations.GetIntegrationsAsync(new ClaimsPrincipal(new ClaimsIdentity())));
+        var ordinaryUser = new ClaimsPrincipal(new ClaimsIdentity(
+            [new Claim(ClaimTypes.NameIdentifier, scenario.User.Id.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+                new Claim("is_admin", "true")], CookieAuthenticationDefaults.AuthenticationScheme));
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => scenario.Operations.GetIntegrationsAsync(ordinaryUser));
+
+        await fixture.SetAdminAsync(false);
+        try
+        {
+            await Assert.ThrowsAsync<UnauthorizedAccessException>(() => scenario.Operations.GetIntegrationsAsync(scenario.Admin));
+        }
+        finally
+        {
+            await fixture.SetAdminAsync(true);
+        }
     }
 
     private static string EncodeGameId(long id)
