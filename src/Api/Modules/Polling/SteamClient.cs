@@ -50,7 +50,7 @@ public sealed class SteamClient(HttpClient httpClient, IOptions<SteamOptions> op
             Game: new CurrentlyPlayingResult(
                 Title: player.GameExtraInfo,
                 ExternalId: player.GameId,
-                CapsuleUrl: $"https://shared.steamstatic.com/store_item_assets/steam/apps/{player.GameId}/library_600x900_2x.jpg",
+                CapsuleUrl: $"https://api-cdn.wemod.com/steam_apps/{player.GameId}/hero_capsule.webp",
                 Platform: "steam"
             ),
             RawPayload: rawJson
