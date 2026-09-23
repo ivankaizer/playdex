@@ -232,7 +232,7 @@ public sealed partial class ApiCaptureService(
     {
         if (string.Equals(gameProvider, "steam", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrEmpty(gameId))
         {
-            return $"https://shared.steamstatic.com/store_item_assets/steam/apps/{gameId}/library_600x900_2x.jpg";
+            return $"https://api-cdn.wemod.com/steam_apps/{gameId}/hero_capsule.webp";
         }
 
         return null;
