@@ -53,7 +53,7 @@ services:
       ASPNETCORE_ENVIRONMENT: Development
       ASPNETCORE_URLS: http://0.0.0.0:3000
       DATABASE_URL: postgresql://playdex:playdex@db:5432/playdex
-      CORS_ORIGINS: "http://ui.playdex.orb.local,https://ui.playdex.orb.local"
+      CORS_ORIGINS: "http://ui.playdex.orb.local,https://ui.playdex.orb.local,http://localhost:5173"
       Polling__IntervalSeconds: 10
       Auth__JwtSecret: dev-only-jwt-secret-do-not-use-in-production
       Auth__AccessTokenTtl: 30m
@@ -78,44 +78,22 @@ services:
   ui:
     build:
       context: .
-      dockerfile: src/Web/Dockerfile.dev
+      dockerfile: src/Frontend/Dockerfile.dev
     restart: "no"
     environment:
-      PLAYDEX_API_URL: "https://app.playdex.orb.local/api/"
-    working_dir: /workspace/src/Web
+      VITE_API_BASE_URL: "https://app.playdex.orb.local/api/"
+    working_dir: /workspace/src/Frontend
     volumes:
       - .:/workspace
-      - web_node_modules:/app/node_modules
-      - dotnet_nuget:/root/.nuget/packages
-      - web_bun_cache:/root/.bun/install/cache
-    command: ["sh", "-c", "ln -sfn /app/node_modules /workspace/src/Web/node_modules && bun run css:watch & exec dotnet watch run --urls http://0.0.0.0:5173"]
+      - frontend_node_modules:/workspace/src/Frontend/node_modules
+    command: ["sh", "-c", "bun install --frozen-lockfile && exec bun run dev"]
     ports:
       - "5173:5173"
     depends_on:
       - app
 
-  admin:
-    build:
-      context: .
-      dockerfile: src/Admin/Dockerfile
-    restart: "no"
-    environment:
-      ASPNETCORE_ENVIRONMENT: Development
-      ASPNETCORE_URLS: http://0.0.0.0:3100
-      DATABASE_URL: postgresql://playdex:playdex@db:5432/playdex
-      Admin__AllowedOrigin: "http://admin.playdex.orb.local"
-    ports:
-      - "3100:3100"
-    depends_on:
-      db:
-        condition: service_healthy
-      app:
-        condition: service_started
-
 volumes:
   db_data:
   apprise_config:
   apprise_attach:
-  web_node_modules:
-  dotnet_nuget:
-  web_bun_cache:
+  frontend_node_modules:
