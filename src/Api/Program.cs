@@ -7,6 +7,7 @@ using Api.Infrastructure.Http;
 using Playdex.Persistence;
 using Playdex.Persistence.Migrations;
 using Api.Modules.Accounts;
+using Api.Modules.Admin;
 using Api.Modules.ApiCapture;
 using Api.Modules.Games;
 using Api.Modules.Manual;
@@ -77,7 +78,8 @@ builder.Services
     .AddRecap()
     .AddPlaydexMetrics()
     .AddPolling(builder.Configuration)
-    .AddNotifications(builder.Configuration);
+    .AddNotifications(builder.Configuration)
+    .AddAdmin();
 
 builder.Services.AddExceptionHandler<ApiExceptionHandler>();
 builder.Services.AddProblemDetails();
@@ -133,7 +135,8 @@ api
     .MapApiCapture()
     .MapProviders()
     .MapRecap()
-    .MapMetrics();
+    .MapMetrics()
+    .MapAdmin();
 
 app.MapHealthChecks("/health/live", new HealthCheckOptions { Predicate = _ => false });
 app.MapHealthChecks("/health/ready");
