@@ -1,0 +1,8 @@
+/*
+ * Port of the Blazor-scoped DraftWorkspace.razor.css. Blazor stamps a b-* attribute on every element
+ * rendered by DraftWorkspace itself (not on child components such as Breadcrumbs or InputFile), so the
+ * rules below only match elements carrying the equivalent [data-dw-scope] attribute (same specificity).
+ */
+.draft-input[data-dw-scope] { display:block; width:100%; margin:0.4rem 0 0.8rem; padding:0.55rem 0.7rem; border:1px solid #94a3b8; border-radius:0.65rem; background:transparent; color:inherit; }
+.draft-button[data-dw-scope] { padding:0.5rem 0.9rem; border-radius:1.5rem; background:#34d399; color:#0f172a; font-weight:600; }
+button[data-dw-scope]:disabled,fieldset[data-dw-scope]:disabled { opacity:0.55; }

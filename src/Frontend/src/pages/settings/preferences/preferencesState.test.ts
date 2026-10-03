@@ -1,0 +1,105 @@
+import { describe, expect, it } from "vitest";
+import * as p from "./preferencesState";
+
+function withMinutes(draft: string) {
+  return p.setIgnoreShortSessionsMinutes(p.createPreferencesState(), draft);
+}
+
+describe("preferencesState", () => {
+  it("retains values while loading and fails independently", () => {
+    let state = p.completeSettingsLoad(p.createPreferencesState(), {
+      ignoreShortSessionsMinutes: 30,
+      telegramChatId: "123456789",
+    });
+    state = p.beginSettingsLoad(state);
+    expect(state.isSettingsLoading).toBe(true);
+    expect(state.ignoreShortSessionsMinutes).toBe("30");
+    expect(state.telegramChatId).toBe("123456789");
+
+    state = p.failSettingsLoad(state, "Settings error.");
+    expect(state.settingsError).toBe("Settings error.");
+    expect(state.isSettingsLoading).toBe(false);
+    expect(state.ignoreShortSessionsMinutes).toBe("30");
+  });
+
+  it.each([
+    ["", 0],
+    ["   ", 0],
+    ["0", 0],
+    ["1.0", 1],
+    ["1e2", 100],
+    [" 15 ", 15],
+  ])("accepts integer minutes %j", (draft, expected) => {
+    const { submission } = p.buildSettingsSubmission(withMinutes(draft));
+    expect(submission).not.toBeNull();
+    expect(submission!.path).toBe("/settings");
+    expect(submission!.method).toBe("PUT");
+    expect(Object.keys(submission!.body)).toEqual(["ignoreShortSessionsMinutes", "telegramChatId"]);
+    expect(submission!.body.ignoreShortSessionsMinutes).toBe(expected);
+    expect(submission!.body.telegramChatId).toBeNull();
+  });
+
+  it.each(["-1", "1.5", "nope", "Infinity", "NaN", "0x10", "1e400", "2147483648", "1,000"])(
+    "rejects non-integer or negative minutes %j",
+    (draft) => {
+      const result = p.buildSettingsSubmission(withMinutes(draft));
+      expect(result.submission).toBeNull();
+      expect(result.state.settingsError).toBe("Enter a non-negative number of minutes.");
+    },
+  );
+
+  it.each([
+    ["123456789", "123456789"],
+    ["  -100123456789  ", "-100123456789"],
+  ])("accepts Telegram chat id %j", (draft, expected) => {
+    const state = p.setTelegramChatId(p.createPreferencesState(), draft);
+    expect(p.buildSettingsSubmission(state).submission!.body.telegramChatId).toBe(expected);
+  });
+
+  it.each(["0", "@username", "12.5", "-0", "9223372036854775808"])("rejects Telegram chat id %j", (draft) => {
+    const state = p.setTelegramChatId(p.createPreferencesState(), draft);
+    const result = p.buildSettingsSubmission(state);
+    expect(result.submission).toBeNull();
+    expect(result.state.settingsError).toBe("Enter a valid Telegram chat ID.");
+  });
+
+  it("uses the save response without a success state", () => {
+    let state = p.beginSettingsSave(withMinutes("15"));
+    expect(state.isSettingsSaving).toBe(true);
+    expect(state.settingsError).toBe("");
+    state = p.endSettingsSave(p.completeSettingsSave(state, { ignoreShortSessionsMinutes: 20, telegramChatId: "987654321" }));
+    expect(state.isSettingsSaving).toBe(false);
+    expect(state.ignoreShortSessionsMinutes).toBe("20");
+    expect(state.telegramChatId).toBe("987654321");
+
+    state = p.endSettingsSave(p.failSettingsSave(p.beginSettingsSave(state), "Save failed."));
+    expect(state.settingsError).toBe("Save failed.");
+    expect(state.ignoreShortSessionsMinutes).toBe("20");
+  });
+
+  it("requires an unchanged saved chat id to send a test notification and reports the outcome", () => {
+    let state = p.createPreferencesState();
+    expect(p.canSendTestNotification(state)).toBe(false);
+    state = p.completeSettingsLoad(state, { ignoreShortSessionsMinutes: 0, telegramChatId: "123456789" });
+    expect(p.canSendTestNotification(state)).toBe(true);
+    state = p.setTelegramChatId(state, "987654321");
+    expect(p.canSendTestNotification(state)).toBe(false);
+    state = p.completeSettingsSave(state, { ignoreShortSessionsMinutes: 0, telegramChatId: "987654321" });
+    expect(p.canSendTestNotification(state)).toBe(true);
+
+    state = p.beginTestNotification(state);
+    expect(state.isTestNotificationSending).toBe(true);
+    expect(p.canSendTestNotification(state)).toBe(false);
+    state = p.endTestNotification(p.completeTestNotification(state, { sent: true }));
+    expect(p.canSendTestNotification(state)).toBe(true);
+    expect(state.testNotificationMessage).toBe("Test message sent.");
+    expect(state.testNotificationError).toBe("");
+
+    state = p.endTestNotification(p.failTestNotification(p.beginTestNotification(state), "Apprise unavailable."));
+    expect(state.testNotificationError).toBe("Apprise unavailable.");
+    expect(state.testNotificationMessage).toBe("");
+
+    state = p.completeTestNotification(p.beginTestNotification(state), { sent: false });
+    expect(state.testNotificationError).toBe("The test message was not sent.");
+  });
+});
