@@ -27,11 +27,12 @@ import type {
   ManualSessionStopResponse,
 } from "@/models/manual";
 import type { AccountCurrentSessionResponse, AccountSessionsResponse } from "@/models/sessions";
-import type { AccountStatsRangeResponse } from "@/models/stats";
+import type { AccountDailyStatsResponse, AccountStatsRangeResponse } from "@/models/stats";
 import { LiveSessionControl } from "../sessions/components/LiveSessionControl";
 import {
   beginRefresh,
   completeRefresh,
+  dailyTotals,
   dashboardActivityRequests,
   dashboardRequests,
   failRefresh,
@@ -70,15 +71,12 @@ export function DashboardPage() {
     const version = ++activityVersion.current;
     const requests = dashboardActivityRequests(new Date());
     try {
-      const [week, ...days] = await Promise.all([
+      const [week, daily] = await Promise.all([
         apiRequest<AccountStatsRangeResponse>(requests.week, { onAuthFailure: logout, signal }),
-        ...requests.days.map((day) => apiRequest<AccountStatsRangeResponse>(day.path, { onAuthFailure: logout, signal })),
+        apiRequest<AccountDailyStatsResponse>(requests.daily, { onAuthFailure: logout, signal }),
       ]);
       if (signal.aborted || version !== activityVersion.current) return;
-      const totals: Record<string, number> = {};
-      requests.days.forEach((day, index) => {
-        totals[day.date] = days[index].stats.totalSeconds;
-      });
+      const totals = dailyTotals(daily.days);
       setActivity({ weekStats: week.stats, days: totals });
     } catch (error) {
       if (signal.aborted || isAbortError(error) || version !== activityVersion.current) return;

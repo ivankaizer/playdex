@@ -59,6 +59,13 @@ public sealed record AccountTopGameDto(string GameId, string Title, double Total
 
 public sealed record AccountMonthStatDto(int Year, int Month, double TotalSeconds);
 
+/// <summary>Play time for one UTC calendar day; <paramref name="Date"/> is "yyyy-MM-dd".</summary>
+public sealed record AccountDayStatDto(string Date, double TotalSeconds, int SessionCount);
+
+public sealed record AccountDailyStatsResponseDto(
+    long? AccountId,
+    IReadOnlyList<AccountDayStatDto> Days);
+
 public sealed record AccountStatsResponseDto(
     long? AccountId,
     AccountStatsPeriodDto Monthly,

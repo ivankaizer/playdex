@@ -127,6 +127,22 @@ public sealed class AccountsService(AccountsRepository repository)
             userId, accountId, range.From!.Value, range.ToExclusive!.Value, platform, ignoreShortMinutes, ct);
     }
 
+    /// <summary>Longest range the daily breakdown serves, so one request stays small.</summary>
+    public const int MaxDailyStatsDays = 366;
+
+    public Task<List<AccountDayStatDto>> ComputeDailyStats(
+        long userId, long? accountId, string? from, string? to, string? platform,
+        int ignoreShortMinutes, CancellationToken ct)
+    {
+        var range = AccountDateRange.ParseRequired(from, to);
+        var dayCount = (range.ToExclusive!.Value.UtcDateTime.Date - range.From!.Value.UtcDateTime.Date).TotalDays;
+        if (dayCount > MaxDailyStatsDays)
+            throw AppProblemException.Validation($"Daily stats cover at most {MaxDailyStatsDays} days.");
+
+        return repository.ComputeDailyStats(
+            userId, accountId, range.From.Value, range.ToExclusive.Value, platform, ignoreShortMinutes, ct);
+    }
+
     public async Task<AccountStatsResponseDto> ComputeAccountStats(
         long userId, long? accountId, int ignoreShortMinutes, CancellationToken ct)
     {

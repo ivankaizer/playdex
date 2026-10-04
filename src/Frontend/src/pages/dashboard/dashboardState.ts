@@ -3,7 +3,7 @@ import { formatDuration, formatHours, formatTimeLabel, formatUtcDateInput } from
 import { encodeGameId } from "@/lib/gameHash";
 import type { ManualActiveSession } from "@/models/manual";
 import type { AccountSession } from "@/models/sessions";
-import type { AccountPlatformStat, AccountStatsPeriod } from "@/models/stats";
+import type { AccountDayStat, AccountPlatformStat, AccountStatsPeriod } from "@/models/stats";
 
 const todaySessionsPageSize = 3;
 
@@ -368,20 +368,23 @@ export interface DashboardActivity {
 
 export interface DashboardActivityRequests {
   week: string;
-  days: Array<{ date: DateOnly; path: string }>;
+  daily: string;
 }
 
-/** This week's stats and one stats request per UTC day from the earlier of Monday / the 1st through today. */
+/** This week's stats and one daily breakdown from the earlier of Monday / the 1st through today (UTC days). */
 export function dashboardActivityRequests(now: Date): DashboardActivityRequests {
   const today = formatUtcDateInput(now);
   const { monthStart } = utcPeriodStarts(now);
   const monday = currentUtcWeek(now).from;
   const first = monday < monthStart ? monday : monthStart;
-  const days: Array<{ date: DateOnly; path: string }> = [];
-  for (let date = first; date <= today; date = addDays(date, 1)) {
-    days.push({ date, path: `/stats?from=${date}&to=${date}` });
-  }
-  return { week: `/stats?from=${monday}&to=${today}`, days };
+  return { week: `/stats?from=${monday}&to=${today}`, daily: `/stats/daily?from=${first}&to=${today}` };
+}
+
+/** Indexes a daily breakdown by date. */
+export function dailyTotals(days: readonly AccountDayStat[]): Record<DateOnly, number> {
+  const totals: Record<DateOnly, number> = {};
+  for (const day of days) totals[day.date] = day.totalSeconds;
+  return totals;
 }
 
 export interface ActivityBar {

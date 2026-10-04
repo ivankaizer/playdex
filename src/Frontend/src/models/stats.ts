@@ -30,3 +30,15 @@ export interface AccountStatsRangeResponse {
   accountId: number | null;
   stats: AccountStatsPeriod;
 }
+
+/** One UTC calendar day from `/stats/daily`; `date` is "yyyy-MM-dd". */
+export interface AccountDayStat {
+  date: string;
+  totalSeconds: number;
+  sessionCount: number;
+}
+
+export interface AccountDailyStatsResponse {
+  accountId: number | null;
+  days: AccountDayStat[];
+}

@@ -4,6 +4,7 @@ import type { AccountStatsPeriod } from "@/models/stats";
 import {
   beginRefresh,
   completeRefresh,
+  dailyTotals,
   dashboardActivityRequests,
   dashboardRequests,
   formatShortDuration,
@@ -260,12 +261,22 @@ describe("waitAllOrCancel", () => {
 });
 
 describe("dashboard redesign views", () => {
-  it("requests per-day stats from the earlier of Monday and the 1st through today", () => {
+  it("requests one daily breakdown from the earlier of Monday and the 1st through today", () => {
     const requests = dashboardActivityRequests(new Date("2026-10-04T12:00:00Z"));
     expect(requests.week).toBe("/stats?from=2026-09-28&to=2026-10-04");
-    expect(requests.days[0]).toEqual({ date: "2026-09-28", path: "/stats?from=2026-09-28&to=2026-09-28" });
-    expect(requests.days.at(-1)?.date).toBe("2026-10-04");
-    expect(requests.days).toHaveLength(7);
+    expect(requests.daily).toBe("/stats/daily?from=2026-09-28&to=2026-10-04");
+
+    const midMonth = dashboardActivityRequests(new Date("2026-10-20T12:00:00Z"));
+    expect(midMonth.daily).toBe("/stats/daily?from=2026-10-01&to=2026-10-20");
+  });
+
+  it("indexes daily totals by date", () => {
+    expect(
+      dailyTotals([
+        { date: "2026-10-01", totalSeconds: 600, sessionCount: 1 },
+        { date: "2026-10-02", totalSeconds: 0, sessionCount: 0 },
+      ]),
+    ).toEqual({ "2026-10-01": 600, "2026-10-02": 0 });
   });
 
   it("builds week bars with today highlighted and future days faded", () => {

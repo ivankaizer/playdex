@@ -1,3 +1,4 @@
+using System.Globalization;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 using Api.Infrastructure.Common;
@@ -224,6 +225,20 @@ public sealed class AccountsRepository(PlaydexDbContext db, IGames games)
             totalSeconds, sessions.Count, topGame, platforms, topGames, months);
     }
 
+    public async Task<List<AccountDayStatDto>> ComputeDailyStats(
+        long userId, long? accountId, DateTimeOffset from, DateTimeOffset to,
+        string? platform, int ignoreShortMinutes, CancellationToken ct)
+    {
+        var sessions = await ListSessionsForStats(userId, accountId, from, to, ignoreShortMinutes, ct);
+        var normalizedPlatform = string.IsNullOrWhiteSpace(platform)
+            ? null
+            : platform.Trim().ToLowerInvariant();
+        if (normalizedPlatform is not null)
+            sessions = sessions.Where(session => session.PlatformKey == normalizedPlatform).ToList();
+
+        return BuildDayStats(from, to, sessions);
+    }
+
     private static (string Sql, List<NpgsqlParameter> Parameters) BuildSessionQuery(
         long userId, long? accountId, string? title, IReadOnlyCollection<long>? gameIds,
         string? platform, DateTimeOffset? from, DateTimeOffset? to, bool excludeIgnored)
@@ -330,6 +345,26 @@ public sealed class AccountsRepository(PlaydexDbContext db, IGames games)
         s.EndedAt.HasValue
             ? (s.EndedAt.Value - s.StartedAt).TotalSeconds
             : (DateTimeOffset.UtcNow - s.StartedAt).TotalSeconds;
+
+    private static List<AccountDayStatDto> BuildDayStats(
+        DateTimeOffset from,
+        DateTimeOffset to,
+        IReadOnlyList<AccountSessionDto> sessions)
+    {
+        var totals = sessions
+            .GroupBy(session => session.StartedAt.UtcDateTime.Date)
+            .ToDictionary(group => group.Key, group => (Seconds: group.Sum(MapDuration), Count: group.Count()));
+        var cursor = from.UtcDateTime.Date;
+        var days = new List<AccountDayStatDto>();
+        while (cursor < to.UtcDateTime)
+        {
+            var total = totals.GetValueOrDefault(cursor);
+            days.Add(new AccountDayStatDto(
+                cursor.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture), total.Seconds, total.Count));
+            cursor = cursor.AddDays(1);
+        }
+        return days;
+    }
 
     private static List<AccountMonthStatDto> BuildMonthStats(
         DateTimeOffset from,
