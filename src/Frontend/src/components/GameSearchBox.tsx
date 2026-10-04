@@ -138,7 +138,7 @@ export function GameSearchBox({ search, onNavigate }: GameSearchBoxProps) {
           fill="none"
           stroke="currentColor"
           strokeWidth="1.75"
-          className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500 dark:text-slate-400"
+          className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-faint"
         >
           <circle cx="11" cy="11" r="7"></circle>
           <path d="m20 20-3.5-3.5"></path>
@@ -157,7 +157,7 @@ export function GameSearchBox({ search, onNavigate }: GameSearchBoxProps) {
           value={state.query}
           onChange={handleInput}
           onKeyDown={handleKeyDown}
-          className="w-full rounded-full border border-slate-300 bg-white/90 py-2 pl-10 pr-4 text-xs text-slate-900 outline-none transition placeholder:text-slate-500 focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/30 dark:border-slate-700 dark:bg-slate-950/80 dark:text-white dark:placeholder:text-slate-400"
+          className="pdx-input !h-[38px] !pl-10 !pr-4 !text-[13px]"
         />
       </div>
 
@@ -173,14 +173,14 @@ export function GameSearchBox({ search, onNavigate }: GameSearchBoxProps) {
             id="game-search-results"
             role="listbox"
             aria-label="Game search results"
-            className="absolute right-0 top-full mt-2 w-72 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl shadow-slate-950/20 dark:border-slate-700 dark:bg-slate-900 sm:w-80"
+            className="absolute right-0 top-full mt-2 w-72 overflow-hidden rounded-[22px] border border-line bg-surface p-1.5 shadow-pop sm:w-80"
           >
             {state.isLoading ? (
-              <p className="px-4 py-3 text-sm text-slate-500 dark:text-slate-400">Searching...</p>
+              <p className="px-4 py-3 text-sm text-muted">Searching...</p>
             ) : state.error.length > 0 ? (
-              <p className="px-4 py-3 text-sm text-rose-700 dark:text-rose-300">{state.error}</p>
+              <p className="px-4 py-3 text-sm text-danger">{state.error}</p>
             ) : state.results.length === 0 ? (
-              <p className="px-4 py-3 text-sm text-slate-500 dark:text-slate-400">No games found.</p>
+              <p className="px-4 py-3 text-sm text-muted">No games found.</p>
             ) : (
               state.results.map((result, index) => (
                 <button
@@ -191,20 +191,20 @@ export function GameSearchBox({ search, onNavigate }: GameSearchBoxProps) {
                   aria-selected={index === state.activeIndex}
                   onMouseEnter={() => moveActive(index - state.activeIndex)}
                   onClick={() => select(result)}
-                  className={`flex w-full items-center gap-3 border-b border-slate-100 px-3 py-2 text-left transition last:border-b-0 hover:bg-emerald-50 dark:border-slate-800 dark:hover:bg-emerald-400/10 ${index === state.activeIndex ? "bg-emerald-50 dark:bg-emerald-400/10" : ""}`}
+                  className={`flex w-full items-center gap-3 rounded-2xl px-3 py-2 text-left transition hover:bg-tile ${index === state.activeIndex ? "bg-mint" : ""}`}
                 >
                   {result.capsuleUrl !== null ? (
                     <img
                       src={result.capsuleUrl}
                       alt=""
-                      className="h-12 w-9 shrink-0 rounded-lg border border-slate-200 object-cover dark:border-slate-700"
+                      className="h-12 w-9 shrink-0 rounded-[10px] object-cover"
                     />
                   ) : (
-                    <span aria-hidden="true" className="h-12 w-9 shrink-0 rounded-lg bg-slate-200 dark:bg-slate-800"></span>
+                    <span aria-hidden="true" className="h-12 w-9 shrink-0 rounded-[10px] bg-track"></span>
                   )}
                   <span className="min-w-0">
-                    <span className="block truncate text-sm font-semibold text-slate-900 dark:text-white">{result.title}</span>
-                    <span className="block truncate text-xs text-slate-500 dark:text-slate-400">{result.platform}</span>
+                    <span className="block truncate text-sm font-semibold text-ink">{result.title}</span>
+                    <span className="block truncate text-xs text-muted">{result.platform}</span>
                   </span>
                 </button>
               ))

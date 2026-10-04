@@ -31,14 +31,14 @@
     <style>
         html[data-theme="light"] body,
         html[data-theme="light"] #app {
-            background-color: #e2e8f0;
-            color: #0f172a;
+            background-color: #e4eaf0;
+            color: #18212b;
         }
 
         html[data-theme="dark"] body,
         html[data-theme="dark"] #app {
-            background-color: #020617;
-            color: #f1f5f9;
+            background-color: #0f151b;
+            color: #e6ecf1;
         }
 
         .boot-loader {
@@ -61,21 +61,21 @@
             width: 0.75rem;
             height: 0.75rem;
             border-radius: 9999px;
-            background-color: #34d399;
-            box-shadow: 0 0 14px rgba(52, 211, 153, 0.8);
+            background-color: #6fe3b5;
+            box-shadow: 0 0 0 4px rgba(111, 227, 181, 0.18);
         }
 
         .boot-loader__wordmark {
             margin: 0;
             font-size: 0.75rem;
             font-weight: 600;
-            letter-spacing: 0.5em;
+            letter-spacing: 0.32em;
             text-transform: uppercase;
-            color: #047857;
+            color: #0a8a60;
         }
 
         html[data-theme="dark"] .boot-loader__wordmark {
-            color: #6ee7b7;
+            color: #5fd3a5;
         }
 
         .boot-loader__spinner {
@@ -83,13 +83,13 @@
             height: 2rem;
             border-radius: 9999px;
             border: 3px solid rgba(148, 163, 184, 0.35);
-            border-top-color: #10b981;
+            border-top-color: #0a9a6c;
             animation: boot-spin 0.9s linear infinite;
         }
 
         html[data-theme="dark"] .boot-loader__spinner {
             border-color: rgba(71, 85, 105, 0.5);
-            border-top-color: #34d399;
+            border-top-color: #6fe3b5;
         }
 
         .boot-loader__hint {
@@ -97,11 +97,11 @@
             font-size: 0.75rem;
             letter-spacing: 0.2em;
             text-transform: uppercase;
-            color: #64748b;
+            color: #6b7785;
         }
 
         html[data-theme="dark"] .boot-loader__hint {
-            color: #94a3b8;
+            color: #8d99a6;
         }
 
         @keyframes boot-spin {
@@ -113,7 +113,7 @@
     <link rel="icon" href="/favicon.ico" type="image/x-icon">
     <title>Playdex</title>
 </head>
-<body class="bg-slate-950 text-slate-100">
+<body>
     <div id="app">
         <div class="boot-loader" aria-live="polite" aria-busy="true">
             <div class="boot-loader__mark">

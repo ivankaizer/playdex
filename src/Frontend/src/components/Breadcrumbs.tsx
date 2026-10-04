@@ -7,24 +7,22 @@ interface BreadcrumbsProps {
 
 export function Breadcrumbs({ parentLabel, currentLabel, onParent, disabled = false }: BreadcrumbsProps) {
   return (
-    <nav aria-label="Breadcrumb" className="text-xs font-semibold uppercase tracking-[0.16em]">
+    <nav aria-label="Breadcrumb" className="text-[13px] font-medium">
       <ol className="flex flex-wrap items-center gap-2">
         <li>
           <button
             type="button"
             disabled={disabled}
             onClick={onParent}
-            className="text-slate-500 transition hover:text-emerald-700 disabled:cursor-not-allowed disabled:opacity-60 dark:text-slate-400 dark:hover:text-emerald-300"
+            className="text-muted transition hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
           >
             {parentLabel}
           </button>
         </li>
-        <li aria-hidden="true" className="text-slate-300 dark:text-slate-700">
-          <svg viewBox="0 0 16 16" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="1.8">
-            <path d="m6 3 5 5-5 5" strokeLinecap="round" strokeLinejoin="round"></path>
-          </svg>
+        <li aria-hidden="true" className="text-faint">
+          ›
         </li>
-        <li aria-current="page" className="text-emerald-700 dark:text-emerald-300">
+        <li aria-current="page" className="text-[11px] font-semibold uppercase tracking-[0.24em] text-accent">
           {currentLabel}
         </li>
       </ol>

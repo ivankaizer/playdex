@@ -1,14 +1,50 @@
-export function AppFooter() {
+import { navItems, useAppNavigate } from "@/lib/navigation";
+
+export function PlaydexMark({ className = "" }: { className?: string }) {
   return (
-    <footer className="mt-10 flex flex-wrap items-center justify-between gap-4 rounded-3xl border border-slate-200 dark:border-slate-800 bg-white/90 dark:bg-slate-900/70 px-4 py-3 sm:px-6 sm:py-4 md:flex-nowrap">
-      <div className="min-w-0 flex-1">
-        <p className="text-xs font-semibold uppercase tracking-[0.5em] text-emerald-700 dark:text-emerald-300">Playdex</p>
-        <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">Playtime tracking for connected libraries.</p>
+    <div className={`flex items-center gap-2.5 ${className}`.trim()}>
+      <span className="h-2.5 w-2.5 rounded-full bg-[#6fe3b5] shadow-[0_0_0_4px_rgba(111,227,181,.18)]"></span>
+      <span className="text-xs font-semibold uppercase tracking-[0.32em] text-[#6fe3b5]">Playdex</span>
+    </div>
+  );
+}
+
+export function AppFooter() {
+  const navigate = useAppNavigate();
+  return (
+    <footer className="flex flex-col gap-6 rounded-card bg-footer px-6 py-7 text-[#e9eef3] sm:px-9">
+      <div className="flex flex-wrap items-center justify-between gap-6">
+        <PlaydexMark />
+        <nav aria-label="Footer" className="flex flex-wrap gap-1.5">
+          {navItems.map((item) => (
+            <a
+              key={item.path}
+              href={item.path}
+              onClick={(event) => {
+                event.preventDefault();
+                navigate(item.path);
+              }}
+              className="rounded-full border border-[#2f3b47] px-4 py-2 text-[13px] font-medium text-[#e9eef3] no-underline transition hover:bg-[#24303b] hover:text-white"
+            >
+              {item.label}
+            </a>
+          ))}
+        </nav>
       </div>
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs font-semibold uppercase tracking-[0.25em] text-slate-500 dark:text-slate-400">
+      <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3 border-t border-[#2a3540] pt-[18px] text-[13px] text-[#8a96a3]">
         <span>© {new Date().getFullYear()} Playdex</span>
-        <span className="hidden h-1 w-1 rounded-full bg-emerald-400 sm:inline-flex"></span>
-        <span>Private dashboard</span>
+        <div className="flex flex-wrap gap-5">
+          {/* Placeholder targets until the real pages exist. */}
+          <a href="#" className="text-[#b5c0cb] no-underline transition hover:text-[#6fe3b5]">
+            Privacy
+          </a>
+          <a href="mailto:hello@playdex.dev" className="text-[#b5c0cb] no-underline transition hover:text-[#6fe3b5]">
+            Contact
+          </a>
+          <a href="https://github.com" target="_blank" rel="noreferrer" className="text-[#b5c0cb] no-underline transition hover:text-[#6fe3b5]">
+            GitHub ↗
+          </a>
+        </div>
       </div>
     </footer>
   );

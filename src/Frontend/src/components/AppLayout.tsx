@@ -6,7 +6,6 @@ import { useTheme } from "@/lib/theme";
 import type { GameSearchResponse } from "@/models/games";
 import { AppFooter } from "./AppFooter";
 import { AppHeader } from "./AppHeader";
-import { Background } from "./Background";
 
 interface AppLayoutProps {
   title: string;
@@ -14,6 +13,10 @@ interface AppLayoutProps {
   overlay?: ReactNode;
 }
 
+/**
+ * Page chrome: gradient background, header card, a vertical stack of page
+ * sections (28px gap) and the dark footer.
+ */
 export function AppLayout({ title, children, overlay }: AppLayoutProps) {
   const { theme, toggleTheme } = useTheme();
   const location = useLocation();
@@ -25,9 +28,8 @@ export function AppLayout({ title, children, overlay }: AppLayoutProps) {
   );
 
   return (
-    <main className="relative min-h-screen overflow-hidden bg-slate-200 dark:bg-slate-950 text-slate-900 dark:text-slate-100">
-      <Background />
-      <div className="relative mx-auto w-full max-w-6xl p-3 sm:px-6 sm:py-12">
+    <main className="pdx-page relative px-4 pb-10 pt-6 sm:px-8 sm:pt-12">
+      <div className="relative mx-auto flex w-full max-w-[1180px] flex-col gap-7">
         <AppHeader
           title={title}
           navItems={navItems}
