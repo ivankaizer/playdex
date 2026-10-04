@@ -1,91 +1,42 @@
 # Preview environments
 
-Every pull request gets its own copy of Playdex on the staging server:
+Playdex uses [preview-kit](https://github.com/ivankaizer/preview-kit), the shared setup for all
+repos. After the tests pass on a pull request, CI deploys a full copy of Playdex at
 
 ```
 https://<branch-slug>.playdex.deployment.lat
 ```
 
-`<branch-slug>` is the branch name lowercased with every run of non-alphanumerics replaced by `-`,
-cut to 40 characters (`feat/react-frontend` → `feat-react-frontend.playdex.deployment.lat`).
-UI and API share that origin: Traefik sends `/api/*` to the API and everything else to the UI.
+and records a demo. One PR comment carries the URL, the full tour and, from the second commit on, a
+video of the steps that changed visually since the previous commit. The preview and its demos are
+removed when the PR closes. The kit's README documents the CLI (`preview deploy`, `preview demo`,
+`preview status`, …), the config formats and how it works.
 
-## How it works
+## Playdex specifics
 
-- **Server:** a Dokploy instance at <https://dash.deployment.lat> (project `playdex`,
-  environment `previews`). Each PR is one compose app named `pr-<number>`.
-- **Stack:** [`docker-compose.preview.yml`](../docker-compose.preview.yml) — Postgres, Wiremock,
-  Apprise, API and the production UI image, with no published ports and memory limits. The database
-  is fresh per PR and external gaming providers are mocked by Wiremock.
-- **Seed data:** on the first deploy of a preview, the one-shot `seeder` service runs
-  `tools/Seeder` after the API has applied migrations. Later deploys skip it, because the seeder
-  truncates every table and would wipe data changed while testing. To reseed, destroy the preview
-  and deploy again. Seeded logins, all with password `password`:
+- **Stack:** [`docker-compose.preview.yml`](../docker-compose.preview.yml) contains Postgres,
+  Wiremock (which mocks Steam, PSN and Xbox), Apprise, the API, the production UI image and a
+  one-shot `seeder`. It publishes no host ports and sets memory limits.
+- **Routing** ([`.preview/config.json`](../.preview/config.json)): `/api/*` goes to the API and
+  everything else to the UI, on the same origin.
+- **Seed data:** the `seeder` service runs `tools/Seeder` once per preview, after the API has
+  applied migrations. Later deploys skip it, because the seeder truncates every table and would wipe
+  data changed while testing. To reseed, run `preview destroy`, then `preview deploy`. Seeded
+  logins, all with password `password`:
   - `user@playdex.dev`
   - `second_user@playdex.dev`
   - `admin@playdex.dev`, an administrator (`/admin`)
-- **Source:** Dokploy clones the PR branch over SSH with a read-only deploy key and builds the images
-  on the server.
-- **Script:** [`deploy/preview.sh`](../deploy/preview.sh) does everything through the Dokploy API:
-  `deploy` creates the app and its domains on first run, redeploys the latest commit of the branch,
-  waits for it and prints the URL; `destroy` removes the app and its volumes.
+- **Demo tour** ([`.preview/tour.json`](../.preview/tour.json)) has two parts:
+  - the user part: landing → login → dashboard → sessions → recap → settings
+  - the admin part: login → dashboard → integrations → sessions → AI generations → games
 
-### Automatic (CI)
-
-- `.github/workflows/test.yaml` → job **Deploy preview** runs after the tests pass on every PR
-  push, then posts or updates a `🚀 Preview:` comment on the PR with the URL.
-- `.github/workflows/preview-cleanup.yaml` removes the preview when the PR is merged or closed.
-- CI reads `vars.DOKPLOY_URL` and `secrets.DOKPLOY_API_KEY` from the repository settings.
-
-## Deploying manually (agents)
-
-Use this to put a branch online without waiting for CI, or to redeploy after a failure.
-
-1. **Credentials** live in `~/.env` on the developer machine, never in the repo, commits, PR text or
-   logs:
-
-   ```sh
-   export DOKPLOY_URL=https://dash.deployment.lat
-   export DOKPLOY_API_KEY=...   # Dokploy → Settings → Profile → API/CLI
-   ```
-
-   If `~/.env` is missing those variables, stop and ask the user for them; do not create an API key
-   yourself.
-
-2. **Prerequisites:**
-   - The branch is pushed and has an open PR. The server builds from GitHub, not from the local
-     working tree, so unpushed commits are not deployed.
-   - `docker-compose.preview.yml` and `deploy/preview.sh` exist on that branch.
-   - `gh`, `curl` and `jq` are installed and `gh` is authenticated.
-
-3. **Deploy** from the repository root:
-
-   ```sh
-   source ~/.env && deploy/preview.sh deploy
-   ```
-
-   The PR number and branch come from `gh pr view` for the checked-out branch. To target another PR,
-   set them explicitly: `PR_NUMBER=29 BRANCH=feat/react-frontend deploy/preview.sh deploy`.
-
-   A first deploy builds three images on a 2-CPU server and takes roughly 5–10 minutes; later
-   deploys reuse the Docker cache. The last line printed is the URL.
-
-4. **Verify** before reporting success: open the URL (or `curl -fsS <url>/`) and check
-   `<url>/api/` returns JSON from the API (`{"data":"Ok",...}`), not the UI's HTML.
-
-5. **Remove** a preview that is no longer needed: `source ~/.env && deploy/preview.sh destroy`.
+  When a page is added, renamed or moved, update the tour in the same PR.
 
 ## Troubleshooting
 
-- **Build or startup failure:** the script exits non-zero and names the deployment. Logs are in the
-  dashboard under *playdex → previews → pr-<number> → Deployments*, or over SSH on
-  `root@157.180.30.193` in `/etc/dokploy/logs/<appName>/`.
-- **Out of memory:** the server has 4 GB RAM plus 4 GB swap, which is enough for 2–3 previews at
-  once. Destroy previews of closed or stale PRs before deploying more.
-- **`HTTP 401` from the API:** `DOKPLOY_API_KEY` is wrong or revoked; ask the user.
-- **Seed failed or missing data:** check the seeder logs in the dashboard (service `seeder`), or
-  over SSH run `docker logs <appName>-seeder-1`. A failed seed writes no marker, so the next deploy
-  retries it.
-- **Changing the stack** (new service, env var, port): edit `docker-compose.preview.yml`. If the UI
-  or API port or the `/api` routing changes, also update the domain routes in `create_compose` in
-  `deploy/preview.sh` and destroy the existing preview so it is recreated with the new routes.
+- **Build or startup failure:** see the Dokploy dashboard (<https://dash.deployment.lat> →
+  playdex → previews → `pr-<number>` → Deployments).
+- **Seed failed or missing data:** check the `seeder` service logs there. A failed seed writes no
+  marker, so the next deploy retries it.
+- **Route or port changes:** if the UI or API port or the `/api` routing changes, update
+  `.preview/config.json`, then `preview destroy` so the preview is recreated with the new routes.

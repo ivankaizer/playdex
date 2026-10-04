@@ -1,0 +1,26 @@
+{
+  "sessions": [
+    {
+      "name": "user",
+      "steps": [
+        { "name": "landing", "visit": "/" },
+        { "name": "login", "login": "/login", "email": "user@playdex.dev", "password": "password" },
+        { "name": "dashboard", "visit": "/dashboard" },
+        { "name": "sessions", "visit": "/sessions" },
+        { "name": "recap", "visit": "/recap" },
+        { "name": "settings", "visit": "/settings" }
+      ]
+    },
+    {
+      "name": "admin",
+      "steps": [
+        { "name": "admin-login", "login": "/admin/login", "email": "admin@playdex.dev", "password": "password" },
+        { "name": "admin-dashboard", "visit": "/admin" },
+        { "name": "admin-integrations", "visit": "/admin/integrations" },
+        { "name": "admin-sessions", "visit": "/admin/sessions" },
+        { "name": "admin-ai-generations", "visit": "/admin/ai-generations" },
+        { "name": "admin-games", "visit": "/admin/games" }
+      ]
+    }
+  ]
+}
