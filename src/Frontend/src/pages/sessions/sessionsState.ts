@@ -51,8 +51,12 @@ export interface SessionsRowView {
   gamePath: string;
   title: string;
   platform: string;
+  platformKey: string;
   date: string;
+  /** Local calendar day of the start, "yyyy-MM-dd" (used to group the list by day). */
+  dayKey: string;
   duration: string;
+  durationSeconds: number;
   imageUrl: string | null;
   ignored: boolean;
   canEdit: boolean;
@@ -392,18 +396,107 @@ export function completeActiveManualSession(state: SessionsState, response: Manu
 }
 
 export function getRowViews(state: SessionsState, now: Date): SessionsRowView[] {
-  return state.rows.map((session) => ({
-    sessionId: session.sessionId,
-    gameId: session.gameId,
-    gamePath: `/games/${encodeGameId(session.gameId)}`,
-    title: session.game,
-    platform: session.platformName,
-    date: formatDateLabel(session.startedAt),
-    duration: formatDuration(getDurationSeconds(session.startedAt, session.endedAt, now), "compact"),
-    imageUrl: session.capsuleUrl,
-    ignored: session.ignored,
-    canEdit: session.endedAt !== null,
-  }));
+  return state.rows.map((session) => {
+    const durationSeconds = getDurationSeconds(session.startedAt, session.endedAt, now);
+    return {
+      sessionId: session.sessionId,
+      gameId: session.gameId,
+      gamePath: `/games/${encodeGameId(session.gameId)}`,
+      title: session.game,
+      platform: session.platformName,
+      platformKey: session.platformKey,
+      date: formatDateLabel(session.startedAt),
+      dayKey: localDayKey(new Date(session.startedAt)),
+      duration: formatDuration(durationSeconds, "compact"),
+      durationSeconds,
+      imageUrl: session.capsuleUrl,
+      ignored: session.ignored,
+      canEdit: session.endedAt !== null,
+    };
+  });
+}
+
+/** Local "yyyy-MM-dd" for a date. */
+export function localDayKey(date: Date): string {
+  return `${pad(date.getFullYear(), 4)}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
+export interface SessionDayGroup {
+  key: string;
+  /** "TODAY" or e.g. "SATURDAY, OCT 3"; empty when the list is not grouped by day. */
+  label: string;
+  /** "N sessions · total duration". */
+  meta: string;
+  rows: SessionsRowView[];
+}
+
+const dayGroupFormat = new Intl.DateTimeFormat("en-US", { weekday: "long", month: "short", day: "numeric" });
+
+function groupMeta(rows: readonly SessionsRowView[]): string {
+  const total = rows.reduce((sum, row) => sum + row.durationSeconds, 0);
+  return `${rows.length} session${rows.length === 1 ? "" : "s"} · ${formatDuration(total, "compact")}`;
+}
+
+/**
+ * Groups consecutive rows by their local start day when the list is sorted by date; any other sort
+ * keeps the server order in a single unlabeled group.
+ */
+export function groupRowViews(state: SessionsState, rows: readonly SessionsRowView[], now: Date): SessionDayGroup[] {
+  if (rows.length === 0) return [];
+  if (state.sortKey !== "date") {
+    return [{ key: `sort-${state.sortKey}`, label: "", meta: groupMeta(rows), rows: [...rows] }];
+  }
+  const today = localDayKey(now);
+  const groups: SessionDayGroup[] = [];
+  for (const row of rows) {
+    const last = groups.at(-1);
+    if (last && last.key === row.dayKey) {
+      last.rows.push(row);
+      continue;
+    }
+    const [year, month, day] = row.dayKey.split("-").map(Number);
+    const label = row.dayKey === today ? "TODAY" : dayGroupFormat.format(new Date(year, month - 1, day)).toUpperCase();
+    groups.push({ key: row.dayKey, label, meta: "", rows: [row] });
+  }
+  return groups.map((group) => ({ ...group, meta: groupMeta(group.rows) }));
+}
+
+/** Switches the filter to a custom range, keeping the current bounds. */
+export function selectCustomRange(state: SessionsState): SessionsState {
+  return { ...state, preset: "custom" };
+}
+
+const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+
+function parseDateOnly(value: string): { year: number; month: number; day: number } {
+  const [year, month, day] = value.split("-").map(Number);
+  return { year, month, day };
+}
+
+function shortDate(value: string): string {
+  const { year, month, day } = parseDateOnly(value);
+  return `${monthNames[month - 1].slice(0, 3)} ${day}, ${year}`;
+}
+
+/** Human label for the selected range, e.g. "Sep 28 – Oct 4, 2026", "October 2026", "Today · Oct 3, 2026". */
+export function rangeLabel(state: SessionsState): string {
+  const { from, to, preset } = state;
+  if (from.length === 0 && to.length === 0) return "All time";
+  if (to.length === 0) return `From ${shortDate(from)}`;
+  if (from.length === 0) return `Until ${shortDate(to)}`;
+  const a = parseDateOnly(from);
+  const b = parseDateOnly(to);
+  if (preset === "today" || preset === "yesterday") {
+    return `${preset === "today" ? "Today" : "Yesterday"} · ${shortDate(from)}`;
+  }
+  if (preset === "this-month") return `${monthNames[a.month - 1]} ${a.year}`;
+  if (preset === "this-year" || preset === "last-year") return String(a.year);
+  if (from === to) return shortDate(from);
+  const startMonth = monthNames[a.month - 1].slice(0, 3);
+  const endMonth = monthNames[b.month - 1].slice(0, 3);
+  if (a.year !== b.year) return `${shortDate(from)} – ${shortDate(to)}`;
+  if (a.month !== b.month) return `${startMonth} ${a.day} – ${endMonth} ${b.day}, ${b.year}`;
+  return `${startMonth} ${a.day} – ${b.day}, ${b.year}`;
 }
 
 export function buildListRequest(state: SessionsState): string {

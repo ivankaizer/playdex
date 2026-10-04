@@ -1,106 +1,112 @@
-import { creationPlatformName, type CreationPlatform } from "./creatorState";
+import { platformColor } from "@/lib/platforms";
+import {
+  availableIntegrationPlatforms,
+  creationPlatformName,
+  MaxIntegrationsPerPlatform,
+  SupportedCreationPlatforms,
+  type CreationPlatform,
+} from "./creatorState";
 import type { Integrations } from "./useIntegrations";
 
 interface IntegrationCreatorProps {
-  available: readonly CreationPlatform[];
   integrations: Integrations;
 }
 
-const platformButtonClass =
-  "rounded-xl border border-slate-300 bg-white/80 px-4 py-3 text-left text-sm font-semibold text-slate-900 transition hover:border-emerald-400 dark:border-slate-700 dark:bg-slate-900/70 dark:text-white";
+const serviceMarks: Record<CreationPlatform, string> = { steam: "S", psn: "PS", xbox: "X" };
 
-const inputClass =
-  "mt-2 w-full rounded-xl border border-slate-300 bg-white/90 px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/30 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-slate-950/80 dark:text-white";
+const fieldLabelClass = "pdx-label flex min-w-0 flex-col gap-2";
+const fieldInputClass = "pdx-input !h-12 !px-5 tracking-normal";
 
-export function IntegrationCreator({ available, integrations }: IntegrationCreatorProps) {
+export function IntegrationCreator({ integrations }: IntegrationCreatorProps) {
   const state = integrations.creatorState;
+  const providers = integrations.state.providers;
   const platform = state.selectedCreationPlatform;
+  const available = availableIntegrationPlatforms(providers);
+  const open = state.isIntegrationCreatorOpen;
+  const allFull = available.length === 0;
+
+  const toggle = open ? integrations.cancelIntegrationCreation : integrations.openIntegrationCreator;
 
   return (
-    <div
-      data-integration-creator=""
-      className="mt-6 rounded-2xl border border-dashed border-slate-300 bg-slate-100/40 p-4 dark:border-slate-700 dark:bg-slate-950/30 sm:p-5"
-    >
-      {!state.isIntegrationCreatorOpen ? (
-        <button
-          type="button"
-          onClick={integrations.openIntegrationCreator}
-          className="flex w-full items-center justify-between gap-4 text-left"
+    <div data-integration-creator="" className="flex flex-col gap-3.5 rounded-tile border-[1.5px] border-dashed border-dash px-5 py-[18px]">
+      <button
+        type="button"
+        onClick={toggle}
+        disabled={(!open && allFull) || state.isCreatingIntegration}
+        aria-expanded={open}
+        aria-label={open ? "Close add integration" : "Add integration"}
+        className="flex w-full items-center justify-between gap-3 text-left disabled:cursor-not-allowed disabled:opacity-60"
+      >
+        <span>
+          <span className="block text-[15px] font-semibold">
+            {platform !== null ? `Connect ${creationPlatformName(platform)}` : "Add integration"}
+          </span>
+          <span className="mt-0.5 block text-[13px] text-muted">
+            {allFull && !open
+              ? "Every service already has 3 accounts connected."
+              : platform !== null
+                ? "Enter the credentials Playdex needs to sync this account."
+                : `Up to ${MaxIntegrationsPerPlatform} accounts per service`}
+          </span>
+        </span>
+        <span
+          aria-hidden="true"
+          className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-pill text-xl font-semibold text-pill-ink"
         >
-          <span>
-            <span className="block text-sm font-semibold text-slate-900 dark:text-white">Add integration</span>
-            <span className="mt-1 block text-xs text-slate-500 dark:text-slate-400">
-              Connect up to 3 accounts per service.
-            </span>
-          </span>
-          <span aria-hidden="true" className="text-xl text-emerald-600 dark:text-emerald-300">
-            +
-          </span>
-        </button>
-      ) : platform === null ? (
-        <>
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <p className="text-sm font-semibold text-slate-900 dark:text-white">Choose an integration</p>
-              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                You can connect up to 3 accounts per service.
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={integrations.cancelIntegrationCreation}
-              className="text-xs font-semibold text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"
-            >
-              Cancel
-            </button>
-          </div>
-          <div className="mt-4 grid gap-3 sm:grid-cols-3">
-            {available.includes("steam") ? (
-              <button type="button" onClick={() => integrations.selectCreationPlatform("steam")} className={platformButtonClass}>
-                Steam
-              </button>
-            ) : null}
-            {available.includes("psn") ? (
-              <button type="button" onClick={() => integrations.selectCreationPlatform("psn")} className={platformButtonClass}>
-                PlayStation
-              </button>
-            ) : null}
-            {available.includes("xbox") ? (
-              <button type="button" onClick={() => integrations.selectCreationPlatform("xbox")} className={platformButtonClass}>
-                Xbox
-              </button>
-            ) : null}
-          </div>
-        </>
-      ) : (
-        <>
-          <div>
-            <p className="text-sm font-semibold text-slate-900 dark:text-white">
-              Connect {creationPlatformName(platform)}
-            </p>
-            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-              Enter the credentials Playdex needs to sync this account.
-            </p>
-          </div>
+          {open ? "×" : "+"}
+        </span>
+      </button>
 
-          <div className="mt-5 grid gap-3 sm:grid-cols-2">
-            <label className="text-xs font-medium text-slate-600 dark:text-slate-300">
-              <span className="block">
-                {platform === "steam" ? "Steam Web API key" : platform === "psn" ? "NPSSO token" : "OpenXBL API key"}
-              </span>
+      {open && platform === null ? (
+        <div className="flex flex-wrap gap-2.5" role="group" aria-label="Choose an integration">
+          {SupportedCreationPlatforms.map((key) => {
+            const count = providers.filter((provider) => provider.platform === key).length;
+            const full = !available.includes(key);
+            const name = creationPlatformName(key);
+            return (
+              <button
+                key={key}
+                type="button"
+                onClick={() => integrations.selectCreationPlatform(key)}
+                disabled={full}
+                aria-label={name}
+                className="flex h-12 items-center gap-2.5 rounded-full border border-line bg-surface pl-2 pr-[18px] text-sm font-semibold text-ink transition-colors hover:border-mint-hover disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:border-line"
+              >
+                <span
+                  aria-hidden="true"
+                  className="grid h-8 w-8 place-items-center rounded-full text-[11px] font-bold text-white"
+                  style={{ background: platformColor(key, name) }}
+                >
+                  {serviceMarks[key]}
+                </span>
+                {name}
+                <span aria-hidden="true" className="pdx-num text-xs font-normal text-muted">
+                  {count} of {MaxIntegrationsPerPlatform}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
+
+      {open && platform !== null ? (
+        <div className="flex flex-col gap-4">
+          <div className="grid gap-3 [grid-template-columns:repeat(auto-fit,minmax(min(260px,100%),1fr))]">
+            <label className={fieldLabelClass}>
+              {platform === "steam" ? "Steam Web API key" : platform === "psn" ? "NPSSO token" : "OpenXBL API key"}
               <input
                 type="password"
                 value={state.creationApiKey}
                 onChange={(event) => integrations.setCreationApiKey(event.target.value)}
                 disabled={state.isCreatingIntegration}
                 autoComplete="off"
-                className={inputClass}
+                className={fieldInputClass}
               />
             </label>
-            <label className="text-xs font-medium text-slate-600 dark:text-slate-300">
-              <span className="block">
+            <label className={fieldLabelClass}>
+              <span>
                 {platform === "steam" ? "Steam ID" : platform === "psn" ? "Account ID" : "Xbox XUID"}
-                {platform !== "steam" ? <span className="font-normal text-slate-400"> (optional)</span> : null}
+                {platform !== "steam" ? <span className="font-normal normal-case tracking-normal text-faint"> (optional)</span> : null}
               </span>
               <input
                 type="text"
@@ -108,33 +114,26 @@ export function IntegrationCreator({ available, integrations }: IntegrationCreat
                 onChange={(event) => integrations.setCreationAccountId(event.target.value)}
                 disabled={state.isCreatingIntegration}
                 inputMode={platform === "xbox" ? "numeric" : undefined}
-                className={inputClass}
+                className={fieldInputClass}
               />
             </label>
           </div>
           {platform === "xbox" ? (
-            <p className="mt-3 text-[11px] text-slate-500 dark:text-slate-400">
+            <p className="text-xs text-muted">
               Leave XUID empty to use the Xbox account linked to the key. Get a key from{" "}
-              <a
-                href="https://xbl.io/dashboard"
-                target="_blank"
-                rel="noreferrer"
-                className="font-semibold text-emerald-700 underline dark:text-emerald-300"
-              >
+              <a href="https://xbl.io/dashboard" target="_blank" rel="noreferrer" className="font-semibold text-accent underline">
                 OpenXBL
               </a>
               .
             </p>
           ) : null}
-          {state.creationError ? (
-            <p className="mt-3 text-xs text-rose-700 dark:text-rose-300">{state.creationError}</p>
-          ) : null}
-          <div className="mt-4 flex flex-wrap justify-end gap-3">
+          {state.creationError ? <p className="text-[13px] text-danger">{state.creationError}</p> : null}
+          <div className="flex flex-wrap justify-end gap-2.5">
             <button
               type="button"
               onClick={integrations.cancelIntegrationCreation}
               disabled={state.isCreatingIntegration}
-              className="rounded-full border border-slate-300 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-600 transition hover:border-slate-400 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:text-slate-300"
+              className="pdx-btn-outline !h-11"
             >
               Cancel
             </button>
@@ -142,13 +141,13 @@ export function IntegrationCreator({ available, integrations }: IntegrationCreat
               type="button"
               onClick={() => void integrations.createIntegration()}
               disabled={state.isCreatingIntegration}
-              className="rounded-full bg-emerald-400 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-900 transition hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-60"
+              className="pdx-btn-primary !h-11"
             >
               {state.isCreatingIntegration ? "Connecting..." : `Connect ${creationPlatformName(platform)}`}
             </button>
           </div>
-        </>
-      )}
+        </div>
+      ) : null}
     </div>
   );
 }

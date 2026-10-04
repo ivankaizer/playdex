@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from "react-router";
 import { AppLayout } from "@/components/AppLayout";
 import { Breadcrumbs } from "@/components/Breadcrumbs";
 import { apiRequest, errorMessage, isAbortError } from "@/lib/api";
-import type { DraftCapabilities } from "@/models/drafts";
+import type { DraftBatchDto, DraftCapabilities } from "@/models/drafts";
 import type {
   ManualEntryCreateResponse,
   ManualMappingSearchResponse,
@@ -11,7 +11,7 @@ import type {
   ManualPlatformsResponse,
   ManualSessionStartResponse,
 } from "@/models/manual";
-import { DraftWorkspace } from "./components/DraftWorkspace";
+import { DraftWorkspace, type DraftWorkspaceView } from "./components/DraftWorkspace";
 import { SessionCreateModal } from "./components/SessionCreateModal";
 import {
   cancelSearch,
@@ -20,6 +20,7 @@ import {
   completeSearch,
   failSave,
   failSearch,
+  formatMinutes,
   openSessionCreate,
   tryBeginSave,
   tryBeginSearch,
@@ -27,6 +28,8 @@ import {
   type SessionCreateMode,
 } from "./sessionCreateState";
 import { createLinkedController, useLatestState } from "./support";
+
+const ToastMilliseconds = 2600;
 
 function modeFromQuery(search: string): SessionCreateMode {
   return search.toLowerCase().includes("mode=live") ? "live" : "historical";
@@ -38,12 +41,22 @@ export function SessionCreatePage() {
   const [platforms, setPlatforms] = useState<readonly ManualPlatform[]>([]);
   const [draftCapabilities, setDraftCapabilities] = useState<DraftCapabilities | null>(null);
   const [draftsOpen, setDraftsOpen] = useState(false);
+  const [draftsView, setDraftsView] = useState<DraftWorkspaceView>("compose");
+  const [batchCount, setBatchCount] = useState(0);
+  const [toast, setToast] = useState<string | null>(null);
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const navigate = useNavigate();
 
   const lifetime = useRef(new AbortController());
   const searchRequest = useRef<AbortController | null>(null);
   const saveRequest = useRef<AbortController | null>(null);
   const searchVersion = useRef(0);
+
+  const showToast = (message: string) => {
+    clearTimeout(toastTimer.current);
+    setToast(message);
+    toastTimer.current = setTimeout(() => setToast(null), ToastMilliseconds);
+  };
 
   const invalidateSearch = () => {
     ++searchVersion.current;
@@ -70,10 +83,19 @@ export function SessionCreatePage() {
         if (!signal.aborted) setDraftCapabilities(null);
       }
     };
-    void Promise.all([loadPlatforms(), loadCapabilities()]);
+    const loadBatchCount = async () => {
+      try {
+        const batches = await apiRequest<DraftBatchDto[]>("/manual/draft-batches", { signal });
+        setBatchCount(batches.length);
+      } catch {
+        // The badge is optional; the AI workspace reports its own load errors.
+      }
+    };
+    void Promise.all([loadPlatforms(), loadCapabilities(), loadBatchCount()]);
 
     return () => {
       controller.abort();
+      clearTimeout(toastTimer.current);
       invalidateSearch();
       saveRequest.current?.abort();
     };
@@ -87,6 +109,7 @@ export function SessionCreatePage() {
 
   const closeDrafts = () => {
     setDraftsOpen(false);
+    setDraftsView("compose");
     updateState(() => openSessionCreate("historical", new Date()));
   };
 
@@ -148,8 +171,15 @@ export function SessionCreatePage() {
           signal: request.signal,
         });
       }
-      updateState(completeSave);
-      navigate("/sessions");
+      if (submission.kind === "entry") {
+        // Past sessions: confirm with a toast and reset the form so the next one can be logged.
+        showToast(`${submission.body.title ?? "Session"} · ${formatMinutes(submission.body.durationMinutes)} saved to your history`);
+        invalidateSearch();
+        updateState(() => openSessionCreate("historical", new Date()));
+      } else {
+        updateState(completeSave);
+        navigate("/sessions");
+      }
     } catch (exception) {
       if (isAbortError(exception) && request.signal.aborted) return;
       updateState((current) => failSave(current, errorMessage(exception)));
@@ -160,38 +190,76 @@ export function SessionCreatePage() {
 
   const backToSessions = () => navigate("/sessions");
 
-  return (
-    <AppLayout title="Session Creator">
-      <section className="mt-10 space-y-6">
-        <header className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-white/80 p-4 dark:border-slate-800 dark:bg-slate-900/60">
-          <Breadcrumbs parentLabel="Sessions" currentLabel="Session Creator" onParent={backToSessions} />
-          <button
-            type="button"
-            data-workspace-toggle
-            onClick={toggleWorkspace}
-            className="rounded-full border border-slate-300 px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-700 transition hover:border-emerald-400 hover:text-emerald-700 dark:border-slate-700 dark:text-slate-200 dark:hover:border-emerald-400 dark:hover:text-emerald-300"
-          >
-            {draftsOpen ? "Manual session" : "AI batches"}
-          </button>
-        </header>
+  const crumb = !draftsOpen ? "Log a session" : draftsView === "review" ? "Review batch" : "AI batch";
+  const modeTab = (open: boolean, label: string, badge?: number) => (
+    <button
+      type="button"
+      data-mode-tab={open ? "ai" : "manual"}
+      aria-pressed={draftsOpen === open}
+      onClick={() => {
+        if (draftsOpen !== open) toggleWorkspace();
+      }}
+      className="pdx-seg-btn flex h-[38px] items-center gap-2 px-[18px]"
+    >
+      {label}
+      {badge !== undefined && badge > 0 && (
+        <span className="pdx-num grid h-5 min-w-5 place-items-center rounded-full bg-brand px-1.5 text-[11px] text-white">
+          <span className="sr-only">(</span>
+          {badge}
+          <span className="sr-only"> saved)</span>
+        </span>
+      )}
+    </button>
+  );
 
-        {draftsOpen ? (
-          <DraftWorkspace embedded capabilities={draftCapabilities} platforms={platforms} onClose={closeDrafts} onAccepted={() => undefined} />
-        ) : (
-          <SessionCreateModal
-            embedded
-            state={state}
-            onStateChange={updateState}
-            aiAvailable={draftCapabilities?.available === true}
-            platforms={platforms}
-            onUseAi={openDrafts}
-            onQueryChanged={queryChanged}
-            onSearch={() => void search()}
-            onSave={() => void save()}
-            onClose={backToSessions}
-          />
-        )}
+  return (
+    <AppLayout
+      title="Log a session"
+      overlay={
+        toast !== null && (
+          <div role="status" className="pdx-toast">
+            <span aria-hidden="true" className="text-[#6fe3b5]">
+              ✓
+            </span>{" "}
+            {toast}
+          </div>
+        )
+      }
+    >
+      <section className="flex flex-wrap items-center justify-between gap-4 rounded-[28px] border border-[color:var(--card-border)] bg-[var(--card-bg)] py-2.5 pl-7 pr-2.5 shadow-card backdrop-blur-[16px] sm:rounded-full">
+        <Breadcrumbs parentLabel="Sessions" currentLabel={crumb} onParent={backToSessions} />
+        <div role="group" aria-label="Entry mode" className="pdx-seg">
+          {modeTab(false, "Manual entry")}
+          {modeTab(true, "AI batch", batchCount)}
+        </div>
       </section>
+
+      {draftsOpen ? (
+        <DraftWorkspace
+          embedded
+          capabilities={draftCapabilities}
+          platforms={platforms}
+          onClose={closeDrafts}
+          onAccepted={() => undefined}
+          onToast={showToast}
+          onViewChange={setDraftsView}
+          onBatchesChange={setBatchCount}
+          onGoToSessions={backToSessions}
+        />
+      ) : (
+        <SessionCreateModal
+          embedded
+          state={state}
+          onStateChange={updateState}
+          aiAvailable={draftCapabilities?.available === true}
+          platforms={platforms}
+          onUseAi={openDrafts}
+          onQueryChanged={queryChanged}
+          onSearch={() => void search()}
+          onSave={() => void save()}
+          onClose={backToSessions}
+        />
+      )}
     </AppLayout>
   );
 }

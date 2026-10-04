@@ -1,10 +1,12 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useLocation } from "react-router";
 import { AppLayout } from "@/components/AppLayout";
+import { BarChart, CardHeading, Cover, Dot, ErrorNote, LoadingNote, Segmented, ShareBar, StackedBar } from "@/components/ui";
 import { apiRequest, errorMessage } from "@/lib/api";
-import { formatHours } from "@/lib/format";
+import { formatDuration, formatHours } from "@/lib/format";
 import { encodeGameId } from "@/lib/gameHash";
 import { logout, useAppNavigate } from "@/lib/navigation";
+import { platformColor } from "@/lib/platforms";
 import type { RecapResponse, RecapYearsResponse } from "./recapModels";
 import {
   applyLocationQuery,
@@ -26,32 +28,13 @@ import {
   type RecapState,
   type RecapStep,
 } from "./recapState";
-import {
-  buildWeekdayChart,
-  cadenceStats,
-  formatNumber,
-  gameHighlightStats,
-  gameMixStats,
-  rangeLabel,
-  roundPercent,
-  sessionLengthStats,
-  volumeStats,
-  type LabeledValue,
-} from "./recapView";
+import { formatAverage, formatRecapDate, formatRecapMonthLabel, rangeLabel, roundPercent, type LabeledValue } from "./recapView";
 
 const WeekdayLabels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-const PlatformBarClasses = ["bg-emerald-400", "bg-teal-400", "bg-cyan-400", "bg-sky-400", "bg-indigo-400", "bg-violet-400"];
-const PlatformDotClasses = [
-  "bg-emerald-400/80",
-  "bg-teal-400/80",
-  "bg-cyan-400/80",
-  "bg-sky-400/80",
-  "bg-indigo-400/80",
-  "bg-violet-400/80",
-];
+const WeekdayNames = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 
-const percentStyle = (value: number) => ({ width: `${formatNumber(value)}%` });
 const pad2 = (value: number) => String(value).padStart(2, "0");
+const count = (value: number) => value.toLocaleString("en-US");
 
 export function RecapPage() {
   const location = useLocation();
@@ -191,464 +174,484 @@ export function RecapPage() {
 
   const navigateToGame = (gameId: string) => navigate(`/games/${encodeGameId(gameId)}`);
 
-  const tabClass = (key: string) =>
-    "rounded-full border px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.25em] transition " +
-    (state.activeTab === key
-      ? "border-emerald-300 bg-emerald-400 text-slate-900"
-      : "border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-200 hover:border-emerald-300/60");
-
+  const tabs = recapTabs(state);
+  const activeLabel = tabs.find((tab) => tab.key === state.activeTab)?.label ?? "All time";
   const recap = state.recap;
-  const weekdayChart = buildWeekdayChart(recap?.sessionsByWeekday ?? []);
-  const hourMaximum = Math.max(1, ...(recap?.sessionsByHour.map((item) => item.sessionCount) ?? [0]));
-  const daysPlayed = recap?.daysPlayed ?? 0;
-  const daysNotPlayed = recap?.daysNotPlayed ?? 0;
-  const totalDays = daysPlayed + daysNotPlayed;
-  const daysPlayedPercent = totalDays > 0 ? (daysPlayed / totalDays) * 100 : 0;
-  const daysPlayedPercentRounded = roundPercent(daysPlayedPercent);
-  const platformTotalSeconds = recap?.platformTotals.reduce((sum, item) => sum + item.totalSeconds, 0) ?? 0;
-  const timeSplitTotalSeconds = (recap?.weekendSeconds ?? 0) + (recap?.weekdaySeconds ?? 0);
-  const weekendShare = timeSplitTotalSeconds > 0 ? (recap?.weekendSeconds ?? 0) / timeSplitTotalSeconds : 0;
-  const weekdayShare = timeSplitTotalSeconds > 0 ? (recap?.weekdaySeconds ?? 0) / timeSplitTotalSeconds : 0;
-  const daysStrokeDasharray = `${formatNumber(daysPlayedPercent)} ${formatNumber(100 - daysPlayedPercent)}`;
-  const weekdayViewBox = `0 0 ${formatNumber(weekdayChart.width)} ${formatNumber(weekdayChart.height)}`;
 
   return (
     <AppLayout title="Recap">
-      <section className="mt-10 space-y-6">
-        <div className="rounded-3xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/60 p-4 sm:p-5">
-          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-700 dark:text-emerald-300">Recap tabs</p>
-          <div className="mt-4 flex flex-wrap gap-2">
-            {recapTabs(state).map((tab) => (
-              <button key={tab.key} type="button" onClick={() => handleSelectTab(tab.key)} className={tabClass(tab.key)}>
-                {tab.label}
-              </button>
-            ))}
+      <section
+        className="pdx-card flex flex-col gap-8"
+        style={{ background: "var(--hero-bg)" }}
+        aria-label={`${activeLabel} recap`}
+      >
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <p className="pdx-kicker">
+            {activeLabel} recap
+            {state.activeTab === "custom" && recap?.range.from && recap.range.to && (
+              <span className="text-muted"> · {rangeLabel(recap)}</span>
+            )}
+          </p>
+          <Segmented
+            ariaLabel="Recap period"
+            options={tabs.map((tab) => ({ value: tab.key, label: tab.label }))}
+            value={state.activeTab}
+            onChange={handleSelectTab}
+          />
+        </div>
+
+        {state.activeTab === "custom" && (
+          <div className="grid items-end gap-3 [grid-template-columns:repeat(auto-fit,minmax(min(180px,100%),1fr))]">
+            <label className="pdx-label flex flex-col gap-2">
+              From
+              <input
+                type="date"
+                value={state.customFrom}
+                onChange={(event) => apply((current) => setCustomFrom(current, event.target.value))}
+                className="pdx-input normal-case tracking-normal"
+              />
+            </label>
+            <label className="pdx-label flex flex-col gap-2">
+              To
+              <input
+                type="date"
+                value={state.customTo}
+                onChange={(event) => apply((current) => setCustomTo(current, event.target.value))}
+                className="pdx-input normal-case tracking-normal"
+              />
+            </label>
+            <button type="button" onClick={applyCustom} className="pdx-btn-primary">
+              Apply
+            </button>
           </div>
-        </div>
+        )}
 
-        <div className="space-y-6">
-          {state.activeTab === "custom" && (
-            <div className="rounded-3xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/60 p-5 sm:p-6">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-700 dark:text-emerald-300">
-                    Custom recap
-                  </p>
-                  <h2 className="mt-2 text-xl font-semibold text-slate-900 dark:text-white">Choose your range</h2>
-                </div>
-              </div>
-              <div className="mt-5 grid gap-3 md:grid-cols-[1fr_1fr_auto]">
-                <label className="text-xs font-medium text-slate-600 dark:text-slate-300">
-                  From{" "}
-                  <input
-                    type="date"
-                    value={state.customFrom}
-                    onChange={(event) => apply((current) => setCustomFrom(current, event.target.value))}
-                    className="mt-2 w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white/90 dark:bg-slate-950/80 px-3 py-2 text-sm text-slate-900 dark:text-white outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/30"
-                  />
-                </label>
-                <label className="text-xs font-medium text-slate-600 dark:text-slate-300">
-                  To{" "}
-                  <input
-                    type="date"
-                    value={state.customTo}
-                    onChange={(event) => apply((current) => setCustomTo(current, event.target.value))}
-                    className="mt-2 w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white/90 dark:bg-slate-950/80 px-3 py-2 text-sm text-slate-900 dark:text-white outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/30"
-                  />
-                </label>
-                <button
-                  type="button"
-                  onClick={applyCustom}
-                  className="mt-6 rounded-full border border-emerald-400/60 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-emerald-700 dark:text-emerald-200 transition hover:border-emerald-300"
+        {state.error.length > 0 && <ErrorNote>{state.error}</ErrorNote>}
+        {state.isLoading && <LoadingNote>Loading recap...</LoadingNote>}
+
+        {recap !== null && (
+          <div className="flex flex-wrap items-end justify-between gap-8">
+            <div className="min-w-0">
+              <p className="text-[15px] text-ink-2">You played</p>
+              <p className="pdx-num mt-1.5 break-words text-[56px] font-semibold leading-none tracking-[-0.04em] sm:text-[80px]">
+                {formatHours(recap.totalSeconds, 1)}
+              </p>
+              <p className="mt-3 text-base text-ink-2">
+                across {count(recap.totalSessions)} {recap.totalSessions === 1 ? "session" : "sessions"} and{" "}
+                {count(recap.uniqueGames)} {recap.uniqueGames === 1 ? "game" : "games"}
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-3">
+              {heroFacts(recap).map((fact) => (
+                <div
+                  key={fact.label}
+                  className="min-w-[150px] max-w-full rounded-[20px] border border-[color:var(--card-border)] bg-surface/75 px-5 py-4"
                 >
-                  Apply
-                </button>
-              </div>
+                  <p className="pdx-label">{fact.label}</p>
+                  <p className="pdx-num mt-1.5 truncate text-xl font-semibold">{fact.value}</p>
+                </div>
+              ))}
             </div>
-          )}
-
-          {state.error.length > 0 && <p className="text-xs text-rose-700 dark:text-rose-300">{state.error}</p>}
-
-          {recap !== null && (
-            <div className="rounded-3xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/60 p-5 sm:p-6">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-700 dark:text-emerald-300">
-                    Most popular
-                  </p>
-                  <h2 className="mt-2 text-xl font-semibold text-slate-900 dark:text-white">Top 5 games</h2>
-                </div>
-                <div className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-500 dark:text-slate-400">
-                  {rangeLabel(recap)}
-                </div>
-              </div>
-              <div className="mt-5 grid items-start gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
-                {recap.topGamesByTime.length === 0 ? (
-                  <div className="rounded-2xl border border-dashed border-slate-200 dark:border-slate-800 bg-slate-200/50 dark:bg-slate-950/50 p-4 text-sm text-slate-500 dark:text-slate-400 lg:col-span-5">
-                    No game data available yet.
-                  </div>
-                ) : (
-                  recap.topGamesByTime.map((game, index) => (
-                    <button key={index} type="button" onClick={() => navigateToGame(game.gameId)} className="group text-left">
-                      <div className="w-full">
-                        <div className="overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-200/50 dark:bg-slate-950/50">
-                          {game.capsuleUrl ? (
-                            <img src={game.capsuleUrl} alt={`${game.title} capsule art`} className="aspect-[2/3] w-full object-cover" />
-                          ) : (
-                            <div className="flex aspect-[2/3] w-full items-center justify-center bg-slate-200/70 dark:bg-slate-900/70 text-xs uppercase tracking-[0.3em] text-slate-500 dark:text-slate-400">
-                              No art
-                            </div>
-                          )}
-                        </div>
-                        <div className="mt-3 grid grid-cols-[1fr_auto] items-start gap-3 text-sm">
-                          <span className="min-w-0 line-clamp-2 font-semibold leading-snug text-slate-900 dark:text-white group-hover:text-emerald-700 dark:group-hover:text-emerald-200">
-                            {game.title}
-                          </span>
-                          <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-200">
-                            {formatHours(game.totalSeconds, 1)}
-                          </span>
-                        </div>
-                      </div>
-                    </button>
-                  ))
-                )}
-              </div>
-            </div>
-          )}
-
-          {state.isLoading && <p className="text-xs text-slate-500 dark:text-slate-400">Loading recap...</p>}
-
-          {recap !== null && (
-            <>
-              <div className="grid gap-6 lg:grid-cols-2 lg:items-stretch">
-                <div className="h-full rounded-3xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/60 p-5 sm:p-6">
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div>
-                      <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-700 dark:text-emerald-300">
-                        Session overview
-                      </p>
-                      <h2 className="mt-2 text-xl font-semibold text-slate-900 dark:text-white">Volume and session length</h2>
-                    </div>
-                  </div>
-                  <div className="mt-4 grid gap-4">
-                    <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/70 dark:bg-slate-950/40 p-4">
-                      <p className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-500 dark:text-slate-400">Volume</p>
-                      <div className="mt-3 grid gap-2 text-sm">{statRows(volumeStats(recap))}</div>
-                    </div>
-                    <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/70 dark:bg-slate-950/40 p-4">
-                      <p className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-500 dark:text-slate-400">
-                        Session length
-                      </p>
-                      <div className="mt-3 grid gap-2 text-sm">{statRows(sessionLengthStats(recap))}</div>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="h-full rounded-3xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/60 p-5 sm:p-6">
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div>
-                      <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-700 dark:text-emerald-300">
-                        Consistency
-                      </p>
-                      <h2 className="mt-2 text-xl font-semibold text-slate-900 dark:text-white">Days played</h2>
-                    </div>
-                    <div className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-500 dark:text-slate-400">
-                      {daysPlayed} / {totalDays} days
-                    </div>
-                  </div>
-                  <div className="mt-4 grid gap-4 sm:grid-cols-[auto_1fr] items-center">
-                    <div className="relative flex h-36 w-36 items-center justify-center">
-                      <svg className="h-full w-full -rotate-90" viewBox="0 0 120 120">
-                        <circle
-                          cx="60"
-                          cy="60"
-                          r="46"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="12"
-                          className="text-slate-200 dark:text-slate-800"
-                        ></circle>
-                        <circle
-                          cx="60"
-                          cy="60"
-                          r="46"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="12"
-                          strokeLinecap="round"
-                          strokeDasharray={daysStrokeDasharray}
-                          pathLength="100"
-                          className="text-emerald-400"
-                        ></circle>
-                      </svg>
-                      <div className="absolute text-center">
-                        <p className="text-2xl font-semibold text-slate-900 dark:text-white">{daysPlayedPercentRounded}%</p>
-                        <p className="text-[10px] uppercase tracking-[0.3em] text-slate-500 dark:text-slate-400">played</p>
-                      </div>
-                    </div>
-                    <div className="grid gap-2 text-sm">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[10px] uppercase tracking-[0.3em] text-slate-500 dark:text-slate-400">Days played</span>
-                        <span className="font-semibold text-slate-900 dark:text-white">{daysPlayed}</span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-[10px] uppercase tracking-[0.3em] text-slate-500 dark:text-slate-400">Days off</span>
-                        <span className="font-semibold text-slate-900 dark:text-white">{daysNotPlayed}</span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-[10px] uppercase tracking-[0.3em] text-slate-500 dark:text-slate-400">Play rate</span>
-                        <span className="font-semibold text-slate-900 dark:text-white">{daysPlayedPercentRounded}%</span>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="mt-5 grid gap-3 sm:grid-cols-2">{statCards(cadenceStats(recap))}</div>
-                </div>
-              </div>
-
-              <div className="grid gap-6 lg:grid-cols-2 lg:items-stretch">
-                <div className="h-full rounded-3xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/60 p-5 sm:p-6">
-                  <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-700 dark:text-emerald-300">Weekly rhythm</p>
-                  <h2 className="mt-2 text-xl font-semibold text-slate-900 dark:text-white">Sessions by weekday</h2>
-                  <div className="mt-4">
-                    <svg className="h-24 w-full" viewBox={weekdayViewBox} preserveAspectRatio="none">
-                      <defs>
-                        <linearGradient id="weekdayGradient" x1="0" x2="0" y1="0" y2="1">
-                          <stop offset="0%" stopColor="rgba(52, 211, 153, 0.4)"></stop>
-                          <stop offset="100%" stopColor="rgba(52, 211, 153, 0)"></stop>
-                        </linearGradient>
-                      </defs>
-                      {weekdayChart.areaPath.length > 0 && (
-                        <path d={weekdayChart.areaPath} fill="url(#weekdayGradient)" stroke="none"></path>
-                      )}
-                      {weekdayChart.linePoints.length > 0 && (
-                        <polyline
-                          points={weekdayChart.linePoints}
-                          fill="none"
-                          stroke="rgba(16, 185, 129, 0.9)"
-                          strokeWidth="2.5"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        ></polyline>
-                      )}
-                      {weekdayChart.points.map((point, index) => (
-                        <circle
-                          key={index}
-                          cx={formatNumber(point.x)}
-                          cy={formatNumber(point.y)}
-                          r="2.5"
-                          fill="rgba(16, 185, 129, 0.9)"
-                        ></circle>
-                      ))}
-                    </svg>
-                    <div className="mt-3 grid grid-cols-7 text-[10px] uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">
-                      {WeekdayLabels.map((label) => (
-                        <span key={label} className="text-center">
-                          {label}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="h-full rounded-3xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/60 p-5 sm:p-6">
-                  <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-700 dark:text-emerald-300">
-                    Hourly activity
-                  </p>
-                  <h2 className="mt-2 text-xl font-semibold text-slate-900 dark:text-white">Heatmap by hour</h2>
-                  <div className="mt-4 grid grid-cols-12 gap-2">
-                    {recap.sessionsByHour.map((item, index) => {
-                      const intensity = item.sessionCount / hourMaximum;
-                      const opacity = 0.2 + intensity * 0.8;
-                      return (
-                        <div key={index} className="flex flex-col items-center gap-2">
-                          <span className="h-3 w-3 rounded-full bg-emerald-400" style={{ opacity: formatNumber(opacity) }}></span>
-                          <span className="text-[9px] uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">
-                            {pad2(item.hour)}
-                          </span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                  <div className="mt-4 text-xs text-slate-500 dark:text-slate-400">
-                    Peak hour:{" "}
-                    <span className="font-semibold text-slate-900 dark:text-white">
-                      {recap.peakHour ? `${pad2(recap.peakHour.hour)}:00` : "—"}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="grid gap-6 lg:grid-cols-2 lg:items-stretch">
-                <div className="h-full rounded-3xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/60 p-5 sm:p-6">
-                  <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-700 dark:text-emerald-300">Time split</p>
-                  <h2 className="mt-2 text-xl font-semibold text-slate-900 dark:text-white">Weekend vs weekday</h2>
-                  <div className="mt-4 space-y-3">
-                    <div className="flex items-center justify-between text-xs uppercase tracking-[0.3em] text-slate-500 dark:text-slate-400">
-                      <span>Weekend</span>
-                      <span className="font-semibold text-slate-900 dark:text-white">
-                        {formatHours(recap.weekendSeconds, 1)} · {roundPercent(weekendShare * 100)}%
-                      </span>
-                    </div>
-                    <div className="flex h-3 w-full overflow-hidden rounded-full bg-slate-200/70 dark:bg-slate-800/70">
-                      <div className="h-full bg-emerald-400" style={percentStyle(weekendShare * 100)}></div>
-                      <div className="h-full bg-sky-400" style={percentStyle(weekdayShare * 100)}></div>
-                    </div>
-                    <div className="flex items-center justify-between text-xs uppercase tracking-[0.3em] text-slate-500 dark:text-slate-400">
-                      <span>Weekday</span>
-                      <span className="font-semibold text-slate-900 dark:text-white">
-                        {formatHours(recap.weekdaySeconds, 1)} · {roundPercent(weekdayShare * 100)}%
-                      </span>
-                    </div>
-                  </div>
-                  <div className="mt-6 grid gap-3 sm:grid-cols-2">
-                    <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/70 dark:bg-slate-950/40 p-3">
-                      <p className="text-[10px] uppercase tracking-[0.3em] text-slate-500 dark:text-slate-400">Peak hour</p>
-                      <p className="mt-2 text-sm font-semibold text-slate-900 dark:text-white">
-                        {recap.peakHour ? `${pad2(recap.peakHour.hour)}:00 · ${recap.peakHour.sessionCount}` : "—"}
-                      </p>
-                    </div>
-                    <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/70 dark:bg-slate-950/40 p-3">
-                      <p className="text-[10px] uppercase tracking-[0.3em] text-slate-500 dark:text-slate-400">Most used platform</p>
-                      <p className="mt-2 text-sm font-semibold text-slate-900 dark:text-white">
-                        {recap.mostUsedPlatform ? recap.mostUsedPlatform.platformName : "—"}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="h-full rounded-3xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/60 p-5 sm:p-6">
-                  <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-700 dark:text-emerald-300">Platform mix</p>
-                  <h2 className="mt-2 text-xl font-semibold text-slate-900 dark:text-white">Share of playtime</h2>
-                  <div className="mt-5 space-y-4">
-                    {recap.platformTotals.length === 0 ? (
-                      <p className="text-sm text-slate-500 dark:text-slate-400">No platform data available yet.</p>
-                    ) : (
-                      recap.platformTotals.map((item, index) => {
-                        const share = platformTotalSeconds > 0 ? (item.totalSeconds / platformTotalSeconds) * 100 : 0;
-                        const barClass = PlatformBarClasses[index % PlatformBarClasses.length];
-                        const dotClass = PlatformDotClasses[index % PlatformDotClasses.length];
-                        return (
-                          <div key={index} className="space-y-2">
-                            <div className="flex items-center justify-between text-sm">
-                              <div className="flex items-center gap-2">
-                                <span className={`h-2.5 w-2.5 rounded-full ${dotClass}`}></span>
-                                <span className="font-semibold text-slate-900 dark:text-white">{item.platformName}</span>
-                              </div>
-                              <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">{roundPercent(share)}%</span>
-                            </div>
-                            <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
-                              <span>{item.sessionCount} sessions</span>
-                              <span className="font-semibold text-emerald-700 dark:text-emerald-200">
-                                {formatHours(item.totalSeconds, 1)}
-                              </span>
-                            </div>
-                            <div className="h-2 w-full overflow-hidden rounded-full bg-slate-200/70 dark:bg-slate-800/70">
-                              <div className={`h-full rounded-full ${barClass}`} style={percentStyle(share)}></div>
-                            </div>
-                          </div>
-                        );
-                      })
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              <div className="grid gap-6 lg:grid-cols-2 lg:items-stretch">
-                <div className="h-full rounded-3xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/60 p-5 sm:p-6">
-                  <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-700 dark:text-emerald-300">Library mix</p>
-                  <h2 className="mt-2 text-xl font-semibold text-slate-900 dark:text-white">How you explore games</h2>
-                  <div className="mt-4 grid gap-3 sm:grid-cols-2">{statCards(gameMixStats(recap))}</div>
-                </div>
-
-                <div className="h-full rounded-3xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/60 p-5 sm:p-6">
-                  <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-700 dark:text-emerald-300">Highlights</p>
-                  <h2 className="mt-2 text-xl font-semibold text-slate-900 dark:text-white">Game leaders</h2>
-                  <div className="mt-4 grid gap-3">{statCards(gameHighlightStats(recap))}</div>
-                </div>
-              </div>
-
-              <div className="rounded-3xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/60 p-5 sm:p-6">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-700 dark:text-emerald-300">
-                      Full library
-                    </p>
-                    <h2 className="mt-2 text-xl font-semibold text-slate-900 dark:text-white">Summed playtime by game</h2>
-                  </div>
-                </div>
-                <div className="mt-5 max-h-96 overflow-auto pr-1">
-                  {recap.gamesTable.length === 0 ? (
-                    <p className="text-sm text-slate-500 dark:text-slate-400">No games logged yet.</p>
-                  ) : (
-                    <div className="overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-800">
-                      <table className="w-full text-left text-xs">
-                        <thead className="bg-white/80 dark:bg-slate-950/70 text-[10px] uppercase tracking-[0.28em] text-slate-500 dark:text-slate-400">
-                          <tr>
-                            <th className="px-3 py-2 text-left">Game</th>
-                            <th className="px-3 py-2 text-left">Sessions</th>
-                            <th className="px-3 py-2 text-left">Time</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {recap.gamesTable.map((game, index) => (
-                            <tr
-                              key={index}
-                              className="border-t border-slate-200/70 dark:border-slate-800/80 bg-slate-200/30 dark:bg-slate-950/40"
-                            >
-                              <td className="px-3 py-2">
-                                <div className="flex min-w-0 items-center gap-2">
-                                  <span className="text-[10px] font-semibold text-slate-500 dark:text-slate-400">{pad2(index + 1)}</span>
-                                  <div className="flex min-w-0 items-center gap-2">
-                                    <button
-                                      type="button"
-                                      onClick={() => navigateToGame(game.gameId)}
-                                      title={game.title}
-                                      className="min-w-0 flex-1 truncate text-left text-sm font-semibold text-slate-900 dark:text-white transition hover:text-emerald-700 dark:hover:text-emerald-200"
-                                    >
-                                      {game.title}
-                                    </button>
-                                    {game.isAbandoned && (
-                                      <span className="inline-flex items-center rounded-full border border-slate-300/70 bg-slate-200/40 px-1.5 py-px text-[8px] font-medium uppercase tracking-[0.14em] text-slate-500 dark:border-slate-700/80 dark:bg-slate-800/30 dark:text-slate-400">
-                                        abandoned
-                                      </span>
-                                    )}
-                                  </div>
-                                </div>
-                              </td>
-                              <td className="px-3 py-2 text-slate-700 dark:text-slate-200">{game.sessionCount}</td>
-                              <td className="px-3 py-2 font-semibold text-emerald-700 dark:text-emerald-200">
-                                {formatHours(game.totalSeconds, 1)}
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </>
-          )}
-        </div>
+          </div>
+        )}
       </section>
+
+      {recap !== null && (
+        <>
+          <section className="pdx-card flex flex-col gap-6">
+            <CardHeading kicker="Most played" title="Top 5 games" />
+            {recap.topGamesByTime.length === 0 ? (
+              <p className="pdx-dashed">No game data available yet.</p>
+            ) : (
+              <div className="grid gap-5 [grid-template-columns:repeat(auto-fit,minmax(min(160px,100%),1fr))]">
+                {recap.topGamesByTime.map((game, index) => (
+                  <button
+                    key={index}
+                    type="button"
+                    onClick={() => navigateToGame(game.gameId)}
+                    className="group flex min-w-0 flex-col gap-3 text-left"
+                  >
+                    <div className="relative w-full">
+                      <Cover
+                        title={game.title}
+                        src={game.capsuleUrl}
+                        className="aspect-[2/3] w-full rounded-[22px] shadow-cover"
+                        style={{ background: "linear-gradient(160deg,#2b3540,rgb(var(--ink-3)))" }}
+                        initialClassName="text-[40px]"
+                      />
+                      <span className="pdx-num absolute left-2.5 top-2.5 grid h-8 min-w-8 place-items-center rounded-full bg-white/90 px-2.5 text-[13px] font-bold text-[#0b3d2c]">
+                        {index + 1}
+                      </span>
+                    </div>
+                    <div className="min-w-0">
+                      <p className="line-clamp-2 text-[15px] font-medium leading-[1.3] group-hover:text-accent">{game.title}</p>
+                      <p className="pdx-num mt-0.5 text-sm font-semibold text-accent">{formatHours(game.totalSeconds, 1)}</p>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </section>
+
+          <RhythmCard recap={recap} />
+
+          <div className="grid gap-7 [grid-template-columns:repeat(auto-fit,minmax(min(340px,100%),1fr))]">
+            <ConsistencyCard recap={recap} />
+            <SessionsCard recap={recap} />
+          </div>
+
+          <PlatformMixCard recap={recap} />
+
+          <LibraryCard recap={recap} onOpenGame={navigateToGame} />
+        </>
+      )}
     </AppLayout>
   );
 }
 
-function statRows(items: LabeledValue[]) {
-  return items.map((item) => (
-    <div key={item.label} className="flex items-center justify-between">
-      <span className="text-[10px] uppercase tracking-[0.3em] text-slate-500 dark:text-slate-400">{item.label}</span>
-      <span className="font-semibold text-slate-900 dark:text-white">{item.value}</span>
-    </div>
-  ));
+function heroFacts(recap: RecapResponse): LabeledValue[] {
+  const facts: LabeledValue[] = [{ label: "Top title", value: recap.topGameByTime?.title ?? "—" }];
+  facts.push({
+    label: "Most active month",
+    value: recap.mostActiveMonth ? formatRecapMonthLabel(recap.mostActiveMonth.month) : "—",
+  });
+  facts.push({ label: "Avg. session", value: formatDuration(recap.averageSessionSeconds, "full") });
+  return facts;
 }
 
-function statCards(items: LabeledValue[]) {
-  return items.map((item) => (
-    <div key={item.label} className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/70 dark:bg-slate-950/40 p-3">
-      <p className="text-[10px] uppercase tracking-[0.3em] text-slate-500 dark:text-slate-400">{item.label}</p>
-      <p className="mt-2 text-sm font-semibold text-slate-900 dark:text-white">{item.value}</p>
+function SideNote({ children }: { children: ReactNode }) {
+  return <span className="text-[13px] text-muted">{children}</span>;
+}
+
+function RhythmCard({ recap }: { recap: RecapResponse }) {
+  const hourMax = Math.max(0, ...recap.sessionsByHour.map((item) => item.sessionCount));
+  const hours = recap.sessionsByHour.map((item) => ({
+    key: String(item.hour),
+    value: item.sessionCount,
+    label: item.hour % 3 === 0 ? pad2(item.hour) : "",
+    title: `${pad2(item.hour)}:00 · ${count(item.sessionCount)} sessions`,
+    highlight: hourMax > 0 && item.sessionCount === hourMax,
+  }));
+
+  const weekdayCounts = WeekdayLabels.map(
+    (_, index) => recap.sessionsByWeekday.find((item) => item.weekday === index)?.sessionCount ?? 0,
+  );
+  const weekdayMax = Math.max(0, ...weekdayCounts);
+  const busiestIndex = weekdayMax > 0 ? weekdayCounts.indexOf(weekdayMax) : -1;
+  const weekdays = weekdayCounts.map((value, index) => ({
+    key: WeekdayLabels[index],
+    value,
+    label: WeekdayLabels[index],
+    title: `${WeekdayLabels[index]} · ${count(value)} sessions`,
+    highlight: index === busiestIndex,
+  }));
+
+  const splitTotal = recap.weekendSeconds + recap.weekdaySeconds;
+  const weekendPercent = splitTotal > 0 ? (recap.weekendSeconds / splitTotal) * 100 : 0;
+  const weekdayPercent = splitTotal > 0 ? (recap.weekdaySeconds / splitTotal) * 100 : 0;
+
+  return (
+    <section className="pdx-card flex flex-col gap-7">
+      <CardHeading kicker="Rhythm" title="When you play" actions={<SideNote>{rangeLabel(recap)}</SideNote>} />
+      <div className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(min(320px,100%),1fr))]">
+        <div className="pdx-tile flex flex-col gap-3.5 !p-7">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <span className="pdx-label">By hour</span>
+            <span className="pdx-num text-[13px] text-ink-2">
+              Peak{" "}
+              {recap.peakHour ? (
+                <>
+                  <b className="font-semibold">{pad2(recap.peakHour.hour)}:00</b> · {count(recap.peakHour.sessionCount)} sessions
+                </>
+              ) : (
+                "—"
+              )}
+            </span>
+          </div>
+          {hours.length === 0 ? (
+            <p className="pdx-dashed">No sessions yet.</p>
+          ) : (
+            <BarChart data={hours} height={130} gap={4} radius={6} ariaLabel="Sessions by hour" />
+          )}
+        </div>
+
+        <div className="pdx-tile flex flex-col gap-3.5 !p-7">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <span className="pdx-label">By weekday</span>
+            <span className="text-[13px] text-ink-2">
+              Busiest <b className="font-semibold">{busiestIndex >= 0 ? WeekdayNames[busiestIndex] : "—"}</b>
+            </span>
+          </div>
+          <BarChart data={weekdays} height={90} gap={10} radius={10} ariaLabel="Sessions by weekday" />
+          <div className="mt-2 flex h-2.5 gap-[3px] overflow-hidden rounded-full bg-track" aria-hidden="true">
+            {recap.weekendSeconds > 0 && <div className="bg-brand" style={{ flex: recap.weekendSeconds }}></div>}
+            {recap.weekdaySeconds > 0 && <div className="bg-info" style={{ flex: recap.weekdaySeconds }}></div>}
+          </div>
+          <div className="pdx-num flex flex-wrap justify-between gap-3 text-[13px]">
+            <span>
+              <b className="font-semibold">{roundPercent(weekendPercent)}%</b>{" "}
+              <span className="text-muted">weekend · {formatHours(recap.weekendSeconds, 1)}</span>
+            </span>
+            <span>
+              <b className="font-semibold">{roundPercent(weekdayPercent)}%</b>{" "}
+              <span className="text-muted">weekday · {formatHours(recap.weekdaySeconds, 1)}</span>
+            </span>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function ConsistencyCard({ recap }: { recap: RecapResponse }) {
+  const totalDays = recap.daysPlayed + recap.daysNotPlayed;
+  const playedPercent = totalDays > 0 ? (recap.daysPlayed / totalDays) * 100 : 0;
+  const day = recap.mostActiveDay;
+  const month = recap.mostActiveMonth;
+  const tiles: Array<{ label: string; value: ReactNode }> = [
+    { label: "Per day", value: <SessionsValue value={formatAverage(recap.averageSessionsPerDay)} /> },
+    { label: "Per week", value: <SessionsValue value={formatAverage(recap.averageSessionsPerWeek)} /> },
+    { label: "Per month", value: <SessionsValue value={formatAverage(recap.averageSessionsPerMonth)} /> },
+    { label: "Most active day", value: day ? `${formatRecapDate(day.date)} · ${count(day.sessionCount)}` : "—" },
+    {
+      label: "Most active month",
+      value: month ? `${formatRecapMonthLabel(month.month)} · ${month.sessionCount}` : "—",
+    },
+  ];
+
+  return (
+    <section className="pdx-card flex flex-col gap-6">
+      <CardHeading
+        kicker="Consistency"
+        title="Days played"
+        actions={
+          <SideNote>
+            {recap.daysPlayed} / {totalDays} days
+          </SideNote>
+        }
+      />
+      <div className="flex flex-wrap items-center gap-7">
+        <div
+          role="img"
+          aria-label={`${roundPercent(playedPercent)}% of days played`}
+          className="grid h-[140px] w-[140px] shrink-0 place-items-center rounded-full"
+          style={{
+            background: `conic-gradient(rgb(var(--bar)) 0 ${playedPercent}%, rgb(var(--track)) ${playedPercent}% 100%)`,
+          }}
+        >
+          <div className="grid h-[108px] w-[108px] place-items-center rounded-full bg-surface text-center">
+            <div>
+              <p className="pdx-num text-[26px] font-semibold">{roundPercent(playedPercent)}%</p>
+              <p className="text-[11px] uppercase tracking-[0.2em] text-muted">Played</p>
+            </div>
+          </div>
+        </div>
+        <dl className="flex flex-[1_1_160px] flex-col gap-2.5 text-sm">
+          <KeyValue label="Days played" value={count(recap.daysPlayed)} />
+          <KeyValue label="Days off" value={count(recap.daysNotPlayed)} />
+          <KeyValue label="Longest streak" value={`${recap.longestStreakDays} days`} />
+        </dl>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        {tiles.map((tile, index) => (
+          <div
+            key={tile.label}
+            className={`min-w-0 rounded-[20px] border border-[color:var(--tile-border)] bg-tile px-[18px] py-4 ${
+              index === tiles.length - 1 && tiles.length % 2 === 1 ? "col-span-2" : ""
+            }`}
+          >
+            <p className="pdx-label">{tile.label}</p>
+            <p className="pdx-num mt-1.5 truncate text-lg font-semibold">{tile.value}</p>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function SessionsValue({ value }: { value: string }) {
+  return (
+    <>
+      {value}
+      <span className="font-medium text-muted"> sessions</span>
+    </>
+  );
+}
+
+function KeyValue({ label, value }: { label: string; value: ReactNode }) {
+  return (
+    <div className="flex justify-between gap-4">
+      <dt className="text-muted">{label}</dt>
+      <dd className="pdx-num font-semibold">{value}</dd>
     </div>
-  ));
+  );
+}
+
+function SessionsCard({ recap }: { recap: RecapResponse }) {
+  const longest = recap.gameWithLongestSession;
+  const bestAverage = recap.topGameByAverageSession;
+  const rows: LabeledValue[] = [
+    { label: "Total sessions", value: count(recap.totalSessions) },
+    { label: "Total time", value: formatHours(recap.totalSeconds, 1) },
+    { label: "Median length", value: formatDuration(recap.medianSessionSeconds, "full") },
+    {
+      label: "Longest",
+      value: `${formatDuration(recap.longestSessionSeconds, "full")}${longest ? ` · ${longest.title}` : ""}`,
+    },
+    { label: "Shortest", value: formatDuration(recap.shortestSessionSeconds, "full") },
+    {
+      label: "Best average",
+      value: bestAverage ? `${bestAverage.title} · ${formatDuration(bestAverage.averageSessionSeconds, "full")}` : "—",
+    },
+  ];
+
+  return (
+    <section className="pdx-card flex flex-col gap-6">
+      <CardHeading kicker="Sessions" title="Volume and length" />
+      <div className="flex flex-wrap items-baseline gap-3">
+        <span className="pdx-num text-[56px] font-semibold leading-none tracking-[-0.03em]">
+          {formatDuration(recap.averageSessionSeconds, "full")}
+        </span>
+        <span className="text-sm text-muted">average session</span>
+      </div>
+      <dl className="flex flex-col">
+        {rows.map((row) => (
+          <div key={row.label} className="flex justify-between gap-4 border-t border-divider py-3 text-sm">
+            <dt className="shrink-0 text-muted">{row.label}</dt>
+            <dd className="pdx-num min-w-0 text-right font-semibold">{row.value}</dd>
+          </div>
+        ))}
+      </dl>
+    </section>
+  );
+}
+
+function PlatformMixCard({ recap }: { recap: RecapResponse }) {
+  const total = recap.platformTotals.reduce((sum, item) => sum + item.totalSeconds, 0);
+  const platforms = [...recap.platformTotals]
+    .sort((a, b) => b.totalSeconds - a.totalSeconds)
+    .map((item) => ({ ...item, color: platformColor(item.platformKey, item.platformName) }));
+
+  return (
+    <section className="pdx-card flex flex-col gap-6">
+      <CardHeading kicker="Platform mix" title="Share of playtime" actions={<SideNote>{rangeLabel(recap)}</SideNote>} />
+      {platforms.length === 0 ? (
+        <p className="pdx-dashed">No platform data available yet.</p>
+      ) : (
+        <>
+          <StackedBar
+            height={14}
+            segments={platforms.map((item) => ({
+              key: item.platformKey || item.platformName,
+              label: item.platformName,
+              value: item.totalSeconds,
+              color: item.color,
+            }))}
+          />
+          <div className="grid gap-3 [grid-template-columns:repeat(auto-fit,minmax(min(200px,100%),1fr))]">
+            {platforms.map((item, index) => (
+              <div
+                key={`${item.platformKey}-${index}`}
+                className="flex min-w-0 flex-col gap-1.5 rounded-[22px] border border-[color:var(--tile-border)] bg-tile px-[22px] py-5"
+              >
+                <div className="flex min-w-0 items-center gap-2 text-sm font-medium">
+                  <Dot color={item.color} size={10} />
+                  <span className="truncate">{item.platformName}</span>
+                </div>
+                <p className="pdx-num text-[32px] font-semibold tracking-[-0.02em]">
+                  {roundPercent(total > 0 ? (item.totalSeconds / total) * 100 : 0)}%
+                </p>
+                <p className="pdx-num text-[13px] text-muted">
+                  {formatHours(item.totalSeconds, 1)} · {count(item.sessionCount)} sessions
+                </p>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+    </section>
+  );
+}
+
+const LibraryColumns = "grid grid-cols-[26px_44px_minmax(0,2.4fr)_90px_100px_minmax(0,1.4fr)] items-center gap-4";
+
+function LibraryCard({ recap, onOpenGame }: { recap: RecapResponse; onOpenGame: (gameId: string) => void }) {
+  const binged = recap.mostBingedGame;
+  const bySessions = recap.topGameBySessions;
+  const chips: LabeledValue[] = [
+    { label: "Unique games", value: count(recap.uniqueGames) },
+    { label: "New games tried", value: count(recap.newGamesTried) },
+    { label: "Abandoned", value: count(recap.abandonedGames) },
+    { label: "Return rate games", value: count(recap.returnRateGames) },
+    { label: "Top 3 share", value: `${roundPercent(recap.timeOnTop3Percent)}%` },
+    { label: "Most binged", value: binged ? `${binged.title} · ${count(binged.sessionCount)}` : "—" },
+    { label: "Top by sessions", value: bySessions ? `${bySessions.title} · ${count(bySessions.sessionCount)}` : "—" },
+  ];
+  const maxSeconds = Math.max(0, ...recap.gamesTable.map((game) => game.totalSeconds));
+
+  return (
+    <section className="pdx-card flex flex-col gap-6">
+      <CardHeading kicker="Full library" title="Summed playtime by game" />
+      <div className="flex flex-wrap gap-2.5">
+        {chips.map((chip) => (
+          <div
+            key={chip.label}
+            className="max-w-full truncate rounded-full border border-[color:var(--tile-border)] bg-tile px-4 py-2.5 text-[13px]"
+          >
+            <span className="text-muted">{chip.label}</span> <b className="pdx-num font-semibold">{chip.value}</b>
+          </div>
+        ))}
+      </div>
+      {recap.gamesTable.length === 0 ? (
+        <p className="pdx-dashed">No games logged yet.</p>
+      ) : (
+        <div className="max-h-[640px] overflow-auto">
+          <div role="table" aria-label="Playtime by game" className="flex min-w-[620px] flex-col">
+            <div role="row" className={`${LibraryColumns} px-3.5 pb-2.5 text-[11px] font-medium tracking-[0.2em] text-muted`}>
+              <span role="columnheader">#</span>
+              <span role="columnheader" aria-label="Cover"></span>
+              <span role="columnheader">GAME</span>
+              <span role="columnheader" className="text-right">
+                SESSIONS
+              </span>
+              <span role="columnheader" className="text-right">
+                TIME
+              </span>
+              <span role="columnheader">SHARE</span>
+            </div>
+            {recap.gamesTable.map((game, index) => (
+              <div key={index} role="row" className={`pdx-row pdx-num ${LibraryColumns} px-3.5 py-2`}>
+                <span role="cell" className="text-[13px] text-faint">
+                  {pad2(index + 1)}
+                </span>
+                <span role="cell">
+                  <Cover title={game.title} src={game.capsuleUrl} className="h-11 w-11 rounded-xl" initialClassName="text-[15px]" />
+                </span>
+                <div role="cell" className="min-w-0">
+                  <button
+                    type="button"
+                    onClick={() => onOpenGame(game.gameId)}
+                    title={game.title}
+                    className="block w-full truncate text-left text-[15px] font-medium transition hover:text-accent"
+                  >
+                    {game.title}
+                  </button>
+                  {game.isAbandoned && <p className="text-xs text-muted">abandoned</p>}
+                </div>
+                <span role="cell" className="text-right text-sm text-ink-2">
+                  {count(game.sessionCount)}
+                </span>
+                <span role="cell" className="text-right text-sm font-semibold text-accent">
+                  {formatHours(game.totalSeconds, 1)}
+                </span>
+                <span role="cell">
+                  <ShareBar pct={maxSeconds > 0 ? (game.totalSeconds / maxSeconds) * 100 : 0} />
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </section>
+  );
 }

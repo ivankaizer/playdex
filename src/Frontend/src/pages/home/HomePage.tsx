@@ -1,11 +1,11 @@
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { AppFooter } from "@/components/AppFooter";
-import { Background } from "@/components/Background";
-import { StatsRecapSection, type RecapPlatformItem, type RecapSummaryItem, type RecapTopGame } from "@/components/StatsRecapSection";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { BarChart, CardHeading, Cover, Donut, LegendRow, StatTile, type BarDatum, type DonutSegment } from "@/components/ui";
 import { apiRequest, errorMessage } from "@/lib/api";
 import { authSession, type LoginRequest, type LoginResponse, type MeResponse } from "@/lib/auth";
 import { logout } from "@/lib/navigation";
+import { platformColor } from "@/lib/platforms";
 import { useTheme } from "@/lib/theme";
 import {
   beginLogin,
@@ -20,52 +20,108 @@ import {
   type HomeState,
 } from "./homeState";
 
-const previewPlatformColors: readonly string[] = ["#34d399", "#38bdf8", "#f59e0b", "#a78bfa"];
-
-const previewRecapSummary: readonly RecapSummaryItem[] = [
+/*
+ * Landing-page preview of the recap. These are the page's illustrative sample
+ * figures (shown under a "Preview" kicker), not the visitor's data.
+ */
+const previewKpis: ReadonlyArray<{ label: string; value: string }> = [
   { label: "Hours played", value: "124.8h" },
   { label: "Sessions", value: "93" },
   { label: "Top title", value: "Hades II" },
 ];
 
-const previewRecapPlatforms: readonly RecapPlatformItem[] = [
+const previewTotalHours = "124.8h";
+
+const previewPlatforms: ReadonlyArray<{ key: string; label: string; value: number; hours: string }> = [
   { key: "steam", label: "Steam", value: 52, hours: "64.9h" },
   { key: "ps5", label: "PlayStation", value: 30, hours: "37.4h" },
   { key: "xbox-series-xs", label: "Xbox", value: 12, hours: "14.9h" },
   { key: "switch-1", label: "Switch", value: 6, hours: "7.6h" },
 ];
 
-const previewRecapTopGames: readonly RecapTopGame[] = [
-  { gameId: "hades-2", title: "Hades II", hours: "26.4h" },
-  { gameId: "bg3", title: "Baldur's Gate 3", hours: "18.2h" },
-  { gameId: "re4", title: "Resident Evil 4", hours: "14.7h" },
-  { gameId: "helldivers-2", title: "Helldivers 2", hours: "12.6h" },
-  { gameId: "fh5", title: "Forza Horizon 5", hours: "10.8h" },
+const previewTopGames: ReadonlyArray<{ gameId: string; title: string; hours: number }> = [
+  { gameId: "hades-2", title: "Hades II", hours: 26.4 },
+  { gameId: "bg3", title: "Baldur's Gate 3", hours: 18.2 },
+  { gameId: "re4", title: "Resident Evil 4", hours: 14.7 },
+  { gameId: "helldivers-2", title: "Helldivers 2", hours: 12.6 },
+  { gameId: "fh5", title: "Forza Horizon 5", hours: 10.8 },
 ];
 
-interface PreviewCard {
-  gameId: string;
-  title: string;
-  hours: string;
-  artClass: string;
-}
-
-const previewRecapCards: readonly PreviewCard[] = [
-  { gameId: "hades-2", title: "Hades II", hours: "26.4h", artClass: "bg-gradient-to-br from-rose-400/60 via-fuchsia-500/40 to-slate-950/70" },
-  { gameId: "bg3", title: "Baldur's Gate 3", hours: "18.2h", artClass: "bg-gradient-to-br from-amber-300/60 via-orange-500/40 to-slate-950/70" },
-  { gameId: "re4", title: "Resident Evil 4", hours: "14.7h", artClass: "bg-gradient-to-br from-emerald-300/60 via-teal-500/40 to-slate-950/70" },
-  { gameId: "helldivers-2", title: "Helldivers 2", hours: "12.6h", artClass: "bg-gradient-to-br from-sky-300/60 via-cyan-500/40 to-slate-950/70" },
-  { gameId: "fh5", title: "Forza Horizon 5", hours: "10.8h", artClass: "bg-gradient-to-br from-violet-300/60 via-indigo-500/40 to-slate-950/70" },
+const coverFallbacks: readonly string[] = [
+  "linear-gradient(160deg,#f5a3b5,#e5a8f0 45%,#4a4f63)",
+  "linear-gradient(160deg,#f5d98f,#f2bfa4 45%,#4a4f63)",
+  "linear-gradient(160deg,#9fe8cf,#a6dcd8 45%,#4a4f63)",
+  "linear-gradient(160deg,#a6dcf5,#a3d8ea 45%,#4a4f63)",
+  "linear-gradient(160deg,#d3c8f7,#b5b8f2 45%,#4a4f63)",
 ];
 
-const inputClass =
-  "mt-2 w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white/90 dark:bg-slate-950/80 px-4 py-3 text-sm text-slate-900 dark:text-white outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/30";
+const platformChips: ReadonlyArray<{ key: string; name: string; mark: string }> = [
+  { key: "steam", name: "Steam", mark: "S" },
+  { key: "psn", name: "PlayStation", mark: "PS" },
+  { key: "xbox", name: "Xbox", mark: "X" },
+  { key: "switch", name: "Switch", mark: "NS" },
+];
 
-const featureCardClass =
-  "flex items-center gap-3 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/70 dark:bg-slate-950/60 p-4 text-sm text-slate-700 dark:text-slate-200";
+const donutSegments: readonly DonutSegment[] = previewPlatforms.map((platform) => ({
+  key: platform.key,
+  label: platform.label,
+  value: platform.value,
+  color: platformColor(platform.key, platform.label),
+}));
 
-const featureIconClass =
-  "flex h-9 w-9 items-center justify-center rounded-full bg-emerald-400/10 text-emerald-700 dark:text-emerald-300";
+const peakGame = previewTopGames.reduce((best, game) => (game.hours > best.hours ? game : best), previewTopGames[0]);
+
+const topGameBars: readonly BarDatum[] = previewTopGames.map((game) => ({
+  key: game.gameId,
+  value: game.hours,
+  label: game.title,
+  title: `${game.title} · ${game.hours}h`,
+  highlight: game.gameId === peakGame.gameId,
+}));
+
+const iconProps = {
+  "aria-hidden": true,
+  viewBox: "0 0 24 24",
+  className: "h-6 w-6",
+  fill: "none",
+  stroke: "currentColor",
+  strokeWidth: 1.8,
+  strokeLinecap: "round",
+  strokeLinejoin: "round",
+} as const;
+
+const features: ReadonlyArray<{ title: string; body: string; icon: ReactNode }> = [
+  {
+    title: "Track Steam and PSN playtime",
+    body: "Link your accounts once and every session lands in one timeline.",
+    icon: (
+      <svg {...iconProps}>
+        <circle cx="12" cy="12" r="9"></circle>
+        <path d="M12 7v5l3 2"></path>
+      </svg>
+    ),
+  },
+  {
+    title: "Automatic polling with scheduled refresh",
+    body: "Playdex checks your libraries in the background, so nothing needs logging by hand.",
+    icon: (
+      <svg {...iconProps}>
+        <path d="M21 12a9 9 0 1 1-2.64-6.36"></path>
+        <path d="M21 3v6h-6"></path>
+      </svg>
+    ),
+  },
+  {
+    title: "Fast search across your library",
+    body: "Find any game, session or platform in a keystroke.",
+    icon: (
+      <svg {...iconProps}>
+        <circle cx="11" cy="11" r="7"></circle>
+        <path d="m20 20-3.5-3.5"></path>
+      </svg>
+    ),
+  },
+];
 
 export function HomePage() {
   const { theme, toggleTheme } = useTheme();
@@ -78,6 +134,7 @@ export function HomePage() {
   const [password, setPassword] = useState("");
   const lifetime = useRef<AbortController | null>(null);
   const shouldLoadProfileRef = useRef(state.isProfileLoading);
+  const emailInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -123,188 +180,240 @@ export function HomePage() {
   };
 
   const openDashboard = () => window.location.assign("/dashboard");
+  const focusLogin = () => emailInputRef.current?.focus();
+  const label = profileLabel(state);
+  const initial = state.sessionEmail.trim().charAt(0).toUpperCase() || "?";
 
   return (
-    <main className="relative min-h-screen overflow-hidden bg-slate-200 dark:bg-slate-950 text-slate-900 dark:text-slate-100">
-      <Background />
-
-      <div className="relative mx-auto w-full max-w-6xl px-4 py-12 sm:px-6 sm:py-16">
-        <div className="flex justify-end mb-6">
+    <main className="pdx-page relative px-4 pb-10 pt-6 sm:px-8 sm:pt-8">
+      <div className="relative mx-auto flex w-full max-w-[1180px] flex-col gap-7">
+        <header className="flex flex-wrap items-center gap-4 rounded-[28px] border border-[color:var(--card-border)] bg-surface/60 py-3.5 pl-7 pr-4 backdrop-blur-[16px] sm:rounded-full">
+          <div className="mr-auto flex items-center gap-2.5">
+            <span className="h-2.5 w-2.5 rounded-full bg-bar shadow-[0_0_0_4px_rgba(47,194,142,.18)]"></span>
+            <span className="text-xs font-semibold uppercase tracking-[0.32em] text-accent">Playdex</span>
+          </div>
           <ThemeToggle theme={theme} onToggle={toggleTheme} />
-        </div>
-        <div className="grid gap-12 lg:grid-cols-[1.1fr_0.9fr]">
-          <section className="flex flex-col justify-center gap-8">
-            <div className="flex items-center gap-3">
-              <span className="inline-flex h-3 w-3 rounded-full bg-emerald-400 shadow-[0_0_14px_rgba(52,211,153,0.8)]"></span>
-              <p className="text-xs font-semibold uppercase tracking-[0.5em] text-emerald-700 dark:text-emerald-300">Playdex</p>
-            </div>
+          {isLoggedIn ? (
+            <>
+              <span className="min-w-0 truncate text-[13px] text-muted">{label}</span>
+              <button type="button" onClick={logout} className="pdx-btn-danger !h-[38px] !px-4 !text-[13px]">
+                Log out
+              </button>
+              <button type="button" onClick={openDashboard} className="pdx-btn-primary !h-[38px] !px-[18px] !text-[13px]">
+                Open dashboard →
+              </button>
+            </>
+          ) : (
+            <button type="button" onClick={focusLogin} className="pdx-btn-outline !h-[38px] !px-[18px] !text-[13px] !text-ink">
+              Sign in
+            </button>
+          )}
+        </header>
 
-            <div className="space-y-4">
-              <h1 className="text-balance text-4xl font-semibold leading-tight text-slate-900 dark:text-white sm:text-5xl">
-                Your cross-platform playtime, perfectly organized.
-              </h1>
-              <p className="max-w-xl text-lg text-slate-600 dark:text-slate-300">
-                Connect your gaming accounts and keep a living history of your sessions, streaks, and favorite titles across
-                platforms.
-              </p>
-            </div>
-          </section>
+        <section className="grid items-center gap-12 px-2 pb-6 pt-6 sm:pt-10 [grid-template-columns:repeat(auto-fit,minmax(min(380px,100%),1fr))]">
+          <div className="flex min-w-0 flex-col gap-7">
+            <h1 className="m-0 text-balance text-[44px] font-semibold leading-[1.02] tracking-[-0.035em] sm:text-[68px]">
+              Your cross-platform playtime, <span className="text-accent">perfectly organized.</span>
+            </h1>
+            <p className="m-0 max-w-[34em] text-pretty text-[17px] leading-[1.55] text-ink-2 sm:text-[19px]">
+              Connect your gaming accounts and keep a living history of your sessions, streaks, and favorite titles across
+              platforms.
+            </p>
+            <ul aria-label="Supported platforms" className="m-0 flex list-none flex-wrap gap-2 p-0">
+              {platformChips.map((chip) => (
+                <li
+                  key={chip.key}
+                  className="flex h-9 items-center gap-2 rounded-full border border-[color:var(--card-border)] bg-surface/75 pl-1.5 pr-3.5 text-[13px] font-medium"
+                >
+                  <span
+                    aria-hidden="true"
+                    className="grid h-6 w-6 place-items-center rounded-full text-[10px] font-bold text-white"
+                    style={{ backgroundColor: platformColor(chip.key, chip.name) }}
+                  >
+                    {chip.mark}
+                  </span>
+                  {chip.name}
+                </li>
+              ))}
+            </ul>
+          </div>
 
-          <section className="flex items-center justify-center">
-            <div className="w-full max-w-md rounded-3xl border border-slate-200 dark:border-slate-800 bg-white/90 dark:bg-slate-900/70 p-6 shadow-[0_25px_80px_rgba(15,23,42,0.65)] sm:p-8">
+          <div className="min-w-0">
+            <div className="flex flex-col gap-5 rounded-card border border-[color:var(--card-border)] bg-surface/85 p-6 shadow-pop backdrop-blur-[16px] sm:p-9">
               {isLoggedIn ? (
-                <div className="space-y-5 text-center">
-                  <p className="text-xs font-semibold uppercase tracking-[0.4em] text-emerald-700 dark:text-emerald-300">
-                    Signed in
-                  </p>
-                  <div className="space-y-2">
-                    <h2 className="text-2xl font-semibold text-slate-900 dark:text-white">Welcome back</h2>
-                    <p className="text-sm text-slate-600 dark:text-slate-300">
-                      Logged in as{" "}
-                      <span className="font-semibold text-emerald-700 dark:text-emerald-200">{profileLabel(state)}</span>
-                    </p>
+                <>
+                  <div className="flex items-center gap-3.5">
+                    <div
+                      aria-hidden="true"
+                      className="grid h-[52px] w-[52px] shrink-0 place-items-center rounded-full bg-mint text-xl font-semibold text-accent"
+                    >
+                      {initial}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="pdx-kicker">Signed in</p>
+                      <h2 className="mt-0.5 text-2xl font-semibold">Welcome back</h2>
+                    </div>
                   </div>
-                  <button
-                    type="button"
-                    onClick={openDashboard}
-                    className="w-full rounded-xl border border-emerald-400/60 bg-emerald-400/10 px-6 py-3 text-sm font-semibold uppercase tracking-[0.3em] text-emerald-700 dark:text-emerald-100 transition hover:border-emerald-300 hover:text-emerald-50"
-                  >
-                    Open dashboard
+                  <p className="text-sm text-muted">
+                    Logged in as <span className="break-all font-semibold text-accent">{label}</span>
+                  </p>
+                  <button type="button" onClick={openDashboard} className="pdx-btn-primary !h-[52px] w-full !text-[15px]">
+                    Open dashboard →
                   </button>
-                  <button
-                    type="button"
-                    onClick={logout}
-                    className="w-full rounded-xl border border-rose-500/60 px-6 py-3 text-sm font-semibold uppercase tracking-[0.3em] text-rose-700 dark:text-rose-200 transition hover:border-rose-400 hover:text-rose-700 dark:hover:text-rose-100"
-                  >
-                    Logout
-                  </button>
-                </div>
+                </>
               ) : (
-                <form className="space-y-5" onSubmit={(event) => void handleSubmit(event)}>
-                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-200">
-                    Email address
+                <form aria-label="Sign in" className="flex flex-col gap-5" onSubmit={(event) => void handleSubmit(event)}>
+                  <div>
+                    <p className="pdx-kicker">Sign in</p>
+                    <h2 className="mt-1 text-2xl font-semibold">Pick up where you left off</h2>
+                  </div>
+                  <label className="flex flex-col gap-1.5 text-xs font-medium text-muted">
+                    Email
                     <input
+                      ref={emailInputRef}
                       type="email"
+                      autoComplete="email"
                       placeholder="you@example.com"
                       value={email}
                       onChange={(event) => setEmail(event.target.value)}
-                      className={inputClass}
+                      className="pdx-input !h-12 !px-5 !text-[15px]"
                     />
                   </label>
-                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-200">
+                  <label className="flex flex-col gap-1.5 text-xs font-medium text-muted">
                     Password
                     <input
                       type="password"
+                      autoComplete="current-password"
                       placeholder="••••••••"
                       value={password}
                       onChange={(event) => setPassword(event.target.value)}
-                      className={inputClass}
+                      className="pdx-input !h-12 !px-5 !text-[15px]"
                     />
                   </label>
-
-                  <button
-                    type="submit"
-                    disabled={isLoginDisabled(state)}
-                    className="w-full rounded-xl bg-emerald-400 px-6 py-3 text-sm font-semibold text-slate-900 transition hover:bg-emerald-300 disabled:cursor-not-allowed disabled:bg-emerald-300/60"
-                  >
-                    {state.loginStatus === "loading" ? "Signing in..." : "Log in"}
+                  <button type="submit" disabled={isLoginDisabled(state)} className="pdx-btn-primary !h-[52px] w-full !text-[15px]">
+                    {state.loginStatus === "loading" ? "Signing in..." : "Sign in"}
                   </button>
                 </form>
               )}
 
-              <div className="mt-6 text-center text-xs text-slate-500 dark:text-slate-400">
+              <div className="text-[13px]">
                 {isLoggedIn ? (
-                  <p className="text-emerald-700 dark:text-emerald-300">Session active.</p>
+                  <p className="flex items-center gap-2 text-accent">
+                    <span aria-hidden="true" className="h-2 w-2 rounded-full bg-bar"></span>
+                    Session active.
+                  </p>
                 ) : state.error.length > 0 ? (
-                  <p className="text-rose-700 dark:text-rose-300">{state.error}</p>
+                  <p role="alert" className="text-danger">
+                    {state.error}
+                  </p>
                 ) : state.loginStatus === "success" ? (
-                  <p className="text-emerald-700 dark:text-emerald-300">Signed in successfully.</p>
+                  <p className="text-accent">Signed in successfully.</p>
                 ) : (
-                  <p>Need access? Ask an admin to invite you.</p>
+                  <p className="text-muted">Need access? Ask an admin to invite you.</p>
                 )}
               </div>
             </div>
-          </section>
-        </div>
+          </div>
+        </section>
 
-        <section className="mt-12 space-y-6">
-          <div>
-            <h2 className="text-2xl font-semibold text-slate-900 dark:text-white">Everything in one place</h2>
-            <p className="mt-3 text-sm text-slate-600 dark:text-slate-300">
+        <section className="flex flex-col gap-5">
+          <div className="px-2">
+            <p className="pdx-kicker">Features</p>
+            <h2 className="mb-1.5 mt-2 text-[32px] font-semibold tracking-[-0.01em]">Everything in one place</h2>
+            <p className="m-0 text-[15px] text-muted">
               Keep your play history consistent, discover trends, and set goals with a dashboard built for long-term tracking.
             </p>
           </div>
-
-          <div className="grid gap-3 sm:grid-cols-3">
-            <div className={featureCardClass}>
-              <span className={featureIconClass}>
-                <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.5">
-                  <circle cx="12" cy="12" r="8"></circle>
-                  <path strokeLinecap="round" d="M12 8v4l3 2"></path>
-                </svg>
-              </span>
-              <span>Track Steam and PSN playtime</span>
-            </div>
-            <div className={featureCardClass}>
-              <span className={featureIconClass}>
-                <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.5">
-                  <path strokeLinecap="round" d="M20 8v-3m0 0h-3m3 0-3.5 3.5"></path>
-                  <path strokeLinecap="round" d="M4 16v3m0 0h3m-3 0 3.5-3.5"></path>
-                  <path strokeLinecap="round" d="M6.5 6.5a8 8 0 0 1 11 0M6.5 17.5a8 8 0 0 0 11 0"></path>
-                </svg>
-              </span>
-              <span>Automatic polling with scheduled refresh</span>
-            </div>
-            <div className={featureCardClass}>
-              <span className={featureIconClass}>
-                <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.5">
-                  <circle cx="11" cy="11" r="6.5"></circle>
-                  <path strokeLinecap="round" d="m16 16 4 4"></path>
-                </svg>
-              </span>
-              <span>Fast search across your library</span>
-            </div>
+          <div className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(min(260px,100%),1fr))]">
+            {features.map((feature) => (
+              <div key={feature.title} className="pdx-card flex flex-col gap-4 !rounded-[28px] !p-7">
+                <span className="grid h-[52px] w-[52px] place-items-center rounded-2xl bg-mint text-accent">{feature.icon}</span>
+                <h3 className="m-0 text-lg font-semibold leading-[1.3]">{feature.title}</h3>
+                <p className="m-0 text-sm leading-normal text-muted">{feature.body}</p>
+              </div>
+            ))}
           </div>
+        </section>
 
-          <StatsRecapSection
-            title="Sessions recap"
-            subtitle="Preview"
-            summary={previewRecapSummary}
-            platforms={previewRecapPlatforms}
-            topGames={previewRecapTopGames}
-            colors={previewPlatformColors}
+        <section className="pdx-card flex flex-col gap-7">
+          <CardHeading
+            kicker="Sessions recap · Preview"
+            title="A month at a glance"
+            actions={
+              <span className="rounded-full bg-tile px-3.5 py-1.5 text-xs font-semibold text-ink-2">Sample data</span>
+            }
           />
-
-          <div className="rounded-3xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/60 p-5 sm:p-6">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-700 dark:text-emerald-300">
-                  Most popular
-                </p>
-                <h3 className="mt-2 text-xl font-semibold text-slate-900 dark:text-white">Top 5 games from recap</h3>
-              </div>
-              <div className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-500 dark:text-slate-400">
-                Jan 1 - Dec 31
+          <div className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(min(200px,100%),1fr))]">
+            {previewKpis.map((kpi) => (
+              <StatTile key={kpi.label} label={kpi.label} value={kpi.value} />
+            ))}
+          </div>
+          <div className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(min(320px,100%),1fr))]">
+            <div className="pdx-tile flex flex-col gap-6 !p-7">
+              <p className="pdx-label">Platform distribution</p>
+              <div className="flex flex-wrap items-center gap-8">
+                <Donut
+                  segments={donutSegments}
+                  center={
+                    <div className="flex flex-col items-center gap-0.5 leading-[1.1]">
+                      <span className="pdx-num text-xl font-semibold">{previewTotalHours}</span>
+                      <span className="text-xs text-muted">total</span>
+                    </div>
+                  }
+                />
+                <div className="flex min-w-0 flex-[1_1_140px] flex-col gap-3.5">
+                  {previewPlatforms.map((platform, index) => (
+                    <LegendRow
+                      key={platform.key}
+                      color={donutSegments[index].color}
+                      name={platform.label}
+                      pct={`${platform.value}%`}
+                      detail={platform.hours}
+                    />
+                  ))}
+                </div>
               </div>
             </div>
-            <div className="mt-5 grid gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
-              {previewRecapCards.map((game) => (
-                <div key={game.gameId} className="group text-left">
-                  <div className="w-full">
-                    <div className="overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-200/50 dark:bg-slate-950/50">
-                      <div className={`aspect-[2/3] w-full ${game.artClass}`}></div>
-                    </div>
-                    <div className="mt-3 grid grid-cols-[1fr_auto] items-start gap-3 text-sm">
-                      <span className="min-w-0 line-clamp-2 font-semibold leading-snug text-slate-900 dark:text-white">
-                        {game.title}
-                      </span>
-                      <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-200">{game.hours}</span>
-                    </div>
-                  </div>
-                </div>
-              ))}
+            <div className="pdx-tile flex flex-col gap-3.5 !p-7">
+              <div className="flex flex-wrap items-baseline justify-between gap-2">
+                <span className="pdx-label">Hours by title</span>
+                <span className="pdx-num text-[13px] text-muted">
+                  Peak {peakGame.title} · {peakGame.hours}h
+                </span>
+              </div>
+              <BarChart data={topGameBars} height={150} gap={10} radius={6} ariaLabel="Hours by title" />
             </div>
           </div>
+        </section>
+
+        <section className="pdx-card flex flex-col gap-6">
+          <CardHeading
+            kicker="Most popular"
+            title="Top 5 games from recap"
+            actions={<span className="text-xs font-semibold uppercase tracking-[0.2em] text-muted">Jan 1 – Dec 31</span>}
+          />
+          <ol className="m-0 grid list-none gap-4 p-0 [grid-template-columns:repeat(auto-fit,minmax(min(120px,100%),1fr))]">
+            {previewTopGames.map((game, index) => (
+              <li key={game.gameId} className="flex min-w-0 flex-col gap-3">
+                <div className="relative">
+                  <Cover
+                    title={game.title}
+                    className="aspect-[2/3] w-full rounded-[22px] shadow-cover"
+                    style={{ background: coverFallbacks[index % coverFallbacks.length] }}
+                    initialClassName="text-[40px]"
+                  />
+                  <span className="absolute left-2.5 top-2.5 grid h-8 min-w-8 place-items-center rounded-full bg-white/90 px-2.5 text-[13px] font-bold text-pill-ink">
+                    <span className="sr-only">Rank </span>
+                    {index + 1}
+                  </span>
+                </div>
+                <div className="flex items-baseline justify-between gap-2">
+                  <span className="min-w-0 text-[15px] font-medium leading-[1.3]">{game.title}</span>
+                  <span className="pdx-num text-sm font-semibold text-accent">{game.hours}h</span>
+                </div>
+              </li>
+            ))}
+          </ol>
         </section>
 
         <AppFooter />

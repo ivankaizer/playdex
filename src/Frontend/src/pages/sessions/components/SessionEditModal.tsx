@@ -10,6 +10,8 @@ interface SessionEditModalProps {
   onCancel?: () => void;
 }
 
+const fieldLabel = "flex flex-col gap-1.5 text-xs font-medium text-muted";
+
 export function SessionEditModal({
   gameTitle,
   startedAt,
@@ -22,18 +24,26 @@ export function SessionEditModal({
   onCancel,
 }: SessionEditModalProps) {
   return (
-    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/65 p-4">
+    <div
+      className="pdx-modal-backdrop fixed inset-0 z-[70] grid place-items-center p-6"
+      onClick={(event) => {
+        if (event.target === event.currentTarget && !isSaving) onCancel?.();
+      }}
+      onKeyDown={(event) => {
+        if (event.key === "Escape" && !isSaving) onCancel?.();
+      }}
+    >
       <section
         role="dialog"
         aria-modal="true"
         aria-labelledby="session-edit-title"
-        className="w-full max-w-lg rounded-3xl border border-slate-200 bg-white p-5 shadow-2xl dark:border-slate-700 dark:bg-slate-900 sm:p-6"
+        className="pdx-modal flex w-[min(460px,100%)] flex-col gap-4 text-ink"
       >
         <div className="flex items-start justify-between gap-4">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-700 dark:text-emerald-300">Edit session</p>
-            <h2 id="session-edit-title" className="mt-2 text-xl font-semibold text-slate-900 dark:text-white">
-              {gameTitle}
+          <div className="min-w-0">
+            <p className="pdx-kicker">Session</p>
+            <h2 id="session-edit-title" className="mt-2 text-[22px] font-semibold leading-tight">
+              Edit session
             </h2>
           </div>
           <button
@@ -41,65 +51,63 @@ export function SessionEditModal({
             aria-label="Close session editor"
             disabled={isSaving}
             onClick={onCancel}
-            className="rounded-full border border-slate-300 px-3 py-1 text-sm text-slate-600 transition hover:border-emerald-400 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:text-slate-300"
+            className="pdx-icon-btn text-base disabled:cursor-not-allowed disabled:opacity-60"
           >
             ×
           </button>
         </div>
 
+        <div className={fieldLabel}>
+          Game
+          <p className="flex h-11 items-center truncate rounded-full border border-line bg-tile px-[18px] text-sm font-medium text-ink">
+            {gameTitle}
+          </p>
+        </div>
+
         <form
-          className="mt-6 space-y-4"
+          className="flex flex-col gap-4"
           onSubmit={(event) => {
             event.preventDefault();
             onSave?.();
           }}
         >
-          <label className="block text-xs font-medium text-slate-600 dark:text-slate-300">
-            Started
-            <input
-              type="datetime-local"
-              step="1"
-              value={startedAt}
-              disabled={isSaving}
-              onChange={(event) => onStartedAtChanged?.(event.currentTarget.value)}
-              className="mt-2 w-full rounded-xl border border-slate-300 bg-white/90 px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/30 disabled:opacity-60 dark:border-slate-700 dark:bg-slate-950/80 dark:text-white"
-            />
-          </label>
-          <label className="block text-xs font-medium text-slate-600 dark:text-slate-300">
-            Ended
-            <input
-              type="datetime-local"
-              step="1"
-              value={endedAt}
-              disabled={isSaving}
-              onChange={(event) => onEndedAtChanged?.(event.currentTarget.value)}
-              className="mt-2 w-full rounded-xl border border-slate-300 bg-white/90 px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/30 disabled:opacity-60 dark:border-slate-700 dark:bg-slate-950/80 dark:text-white"
-            />
-          </label>
+          <div className="flex flex-col gap-4">
+            <label className={fieldLabel}>
+              Started
+              <input
+                type="datetime-local"
+                step="1"
+                value={startedAt}
+                disabled={isSaving}
+                onChange={(event) => onStartedAtChanged?.(event.currentTarget.value)}
+                className="pdx-input !h-11 !px-3.5"
+              />
+            </label>
+            <label className={fieldLabel}>
+              Ended
+              <input
+                type="datetime-local"
+                step="1"
+                value={endedAt}
+                disabled={isSaving}
+                onChange={(event) => onEndedAtChanged?.(event.currentTarget.value)}
+                className="pdx-input !h-11 !px-3.5"
+              />
+            </label>
+          </div>
 
           {error.length > 0 && (
-            <p role="alert" className="text-sm text-rose-700 dark:text-rose-300">
+            <p role="alert" className="text-sm text-danger">
               {error}
             </p>
           )}
 
-          <div className="flex justify-end gap-3 pt-2">
-            <button
-              type="button"
-              data-action="cancel"
-              disabled={isSaving}
-              onClick={onCancel}
-              className="rounded-full border border-slate-300 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-700 transition hover:border-emerald-400 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:text-slate-200"
-            >
+          <div className="mt-2 flex flex-wrap justify-end gap-2.5">
+            <button type="button" data-action="cancel" disabled={isSaving} onClick={onCancel} className="pdx-btn-outline !h-11">
               Cancel
             </button>
-            <button
-              type="submit"
-              data-action="save"
-              disabled={isSaving}
-              className="rounded-full bg-emerald-400 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-950 transition hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {isSaving ? "Saving..." : "Save changes"}
+            <button type="submit" data-action="save" disabled={isSaving} className="pdx-btn-primary !h-11 !px-[22px]">
+              {isSaving ? "Saving..." : "Save session"}
             </button>
           </div>
         </form>

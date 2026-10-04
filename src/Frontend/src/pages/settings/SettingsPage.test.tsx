@@ -99,9 +99,16 @@ describe("SettingsPage", () => {
     expect(screen.queryByText("No integrations connected yet. Add one to start syncing playtime.")).toBeNull();
 
     expect(await screen.findByText("steam-account")).toBeInTheDocument();
-    expect(await screen.findByRole("button", { name: "Save changes" })).toBeEnabled();
+    // Save stays disabled until a field changes.
+    expect(await screen.findByRole("button", { name: "Save changes" })).toBeDisabled();
     expect(screen.getByRole("spinbutton")).toHaveValue(5);
-    expect(await screen.findByText("No game connections yet.")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Increase minimum minutes" }));
+    expect(screen.getByRole("spinbutton")).toHaveValue(6);
+    expect(screen.getByRole("button", { name: "Save changes" })).toBeEnabled();
+    fireEvent.click(screen.getByRole("button", { name: "Discard" }));
+    expect(screen.getByRole("spinbutton")).toHaveValue(5);
+    expect(screen.getByRole("button", { name: "Save changes" })).toBeDisabled();
+    expect(await screen.findByText("No games connected yet. Pick two above to merge their playtime.")).toBeInTheDocument();
 
     const paths = apiRequest.mock.calls.map(([path]) => path as string);
     expect(paths.indexOf("/providers")).toBeLessThan(paths.indexOf("/settings"));
@@ -111,7 +118,7 @@ describe("SettingsPage", () => {
   it("scrolls the #game-connections section into view", async () => {
     routeApi();
     renderPage("/settings#game-connections");
-    await screen.findByText("No game connections yet.");
+    await screen.findByText("No games connected yet. Pick two above to merge their playtime.");
     const section = document.getElementById("game-connections")!;
     expect(section.scrollIntoView).toHaveBeenCalled();
     expect(vi.mocked(Element.prototype.scrollIntoView).mock.contexts).toContain(section);
@@ -141,10 +148,10 @@ describe("SettingsPage", () => {
     const search = deferred<unknown>();
     routeApi({ "GET /games/search": () => search.promise });
     renderPage();
-    await screen.findByText("No game connections yet.");
+    await screen.findByText("No games connected yet. Pick two above to merge their playtime.");
 
     const section = within(document.getElementById("game-connections")!);
-    const [primaryInput] = section.getAllByPlaceholderText("Search games");
+    const [primaryInput] = section.getAllByPlaceholderText("Search your library");
     fireEvent.change(primaryInput, { target: { value: "Hades" } });
     fireEvent.click(section.getAllByRole("button", { name: "Search" })[0]);
     expect(apiRequest).toHaveBeenCalledWith("/games/search?query=Hades", expect.anything());

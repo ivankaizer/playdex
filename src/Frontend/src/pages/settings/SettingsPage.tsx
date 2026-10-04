@@ -23,11 +23,9 @@ export function SettingsPage() {
 
   return (
     <AppLayout title="Settings">
-      <div className="mt-10 space-y-8">
-        <PreferencesSection preferences={preferences} />
-        <IntegrationsSection integrations={integrations} />
-        <MappingSection />
-      </div>
+      <PreferencesSection preferences={preferences} />
+      <IntegrationsSection integrations={integrations} />
+      <MappingSection />
     </AppLayout>
   );
 }

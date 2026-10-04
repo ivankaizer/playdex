@@ -1,6 +1,8 @@
 import type { ManualMappingSearchResult } from "@/models/manual";
 import {
+  clearGame,
   completeSearch,
+  formatMinutes,
   failSave,
   openSessionCreate,
   parseInvariantDouble,
@@ -11,6 +13,7 @@ import {
   setMode,
   setPlatform,
   setQuery,
+  submissionBlocker,
   tryBeginSave,
   tryBeginSearch,
   tryBuildSubmission,
@@ -127,6 +130,32 @@ describe("session create state", () => {
     expect(first).not.toBeNull();
     expect(tryBeginSave(first!)).toBeNull();
     expect(tryBeginSave(failSave(first!, "Failed."))).not.toBeNull();
+  });
+});
+
+describe("save readiness", () => {
+  it("reports the first missing field with the submission's own messages", () => {
+    let state = openSessionCreate("historical", new Date(2026, 9, 4));
+    expect(submissionBlocker(state)).toBe("Select a game.");
+    state = selectGame(state, savedGame);
+    expect(submissionBlocker(state)).toBe("Select a platform.");
+    state = setPlatform(state, "pc");
+    expect(submissionBlocker(state)).toBeNull();
+    expect(submissionBlocker(setMinutes(setHours(state, "0"), "0"))).toBe("Duration must be at least 1 minute.");
+    expect(submissionBlocker(setDate(state, ""))).toBe("Select a date.");
+    expect(submissionBlocker(setMode(selectGame(openSessionCreate("historical", new Date()), savedGame), "live"))).toBe("Select a platform.");
+  });
+
+  it("clearing the game keeps the platform", () => {
+    const state = clearGame(setPlatform(selectGame(openSessionCreate("historical", new Date()), savedGame), "pc"));
+    expect(state.selectedGame).toBeNull();
+    expect(state.platformKey).toBe("pc");
+  });
+
+  it("formats whole-minute durations", () => {
+    expect(formatMinutes(15)).toBe("15m");
+    expect(formatMinutes(60)).toBe("1h");
+    expect(formatMinutes(150)).toBe("2h 30m");
   });
 });
 

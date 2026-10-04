@@ -72,7 +72,8 @@ describe("RecapPage", () => {
     expect(screen.getByText("Jul 2026 · 3")).toBeInTheDocument();
     expect(screen.getByText("1.3")).toBeInTheDocument();
     expect(screen.getByText("abandoned")).toBeInTheDocument();
-    expect(screen.getAllByText("1h · 50%")[0]).toBeInTheDocument();
+    expect(screen.getByText("weekend · 1h")).toBeInTheDocument();
+    expect(screen.getByText("weekday · 1h")).toBeInTheDocument();
     await waitFor(() => expect(screen.queryByText("Loading recap...")).not.toBeInTheDocument());
   });
 });

@@ -1,7 +1,7 @@
+import { cx } from "@/lib/cx";
+import { platformColor } from "@/lib/platforms";
 import type { ProviderStatus } from "../models";
 import {
-  integrationActionButtonClass,
-  integrationStatusClass,
   isAnySessionPlatformSaving,
   isCredentialSaving,
   isEditingCredential,
@@ -19,6 +19,9 @@ interface IntegrationCardProps {
   integrations: Integrations;
 }
 
+const fieldLabelClass = "pdx-label flex min-w-0 flex-col gap-2";
+const fieldInputClass = "pdx-input !h-11 tracking-normal";
+
 export function IntegrationCard({ provider, integrations }: IntegrationCardProps) {
   const { state } = integrations;
   const presentation = presentProvider(provider);
@@ -27,78 +30,92 @@ export function IntegrationCard({ provider, integrations }: IntegrationCardProps
   const actionBlocked = isProviderActionBlocked(state, provider.id);
   const editing = isEditingCredential(state, provider.id);
   const credentialSaving = isCredentialSaving(state, provider.id);
+  const active = provider.status === "active";
+  const panelId = `integration-${provider.id}-manage`;
 
   return (
-    <article className="rounded-2xl border border-slate-200 bg-slate-100/60 p-4 dark:border-slate-800 dark:bg-slate-950/50 sm:p-5">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div className="flex min-w-0 items-center gap-3">
-          <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${presentation.color}`}>
-            <span className={`text-xs font-semibold uppercase ${presentation.accent}`}>{presentation.label}</span>
-          </div>
-          <div className="min-w-0">
-            <p className="text-sm font-semibold text-slate-900 dark:text-white">{presentation.name}</p>
-            <p className="truncate text-xs text-slate-500 dark:text-slate-400">{presentation.subtitle}</p>
-          </div>
+    <article className="rounded-tile border border-[var(--tile-border)] bg-tile">
+      <div className="grid grid-cols-[48px_minmax(0,1fr)_auto] items-center gap-x-4 gap-y-3 px-5 py-4 sm:grid-cols-[48px_minmax(0,1fr)_auto_auto]">
+        <div
+          aria-hidden="true"
+          className="grid h-12 w-12 place-items-center rounded-[14px] text-sm font-bold tracking-[0.04em] text-white"
+          style={{ background: platformColor(provider.platform, presentation.name) }}
+        >
+          {presentation.label}
         </div>
-        <div className="flex flex-wrap items-center gap-2 text-xs">
-          <span data-integration-status={provider.status} className={integrationStatusClass(provider)}>
-            {isUpdating ? "Updating..." : provider.status === "active" ? "Active" : "Paused"}
-          </span>
-          <button
-            type="button"
-            onClick={() => integrations.toggleCredentialEditor(provider)}
-            disabled={isAnySessionPlatformSaving(state) || mutationInProgress}
-            className="rounded-full border border-slate-300 px-3 py-2 font-semibold uppercase tracking-[0.2em] text-slate-700 transition hover:border-emerald-400/60 hover:text-emerald-700 dark:border-slate-700 dark:text-slate-200 dark:hover:text-emerald-100"
-          >
-            {editing ? "Close" : "Manage"}
-          </button>
+        <div className="min-w-0">
+          <p className="text-[15px] font-semibold">{presentation.name}</p>
+          <p className="pdx-num truncate text-[13px] text-muted">{presentation.subtitle}</p>
         </div>
+        <span
+          data-integration-status={provider.status}
+          className={cx(
+            "col-start-2 row-start-2 inline-flex items-center gap-1.5 justify-self-start rounded-full px-3 py-1.5 text-xs font-semibold sm:col-start-auto sm:row-start-auto",
+            active ? "bg-mint text-accent" : "bg-divider text-ink-3",
+          )}
+        >
+          <span
+            aria-hidden="true"
+            className={cx("h-[7px] w-[7px] rounded-full", active ? "bg-brand" : "bg-faint")}
+          ></span>
+          {isUpdating ? "Updating..." : active ? "Active" : "Paused"}
+        </span>
+        <button
+          type="button"
+          aria-expanded={editing}
+          aria-controls={editing ? panelId : undefined}
+          onClick={() => integrations.toggleCredentialEditor(provider)}
+          disabled={isAnySessionPlatformSaving(state) || mutationInProgress}
+          className="pdx-btn-outline !h-9 !px-4 !text-[13px]"
+        >
+          {editing ? "Done" : "Manage"}
+        </button>
       </div>
 
       {editing ? (
-        <div className="mt-5 border-t border-slate-200 pt-5 dark:border-slate-800">
-          <div className="grid gap-3 sm:grid-cols-2">
-            <label className="text-xs font-medium text-slate-600 dark:text-slate-300">
-              <span className="block">Account ID</span>
+        <div id={panelId} className="flex flex-col gap-4 px-5 pb-5 sm:pl-[84px]">
+          <div className="grid gap-3 [grid-template-columns:repeat(auto-fit,minmax(min(240px,100%),1fr))]">
+            <label className={fieldLabelClass}>
+              Account ID
               <input
                 type="text"
                 value={state.editingAccountId}
                 onChange={(event) => integrations.setEditingAccountId(event.target.value)}
                 disabled={credentialSaving}
-                className="mt-2 w-full rounded-xl border border-slate-300 bg-white/90 px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/30 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-slate-950/80 dark:text-white"
+                className={fieldInputClass}
               />
             </label>
             {provider.platform === "api" ? (
-              <label className="text-xs font-medium text-slate-600 dark:text-slate-300">
-                <span className="block">API key</span>
-                <input
-                  type="text"
-                  value={state.editingApiKey}
-                  readOnly
-                  aria-readonly="true"
-                  className="mt-2 w-full cursor-text rounded-xl border border-slate-300 bg-slate-200/40 px-3 py-2 font-mono text-sm text-slate-700 outline-none dark:border-slate-700 dark:bg-slate-950/60 dark:text-slate-300"
-                />
-                <span className="mt-1 block font-normal text-slate-500 dark:text-slate-400">
-                  Generated locally and read-only.
-                </span>
-              </label>
+              <div className="flex min-w-0 flex-col gap-1.5">
+                <label className={fieldLabelClass}>
+                  API key
+                  <input
+                    type="text"
+                    value={state.editingApiKey}
+                    readOnly
+                    aria-readonly="true"
+                    className={cx(fieldInputClass, "!bg-tile font-mono text-ink-2")}
+                  />
+                </label>
+                <span className="px-1 text-xs text-muted">Generated locally and read-only.</span>
+              </div>
             ) : provider.apiKeyLocked ? (
-              <div className="text-xs font-medium text-slate-600 dark:text-slate-300">
-                <span className="block">API key</span>
-                <div className="mt-2 flex items-center gap-2 rounded-xl border border-slate-300 bg-slate-200/40 px-3 py-2 text-sm text-slate-500 dark:border-slate-700 dark:bg-slate-950/60 dark:text-slate-400">
-                  <span className="inline-flex h-2 w-2 rounded-full bg-amber-400"></span>
+              <div className={fieldLabelClass}>
+                API key
+                <div className="flex h-11 items-center gap-2 rounded-full border border-line bg-tile px-[18px] text-sm normal-case tracking-normal text-muted">
+                  <span aria-hidden="true" className="h-2 w-2 rounded-full bg-warn"></span>
                   Managed by administrator
                 </div>
               </div>
             ) : (
-              <label className="text-xs font-medium text-slate-600 dark:text-slate-300">
-                <span className="block">API key</span>
+              <label className={fieldLabelClass}>
+                API key
                 <input
                   type="text"
                   value={state.editingApiKey}
                   onChange={(event) => integrations.setEditingApiKey(event.target.value)}
                   disabled={credentialSaving}
-                  className="mt-2 w-full rounded-xl border border-slate-300 bg-white/90 px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/30 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-slate-950/80 dark:text-white"
+                  className={fieldInputClass}
                 />
               </label>
             )}
@@ -113,26 +130,24 @@ export function IntegrationCard({ provider, integrations }: IntegrationCardProps
             />
           ) : null}
 
-          {state.credentialError ? (
-            <p className="mt-3 text-xs text-rose-700 dark:text-rose-300">{state.credentialError}</p>
-          ) : null}
+          {state.credentialError ? <p className="text-[13px] text-danger">{state.credentialError}</p> : null}
 
-          <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-            <button
-              type="button"
-              onClick={() => void integrations.toggleProvider(provider)}
-              disabled={actionBlocked}
-              className={integrationActionButtonClass(provider)}
-            >
-              {isUpdating ? "Updating..." : provider.status === "active" ? "Pause" : "Resume"}
-            </button>
+          <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
               onClick={() => void integrations.saveCredential(provider)}
               disabled={actionBlocked}
-              className="rounded-full bg-emerald-400 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-900 transition hover:bg-emerald-300 disabled:cursor-not-allowed disabled:bg-emerald-300/60"
+              className="pdx-btn-accent !h-[34px] !px-3.5 !text-xs"
             >
               {credentialSaving ? "Saving..." : "Save credentials"}
+            </button>
+            <button
+              type="button"
+              onClick={() => void integrations.toggleProvider(provider)}
+              disabled={actionBlocked}
+              className="pdx-btn-outline !h-[34px] !px-3.5 !text-xs"
+            >
+              {isUpdating ? "Updating..." : active ? "Pause" : "Resume"}
             </button>
           </div>
         </div>
@@ -153,14 +168,15 @@ function RecordingPlatform({ provider, options, integrations, mutationInProgress
   const saving = isSessionPlatformSaving(state, provider.id);
 
   return (
-    <div className="mt-4 rounded-xl border border-slate-200 bg-white/60 p-3 dark:border-slate-800 dark:bg-slate-900/50">
-      <label className="text-xs font-medium text-slate-600 dark:text-slate-300">
-        <span className="block">Recording platform</span>
+    <div className="rounded-[20px] border border-line bg-surface p-4">
+      <div className="flex flex-col gap-1.5">
+      <label className={fieldLabelClass}>
+        Recording platform
         <select
           value={selectedSessionPlatformKey(state, provider)}
           onChange={(event) => integrations.changeSessionPlatform(provider, event.target.value)}
           disabled={mutationInProgress}
-          className="mt-2 w-full rounded-xl border border-slate-300 bg-white/90 px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/30 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-slate-950/80 dark:text-white"
+          className={fieldInputClass}
         >
           {options.map((option) => (
             <option key={option.key} value={option.key}>
@@ -168,26 +184,23 @@ function RecordingPlatform({ provider, options, integrations, mutationInProgress
             </option>
           ))}
         </select>
-        <span className="mt-1 block font-normal text-slate-500 dark:text-slate-400">
-          New sessions recorded by this integration use this platform.
-        </span>
       </label>
+      <span className="px-1 text-xs text-muted">New sessions recorded by this integration use this platform.</span>
+      </div>
 
       {state.pendingSessionPlatformProviderId === provider.id ? (
         <div
           role="alertdialog"
           aria-label="Confirm recording platform change"
-          className="mt-3 border-t border-slate-200 pt-3 dark:border-slate-800"
+          className="mt-4 border-t border-divider pt-4"
         >
-          <p className="text-xs text-slate-600 dark:text-slate-300">
-            Should existing sessions from this integration also use the new platform?
-          </p>
+          <p className="text-[13px] text-ink-2">Should existing sessions from this integration also use the new platform?</p>
           <div className="mt-3 flex flex-wrap gap-2">
             <button
               type="button"
               onClick={() => void integrations.saveSessionPlatform(provider, true)}
               disabled={saving}
-              className="rounded-full bg-emerald-400 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-900 disabled:cursor-not-allowed disabled:opacity-60"
+              className="pdx-btn-primary !h-[34px] !px-3.5 !text-xs"
             >
               Future and existing sessions
             </button>
@@ -195,7 +208,7 @@ function RecordingPlatform({ provider, options, integrations, mutationInProgress
               type="button"
               onClick={() => void integrations.saveSessionPlatform(provider, false)}
               disabled={saving}
-              className="rounded-full border border-slate-300 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-700 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:text-slate-200"
+              className="pdx-btn-outline !h-[34px] !px-3.5 !text-xs"
             >
               Future sessions only
             </button>
@@ -203,7 +216,7 @@ function RecordingPlatform({ provider, options, integrations, mutationInProgress
               type="button"
               onClick={integrations.cancelSessionPlatformChange}
               disabled={saving}
-              className="px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500 disabled:cursor-not-allowed disabled:opacity-60 dark:text-slate-400"
+              className="pdx-btn !h-[34px] border-0 bg-transparent !px-3.5 !text-xs text-muted hover:text-ink disabled:opacity-60"
             >
               Cancel
             </button>
@@ -211,9 +224,7 @@ function RecordingPlatform({ provider, options, integrations, mutationInProgress
         </div>
       ) : null}
 
-      {state.sessionPlatformError ? (
-        <p className="mt-3 text-xs text-rose-700 dark:text-rose-300">{state.sessionPlatformError}</p>
-      ) : null}
+      {state.sessionPlatformError ? <p className="mt-3 text-[13px] text-danger">{state.sessionPlatformError}</p> : null}
     </div>
   );
 }

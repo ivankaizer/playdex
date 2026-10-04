@@ -4,7 +4,12 @@ import type { AccountStatsPeriod } from "@/models/stats";
 import {
   beginRefresh,
   completeRefresh,
+  dashboardActivityRequests,
   dashboardRequests,
+  formatShortDuration,
+  getOverviewView,
+  getRecentSessions,
+  getWeekView,
   failRefresh,
   getCurrentSession,
   getStatsView,
@@ -251,5 +256,53 @@ describe("waitAllOrCancel", () => {
     const sibling = new AbortController();
     await expect(waitAllOrCancel<[number, string]>([Promise.resolve(1), Promise.resolve("a")], sibling)).resolves.toEqual([1, "a"]);
     expect(sibling.signal.aborted).toBe(false);
+  });
+});
+
+describe("dashboard redesign views", () => {
+  it("requests per-day stats from the earlier of Monday and the 1st through today", () => {
+    const requests = dashboardActivityRequests(new Date("2026-10-04T12:00:00Z"));
+    expect(requests.week).toBe("/stats?from=2026-09-28&to=2026-10-04");
+    expect(requests.days[0]).toEqual({ date: "2026-09-28", path: "/stats?from=2026-09-28&to=2026-09-28" });
+    expect(requests.days.at(-1)?.date).toBe("2026-10-04");
+    expect(requests.days).toHaveLength(7);
+  });
+
+  it("builds week bars with today highlighted and future days faded", () => {
+    const week = getWeekView({ weekStats: snapshot().monthlyStats, days: { "2026-07-13": 600 } }, now);
+    expect(week.bars.map((bar) => bar.label)).toEqual(["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]);
+    expect(week.bars[0]).toMatchObject({ value: 600, highlight: true, faded: false, title: "Mon · 10m" });
+    expect(week.bars[1]).toMatchObject({ faded: true, title: "Tue · upcoming" });
+    expect(week.rangeLabel).toBe("Jul 13 – Jul 19");
+    expect(week.totalSeconds).toBe(7200);
+  });
+
+  it("derives month and year overview KPIs, bars and peak from real totals", () => {
+    const state = completeRefresh(initialDashboardState, snapshot(), now);
+    const month = getOverviewView(state, { weekStats: snapshot().monthlyStats, days: { "2026-07-02": 3600, "2026-07-13": 7200 } }, "month", now);
+    expect(month.title).toBe("July highlights");
+    expect(month.bars).toHaveLength(31);
+    expect(month.bars.filter((bar) => bar.highlight).map((bar) => bar.key)).toEqual(["2026-07-13"]);
+    expect(month.kpis).toEqual([
+      { label: "Hours played", value: "2h", sub: "2 of 31 days played" },
+      { label: "Sessions", value: "2", sub: "Avg. 1h 0m" },
+      { label: "Top title", value: "Elden Ring", sub: "100% of playtime" },
+    ]);
+    expect(month.activityNote).toBe("2 days played · 13 of 31 days in");
+
+    const yearly = { ...snapshot().yearlyStats, months: [{ year: 2026, month: 3, totalSeconds: 10800 }] };
+    const year = getOverviewView({ ...state, yearlyStats: yearly }, null, "year", now);
+    expect(year.title).toBe("2026 recap");
+    expect(year.bars.map((bar) => bar.faded)).toEqual([false, false, false, false, false, false, false, true, true, true, true, true]);
+    expect(year.activityNote).toBe("Peak March · 3h");
+    expect(year.kpis[2].sub).toBe("3h · 100%");
+  });
+
+  it("formats recent sessions with today and short dates", () => {
+    const data = snapshot();
+    const older = { ...data.todaySessions[0], sessionId: 9, startedAt: "2026-06-30T10:00:00Z", endedAt: "2026-06-30T11:55:00Z" };
+    const state = completeRefresh(initialDashboardState, { ...data, recentSessions: [older] }, now);
+    expect(getRecentSessions(state, now)[0]).toMatchObject({ date: "Jun 30", duration: "1h 55m" });
+    expect(formatShortDuration(600)).toBe("10m");
   });
 });

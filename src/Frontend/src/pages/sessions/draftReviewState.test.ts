@@ -2,6 +2,7 @@ import type { DraftRowDto } from "@/models/drafts";
 import {
   acceptance,
   applyDraftRow,
+  applySavedDraftRow,
   canAccept,
   corrections,
   createDraftRowEdit,
@@ -89,6 +90,20 @@ describe("draft row edit", () => {
       igdbId: null,
     });
     expect(rowUpdate({ ...edit, date: "  " }).date).toBeNull();
+  });
+
+  it("a save response keeps edits made while the request was in flight", () => {
+    const edit = createDraftRowEdit(row());
+    const sent = rowUpdate({ ...edit, hours: "2" });
+    const saved = applySavedDraftRow({ ...edit, hours: "2" }, sent, row({ revision: 2, durationMinutes: 120 }));
+    expect(saved.revision).toBe(2);
+    expect(isDirty(saved)).toBe(false);
+
+    const edited = applySavedDraftRow({ ...edit, hours: "2", minutes: "30" }, sent, row({ revision: 2, durationMinutes: 120 }));
+    expect(edited.revision).toBe(2);
+    expect(edited.minutes).toBe("30");
+    expect(isDirty(edited)).toBe(true);
+    expect(rowUpdate(edited)).toMatchObject({ revision: 2, durationMinutes: 150 });
   });
 
   it("validates dates like DateOnly.TryParseExact", () => {

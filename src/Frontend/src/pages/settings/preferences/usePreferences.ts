@@ -51,6 +51,13 @@ export function usePreferences() {
     [update],
   );
 
+  const stepIgnoreShortSessionsMinutes = useCallback(
+    (delta: number) => update((current) => preferences.stepIgnoreShortSessionsMinutes(current, delta)),
+    [update],
+  );
+
+  const discardChanges = useCallback(() => update(preferences.discardSettingsChanges), [update]);
+
   const saveSettings = useCallback(async () => {
     const { state: validated, submission } = preferences.buildSettingsSubmission(get());
     update(() => validated);
@@ -94,5 +101,14 @@ export function usePreferences() {
     }
   }, [get, update]);
 
-  return { state, loadSettings, setIgnoreShortSessionsMinutes, setTelegramChatId, saveSettings, sendTestNotification };
+  return {
+    state,
+    loadSettings,
+    setIgnoreShortSessionsMinutes,
+    stepIgnoreShortSessionsMinutes,
+    setTelegramChatId,
+    discardChanges,
+    saveSettings,
+    sendTestNotification,
+  };
 }

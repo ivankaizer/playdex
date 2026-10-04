@@ -12,8 +12,8 @@ export interface CreatorState {
 
 export type CreationPlatform = "steam" | "psn" | "xbox";
 
-const MaxIntegrationsPerPlatform = 3;
-const SupportedCreationPlatforms: readonly CreationPlatform[] = ["steam", "psn", "xbox"];
+export const MaxIntegrationsPerPlatform = 3;
+export const SupportedCreationPlatforms: readonly CreationPlatform[] = ["steam", "psn", "xbox"];
 
 export function createCreatorState(): CreatorState {
   return {

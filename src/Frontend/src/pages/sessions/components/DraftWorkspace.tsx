@@ -1,13 +1,15 @@
-import { useEffect, useLayoutEffect, useRef, useState, type ChangeEvent } from "react";
-import { Breadcrumbs } from "@/components/Breadcrumbs";
+import { useEffect, useLayoutEffect, useRef, useState, type ChangeEvent, type ReactNode } from "react";
+import { Cover } from "@/components/ui";
 import { apiRequest, errorMessage } from "@/lib/api";
+import { cx } from "@/lib/cx";
 import type { DraftAcceptRequest, DraftAcceptResponse, DraftBatchDto, DraftCapabilities, DraftRowDto } from "@/models/drafts";
 import type { ManualMappingSearchResponse, ManualMappingSearchResult, ManualPlatform } from "@/models/manual";
 import {
   acceptance,
-  applyDraftRow,
+  applySavedDraftRow,
   canAccept,
   createDraftRowEdit,
+  draftDuration,
   hasGameSelection,
   hasValidDate,
   hasValidDuration,
@@ -18,10 +20,12 @@ import {
   setDraftTitle,
   type DraftRowEdit,
 } from "../draftReviewState";
+import { formatMinutes } from "../sessionCreateState";
 import { delay, escapeDataString, newGuid, useLatestState } from "../support";
 import { attachPaste, dataUrlBytes, draftTimezone, readAsDataUrl, supportedImageTypes, validateImage } from "./draftInterop";
 import { BoundSelect, ChangeInput } from "./FormControls";
-import "./DraftWorkspace.css";
+
+export type DraftWorkspaceView = "compose" | "review";
 
 interface DraftWorkspaceProps {
   capabilities?: DraftCapabilities | null;
@@ -29,6 +33,14 @@ interface DraftWorkspaceProps {
   embedded?: boolean;
   onClose?: () => void | Promise<void>;
   onAccepted?: () => void | Promise<void>;
+  /** Short confirmation (e.g. "Hades · 1h added") shown as a toast by the host page. */
+  onToast?: (message: string) => void;
+  /** Fires when the workspace switches between the composer and a batch review. */
+  onViewChange?: (view: DraftWorkspaceView) => void;
+  /** Fires with the saved batch count after every reload of the review queue. */
+  onBatchesChange?: (count: number) => void;
+  /** Shows "Go to sessions" in the "Batch reviewed" state. */
+  onGoToSessions?: () => void;
 }
 
 interface GenerationSource {
@@ -46,11 +58,15 @@ interface WorkspaceState {
   text: string;
   error: string;
   outcome: string;
+  /** Sessions added from the batch that just completed; null when no batch was completed. */
+  reviewed: number | null;
   preview: string;
   mediaType: string;
   fileName: string;
   image: Uint8Array<ArrayBuffer> | null;
   busy: boolean;
+  /** Automatic row saves in flight. */
+  saving: number;
   generationSource: GenerationSource | null;
   generationFailed: boolean;
 }
@@ -62,24 +78,25 @@ const initialState = (): WorkspaceState => ({
   text: "",
   error: "",
   outcome: "",
+  reviewed: null,
   preview: "",
   mediaType: "",
   fileName: "screenshot.png",
   image: null,
   busy: false,
+  saving: 0,
   generationSource: null,
   generationFailed: false,
 });
 
-/** Marks elements that Blazor's scoped CSS would stamp with the component's b-* attribute. */
-const scope = { "data-dw-scope": "" };
+/** Re-saves at most this many times when the row keeps changing while its PATCH is in flight. */
+const MaxSavePasses = 3;
 
-const reviewFieldClass = (needsReview: boolean) =>
-  needsReview
-    ? "border-rose-500 bg-rose-50 focus:border-rose-600 focus:ring-2 focus:ring-rose-200 dark:border-rose-400 dark:bg-rose-950/30 dark:focus:border-rose-300 dark:focus:ring-rose-900"
-    : "border-slate-300 bg-white focus:border-emerald-400 dark:border-slate-700 dark:bg-slate-950";
+const reviewFieldClass = (needsReview: boolean) => (needsReview ? "border-danger" : "");
 
 const ariaInvalid = (invalid: boolean) => (invalid ? "true" : "false");
+
+const plural = (count: number, word: string) => `${count} ${word}${count === 1 ? "" : "s"}`;
 
 /** .NET en-US "g" format of a local time: "M/d/yyyy h:mm tt". */
 export function formatShortDateTime(value: string): string {
@@ -89,17 +106,28 @@ export function formatShortDateTime(value: string): string {
   return `${date.getMonth() + 1}/${date.getDate()}/${date.getFullYear()} ${hour12}:${String(date.getMinutes()).padStart(2, "0")} ${hours < 12 ? "AM" : "PM"}`;
 }
 
-export function DraftWorkspace({ capabilities = null, platforms = [], embedded = false, onClose, onAccepted }: DraftWorkspaceProps) {
+export function DraftWorkspace({
+  capabilities = null,
+  platforms = [],
+  embedded = false,
+  onClose,
+  onAccepted,
+  onToast,
+  onViewChange,
+  onBatchesChange,
+  onGoToSessions,
+}: DraftWorkspaceProps) {
   const [state, get, update] = useLatestState(initialState);
   const [pasteId] = useState(() => `draft-paste-${newGuid(true)}`);
   const lifetime = useRef(new AbortController());
   const requestId = useRef(newGuid());
   const generatedBatchId = useRef<string | null>(null);
   const pasteArea = useRef<HTMLDivElement>(null);
-  const props = useRef({ capabilities, onClose, onAccepted });
+  const saveQueue = useRef(new Map<string, Promise<boolean>>());
+  const props = useRef({ capabilities, onClose, onAccepted, onToast, onViewChange, onBatchesChange });
 
   useLayoutEffect(() => {
-    props.current = { capabilities, onClose, onAccepted };
+    props.current = { capabilities, onClose, onAccepted, onToast, onViewChange, onBatchesChange };
   });
 
   const patch = (changes: Partial<WorkspaceState>) => update((current) => ({ ...current, ...changes }));
@@ -113,6 +141,7 @@ export function DraftWorkspace({ capabilities = null, platforms = [], embedded =
     try {
       const batches = await apiRequest<DraftBatchDto[]>("/manual/draft-batches", { signal: lifetimeSignal });
       patch({ batches });
+      props.current.onBatchesChange?.(batches.length);
     } catch (exception) {
       if (lifetimeSignal.aborted) return;
       patch({ error: errorMessage(exception) });
@@ -127,6 +156,11 @@ export function DraftWorkspace({ capabilities = null, platforms = [], embedded =
     return () => controller.abort();
   }, []);
 
+  const reviewing = state.batch !== null;
+  useEffect(() => {
+    props.current.onViewChange?.(reviewing ? "review" : "compose");
+  }, [reviewing]);
+
   const composerVisible = state.batch === null && capabilities?.available === true;
   const maxImageBytes = capabilities?.maxImageBytes;
   const maxImagePixels = capabilities?.maxImagePixels;
@@ -139,6 +173,7 @@ export function DraftWorkspace({ capabilities = null, platforms = [], embedded =
   const show = (batch: DraftBatchDto) =>
     patch({
       outcome: "",
+      reviewed: null,
       batch,
       rows: batch.rows.filter((row) => row.status !== "deleted").map(createDraftRowEdit),
     });
@@ -156,19 +191,46 @@ export function DraftWorkspace({ capabilities = null, platforms = [], embedded =
 
   const rowPath = (row: DraftRowEdit) => `/manual/draft-batches/${get().batch?.id ?? ""}/rows/${row.id}`;
 
-  const saveRow = async (id: string): Promise<boolean> => {
+  const persistRow = async (id: string): Promise<boolean> => {
+    for (let pass = 0; pass < MaxSavePasses; pass++) {
+      const row = findRow(id);
+      if (!row || row.isAccepted || !isDirty(row)) return true;
+      const body = rowUpdate(row);
+      try {
+        const dto = await apiRequest<DraftRowDto>(rowPath(row), { method: "PATCH", body, signal: signal() });
+        updateRow(id, (current) => applySavedDraftRow(current, body, dto));
+      } catch (exception) {
+        updateRow(id, (current) => ({
+          ...current,
+          error: `${errorMessage(exception)} Your edits are still here. Retry saving, or reopen this batch to review newer server changes.`,
+        }));
+        return false;
+      }
+    }
     const row = findRow(id);
-    if (!row || row.isAccepted || !isDirty(row)) return true;
+    return !row || row.isAccepted || !isDirty(row);
+  };
+
+  /** Saves a row's edits; saves of the same row run one after another so each sends the latest revision. */
+  const saveRow = (id: string): Promise<boolean> => {
+    const previous = saveQueue.current.get(id) ?? Promise.resolve(true);
+    const next = previous.then(() => persistRow(id));
+    saveQueue.current.set(id, next);
+    void next.finally(() => {
+      if (saveQueue.current.get(id) === next) saveQueue.current.delete(id);
+    });
+    return next;
+  };
+
+  /** "Edits save automatically": runs after a field commits, without blocking the rest of the form. */
+  const autoSave = async (id: string) => {
+    const row = findRow(id);
+    if (!row || row.isAccepted || !isDirty(row)) return;
+    update((current) => ({ ...current, saving: current.saving + 1 }));
     try {
-      const dto = await apiRequest<DraftRowDto>(rowPath(row), { method: "PATCH", body: rowUpdate(row), signal: signal() });
-      updateRow(id, (current) => applyDraftRow(current, dto));
-      return true;
-    } catch (exception) {
-      updateRow(id, (current) => ({
-        ...current,
-        error: `${errorMessage(exception)} Your edits are still here. Retry saving, or reopen this batch to review newer server changes.`,
-      }));
-      return false;
+      await saveRow(id);
+    } finally {
+      update((current) => ({ ...current, saving: Math.max(0, current.saving - 1) }));
     }
   };
 
@@ -384,13 +446,16 @@ export function DraftWorkspace({ capabilities = null, platforms = [], embedded =
   };
 
   const completeBatch = async (outcome: string) => {
-    patch({ batch: null, rows: [], outcome });
+    const reviewed = get().rows.filter((row) => row.isAccepted).length;
+    patch({ batch: null, rows: [], outcome, reviewed });
     await loadBatches();
   };
 
   const remove = async (id: string) => {
     patch({ busy: true });
     try {
+      // Let an automatic save of this row finish first so the delete carries the current revision.
+      await saveQueue.current.get(id);
       const row = findRow(id);
       if (row) {
         await apiRequest<unknown>(`${rowPath(row)}?revision=${row.revision}`, { method: "DELETE", signal: signal() });
@@ -432,6 +497,8 @@ export function DraftWorkspace({ capabilities = null, platforms = [], embedded =
           sessionId != null ? markAccepted(row, sessionId) : { ...row, error: result.error ?? "Acceptance failed. Retry this row." },
         );
       }
+      const added = saved.filter((row) => response.results.some((result) => result.id === row.id && result.sessionId != null));
+      if (added.length > 0) props.current.onToast?.(acceptedMessage(added));
       if (response.results.some((result) => result.sessionId != null)) await props.current.onAccepted?.();
       if (!get().rows.some((row) => !row.isAccepted)) {
         await completeBatch("All ready drafts were accepted; the batch was removed from saved review.");
@@ -445,32 +512,26 @@ export function DraftWorkspace({ capabilities = null, platforms = [], embedded =
 
   const { busy, batch, rows } = state;
   const retentionDays = capabilities?.historyRetentionDays ?? 30;
+  const readyCount = rows.filter(canAccept).length;
+  const unmatchedCount = rows.filter((row) => !row.isAccepted && !hasGameSelection(row)).length;
+  const acceptedCount = rows.filter((row) => row.isAccepted).length;
 
   return (
-    <div className={embedded ? "w-full" : "fixed inset-0 z-[80] overflow-y-auto bg-slate-950/65 p-4"}>
+    <div className={embedded ? "w-full" : "pdx-modal-backdrop fixed inset-0 z-[80] overflow-y-auto p-4"}>
       <section
         role={embedded ? undefined : "dialog"}
         aria-modal={embedded ? undefined : "true"}
         aria-label="AI session drafts"
         data-layout={embedded ? "extended-ai" : undefined}
-        className={
-          embedded
-            ? "w-full text-slate-900 dark:text-white"
-            : "mx-auto my-8 w-full max-w-5xl rounded-3xl bg-slate-50 p-5 text-slate-900 shadow-xl dark:bg-slate-950 dark:text-white sm:p-6"
-        }
+        className={cx("flex w-full flex-col gap-7 text-ink", !embedded && "mx-auto my-8 max-w-5xl")}
       >
         {!embedded && (
-          <div className="mb-5 flex items-start justify-between gap-4 rounded-3xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
+          <div className="pdx-card flex flex-wrap items-start justify-between gap-4">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-700 dark:text-emerald-300">AI session import</p>
-              <h2 className="mt-2 text-xl font-semibold">Review session drafts</h2>
+              <p className="pdx-kicker">AI session import</p>
+              <h2 className="pdx-title">Review session drafts</h2>
             </div>
-            <button
-              {...scope}
-              disabled={busy}
-              onClick={() => void close()}
-              className="rounded-full border border-slate-300 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] dark:border-slate-700"
-            >
+            <button type="button" disabled={busy} onClick={() => void close()} className="pdx-btn-outline">
               Close
             </button>
           </div>
@@ -479,201 +540,233 @@ export function DraftWorkspace({ capabilities = null, platforms = [], embedded =
         {state.error.length > 0 && (
           <div
             role="alert"
-            className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700 dark:border-rose-400/20 dark:bg-rose-400/10 dark:text-rose-200"
+            className="flex flex-wrap items-center justify-between gap-3 rounded-[20px] border border-danger-line bg-danger-tint px-5 py-4 text-sm text-danger"
           >
             <p>{state.error}</p>
             {state.generationFailed && state.generationSource !== null && capabilities?.available === true && (
-              <button
-                {...scope}
-                type="button"
-                disabled={busy}
-                onClick={() => void retryGeneration()}
-                className="shrink-0 rounded-full border border-rose-300 px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] disabled:opacity-60 dark:border-rose-400/40"
-              >
+              <button type="button" disabled={busy} onClick={() => void retryGeneration()} className="pdx-btn-danger">
                 Retry generation
               </button>
             )}
           </div>
         )}
-        {state.outcome.length > 0 && (
-          <p
-            role="status"
-            className="mb-5 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800 dark:border-emerald-400/20 dark:bg-emerald-400/10 dark:text-emerald-200"
-          >
-            {state.outcome}
-          </p>
+
+        {batch === null && state.reviewed !== null && state.outcome.length > 0 ? (
+          <section className="pdx-card flex flex-col items-center gap-3 text-center">
+            <span aria-hidden="true" className="grid h-14 w-14 place-items-center rounded-full bg-mint text-2xl text-accent">
+              ✓
+            </span>
+            <h2 className="text-xl font-semibold">Batch reviewed</h2>
+            <p role="status" className="max-w-[44em] text-sm text-muted">
+              {state.reviewed > 0 && `${plural(state.reviewed, "session")} added to your history. `}
+              {state.outcome}
+            </p>
+            {onGoToSessions && (
+              <button type="button" onClick={onGoToSessions} className="pdx-btn-primary mt-1.5 h-11">
+                Go to sessions
+              </button>
+            )}
+          </section>
+        ) : (
+          state.outcome.length > 0 && (
+            <p role="status" className="rounded-[20px] border border-mint-line bg-mint px-5 py-4 text-sm text-accent">
+              {state.outcome}
+            </p>
+          )
         )}
 
         {batch === null ? (
-          <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_20rem]">
-            <section className="rounded-3xl border border-slate-200 bg-white/80 p-5 dark:border-slate-800 dark:bg-slate-900/60 sm:p-6">
-              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-700 dark:text-emerald-300">Natural input</p>
-              <h2 className="mt-2 text-xl font-semibold">Create AI batch</h2>
-              <p className="mt-2 max-w-2xl text-sm text-slate-600 dark:text-slate-300">
-                Describe one or several play sessions, add a screenshot, or use both. You will review every suggestion before it reaches your history.
-              </p>
+          <div className="grid items-start gap-7 min-[900px]:grid-cols-[minmax(0,2fr)_minmax(280px,1fr)]">
+            <section className="pdx-card flex flex-col gap-[22px]">
+              <div>
+                <p className="pdx-kicker">Natural input</p>
+                <h2 className="pdx-title">Create AI batch</h2>
+                <p className="mt-1.5 max-w-[44em] text-sm leading-normal text-muted">
+                  Describe one or several play sessions, add a screenshot, or use both. You will review every suggestion before it reaches your history.
+                </p>
+              </div>
 
               {capabilities?.available === true ? (
                 <>
-                  <div className="mt-6">
-                    <label className="block text-sm font-semibold text-slate-800 dark:text-slate-100">
-                      What did you play?
-                      <textarea
-                        rows={7}
-                        maxLength={capabilities.maxTextCharacters}
-                        value={state.text}
-                        onChange={(event) => patch({ text: event.currentTarget.value })}
-                        disabled={busy}
-                        placeholder="For example: Yesterday I played Hades II on PC for 1 hour 20 minutes."
-                        className="mt-2 block w-full resize-y rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm font-normal text-slate-900 outline-none placeholder:text-slate-400 focus:border-emerald-400 dark:border-slate-700 dark:bg-slate-950 dark:text-white"
-                      ></textarea>
-                    </label>
-                    <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
-                      Up to {capabilities.maxTextCharacters} characters and {capabilities.maxRows} sessions.
-                    </p>
-                  </div>
+                  <label className="flex flex-col gap-2 text-xs font-medium text-muted">
+                    What did you play?
+                    <textarea
+                      rows={9}
+                      maxLength={capabilities.maxTextCharacters}
+                      value={state.text}
+                      onChange={(event) => patch({ text: event.currentTarget.value })}
+                      disabled={busy}
+                      placeholder="For example: Yesterday I played Hades II on PC for 1 hour 20 minutes."
+                      className="pdx-input px-[22px] py-[18px] text-[15px] leading-relaxed"
+                    ></textarea>
+                    <span className="flex flex-wrap justify-between gap-x-4 gap-y-1 font-normal">
+                      <span>Up to {plural(capabilities.maxRows, "session")}. One session per line works best.</span>
+                      <span className="pdx-num">
+                        {state.text.length.toLocaleString("en-US")} / {capabilities.maxTextCharacters.toLocaleString("en-US")}
+                      </span>
+                    </span>
+                  </label>
 
                   <div
                     id={pasteId}
                     ref={pasteArea}
                     tabIndex={0}
-                    className="mt-5 rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-4 outline-none focus:border-emerald-400 dark:border-slate-700 dark:bg-slate-950/70"
+                    aria-label="Screenshot drop area. Paste an image while focused."
+                    className="flex flex-wrap items-center gap-4 rounded-tile border-[1.5px] border-dashed border-dash px-5 py-[18px] outline-none transition-colors focus:border-bar"
                   >
-                    <label className="block text-sm font-semibold text-slate-800 dark:text-slate-100">
-                      Add a screenshot
-                      <span className="mt-1 block text-xs font-normal text-slate-500 dark:text-slate-400">
-                        Choose a file or paste an image while this area is focused.
+                    {state.image !== null ? (
+                      <img
+                        src={state.preview}
+                        alt="Screenshot to be sent for extraction"
+                        className="h-12 w-12 shrink-0 rounded-[14px] object-cover"
+                      />
+                    ) : (
+                      <span aria-hidden="true" className="grid h-12 w-12 shrink-0 place-items-center rounded-[14px] bg-mint text-xl text-accent">
+                        ▣
                       </span>
+                    )}
+                    <div className="min-w-0 flex-[1_1_200px]">
+                      <p className="truncate text-[15px] font-semibold">{state.image !== null ? state.fileName : "Add a screenshot"}</p>
+                      <p className="mt-0.5 text-[13px] text-muted">
+                        {state.image !== null
+                          ? "Attached · it will be read alongside your text."
+                          : `PNG, JPEG or WebP up to ${Math.trunc(Math.trunc(capabilities.maxImageBytes / 1024) / 1024)} MiB. You can also paste an image while this area is focused.`}
+                      </p>
+                    </div>
+                    {state.image !== null && (
+                      <button type="button" disabled={busy} onClick={removeImage} className="pdx-btn-danger">
+                        Remove screenshot
+                      </button>
+                    )}
+                    <label className={cx("pdx-btn-outline focus-within:border-bar", busy && "pointer-events-none opacity-60")}>
+                      Choose file
                       <input
                         type="file"
                         onChange={(event) => void loadImage(event)}
                         accept="image/png,image/jpeg,image/webp"
                         disabled={busy}
-                        className="mt-3 block w-full text-xs text-slate-500 file:mr-3 file:rounded-full file:border-0 file:bg-emerald-400 file:px-4 file:py-2 file:text-xs file:font-semibold file:text-slate-950 dark:text-slate-400"
+                        className="sr-only"
                       />
                     </label>
-                    {state.image !== null && (
-                      <div className="mt-4 flex flex-col items-start gap-3 rounded-2xl border border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-900 sm:flex-row">
-                        <img
-                          src={state.preview}
-                          alt="Screenshot to be sent for extraction"
-                          className="max-h-48 max-w-full rounded-xl object-contain sm:max-w-xs"
-                        />
-                        <button
-                          {...scope}
-                          type="button"
-                          disabled={busy}
-                          onClick={removeImage}
-                          className="rounded-full border border-slate-300 px-4 py-2 text-xs font-semibold text-slate-700 dark:border-slate-700 dark:text-slate-200"
-                        >
-                          Remove screenshot
-                        </button>
-                      </div>
-                    )}
                   </div>
 
-                  <div className="mt-5 flex flex-col gap-4 border-t border-slate-200 pt-5 dark:border-slate-800 sm:flex-row sm:items-center sm:justify-between">
-                    <p className="max-w-2xl text-xs leading-5 text-slate-500 dark:text-slate-400">
+                  <div className="flex flex-wrap items-center justify-between gap-4 border-t border-divider pt-5">
+                    <p className="flex-[1_1_300px] text-xs leading-[1.55] text-faint">
                       {`Text and screenshots are sent to ${capabilities.provider} for processing. Playdex retains your input, screenshot, and AI results ${retentionDays > 0 ? `for ${retentionDays} days` : "until deleted"} for administrator review to improve generation. Supported: PNG, JPEG, WebP up to ${Math.trunc(Math.trunc(capabilities.maxImageBytes / 1024) / 1024)} MiB and ${Math.trunc(capabilities.maxImagePixels / 1000000)} megapixels.`}
                     </p>
                     <button
-                      {...scope}
                       type="button"
                       disabled={busy || (state.text.trim().length === 0 && state.image === null)}
                       onClick={() => void generate()}
-                      className="shrink-0 rounded-full bg-emerald-400 px-5 py-2.5 text-xs font-semibold uppercase tracking-[0.18em] text-slate-950 disabled:opacity-60"
+                      className="pdx-btn-primary h-[50px] px-[26px] text-[15px]"
                     >
-                      {busy ? "Generating drafts…" : "Generate drafts"}
+                      {busy ? "Generating…" : "Generate drafts"}
                     </button>
                   </div>
                 </>
               ) : (
-                <div className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 dark:border-amber-400/20 dark:bg-amber-400/10 dark:text-amber-200">
-                  AI generation is currently unavailable. Saved drafts remain available for review, and you can use the Manual session tab.
-                </div>
+                <p className="pdx-dashed rounded-[20px] text-sm text-warn">
+                  AI generation is currently unavailable. Saved drafts remain available for review, and you can use Manual entry.
+                </p>
               )}
             </section>
 
-            <aside className="rounded-3xl border border-slate-200 bg-white/80 p-5 dark:border-slate-800 dark:bg-slate-900/60 lg:sticky lg:top-6">
-              <div className="flex items-center justify-between gap-3">
+            <aside className="pdx-card flex flex-col gap-[18px] !p-8 max-sm:!p-6">
+              <div className="flex items-start justify-between gap-3">
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.25em] text-slate-500 dark:text-slate-400">Review queue</p>
-                  <h2 className="mt-2 text-lg font-semibold">Saved batches</h2>
+                  <p className="pdx-kicker">Review queue</p>
+                  <h2 className="mt-2 text-[22px] font-semibold">Saved batches</h2>
                 </div>
                 {state.batches.length > 0 && (
-                  <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-800 dark:bg-emerald-400/15 dark:text-emerald-200">
+                  <span className="pdx-num grid h-7 min-w-7 place-items-center rounded-full bg-mint px-2 text-[13px] font-bold text-accent">
                     {state.batches.length}
                   </span>
                 )}
               </div>
 
-              <div className="mt-4 space-y-2">
-                {state.batches.map((saved, index) => (
-                  <button
-                    {...scope}
-                    key={`${index}-${saved.id}`}
-                    type="button"
-                    disabled={busy}
-                    onClick={() => void resume(saved.id)}
-                    className="w-full rounded-2xl border border-slate-200 bg-slate-50 p-3 text-left transition hover:border-emerald-400 hover:bg-emerald-50 dark:border-slate-700 dark:bg-slate-950/70 dark:hover:bg-emerald-400/10"
-                  >
-                    <span className="block text-sm font-semibold">Resume {formatShortDateTime(saved.createdAt)}</span>
-                    <span className="mt-1 block text-xs text-slate-500 dark:text-slate-400">
+              {state.batches.map((saved, index) => (
+                <button
+                  key={`${index}-${saved.id}`}
+                  type="button"
+                  disabled={busy}
+                  onClick={() => void resume(saved.id)}
+                  className="flex items-center gap-3 rounded-[20px] border border-[color:var(--tile-border)] bg-tile px-[18px] py-4 text-left transition-colors hover:border-mint-hover disabled:opacity-[.55]"
+                >
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-[15px] font-semibold">Resume {formatShortDateTime(saved.createdAt)}</span>
+                    <span className="mt-0.5 block text-[13px] text-muted">
                       {saved.rows.filter((row) => row.status === "pending").length} pending
                     </span>
-                  </button>
-                ))}
-                {state.batches.length === 0 && (
-                  <div className="rounded-2xl bg-slate-100 p-4 text-sm text-slate-500 dark:bg-slate-950 dark:text-slate-400">
-                    <p className="font-semibold text-slate-700 dark:text-slate-200">No saved drafts.</p>
-                    <p className="mt-1 text-xs leading-5">Generated batches appear here until every pending row is accepted or deleted.</p>
-                  </div>
-                )}
-              </div>
+                  </span>
+                  <span aria-hidden="true" className="text-base text-accent">
+                    →
+                  </span>
+                </button>
+              ))}
+              {state.batches.length === 0 && (
+                <div className="pdx-dashed rounded-[20px]">
+                  <p className="font-semibold text-ink-2">No saved drafts.</p>
+                  <p className="mt-1 text-xs leading-5">Generated batches appear here until every pending row is accepted or deleted.</p>
+                </div>
+              )}
             </aside>
           </div>
         ) : (
           <>
-            <div className="rounded-3xl border border-slate-200 bg-white/80 p-5 dark:border-slate-800 dark:bg-slate-900/60 sm:p-6">
-              <Breadcrumbs parentLabel="Saved batches" currentLabel="Review batch" onParent={() => void back()} disabled={busy} />
-              <div className="mt-4 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-700 dark:text-emerald-300">AI batch review</p>
-                  <h2 className="mt-2 text-xl font-semibold">Review extracted sessions</h2>
-                  <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
-                    Correct the details and choose a verified game before accepting each session.
-                  </p>
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <button
-                    {...scope}
-                    type="button"
-                    disabled={busy || capabilities?.available !== true}
-                    onClick={() => void regenerate()}
-                    className="shrink-0 rounded-full border border-slate-300 px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-700 disabled:opacity-60 dark:border-slate-700 dark:text-slate-200"
-                  >
-                    Generate again
-                  </button>
-                  <button
-                    {...scope}
-                    type="button"
-                    disabled={busy || !rows.some(canAccept)}
-                    onClick={() => void accept(rows.filter(canAccept).map((row) => row.id))}
-                    className="shrink-0 rounded-full bg-emerald-400 px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-950 disabled:opacity-60"
-                  >
-                    Accept all ready
-                  </button>
+            <section className="pdx-card flex flex-wrap items-end justify-between gap-5">
+              <div className="min-w-0">
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => void back()}
+                  className="text-[13px] text-muted transition-colors hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  <span aria-hidden="true">← </span>Saved batches
+                </button>
+                <p className="pdx-kicker mt-3.5">AI batch review · {formatShortDateTime(batch.createdAt)}</p>
+                <h2 className="pdx-title">Review extracted sessions</h2>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <StatusChip className="bg-mint text-accent">{readyCount} ready</StatusChip>
+                  {unmatchedCount > 0 && (
+                    <StatusChip className="bg-danger-tint text-danger">
+                      {unmatchedCount} {unmatchedCount === 1 ? "needs" : "need"} a game
+                    </StatusChip>
+                  )}
+                  {acceptedCount > 0 && <StatusChip className="bg-tile text-ink-2">{acceptedCount} added</StatusChip>}
                 </div>
               </div>
-            </div>
+              <div className="flex flex-wrap gap-2.5">
+                <button
+                  type="button"
+                  disabled={busy || capabilities?.available !== true}
+                  onClick={() => void regenerate()}
+                  className="pdx-btn-outline h-[46px]"
+                >
+                  Generate again
+                </button>
+                <button
+                  type="button"
+                  disabled={busy || readyCount === 0}
+                  onClick={() => void accept(rows.filter(canAccept).map((row) => row.id))}
+                  className="pdx-btn-primary h-[46px] px-[22px]"
+                >
+                  Accept all ready ({readyCount})
+                </button>
+              </div>
+            </section>
 
-            {rows.length === 0 && (
-              <p className="mt-5 rounded-3xl border border-slate-200 bg-white/80 p-6 text-sm text-slate-600 dark:border-slate-800 dark:bg-slate-900/60 dark:text-slate-300">
-                No eligible session evidence was found. Try describing individual plays with a date and duration.
-              </p>
-            )}
+            <section aria-label="Session drafts" className="pdx-card flex flex-col gap-2.5 !p-5">
+              <div className="flex justify-between gap-3 px-3 pb-1 pt-1.5 text-xs text-faint">
+                <span>{plural(rows.length, "draft")}</span>
+                <span aria-live="polite">{state.saving > 0 ? "Saving…" : "Edits save automatically"}</span>
+              </div>
 
-            <div className="mt-5 space-y-3">
+              {rows.length === 0 && (
+                <p className="pdx-dashed rounded-[20px] text-sm">
+                  No eligible session evidence was found. Try describing individual plays with a date and duration.
+                </p>
+              )}
+
               {rows.map((row) => (
                 <DraftRowArticle
                   key={row.id}
@@ -681,20 +774,37 @@ export function DraftWorkspace({ capabilities = null, platforms = [], embedded =
                   busy={busy}
                   platforms={platforms}
                   onTitle={(title) => updateRow(row.id, (current) => setDraftTitle(current, title))}
-                  onField={(changes) => updateRow(row.id, (current) => ({ ...current, ...changes }))}
+                  onField={(changes) => {
+                    updateRow(row.id, (current) => ({ ...current, ...changes }));
+                    void autoSave(row.id);
+                  }}
+                  onCommitTitle={() => void autoSave(row.id)}
                   onSearch={() => void search(row.id)}
-                  onSave={() => void saveAction(row.id)}
+                  onRetrySave={() => void saveAction(row.id)}
                   onDelete={() => void remove(row.id)}
                   onAccept={() => void accept([row.id])}
                   onChoose={(result) => void choose(row.id, result)}
                 />
               ))}
-            </div>
+            </section>
           </>
         )}
       </section>
     </div>
   );
+}
+
+function acceptedMessage(rows: readonly DraftRowEdit[]): string {
+  if (rows.length === 1) {
+    const row = rows[0];
+    const minutes = draftDuration(row);
+    return `${row.selection?.title ?? row.title}${minutes !== null ? ` · ${formatMinutes(minutes)}` : ""} added`;
+  }
+  return `${plural(rows.length, "session")} added to your history`;
+}
+
+function StatusChip({ className, children }: { className: string; children: ReactNode }) {
+  return <span className={cx("pdx-num rounded-full px-3 py-1.5 text-xs font-semibold", className)}>{children}</span>;
 }
 
 interface DraftRowArticleProps {
@@ -703,99 +813,119 @@ interface DraftRowArticleProps {
   platforms: readonly ManualPlatform[];
   onTitle: (title: string) => void;
   onField: (changes: Partial<Pick<DraftRowEdit, "date" | "hours" | "minutes" | "platformKey">>) => void;
+  onCommitTitle: () => void;
   onSearch: () => void;
-  onSave: () => void;
+  onRetrySave: () => void;
   onDelete: () => void;
   onAccept: () => void;
   onChoose: (result: ManualMappingSearchResult) => void;
 }
 
-function DraftRowArticle({ row, busy, platforms, onTitle, onField, onSearch, onSave, onDelete, onAccept, onChoose }: DraftRowArticleProps) {
+const fieldLabelClass = "flex flex-col gap-1.5 text-[11px] font-medium uppercase tracking-[0.12em] text-muted";
+
+function DraftRowArticle({
+  row,
+  busy,
+  platforms,
+  onTitle,
+  onField,
+  onCommitTitle,
+  onSearch,
+  onRetrySave,
+  onDelete,
+  onAccept,
+  onChoose,
+}: DraftRowArticleProps) {
+  const [changing, setChanging] = useState(false);
   const selected = row.selection;
   const invalidGame = !hasGameSelection(row);
   const invalidDate = !hasValidDate(row);
   const invalidDuration = !hasValidDuration(row);
   const platformReview = needsPlatformReview(row);
+  const showSearch = selected === null || changing || row.results.length > 0;
 
   return (
-    <article data-draft-row className="rounded-2xl border border-slate-200 bg-white/80 p-4 dark:border-slate-800 dark:bg-slate-900/60">
-      <fieldset {...scope} disabled={busy || row.isAccepted}>
-        <div className="flex items-center justify-between gap-3">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.25em] text-emerald-700 dark:text-emerald-300">Session draft</p>
-          {row.isAccepted && (
-            <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-emerald-800 dark:bg-emerald-400/15 dark:text-emerald-200">
-              Accepted
-            </span>
-          )}
-        </div>
-
-        <div
-          data-draft-row-fields
-          className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-[minmax(18rem,2fr)_minmax(9rem,0.8fr)_minmax(9rem,0.8fr)_minmax(14rem,1.2fr)_auto] xl:items-end"
-        >
-          <div className="md:col-span-2 xl:col-span-1">
-            <label className="block text-xs font-medium text-slate-600 dark:text-slate-300">
-              Game match
-              <span className="mt-1 flex items-center gap-2">
-                <input
-                  data-game-search
-                  value={row.title}
-                  onChange={(event) => onTitle(event.currentTarget.value)}
-                  aria-invalid={ariaInvalid(invalidGame)}
-                  placeholder="Search saved games and IGDB"
-                  className={`block min-w-0 flex-1 rounded-xl border px-3 py-2 text-sm text-slate-900 outline-none dark:text-white ${reviewFieldClass(invalidGame)}`}
-                />
-                <button
-                  {...scope}
-                  type="button"
-                  onClick={onSearch}
-                  className="shrink-0 rounded-xl border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 transition hover:border-emerald-400 dark:border-slate-700 dark:text-slate-200"
-                >
-                  Find game
-                </button>
-              </span>
-            </label>
-            {selected !== null && (
-              <div className="mt-2 flex min-w-0 items-center gap-2 rounded-xl border border-emerald-300/60 bg-emerald-50 px-2 py-1.5 dark:border-emerald-400/30 dark:bg-emerald-400/10">
-                {selected.capsuleUrl !== null ? (
-                  <img src={selected.capsuleUrl} alt={`${selected.title} poster`} className="h-10 w-8 shrink-0 rounded-md object-cover" />
+    <article
+      data-draft-row
+      className={cx(
+        "rounded-tile border px-4 py-3.5",
+        selected === null && !row.isAccepted ? "border-danger-line bg-danger-tint" : "border-[color:var(--tile-border)] bg-tile",
+      )}
+    >
+      <fieldset disabled={busy || row.isAccepted} className="m-0 min-w-0 border-0 p-0 disabled:opacity-[.55]">
+        <legend className="sr-only">Session draft {row.title}</legend>
+        <div data-draft-row-fields className="flex flex-wrap items-end gap-2.5">
+          <div className="flex min-w-0 flex-[1_1_160px] items-center gap-3">
+            <Cover title={selected?.title ?? row.title} src={selected?.capsuleUrl} className="h-12 w-12 rounded-[14px]" />
+            {showSearch ? (
+              <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+                <div className="flex gap-1.5">
+                  <input
+                    data-game-search
+                    aria-label="Game match"
+                    value={row.title}
+                    onChange={(event) => onTitle(event.currentTarget.value)}
+                    onBlur={onCommitTitle}
+                    aria-invalid={ariaInvalid(invalidGame)}
+                    placeholder="Search saved games and IGDB"
+                    className={cx("pdx-input h-10 px-4", invalidGame ? "border-danger-line" : "")}
+                  />
+                  <button type="button" onClick={onSearch} className="pdx-btn-outline h-10 shrink-0 px-3.5 text-[13px]">
+                    Find game
+                  </button>
+                </div>
+                {selected === null ? (
+                  <span className="text-xs font-medium text-danger">No verified game yet. Search to pick one.</span>
                 ) : (
-                  <span
-                    aria-hidden="true"
-                    className="flex h-10 w-8 shrink-0 items-center justify-center rounded-md bg-slate-200 text-[7px] uppercase text-slate-500 dark:bg-slate-800 dark:text-slate-400"
-                  >
-                    No art
+                  <span className="flex flex-wrap gap-x-2 text-xs text-muted">
+                    <span className="min-w-0 truncate">Matched to {selected.title}. Search to pick a different game.</span>
+                    {changing && row.results.length === 0 && (
+                      <button type="button" onClick={() => setChanging(false)} className="font-semibold text-ink-2 underline">
+                        Keep match
+                      </button>
+                    )}
                   </span>
                 )}
-                <span className="min-w-0">
-                  <span className="block truncate text-sm font-semibold">{selected.title}</span>
-                  <span className="block text-[10px] font-semibold uppercase tracking-[0.16em] text-emerald-700 dark:text-emerald-300">
-                    Matched from {selected.source === "local" ? "saved game" : "IGDB"}
+              </div>
+            ) : (
+              <div data-draft-match className="min-w-0 flex-1">
+                <p className="truncate text-[15px] font-semibold">{selected.title}</p>
+                <p className="mt-[3px] flex min-w-0 items-center gap-2 text-xs text-muted">
+                  <span className="shrink-0 whitespace-nowrap font-semibold text-accent">✓ Matched</span>
+                  <span className="truncate">from “{row.title}”</span>
+                  <span className="shrink-0 text-[10px] font-semibold uppercase tracking-[0.14em]">
+                    {selected.source === "local" ? "Saved game" : "IGDB"}
                   </span>
-                </span>
+                  {!row.isAccepted && (
+                    <button type="button" onClick={() => setChanging(true)} className="shrink-0 font-semibold text-ink-2 underline">
+                      Change
+                    </button>
+                  )}
+                </p>
               </div>
             )}
           </div>
 
-          <label className="block text-xs font-medium text-slate-600 dark:text-slate-300">
+          <label className={cx(fieldLabelClass, "flex-[0_0_136px]")}>
             Date
             <ChangeInput
               type="date"
               value={row.date}
               onValueChange={(date) => onField({ date })}
               aria-invalid={ariaInvalid(invalidDate)}
-              className={`mt-1 block w-full rounded-xl border px-3 py-2 text-sm outline-none dark:text-white ${reviewFieldClass(invalidDate)}`}
+              className={cx("pdx-input h-10 px-3 text-[13px] tracking-normal", reviewFieldClass(invalidDate))}
             />
           </label>
 
-          <div>
-            <span className="block text-xs font-medium text-slate-600 dark:text-slate-300">Duration</span>
-            <div className="mt-1 grid grid-cols-2 gap-2">
-              <label className="sr-only" htmlFor={`draft-hours-${row.id}`}>
-                Hours
-              </label>
+          <div className={cx(fieldLabelClass, "flex-[0_0_auto]")}>
+            <span aria-hidden="true">Duration</span>
+            <div
+              className={cx(
+                "flex h-10 items-center gap-1 rounded-full border bg-surface px-3 tracking-normal transition-colors focus-within:border-bar",
+                invalidDuration ? "border-danger" : "border-line",
+              )}
+            >
               <ChangeInput
-                id={`draft-hours-${row.id}`}
                 aria-label="Hours"
                 type="number"
                 min="0"
@@ -803,13 +933,12 @@ function DraftRowArticle({ row, busy, platforms, onTitle, onField, onSearch, onS
                 value={row.hours}
                 onValueChange={(hours) => onField({ hours })}
                 aria-invalid={ariaInvalid(invalidDuration)}
-                className={`block w-full rounded-xl border px-2 py-2 text-sm outline-none dark:text-white ${reviewFieldClass(invalidDuration)}`}
+                className="pdx-num w-[34px] border-0 bg-transparent text-right text-sm font-semibold text-ink outline-none"
               />
-              <label className="sr-only" htmlFor={`draft-minutes-${row.id}`}>
-                Minutes
-              </label>
+              <span aria-hidden="true" className="text-xs">
+                h
+              </span>
               <ChangeInput
-                id={`draft-minutes-${row.id}`}
                 aria-label="Minutes"
                 type="number"
                 min="0"
@@ -817,18 +946,21 @@ function DraftRowArticle({ row, busy, platforms, onTitle, onField, onSearch, onS
                 value={row.minutes}
                 onValueChange={(minutes) => onField({ minutes })}
                 aria-invalid={ariaInvalid(invalidDuration)}
-                className={`block w-full rounded-xl border px-2 py-2 text-sm outline-none dark:text-white ${reviewFieldClass(invalidDuration)}`}
+                className="pdx-num w-[42px] border-0 bg-transparent text-right text-sm font-semibold text-ink outline-none"
               />
+              <span aria-hidden="true" className="text-xs">
+                m
+              </span>
             </div>
           </div>
 
-          <label className="block text-xs font-medium text-slate-600 dark:text-slate-300">
+          <label className={cx(fieldLabelClass, "flex-[0_0_136px]")}>
             Platform
             <BoundSelect
               value={row.platformKey}
               onValueChange={(platformKey) => onField({ platformKey })}
               data-needs-review={platformReview ? "" : undefined}
-              className={`mt-1 block w-full rounded-xl border px-3 py-2 text-sm outline-none dark:text-white ${reviewFieldClass(platformReview)}`}
+              className={cx("pdx-input h-10 pl-3 text-[13px] tracking-normal", reviewFieldClass(platformReview))}
             >
               {platforms.map((platform, index) => (
                 <option key={`${index}-${platform.key}`} value={platform.key}>
@@ -839,60 +971,53 @@ function DraftRowArticle({ row, busy, platforms, onTitle, onField, onSearch, onS
             </BoundSelect>
           </label>
 
-          <div className="flex flex-wrap items-center gap-2 md:col-span-2 xl:col-span-1 xl:justify-end">
-            <button
-              {...scope}
-              type="button"
-              onClick={onSave}
-              className="rounded-xl border border-slate-300 px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-700 dark:border-slate-700 dark:text-slate-200"
-            >
-              Save edits
-            </button>
-            <button
-              {...scope}
-              type="button"
-              onClick={onDelete}
-              className="rounded-xl border border-rose-200 px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-rose-700 dark:border-rose-400/30 dark:text-rose-200"
-            >
-              Delete draft
-            </button>
-            <button
-              {...scope}
-              type="button"
-              disabled={!canAccept(row)}
-              onClick={onAccept}
-              className="rounded-xl bg-emerald-400 px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-950 disabled:opacity-60"
-            >
-              Accept
-            </button>
+          <div className="ml-auto flex flex-[0_0_auto] items-center gap-1.5">
+            {row.isAccepted ? (
+              <span role="status" className="rounded-full bg-mint px-3.5 py-2 text-[13px] font-semibold text-accent">
+                ✓ Added
+              </span>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  aria-label="Delete draft"
+                  title="Delete draft"
+                  onClick={onDelete}
+                  className="pdx-icon-btn h-10 w-10 border-danger-line text-sm font-semibold text-danger hover:border-danger hover:bg-danger-tint"
+                >
+                  ✕
+                </button>
+                <button type="button" disabled={!canAccept(row)} onClick={onAccept} className="pdx-btn-primary h-10 px-4 text-[13px]">
+                  Accept
+                </button>
+              </>
+            )}
           </div>
 
           {row.results.length > 0 && (
-            <div className="grid max-h-56 gap-2 overflow-y-auto border-t border-slate-200 pt-3 md:col-span-2 sm:grid-cols-2 lg:grid-cols-3 xl:col-span-5 xl:grid-cols-4 dark:border-slate-800">
+            <div className="grid basis-full grid-cols-[repeat(auto-fill,minmax(min(210px,100%),1fr))] gap-2 border-t border-divider pt-3">
               {row.results.map((result, index) => (
                 <button
-                  {...scope}
                   key={index}
                   type="button"
                   data-game-result
                   data-game-result-source={result.source}
-                  className="flex min-w-0 items-center gap-2 rounded-xl border border-slate-200 bg-white p-2 text-left transition hover:border-emerald-400 dark:border-slate-700 dark:bg-slate-950"
-                  onClick={() => onChoose(result)}
+                  className="grid min-w-0 grid-cols-[40px_minmax(0,1fr)] items-center gap-2.5 rounded-[18px] border-[1.5px] border-transparent bg-surface p-2 text-left transition-colors hover:border-mint-hover"
+                  onClick={() => {
+                    setChanging(false);
+                    onChoose(result);
+                  }}
                 >
-                  {result.capsuleUrl !== null ? (
-                    <img src={result.capsuleUrl} alt={`${result.title} poster`} className="h-12 w-9 shrink-0 rounded-md object-cover" />
-                  ) : (
-                    <span
-                      aria-hidden="true"
-                      className="flex h-12 w-9 shrink-0 items-center justify-center rounded-md bg-slate-200 text-[7px] uppercase text-slate-500 dark:bg-slate-800 dark:text-slate-400"
-                    >
-                      No art
-                    </span>
-                  )}
+                  <Cover title={result.title} src={result.capsuleUrl} className="h-10 w-10 rounded-xl" initialClassName="text-sm" />
                   <span className="min-w-0">
-                    <span className="block truncate text-sm font-semibold">{result.title}</span>
-                    <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">
-                      {result.source === "local" ? "Saved game" : "IGDB"}
+                    <span className="block truncate text-sm font-medium">{result.title}</span>
+                    <span
+                      className={cx(
+                        "block text-[10px] font-semibold uppercase tracking-[0.14em]",
+                        result.source === "local" ? "text-accent" : "text-muted",
+                      )}
+                    >
+                      {result.source === "local" ? "Saved game" : "From IGDB"}
                     </span>
                   </span>
                 </button>
@@ -902,14 +1027,14 @@ function DraftRowArticle({ row, busy, platforms, onTitle, onField, onSearch, onS
         </div>
       </fieldset>
       {row.error.length > 0 && (
-        <p role="alert" className="mt-4 rounded-xl bg-rose-50 p-3 text-sm text-rose-700 dark:bg-rose-400/10 dark:text-rose-200">
-          {row.error}
-        </p>
-      )}
-      {row.isAccepted && (
-        <p role="status" className="mt-4 rounded-xl bg-emerald-50 p-3 text-sm text-emerald-800 dark:bg-emerald-400/10 dark:text-emerald-200">
-          Accepted — session saved.
-        </p>
+        <div role="alert" className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-[18px] bg-surface px-4 py-3 text-sm text-danger">
+          <p className="min-w-0 flex-1">{row.error}</p>
+          {!row.isAccepted && isDirty(row) && (
+            <button type="button" disabled={busy} onClick={onRetrySave} className="pdx-btn-danger h-9 px-4 text-[13px]">
+              Retry save
+            </button>
+          )}
+        </div>
       )}
     </article>
   );

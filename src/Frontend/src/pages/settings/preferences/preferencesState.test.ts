@@ -102,4 +102,29 @@ describe("preferencesState", () => {
     state = p.completeTestNotification(p.beginTestNotification(state), { sent: false });
     expect(state.testNotificationError).toBe("The test message was not sent.");
   });
+
+  it("tracks unsaved changes and discards back to the loaded values", () => {
+    const loaded = p.completeSettingsLoad(p.createPreferencesState(), {
+      ignoreShortSessionsMinutes: 5,
+      telegramChatId: "42",
+    });
+    expect(p.isPreferencesDirty(loaded)).toBe(false);
+
+    const stepped = p.stepIgnoreShortSessionsMinutes(loaded, 1);
+    expect(stepped.ignoreShortSessionsMinutes).toBe("6");
+    expect(p.isPreferencesDirty(stepped)).toBe(true);
+
+    const edited = p.setTelegramChatId(stepped, "43");
+    const discarded = p.discardSettingsChanges(edited);
+    expect([discarded.ignoreShortSessionsMinutes, discarded.telegramChatId]).toEqual(["5", "42"]);
+    expect(p.isPreferencesDirty(discarded)).toBe(false);
+  });
+
+  it("steps minimum minutes from 0 for unparsable drafts and never below 0", () => {
+    const state = p.setIgnoreShortSessionsMinutes(p.createPreferencesState(), "abc");
+    expect(p.parsedMinimumMinutes(state)).toBeNull();
+    expect(p.stepIgnoreShortSessionsMinutes(state, 1).ignoreShortSessionsMinutes).toBe("1");
+    expect(p.stepIgnoreShortSessionsMinutes(p.createPreferencesState(), -1).ignoreShortSessionsMinutes).toBe("0");
+    expect(p.parsedMinimumMinutes(p.setIgnoreShortSessionsMinutes(state, " "))).toBe(0);
+  });
 });

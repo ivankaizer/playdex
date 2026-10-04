@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router";
 import { ThemeProvider } from "@/lib/theme";
@@ -47,7 +47,8 @@ describe("HomePage", () => {
 
     renderHome();
 
-    expect(screen.getByText("cached@example.com")).toBeInTheDocument();
+    // Shown in the header pill bar and in the auth card.
+    expect(screen.getAllByText("cached@example.com")).toHaveLength(2);
     expect(screen.getByText("Session active.")).toBeInTheDocument();
     expect(fetchMock).not.toHaveBeenCalled();
   });
@@ -59,9 +60,9 @@ describe("HomePage", () => {
       .mockResolvedValue(jsonResponse(200, { data: { userId: 1, email: "loaded@example.com" }, error: null }));
 
     renderHome();
-    expect(screen.getByText("Loading...")).toBeInTheDocument();
+    expect(screen.getAllByText("Loading...").length).toBeGreaterThan(0);
 
-    expect(await screen.findByText("loaded@example.com")).toBeInTheDocument();
+    expect((await screen.findAllByText("loaded@example.com")).length).toBeGreaterThan(0);
     expect(String(fetchMock.mock.calls[0][0])).toMatch(/\/me$/);
     expect(localStorage.getItem("playdex.email")).toBe("loaded@example.com");
   });
@@ -72,15 +73,24 @@ describe("HomePage", () => {
       .mockResolvedValue(jsonResponse(401, { data: null, error: { error: "Invalid credentials." } }));
 
     renderHome();
+    const form = within(screen.getByRole("form", { name: "Sign in" }));
     fireEvent.change(screen.getByPlaceholderText("you@example.com"), { target: { value: "a@b.c" } });
     fireEvent.change(screen.getByPlaceholderText("••••••••"), { target: { value: "secret" } });
-    fireEvent.click(screen.getByRole("button", { name: "Log in" }));
+    fireEvent.click(form.getByRole("button", { name: "Sign in" }));
 
     expect(await screen.findByText("Invalid credentials.")).toBeInTheDocument();
     const [url, init] = fetchMock.mock.calls[0];
     expect(String(url)).toMatch(/\/login$/);
     expect(init?.method).toBe("POST");
     expect(init?.body).toBe(JSON.stringify({ email: "a@b.c", password: "secret" }));
-    await waitFor(() => expect(screen.getByRole("button", { name: "Log in" })).not.toBeDisabled());
+    await waitFor(() => expect(form.getByRole("button", { name: "Sign in" })).not.toBeDisabled());
+  });
+
+  it("focuses the email field from the header sign-in pill", () => {
+    renderHome();
+    const form = screen.getByRole("form", { name: "Sign in" });
+    const headerButton = screen.getAllByRole("button", { name: "Sign in" }).find((button) => !form.contains(button));
+    fireEvent.click(headerButton!);
+    expect(screen.getByPlaceholderText("you@example.com")).toHaveFocus();
   });
 });

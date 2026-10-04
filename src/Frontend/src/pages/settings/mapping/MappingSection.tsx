@@ -1,4 +1,7 @@
+import { Cover } from "@/components/ui";
+import { cx } from "@/lib/cx";
 import type { GameConnection, GameSearchResult } from "@/models/games";
+import { SectionHeading } from "../shared/SectionHeading";
 import type { GameSearchState, SearchSlot } from "./mappingState";
 import { useMapping } from "./useMapping";
 
@@ -6,124 +9,119 @@ type Mapping = ReturnType<typeof useMapping>;
 
 const platformLabel = (platform: string | null | undefined) => (platform ? platform : "Unknown platform");
 
+const secondaryCoverStyle = { background: "linear-gradient(135deg,#8a96a3,#b5bfc9)" };
+
 export function MappingSection() {
   const mapping = useMapping();
   const { state } = mapping;
+  const primary = state.primary.selected;
+  const secondary = state.secondary.selected;
+  const canConnect =
+    primary !== null && secondary !== null && primary.gameId !== secondary.gameId && !state.isConnectionSaving;
+  const pairCount = state.gameConnections.length;
 
   return (
-    <section
-      id="game-connections"
-      data-settings-section="game-connections"
-      className="rounded-3xl border border-slate-200 bg-white/80 p-5 dark:border-slate-800 dark:bg-slate-900/60 sm:p-6"
-    >
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-700 dark:text-emerald-300">
-            Game connections
-          </p>
-          <h2 className="mt-2 text-xl font-semibold text-slate-900 dark:text-white">Merge stats across editions</h2>
-        </div>
-        <button
-          type="button"
-          onClick={() => void mapping.loadGameConnections()}
-          disabled={state.isGameConnectionsLoading}
-          className="rounded-full border border-slate-300 dark:border-slate-700 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-slate-700 dark:text-slate-200 transition hover:border-emerald-300/60 dark:hover:border-emerald-400/60 disabled:cursor-not-allowed"
-        >
-          {state.isGameConnectionsLoading ? "Refreshing..." : "Refresh"}
-        </button>
-      </div>
+    <section id="game-connections" data-settings-section="game-connections" className="pdx-card flex flex-col gap-6">
+      <SectionHeading
+        kicker="Game connections"
+        title="Merge stats across editions"
+        description="Combine two library entries so their playtime counts as one game."
+        aside={
+          <button
+            type="button"
+            onClick={() => void mapping.loadGameConnections()}
+            disabled={state.isGameConnectionsLoading}
+            className="pdx-btn-outline !h-[38px] !px-[18px] !text-[13px]"
+          >
+            <span aria-hidden="true">↻</span>
+            {state.isGameConnectionsLoading ? "Refreshing..." : "Refresh"}
+          </button>
+        }
+      />
 
       {state.gameConnectionsError.length > 0 ? (
-        <p className="mt-4 text-xs text-rose-700 dark:text-rose-300">{state.gameConnectionsError}</p>
+        <p role="alert" className="text-[13px] text-danger">
+          {state.gameConnectionsError}
+        </p>
       ) : null}
 
-      <div className="mt-6 grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
-        <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/70 dark:bg-slate-950/50 p-4 sm:p-5">
-          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-500 dark:text-slate-400">
-            Connect games
-          </p>
-          <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
-            Pick two games to combine their playtime into a single entry.
-          </p>
-
-          <div className="mt-4 grid gap-4">
-            <GameSearchPanel
-              slot="primary"
-              title="Primary game"
-              emptyHint="Search to find the primary game."
-              search={state.primary}
-              mapping={mapping}
-            />
-            <GameSearchPanel
-              slot="secondary"
-              title="Connected game"
-              emptyHint="Search to find the connected game."
-              search={state.secondary}
-              mapping={mapping}
-            />
+      <div className="pdx-tile flex flex-col gap-3 !p-6">
+        <div className="grid items-start gap-3 md:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)_auto]">
+          <GameSearchField
+            slot="primary"
+            title="Primary game"
+            emptyHint="Search to find the primary game."
+            search={state.primary}
+            mapping={mapping}
+          />
+          <div className="hidden flex-col gap-2 md:flex" aria-hidden="true">
+            <span className="pdx-label">&nbsp;</span>
+            <span className="grid h-12 place-items-center text-lg text-accent">⟵</span>
           </div>
+          <GameSearchField
+            slot="secondary"
+            title="Merge into it"
+            emptyHint="Search to find the game to merge in."
+            search={state.secondary}
+            mapping={mapping}
+          />
+          <div className="flex flex-col gap-2">
+            <span className="pdx-label hidden md:block" aria-hidden="true">
+              &nbsp;
+            </span>
+            <div className="flex gap-2">
+              <button type="button" onClick={mapping.clearConnectionDraft} className="pdx-btn-outline !h-12 !px-[18px]">
+                Clear
+              </button>
+              <button
+                type="button"
+                onClick={() => void mapping.connectGames()}
+                disabled={!canConnect}
+                className="pdx-btn-primary !h-12 !px-[22px]"
+              >
+                {state.isConnectionSaving ? "Saving..." : "Connect"}
+              </button>
+            </div>
+          </div>
+        </div>
+        {state.connectionSaveError.length > 0 ? (
+          <p role="alert" className="text-[13px] text-danger">
+            {state.connectionSaveError}
+          </p>
+        ) : null}
+      </div>
 
-          {state.connectionSaveError.length > 0 ? (
-            <p className="mt-4 text-xs text-rose-700 dark:text-rose-300">{state.connectionSaveError}</p>
+      <div className="flex flex-col gap-1">
+        <div className="pdx-label flex justify-between px-1 pb-2">
+          <span>Connected pairs</span>
+          {!state.isGameConnectionsLoading ? (
+            <span className="pdx-num">
+              {pairCount} {pairCount === 1 ? "pair" : "pairs"}
+            </span>
           ) : null}
-
-          <div className="mt-4 flex flex-wrap gap-3">
-            <button
-              type="button"
-              onClick={() => void mapping.connectGames()}
-              disabled={state.isConnectionSaving}
-              className="rounded-full bg-emerald-300 dark:bg-emerald-400 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-slate-900 transition hover:bg-emerald-200 dark:hover:bg-emerald-300 disabled:cursor-not-allowed disabled:bg-emerald-200/60 dark:disabled:bg-emerald-300/60"
-            >
-              {state.isConnectionSaving ? "Saving..." : "Connect games"}
-            </button>
-            <button
-              type="button"
-              onClick={mapping.clearConnectionDraft}
-              className="rounded-full border border-slate-300 dark:border-slate-700 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-slate-700 dark:text-slate-200 transition hover:border-emerald-300/60 dark:hover:border-emerald-400/60"
-            >
-              Clear
-            </button>
-          </div>
         </div>
-
-        <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/70 dark:bg-slate-950/50 p-4 sm:p-5">
-          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-500 dark:text-slate-400">
-            Connected pairs
-          </p>
-          <div className="mt-4 space-y-3">
-            {state.isGameConnectionsLoading ? (
-              [1, 2, 3].map((row) => (
-                <div
-                  key={row}
-                  className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/70 dark:bg-slate-950/40 p-3"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="h-10 w-8 rounded-lg bg-slate-200/70 dark:bg-slate-800/60"></div>
-                    <div className="h-3 w-24 rounded-full bg-slate-200/70 dark:bg-slate-800/60"></div>
-                  </div>
-                </div>
-              ))
-            ) : state.gameConnections.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-slate-200 dark:border-slate-800 bg-white/70 dark:bg-slate-950/40 p-4 text-xs text-slate-500 dark:text-slate-400">
-                No game connections yet.
-              </div>
-            ) : (
-              state.gameConnections.map((connection) => (
-                <ConnectionRow
-                  key={`${connection.gameId}-${connection.connectedGameId}`}
-                  connection={connection}
-                  mapping={mapping}
-                />
-              ))
-            )}
+        {state.isGameConnectionsLoading ? (
+          [1, 2, 3].map((row) => (
+            <div key={row} aria-hidden="true" className="flex items-center gap-3 px-3.5 py-3">
+              <div className="h-11 w-11 animate-pulse rounded-xl bg-track"></div>
+              <div className="h-3 w-40 max-w-full animate-pulse rounded-full bg-track"></div>
+            </div>
+          ))
+        ) : pairCount === 0 ? (
+          <div className="pdx-dashed !rounded-[20px] border-[1.5px] !p-5 !text-sm">
+            No games connected yet. Pick two above to merge their playtime.
           </div>
-        </div>
+        ) : (
+          state.gameConnections.map((connection) => (
+            <ConnectionRow key={`${connection.gameId}-${connection.connectedGameId}`} connection={connection} mapping={mapping} />
+          ))
+        )}
       </div>
     </section>
   );
 }
 
-interface GameSearchPanelProps {
+interface GameSearchFieldProps {
   slot: SearchSlot;
   title: string;
   emptyHint: string;
@@ -131,56 +129,57 @@ interface GameSearchPanelProps {
   mapping: Mapping;
 }
 
-function GameSearchPanel({ slot, title, emptyHint, search, mapping }: GameSearchPanelProps) {
+function GameSearchField({ slot, title, emptyHint, search, mapping }: GameSearchFieldProps) {
   const selected = search.selected;
+  const inputId = `game-connection-${slot}`;
+  const showSelected = selected !== null && search.query === selected.title;
 
   return (
-    <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/70 dark:bg-slate-950/60 p-4">
-      <p className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-500 dark:text-slate-400">{title}</p>
-      <div className="mt-3 flex flex-wrap items-center gap-3">
+    <div className="flex min-w-0 flex-col gap-2">
+      <label htmlFor={inputId} className="pdx-label">
+        {title}
+      </label>
+      <div className="relative">
         <input
+          id={inputId}
           type="text"
           value={search.query}
           onChange={(event) => mapping.changeGameQuery(slot, event.target.value)}
-          className="flex-1 rounded-xl border border-slate-300 dark:border-slate-700 bg-white/90 dark:bg-slate-950/80 px-3 py-2 text-sm text-slate-900 dark:text-white outline-none transition focus:border-emerald-300 dark:focus:border-emerald-400 focus:ring-2 focus:ring-emerald-300/30 dark:focus:ring-emerald-400/30"
-          placeholder="Search games"
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              event.preventDefault();
+              void mapping.searchGames(slot);
+            }
+          }}
+          placeholder="Search your library"
+          className={cx("pdx-input !h-12 !pl-5 !pr-[104px]", showSelected && "!border-mint-line")}
         />
         <button
           type="button"
           onClick={() => void mapping.searchGames(slot)}
           disabled={search.isLoading}
-          className="rounded-full bg-emerald-300 dark:bg-emerald-400 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-slate-900 transition hover:bg-emerald-200 dark:hover:bg-emerald-300 disabled:cursor-not-allowed disabled:bg-emerald-200/60 dark:disabled:bg-emerald-300/60"
+          className="pdx-btn-accent absolute right-1.5 top-1.5 !h-9 !px-3.5 !text-xs"
         >
           {search.isLoading ? "Searching..." : "Search"}
         </button>
       </div>
-      {search.error.length > 0 ? <p className="mt-3 text-xs text-rose-700 dark:text-rose-300">{search.error}</p> : null}
-      {selected !== null ? (
-        <div className="mt-3 flex items-center gap-3 rounded-xl border border-emerald-300/40 dark:border-emerald-400/40 bg-emerald-300/10 dark:bg-emerald-500/10 p-3 text-sm text-emerald-700 dark:text-emerald-100">
-          {selected.capsuleUrl ? (
-            <img
-              src={selected.capsuleUrl}
-              alt={`${selected.title} cover`}
-              className="h-10 w-8 rounded-lg border border-emerald-300/40 dark:border-emerald-400/40 object-cover"
-            />
-          ) : (
-            <div className="h-10 w-8 rounded-lg border border-emerald-300/40 dark:border-emerald-400/40 bg-emerald-300/10 dark:bg-emerald-500/10"></div>
-          )}
-          <div>
-            <p className="font-semibold">{selected.title}</p>
-            <p className="text-xs text-emerald-700 dark:text-emerald-200">{platformLabel(selected.platform)}</p>
-          </div>
-        </div>
-      ) : null}
-      <div className="mt-3 grid gap-2">
-        {search.results.length === 0 ? (
-          <p className="text-xs text-slate-500">{emptyHint}</p>
-        ) : (
-          search.results.map((result) => (
-            <SearchResultButton key={result.gameId} result={result} onSelect={() => mapping.selectGame(slot, result)} />
-          ))
-        )}
-      </div>
+      {search.error.length > 0 ? <p className="px-1 text-xs text-danger">{search.error}</p> : null}
+      {search.results.length > 0 ? (
+        <ul className="flex max-h-72 flex-col gap-0.5 overflow-y-auto rounded-[18px] border border-line bg-surface p-1.5 shadow-pop">
+          {search.results.map((result) => (
+            <li key={result.gameId}>
+              <SearchResultButton result={result} onSelect={() => mapping.selectGame(slot, result)} />
+            </li>
+          ))}
+        </ul>
+      ) : showSelected ? (
+        <p className="flex items-center gap-1.5 px-1 text-xs font-semibold text-accent">
+          <span aria-hidden="true">✓</span>
+          <span className="truncate">Selected · {platformLabel(selected.platform)}</span>
+        </p>
+      ) : (
+        <p className="px-1 text-xs text-muted">{emptyHint}</p>
+      )}
     </div>
   );
 }
@@ -190,74 +189,92 @@ function SearchResultButton({ result, onSelect }: { result: GameSearchResult; on
     <button
       type="button"
       onClick={onSelect}
-      className="flex items-center gap-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-950/40 p-3 text-left text-sm text-slate-900 dark:text-white transition hover:border-emerald-300/60 dark:hover:border-emerald-400/60"
+      className="pdx-row flex w-full items-center gap-3 !rounded-[14px] px-2.5 py-2 text-left"
     >
-      <Capsule url={result.capsuleUrl} title={result.title} />
-      <div>
-        <p className="font-semibold">{result.title}</p>
-        <p className="text-xs text-slate-500 dark:text-slate-400">{platformLabel(result.platform)}</p>
-      </div>
+      <Cover title={result.title} src={result.capsuleUrl} className="h-9 w-9 rounded-[10px]" initialClassName="text-sm" />
+      <span className="min-w-0">
+        <span className="block truncate text-sm font-semibold">{result.title}</span>
+        <span className="block text-xs text-muted">{platformLabel(result.platform)}</span>
+      </span>
     </button>
-  );
-}
-
-function Capsule({ url, title }: { url: string | null; title: string }) {
-  return url ? (
-    <img
-      src={url}
-      alt={`${title} cover`}
-      className="h-10 w-8 rounded-lg border border-slate-200 dark:border-slate-800 object-cover"
-    />
-  ) : (
-    <div className="h-10 w-8 rounded-lg border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/60"></div>
   );
 }
 
 function ConnectionRow({ connection, mapping }: { connection: GameConnection; mapping: Mapping }) {
   return (
-    <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/70 dark:bg-slate-950/40 p-3">
-      <div className="flex flex-col gap-3">
-        <div className="flex items-center gap-3">
-          <Capsule url={connection.capsuleUrl} title={connection.title} />
-          <div className="min-w-0 flex-1">
-            <button
-              type="button"
-              onClick={() => mapping.navigateToGame(connection.gameId)}
-              className="block w-full break-words text-left text-sm font-semibold text-slate-900 dark:text-white transition hover:text-emerald-700 dark:hover:text-emerald-200"
-            >
-              {connection.title}
-            </button>
-            <p className="text-xs text-slate-500 dark:text-slate-400">{platformLabel(connection.platform)}</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2 text-xs uppercase tracking-[0.3em] text-slate-500">
-          <span className="h-px flex-1 bg-slate-200 dark:bg-slate-800"></span>
-          <span>+ +</span>
-          <span className="h-px flex-1 bg-slate-200 dark:bg-slate-800"></span>
-        </div>
-        <div className="flex items-center gap-3">
-          <Capsule url={connection.connectedCapsuleUrl} title={connection.connectedTitle} />
-          <div className="min-w-0 flex-1">
-            <button
-              type="button"
-              onClick={() => mapping.navigateToGame(connection.connectedGameId)}
-              className="block w-full break-words text-left text-sm font-semibold text-slate-900 dark:text-white transition hover:text-emerald-700 dark:hover:text-emerald-200"
-            >
-              {connection.connectedTitle}
-            </button>
-            <p className="text-xs text-slate-500 dark:text-slate-400">{platformLabel(connection.connectedPlatform)}</p>
-          </div>
-        </div>
+    <div className="pdx-row grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3.5 gap-y-2 !rounded-[20px] px-3.5 py-3 sm:grid-cols-[minmax(0,1fr)_32px_minmax(0,1fr)_auto]">
+      <ConnectionGame
+        title={connection.title}
+        capsuleUrl={connection.capsuleUrl}
+        role="Primary"
+        platform={connection.platform}
+        onOpen={() => mapping.navigateToGame(connection.gameId)}
+        primary
+      />
+      <span
+        aria-hidden="true"
+        className="hidden h-8 w-8 place-items-center rounded-full bg-mint text-sm text-accent sm:grid"
+      >
+        ⟵
+      </span>
+      <div className="col-start-1 row-start-2 min-w-0 sm:col-start-auto sm:row-start-auto">
+        <ConnectionGame
+          title={connection.connectedTitle}
+          capsuleUrl={connection.connectedCapsuleUrl}
+          role="Merged in"
+          platform={connection.connectedPlatform}
+          onOpen={() => mapping.navigateToGame(connection.connectedGameId)}
+        />
       </div>
-      <div className="mt-3 flex justify-end">
+      <button
+        type="button"
+        onClick={() => void mapping.disconnectGames(connection.gameId, connection.connectedGameId)}
+        disabled={mapping.state.isConnectionSaving}
+        aria-label={`Unlink ${connection.connectedTitle} from ${connection.title}`}
+        className="pdx-btn-danger col-start-2 row-span-2 row-start-1 !h-8 !px-3.5 !text-xs sm:col-start-auto sm:row-span-1 sm:row-start-auto"
+      >
+        Unlink
+      </button>
+    </div>
+  );
+}
+
+function ConnectionGame({
+  title,
+  capsuleUrl,
+  role,
+  platform,
+  onOpen,
+  primary = false,
+}: {
+  title: string;
+  capsuleUrl: string | null;
+  role: string;
+  platform: string;
+  onOpen: () => void;
+  primary?: boolean;
+}) {
+  return (
+    <div className="flex min-w-0 items-center gap-3">
+      <Cover
+        title={title}
+        src={capsuleUrl}
+        className="h-11 w-11 rounded-xl"
+        initialClassName="text-[15px]"
+        style={primary ? undefined : secondaryCoverStyle}
+      />
+      <div className="min-w-0">
         <button
           type="button"
-          onClick={() => void mapping.disconnectGames(connection.gameId, connection.connectedGameId)}
-          disabled={mapping.state.isConnectionSaving}
-          className="rounded-full border border-rose-400/60 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.3em] text-rose-700 dark:text-rose-200 transition hover:border-rose-300 hover:text-rose-700 dark:hover:text-rose-100 disabled:cursor-not-allowed"
+          onClick={onOpen}
+          className="block max-w-full truncate text-left text-[15px] font-medium transition-colors hover:text-accent"
         >
-          Remove
+          {title}
         </button>
+        <p className={cx("truncate text-xs", primary ? "font-semibold text-accent" : "text-muted")}>
+          {role}
+          <span className="font-normal text-muted"> · {platformLabel(platform)}</span>
+        </p>
       </div>
     </div>
   );

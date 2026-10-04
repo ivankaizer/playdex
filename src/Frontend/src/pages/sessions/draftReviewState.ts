@@ -138,6 +138,17 @@ export function applyDraftRow(row: DraftRowEdit, dto: DraftRowDto): DraftRowEdit
   return { ...next, saved: rowUpdate(next) };
 }
 
+/**
+ * Applies the server's answer to a PATCH that sent `sent`. When the row was edited again while the
+ * request was in flight, those newer edits are kept on top of the new revision (the row stays dirty
+ * so the next automatic save sends them); otherwise this is `applyDraftRow`.
+ */
+export function applySavedDraftRow(row: DraftRowEdit, sent: DraftRowUpdate, dto: DraftRowDto): DraftRowEdit {
+  const applied = applyDraftRow(row, dto);
+  if (sameUpdate(rowUpdate(row), sent)) return applied;
+  return { ...row, revision: dto.revision, warnings: dto.warnings, error: "", saved: applied.saved };
+}
+
 export function setDraftTitle(row: DraftRowEdit, title: string): DraftRowEdit {
   if (row.title === title) return row;
   return { ...row, title, selection: null, results: [] };

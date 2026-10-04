@@ -97,6 +97,11 @@ export function selectGame(state: SessionCreateState, game: ManualMappingSearchR
   return { ...state, selectedGame: game, platformKey: "", error: "" };
 }
 
+/** Clears the chosen game (the "✕" on the selected-game strip); the platform stays. */
+export function clearGame(state: SessionCreateState): SessionCreateState {
+  return { ...state, selectedGame: null, error: "" };
+}
+
 export function setPlatform(state: SessionCreateState, platformKey: string): SessionCreateState {
   return { ...state, platformKey, error: "" };
 }
@@ -162,6 +167,23 @@ export function tryBuildSubmission(state: SessionCreateState): {
       },
     },
   };
+}
+
+/**
+ * The validation message that currently blocks saving, or null when the form is complete.
+ * Uses the same rules as `tryBuildSubmission`, so the disabled save button and the server request agree.
+ */
+export function submissionBlocker(state: SessionCreateState): string | null {
+  const built = tryBuildSubmission(state);
+  return built.submission === null ? built.state.error : null;
+}
+
+/** Whole minutes as "2h 30m", "45m" or "1h". */
+export function formatMinutes(totalMinutes: number): string {
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  if (hours === 0) return `${minutes}m`;
+  return minutes === 0 ? `${hours}h` : `${hours}h ${minutes}m`;
 }
 
 /** Returns null when a save is already in flight (TryBeginSave == false). */

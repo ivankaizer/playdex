@@ -1,4 +1,4 @@
-import { availableIntegrationPlatforms } from "./creatorState";
+import { SectionHeading } from "../shared/SectionHeading";
 import { IntegrationCard } from "./IntegrationCard";
 import { IntegrationCreator } from "./IntegrationCreator";
 import { visibleProviders } from "./providersState";
@@ -11,60 +11,55 @@ interface IntegrationsSectionProps {
 export function IntegrationsSection({ integrations }: IntegrationsSectionProps) {
   const { state } = integrations;
   const visible = visibleProviders(state);
-  const available = availableIntegrationPlatforms(state.providers);
+  const activeCount = visible.filter((provider) => provider.status === "active").length;
 
   return (
-    <section
-      data-settings-section="integrations"
-      className="rounded-3xl border border-slate-200 bg-white/80 p-5 dark:border-slate-800 dark:bg-slate-900/60 sm:p-6"
-    >
-      <div>
-        <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-700 dark:text-emerald-300">
-          Integrations
-        </p>
-        <h2 className="mt-2 text-xl font-semibold text-slate-900 dark:text-white">Connected services</h2>
-        <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
-          Manage the services that contribute activity to Playdex.
-        </p>
-      </div>
+    <section data-settings-section="integrations" className="pdx-card flex flex-col gap-6">
+      <SectionHeading
+        kicker="Integrations"
+        title="Connected services"
+        description="Accounts that feed activity into Playdex."
+        aside={
+          !state.isProvidersLoading && visible.length > 0 ? (
+            <span className="pdx-num text-[13px] text-muted">
+              {activeCount} of {visible.length} active
+            </span>
+          ) : null
+        }
+      />
 
       {state.providersError ? (
-        <p className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2.5 text-xs text-rose-700 dark:border-rose-900/60 dark:bg-rose-950/30 dark:text-rose-300">
+        <p role="alert" className="rounded-[18px] border border-danger-line bg-danger-tint px-4 py-3 text-[13px] text-danger">
           {state.providersError}
         </p>
       ) : null}
 
-      <div className="mt-6 space-y-3">
+      <div className="flex flex-col gap-2.5">
         {state.isProvidersLoading ? (
           [1, 2].map((item) => (
             <div
               key={item}
-              className="flex items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-slate-100/60 p-4 dark:border-slate-800 dark:bg-slate-950/50"
+              aria-hidden="true"
+              className="grid grid-cols-[48px_minmax(0,1fr)_auto] items-center gap-4 rounded-tile border border-[var(--tile-border)] bg-tile px-5 py-4"
             >
-              <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-full bg-slate-200/70 dark:bg-slate-800/60"></div>
-                <div className="space-y-2">
-                  <div className="h-3 w-24 rounded-full bg-slate-200/70 dark:bg-slate-800/60"></div>
-                  <div className="h-2 w-16 rounded-full bg-slate-200/50 dark:bg-slate-800/50"></div>
-                </div>
+              <div className="h-12 w-12 animate-pulse rounded-[14px] bg-track"></div>
+              <div className="space-y-2">
+                <div className="h-3 w-28 animate-pulse rounded-full bg-track"></div>
+                <div className="h-2.5 w-40 max-w-full animate-pulse rounded-full bg-track"></div>
               </div>
-              <div className="h-8 w-24 rounded-full bg-slate-200/70 dark:bg-slate-800/60"></div>
+              <div className="h-9 w-24 animate-pulse rounded-full bg-track"></div>
             </div>
           ))
         ) : visible.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-100/50 p-4 text-xs text-slate-500 dark:border-slate-700 dark:bg-slate-950/40 dark:text-slate-400">
+          <div className="pdx-dashed !rounded-[20px] !p-5 !text-sm">
             No integrations connected yet. Add one to start syncing playtime.
           </div>
         ) : (
-          visible.map((provider) => (
-            <IntegrationCard key={provider.id} provider={provider} integrations={integrations} />
-          ))
+          visible.map((provider) => <IntegrationCard key={provider.id} provider={provider} integrations={integrations} />)
         )}
-      </div>
 
-      {!state.isProvidersLoading && available.length > 0 ? (
-        <IntegrationCreator available={available} integrations={integrations} />
-      ) : null}
+        {!state.isProvidersLoading ? <IntegrationCreator integrations={integrations} /> : null}
+      </div>
     </section>
   );
 }

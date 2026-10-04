@@ -27,6 +27,9 @@ function problem(detail: string, status: number) {
 const buttonByText = (text: string) =>
   screen.getAllByRole("button").find((button) => button.textContent?.trim() === text) as HTMLButtonElement;
 
+const buttonStartingWith = (text: string) =>
+  screen.getAllByRole("button").find((button) => button.textContent?.trim().startsWith(text)) as HTMLButtonElement;
+
 describe("SessionActions", () => {
   it("offers edit and remove for finished sessions", () => {
     const { container } = render(<SessionActions canEdit />);
@@ -55,7 +58,7 @@ describe("SessionEditModal", () => {
     expect(inputs[0].getAttribute("value")).toBe("2026-08-04T18:30:15");
     expect(inputs[1].getAttribute("value")).toBe("2026-08-04T20:45:30");
     expect(container.querySelector("button[data-action=cancel]")?.textContent).toBe("Cancel");
-    expect(container.querySelector("button[data-action=save]")?.textContent).toBe("Save changes");
+    expect(container.querySelector("button[data-action=save]")?.textContent).toBe("Save session");
   });
 });
 
@@ -112,7 +115,7 @@ describe("SessionCreateModal", () => {
     expect(screen.getByRole("dialog")).toHaveAttribute("aria-modal", "true");
     expect(container.querySelectorAll("button[data-mode]")).toHaveLength(2);
     expect(container.querySelector("input[type=search]")).not.toBeNull();
-    expect(container.querySelectorAll("select[data-field=platform] option")).toHaveLength(3);
+    expect(container.querySelectorAll("[data-field=platform] button[data-platform]")).toHaveLength(2);
     expect(container.innerHTML).toContain("IGDB");
   });
 
@@ -130,7 +133,29 @@ describe("SessionCreateModal", () => {
   it("a platform without a matching option shows no selection like Blazor", () => {
     const state = { ...openSessionCreate("historical", new Date()), platformKey: "switch" };
     const { container } = render(<CreateModalHarness initial={state} embedded />);
-    expect(container.querySelector<HTMLSelectElement>("select[data-field=platform]")!.selectedIndex).toBe(-1);
+    expect(container.querySelectorAll("[data-field=platform] button[aria-pressed=true]")).toHaveLength(0);
+    fireEvent.click(container.querySelector("button[data-platform=ps5]")!);
+    expect(container.querySelector("button[data-platform=ps5]")).toHaveAttribute("aria-pressed", "true");
+  });
+});
+
+describe("SessionCreateModal readiness", () => {
+  it("keeps save disabled until game, platform and duration are set and summarizes the entry", () => {
+    const state = completeSearch(openSessionCreate("historical", new Date(2026, 9, 4)), {
+      query: "Hades",
+      igdbAvailable: true,
+      results: [{ source: "local", gameId: "g1", igdbId: null, title: "Hades II", platform: null, platformId: null, capsuleUrl: null }],
+    });
+    const { container } = render(<CreateModalHarness initial={{ ...state, date: "2026-10-04" }} embedded />);
+    const save = container.querySelector<HTMLButtonElement>("button[data-action=save]")!;
+    expect(save).toBeDisabled();
+    expect(container).toHaveTextContent("Select a game.");
+    fireEvent.click(screen.getAllByRole("button").find((button) => button.textContent?.includes("Hades II"))!);
+    expect(save).toBeDisabled();
+    fireEvent.click(container.querySelector("button[data-platform=pc]")!);
+    fireEvent.click(buttonByText("30m"));
+    expect(save).not.toBeDisabled();
+    expect(container).toHaveTextContent("Hades II · PC · 30m on Oct 4");
   });
 });
 
@@ -159,19 +184,47 @@ describe("LiveSessionControl", () => {
     );
 
     const platform = container.querySelector("[data-live-platform]")!;
-    expect(platform.classList).toContain("sm:w-36");
-    expect(buttonByText("Start live session")).toBeDisabled();
+    expect(platform).toHaveAttribute("role", "group");
+    expect(buttonByText("Start session")).toBeDisabled();
     fireEvent.change(container.querySelector("input[type=search]")!, { target: { value: "Hades" } });
-    fireEvent.click(buttonByText("Search"));
+    fireEvent.click(screen.getByRole("button", { name: "Search" }));
     await waitFor(() => expect(container.innerHTML).toContain("hades.png"));
     expect(searchGames).toHaveBeenCalledWith("/manual/search?query=Hades", expect.any(AbortSignal));
 
     fireEvent.click(screen.getAllByRole("button").find((button) => button.textContent?.includes("Hades"))!);
-    fireEvent.change(container.querySelector("select")!, { target: { value: "pc" } });
-    const start = buttonByText("Start live session");
+    expect(buttonByText("Start session")).toBeDisabled();
+    fireEvent.click(buttonByText("PC"));
+    const start = buttonByText("Start session");
     expect(start).not.toBeDisabled();
     fireEvent.click(start);
     expect(started).toMatchObject({ igdbId: "114283", platformKey: "pc", title: "Hades" });
+  });
+
+  it("live state shows the ticking timer and stops, or hides stop for a synced session", () => {
+    const onStop = vi.fn();
+    const session = {
+      sessionId: 7,
+      gameId: "43",
+      title: "Hades II",
+      platformKey: "pc",
+      platformName: "PC",
+      startedAt: new Date(Date.now() - 3661_000).toISOString(),
+      capsuleUrl: null,
+    };
+    const searchGames = vi.fn();
+    const { rerender } = render(
+      <LiveSessionControl activeSession={session} searchGames={searchGames} onStart={() => undefined} onStop={onStop} />,
+    );
+    expect(screen.getByText("Playing now")).toBeInTheDocument();
+    expect(screen.getByRole("timer").textContent).toMatch(/^1:01:0\d$/);
+    fireEvent.click(buttonByText("Stop and log"));
+    expect(onStop).toHaveBeenCalledTimes(1);
+
+    rerender(
+      <LiveSessionControl activeSession={session} canStop={false} searchGames={searchGames} onStart={() => undefined} onStop={onStop} />,
+    );
+    expect(screen.queryAllByRole("button").some((button) => button.textContent?.includes("Stop"))).toBe(false);
+    expect(screen.getByRole("timer")).toBeInTheDocument();
   });
 });
 
@@ -263,16 +316,16 @@ describe("DraftWorkspace", () => {
     const { container } = render(<DraftWorkspace />);
     await resume();
     await waitFor(() => expect(container.querySelectorAll("input[type=date]")).toHaveLength(1));
-    expect(screen.getByRole("navigation", { name: "Breadcrumb" })).toHaveTextContent("Saved batches");
+    expect(screen.getByRole("button", { name: "Saved batches" })).toBeInTheDocument();
     expect(container.querySelector("input[data-game-search]")).toHaveAttribute("aria-invalid", "true");
     expect(container.querySelector("input[type=date]")).toHaveAttribute("aria-invalid", "true");
     container.querySelectorAll("input[type=number]").forEach((input) => expect(input).toHaveAttribute("aria-invalid", "true"));
-    expect(container.querySelector("input[type=date]")!.classList).toContain("border-rose-500");
-    expect(container.querySelector("select")!.classList).toContain("border-rose-500");
+    expect(container.querySelector("input[type=date]")!.classList).toContain("border-danger");
+    expect(container.querySelector("select")!.classList).toContain("border-danger");
     expect(container.querySelector("select")).toHaveAttribute("data-needs-review", "");
     expect(container.innerHTML).not.toContain("Platform is Unknown");
     expect(buttonByText("Accept")).toBeDisabled();
-    expect(container.querySelector("fieldset")).toHaveAttribute("data-dw-scope");
+    expect(container.querySelector("fieldset")).not.toBeDisabled();
   });
 
   it("a failed save keeps edits and does not accept", async () => {
@@ -281,11 +334,12 @@ describe("DraftWorkspace", () => {
     const { container } = render(<DraftWorkspace />);
     await resume();
     await waitFor(() => expect(container.querySelectorAll("input[type=date]")).toHaveLength(1));
+    // Edits save automatically when a field commits.
     fireEvent.change(container.querySelectorAll("input[type=number]")[0], { target: { value: "3" } });
-    fireEvent.click(buttonByText("Save edits"));
     await waitFor(() => expect(container.innerHTML).toContain("Stale revision Your edits are still here."));
     expect(container.querySelectorAll<HTMLInputElement>("input[type=number]")[0].value).toBe("3");
-    expect(container.innerHTML).not.toContain("Accepted — session saved");
+    expect(container.innerHTML).not.toContain("✓ Added");
+    expect(buttonByText("Retry save")).toBeInTheDocument();
   });
 
   it("partial acceptance marks only successful rows and notifies", async () => {
@@ -300,13 +354,15 @@ describe("DraftWorkspace", () => {
         return json({ results: [{ id: first.id, sessionId: 42, error: null }, { id: second.id, sessionId: null, error: "IGDB unavailable" }] });
       }),
     );
-    const { container } = render(<DraftWorkspace onAccepted={accepted} />);
+    const toast = vi.fn();
+    const { container } = render(<DraftWorkspace onAccepted={accepted} onToast={toast} />);
     await resume();
     await waitFor(() => expect(container.querySelectorAll("article")).toHaveLength(2));
-    fireEvent.click(buttonByText("Accept all ready"));
+    fireEvent.click(buttonStartingWith("Accept all ready"));
     await waitFor(() => expect(container.innerHTML).toContain("IGDB unavailable"));
     expect(acceptBody).toEqual({ rows: [{ id: first.id, revision: 1 }, { id: second.id, revision: 1 }] });
     expect(accepted).toHaveBeenCalled();
+    expect(toast).toHaveBeenCalledWith("Hades · 1h added");
     const fieldsets = container.querySelectorAll("fieldset");
     expect(fieldsets[0]).toBeDisabled();
     expect(fieldsets[1]).not.toBeDisabled();
@@ -326,7 +382,7 @@ describe("DraftWorkspace", () => {
     const { container } = render(<DraftWorkspace onAccepted={accepted} />);
     await resume();
     await waitFor(() => expect(container.querySelectorAll("article")).toHaveLength(1));
-    fireEvent.click(buttonByText("Accept all ready"));
+    fireEvent.click(buttonStartingWith("Accept all ready"));
     await waitFor(() => expect(container.innerHTML).toContain("removed from saved review"));
     expect(accepted).toHaveBeenCalled();
     await waitFor(() => expect(container.innerHTML).toContain("No saved drafts"));
@@ -405,9 +461,9 @@ describe("DraftWorkspace", () => {
     await waitFor(() => expect(container.innerHTML).toContain("Review extracted sessions"));
     fireEvent.click(buttonByText("Generate again"));
     await waitFor(() => expect(container.innerHTML).toContain("Invalid extraction"));
-    expect(container.querySelector<HTMLInputElement>("input[data-game-search]")!.value).toBe("Hades");
+    expect(container.querySelector("[data-draft-match]")).toHaveTextContent("from “Hades”");
     fireEvent.click(buttonByText("Retry generation"));
-    await waitFor(() => expect(container.querySelector<HTMLInputElement>("input[data-game-search]")!.value).toBe("Hades II"));
+    await waitFor(() => expect(container.querySelector("[data-draft-match]")).toHaveTextContent("from “Hades II”"));
     expect(requests).toHaveLength(3);
     expect(requests[0].id).not.toBe(requests[1].id);
     expect(requests[1].id).toBe(requests[2].id);
@@ -471,7 +527,8 @@ describe("DraftWorkspace", () => {
     await act(async () => {
       fireEvent.click(container.querySelectorAll("[data-game-result]")[1]);
     });
-    await waitFor(() => expect(container.innerHTML).toContain("Matched from IGDB"));
+    await waitFor(() => expect(container.querySelector("[data-draft-match]")).toHaveTextContent("✓ Matched"));
+    expect(container.querySelector("[data-draft-match]")).toHaveTextContent("IGDB");
     expect(patchBody).toMatchObject({ revision: 1, gameId: null, igdbId: "114283" });
     expect(buttonByText("Accept")).not.toBeDisabled();
     expect(container.querySelectorAll("[data-game-result]")).toHaveLength(0);

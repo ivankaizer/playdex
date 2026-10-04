@@ -48,6 +48,9 @@ import {
   tryBuildEditSubmission,
   tryOpenEdit,
   tryParseLocal,
+  groupRowViews,
+  rangeLabel,
+  selectCustomRange,
 } from "./sessionsState";
 
 const july13 = new Date("2026-07-13T00:00:00Z");
@@ -410,5 +413,57 @@ describe("sessions state", () => {
     expect(ActiveManualSessionRequest).toBe("/manual/sessions/current");
     expect(state.platforms.map((item) => item.key)).toEqual(["pc", "ps5"]);
     expect(state.activeManualSession).toBe(active);
+  });
+});
+
+describe("sessions list presentation", () => {
+  const at = (year: number, month: number, day: number, hour: number) => new Date(year, month - 1, day, hour, 0, 0);
+  const played = (sessionId: number, start: Date, minutes: number) =>
+    session({ sessionId, startedAt: start.toISOString(), endedAt: new Date(start.getTime() + minutes * 60_000).toISOString() });
+
+  it("groups date-sorted rows by local start day with counts and totals", () => {
+    const now = at(2026, 10, 3, 20);
+    const rows = [
+      played(1, at(2026, 10, 3, 10), 10),
+      played(2, at(2026, 9, 30, 10), 60),
+      played(3, at(2026, 9, 30, 8), 25),
+    ];
+    const state = completeListLoad(createSessionsState(now), { accountId: 1, sessions: rows, total: 3, limit: 10, offset: 0 });
+    const groups = groupRowViews(state, getRowViews(state, now), now);
+    expect(groups.map((group) => group.label)).toEqual(["TODAY", "WEDNESDAY, SEP 30"]);
+    expect(groups[0].meta).toBe("1 session · 10m");
+    expect(groups[1].meta).toBe("2 sessions · 1h 25m");
+    expect(groups[1].rows.map((row) => row.sessionId)).toEqual([2, 3]);
+  });
+
+  it("keeps a single unlabeled group when sorted by duration", () => {
+    const now = new Date();
+    let state = completeListLoad(createSessionsState(now), { accountId: 1, sessions: [session({ sessionId: 1 }), session({ sessionId: 2 })], total: 2, limit: 10, offset: 0 });
+    state = sortBy(state, "duration");
+    const groups = groupRowViews(state, getRowViews(state, now), now);
+    expect(groups).toHaveLength(1);
+    expect(groups[0].label).toBe("");
+    expect(groups[0].meta).toBe("2 sessions · 2h 00m");
+    expect(groupRowViews(state, [], now)).toEqual([]);
+  });
+
+  it("labels the selected range like the design", () => {
+    const now = new Date("2026-10-03T12:00:00Z");
+    const base = createSessionsState(now);
+    expect(rangeLabel(base)).toBe("Sep 28 – Oct 4, 2026");
+    expect(rangeLabel(applyPreset(base, "today", now))).toBe("Today · Oct 3, 2026");
+    expect(rangeLabel(applyPreset(base, "yesterday", now))).toBe("Yesterday · Oct 2, 2026");
+    expect(rangeLabel(applyPreset(base, "last-week", now))).toBe("Sep 21 – 27, 2026");
+    expect(rangeLabel(applyPreset(base, "this-month", now))).toBe("October 2026");
+    expect(rangeLabel(applyPreset(base, "last-year", now))).toBe("2025");
+    expect(rangeLabel(setFrom(setTo(base, "2027-01-04"), "2026-12-29"))).toBe("Dec 29, 2026 – Jan 4, 2027");
+    expect(rangeLabel(setTo(setFrom(base, ""), ""))).toBe("All time");
+    expect(rangeLabel(setTo(base, ""))).toBe("From Sep 28, 2026");
+  });
+
+  it("switching to a custom range keeps the bounds", () => {
+    const state = selectCustomRange(createSessionsState(new Date("2026-10-03T12:00:00Z")));
+    expect(state.preset).toBe("custom");
+    expect([state.from, state.to]).toEqual(["2026-09-28", "2026-10-04"]);
   });
 });

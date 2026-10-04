@@ -77,22 +77,23 @@ describe("SessionsPage", () => {
     vi.useRealTimers();
   });
 
-  it("loads list, stats, active session and platforms and renders rows in both layouts", async () => {
+  it("loads list, stats, active session and platforms and renders rows grouped by day", async () => {
     const { container } = renderAt("/sessions");
-    await waitFor(() => expect(container.innerHTML).toContain("Showing 1-1 of 1 sessions"));
+    await waitFor(() => expect(container.innerHTML).toContain("Showing 1–1 of 1 sessions"));
     const paths = calls.map((call) => call.path);
     expect(paths.some((path) => /^\/sessions\?limit=10&offset=0&from=\d{4}-\d{2}-\d{2}&to=\d{4}-\d{2}-\d{2}&sort=date&direction=desc$/.test(path))).toBe(true);
     expect(paths.some((path) => path.startsWith("/stats?from="))).toBe(true);
     expect(paths).toContain("/manual/sessions/current");
     expect(paths).toContain("/manual/platforms");
-    expect(screen.getAllByText("1h 05m")).toHaveLength(2);
-    expect(screen.getAllByLabelText("Ignored from stats")).toHaveLength(2);
-    expect(container.querySelectorAll("button[data-action=edit]")).toHaveLength(2);
+    expect(screen.getAllByText("1h 05m")).toHaveLength(1);
+    expect(screen.getByText("1 session · 1h 05m")).toBeInTheDocument();
+    expect(screen.getAllByLabelText("Ignored from stats")).toHaveLength(1);
+    expect(container.querySelectorAll("button[data-action=edit]")).toHaveLength(1);
   });
 
   it("debounces the title filter and resets to the first page", async () => {
     const { container } = renderAt("/sessions");
-    await waitFor(() => expect(container.innerHTML).toContain("Showing 1-1 of 1 sessions"));
+    await waitFor(() => expect(container.innerHTML).toContain("Showing 1–1 of 1 sessions"));
     vi.useFakeTimers();
     const before = calls.length;
     fireEvent.change(screen.getByPlaceholderText("Search by game title"), { target: { value: " Hades II " } });
@@ -106,7 +107,7 @@ describe("SessionsPage", () => {
   it("removal is confirm gated", async () => {
     const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
     const { container } = renderAt("/sessions");
-    await waitFor(() => expect(container.innerHTML).toContain("Showing 1-1 of 1 sessions"));
+    await waitFor(() => expect(container.innerHTML).toContain("Showing 1–1 of 1 sessions"));
     fireEvent.click(container.querySelector("button[data-action=remove]")!);
     expect(confirm).toHaveBeenCalledWith("Remove this session entry?");
     expect(calls.some((call) => call.method === "DELETE")).toBe(false);
@@ -119,11 +120,11 @@ describe("SessionsPage", () => {
 
   it("edits a finished session through the overlay modal", async () => {
     const { container } = renderAt("/sessions");
-    await waitFor(() => expect(container.innerHTML).toContain("Showing 1-1 of 1 sessions"));
+    await waitFor(() => expect(container.innerHTML).toContain("Showing 1–1 of 1 sessions"));
     fireEvent.click(container.querySelector("button[data-action=edit]")!);
     const dialog = screen.getByRole("dialog");
     expect(dialog).toHaveTextContent("Hades II");
-    fireEvent.click(screen.getByText("Save changes"));
+    fireEvent.click(screen.getByText("Save session"));
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
     const put = calls.find((call) => call.method === "PUT");
     expect(put?.path).toBe("/sessions/7");
@@ -132,7 +133,7 @@ describe("SessionsPage", () => {
 
   it("opens the session creator", async () => {
     const { container } = renderAt("/sessions");
-    await waitFor(() => expect(container.innerHTML).toContain("Showing 1-1 of 1 sessions"));
+    await waitFor(() => expect(container.innerHTML).toContain("Showing 1–1 of 1 sessions"));
     fireEvent.click(container.querySelector("[data-session-action=extended]")!);
     await waitFor(() => expect(screen.getByTestId("location")).toHaveTextContent("/sessions/create"));
   });
@@ -163,21 +164,22 @@ describe("SessionCreatePage", () => {
     const { container } = renderAt("/sessions/create");
     expect(container.querySelector("[data-layout=extended-manual]")).not.toBeNull();
     expect(container.querySelector("input[type=date]")).not.toBeNull();
-    const toggle = container.querySelector("[data-workspace-toggle]")!;
-    expect(toggle).toHaveTextContent("AI batches");
-    fireEvent.click(toggle);
-    expect(toggle).toHaveTextContent("Manual session");
+    const manual = container.querySelector("[data-mode-tab=manual]")!;
+    const ai = container.querySelector("[data-mode-tab=ai]")!;
+    expect(manual).toHaveAttribute("aria-pressed", "true");
+    fireEvent.click(ai);
+    expect(ai).toHaveAttribute("aria-pressed", "true");
     expect(container.querySelector("[data-layout=extended-ai]")).not.toBeNull();
     await waitFor(() => expect(container.innerHTML).toContain("No saved drafts"));
-    fireEvent.click(toggle);
+    fireEvent.click(manual);
     expect(container.querySelector("[data-layout=extended-manual]")).not.toBeNull();
   });
 
   it("validates before saving and the breadcrumb returns to sessions", async () => {
     const { container } = renderAt("/sessions/create?mode=live");
     expect(container.querySelector("input[type=date]")).toBeNull();
-    fireEvent.click(container.querySelector("button[data-action=save]")!);
-    expect(screen.getByRole("alert")).toHaveTextContent("Select a game.");
+    expect(container.querySelector("button[data-action=save]")).toBeDisabled();
+    expect(container).toHaveTextContent("Select a game.");
     const breadcrumb = screen.getByRole("navigation", { name: "Breadcrumb" });
     fireEvent.click(breadcrumb.querySelector("button")!);
     await waitFor(() => expect(screen.getByTestId("location")).toHaveTextContent("/sessions"));
