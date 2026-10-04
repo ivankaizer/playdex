@@ -1,0 +1,89 @@
+# Per-PR preview stack deployed to the staging Dokploy server by deploy/preview.sh.
+# Unlike docker-compose.yml it builds production images, publishes no host ports
+# and serves UI and API from one origin: Traefik routes /api to `app`, the rest to `ui`.
+services:
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: playdex
+      POSTGRES_PASSWORD: playdex
+      POSTGRES_DB: playdex
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U playdex -d playdex"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    mem_limit: 256m
+
+  wiremock:
+    build:
+      context: .
+      dockerfile: tools/Wiremock/Dockerfile
+    restart: unless-stopped
+    volumes:
+      - ./tools/Wiremock/mocks:/app/mocks:ro
+    mem_limit: 256m
+
+  apprise:
+    image: caronc/apprise:1.3.3
+    restart: unless-stopped
+    environment:
+      APPRISE_STATEFUL_MODE: simple
+      APPRISE_WORKER_COUNT: 1
+      APPRISE_API_ONLY: "yes"
+    volumes:
+      - apprise_config:/config
+      - apprise_attach:/attach
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://localhost:8000/status"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    mem_limit: 192m
+
+  app:
+    build:
+      context: .
+      dockerfile: src/Api/Dockerfile
+    restart: unless-stopped
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_URLS: http://0.0.0.0:3000
+      DATABASE_URL: postgresql://playdex:playdex@db:5432/playdex
+      Polling__IntervalSeconds: 10
+      Auth__JwtSecret: ${JWT_SECRET:-preview-only-jwt-secret-not-for-production-use}
+      Auth__AccessTokenTtl: 30m
+      Polling__UseWiremock: "true"
+      Apprise__BaseUrl: http://apprise:8000
+      Apprise__TelegramBotToken: ${TELEGRAM_BOT_TOKEN:-}
+      Apprise__UseMock: "false"
+      Polling__Steam__BaseUrl: http://wiremock:8888
+      Polling__Psn__OAuthAuthorizeUrl: http://wiremock:8888/api/authz/v3/oauth/authorize
+      Polling__Psn__OAuthTokenUrl: http://wiremock:8888/api/authz/v3/oauth/token
+      Polling__Psn__PresenceBaseUrl: http://wiremock:8888
+      Polling__OpenXbl__BaseUrl: http://wiremock:8888
+    depends_on:
+      db:
+        condition: service_healthy
+      wiremock:
+        condition: service_started
+      apprise:
+        condition: service_healthy
+    mem_limit: 512m
+
+  ui:
+    build:
+      context: .
+      dockerfile: src/Frontend/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      - app
+    mem_limit: 64m
+
+volumes:
+  db_data:
+  apprise_config:
+  apprise_attach:
