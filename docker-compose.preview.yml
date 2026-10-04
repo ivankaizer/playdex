@@ -74,6 +74,28 @@ services:
         condition: service_healthy
     mem_limit: 512m
 
+  # One-shot: seeds demo data (users/admin with password "password") on the first deploy only.
+  # The seeder truncates every table, so a marker in seed_state keeps redeploys from wiping
+  # data changed while testing. Destroying the preview drops both volumes and reseeds next time.
+  seeder:
+    build:
+      context: .
+      dockerfile: tools/Seeder/Dockerfile
+    restart: "no"
+    environment:
+      DATABASE_URL: postgresql://playdex:playdex@db:5432/playdex
+    volumes:
+      - seed_state:/state
+    entrypoint: ["sh", "-c"]
+    command:
+      - |
+        if [ -f /state/seeded ]; then echo "Already seeded; skipping."; exit 0; fi
+        dotnet Seeder.dll && date -u > /state/seeded && echo "Seeded."
+    depends_on:
+      app:
+        condition: service_healthy
+    mem_limit: 256m
+
   ui:
     build:
       context: .
@@ -87,3 +109,4 @@ volumes:
   db_data:
   apprise_config:
   apprise_attach:
+  seed_state:

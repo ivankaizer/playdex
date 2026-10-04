@@ -17,6 +17,13 @@ UI and API share that origin: Traefik sends `/api/*` to the API and everything e
 - **Stack:** [`docker-compose.preview.yml`](../docker-compose.preview.yml) — Postgres, Wiremock,
   Apprise, API and the production UI image, with no published ports and memory limits. The database
   is fresh per PR and external gaming providers are mocked by Wiremock.
+- **Seed data:** on the first deploy of a preview, the one-shot `seeder` service runs
+  `tools/Seeder` after the API has applied migrations. Later deploys skip it, because the seeder
+  truncates every table and would wipe data changed while testing. To reseed, destroy the preview
+  and deploy again. Seeded logins, all with password `password`:
+  - `user@playdex.dev`
+  - `second_user@playdex.dev`
+  - `admin@playdex.dev`, an administrator (`/admin`)
 - **Source:** Dokploy clones the PR branch over SSH with a read-only deploy key and builds the images
   on the server.
 - **Script:** [`deploy/preview.sh`](../deploy/preview.sh) does everything through the Dokploy API:
@@ -76,6 +83,9 @@ Use this to put a branch online without waiting for CI, or to redeploy after a f
 - **Out of memory:** the server has 4 GB RAM plus 4 GB swap, which is enough for 2–3 previews at
   once. Destroy previews of closed or stale PRs before deploying more.
 - **`HTTP 401` from the API:** `DOKPLOY_API_KEY` is wrong or revoked; ask the user.
+- **Seed failed or missing data:** check the seeder logs in the dashboard (service `seeder`), or
+  over SSH run `docker logs <appName>-seeder-1`. A failed seed writes no marker, so the next deploy
+  retries it.
 - **Changing the stack** (new service, env var, port): edit `docker-compose.preview.yml`. If the UI
   or API port or the `/api` routing changes, also update the domain routes in `create_compose` in
   `deploy/preview.sh` and destroy the existing preview so it is recreated with the new routes.
