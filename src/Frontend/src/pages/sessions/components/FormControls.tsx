@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, type InputHTMLAttributes, type SelectHTMLAttributes } from "react";
+import { useLayoutEffect, useRef, type InputHTMLAttributes, type SelectHTMLAttributes } from "react";
 
 type ChangeInputProps = Omit<InputHTMLAttributes<HTMLInputElement>, "value" | "defaultValue" | "onChange"> & {
   value: string;
@@ -22,7 +22,8 @@ export function ChangeInput({ value, onValueChange, ...rest }: ChangeInputProps)
     if (element && element.value !== value) element.value = value;
   }, [value]);
 
-  useEffect(() => {
+  // Attach synchronously on commit so a change fired right after mount is never missed.
+  useLayoutEffect(() => {
     const element = ref.current;
     if (!element) return;
     const listener = () => handler.current(element.value);
