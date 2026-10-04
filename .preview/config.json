@@ -1,5 +1,7 @@
 {
   "project": "playdex",
+  "domain": "deployment.lat",
+  "dokploy": "https://dash.deployment.lat",
   "compose": "docker-compose.preview.yml",
   "routes": [
     { "service": "ui", "port": 5056, "path": "/" },
