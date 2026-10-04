@@ -603,7 +603,8 @@ public sealed class AdminEndpointsIntegrationTests(AdminApiFixture fixture)
             InterceptionResult<int> result,
             CancellationToken cancellationToken = default)
         {
-            if (command.CommandText.Contains("update play_sessions set game_id", StringComparison.OrdinalIgnoreCase))
+            if (command.CommandText.Contains("update play_sessions", StringComparison.OrdinalIgnoreCase) &&
+                command.CommandText.Contains("set game_id", StringComparison.OrdinalIgnoreCase))
                 throw new InvalidOperationException("Injected relationship reassignment failure.");
             return ValueTask.FromResult(result);
         }
