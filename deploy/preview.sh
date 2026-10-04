@@ -4,13 +4,19 @@
 #   deploy/preview.sh deploy   # create the stack on first run, then redeploy; prints the URL
 #   deploy/preview.sh destroy  # remove the stack and its volumes
 #
-# Required env: DOKPLOY_URL, DOKPLOY_API_KEY, DOKPLOY_ENVIRONMENT_ID, DOKPLOY_SSH_KEY_ID,
-#               PR_NUMBER, BRANCH, PREVIEW_DOMAIN (e.g. playdex.deployment.lat)
+# Required env: DOKPLOY_URL, DOKPLOY_API_KEY (CI secrets; ~/.env for local agents).
+# PR_NUMBER and BRANCH default to the pull request of the checked-out branch (needs `gh`).
+# See docs/preview-environments.md.
 set -euo pipefail
 
-: "${DOKPLOY_URL:?}" "${DOKPLOY_API_KEY:?}" "${DOKPLOY_ENVIRONMENT_ID:?}" "${DOKPLOY_SSH_KEY_ID:?}"
-: "${PR_NUMBER:?}" "${BRANCH:?}" "${PREVIEW_DOMAIN:?}"
+: "${DOKPLOY_URL:?set DOKPLOY_URL (e.g. source ~/.env)}" "${DOKPLOY_API_KEY:?set DOKPLOY_API_KEY (e.g. source ~/.env)}"
+DOKPLOY_ENVIRONMENT_ID="${DOKPLOY_ENVIRONMENT_ID:-UiuiXVqW5650lx-QhIG5R}" # project "playdex", env "previews"
+DOKPLOY_SSH_KEY_ID="${DOKPLOY_SSH_KEY_ID:-nipG1gsiVfYwim4q8NUnl}"         # read-only deploy key
+PREVIEW_DOMAIN="${PREVIEW_DOMAIN:-playdex.deployment.lat}"
 REPO_SSH_URL="${REPO_SSH_URL:-git@github.com:ivankaizer/playdex.git}"
+if [[ -z ${PR_NUMBER:-} || -z ${BRANCH:-} ]]; then
+  read -r PR_NUMBER BRANCH <<<"$(gh pr view --json number,headRefName --jq '"\(.number) \(.headRefName)"')"
+fi
 COMPOSE_PATH="./docker-compose.preview.yml"
 DEPLOY_TIMEOUT="${DEPLOY_TIMEOUT:-1500}"
 
@@ -90,8 +96,8 @@ deploy() {
   # Traefik needs a moment to pick up routes and issue the certificate.
   local api_status=000
   for _ in $(seq 1 30); do
-    api_status=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 10 "${url}/api/" || true)
-    if curl -fsS -o /dev/null --max-time 10 "${url}/" && [[ $api_status =~ ^[234] ]]; then
+    api_status=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 "${url}/api/" || true)
+    if curl -fs -o /dev/null --max-time 10 "${url}/" && [[ $api_status =~ ^[234] ]]; then
       echo "$url"
       return
     fi

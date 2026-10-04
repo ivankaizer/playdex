@@ -65,3 +65,43 @@ jobs:
           dotnet test test/Api.Tests/Api.Tests.csproj --configuration Release --no-build
         env:
           PLAYDEX_INTEGRATION_DATABASE_URL: postgresql://playdex:playdex@127.0.0.1:5432/playdex_db_test
+
+  preview:
+    name: Deploy preview
+    needs: test
+    # Secrets are unavailable to fork PRs.
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    concurrency:
+      group: preview-${{ github.event.pull_request.number }}
+      cancel-in-progress: true
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Deploy to Dokploy
+        id: deploy
+        env:
+          DOKPLOY_URL: ${{ vars.DOKPLOY_URL }}
+          DOKPLOY_API_KEY: ${{ secrets.DOKPLOY_API_KEY }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          BRANCH: ${{ github.head_ref }}
+        run: echo "url=$(deploy/preview.sh deploy)" >> "$GITHUB_OUTPUT"
+
+      - name: Comment preview URL
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          URL: ${{ steps.deploy.outputs.url }}
+        run: |
+          body=$(printf '<!-- preview-url -->\n🚀 **Preview:** %s\n\nDeployed `%s`' "$URL" "${{ github.event.pull_request.head.sha }}")
+          id=$(gh api "repos/${{ github.repository }}/issues/$PR_NUMBER/comments" --paginate \
+            --jq '[.[] | select(.body | startswith("<!-- preview-url -->"))][0].id // empty')
+          if [ -n "$id" ]; then
+            gh api -X PATCH "repos/${{ github.repository }}/issues/comments/$id" -f body="$body" >/dev/null
+          else
+            gh pr comment "$PR_NUMBER" --body "$body"
+          fi
