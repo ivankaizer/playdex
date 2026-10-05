@@ -39,12 +39,15 @@ const previewPlatforms: ReadonlyArray<{ key: string; label: string; value: numbe
   { key: "switch-1", label: "Switch", value: 6, hours: "7.6h" },
 ];
 
-const previewTopGames: ReadonlyArray<{ gameId: string; title: string; hours: number }> = [
-  { gameId: "hades-2", title: "Hades II", hours: 26.4 },
-  { gameId: "bg3", title: "Baldur's Gate 3", hours: 18.2 },
-  { gameId: "re4", title: "Resident Evil 4", hours: 14.7 },
-  { gameId: "helldivers-2", title: "Helldivers 2", hours: 12.6 },
-  { gameId: "fh5", title: "Forza Horizon 5", hours: 10.8 },
+/** Steam library art for the sample games (portrait, 600px wide). */
+const steamCover = (appId: number) => `https://cdn.cloudflare.steamstatic.com/steam/apps/${appId}/library_600x900_2x.jpg`;
+
+const previewTopGames: ReadonlyArray<{ gameId: string; title: string; hours: number; cover: string }> = [
+  { gameId: "hades-2", title: "Hades II", hours: 26.4, cover: steamCover(1145350) },
+  { gameId: "bg3", title: "Baldur's Gate 3", hours: 18.2, cover: steamCover(1086940) },
+  { gameId: "re4", title: "Resident Evil 4", hours: 14.7, cover: steamCover(2050650) },
+  { gameId: "helldivers-2", title: "Helldivers 2", hours: 12.6, cover: steamCover(553850) },
+  { gameId: "fh5", title: "Forza Horizon 5", hours: 10.8, cover: steamCover(1551360) },
 ];
 
 const coverFallbacks: readonly string[] = [
@@ -92,18 +95,8 @@ const iconProps = {
 
 const features: ReadonlyArray<{ title: string; body: string; icon: ReactNode }> = [
   {
-    title: "Track Steam and PSN playtime",
-    body: "Link your accounts once and every session lands in one timeline.",
-    icon: (
-      <svg {...iconProps}>
-        <circle cx="12" cy="12" r="9"></circle>
-        <path d="M12 7v5l3 2"></path>
-      </svg>
-    ),
-  },
-  {
-    title: "Automatic polling with scheduled refresh",
-    body: "Playdex checks your libraries in the background, so nothing needs logging by hand.",
+    title: "Steam, PlayStation and Xbox, synced for you",
+    body: "Connect once and every session shows up on its own. No timers to start, nothing to forget.",
     icon: (
       <svg {...iconProps}>
         <path d="M21 12a9 9 0 1 1-2.64-6.36"></path>
@@ -112,12 +105,31 @@ const features: ReadonlyArray<{ title: string; body: string; icon: ReactNode }> 
     ),
   },
   {
-    title: "Fast search across your library",
-    body: "Find any game, session or platform in a keystroke.",
+    title: "Log a whole weekend in one paste",
+    body: "Describe what you played or drop a screenshot. AI turns it into sessions you review and accept.",
     icon: (
       <svg {...iconProps}>
-        <circle cx="11" cy="11" r="7"></circle>
-        <path d="m20 20-3.5-3.5"></path>
+        <path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"></path>
+        <path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"></path>
+      </svg>
+    ),
+  },
+  {
+    title: "Your year in games, on demand",
+    body: "Peak hours, longest streak, most-binged title and where the time really went, for any year or range.",
+    icon: (
+      <svg {...iconProps}>
+        <path d="M4 20V10M10 20V4M16 20v-7M22 20H2"></path>
+      </svg>
+    ),
+  },
+  {
+    title: "Switch, retro, anything else",
+    body: "Start a live timer or log past sessions for platforms that don't sync, and they count like the rest.",
+    icon: (
+      <svg {...iconProps}>
+        <circle cx="12" cy="13" r="8"></circle>
+        <path d="M12 9v4l2.5 1.5M10 2h4"></path>
       </svg>
     ),
   },
@@ -319,9 +331,9 @@ export function HomePage() {
         <section className="flex flex-col gap-5">
           <div className="px-2">
             <p className="pdx-kicker">Features</p>
-            <h2 className="mb-1.5 mt-2 text-[32px] font-semibold tracking-[-0.01em]">Everything in one place</h2>
+            <h2 className="mb-1.5 mt-2 text-[32px] font-semibold tracking-[-0.01em]">Every hour you play, accounted for</h2>
             <p className="m-0 text-[15px] text-muted">
-              Keep your play history consistent, discover trends, and set goals with a dashboard built for long-term tracking.
+              Automatic where it can be, effortless where it can't. One history across every platform you own.
             </p>
           </div>
           <div className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(min(260px,100%),1fr))]">
@@ -398,6 +410,7 @@ export function HomePage() {
                 <div className="relative">
                   <Cover
                     title={game.title}
+                    src={game.cover}
                     className="aspect-[2/3] w-full rounded-[22px] shadow-cover"
                     style={{ background: coverFallbacks[index % coverFallbacks.length] }}
                     initialClassName="text-[40px]"
