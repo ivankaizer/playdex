@@ -4,6 +4,12 @@ public class PollingOptions
 {
     public int IntervalSeconds { get; set; } = 60;
     public bool UseWiremock { get; set; }
+
+    /// <summary>
+    /// Days to keep raw provider responses (poll_results) before the hourly cleanup deletes them;
+    /// 0 or less keeps them forever.
+    /// </summary>
+    public int PollResultRetentionDays { get; set; } = 30;
     public SteamOptions Steam { get; set; } = new();
     public PsnOptions Psn { get; set; } = new();
     public OpenXblOptions OpenXbl { get; set; } = new();

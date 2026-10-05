@@ -14,6 +14,7 @@ using Api.Modules.Manual;
 using Api.Modules.Metrics;
 using Api.Modules.Notifications;
 using Api.Modules.Polling;
+using Api.Modules.Privacy;
 using Api.Modules.Providers;
 using Api.Modules.Recap;
 using Api.Modules.Settings;
@@ -71,6 +72,7 @@ builder.Services
     .AddAuth(builder.Configuration)
     .AddAccounts()
     .AddSettings()
+    .AddPrivacy()
     .AddGames()
     .AddManual()
     .AddApiCapture()
@@ -130,6 +132,7 @@ api
     .MapAuth()
     .MapAccounts()
     .MapSettings()
+    .MapPrivacy()
     .MapGames()
     .MapManual()
     .MapApiCapture()
