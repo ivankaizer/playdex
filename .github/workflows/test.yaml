@@ -72,6 +72,9 @@ jobs:
     # Secrets are unavailable to fork PRs.
     if: github.event.pull_request.head.repo.full_name == github.repository
     uses: ivankaizer/preview-kit/.github/workflows/preview.yml@v1
+    with:
+      # One comment per deploy, so earlier demos stay in the PR thread.
+      comment: new
     permissions:
       contents: write
       pull-requests: write

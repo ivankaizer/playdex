@@ -7,9 +7,11 @@ repos. After the tests pass on a pull request, CI deploys a full copy of Playdex
 https://<branch-slug>.playdex.deployment.lat
 ```
 
-and records a demo. One PR comment carries the URL, the full tour and, from the second commit on, a
-video of the steps that changed visually since the previous commit. The preview and its demos are
-removed when the PR closes. The kit's README documents the CLI (`preview deploy`, `preview demo`,
+and records a demo. Each deploy posts a new PR comment (`comment: new` in
+[`test.yaml`](../.github/workflows/test.yaml)) with the URL, the full tour and, from the second
+commit on, a video of the steps that changed visually since the previous commit. The videos live on
+the `demos/pr-<number>` branch, one folder per commit, so earlier comments keep working. The preview
+and its demos are removed when the PR closes. The kit's README documents the CLI (`preview deploy`, `preview demo`,
 `preview status`, …), the config formats and how it works.
 
 ## Playdex specifics
