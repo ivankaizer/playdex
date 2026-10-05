@@ -210,9 +210,9 @@ export function HomePage() {
           )}
         </header>
 
-        <section className="grid items-center gap-12 px-2 pb-6 pt-6 sm:pt-10 [grid-template-columns:repeat(auto-fit,minmax(min(380px,100%),1fr))]">
+        <section className="grid items-center gap-12 px-2 pb-6 pt-6 sm:pt-10 lg:grid-cols-[minmax(0,1fr)_minmax(360px,420px)]">
           <div className="flex min-w-0 flex-col gap-7">
-            <h1 className="m-0 text-balance text-[44px] font-semibold leading-[1.02] tracking-[-0.035em] sm:text-[68px]">
+            <h1 className="m-0 text-[44px] font-semibold leading-[1.02] tracking-[-0.035em] sm:text-[68px]">
               Your cross-platform playtime, <span className="text-accent">perfectly organized.</span>
             </h1>
             <p className="m-0 max-w-[34em] text-pretty text-[17px] leading-[1.55] text-ink-2 sm:text-[19px]">
