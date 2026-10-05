@@ -34,14 +34,20 @@ export function AppFooter() {
       <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3 border-t border-[#2a3540] pt-[18px] text-[13px] text-[#8a96a3]">
         <span>© {new Date().getFullYear()} Playdex</span>
         <div className="flex flex-wrap gap-5">
-          {/* Placeholder targets until the real pages exist. */}
-          <a href="#" className="text-[#b5c0cb] no-underline transition hover:text-[#6fe3b5]">
+          <a
+            href="/privacy"
+            onClick={(event) => {
+              event.preventDefault();
+              navigate("/privacy");
+            }}
+            className="text-[#b5c0cb] no-underline transition hover:text-[#6fe3b5]"
+          >
             Privacy
           </a>
           <a href="mailto:hello@playdex.dev" className="text-[#b5c0cb] no-underline transition hover:text-[#6fe3b5]">
             Contact
           </a>
-          <a href="https://github.com" target="_blank" rel="noreferrer" className="text-[#b5c0cb] no-underline transition hover:text-[#6fe3b5]">
+          <a href="https://github.com/ivankaizer/playdex" target="_blank" rel="noreferrer" className="text-[#b5c0cb] no-underline transition hover:text-[#6fe3b5]">
             GitHub ↗
           </a>
         </div>

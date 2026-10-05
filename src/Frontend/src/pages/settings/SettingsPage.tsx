@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { useLocation } from "react-router";
 import { AppLayout } from "@/components/AppLayout";
+import { DataSection } from "./data/DataSection";
 import { IntegrationsSection } from "./integrations/IntegrationsSection";
 import { useIntegrations } from "./integrations/useIntegrations";
 import { MappingSection } from "./mapping/MappingSection";
@@ -26,6 +27,7 @@ export function SettingsPage() {
       <PreferencesSection preferences={preferences} />
       <IntegrationsSection integrations={integrations} />
       <MappingSection />
+      <DataSection />
     </AppLayout>
   );
 }
