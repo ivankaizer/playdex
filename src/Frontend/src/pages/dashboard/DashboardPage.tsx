@@ -32,6 +32,7 @@ import { LiveSessionControl } from "../sessions/components/LiveSessionControl";
 import {
   beginRefresh,
   completeRefresh,
+  dailyPlatforms,
   dailySessionCounts,
   dailyTotals,
   dashboardActivityRequests,
@@ -72,13 +73,13 @@ export function DashboardPage() {
     const version = ++activityVersion.current;
     const requests = dashboardActivityRequests(new Date());
     try {
-      const [week, daily] = await Promise.all([
-        apiRequest<AccountStatsRangeResponse>(requests.week, { onAuthFailure: logout, signal }),
-        apiRequest<AccountDailyStatsResponse>(requests.daily, { onAuthFailure: logout, signal }),
-      ]);
+      const daily = await apiRequest<AccountDailyStatsResponse>(requests.daily, { onAuthFailure: logout, signal });
       if (signal.aborted || version !== activityVersion.current) return;
-      const totals = dailyTotals(daily.days);
-      setActivity({ weekStats: week.stats, days: totals, sessionCounts: dailySessionCounts(daily.days) });
+      setActivity({
+        days: dailyTotals(daily.days),
+        sessionCounts: dailySessionCounts(daily.days),
+        dayPlatforms: dailyPlatforms(daily.days),
+      });
     } catch (error) {
       if (signal.aborted || isAbortError(error) || version !== activityVersion.current) return;
       setActivity(null);

@@ -36,6 +36,14 @@ export interface AccountDayStat {
   date: string;
   totalSeconds: number;
   sessionCount: number;
+  /** The day's play time per platform, sessions split at midnight. */
+  platforms: AccountDayPlatform[];
+}
+
+export interface AccountDayPlatform {
+  platformKey: string;
+  platformName: string;
+  totalSeconds: number;
 }
 
 export interface AccountDailyStatsResponse {

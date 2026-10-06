@@ -3,7 +3,7 @@ import { formatDuration, formatHours, formatTimeLabel, formatUtcDateInput } from
 import { encodeGameId } from "@/lib/gameHash";
 import type { ManualActiveSession } from "@/models/manual";
 import type { AccountSession } from "@/models/sessions";
-import type { AccountDayStat, AccountPlatformStat, AccountStatsPeriod } from "@/models/stats";
+import type { AccountDayPlatform, AccountDayStat, AccountPlatformStat, AccountStatsPeriod } from "@/models/stats";
 
 const todaySessionsPageSize = 3;
 
@@ -360,15 +360,13 @@ export function todaySeconds(state: DashboardState): number {
   return sumSeconds(state.todayPlatformTotals);
 }
 
-/**
- * Per-day play time (UTC days, sessions split at midnight, running sessions counted up to now)
- * plus this week's stats for the platform breakdown.
- */
+/** Per-day play time (UTC days, sessions split at midnight, running sessions counted up to now). */
 export interface DashboardActivity {
-  weekStats: AccountStatsPeriod;
   days: Record<DateOnly, number>;
-  /** Sessions overlapping each day; absent in older snapshots. */
+  /** Sessions overlapping each day. */
   sessionCounts?: Record<DateOnly, number>;
+  /** Each day's play time per platform. */
+  dayPlatforms?: Record<DateOnly, readonly AccountDayPlatform[]>;
 }
 
 /**
@@ -384,17 +382,16 @@ export function getTodayView(state: DashboardState, activity: DashboardActivity 
 }
 
 export interface DashboardActivityRequests {
-  week: string;
   daily: string;
 }
 
-/** This week's stats and one daily breakdown from the earlier of Monday / the 1st through today (UTC days). */
+/** One daily breakdown from the earlier of Monday / the 1st through today (UTC days). */
 export function dashboardActivityRequests(now: Date): DashboardActivityRequests {
   const today = formatUtcDateInput(now);
   const { monthStart } = utcPeriodStarts(now);
   const monday = currentUtcWeek(now).from;
   const first = monday < monthStart ? monday : monthStart;
-  return { week: `/stats?from=${monday}&to=${today}`, daily: `/stats/daily?from=${first}&to=${today}` };
+  return { daily: `/stats/daily?from=${first}&to=${today}` };
 }
 
 /** Indexes a daily breakdown by date. */
@@ -402,6 +399,13 @@ export function dailyTotals(days: readonly AccountDayStat[]): Record<DateOnly, n
   const totals: Record<DateOnly, number> = {};
   for (const day of days) totals[day.date] = day.totalSeconds;
   return totals;
+}
+
+/** Indexes a daily breakdown's per-platform split by date. */
+export function dailyPlatforms(days: readonly AccountDayStat[]): Record<DateOnly, readonly AccountDayPlatform[]> {
+  const byDate: Record<DateOnly, readonly AccountDayPlatform[]> = {};
+  for (const day of days) byDate[day.date] = day.platforms;
+  return byDate;
 }
 
 /** Indexes a daily breakdown's session counts by date. */
@@ -448,18 +452,31 @@ export function getWeekView(activity: DashboardActivity | null, now: Date): Week
       faded: future,
     };
   });
-  const weekStats = activity?.weekStats ?? null;
+  // Platform split of the same days the bars show, so the legend always agrees with the week total.
+  const platformTotals = new Map<string, AccountPlatformStat>();
+  for (const bar of bars) {
+    if (bar.faded) continue;
+    for (const item of activity?.dayPlatforms?.[bar.key] ?? []) {
+      const current = platformTotals.get(item.platformKey);
+      platformTotals.set(item.platformKey, {
+        platformKey: item.platformKey,
+        platformName: item.platformName,
+        totalSeconds: (current?.totalSeconds ?? 0) + item.totalSeconds,
+        source: null,
+      });
+    }
+  }
+  const weekPlatforms = [...platformTotals.values()].sort((a, b) => b.totalSeconds - a.totalSeconds);
+  const weekPlatformSeconds = sumSeconds(weekPlatforms);
   return {
     bars,
     // Sum of the bars, so the total matches what the chart shows (time played within this week).
     totalSeconds: activity ? bars.reduce((sum, bar) => sum + bar.value, 0) : 0,
     rangeLabel: `${shortDate(week.from)} – ${shortDate(week.to)}`,
-    platforms: weekStats
-      ? createPlatforms(weekStats.platforms, weekStats.totalSeconds).map((item, index) => ({
-          ...item,
-          seconds: weekStats.platforms[index].totalSeconds,
-        }))
-      : [],
+    platforms: createPlatforms(weekPlatforms, weekPlatformSeconds).map((item, index) => ({
+      ...item,
+      seconds: weekPlatforms[index].totalSeconds,
+    })),
   };
 }
 

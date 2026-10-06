@@ -359,6 +359,7 @@ public sealed class AccountsRepository(PlaydexDbContext db, IGames games)
         var firstDay = from.UtcDateTime.Date;
         var seconds = new Dictionary<DateTime, double>();
         var counts = new Dictionary<DateTime, int>();
+        var platforms = new Dictionary<DateTime, Dictionary<string, (string Name, double Seconds)>>();
         foreach (var session in sessions)
         {
             var start = session.StartedAt > from ? session.StartedAt : from;
@@ -370,8 +371,13 @@ public sealed class AccountsRepository(PlaydexDbContext db, IGames games)
                 var sliceStart = start > dayStart ? start : dayStart;
                 var sliceEnd = end < dayStart.AddDays(1) ? end : dayStart.AddDays(1);
                 if (sliceEnd <= sliceStart) continue;
-                seconds[day] = seconds.GetValueOrDefault(day) + (sliceEnd - sliceStart).TotalSeconds;
+                var slice = (sliceEnd - sliceStart).TotalSeconds;
+                seconds[day] = seconds.GetValueOrDefault(day) + slice;
                 counts[day] = counts.GetValueOrDefault(day) + 1;
+                if (!platforms.TryGetValue(day, out var byPlatform))
+                    platforms[day] = byPlatform = [];
+                var current = byPlatform.GetValueOrDefault(session.PlatformKey, (session.PlatformName, 0));
+                byPlatform[session.PlatformKey] = (current.Name, current.Seconds + slice);
             }
         }
 
@@ -381,7 +387,13 @@ public sealed class AccountsRepository(PlaydexDbContext db, IGames games)
             days.Add(new AccountDayStatDto(
                 cursor.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
                 seconds.GetValueOrDefault(cursor),
-                counts.GetValueOrDefault(cursor)));
+                counts.GetValueOrDefault(cursor),
+                platforms.TryGetValue(cursor, out var dayPlatforms)
+                    ? dayPlatforms
+                        .OrderBy(item => item.Key, StringComparer.Ordinal)
+                        .Select(item => new AccountDayPlatformDto(item.Key, item.Value.Name, item.Value.Seconds))
+                        .ToList()
+                    : []));
         }
         return days;
     }

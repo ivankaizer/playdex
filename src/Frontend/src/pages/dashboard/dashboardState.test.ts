@@ -266,7 +266,6 @@ describe("waitAllOrCancel", () => {
 describe("dashboard redesign views", () => {
   it("requests one daily breakdown from the earlier of Monday and the 1st through today", () => {
     const requests = dashboardActivityRequests(new Date("2026-10-04T12:00:00Z"));
-    expect(requests.week).toBe("/stats?from=2026-09-28&to=2026-10-04");
     expect(requests.daily).toBe("/stats/daily?from=2026-09-28&to=2026-10-04");
 
     const midMonth = dashboardActivityRequests(new Date("2026-10-20T12:00:00Z"));
@@ -276,14 +275,14 @@ describe("dashboard redesign views", () => {
   it("indexes daily totals by date", () => {
     expect(
       dailyTotals([
-        { date: "2026-10-01", totalSeconds: 600, sessionCount: 1 },
-        { date: "2026-10-02", totalSeconds: 0, sessionCount: 0 },
+        { date: "2026-10-01", totalSeconds: 600, sessionCount: 1, platforms: [] },
+        { date: "2026-10-02", totalSeconds: 0, sessionCount: 0, platforms: [] },
       ]),
     ).toEqual({ "2026-10-01": 600, "2026-10-02": 0 });
   });
 
   it("builds week bars with today highlighted and future days faded", () => {
-    const week = getWeekView({ weekStats: snapshot().monthlyStats, days: { "2026-07-13": 600 } }, now);
+    const week = getWeekView({ days: { "2026-07-13": 600 } }, now);
     expect(week.bars.map((bar) => bar.label)).toEqual(["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]);
     expect(week.bars[0]).toMatchObject({ value: 600, highlight: true, faded: false, title: "Mon · 10m" });
     expect(week.bars[1]).toMatchObject({ faded: true, title: "Tue · upcoming" });
@@ -292,10 +291,31 @@ describe("dashboard redesign views", () => {
     expect(week.totalSeconds).toBe(600);
   });
 
+  it("splits the week's platforms from the same days as the bars", () => {
+    const week = getWeekView(
+      {
+        days: { "2026-07-13": 5400 },
+        dayPlatforms: {
+          "2026-07-13": [
+            { platformKey: "psn", platformName: "PlayStation", totalSeconds: 1800 },
+            { platformKey: "steam", platformName: "Steam", totalSeconds: 3600 },
+          ],
+          // Outside this week (and a future day of it): ignored.
+          "2026-07-12": [{ platformKey: "xbox", platformName: "Xbox", totalSeconds: 999 }],
+          "2026-07-14": [{ platformKey: "xbox", platformName: "Xbox", totalSeconds: 999 }],
+        },
+      },
+      now,
+    );
+    expect(week.platforms.map((item) => [item.label, item.seconds])).toEqual([
+      ["Steam", 3600],
+      ["PlayStation", 1800],
+    ]);
+  });
+
   it("takes today from the daily breakdown so a running or overnight session counts", () => {
     const state = completeRefresh(initialDashboardState, snapshot(), now);
     const activity = {
-      weekStats: snapshot().monthlyStats,
       days: { "2026-07-13": 5400 },
       sessionCounts: { "2026-07-13": 2 },
     };
@@ -308,12 +328,12 @@ describe("dashboard redesign views", () => {
   });
 
   it("indexes daily session counts by date", () => {
-    expect(dailySessionCounts([{ date: "2026-07-13", totalSeconds: 60, sessionCount: 3 }])).toEqual({ "2026-07-13": 3 });
+    expect(dailySessionCounts([{ date: "2026-07-13", totalSeconds: 60, sessionCount: 3, platforms: [] }])).toEqual({ "2026-07-13": 3 });
   });
 
   it("derives month and year overview KPIs, bars and peak from real totals", () => {
     const state = completeRefresh(initialDashboardState, snapshot(), now);
-    const month = getOverviewView(state, { weekStats: snapshot().monthlyStats, days: { "2026-07-02": 3600, "2026-07-13": 7200 } }, "month", now);
+    const month = getOverviewView(state, { days: { "2026-07-02": 3600, "2026-07-13": 7200 } }, "month", now);
     expect(month.title).toBe("July highlights");
     expect(month.bars).toHaveLength(31);
     expect(month.bars.filter((bar) => bar.highlight).map((bar) => bar.key)).toEqual(["2026-07-13"]);

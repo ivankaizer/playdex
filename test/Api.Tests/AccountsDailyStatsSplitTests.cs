@@ -25,6 +25,22 @@ public sealed class AccountsDailyStatsSplitTests
     }
 
     [Fact]
+    public void SplitsEachDayByPlatform()
+    {
+        var days = AccountsRepository.BuildDayStats(From, To,
+        [
+            Session(new(2026, 9, 28, 10, 0, 0, TimeSpan.Zero), new(2026, 9, 28, 11, 0, 0, TimeSpan.Zero)),
+            Session(new(2026, 9, 28, 23, 0, 0, TimeSpan.Zero), new(2026, 9, 29, 1, 0, 0, TimeSpan.Zero), "psn", "PlayStation"),
+        ], now: To);
+
+        Assert.Equal(
+            [new AccountDayPlatformDto("psn", "PlayStation", 3600), new AccountDayPlatformDto("steam", "Steam", 3600)],
+            days[0].Platforms);
+        Assert.Equal([new AccountDayPlatformDto("psn", "PlayStation", 3600)], days[1].Platforms);
+        Assert.Empty(days[2].Platforms);
+    }
+
+    [Fact]
     public void CountsRunningSessionsUpToNowWithoutExceedingADay()
     {
         var now = new DateTimeOffset(2026, 10, 1, 6, 0, 0, TimeSpan.Zero);
@@ -35,6 +51,7 @@ public sealed class AccountsDailyStatsSplitTests
         Assert.All(days, day => Assert.True(day.TotalSeconds <= 24 * 3600));
     }
 
-    private static AccountSessionDto Session(DateTimeOffset startedAt, DateTimeOffset? endedAt) =>
-        new(1, startedAt, endedAt, "g", "steam", "Steam", "Game", null, false, null, null);
+    private static AccountSessionDto Session(
+        DateTimeOffset startedAt, DateTimeOffset? endedAt, string platformKey = "steam", string platformName = "Steam") =>
+        new(1, startedAt, endedAt, "g", platformKey, platformName, "Game", null, false, null, null);
 }
