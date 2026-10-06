@@ -3,6 +3,8 @@ import { storage } from "./storage";
 const AccessTokenKey = "playdex.token";
 const RefreshTokenKey = "playdex.refresh";
 const EmailKey = "playdex.email";
+/** Whether to show admin entry points; the API enforces the role on every admin call. */
+const AdminKey = "playdex.admin";
 
 export interface LoginRequest {
   email: string | null;
@@ -41,13 +43,18 @@ export const authSession = {
   getEmail(): string | null {
     return storage.get(EmailKey);
   },
+  isAdmin(): boolean {
+    return storage.get(AdminKey) === "true";
+  },
   storeLogin(response: LoginResponse): void {
     storage.set(AccessTokenKey, response.accessToken);
     storage.set(RefreshTokenKey, response.refreshToken);
     storage.set(EmailKey, response.email);
+    storeAdminFlag(response.isAdmin);
   },
   storeProfile(response: MeResponse): void {
     storage.set(EmailKey, response.email);
+    storeAdminFlag(response.isAdmin);
   },
   storeTokens(accessToken: string, refreshToken: string): void {
     storage.set(AccessTokenKey, accessToken);
@@ -57,5 +64,11 @@ export const authSession = {
     storage.remove(AccessTokenKey);
     storage.remove(RefreshTokenKey);
     storage.remove(EmailKey);
+    storage.remove(AdminKey);
   },
 };
+
+function storeAdminFlag(isAdmin: boolean | undefined): void {
+  if (isAdmin) storage.set(AdminKey, "true");
+  else storage.remove(AdminKey);
+}

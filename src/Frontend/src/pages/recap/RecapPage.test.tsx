@@ -66,7 +66,8 @@ describe("RecapPage", () => {
     );
 
     expect(await screen.findByText("Summed playtime by game")).toBeInTheDocument();
-    expect(calls).toEqual(["/recap/years", "/recap"]);
+    // The layout's background role check (/me) is not part of the page's data flow.
+    expect(calls.filter((path) => path !== "/me")).toEqual(["/recap/years", "/recap"]);
     expect(screen.getByRole("button", { name: "2026" })).toBeInTheDocument();
     expect(screen.getByText("1 / 3 days")).toBeInTheDocument();
     expect(screen.getByText("Jul 2026 · 3")).toBeInTheDocument();

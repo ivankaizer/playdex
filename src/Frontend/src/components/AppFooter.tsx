@@ -9,14 +9,14 @@ export function PlaydexMark({ className = "" }: { className?: string }) {
   );
 }
 
-export function AppFooter() {
+export function AppFooter({ items = navItems }: { items?: ReadonlyArray<{ label: string; path: string }> }) {
   const navigate = useAppNavigate();
   return (
     <footer className="flex flex-col gap-6 rounded-card bg-footer px-6 py-7 text-[#e9eef3] sm:px-9">
       <div className="flex flex-wrap items-center justify-between gap-6">
         <PlaydexMark />
         <nav aria-label="Footer" className="flex flex-wrap gap-1.5">
-          {navItems.map((item) => (
+          {items.map((item) => (
             <a
               key={item.path}
               href={item.path}

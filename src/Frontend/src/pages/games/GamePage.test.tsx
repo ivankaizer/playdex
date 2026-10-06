@@ -19,7 +19,9 @@ describe("GamePage", () => {
     expect(screen.getAllByText("Invalid game link.")).toHaveLength(4);
     expect(screen.getByText("Unknown")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Ignore game" })).toBeDisabled();
-    expect(fetchSpy).not.toHaveBeenCalled();
+    // Only the layout's background role check (/me) may run; the page itself requests nothing.
+    const pageRequests = fetchSpy.mock.calls.map(([url]) => String(url)).filter((url) => !/\/me$/.test(url));
+    expect(pageRequests).toEqual([]);
     vi.unstubAllGlobals();
   });
 });
