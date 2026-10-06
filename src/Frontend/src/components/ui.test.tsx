@@ -26,6 +26,32 @@ describe("chart tooltips", () => {
     expect(screen.getByRole("tooltip")).toHaveTextContent("Mon · 1h");
   });
 
+  it("is a single tab stop and moves between bars with the arrow keys", () => {
+    render(
+      <BarChart
+        data={[
+          { key: "a", value: 1, label: "A", title: "A · 1" },
+          { key: "b", value: 2, label: "B", title: "B · 2", highlight: true },
+          { key: "c", value: 3, label: "C", title: "C · 3" },
+        ]}
+      />,
+    );
+    const [a, b, c] = ["A · 1", "B · 2", "C · 3"].map((name) => screen.getByLabelText(name));
+    // The highlighted bar (e.g. today) is the chart's tab stop.
+    expect([a, b, c].map((bar) => bar.tabIndex)).toEqual([-1, 0, -1]);
+
+    b.focus();
+    fireEvent.keyDown(b, { key: "ArrowRight" });
+    expect(document.activeElement).toBe(c);
+    expect(screen.getByRole("tooltip")).toHaveTextContent("C · 3");
+    expect([a, b, c].map((bar) => bar.tabIndex)).toEqual([-1, -1, 0]);
+
+    fireEvent.keyDown(c, { key: "Home" });
+    expect(document.activeElement).toBe(a);
+    fireEvent.keyDown(a, { key: "ArrowLeft" });
+    expect(document.activeElement).toBe(a);
+  });
+
   it("shows a stacked bar segment's share and detail on hover", () => {
     const { container } = render(<StackedBar segments={segments} />);
     const parts = container.querySelectorAll("[role=img] > div");

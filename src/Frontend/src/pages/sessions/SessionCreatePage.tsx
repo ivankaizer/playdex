@@ -226,7 +226,7 @@ export function SessionCreatePage() {
         )
       }
     >
-      <section className="flex flex-wrap items-center justify-between gap-4 rounded-[28px] border border-[color:var(--card-border)] bg-[var(--card-bg)] py-2.5 pl-7 pr-2.5 shadow-card backdrop-blur-[16px] sm:rounded-full">
+      <section className="flex flex-wrap items-center justify-between gap-4 rounded-[28px] border border-[color:var(--card-border)] bg-[var(--card-bg)] py-2.5 pl-7 pr-2.5 shadow-card sm:rounded-full">
         <Breadcrumbs parentLabel="Sessions" currentLabel={crumb} onParent={backToSessions} />
         <div role="group" aria-label="Entry mode" className="pdx-seg">
           {modeTab(false, "Manual entry")}

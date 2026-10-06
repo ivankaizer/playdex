@@ -209,14 +209,13 @@ describe("providersState", () => {
   });
 
   it.each([
-    ["steam", "S", "bg-slate-200 dark:bg-slate-800", "text-slate-900 dark:text-slate-100"],
-    ["psn", "P", "bg-indigo-500/30", "text-indigo-700 dark:text-indigo-200"],
-    ["playnite", "PL", "bg-amber-500/30", "text-amber-700 dark:text-amber-200"],
-    ["xbox", "X", "bg-lime-500/30", "text-lime-700 dark:text-lime-200"],
-    ["custom", "PX", "bg-slate-200 dark:bg-slate-800", "text-slate-700 dark:text-slate-200"],
-  ])("presents %s with the exact metadata", (platform, label, color, accent) => {
-    const view = s.presentProvider(provider(1, platform, "active"));
-    expect([view.label, view.color, view.accent]).toEqual([label, color, accent]);
+    ["steam", "S"],
+    ["psn", "P"],
+    ["playnite", "PL"],
+    ["xbox", "X"],
+    ["custom", "PX"],
+  ])("presents %s with the exact mark", (platform, label) => {
+    expect(s.presentProvider(provider(1, platform, "active")).label).toBe(label);
   });
 
   it("presentation preserves empty subtitles and uses null fallbacks", () => {
@@ -226,14 +225,5 @@ describe("providersState", () => {
     expect(s.presentProvider({ ...base, platform: "playnite", accountId: "account", apiKey: null }).subtitle).toBe("Local");
     expect(s.presentProvider({ ...base, platform: "playnite", accountId: "account", apiKey: "" }).subtitle).toBe("");
     expect(s.presentProvider({ ...base, platform: "psn", accountId: "a", apiKey: null }).name).toBe("PlayStation");
-  });
-
-  it("builds the status and action classes exactly", () => {
-    expect(s.integrationStatusClass(provider(1, "steam", "active"))).toBe(
-      "rounded-full px-3 py-1.5 font-semibold uppercase tracking-[0.2em] bg-emerald-400 text-slate-900",
-    );
-    expect(s.integrationActionButtonClass(provider(1, "steam", "paused"))).toBe(
-      "rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] transition disabled:cursor-not-allowed disabled:opacity-60 border-emerald-300 text-emerald-700 hover:border-emerald-400 dark:border-emerald-900/70 dark:text-emerald-300",
-    );
   });
 });

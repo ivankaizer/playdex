@@ -1,4 +1,4 @@
-import { useState, type CSSProperties, type MouseEvent, type ReactNode } from "react";
+import { useRef, useState, type CSSProperties, type KeyboardEvent, type MouseEvent, type ReactNode } from "react";
 import { cx } from "@/lib/cx";
 
 /** Kicker over a card title, with optional right-side actions. */
@@ -240,8 +240,35 @@ export function BarChart({
   ariaLabel?: string;
 }) {
   const [active, setActive] = useState<string | null>(null);
+  const [focusKey, setFocusKey] = useState<string | null>(null);
+  const columnRefs = useRef(new Map<string, HTMLDivElement>());
   const max = Math.max(...data.map((d) => d.value), 0);
   const columns = { gridTemplateColumns: `repeat(${data.length}, minmax(0, 1fr))`, gap };
+  const focusable = data.filter((d) => d.title);
+  // One tab stop per chart (roving tabindex): the last focused bar, else the highlighted one, else the first.
+  const tabKey =
+    (focusKey !== null && focusable.some((d) => d.key === focusKey) ? focusKey : null) ??
+    focusable.find((d) => d.highlight)?.key ??
+    focusable[0]?.key;
+
+  const onKeyDown = (event: KeyboardEvent<HTMLDivElement>, key: string) => {
+    const index = focusable.findIndex((d) => d.key === key);
+    const target =
+      event.key === "ArrowRight" || event.key === "ArrowDown"
+        ? focusable[Math.min(index + 1, focusable.length - 1)]
+        : event.key === "ArrowLeft" || event.key === "ArrowUp"
+          ? focusable[Math.max(index - 1, 0)]
+          : event.key === "Home"
+            ? focusable[0]
+            : event.key === "End"
+              ? focusable[focusable.length - 1]
+              : undefined;
+    if (!target) return;
+    event.preventDefault();
+    setFocusKey(target.key);
+    columnRefs.current.get(target.key)?.focus();
+  };
+
   return (
     <div aria-label={ariaLabel} role={ariaLabel ? "group" : undefined}>
       <div className="grid items-end" style={{ ...columns, height }} onMouseLeave={() => setActive(null)}>
@@ -252,11 +279,19 @@ export function BarChart({
             // The whole column is the hover target, so short and empty bars are as easy to hover as tall ones.
             <div
               key={d.key}
-              tabIndex={d.title ? 0 : undefined}
+              ref={(element) => {
+                if (element) columnRefs.current.set(d.key, element);
+                else columnRefs.current.delete(d.key);
+              }}
+              tabIndex={d.title ? (d.key === tabKey ? 0 : -1) : undefined}
               aria-label={d.title}
               onMouseEnter={() => setActive(d.key)}
-              onFocus={() => setActive(d.key)}
+              onFocus={() => {
+                setActive(d.key);
+                setFocusKey(d.key);
+              }}
               onBlur={() => setActive((current) => (current === d.key ? null : current))}
+              onKeyDown={d.title ? (event) => onKeyDown(event, d.key) : undefined}
               className="relative flex h-full items-end rounded-md outline-none focus-visible:ring-2 focus-visible:ring-bar"
             >
               <div

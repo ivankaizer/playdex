@@ -33,8 +33,8 @@ export function AppHeader({ title, navItems, path, onNavigate, onLogout, theme, 
                 aria-current={active ? "page" : undefined}
                 className={
                   active
-                    ? "rounded-full border border-pill bg-pill px-[18px] py-[8px] text-[13px] font-semibold tracking-[0.04em] text-pill-ink"
-                    : "rounded-full border border-line px-[18px] py-[8px] text-[13px] font-medium tracking-[0.04em] text-ink-2 transition hover:bg-surface"
+                    ? "pdx-hit rounded-full border border-pill bg-pill px-[18px] py-[8px] text-[13px] font-semibold tracking-[0.04em] text-pill-ink"
+                    : "pdx-hit rounded-full border border-line px-[18px] py-[8px] text-[13px] font-medium tracking-[0.04em] text-ink-2 transition hover:bg-surface"
                 }
               >
                 {item.label}

@@ -164,7 +164,7 @@ export function PrivacyPage() {
   return (
     <main className="pdx-page relative px-4 pb-10 pt-6 sm:px-8 sm:pt-8">
       <div className="relative mx-auto flex w-full max-w-[1180px] flex-col gap-7">
-        <header className="flex flex-wrap items-center gap-4 rounded-[28px] border border-[color:var(--card-border)] bg-surface/60 py-3.5 pl-7 pr-4 backdrop-blur-[16px] sm:rounded-full">
+        <header className="flex flex-wrap items-center gap-4 rounded-[28px] border border-[color:var(--card-border)] bg-surface/60 py-3.5 pl-7 pr-4 sm:rounded-full">
           <a
             href="/"
             onClick={(event) => {
@@ -206,7 +206,7 @@ export function PrivacyPage() {
                 <li key={section.id}>
                   <a
                     href={`#${section.id}`}
-                    className="pdx-row block px-3 py-2 text-sm text-ink-2 no-underline hover:text-accent"
+                    className="pdx-row pdx-hit block px-3 py-2 text-sm text-ink-2 no-underline hover:text-accent"
                   >
                     {section.title}
                   </a>

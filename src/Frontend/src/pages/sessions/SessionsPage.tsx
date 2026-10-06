@@ -630,7 +630,7 @@ export function SessionsPage() {
                   onClick={() => navigateToGame(game.gameId)}
                   className="group grid grid-cols-[26px_minmax(0,1fr)_auto] items-baseline gap-x-3 gap-y-1.5 text-left"
                 >
-                  <span className="pdx-num text-[13px] text-faint">{String(index + 1).padStart(2, "0")}</span>
+                  <span className="pdx-num text-[13px] text-muted">{String(index + 1).padStart(2, "0")}</span>
                   <span className="truncate text-[15px] font-medium transition group-hover:text-accent">{game.title}</span>
                   <span className="pdx-num text-sm font-semibold text-accent">{formatHours(game.totalSeconds, 1)}</span>
                   <ShareBar pct={(game.totalSeconds / topGameMax) * 100} className="col-span-2 col-start-2" />
@@ -671,7 +671,7 @@ export function SessionsPage() {
         {state.isListLoading ? (
           <div className="flex flex-col gap-2 pt-5" aria-busy="true" aria-label="Loading sessions">
             {[1, 2, 3, 4].map((row) => (
-              <div key={row} className="flex animate-pulse items-center gap-[18px] py-2.5">
+              <div key={row} className="flex motion-safe:animate-pulse items-center gap-[18px] py-2.5">
                 <div className="h-[52px] w-[52px] rounded-[14px] bg-track"></div>
                 <div className="flex-1 space-y-2">
                   <div className="h-3 w-40 max-w-full rounded-full bg-track"></div>

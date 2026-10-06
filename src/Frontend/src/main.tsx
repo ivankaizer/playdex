@@ -1,4 +1,3 @@
-import * as Sentry from "@sentry/react";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter } from "react-router";
@@ -10,6 +9,8 @@ import "./styles/app.css";
 async function start() {
   const config = await loadConfig();
   if (config.sentry?.dsn) {
+    // Loaded only when configured, so deployments without Sentry never download it.
+    const Sentry = await import("@sentry/react");
     Sentry.init({
       dsn: config.sentry.dsn,
       environment: config.sentry.environment,

@@ -106,7 +106,7 @@ export function IntegrationCreator({ integrations }: IntegrationCreatorProps) {
             <label className={fieldLabelClass}>
               <span>
                 {platform === "steam" ? "Steam ID" : platform === "psn" ? "Account ID" : "Xbox XUID"}
-                {platform !== "steam" ? <span className="font-normal normal-case tracking-normal text-faint"> (optional)</span> : null}
+                {platform !== "steam" ? <span className="font-normal normal-case tracking-normal text-muted"> (optional)</span> : null}
               </span>
               <input
                 type="text"

@@ -42,12 +42,12 @@ export function IntegrationsSection({ integrations }: IntegrationsSectionProps) 
               aria-hidden="true"
               className="grid grid-cols-[48px_minmax(0,1fr)_auto] items-center gap-4 rounded-tile border border-[var(--tile-border)] bg-tile px-5 py-4"
             >
-              <div className="h-12 w-12 animate-pulse rounded-[14px] bg-track"></div>
+              <div className="h-12 w-12 motion-safe:animate-pulse rounded-[14px] bg-track"></div>
               <div className="space-y-2">
-                <div className="h-3 w-28 animate-pulse rounded-full bg-track"></div>
-                <div className="h-2.5 w-40 max-w-full animate-pulse rounded-full bg-track"></div>
+                <div className="h-3 w-28 motion-safe:animate-pulse rounded-full bg-track"></div>
+                <div className="h-2.5 w-40 max-w-full motion-safe:animate-pulse rounded-full bg-track"></div>
               </div>
-              <div className="h-9 w-24 animate-pulse rounded-full bg-track"></div>
+              <div className="h-9 w-24 motion-safe:animate-pulse rounded-full bg-track"></div>
             </div>
           ))
         ) : visible.length === 0 ? (

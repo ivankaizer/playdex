@@ -24,7 +24,7 @@ export function AppFooter() {
                 event.preventDefault();
                 navigate(item.path);
               }}
-              className="rounded-full border border-[#2f3b47] px-4 py-2 text-[13px] font-medium text-[#e9eef3] no-underline transition hover:bg-[#24303b] hover:text-white"
+              className="pdx-hit rounded-full border border-[#2f3b47] px-4 py-2 text-[13px] font-medium text-[#e9eef3] no-underline transition hover:bg-[#24303b] hover:text-white"
             >
               {item.label}
             </a>
@@ -40,14 +40,14 @@ export function AppFooter() {
               event.preventDefault();
               navigate("/privacy");
             }}
-            className="text-[#b5c0cb] no-underline transition hover:text-[#6fe3b5]"
+            className="pdx-hit text-[#b5c0cb] no-underline transition hover:text-[#6fe3b5]"
           >
             Privacy
           </a>
-          <a href="mailto:hello@playdex.dev" className="text-[#b5c0cb] no-underline transition hover:text-[#6fe3b5]">
+          <a href="mailto:hello@playdex.dev" className="pdx-hit text-[#b5c0cb] no-underline transition hover:text-[#6fe3b5]">
             Contact
           </a>
-          <a href="https://github.com/ivankaizer/playdex" target="_blank" rel="noreferrer" className="text-[#b5c0cb] no-underline transition hover:text-[#6fe3b5]">
+          <a href="https://github.com/ivankaizer/playdex" target="_blank" rel="noreferrer" className="pdx-hit text-[#b5c0cb] no-underline transition hover:text-[#6fe3b5]">
             GitHub ↗
           </a>
         </div>

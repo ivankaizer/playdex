@@ -103,8 +103,8 @@ export function MappingSection() {
         {state.isGameConnectionsLoading ? (
           [1, 2, 3].map((row) => (
             <div key={row} aria-hidden="true" className="flex items-center gap-3 px-3.5 py-3">
-              <div className="h-11 w-11 animate-pulse rounded-xl bg-track"></div>
-              <div className="h-3 w-40 max-w-full animate-pulse rounded-full bg-track"></div>
+              <div className="h-11 w-11 motion-safe:animate-pulse rounded-xl bg-track"></div>
+              <div className="h-3 w-40 max-w-full motion-safe:animate-pulse rounded-full bg-track"></div>
             </div>
           ))
         ) : pairCount === 0 ? (

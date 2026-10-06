@@ -199,7 +199,7 @@ export function HomePage() {
   return (
     <main className="pdx-page relative px-4 pb-10 pt-6 sm:px-8 sm:pt-8">
       <div className="relative mx-auto flex w-full max-w-[1180px] flex-col gap-7">
-        <header className="flex flex-wrap items-center gap-4 rounded-[28px] border border-[color:var(--card-border)] bg-surface/60 py-3.5 pl-7 pr-4 backdrop-blur-[16px] sm:rounded-full">
+        <header className="flex flex-wrap items-center gap-4 rounded-[28px] border border-[color:var(--card-border)] bg-surface/60 py-3.5 pl-7 pr-4 sm:rounded-full">
           <div className="mr-auto flex items-center gap-2.5">
             <span className="h-2.5 w-2.5 rounded-full bg-bar shadow-[0_0_0_4px_rgba(47,194,142,.18)]"></span>
             <span className="text-xs font-semibold uppercase tracking-[0.32em] text-accent">Playdex</span>
@@ -251,7 +251,7 @@ export function HomePage() {
           </div>
 
           <div className="min-w-0">
-            <div className="flex flex-col gap-5 rounded-card border border-[color:var(--card-border)] bg-surface/85 p-6 shadow-pop backdrop-blur-[16px] sm:p-9">
+            <div className="flex flex-col gap-5 rounded-card border border-[color:var(--card-border)] bg-surface/85 p-6 shadow-pop sm:p-9">
               {isLoggedIn ? (
                 <>
                   <div className="flex items-center gap-3.5">

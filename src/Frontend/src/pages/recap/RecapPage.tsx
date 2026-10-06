@@ -621,7 +621,7 @@ function LibraryCard({ recap, onOpenGame }: { recap: RecapResponse; onOpenGame: 
             </div>
             {recap.gamesTable.map((game, index) => (
               <div key={index} role="row" className={`pdx-row pdx-num ${LibraryColumns} px-3.5 py-2`}>
-                <span role="cell" className="text-[13px] text-faint">
+                <span role="cell" className="text-[13px] text-muted">
                   {pad2(index + 1)}
                 </span>
                 <span role="cell">

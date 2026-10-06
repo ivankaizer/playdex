@@ -33,7 +33,9 @@ export function normalizeGameHash(escapedRemainder: string): string | null {
 }
 
 export function scrollToTop(): void {
-  window.scrollTo({ top: 0, behavior: "smooth" });
+  const reduceMotion =
+    typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  window.scrollTo({ top: 0, behavior: reduceMotion ? "auto" : "smooth" });
 }
 
 /**

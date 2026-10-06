@@ -651,7 +651,7 @@ export function DraftWorkspace({
                   </div>
 
                   <div className="flex flex-wrap items-center justify-between gap-4 border-t border-divider pt-5">
-                    <p className="flex-[1_1_300px] text-xs leading-[1.55] text-faint">
+                    <p className="flex-[1_1_300px] text-xs leading-[1.55] text-muted">
                       {`Text and screenshots are sent to ${capabilities.provider} for processing. Playdex retains your input, screenshot, and AI results ${retentionDays > 0 ? `for ${retentionDays} days` : "until deleted"} for administrator review to improve generation. Supported: PNG, JPEG, WebP up to ${Math.trunc(Math.trunc(capabilities.maxImageBytes / 1024) / 1024)} MiB and ${Math.trunc(capabilities.maxImagePixels / 1000000)} megapixels.`}
                     </p>
                     <button
@@ -756,7 +756,7 @@ export function DraftWorkspace({
             </section>
 
             <section aria-label="Session drafts" className="pdx-card flex flex-col gap-2.5 !p-5">
-              <div className="flex justify-between gap-3 px-3 pb-1 pt-1.5 text-xs text-faint">
+              <div className="flex justify-between gap-3 px-3 pb-1 pt-1.5 text-xs text-muted">
                 <span>{plural(rows.length, "draft")}</span>
                 <span aria-live="polite">{state.saving > 0 ? "Saving…" : "Edits save automatically"}</span>
               </div>

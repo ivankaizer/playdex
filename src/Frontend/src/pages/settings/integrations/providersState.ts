@@ -19,9 +19,8 @@ export interface ProvidersState {
 }
 
 export interface ProviderPresentation {
+  /** Short mark shown in the service tile, e.g. "S" for Steam. */
   label: string;
-  color: string;
-  accent: string;
   name: string;
   subtitle: string;
 }
@@ -300,42 +299,23 @@ export function appendProvider(state: ProvidersState, provider: ProviderStatus):
 // Presentation
 
 export function presentProvider(provider: ProviderStatus): ProviderPresentation {
-  const [label, color, accent] = presentationMetadata(provider.platform);
+  const label = providerMark(provider.platform);
   const subtitle = provider.platform === "playnite" ? (provider.apiKey ?? "Local") : (provider.accountId ?? "Local");
-  return { label, color, accent, name: formatProviderName(provider.platform), subtitle };
+  return { label, name: formatProviderName(provider.platform), subtitle };
 }
 
-export function integrationStatusClass(provider: ProviderStatus): string {
-  return (
-    "rounded-full px-3 py-1.5 font-semibold uppercase tracking-[0.2em] " +
-    (provider.status === "active"
-      ? "bg-emerald-400 text-slate-900"
-      : "border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200")
-  );
-}
-
-export function integrationActionButtonClass(provider: ProviderStatus): string {
-  return (
-    "rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] transition " +
-    "disabled:cursor-not-allowed disabled:opacity-60 " +
-    (provider.status === "active"
-      ? "border-rose-300 text-rose-700 hover:border-rose-400 dark:border-rose-900/70 dark:text-rose-300"
-      : "border-emerald-300 text-emerald-700 hover:border-emerald-400 dark:border-emerald-900/70 dark:text-emerald-300")
-  );
-}
-
-function presentationMetadata(platform: string): [string, string, string] {
+function providerMark(platform: string): string {
   switch (platform) {
     case "steam":
-      return ["S", "bg-slate-200 dark:bg-slate-800", "text-slate-900 dark:text-slate-100"];
+      return "S";
     case "psn":
-      return ["P", "bg-indigo-500/30", "text-indigo-700 dark:text-indigo-200"];
+      return "P";
     case "playnite":
-      return ["PL", "bg-amber-500/30", "text-amber-700 dark:text-amber-200"];
+      return "PL";
     case "xbox":
-      return ["X", "bg-lime-500/30", "text-lime-700 dark:text-lime-200"];
+      return "X";
     default:
-      return ["PX", "bg-slate-200 dark:bg-slate-800", "text-slate-700 dark:text-slate-200"];
+      return "PX";
   }
 }
 

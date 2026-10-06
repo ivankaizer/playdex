@@ -1,4 +1,4 @@
-@import url("https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap");
+/* Space Grotesk is linked from index.html (preconnected, not a render-blocking @import chain). */
 
 @tailwind base;
 @tailwind components;
@@ -16,8 +16,8 @@
   --ink: 24 33 43; /* #18212b */
   --ink-2: 58 70 82; /* #3a4652 */
   --ink-3: 90 102 114; /* #5a6672 */
-  --muted: 107 119 133; /* #6b7785 */
-  --faint: 138 150 163; /* #8a96a3 */
+  --muted: 95 106 118; /* #5f6a76: AA (4.5:1) on tiles and cards; handoff #6b7785 */
+  --faint: 138 150 163; /* #8a96a3: icons and decoration only (3:1); not for text */
   --faint-2: 181 192 203; /* #b5c0cb */
 
   --page: 228 234 240; /* #e4eaf0 */
@@ -32,9 +32,9 @@
   --line: 213 221 229; /* #d5dde5 */
   --dash: 205 214 223; /* #cdd6df */
 
-  --accent: 10 138 96; /* #0a8a60 green text */
-  --brand: 10 154 108; /* #0a9a6c primary button */
-  --brand-hover: 8 138 96; /* #088a60 */
+  --accent: 9 120 84; /* #097854 green text, AA on tiles and mint; handoff #0a8a60 */
+  --brand: 9 134 94; /* #09865e primary button, white text 4.6:1; handoff #0a9a6c */
+  --brand-hover: 7 116 81; /* #077451 */
   --pill: 111 227 181; /* #6fe3b5 active pill */
   --pill-ink: 11 61 44; /* #0b3d2c */
   --bar: 47 194 142; /* #2fc28e */
@@ -43,11 +43,11 @@
   --mint-line: 191 230 214; /* #bfe6d6 */
   --mint-hover: 159 220 196; /* #9fdcc4 */
 
-  --danger: 196 58 79; /* #c43a4f */
+  --danger: 188 56 76; /* #bc384c */
   --danger-icon: 214 69 90; /* #d6455a */
   --danger-line: 241 196 200; /* #f1c4c8 */
   --danger-tint: 255 245 246; /* #fff5f6 */
-  --warn: 185 101 10; /* #b9650a */
+  --warn: 159 87 9; /* #9f5709 */
   --info: 155 215 239; /* #9bd7ef */
 
   --seg-on: 255 255 255; /* selected segment pill */
@@ -69,7 +69,7 @@
   --ink: 230 236 241; /* #e6ecf1 */
   --ink-2: 195 204 213; /* #c3ccd5 */
   --ink-3: 154 166 178; /* #9aa6b2 */
-  --muted: 141 153 166; /* #8d99a6 */
+  --muted: 147 158 170; /* #939eaa */
   --faint: 111 123 136; /* #6f7b88 */
   --faint-2: 90 102 114;
 
@@ -124,7 +124,7 @@ body {
 
 input::placeholder,
 textarea::placeholder {
-  color: rgb(var(--faint));
+  color: rgb(var(--muted));
 }
 
 @layer components {
@@ -139,15 +139,15 @@ textarea::placeholder {
       rgb(var(--page));
   }
 
-  /* Frosted main surface. */
+  /* Frosted main surface (translucent fill over the gradient page). */
   .pdx-card {
     border-radius: 32px;
     padding: 36px 40px;
     background: var(--card-bg);
     border: 1px solid var(--card-border);
     box-shadow: var(--card-shadow);
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
+    /* No backdrop-filter: cards sit over a static soft gradient, where a blur is invisible but costs a
+       compositing layer per card while scrolling. */
     min-width: 0;
   }
 
@@ -435,6 +435,41 @@ textarea::placeholder {
     max-width: calc(100vw - 32px);
   }
 
+  /*
+   * Touch: compact controls keep their visual size, but on coarse pointers an invisible hit area grows
+   * them to at least 44x44 (WCAG 2.5.5). Use .pdx-hit for any other small control or link.
+   */
+  @media (pointer: coarse) {
+    .pdx-btn,
+    .pdx-btn-primary,
+    .pdx-btn-outline,
+    .pdx-btn-accent,
+    .pdx-btn-danger,
+    .pdx-icon-btn,
+    .pdx-chip,
+    .pdx-seg-btn,
+    .pdx-hit {
+      position: relative;
+    }
+    .pdx-btn::after,
+    .pdx-btn-primary::after,
+    .pdx-btn-outline::after,
+    .pdx-btn-accent::after,
+    .pdx-btn-danger::after,
+    .pdx-icon-btn::after,
+    .pdx-chip::after,
+    .pdx-seg-btn::after,
+    .pdx-hit::after {
+      content: "";
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: max(100%, 44px);
+      height: max(100%, 44px);
+      transform: translate(-50%, -50%);
+    }
+  }
+
   @keyframes pdx-pulse {
     0%, 100% { box-shadow: 0 0 0 4px rgb(var(--brand) / 0.18); }
     50% { box-shadow: 0 0 0 7px rgb(var(--brand) / 0.06); }
@@ -445,6 +480,13 @@ textarea::placeholder {
     border-radius: 999px;
     background: rgb(var(--brand));
     animation: pdx-pulse 1.8s ease-in-out infinite;
+  }
+  /* Reduced motion keeps the "live" signal as a static ring instead of a pulse. */
+  @media (prefers-reduced-motion: reduce) {
+    .pdx-live-dot {
+      animation: none;
+      box-shadow: 0 0 0 4px rgb(var(--brand) / 0.18);
+    }
   }
 }
 

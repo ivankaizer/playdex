@@ -66,7 +66,7 @@ export function Alert({ tone = "info", children }: { tone?: "info" | "danger"; c
 export function ProgressBar() {
   return (
     <div role="progressbar" aria-label="Loading" className="my-3 h-1 w-full overflow-hidden rounded bg-slate-200 dark:bg-slate-700">
-      <div className="h-full w-1/3 animate-pulse rounded bg-emerald-500" />
+      <div className="h-full w-1/3 motion-safe:animate-pulse rounded bg-emerald-500" />
     </div>
   );
 }

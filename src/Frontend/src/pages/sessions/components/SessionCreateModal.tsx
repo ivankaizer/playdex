@@ -331,7 +331,7 @@ function DetailsStep({
               {platform.name}
             </button>
           ))}
-          {platforms.length === 0 && <span className="text-sm text-faint">No platforms are available.</span>}
+          {platforms.length === 0 && <span className="text-sm text-muted">No platforms are available.</span>}
         </div>
       </div>
 
@@ -399,7 +399,7 @@ function DetailsStep({
       )}
 
       <div className="flex flex-col gap-3 border-t border-divider pt-5">
-        <p id={`${ids}-summary`} aria-live="polite" className={cx("text-[13px]", blocker === null ? "text-ink" : "text-faint")}>
+        <p id={`${ids}-summary`} aria-live="polite" className={cx("text-[13px]", blocker === null ? "text-ink" : "text-muted")}>
           {summary}
         </p>
         <div className="flex flex-wrap gap-3">
