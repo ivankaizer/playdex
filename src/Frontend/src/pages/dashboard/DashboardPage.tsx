@@ -32,6 +32,7 @@ import { LiveSessionControl } from "../sessions/components/LiveSessionControl";
 import {
   beginRefresh,
   completeRefresh,
+  dailySessionCounts,
   dailyTotals,
   dashboardActivityRequests,
   dashboardRequests,
@@ -40,11 +41,11 @@ import {
   formatShortDuration,
   getOverviewView,
   getRecentSessions,
+  getTodayView,
   getWeekView,
   initialDashboardState,
   recapPath,
   recentSessionsRequest,
-  todaySeconds,
   waitAllOrCancel,
   type DashboardActivity,
   type DashboardState,
@@ -77,7 +78,7 @@ export function DashboardPage() {
       ]);
       if (signal.aborted || version !== activityVersion.current) return;
       const totals = dailyTotals(daily.days);
-      setActivity({ weekStats: week.stats, days: totals });
+      setActivity({ weekStats: week.stats, days: totals, sessionCounts: dailySessionCounts(daily.days) });
     } catch (error) {
       if (signal.aborted || isAbortError(error) || version !== activityVersion.current) return;
       setActivity(null);
@@ -208,7 +209,7 @@ export function DashboardPage() {
           capsuleUrl: state.currentSession.capsuleUrl,
         });
   const loading = state.isDashboardLoading;
-  const todayTotal = todaySeconds(state);
+  const today = getTodayView(state, activity, now);
   const week = getWeekView(activity, now);
   const recent = getRecentSessions(state, now);
   const overview = getOverviewView(state, activity, period, now);
@@ -262,11 +263,11 @@ export function DashboardPage() {
             </div>
             <div className="mt-3 flex flex-wrap items-baseline gap-3">
               <span className="pdx-num text-[64px] font-semibold leading-none tracking-[-0.03em]">
-                {loading ? "—" : formatShortDuration(todayTotal)}
+                {loading ? "—" : formatShortDuration(today.seconds)}
               </span>
               {!loading && (
                 <span className="text-[15px] text-muted">
-                  played across {state.todaySessionCount} {state.todaySessionCount === 1 ? "session" : "sessions"}
+                  played across {today.sessions} {today.sessions === 1 ? "session" : "sessions"}
                 </span>
               )}
             </div>
@@ -460,7 +461,7 @@ export function DashboardPage() {
             <p className="pdx-label">Top games</p>
             {overview.topGames.map((game, index) => (
               <div key={game.gameId} className="grid grid-cols-[26px_minmax(0,1fr)_auto] items-baseline gap-x-3 gap-y-1.5">
-                <span className="pdx-num text-[13px] text-faint">{String(index + 1).padStart(2, "0")}</span>
+                <span className="pdx-num text-[13px] text-muted">{String(index + 1).padStart(2, "0")}</span>
                 <button
                   type="button"
                   onClick={() => navigateToGame(game.gameId)}

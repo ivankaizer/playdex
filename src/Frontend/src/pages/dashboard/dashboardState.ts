@@ -360,10 +360,27 @@ export function todaySeconds(state: DashboardState): number {
   return sumSeconds(state.todayPlatformTotals);
 }
 
-/** Per-day totals (UTC days, like every other dashboard range) plus this week's stats. */
+/**
+ * Per-day play time (UTC days, sessions split at midnight, running sessions counted up to now)
+ * plus this week's stats for the platform breakdown.
+ */
 export interface DashboardActivity {
   weekStats: AccountStatsPeriod;
   days: Record<DateOnly, number>;
+  /** Sessions overlapping each day; absent in older snapshots. */
+  sessionCounts?: Record<DateOnly, number>;
+}
+
+/**
+ * Today's played time and session count. Prefers the daily breakdown, which includes a session that
+ * started yesterday or is still running; falls back to today's period stats until it loads.
+ */
+export function getTodayView(state: DashboardState, activity: DashboardActivity | null, now: Date): { seconds: number; sessions: number } {
+  const today = formatUtcDateInput(now);
+  if (activity && today in activity.days) {
+    return { seconds: activity.days[today], sessions: activity.sessionCounts?.[today] ?? state.todaySessionCount };
+  }
+  return { seconds: todaySeconds(state), sessions: state.todaySessionCount };
 }
 
 export interface DashboardActivityRequests {
@@ -385,6 +402,13 @@ export function dailyTotals(days: readonly AccountDayStat[]): Record<DateOnly, n
   const totals: Record<DateOnly, number> = {};
   for (const day of days) totals[day.date] = day.totalSeconds;
   return totals;
+}
+
+/** Indexes a daily breakdown's session counts by date. */
+export function dailySessionCounts(days: readonly AccountDayStat[]): Record<DateOnly, number> {
+  const counts: Record<DateOnly, number> = {};
+  for (const day of days) counts[day.date] = day.sessionCount;
+  return counts;
 }
 
 export interface ActivityBar {
@@ -427,7 +451,8 @@ export function getWeekView(activity: DashboardActivity | null, now: Date): Week
   const weekStats = activity?.weekStats ?? null;
   return {
     bars,
-    totalSeconds: weekStats?.totalSeconds ?? 0,
+    // Sum of the bars, so the total matches what the chart shows (time played within this week).
+    totalSeconds: activity ? bars.reduce((sum, bar) => sum + bar.value, 0) : 0,
     rangeLabel: `${shortDate(week.from)} – ${shortDate(week.to)}`,
     platforms: weekStats
       ? createPlatforms(weekStats.platforms, weekStats.totalSeconds).map((item, index) => ({

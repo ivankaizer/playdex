@@ -4,12 +4,14 @@ import type { AccountStatsPeriod } from "@/models/stats";
 import {
   beginRefresh,
   completeRefresh,
+  dailySessionCounts,
   dailyTotals,
   dashboardActivityRequests,
   dashboardRequests,
   formatShortDuration,
   getOverviewView,
   getRecentSessions,
+  getTodayView,
   getWeekView,
   failRefresh,
   getCurrentSession,
@@ -19,6 +21,7 @@ import {
   recapPath,
   setTodaySessionsPage,
   todayHours,
+  todaySeconds,
   todaySessionPageItems,
   todaySessionsTotalPages,
   waitAllOrCancel,
@@ -285,7 +288,27 @@ describe("dashboard redesign views", () => {
     expect(week.bars[0]).toMatchObject({ value: 600, highlight: true, faded: false, title: "Mon · 10m" });
     expect(week.bars[1]).toMatchObject({ faded: true, title: "Tue · upcoming" });
     expect(week.rangeLabel).toBe("Jul 13 – Jul 19");
-    expect(week.totalSeconds).toBe(7200);
+    // The week total is the time shown by the bars (sessions split at midnight), not the start-day stats.
+    expect(week.totalSeconds).toBe(600);
+  });
+
+  it("takes today from the daily breakdown so a running or overnight session counts", () => {
+    const state = completeRefresh(initialDashboardState, snapshot(), now);
+    const activity = {
+      weekStats: snapshot().monthlyStats,
+      days: { "2026-07-13": 5400 },
+      sessionCounts: { "2026-07-13": 2 },
+    };
+    expect(getTodayView(state, activity, now)).toEqual({ seconds: 5400, sessions: 2 });
+  });
+
+  it("falls back to today's stats until the daily breakdown loads", () => {
+    const state = completeRefresh(initialDashboardState, snapshot(), now);
+    expect(getTodayView(state, null, now)).toEqual({ seconds: todaySeconds(state), sessions: state.todaySessionCount });
+  });
+
+  it("indexes daily session counts by date", () => {
+    expect(dailySessionCounts([{ date: "2026-07-13", totalSeconds: 60, sessionCount: 3 }])).toEqual({ "2026-07-13": 3 });
   });
 
   it("derives month and year overview KPIs, bars and peak from real totals", () => {

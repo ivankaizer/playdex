@@ -225,18 +225,22 @@ public sealed class AccountsRepository(PlaydexDbContext db, IGames games)
             totalSeconds, sessions.Count, topGame, platforms, topGames, months);
     }
 
+    /// <summary>
+    /// Play time per UTC day in [from, to). Unlike the period stats, a session is split across every day it
+    /// overlaps, and a running session counts up to now, so no day can exceed 24 hours.
+    /// </summary>
     public async Task<List<AccountDayStatDto>> ComputeDailyStats(
         long userId, long? accountId, DateTimeOffset from, DateTimeOffset to,
         string? platform, int ignoreShortMinutes, CancellationToken ct)
     {
-        var sessions = await ListSessionsForStats(userId, accountId, from, to, ignoreShortMinutes, ct);
-        var normalizedPlatform = string.IsNullOrWhiteSpace(platform)
-            ? null
-            : platform.Trim().ToLowerInvariant();
-        if (normalizedPlatform is not null)
-            sessions = sessions.Where(session => session.PlatformKey == normalizedPlatform).ToList();
+        var (sql, parameters) = BuildSessionQuery(
+            userId, accountId, null, null, platform, null, null, excludeIgnored: true);
+        sql += " AND ps.started_at < @OverlapTo AND COALESCE(ps.ended_at, NOW()) > @OverlapFrom ORDER BY ps.started_at ASC";
+        parameters.Add(new NpgsqlParameter("OverlapFrom", from));
+        parameters.Add(new NpgsqlParameter("OverlapTo", to));
+        var rows = await db.Database.SqlQueryRaw<SessionDbRow>(sql, [.. parameters]).ToListAsync(ct);
 
-        return BuildDayStats(from, to, sessions);
+        return BuildDayStats(from, to, rows.Select(MapSession).ToList(), DateTimeOffset.UtcNow);
     }
 
     private static (string Sql, List<NpgsqlParameter> Parameters) BuildSessionQuery(
@@ -346,22 +350,38 @@ public sealed class AccountsRepository(PlaydexDbContext db, IGames games)
             ? (s.EndedAt.Value - s.StartedAt).TotalSeconds
             : (DateTimeOffset.UtcNow - s.StartedAt).TotalSeconds;
 
-    private static List<AccountDayStatDto> BuildDayStats(
+    internal static List<AccountDayStatDto> BuildDayStats(
         DateTimeOffset from,
         DateTimeOffset to,
-        IReadOnlyList<AccountSessionDto> sessions)
+        IReadOnlyList<AccountSessionDto> sessions,
+        DateTimeOffset now)
     {
-        var totals = sessions
-            .GroupBy(session => session.StartedAt.UtcDateTime.Date)
-            .ToDictionary(group => group.Key, group => (Seconds: group.Sum(MapDuration), Count: group.Count()));
-        var cursor = from.UtcDateTime.Date;
-        var days = new List<AccountDayStatDto>();
-        while (cursor < to.UtcDateTime)
+        var firstDay = from.UtcDateTime.Date;
+        var seconds = new Dictionary<DateTime, double>();
+        var counts = new Dictionary<DateTime, int>();
+        foreach (var session in sessions)
         {
-            var total = totals.GetValueOrDefault(cursor);
+            var start = session.StartedAt > from ? session.StartedAt : from;
+            var end = session.EndedAt ?? now;
+            if (end > to) end = to;
+            for (var day = start.UtcDateTime.Date; day < end.UtcDateTime; day = day.AddDays(1))
+            {
+                var dayStart = new DateTimeOffset(day, TimeSpan.Zero);
+                var sliceStart = start > dayStart ? start : dayStart;
+                var sliceEnd = end < dayStart.AddDays(1) ? end : dayStart.AddDays(1);
+                if (sliceEnd <= sliceStart) continue;
+                seconds[day] = seconds.GetValueOrDefault(day) + (sliceEnd - sliceStart).TotalSeconds;
+                counts[day] = counts.GetValueOrDefault(day) + 1;
+            }
+        }
+
+        var days = new List<AccountDayStatDto>();
+        for (var cursor = firstDay; cursor < to.UtcDateTime; cursor = cursor.AddDays(1))
+        {
             days.Add(new AccountDayStatDto(
-                cursor.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture), total.Seconds, total.Count));
-            cursor = cursor.AddDays(1);
+                cursor.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+                seconds.GetValueOrDefault(cursor),
+                counts.GetValueOrDefault(cursor)));
         }
         return days;
     }
