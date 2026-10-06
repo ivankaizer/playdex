@@ -1,4 +1,4 @@
-import { useState, type CSSProperties, type ReactNode } from "react";
+import { useState, type CSSProperties, type MouseEvent, type ReactNode } from "react";
 import { cx } from "@/lib/cx";
 
 /** Kicker over a card title, with optional right-side actions. */
@@ -92,9 +92,36 @@ export interface DonutSegment {
   label: string;
   value: number;
   color: string;
+  /** Extra hover text after the share, e.g. "64.9h". */
+  detail?: string;
 }
 
-/** Conic-gradient donut with small gaps between segments and a centered label. */
+/** Rounded share of the total, as "52%" (or "<1%" for a sliver). */
+function sharePercent(value: number, total: number): string {
+  if (total <= 0) return "0%";
+  const pct = (value / total) * 100;
+  return pct > 0 && pct < 1 ? "<1%" : `${Math.round(pct)}%`;
+}
+
+function segmentHoverText(segment: DonutSegment, total: number): string {
+  const share = sharePercent(segment.value, total);
+  return segment.detail ? `${segment.label} · ${share} · ${segment.detail}` : `${segment.label} · ${share}`;
+}
+
+/** Small dark pill shown above a hovered chart element. */
+function ChartTooltip({ text, style }: { text: string; style: CSSProperties }) {
+  return (
+    <span
+      role="tooltip"
+      className="pointer-events-none absolute z-20 -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-full bg-footer px-3 py-1.5 text-xs font-semibold text-[#e9eef3] shadow-pop"
+      style={style}
+    >
+      {text}
+    </span>
+  );
+}
+
+/** Conic-gradient donut with small gaps between segments, a centered label and per-segment hover. */
 export function Donut({
   segments,
   size = 168,
@@ -108,27 +135,55 @@ export function Donut({
   center?: ReactNode;
   holeClassName?: string;
 }) {
+  const [hover, setHover] = useState<{ key: string; x: number; y: number } | null>(null);
   const total = segments.reduce((sum, s) => sum + Math.max(0, s.value), 0);
-  const gap = segments.filter((s) => s.value > 0).length > 1 ? 0.6 : 0;
+  const visible = segments.filter((s) => s.value > 0);
+  const gap = visible.length > 1 ? 0.6 : 0;
+
+  // Segment ranges in percent of the circle, clockwise from 12 o'clock (same order as the gradient).
   let cursor = 0;
+  const ranges = visible.map((segment) => {
+    const startPct = cursor;
+    cursor += (segment.value / total) * 100;
+    return { segment, start: startPct, end: cursor };
+  });
+
   const stops: string[] = [];
-  if (total > 0) {
-    for (const segment of segments) {
-      if (segment.value <= 0) continue;
-      const share = (segment.value / total) * 100;
-      const end = cursor + share;
-      stops.push(`${segment.color} ${cursor}% ${Math.max(cursor, end - gap)}%`);
-      if (gap > 0) stops.push(`transparent ${Math.max(cursor, end - gap)}% ${end}%`);
-      cursor = end;
-    }
+  for (const { segment, start, end } of ranges) {
+    const dimmed = hover !== null && hover.key !== segment.key;
+    const color = dimmed ? `color-mix(in srgb, ${segment.color} 35%, transparent)` : segment.color;
+    stops.push(`${color} ${start}% ${Math.max(start, end - gap)}%`);
+    if (gap > 0) stops.push(`transparent ${Math.max(start, end - gap)}% ${end}%`);
   }
   const background = stops.length > 0 ? `conic-gradient(${stops.join(", ")})` : "rgb(var(--track))";
+
+  const onMouseMove = (event: MouseEvent<HTMLDivElement>) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    const x = event.clientX - rect.left;
+    const y = event.clientY - rect.top;
+    const dx = x - rect.width / 2;
+    const dy = y - rect.height / 2;
+    const radius = Math.hypot(dx, dy);
+    const outer = rect.width / 2;
+    if (radius > outer || radius < outer - thickness) {
+      setHover(null);
+      return;
+    }
+    const angle = ((Math.atan2(dx, -dy) * 180) / Math.PI + 360) % 360;
+    const pct = (angle / 360) * 100;
+    const hit = ranges.find((range) => pct >= range.start && pct < range.end);
+    setHover(hit ? { key: hit.segment.key, x, y } : null);
+  };
+
+  const hovered = hover ? visible.find((s) => s.key === hover.key) : undefined;
   return (
     <div
       role="img"
-      aria-label={segments.map((s) => `${s.label} ${s.value}`).join(", ") || "No data"}
-      className="grid shrink-0 place-items-center rounded-full"
+      aria-label={visible.map((s) => segmentHoverText(s, total)).join(", ") || "No data"}
+      className="relative grid shrink-0 place-items-center rounded-full"
       style={{ width: size, height: size, background }}
+      onMouseMove={onMouseMove}
+      onMouseLeave={() => setHover(null)}
     >
       <div
         className={cx("grid place-items-center rounded-full text-center", holeClassName)}
@@ -136,6 +191,9 @@ export function Donut({
       >
         {center}
       </div>
+      {hover && hovered && (
+        <ChartTooltip text={segmentHoverText(hovered, total)} style={{ left: hover.x, top: hover.y - 10 }} />
+      )}
     </div>
   );
 }
@@ -165,7 +223,7 @@ export interface BarDatum {
   faded?: boolean;
 }
 
-/** Vertical bar chart with labels under each bar. */
+/** Vertical bar chart with labels under each bar and a tooltip per column on hover or focus. */
 export function BarChart({
   data,
   height = 140,
@@ -181,24 +239,46 @@ export function BarChart({
   minBar?: number;
   ariaLabel?: string;
 }) {
+  const [active, setActive] = useState<string | null>(null);
   const max = Math.max(...data.map((d) => d.value), 0);
   const columns = { gridTemplateColumns: `repeat(${data.length}, minmax(0, 1fr))`, gap };
   return (
     <div aria-label={ariaLabel} role={ariaLabel ? "group" : undefined}>
-      <div className="grid items-end" style={{ ...columns, height }}>
-        {data.map((d) => (
-          <div
-            key={d.key}
-            title={d.title}
-            aria-label={d.title}
-            className={cx(d.highlight ? "bg-brand" : "bg-bar-light", d.faded && "opacity-35")}
-            style={{
-              height: max > 0 && d.value > 0 ? `max(${(d.value / max) * 100}%, ${minBar}px)` : minBar,
-              borderRadius: radius,
-              opacity: !d.faded && d.value <= 0 ? 0.35 : undefined,
-            }}
-          ></div>
-        ))}
+      <div className="grid items-end" style={{ ...columns, height }} onMouseLeave={() => setActive(null)}>
+        {data.map((d) => {
+          const barHeight = max > 0 && d.value > 0 ? `max(${(d.value / max) * 100}%, ${minBar}px)` : `${minBar}px`;
+          const isActive = active === d.key;
+          return (
+            // The whole column is the hover target, so short and empty bars are as easy to hover as tall ones.
+            <div
+              key={d.key}
+              tabIndex={d.title ? 0 : undefined}
+              aria-label={d.title}
+              onMouseEnter={() => setActive(d.key)}
+              onFocus={() => setActive(d.key)}
+              onBlur={() => setActive((current) => (current === d.key ? null : current))}
+              className="relative flex h-full items-end rounded-md outline-none focus-visible:ring-2 focus-visible:ring-bar"
+            >
+              <div
+                className={cx(
+                  "w-full transition-[filter,opacity]",
+                  d.highlight ? "bg-brand" : "bg-bar-light",
+                  d.faded && "opacity-35",
+                  isActive && "brightness-110",
+                  active !== null && !isActive && "opacity-60",
+                )}
+                style={{
+                  height: barHeight,
+                  borderRadius: radius,
+                  opacity: !d.faded && d.value <= 0 && !isActive ? 0.35 : undefined,
+                }}
+              ></div>
+              {isActive && d.title && (
+                <ChartTooltip text={d.title} style={{ left: "50%", bottom: `calc(${barHeight} + 8px)`, transform: "translateX(-50%)" }} />
+              )}
+            </div>
+          );
+        })}
       </div>
       <div className="mt-2.5 grid" style={columns}>
         {data.map((d) => (
@@ -214,15 +294,37 @@ export function BarChart({
   );
 }
 
-/** Horizontal stacked share bar. */
+/** Horizontal stacked share bar with a tooltip per segment. */
 export function StackedBar({ segments, height = 12 }: { segments: readonly DonutSegment[]; height?: number }) {
+  const [active, setActive] = useState<string | null>(null);
   const visible = segments.filter((s) => s.value > 0);
   if (visible.length === 0) return <div className="rounded-full bg-track" style={{ height }}></div>;
+  const total = visible.reduce((sum, s) => sum + s.value, 0);
+  let cursor = 0;
   return (
-    <div className="flex gap-[3px] overflow-hidden rounded-full" style={{ height }}>
-      {visible.map((s) => (
-        <div key={s.key} title={`${s.label} · ${s.value}`} style={{ flex: s.value, backgroundColor: s.color }}></div>
-      ))}
+    <div className="relative" onMouseLeave={() => setActive(null)}>
+      <div
+        role="img"
+        aria-label={visible.map((s) => segmentHoverText(s, total)).join(", ")}
+        className="flex gap-[3px] overflow-hidden rounded-full"
+        style={{ height }}
+      >
+        {visible.map((s) => (
+          <div
+            key={s.key}
+            onMouseEnter={() => setActive(s.key)}
+            className="transition-opacity"
+            style={{ flex: s.value, backgroundColor: s.color, opacity: active !== null && active !== s.key ? 0.4 : 1 }}
+          ></div>
+        ))}
+      </div>
+      {visible.map((s) => {
+        const mid = cursor + (s.value / total) * 50;
+        cursor += (s.value / total) * 100;
+        return active === s.key ? (
+          <ChartTooltip key={s.key} text={segmentHoverText(s, total)} style={{ left: `${mid}%`, top: -8 }} />
+        ) : null;
+      })}
     </div>
   );
 }
