@@ -43,9 +43,13 @@ function RequireAdmin({ children }: { children: ReactNode }) {
 
   if (state.status === "checking") {
     return (
-      <div className="min-h-screen bg-slate-100 p-8 dark:bg-slate-950">
-        <ProgressBar />
-      </div>
+      <main className="pdx-page grid place-items-center px-4 py-10">
+        <div className="pdx-card flex w-full max-w-sm flex-col gap-4">
+          <p className="pdx-kicker">Playdex · Admin</p>
+          <p className="text-sm text-muted">Checking your administrator session…</p>
+          <ProgressBar />
+        </div>
+      </main>
     );
   }
   if (state.status === "redirect") {
@@ -59,10 +63,13 @@ function RequireAdmin({ children }: { children: ReactNode }) {
   }
   if (state.status === "error") {
     return (
-      <div className="min-h-screen bg-slate-100 p-8 dark:bg-slate-950">
-        <Alert tone="danger">Could not verify your administrator session: {state.message}</Alert>
-        <Button onClick={() => setAttempt((value) => value + 1)}>Retry</Button>
-      </div>
+      <main className="pdx-page grid place-items-center px-4 py-10">
+        <div className="pdx-card flex w-full max-w-md flex-col items-start gap-4">
+          <p className="pdx-kicker">Playdex · Admin</p>
+          <Alert tone="danger">Could not verify your administrator session: {state.message}</Alert>
+          <Button onClick={() => setAttempt((value) => value + 1)}>Retry</Button>
+        </div>
+      </main>
     );
   }
   return <AdminUserContext.Provider value={state.email}>{children}</AdminUserContext.Provider>;

@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { authSession } from "@/lib/auth";
+import { ThemeProvider } from "@/lib/theme";
 import AdminApp from "./AdminApp";
 import { NotAdministratorMessage } from "./auth";
 
@@ -40,12 +41,15 @@ const snapshot = (updatedAt: string) => ({
 const fetchMock = vi.fn<typeof fetch>();
 
 function renderAt(path: string) {
+  // main.tsx mounts the whole app, admin included, inside ThemeProvider (the admin header has a theme toggle).
   return render(
-    <MemoryRouter initialEntries={[path]}>
-      <Routes>
-        <Route path="/admin/*" element={<AdminApp />} />
-      </Routes>
-    </MemoryRouter>,
+    <ThemeProvider>
+      <MemoryRouter initialEntries={[path]}>
+        <Routes>
+          <Route path="/admin/*" element={<AdminApp />} />
+        </Routes>
+      </MemoryRouter>
+    </ThemeProvider>,
   );
 }
 

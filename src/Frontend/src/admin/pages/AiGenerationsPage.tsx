@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { Link, useParams, useSearchParams } from "react-router";
+import { scrollToTop } from "@/lib/navigation";
 import {
   AdminAccessRequired,
   adminApi,
@@ -10,7 +11,8 @@ import {
   type GenerationPage,
 } from "../api";
 import { GenerationDetails } from "../components/GenerationDetails";
-import { Alert, Button, PageHeading, Pager, ProgressBar, rowClass, Select, Table, Td, TextInput, Th, Toolbar } from "../components/ui";
+import { Alert, Button, linkClass, Note, Pager, Panel, ProgressBar, rowClass, Select, Table, Td, TextInput, Th, Toolbar } from "../components/ui";
+import { OutcomeBadge } from "../components/GenerationDetails";
 import { GenerationStatuses, hasNextPage } from "../logic";
 import { formatLocal, parseTime } from "../time";
 
@@ -88,7 +90,7 @@ export function AiGenerationsPage() {
       if (controller.signal.aborted) return;
       setDetail(next);
       setError(null);
-      window.scrollTo({ top: 0, behavior: "smooth" });
+      scrollToTop();
     } catch (caught) {
       if (controller.signal.aborted || isAbortError(caught)) return;
       if (isNotFound(caught)) setError("This generation has been deleted or expired.");
@@ -147,101 +149,108 @@ export function AiGenerationsPage() {
 
   return (
     <>
-      <PageHeading>AI generations</PageHeading>
-      <p className="mb-2 text-sm text-slate-600 dark:text-slate-400">
-        Compare submitted evidence with generated sessions, including failed attempts and automatic retries.
-      </p>
-      {scopeSince !== null || scopeUntil !== null ? (
-        <p className="mb-2 text-sm text-slate-600 dark:text-slate-400">
-          Submitted {formatLocal(scopeSince)} – {formatLocal(scopeUntil)} ·{" "}
-          <Link className="text-emerald-600 hover:underline" to="/admin/ai-generations?status=errors">
-            Clear time filter
-          </Link>
-        </p>
-      ) : null}
-      <form onSubmit={search}>
-        <Toolbar>
-          <TextInput
-            className="sm:w-72"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search email or input text"
-            aria-label="Search generation history"
-          />
-          <Select className="sm:w-44" value={status} onChange={(event) => setStatus(event.target.value)} aria-label="Generation outcome">
-            <option value="">All outcomes</option>
-            {GenerationStatuses.map((value) => (
-              <option key={value} value={value}>
-                {value}
-              </option>
-            ))}
-          </Select>
-          <Button type="submit" variant="primary" disabled={busy}>
-            Search
-          </Button>
-        </Toolbar>
-      </form>
-      {error !== null ? <Alert tone="danger">{error}</Alert> : null}
-      {busy ? <ProgressBar /> : null}
       {detail !== null ? (
-        <div className="mb-6">
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-            <h2 className="text-lg font-semibold">Generation details</h2>
-            <div className="flex gap-2">
+        <GenerationDetails
+          detail={detail}
+          actions={
+            <>
               <Button onClick={() => setDetail(null)} disabled={busy}>
                 Close details
               </Button>
               <Button variant="danger" onClick={() => void remove()} disabled={busy}>
                 Delete generation
               </Button>
-            </div>
-          </div>
-          <GenerationDetails detail={detail} />
-        </div>
+            </>
+          }
+        />
       ) : null}
-      {result !== null && !busy ? (
-        <>
-          {result.items.length === 0 ? (
-            <Alert>No generations found. History is collected for new submissions; older inputs were not retained.</Alert>
-          ) : (
-            <Table>
-              <thead>
-                <tr>
-                  <Th>User</Th>
-                  <Th>Submitted</Th>
-                  <Th>Outcome</Th>
-                  <Th>Model</Th>
-                  <Th>Input</Th>
-                  <Th className="w-28">Review</Th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                {result.items.map((item) => (
-                  <tr key={item.id} className={rowClass}>
-                    <Td>{item.email}</Td>
-                    <Td className="whitespace-nowrap">{formatLocal(item.createdAt)}</Td>
-                    <Td>{item.status}</Td>
-                    <Td>{item.model}</Td>
-                    <Td className="max-w-md break-words">
-                      {item.inputPreview}
-                      {item.hasImage ? " · Screenshot" : ""}
-                    </Td>
-                    <Td>
-                      <Button onClick={() => void inspect(item.id)}>Inspect</Button>
-                    </Td>
+      <Panel label="AI generations" kicker="AI batch import" title="Generation history">
+        <Note>Compare submitted evidence with generated sessions, including failed attempts and automatic retries.</Note>
+        {scopeSince !== null || scopeUntil !== null ? (
+          <Note>
+            Submitted {formatLocal(scopeSince)} – {formatLocal(scopeUntil)} ·{" "}
+            <Link className={linkClass} to="/admin/ai-generations?status=errors">
+              Clear time filter
+            </Link>
+          </Note>
+        ) : null}
+        <form onSubmit={search}>
+          <Toolbar>
+            <TextInput
+              className="sm:!w-72"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Search email or input text"
+              aria-label="Search generation history"
+            />
+            <Select
+              className="sm:!w-44"
+              value={status}
+              onChange={(event) => setStatus(event.target.value)}
+              aria-label="Generation outcome"
+            >
+              <option value="">All outcomes</option>
+              {GenerationStatuses.map((value) => (
+                <option key={value} value={value}>
+                  {value}
+                </option>
+              ))}
+            </Select>
+            <Button type="submit" variant="primary" disabled={busy}>
+              Search
+            </Button>
+          </Toolbar>
+        </form>
+        {error !== null ? <Alert tone="danger">{error}</Alert> : null}
+        {busy ? <ProgressBar /> : null}
+        {result !== null && !busy ? (
+          <>
+            {result.items.length === 0 ? (
+              <Alert>No generations found. History is collected for new submissions; older inputs were not retained.</Alert>
+            ) : (
+              <Table label="Generation history table">
+                <thead>
+                  <tr>
+                    <Th>User</Th>
+                    <Th>Submitted</Th>
+                    <Th>Outcome</Th>
+                    <Th>Model</Th>
+                    <Th>Input</Th>
+                    <Th className="w-28">Review</Th>
                   </tr>
-                ))}
-              </tbody>
-            </Table>
-          )}
-          <Pager
-            label={`${result.total} generations · Page ${result.page + 1}`}
-            page={result.page}
-            hasNext={hasNextPage(result.page, result.pageSize, result.total)}
-            onPage={(page) => void load(page)}
-          />
-        </>
-      ) : null}
+                </thead>
+                <tbody>
+                  {result.items.map((item) => (
+                    <tr key={item.id} className={rowClass}>
+                      <Td className="break-all">{item.email}</Td>
+                      <Td className="pdx-num whitespace-nowrap">{formatLocal(item.createdAt)}</Td>
+                      <Td>
+                        <OutcomeBadge status={item.status} />
+                      </Td>
+                      <Td className="whitespace-nowrap">{item.model}</Td>
+                      <Td className="min-w-[220px] max-w-md break-words text-muted">
+                        {item.inputPreview}
+                        {item.hasImage ? " · Screenshot" : ""}
+                      </Td>
+                      <Td>
+                        <Button variant="accent" size="sm" onClick={() => void inspect(item.id)}>
+                          Inspect
+                        </Button>
+                      </Td>
+                    </tr>
+                  ))}
+                </tbody>
+              </Table>
+            )}
+            <Pager
+              label={`${result.total} generations · Page ${result.page + 1}`}
+              page={result.page}
+              hasNext={hasNextPage(result.page, result.pageSize, result.total)}
+              onPage={(page) => void load(page)}
+            />
+          </>
+        ) : null}
+      </Panel>
     </>
   );
 }

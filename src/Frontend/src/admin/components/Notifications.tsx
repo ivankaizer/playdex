@@ -40,25 +40,32 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   return (
     <NotificationContext.Provider value={value}>
       {children}
-      <div aria-live="polite" className="pointer-events-none fixed bottom-4 right-4 z-50 flex w-80 max-w-[calc(100vw-2rem)] flex-col gap-2">
+      <div
+        aria-live="polite"
+        className="pointer-events-none fixed bottom-8 left-1/2 z-[80] flex w-[min(420px,calc(100vw-32px))] -translate-x-1/2 flex-col items-center gap-2"
+      >
         {notices.map((notice) => (
           <div
             key={notice.id}
             role={notice.tone === "error" ? "alert" : "status"}
-            className={cx(
-              "pointer-events-auto rounded-md border px-4 py-3 text-sm shadow-lg",
-              notice.tone === "success"
-                ? "border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-100"
-                : "border-rose-200 bg-rose-50 text-rose-900 dark:border-rose-800 dark:bg-rose-950 dark:text-rose-100",
-            )}
+            className="pdx-toast pointer-events-auto !static flex w-full !transform-none items-start gap-3 !rounded-[22px] !px-5 !py-3"
           >
-            <div className="flex items-start justify-between gap-2">
-              <strong className="font-semibold">{notice.summary}</strong>
-              <button type="button" aria-label="Dismiss" className="opacity-60 hover:opacity-100" onClick={() => dismiss(notice.id)}>
-                ×
-              </button>
+            <span
+              aria-hidden="true"
+              className={cx("mt-[7px] h-2 w-2 shrink-0 rounded-full", notice.tone === "success" ? "bg-[#6fe3b5]" : "bg-[#f0788a]")}
+            />
+            <div className="min-w-0 flex-1">
+              <strong className="block font-semibold">{notice.summary}</strong>
+              <p className="mt-0.5 break-words text-[13px] text-[#c3ccd5]">{notice.detail}</p>
             </div>
-            <p className="mt-0.5">{notice.detail}</p>
+            <button
+              type="button"
+              aria-label="Dismiss"
+              className="pdx-hit -mr-1 grid h-7 w-7 shrink-0 place-items-center rounded-full text-[#c3ccd5] transition hover:bg-white/10 hover:text-white"
+              onClick={() => dismiss(notice.id)}
+            >
+              ×
+            </button>
           </div>
         ))}
       </div>

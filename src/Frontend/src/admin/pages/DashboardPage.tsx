@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { Link } from "react-router";
 import { AdminAccessRequired, adminApi, isAbortError, isForbidden, type DashboardSession, type DashboardSnapshot } from "../api";
-import { Alert, Button, Card, PageHeading, Pager, ProgressBar, rowClass, SectionHeading, Select, Table, Td, TextInput, Th, Toolbar } from "../components/ui";
+import { Cover } from "@/components/ui";
+import { platformColor } from "@/lib/platforms";
+import { Alert, Badge, Button, linkClass, Pager, Panel, ProgressBar, rowClass, Select, Sub, Table, Td, TextInput, Th, Toolbar } from "../components/ui";
 import { aiErrorsLink, DashboardRefreshMs, generationLink, pageOf, sessionsTodayLink, sourceLabel } from "../logic";
 import { formatElapsed, formatLocal, formatLocalSeconds, localDayRange } from "../time";
 
@@ -16,11 +18,24 @@ function Counter({ to, value, label }: { to: string; value: number; label: strin
   return (
     <Link
       to={to}
-      className="flex flex-col rounded-lg border border-slate-200 bg-white p-4 shadow-sm hover:border-emerald-400 dark:border-slate-700 dark:bg-slate-900"
+      className="pdx-tile group flex flex-col no-underline transition-colors hover:border-mint-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-bar"
     >
-      <strong className="text-3xl font-semibold text-slate-900 dark:text-white">{value}</strong>
-      <span className="text-sm text-slate-500 dark:text-slate-400">{label}</span>
+      <span className="pdx-label">{label}</span>
+      <strong className="pdx-num mt-2.5 text-[36px] font-semibold leading-tight tracking-[-0.02em] text-ink">{value}</strong>
+      <span aria-hidden="true" className="mt-1 text-[13px] font-medium text-accent opacity-0 transition-opacity group-hover:opacity-100">
+        Open →
+      </span>
     </Link>
+  );
+}
+
+/** Platform name with its brand-colored dot. */
+function PlatformName({ keyName, name }: { keyName: string; name: string }) {
+  return (
+    <span className="inline-flex items-center gap-2 whitespace-nowrap">
+      <span aria-hidden="true" className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: platformColor(keyName, name) }} />
+      {name}
+    </span>
   );
 }
 
@@ -102,32 +117,32 @@ export function DashboardPage() {
 
   return (
     <>
-      <PageHeading
+      <Panel
+        label="Overview"
+        kicker="Overview"
+        title="Today across all accounts"
         actions={
-          <div className="flex items-center gap-3 text-sm text-slate-500 dark:text-slate-400">
-            <span>
+          <>
+            <span className="pdx-num text-sm text-muted">
               {snapshot === null ? "Monitoring all accounts" : `Updated ${formatLocalSeconds(snapshot.updatedAt)} · every 30s`}
             </span>
             <Button onClick={() => void refresh()} disabled={loading}>
               Refresh
             </Button>
-          </div>
+          </>
         }
       >
-        Dashboard
-      </PageHeading>
-      {loading ? <ProgressBar /> : null}
-      {error !== null ? (
-        <>
-          <Alert tone="danger">{error}</Alert>
-          <Button onClick={() => void refresh()} disabled={loading}>
-            Retry
-          </Button>
-        </>
-      ) : null}
-      {snapshot !== null && live !== null ? (
-        <>
-          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        {loading ? <ProgressBar /> : null}
+        {error !== null ? (
+          <div className="flex flex-col items-start gap-3">
+            <Alert tone="danger">{error}</Alert>
+            <Button onClick={() => void refresh()} disabled={loading}>
+              Retry
+            </Button>
+          </div>
+        ) : null}
+        {snapshot !== null ? (
+          <div className="grid gap-3.5 [grid-template-columns:repeat(auto-fit,minmax(min(200px,100%),1fr))]">
             <Counter to="/admin/sessions?status=live" value={snapshot.counts.liveSessions} label="Live sessions" />
             <Counter to="/admin/sessions?status=live" value={snapshot.counts.liveUsers} label="Users playing" />
             <Counter
@@ -137,20 +152,32 @@ export function DashboardPage() {
             />
             <Counter to={aiErrorsLink(snapshot.updatedAt)} value={snapshot.counts.aiErrors} label="AI errors · 24h" />
           </div>
-
-          <section aria-label="Live sessions">
-            <SectionHeading aside="Longest running first">Live sessions</SectionHeading>
+        ) : null}
+      </Panel>
+      {snapshot !== null && live !== null ? (
+        <>
+          <Panel
+            label="Live sessions"
+            kicker={
+              <span className="inline-flex items-center gap-2">
+                <span aria-hidden="true" className="pdx-live-dot" />
+                Live now
+              </span>
+            }
+            title="Live sessions"
+            actions={<span className="text-sm text-muted">Longest running first</span>}
+          >
             <form onSubmit={applyFilters}>
               <Toolbar>
                 <TextInput
-                  className="sm:w-72"
+                  className="sm:!w-72"
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
                   placeholder="Search user, game or account"
                   aria-label="Search live sessions"
                 />
                 <Select
-                  className="sm:w-56"
+                  className="sm:!w-56"
                   value={platform}
                   onChange={(event) => setPlatform(event.target.value)}
                   aria-label="Live platform"
@@ -175,7 +202,7 @@ export function DashboardPage() {
               </Alert>
             ) : (
               <>
-                <Table>
+                <Table label="Live sessions table">
                   <thead>
                     <tr>
                       <Th>User</Th>
@@ -187,30 +214,29 @@ export function DashboardPage() {
                       <Th>Last poll</Th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                  <tbody>
                     {live.rows.map((session) => (
                       <tr key={session.id} className={rowClass}>
-                        <Td>{session.email}</Td>
+                        <Td className="break-all">{session.email}</Td>
                         <Td>
-                          <div className="flex items-center gap-2">
-                            {session.capsuleUrl && session.capsuleUrl.trim() !== "" ? (
-                              <img src={session.capsuleUrl} alt="" loading="lazy" className="h-8 w-14 rounded object-cover" />
-                            ) : (
-                              <span className="flex h-8 w-14 items-center justify-center rounded bg-slate-200 text-xs text-slate-500 dark:bg-slate-700 dark:text-slate-400">
-                                ?
-                              </span>
-                            )}
-                            <span>{session.game}</span>
+                          <div className="flex min-w-[180px] items-center gap-3">
+                            <Cover
+                              title={session.game}
+                              src={session.capsuleUrl && session.capsuleUrl.trim() !== "" ? session.capsuleUrl : null}
+                              className="h-9 w-14 rounded-[10px]"
+                              initialClassName="text-xs"
+                            />
+                            <span className="font-semibold text-ink">{session.game}</span>
                           </div>
                         </Td>
                         <Td>
-                          <div>{session.platform}</div>
-                          <small className="text-slate-500 dark:text-slate-400">{session.accountId ?? "—"}</small>
+                          <PlatformName keyName={session.platformKey} name={session.platform} />
+                          <Sub>{session.accountId ?? "—"}</Sub>
                         </Td>
                         <Td>{sourceLabel(session.source)}</Td>
-                        <Td>{duration(session)}</Td>
-                        <Td>{formatLocal(session.startedAt)}</Td>
-                        <Td>
+                        <Td className="pdx-num whitespace-nowrap font-semibold text-accent">{duration(session)}</Td>
+                        <Td className="pdx-num whitespace-nowrap">{formatLocal(session.startedAt)}</Td>
+                        <Td className="pdx-num whitespace-nowrap">
                           {session.source !== "polling"
                             ? "Not polled"
                             : session.lastPolledAt === null
@@ -231,65 +257,80 @@ export function DashboardPage() {
                 ) : null}
               </>
             )}
-          </section>
+          </Panel>
 
-          <div className="grid gap-6 lg:grid-cols-2">
-            <section aria-label="Recent ended sessions">
-              <SectionHeading aside={<Link className="text-emerald-600 hover:underline" to="/admin/sessions?status=ended">View all</Link>}>
-                Recently ended
-              </SectionHeading>
+          <div className="grid gap-7 [grid-template-columns:repeat(auto-fit,minmax(min(420px,100%),1fr))]">
+            <Panel
+              label="Recent ended sessions"
+              kicker="History"
+              title="Recently ended"
+              actions={
+                <Link className={linkClass} to="/admin/sessions?status=ended">
+                  View all
+                </Link>
+              }
+            >
               {snapshot.endedSessions.length === 0 ? (
                 <Alert>No ended sessions yet.</Alert>
               ) : (
-                <Card className="divide-y divide-slate-100 p-0 dark:divide-slate-800">
+                <ul className="-mx-3 flex flex-col">
                   {snapshot.endedSessions.map((session) => (
-                    <div key={session.id} className="flex items-start justify-between gap-3 px-4 py-2 text-sm">
-                      <div className="flex min-w-0 flex-col">
-                        <strong className="truncate">{session.game}</strong>
-                        <small className="truncate text-slate-500 dark:text-slate-400">
+                    <li key={session.id} className="pdx-row flex items-center gap-3 px-3 py-2.5 text-sm">
+                      <Cover
+                        title={session.game}
+                        src={session.capsuleUrl && session.capsuleUrl.trim() !== "" ? session.capsuleUrl : null}
+                        className="h-10 w-10 rounded-[12px]"
+                        initialClassName="text-sm"
+                      />
+                      <div className="flex min-w-0 flex-1 flex-col">
+                        <strong className="truncate font-semibold">{session.game}</strong>
+                        <small className="truncate text-xs text-muted">
                           {session.email} · {session.platform}
                         </small>
                       </div>
                       <div className="flex shrink-0 flex-col items-end">
-                        <strong>{duration(session)}</strong>
-                        <small className="text-slate-500 dark:text-slate-400">{formatLocal(session.endedAt)}</small>
+                        <strong className="pdx-num font-semibold">{duration(session)}</strong>
+                        <small className="pdx-num text-xs text-muted">{formatLocal(session.endedAt)}</small>
                       </div>
-                    </div>
+                    </li>
                   ))}
-                </Card>
+                </ul>
               )}
-            </section>
-            <section aria-label="Recent AI errors">
-              <SectionHeading
-                aside={<Link className="text-emerald-600 hover:underline" to="/admin/ai-generations?status=errors">View all</Link>}
-              >
-                Recent AI errors
-              </SectionHeading>
+            </Panel>
+            <Panel
+              label="Recent AI errors"
+              kicker="AI generations"
+              title="Recent AI errors"
+              actions={
+                <Link className={linkClass} to="/admin/ai-generations?status=errors">
+                  View all
+                </Link>
+              }
+            >
               {snapshot.failedGenerations.length === 0 ? (
                 <Alert>No failed AI generations.</Alert>
               ) : (
-                <Card className="divide-y divide-slate-100 p-0 dark:divide-slate-800">
+                <ul className="-mx-3 flex flex-col">
                   {snapshot.failedGenerations.map((generation) => (
-                    <Link
-                      key={generation.id}
-                      to={generationLink(generation.id)}
-                      className="flex items-start justify-between gap-3 px-4 py-2 text-sm hover:bg-slate-50 dark:hover:bg-slate-800"
-                    >
-                      <div className="flex min-w-0 flex-col">
-                        <strong className="truncate">{generation.email}</strong>
-                        <small className="truncate text-slate-500 dark:text-slate-400">{generation.model}</small>
-                      </div>
-                      <div className="flex shrink-0 flex-col items-end">
-                        <span className="rounded bg-rose-100 px-1.5 text-xs font-medium text-rose-700 dark:bg-rose-950 dark:text-rose-300">
-                          {generation.status}
-                        </span>
-                        <small className="text-slate-500 dark:text-slate-400">{formatLocal(generation.createdAt)}</small>
-                      </div>
-                    </Link>
+                    <li key={generation.id}>
+                      <Link
+                        to={generationLink(generation.id)}
+                        className="pdx-row flex items-center justify-between gap-3 px-3 py-2.5 text-sm no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-bar"
+                      >
+                        <div className="flex min-w-0 flex-col">
+                          <strong className="truncate font-semibold text-ink">{generation.email}</strong>
+                          <small className="truncate text-xs text-muted">{generation.model}</small>
+                        </div>
+                        <div className="flex shrink-0 flex-col items-end gap-1">
+                          <Badge tone="danger">{generation.status}</Badge>
+                          <small className="pdx-num text-xs text-muted">{formatLocal(generation.createdAt)}</small>
+                        </div>
+                      </Link>
+                    </li>
                   ))}
-                </Card>
+                </ul>
               )}
-            </section>
+            </Panel>
           </div>
         </>
       ) : null}

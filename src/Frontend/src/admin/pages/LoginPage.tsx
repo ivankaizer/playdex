@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { useLocation, useNavigate } from "react-router";
 import { adminLogin } from "../auth";
-import { Alert, Button, Card, Field, TextInput } from "../components/ui";
+import { Alert, Button, Field, TextInput } from "../components/ui";
 
 interface LoginLocationState {
   from?: string;
@@ -34,9 +34,13 @@ export function LoginPage() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-slate-100 px-4 dark:bg-slate-950">
-      <Card className="w-full max-w-sm">
-        <h1 className="mb-4 text-xl font-semibold text-slate-900 dark:text-white">Admin login</h1>
+    <main className="pdx-page grid place-items-center px-4 py-10">
+      <div className="pdx-card flex w-full max-w-[420px] flex-col gap-6">
+        <div>
+          <p className="pdx-kicker">Playdex · Admin</p>
+          <h1 className="pdx-title">Admin login</h1>
+          <p className="mt-2 text-sm text-muted">Sign in with an administrator account.</p>
+        </div>
         {error ? <Alert tone="danger">{error}</Alert> : null}
         <form className="flex flex-col gap-4" onSubmit={submit}>
           <Field label="Email" htmlFor="admin-email">
@@ -46,6 +50,7 @@ export function LoginPage() {
               type="email"
               placeholder="Email"
               autoComplete="username"
+              className="!h-12"
               value={email}
               onChange={(event) => setEmail(event.target.value)}
               required
@@ -58,16 +63,17 @@ export function LoginPage() {
               type="password"
               placeholder="Password"
               autoComplete="current-password"
+              className="!h-12"
               value={password}
               onChange={(event) => setPassword(event.target.value)}
               required
             />
           </Field>
-          <Button type="submit" variant="primary" disabled={submitting}>
+          <Button type="submit" variant="primary" className="mt-2 !h-12" disabled={submitting}>
             {submitting ? "Signing in…" : "Sign in"}
           </Button>
         </form>
-      </Card>
-    </div>
+      </div>
+    </main>
   );
 }

@@ -1,63 +1,81 @@
-import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, SelectHTMLAttributes } from "react";
+import {
+  useEffect,
+  useId,
+  useRef,
+  type ButtonHTMLAttributes,
+  type InputHTMLAttributes,
+  type KeyboardEvent,
+  type ReactNode,
+  type SelectHTMLAttributes,
+} from "react";
+import { CardHeading } from "@/components/ui";
 import { cx } from "@/lib/cx";
 
-type Variant = "primary" | "secondary" | "danger";
+type Variant = "primary" | "secondary" | "accent" | "danger";
 
 const variants: Record<Variant, string> = {
-  primary: "bg-emerald-600 text-white hover:bg-emerald-500 disabled:bg-emerald-600/50",
-  secondary:
-    "border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 disabled:text-slate-400 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700 dark:disabled:text-slate-500",
-  danger: "bg-rose-600 text-white hover:bg-rose-500 disabled:bg-rose-600/50",
+  primary: "pdx-btn-primary",
+  secondary: "pdx-btn-outline",
+  accent: "pdx-btn-accent",
+  danger: "pdx-btn-danger",
 };
 
+/** Pill button over the shared pdx-btn-* styles; `size="sm"` is the compact table-row size. */
 export function Button({
   variant = "secondary",
+  size = "md",
   className,
   type = "button",
   ...props
-}: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: Variant }) {
+}: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: Variant; size?: "sm" | "md" }) {
   return (
     <button
       type={type}
-      className={cx(
-        "inline-flex items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors disabled:cursor-not-allowed",
-        variants[variant],
-        className,
-      )}
+      className={cx(variants[variant], size === "sm" && "!h-[34px] !px-4 !text-[13px]", className)}
       {...props}
     />
   );
 }
 
-export function PageHeading({ children, actions }: { children: ReactNode; actions?: ReactNode }) {
+/** A page section: frosted card with a kicker, title and optional actions. */
+export function Panel({
+  kicker,
+  title,
+  actions,
+  label,
+  className,
+  children,
+}: {
+  kicker: ReactNode;
+  title?: ReactNode;
+  actions?: ReactNode;
+  /** Accessible name for the section landmark. */
+  label?: string;
+  className?: string;
+  children?: ReactNode;
+}) {
   return (
-    <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-      <h1 className="text-2xl font-semibold text-slate-900 dark:text-white">{children}</h1>
-      {actions}
-    </div>
+    <section aria-label={label} className={cx("pdx-card flex flex-col gap-5", className)}>
+      <CardHeading kicker={kicker} title={title} actions={actions} />
+      {children}
+    </section>
   );
 }
 
-export function SectionHeading({ children, aside }: { children: ReactNode; aside?: ReactNode }) {
-  return (
-    <div className="mb-3 mt-6 flex flex-wrap items-baseline justify-between gap-2">
-      <h2 className="text-lg font-semibold text-slate-900 dark:text-white">{children}</h2>
-      {aside ? <div className="text-sm text-slate-500 dark:text-slate-400">{aside}</div> : null}
-    </div>
-  );
+/** Short muted paragraph under a card heading. */
+export function Note({ children, className }: { children: ReactNode; className?: string }) {
+  return <p className={cx("text-sm text-muted", className)}>{children}</p>;
 }
+
+export const linkClass = "pdx-hit font-semibold text-accent underline-offset-4 hover:underline";
 
 export function Alert({ tone = "info", children }: { tone?: "info" | "danger"; children: ReactNode }) {
-  return (
-    <div
-      role={tone === "danger" ? "alert" : "status"}
-      className={cx(
-        "my-3 rounded-md border px-4 py-3 text-sm",
-        tone === "danger"
-          ? "border-rose-200 bg-rose-50 text-rose-800 dark:border-rose-900 dark:bg-rose-950/50 dark:text-rose-200"
-          : "border-sky-200 bg-sky-50 text-sky-800 dark:border-sky-900 dark:bg-sky-950/50 dark:text-sky-200",
-      )}
-    >
+  return tone === "danger" ? (
+    <div role="alert" className="rounded-[18px] border border-danger-line bg-danger-tint px-4 py-3 text-sm text-danger">
+      {children}
+    </div>
+  ) : (
+    <div role="status" className="pdx-dashed">
       {children}
     </div>
   );
@@ -65,40 +83,28 @@ export function Alert({ tone = "info", children }: { tone?: "info" | "danger"; c
 
 export function ProgressBar() {
   return (
-    <div role="progressbar" aria-label="Loading" className="my-3 h-1 w-full overflow-hidden rounded bg-slate-200 dark:bg-slate-700">
-      <div className="h-full w-1/3 motion-safe:animate-pulse rounded bg-emerald-500" />
+    <div role="progressbar" aria-label="Loading" className="h-1.5 w-full overflow-hidden rounded-full bg-track">
+      <div className="h-full w-1/3 rounded-full bg-bar motion-safe:animate-pulse" />
     </div>
   );
 }
 
 export function Card({ children, className }: { children: ReactNode; className?: string }) {
-  return (
-    <div
-      className={cx(
-        "rounded-lg border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900",
-        className,
-      )}
-    >
-      {children}
-    </div>
-  );
+  return <div className={cx("pdx-card", className)}>{children}</div>;
 }
 
-const inputClass =
-  "w-full rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-900 placeholder:text-slate-400 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100";
-
 export function TextInput({ className, ...props }: InputHTMLAttributes<HTMLInputElement>) {
-  return <input type="text" className={cx(inputClass, className)} {...props} />;
+  return <input type="text" className={cx("pdx-input", className)} {...props} />;
 }
 
 export function Select({ className, ...props }: SelectHTMLAttributes<HTMLSelectElement>) {
-  return <select className={cx(inputClass, "pr-8", className)} {...props} />;
+  return <select className={cx("pdx-input", className)} {...props} />;
 }
 
 export function Field({ label, htmlFor, hint, children }: { label: string; htmlFor: string; hint?: ReactNode; children: ReactNode }) {
   return (
-    <div className="flex flex-col gap-1">
-      <label htmlFor={htmlFor} className="text-sm font-medium text-slate-700 dark:text-slate-300">
+    <div className="flex min-w-0 flex-col gap-1.5">
+      <label htmlFor={htmlFor} className="px-1 text-xs font-medium text-muted">
         {label}
       </label>
       {children}
@@ -109,10 +115,10 @@ export function Field({ label, htmlFor, hint, children }: { label: string; htmlF
 
 export function Checkbox({ label, checked, onChange }: { label: string; checked: boolean; onChange: (checked: boolean) => void }) {
   return (
-    <label className="inline-flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
+    <label className="pdx-hit inline-flex cursor-pointer items-center gap-2.5 text-sm font-medium text-ink-2">
       <input
         type="checkbox"
-        className="h-4 w-4 rounded border-slate-300 text-emerald-600"
+        className="h-4 w-4 cursor-pointer accent-brand"
         checked={checked}
         onChange={(event) => onChange(event.target.checked)}
       />
@@ -122,36 +128,70 @@ export function Checkbox({ label, checked, onChange }: { label: string; checked:
 }
 
 export function Toolbar({ children, className }: { children: ReactNode; className?: string }) {
-  return <div className={cx("my-3 flex flex-wrap items-center gap-2", className)}>{children}</div>;
+  return <div className={cx("flex flex-wrap items-center gap-2.5", className)}>{children}</div>;
 }
 
-export function Table({ children }: { children: ReactNode }) {
+/**
+ * Dense data table. Wide tables scroll horizontally inside the card instead of the page; the scroll
+ * region is focusable so keyboard users can scroll it too.
+ */
+export function Table({ children, label }: { children: ReactNode; label?: string }) {
   return (
-    <div className="overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-700">
-      <table className="min-w-full divide-y divide-slate-200 text-left text-sm dark:divide-slate-700">{children}</table>
+    <div
+      role={label ? "region" : undefined}
+      aria-label={label}
+      tabIndex={label ? 0 : undefined}
+      className="-mx-2 overflow-x-auto rounded-[14px] px-2 outline-none focus-visible:ring-2 focus-visible:ring-bar"
+    >
+      <table className="w-full min-w-full border-collapse text-left text-sm [&_tbody_tr:last-child_td]:border-b-0">
+        {children}
+      </table>
     </div>
   );
 }
 
 export function Th({ children, className }: { children?: ReactNode; className?: string }) {
   return (
-    <th
-      scope="col"
-      className={cx(
-        "bg-slate-50 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:bg-slate-800 dark:text-slate-400",
-        className,
-      )}
-    >
+    <th scope="col" className={cx("pdx-label whitespace-nowrap border-b border-divider px-3 pb-3 pt-1 font-medium", className)}>
       {children}
     </th>
   );
 }
 
 export function Td({ children, className }: { children?: ReactNode; className?: string }) {
-  return <td className={cx("px-3 py-2 align-top text-slate-700 dark:text-slate-300", className)}>{children}</td>;
+  return <td className={cx("border-b border-divider px-3 py-3 align-middle text-ink-2", className)}>{children}</td>;
 }
 
-export const rowClass = "bg-white dark:bg-slate-900";
+export const rowClass = "transition-colors hover:bg-[var(--row-hover)]";
+
+type BadgeTone = "success" | "danger" | "warn" | "neutral";
+
+const badgeTones: Record<BadgeTone, string> = {
+  success: "border-mint-line bg-mint text-accent",
+  danger: "border-danger-line bg-danger-tint text-danger",
+  warn: "border-line bg-tile text-warn",
+  neutral: "border-line bg-tile text-muted",
+};
+
+/** Small status pill. */
+export function Badge({ tone = "neutral", live = false, children }: { tone?: BadgeTone; live?: boolean; children: ReactNode }) {
+  return (
+    <span
+      className={cx(
+        "inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 py-0.5 text-xs font-semibold",
+        badgeTones[tone],
+      )}
+    >
+      {live ? <span aria-hidden="true" className="pdx-live-dot" /> : null}
+      {children}
+    </span>
+  );
+}
+
+/** Secondary line under a table cell value (account ids, emails). */
+export function Sub({ children }: { children: ReactNode }) {
+  return <span className="block text-xs text-muted">{children}</span>;
+}
 
 export function Pager({
   label,
@@ -167,14 +207,107 @@ export function Pager({
   onPage: (page: number) => void;
 }) {
   return (
-    <div className="my-3 flex flex-wrap items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
-      <span>{label}</span>
-      <Button onClick={() => onPage(page - 1)} disabled={page === 0 || disabled}>
-        Previous
-      </Button>
-      <Button onClick={() => onPage(page + 1)} disabled={!hasNext || disabled}>
-        Next
-      </Button>
+    <div className="flex flex-wrap items-center justify-between gap-3 border-t border-divider pt-4 text-sm text-muted">
+      <span className="pdx-num">{label}</span>
+      <div className="flex gap-2">
+        <Button size="sm" onClick={() => onPage(page - 1)} disabled={page === 0 || disabled}>
+          Previous
+        </Button>
+        <Button size="sm" onClick={() => onPage(page + 1)} disabled={!hasNext || disabled}>
+          Next
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+const focusableSelector = 'input, select, textarea, button, a[href], [tabindex]:not([tabindex="-1"])';
+
+/**
+ * Centered dialog over a blurred backdrop. Focuses the first form control on open, keeps Tab inside,
+ * closes on Escape or a backdrop click (unless busy) and returns focus to the opener on close.
+ */
+export function Modal({
+  kicker,
+  title,
+  busy = false,
+  onClose,
+  children,
+}: {
+  kicker: ReactNode;
+  title: ReactNode;
+  busy?: boolean;
+  onClose: () => void;
+  children: ReactNode;
+}) {
+  const titleId = useId();
+  const dialogRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const dialog = dialogRef.current;
+    const first =
+      dialog?.querySelector<HTMLElement>("input, select, textarea") ?? dialog?.querySelector<HTMLElement>(focusableSelector);
+    first?.focus();
+    return () => opener?.focus();
+  }, []);
+
+  const onKeyDown = (event: KeyboardEvent) => {
+    if (event.key === "Escape" && !busy) {
+      event.stopPropagation();
+      onClose();
+      return;
+    }
+    if (event.key !== "Tab" || !dialogRef.current) return;
+    const items = [...dialogRef.current.querySelectorAll<HTMLElement>(focusableSelector)].filter(
+      (element) => !element.hasAttribute("disabled"),
+    );
+    if (items.length === 0) return;
+    const first = items[0];
+    const last = items[items.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  };
+
+  return (
+    <div
+      className="pdx-modal-backdrop fixed inset-0 z-[70] grid place-items-center overflow-y-auto p-4 sm:p-6"
+      onClick={(event) => {
+        if (event.target === event.currentTarget && !busy) onClose();
+      }}
+      onKeyDown={onKeyDown}
+    >
+      <section
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        className="pdx-modal flex w-[min(520px,100%)] flex-col gap-5 text-ink max-sm:!p-6"
+      >
+        <div className="flex items-start justify-between gap-4">
+          <div className="min-w-0">
+            <p className="pdx-kicker">{kicker}</p>
+            <h2 id={titleId} className="mt-2 break-words text-[22px] font-semibold leading-tight">
+              {title}
+            </h2>
+          </div>
+          <button
+            type="button"
+            aria-label="Close"
+            disabled={busy}
+            onClick={onClose}
+            className="pdx-icon-btn text-base disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            ×
+          </button>
+        </div>
+        {children}
+      </section>
     </div>
   );
 }
