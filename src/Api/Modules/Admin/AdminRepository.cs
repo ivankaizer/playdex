@@ -286,22 +286,25 @@ public sealed class AdminRepository(PlaydexDbContext db)
         if (target is null) return "Target game not found.";
         if (!target.TitleLocked && source.TitleLocked) target.Title = source.Title;
         if (!target.CapsuleUrlLocked && target.CapsuleUrl is null) target.CapsuleUrl = source.CapsuleUrl;
-        target.UpdatedAt = DateTimeOffset.UtcNow;
+        var now = DateTimeOffset.UtcNow;
+        target.UpdatedAt = now;
         await db.SaveChangesAsync(ct);
-        await db.Database.ExecuteSqlInterpolatedAsync(
-            $"update game_external_identities set game_id={targetId}, updated_at=now() where game_id={sourceId}", ct);
-        await db.Database.ExecuteSqlInterpolatedAsync(
-            $"update play_sessions set game_id={targetId}, updated_at=now() where game_id={sourceId}", ct);
-        await db.Database.ExecuteSqlInterpolatedAsync(
-            $"delete from ignored_games s where s.game_id={sourceId} and exists(select 1 from ignored_games t where t.user_id=s.user_id and t.game_id={targetId})",
-            ct);
-        await db.Database.ExecuteSqlInterpolatedAsync(
-            $"update ignored_games set game_id={targetId}, updated_at=now() where game_id={sourceId}", ct);
-        await db.Database.ExecuteSqlInterpolatedAsync(
-            $"delete from game_ratings s where s.game_id={sourceId} and exists(select 1 from game_ratings t where t.user_id=s.user_id and t.game_id={targetId})",
-            ct);
-        await db.Database.ExecuteSqlInterpolatedAsync(
-            $"update game_ratings set game_id={targetId}, updated_at=now() where game_id={sourceId}", ct);
+        await db.GameExternalIdentities.Where(row => row.GameId == sourceId)
+            .ExecuteUpdateAsync(set => set.SetProperty(row => row.GameId, targetId).SetProperty(row => row.UpdatedAt, now), ct);
+        await db.PlaySessions.Where(row => row.GameId == sourceId)
+            .ExecuteUpdateAsync(set => set.SetProperty(row => row.GameId, targetId).SetProperty(row => row.UpdatedAt, now), ct);
+        // A user who already has a target row keeps it; their source row would collide on (user_id, game_id).
+        await db.IgnoredGames
+            .Where(s => s.GameId == sourceId && db.IgnoredGames.Any(t => t.UserId == s.UserId && t.GameId == targetId))
+            .ExecuteDeleteAsync(ct);
+        await db.IgnoredGames.Where(row => row.GameId == sourceId)
+            .ExecuteUpdateAsync(set => set.SetProperty(row => row.GameId, targetId).SetProperty(row => row.UpdatedAt, now), ct);
+        await db.GameRatings
+            .Where(s => s.GameId == sourceId && db.GameRatings.Any(t => t.UserId == s.UserId && t.GameId == targetId))
+            .ExecuteDeleteAsync(ct);
+        await db.GameRatings.Where(row => row.GameId == sourceId)
+            .ExecuteUpdateAsync(set => set.SetProperty(row => row.GameId, targetId).SetProperty(row => row.UpdatedAt, now), ct);
+        // Data-modifying CTE with ON CONFLICT has no LINQ equivalent.
         await db.Database.ExecuteSqlInterpolatedAsync($"""
             with neighbors as (select user_id, case when game_id={sourceId} then connected_game_id else game_id end neighbor from game_connections where game_id={sourceId} or connected_game_id={sourceId}),
             removed as (delete from game_connections where game_id={sourceId} or connected_game_id={sourceId})
@@ -313,8 +316,10 @@ public sealed class AdminRepository(PlaydexDbContext db)
         var sourceHash = GameId.Encode(sourceId);
         var targetHash = GameId.Encode(targetId);
         var sourceRaw = sourceId.ToString(System.Globalization.CultureInfo.InvariantCulture);
-        await db.Database.ExecuteSqlInterpolatedAsync(
-            $"update session_draft_rows set game_id={targetHash} where game_id in ({sourceHash}, {sourceRaw})", ct);
+        string?[] sourceGameIds = [sourceHash, sourceRaw];
+        await db.SessionDraftRows.Where(row => sourceGameIds.Contains(row.GameId))
+            .ExecuteUpdateAsync(set => set.SetProperty(row => row.GameId, targetHash), ct);
+        // selection_json is mapped as a string, so jsonb_set has no LINQ equivalent.
         await db.Database.ExecuteSqlInterpolatedAsync($$"""
             update session_draft_rows
             set selection_json = jsonb_set(selection_json, array['GameId'], to_jsonb({{targetHash}}::text))

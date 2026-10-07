@@ -101,21 +101,22 @@ public sealed class PollingRepository(PlaydexDbContext db, IGameResolver gameRes
 
     public async Task<List<ActiveCredential>> LoadActiveCredentials(CancellationToken ct)
     {
-        var rows = await db.Database.SqlQuery<ActiveCredentialRow>($"""
-                                                                    SELECT
-                                                                        pc.id                        AS Id,
-                                                                        pc.user_id                   AS UserId,
-                                                                        pc.api_key                   AS ApiKey,
-                                                                        pc.account_id                AS AccountId,
-                                                                        pc.created_at                AS CreatedAt,
-                                                                        pc.updated_at                AS UpdatedAt,
-                                                                        pc.active                    AS Active,
-                                                                        pc.platform_id               AS PlatformId,
-                                                                        pc.type                      AS Type
-                                                                    FROM integrations pc
-                                                                    WHERE pc.active
-                                                                      AND pc.type != 'api'
-                                                                    """).ToListAsync(ct);
+        var rows = await db.Integrations
+            .AsNoTracking()
+            .Where(pc => pc.Active && pc.Type != IntegrationType.Api)
+            .Select(pc => new ActiveCredentialRow
+            {
+                Id = pc.Id,
+                UserId = pc.UserId,
+                ApiKey = pc.ApiKey,
+                AccountId = pc.AccountId,
+                CreatedAt = pc.CreatedAt,
+                UpdatedAt = pc.UpdatedAt,
+                Active = pc.Active,
+                PlatformId = pc.PlatformId!.Value,
+                Type = pc.Type,
+            })
+            .ToListAsync(ct);
 
         return rows.Select(r => new ActiveCredential(
             new IntegrationCredentials
