@@ -1,12 +1,14 @@
+import { inHost, onHostMessage, postToHost } from "../host/bridge";
 import { current, focusEl, move, type Dir } from "./focus";
 import { inputMode } from "./store";
 
 /*
  * Input: keyboard and gamepad map onto the same actions. In the Windows host, controller events arrive from
- * a native XInput thread; this browser Gamepad API path is the prototype stand-in.
+ * a native XInput thread (see the host section at the end) and browser Gamepad polling is off. In a plain browser
+ * the Gamepad API path below is the stand-in.
  */
 
-export type Action = "confirm" | "back" | "x" | "y" | "lb" | "rb" | "view" | "menu";
+export type Action = "confirm" | "back" | "x" | "y" | "lb" | "rb" | "view" | "menu" | "guide";
 
 const handlers = new Set<(a: Action) => boolean | void>();
 
@@ -153,5 +155,27 @@ function poll(t: number) {
   requestAnimationFrame(poll);
 }
 
-window.addEventListener("gamepadconnected", () => setMode("pad"));
-requestAnimationFrame(poll);
+/* ---- Windows host ---- */
+
+// The host owns repeat timing and the Guide button. Each event's id is echoed from the next animation frame (the
+// budget's definition) and again from the frame after it, by which time the focused frame has been presented.
+onHostMessage((m) => {
+  if (m.type === "dir") {
+    setMode("pad");
+    move(m.dir);
+  } else if (m.type === "action") {
+    setMode("pad");
+    if (m.action === "confirm") confirm();
+    else dispatch(m.action);
+  } else return;
+  const id = m.id;
+  requestAnimationFrame(() => {
+    postToHost({ type: "ack", id });
+    requestAnimationFrame(() => postToHost({ type: "ack", id, presented: true }));
+  });
+});
+
+if (!inHost) {
+  window.addEventListener("gamepadconnected", () => setMode("pad"));
+  requestAnimationFrame(poll);
+}

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Developer-mode SCCD: AllowAny + Catalog FFFF only works with Developer Mode on. Store builds need a
+     Microsoft-signed SCCD. -->
+<CustomCapabilityDescriptor xmlns="http://schemas.microsoft.com/appx/2018/sccd">
+  <CustomCapabilities>
+    <CustomCapability Name="Microsoft.appCategory.gamingHome_8wekyb3d8bbwe" />
+  </CustomCapabilities>
+  <AuthorizedEntities AllowAny="true" />
+  <Catalog>FFFF</Catalog>
+</CustomCapabilityDescriptor>

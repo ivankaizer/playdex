@@ -1,6 +1,16 @@
 import { Moon, Sun, Wifi } from "lucide-react";
 import { useEffect, useState } from "react";
-import { closeGame, launch, launching, openGame, openGameId, takeReturnFocus, toast } from "./app-state";
+import {
+  closeGame,
+  launch,
+  launching,
+  leaveLaunch,
+  openGame,
+  openGameId,
+  session,
+  takeReturnFocus,
+  toast,
+} from "./app-state";
 import { Backdrop, Clock, Glyph, Hint, Logo } from "./components/shared";
 import { gameById, isInstalled } from "./data/games";
 import { DossierHome } from "./homes/DossierHome";
@@ -9,8 +19,11 @@ import { TimelineHome } from "./homes/TimelineHome";
 import { focusDefault, focusEl, forgetGroups } from "./nav/focus";
 import { onAction } from "./nav/input";
 import { focusedGame, focusedKind, useStore } from "./nav/store";
+import { inHost, onHostMessage, signalAfterFrame } from "./host/bridge";
 import { GamePage } from "./screens/GamePage";
 import { Library } from "./screens/Library";
+
+let readySent = false;
 
 const LAYOUTS = [
   { id: "ribbon", label: "Ribbon" },
@@ -73,9 +86,25 @@ export function App() {
       const from = back ? document.querySelector<HTMLElement>(`[data-nav][data-game="${back}"]`) : null;
       if (from) focusEl(from);
       else focusDefault();
+      if (!readySent) {
+        readySent = true;
+        signalAfterFrame({ type: "ready" });
+      }
     });
     return () => window.clearTimeout(t);
   }, [layout, tab, playing, gameOpen]);
+
+  // The host asks for home on every relaunch (FSE, Game Bar "Home", a second instance) and on the Guide button.
+  useEffect(
+    () =>
+      onHostMessage((m) => {
+        if (m.type !== "home") return;
+        closeGame();
+        setTab("Home");
+        signalAfterFrame({ type: "home-ready", reason: "activate" });
+      }),
+    [],
+  );
 
   useEffect(
     () =>
@@ -83,6 +112,11 @@ export function App() {
         if (launching.get()) return false;
         const kind = focusedKind.get();
         const game = focusedGame.get();
+        if (a === "guide") {
+          closeGame();
+          setTab("Home");
+          return true;
+        }
         if (a === "back" && openGameId.get()) {
           closeGame();
           return true;
@@ -249,19 +283,25 @@ function Placeholder({ tab }: { tab: Tab }) {
 
 function LaunchOverlay({ gameId }: { gameId: string }) {
   const game = gameById(gameId);
+  const hostSession = useStore(session);
   const [elapsed, setElapsed] = useState(0);
-  const running = elapsed >= 3;
+
+  // In the host, "running" and the session seconds come from the host; it reports exit too. The 1 s ticker only
+  // advances the clock between host updates. In a plain browser the launch is simulated: running after 3 s.
+  const running = inHost ? hostSession?.state === "running" : elapsed >= 3;
 
   useEffect(() => {
+    if (inHost && !running) return;
+    setElapsed(0);
     const t = window.setInterval(() => setElapsed((e) => e + 1), 1000);
     return () => window.clearInterval(t);
-  }, []);
+  }, [running, hostSession?.seconds]);
 
   useEffect(
     () =>
       onAction((a) => {
         if (a === "back") {
-          launching.set(null);
+          leaveLaunch();
           return true;
         }
         return true;
@@ -269,7 +309,7 @@ function LaunchOverlay({ gameId }: { gameId: string }) {
     [],
   );
 
-  const playedFor = Math.max(0, elapsed - 3);
+  const playedFor = inHost ? (hostSession?.seconds ?? 0) + elapsed : Math.max(0, elapsed - 3);
   const clock = `${Math.floor(playedFor / 60)}:${String(playedFor % 60).padStart(2, "0")}`;
 
   return (

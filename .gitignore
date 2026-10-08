@@ -47,3 +47,8 @@ todo.md
 /artifacts/
 
 *.DotSettings.user
+
+# Launcher host (MSIX output and signing material must never be committed)
+src/Launcher/Host/AppPackages/
+*.pfx
+*.cer

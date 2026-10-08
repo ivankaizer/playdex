@@ -56,7 +56,7 @@ export const games: Game[] = [
   { id: "spiderman", title: "Marvel's Spider-Man Remastered", source: "steam", art: 1817070, totalMinutes: 1520 },
   { id: "hogwarts", title: "Hogwarts Legacy", source: "epic", art: 990080, totalMinutes: 2210 },
   { id: "rdr2", title: "Red Dead Redemption 2", source: "steam", art: 1174180, totalMinutes: 6120 },
-  { id: "witcher3", title: "The Witcher 3: Wild Hunt", source: "gog", art: 292030, totalMinutes: 8730 },
+  { id: "witcher3", title: "The Witcher 3: Wild Hunt", source: "steam", art: 292030, totalMinutes: 8730 },
   { id: "skyrim", title: "The Elder Scrolls V: Skyrim", source: "steam", art: 489830, totalMinutes: 10440, installed: false },
   { id: "gow", title: "God of War", source: "steam", art: 1593500, totalMinutes: 2340 },
   { id: "sekiro", title: "Sekiro: Shadows Die Twice", source: "steam", art: 814380, totalMinutes: 3010 },
