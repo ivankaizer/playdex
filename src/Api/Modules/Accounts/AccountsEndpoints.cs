@@ -18,6 +18,7 @@ public static class AccountsEndpoints
         sessions.MapDelete("/{sessionId}", DeleteSession);
 
         api.MapGet("/stats", ListStatsForRange).RequireAuthorization();
+        api.MapGet("/stats/daily", ListDailyStats).RequireAuthorization();
 
         accounts.MapGet("/{accountId}/sessions", ListAccountSessions);
         accounts.MapGet("/{accountId}/sessions/today", ListAccountSessionsToday);
@@ -74,6 +75,16 @@ public static class AccountsEndpoints
     {
         var stats = await service.ComputeStatsForRange(principal.GetUserId(), null, from, to, platform, 0, ct);
         return TypedResults.Ok(new AccountStatsRangeResponseDto(null, stats));
+    }
+
+    private static async Task<IResult> ListDailyStats(
+        ClaimsPrincipal principal,
+        AccountsService service,
+        string? from, string? to, string? platform,
+        CancellationToken ct)
+    {
+        var days = await service.ComputeDailyStats(principal.GetUserId(), null, from, to, platform, 0, ct);
+        return TypedResults.Ok(new AccountDailyStatsResponseDto(null, days));
     }
 
     private static async Task<IResult> ListAccountSessions(

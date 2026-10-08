@@ -34,6 +34,14 @@ public sealed class ApiEnvelopeMiddleware(RequestDelegate next)
             return;
         }
 
+        if (context.Response.StatusCode is >= 200 and < 300 && IsBinary(context.Response.ContentType))
+        {
+            // Files (e.g. admin screenshots) are streamed as-is; only JSON payloads are enveloped.
+            context.Response.ContentLength = bufferedBody.Length;
+            await bufferedBody.CopyToAsync(originalBody, context.RequestAborted);
+            return;
+        }
+
         context.Response.ContentLength = null;
         context.Response.ContentType = "application/json";
 
@@ -59,6 +67,11 @@ public sealed class ApiEnvelopeMiddleware(RequestDelegate next)
         writer.WriteEndObject();
         await writer.FlushAsync(context.RequestAborted);
     }
+
+    private static bool IsBinary(string? contentType) =>
+        contentType is not null && (
+            contentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase) ||
+            contentType.StartsWith("application/octet-stream", StringComparison.OrdinalIgnoreCase));
 
     private static async Task WriteBodyAsync(
         Stream body,

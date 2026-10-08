@@ -1,0 +1,13 @@
+name: Preview cleanup
+
+on:
+  pull_request:
+    types: [closed]
+
+jobs:
+  cleanup:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    uses: ivankaizer/preview-kit/.github/workflows/cleanup.yml@v1
+    permissions:
+      contents: write
+    secrets: inherit
