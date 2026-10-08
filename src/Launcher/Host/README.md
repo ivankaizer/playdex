@@ -57,4 +57,6 @@ At startup the host lists the games on this PC and injects them into the page as
 - **Steam:** every fully installed app in each Steam library folder (`libraryfolders.vdf`, `appmanifest_*.acf`), minus redistributables and runtimes. Launched with `steam://rungameid`; the host records the session.
 - **Playdex:** every generated launcher in the Playdex Wrapper's launchers folder (`%LOCALAPPDATA%\PlaydexWrapper\launchers\Playdex-*.exe` with its `.playdex.json`), matched to its entry in the Wrapper config, if the game's executable exists. Launched through that `Playdex-*.exe`, which records the session itself; the host only follows it to exit (a Job Object, so exit arrives after the Wrapper's exit debounce, 10 s by default). A Wrapper game with a Steam app id replaces the same Steam entry.
 
+Artwork for Steam app ids comes from Steam's own cache (`Steam\appcache\librarycache\<appid>\[<hash>\]`), served to the page from `https://steam-art.playdex/`. Newer apps are only on the CDN under per-image hashes, so the fixed `cdn.cloudflare.steamstatic.com/steam/apps/<id>/...` URLs 404 for them; those URLs remain the fallback for each image the cache lacks.
+
 New games appear the next time the launcher starts.

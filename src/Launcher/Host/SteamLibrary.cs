@@ -5,6 +5,9 @@ namespace Playdex.Launcher.Host;
 
 internal sealed record InstalledGame(int AppId, string Name, long LastPlayed);
 
+/// <summary>Cached artwork, each a path relative to Steam's librarycache folder (forward slashes), or null.</summary>
+internal sealed record SteamArt(string? Hero, string? Logo, string? Portrait, string? Capsule);
+
 /// <summary>
 /// Installed Steam games, read from disk: the library folders in steamapps\libraryfolders.vdf and one
 /// appmanifest_&lt;appid&gt;.acf per installed app. No Steam API, no network; a few small file reads.
@@ -63,6 +66,63 @@ internal static partial class SteamLibrary
             }
         }
         return games;
+    }
+
+    /// <summary>Steam's artwork cache (appcache\librarycache), or null without Steam.</summary>
+    public static string? ArtCacheDirectory { get; } =
+        Registry.CurrentUser.OpenSubKey(@"Software\Valve\Steam")?.GetValue("SteamPath") is string steamPath
+        && Path.Combine(steamPath, "appcache", "librarycache") is var dir && Directory.Exists(dir)
+            ? Path.GetFullPath(dir)
+            : null;
+
+    /// <summary>
+    /// The app's artwork in Steam's own cache, as paths relative to <see cref="ArtCacheDirectory"/>. Newer apps are
+    /// only on the CDN under per-image hashes that can't be guessed, so this cache is the reliable source; it is also
+    /// local. Files sit in librarycache\&lt;appid&gt;\ or librarycache\&lt;appid&gt;\&lt;hash&gt;\; the newest copy wins.
+    /// </summary>
+    public static SteamArt? FindArt(int appId)
+    {
+        if (ArtCacheDirectory is not { } root)
+        {
+            return null;
+        }
+        var dir = Path.Combine(root, appId.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        if (!Directory.Exists(dir))
+        {
+            return null;
+        }
+        List<FileInfo> files;
+        try
+        {
+            files = [.. new DirectoryInfo(dir).EnumerateFiles("*", new EnumerationOptions { RecurseSubdirectories = true, MaxRecursionDepth = 1 })];
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Log.Info($"steam art: {dir} unreadable: {ex.Message}");
+            return null;
+        }
+
+        string? Find(params string[] names)
+        {
+            foreach (var name in names)
+            {
+                var newest = files
+                    .Where(f => string.Equals(f.Name, name, StringComparison.OrdinalIgnoreCase) && f.Length > 0)
+                    .MaxBy(f => f.LastWriteTimeUtc);
+                if (newest is not null)
+                {
+                    return Path.GetRelativePath(root, newest.FullName).Replace('\\', '/');
+                }
+            }
+            return null;
+        }
+
+        var art = new SteamArt(
+            Hero: Find("library_hero.jpg"),
+            Logo: Find("logo.png"),
+            Portrait: Find("library_600x900.jpg", "library_capsule.jpg"),
+            Capsule: Find("header.jpg", "library_header.jpg"));
+        return art is { Hero: null, Logo: null, Portrait: null, Capsule: null } ? null : art;
     }
 
     /// <summary>The app's install folder (with a trailing separator), or null when it is not installed.</summary>

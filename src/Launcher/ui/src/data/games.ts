@@ -7,6 +7,13 @@ export type Source = "steam" | "playdex" | "epic" | "gog" | "xbox" | "emulator" 
 /** Sources that run on this PC. Others are history Playdex tracked on another platform. */
 export const PC_SOURCES: Source[] = ["steam", "playdex", "epic", "gog", "xbox", "emulator"];
 
+export interface GameImages {
+  hero?: string;
+  logo?: string;
+  portrait?: string;
+  capsule?: string;
+}
+
 interface HostGame {
   id: string;
   title: string;
@@ -14,6 +21,8 @@ interface HostGame {
   steamAppId?: number;
   /** Unix ms; Steam's own record of the last launch. */
   lastPlayed?: number;
+  /** Artwork from Steam's local cache, served by the host. */
+  images?: GameImages;
 }
 
 declare global {
@@ -39,6 +48,8 @@ export interface Game {
   installed?: boolean;
   /** Unix ms of the last launch as the store records it, for games with no Playdex sessions here. */
   lastPlayed?: number;
+  /** Local artwork (host only); each missing kind falls back to the Steam CDN by `art`. */
+  images?: GameImages;
 }
 
 export interface Session {
@@ -143,6 +154,7 @@ export const games: Game[] = hostLibrary
       art: g.steamAppId,
       totalMinutes: 0,
       lastPlayed: g.lastPlayed,
+      images: g.images,
     }))
   : demoGames;
 
@@ -154,10 +166,10 @@ export const gameById = (id: string): Game => byId.get(id)!;
 
 const steam = (id: number, file: string) => `https://cdn.cloudflare.steamstatic.com/steam/apps/${id}/${file}`;
 export const art = {
-  hero: (g: Game) => (g.art ? steam(g.art, "library_hero.jpg") : undefined),
-  logo: (g: Game) => (g.art ? steam(g.art, "logo.png") : undefined),
-  portrait: (g: Game) => (g.art ? steam(g.art, "library_600x900.jpg") : undefined),
-  capsule: (g: Game) => (g.art ? steam(g.art, "capsule_616x353.jpg") : undefined),
+  hero: (g: Game) => g.images?.hero ?? (g.art ? steam(g.art, "library_hero.jpg") : undefined),
+  logo: (g: Game) => g.images?.logo ?? (g.art ? steam(g.art, "logo.png") : undefined),
+  portrait: (g: Game) => g.images?.portrait ?? (g.art ? steam(g.art, "library_600x900.jpg") : undefined),
+  capsule: (g: Game) => g.images?.capsule ?? (g.art ? steam(g.art, "capsule_616x353.jpg") : undefined),
 };
 
 /** Sessions sorted newest first (by day, then start time). */

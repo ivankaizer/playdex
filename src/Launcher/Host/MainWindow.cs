@@ -129,6 +129,12 @@ internal sealed partial class MainWindow : Window
             // below; awaiting the round trip cost ~90 ms of cold start.
             var injected = web.AddScriptToExecuteOnDocumentCreatedAsync($"window.__PLAYDEX_LIBRARY__ = {Library.ToJson(await _library)};");
 
+            if (SteamLibrary.ArtCacheDirectory is { } artCache)
+            {
+                // Steam's own artwork cache, read in place (see Library.Scan).
+                web.SetVirtualHostNameToFolderMapping(Library.ArtHost, artCache, CoreWebView2HostResourceAccessKind.Allow);
+            }
+
             var dist = Path.Combine(AppContext.BaseDirectory, "ui");
             string url;
             if (!_options.Dev && File.Exists(Path.Combine(dist, "index.html")))

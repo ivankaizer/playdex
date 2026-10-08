@@ -13,7 +13,8 @@ internal sealed record LibraryGame(
     string Source,
     int? SteamAppId,
     long? LastPlayed,
-    [property: JsonIgnore] string? LauncherPath);
+    [property: JsonIgnore] string? LauncherPath,
+    SteamArt? Images = null);
 
 [JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase, DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull)]
 [JsonSerializable(typeof(List<LibraryGame>))]
@@ -40,9 +41,24 @@ internal static class Library
         {
             games[game.Id] = game;
         }
-        Log.Info($"library: {games.Count} game(s), {wrapper.Count} from the Playdex Wrapper");
+        var withArt = 0;
+        foreach (var (id, game) in games.ToList())
+        {
+            if (game.SteamAppId is { } appId && SteamLibrary.FindArt(appId) is { } art)
+            {
+                games[id] = game with { Images = new SteamArt(ArtUrl(art.Hero), ArtUrl(art.Logo), ArtUrl(art.Portrait), ArtUrl(art.Capsule)) };
+                withArt++;
+            }
+        }
+        Log.Info($"library: {games.Count} game(s), {wrapper.Count} from the Playdex Wrapper, {withArt} with cached Steam art");
         return games;
     }
+
+    /// <summary>Virtual host the page loads Steam's cached artwork from (mapped to <see cref="SteamLibrary.ArtCacheDirectory"/>).</summary>
+    public const string ArtHost = "steam-art.playdex";
+
+    private static string? ArtUrl(string? relativePath) =>
+        relativePath is null ? null : $"https://{ArtHost}/{string.Join('/', relativePath.Split('/').Select(Uri.EscapeDataString))}";
 
     public static string ToJson(IReadOnlyDictionary<string, LibraryGame> games) =>
         JsonSerializer.Serialize(games.Values.ToList(), LibraryJson.Default.ListLibraryGame);
