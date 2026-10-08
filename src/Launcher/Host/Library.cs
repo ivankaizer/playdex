@@ -44,21 +44,47 @@ internal static class Library
         var withArt = 0;
         foreach (var (id, game) in games.ToList())
         {
-            if (game.SteamAppId is { } appId && SteamLibrary.FindArt(appId) is { } art)
+            if (Images(game) is { } images)
             {
-                games[id] = game with { Images = new SteamArt(ArtUrl(art.Hero), ArtUrl(art.Logo), ArtUrl(art.Portrait), ArtUrl(art.Capsule)) };
+                games[id] = game with { Images = images };
                 withArt++;
             }
         }
-        Log.Info($"library: {games.Count} game(s), {wrapper.Count} from the Playdex Wrapper, {withArt} with cached Steam art");
+        Log.Info($"library: {games.Count} game(s), {wrapper.Count} from the Playdex Wrapper, {withArt} with local art");
         return games;
     }
 
-    /// <summary>Virtual host the page loads Steam's cached artwork from (mapped to <see cref="SteamLibrary.ArtCacheDirectory"/>).</summary>
+    /// <summary>Virtual host for Steam's artwork cache (<see cref="SteamLibrary.ArtCacheDirectory"/>).</summary>
     public const string ArtHost = "steam-art.playdex";
 
-    private static string? ArtUrl(string? relativePath) =>
-        relativePath is null ? null : $"https://{ArtHost}/{string.Join('/', relativePath.Split('/').Select(Uri.EscapeDataString))}";
+    /// <summary>Parent of the per-user grid hosts: &lt;user id&gt;.steam-grid.playdex is that user's grid folder (<see cref="SteamGrid.GridFolders"/>).</summary>
+    public const string GridHost = "steam-grid.playdex";
+
+    /// <summary>
+    /// Local artwork as page URLs, per image: the game's own Steam shortcut grid art (Wrapper games, from SteamGridDB),
+    /// then custom grid art on its Steam app, then Steam's artwork cache. Kinds still missing fall back to the CDN.
+    /// </summary>
+    private static SteamArt? Images(LibraryGame game)
+    {
+        var shortcut = game.LauncherPath is { } launcher ? SteamGrid.ForShortcut(launcher) : null;
+        var appGrid = game.SteamAppId is { } gridId ? SteamGrid.ForApp(gridId) : null;
+        var cache = game.SteamAppId is { } cacheId ? SteamLibrary.FindArt(cacheId) : null;
+
+        string? Pick(Func<SteamArt, string?> kind) =>
+            (shortcut is not null ? GridUrl(kind(shortcut)) : null)
+            ?? (appGrid is not null ? GridUrl(kind(appGrid)) : null)
+            ?? (cache is not null ? Url(ArtHost, kind(cache)) : null);
+
+        var images = new SteamArt(Pick(a => a.Hero), Pick(a => a.Logo), Pick(a => a.Portrait), Pick(a => a.Capsule));
+        return images is { Hero: null, Logo: null, Portrait: null, Capsule: null } ? null : images;
+    }
+
+    /// <summary>"&lt;user id&gt;/&lt;file&gt;" → https://&lt;user id&gt;.steam-grid.playdex/&lt;file&gt;.</summary>
+    private static string? GridUrl(string? userAndFile) =>
+        userAndFile?.Split('/', 2) is [var user, var file] ? Url($"{user}.{GridHost}", file) : null;
+
+    private static string? Url(string host, string? relativePath) =>
+        relativePath is null ? null : $"https://{host}/{string.Join('/', relativePath.Split('/').Select(Uri.EscapeDataString))}";
 
     public static string ToJson(IReadOnlyDictionary<string, LibraryGame> games) =>
         JsonSerializer.Serialize(games.Values.ToList(), LibraryJson.Default.ListLibraryGame);

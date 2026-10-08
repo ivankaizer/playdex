@@ -134,6 +134,12 @@ internal sealed partial class MainWindow : Window
                 // Steam's own artwork cache, read in place (see Library.Scan).
                 web.SetVirtualHostNameToFolderMapping(Library.ArtHost, artCache, CoreWebView2HostResourceAccessKind.Allow);
             }
+            foreach (var (userId, grid) in SteamGrid.GridFolders)
+            {
+                // Steam grid art (custom and non-Steam shortcut artwork), read in place. Only the grid folders are
+                // served, not the rest of userdata.
+                web.SetVirtualHostNameToFolderMapping($"{userId}.{Library.GridHost}", grid, CoreWebView2HostResourceAccessKind.Allow);
+            }
 
             var dist = Path.Combine(AppContext.BaseDirectory, "ui");
             string url;
