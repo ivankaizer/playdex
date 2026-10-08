@@ -1,0 +1,188 @@
+.timeline-home {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  gap: 1.4rem;
+  min-height: 0;
+}
+
+/* Full-bleed art behind the whole upper screen, fading into the page. */
+.stage-art {
+  position: fixed;
+  z-index: -2;
+  inset: 0 0 auto 0;
+  height: 78vh;
+  mask-image: linear-gradient(180deg, #000 45%, transparent 100%);
+}
+.stage-scrim {
+  position: fixed;
+  z-index: -1;
+  inset: 0 0 auto 0;
+  height: 78vh;
+  pointer-events: none;
+  background:
+    linear-gradient(90deg, rgb(var(--scrim) / 0.88) 0%, rgb(var(--scrim) / 0.45) 42%, transparent 70%),
+    linear-gradient(180deg, rgb(var(--scrim) / 0.55) 0%, transparent 22%);
+}
+
+/* ---------- Stage ---------- */
+.stage {
+  display: flex;
+  align-items: flex-end;
+  min-height: 0;
+}
+.stage-body {
+  display: grid;
+  gap: 0.9rem;
+  max-width: 40rem;
+  animation: stage-in 0.35s var(--ease-out) both;
+}
+@keyframes stage-in {
+  from {
+    opacity: 0;
+    transform: translateY(0.5rem);
+  }
+}
+.stage-logo {
+  height: 6rem;
+  max-width: 26rem;
+  object-fit: contain;
+  object-position: left bottom;
+  filter: drop-shadow(0 0.25rem 0.8rem rgba(0, 0, 0, 0.5));
+}
+.stage-title {
+  margin: 0;
+  font-size: 2.8rem;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  line-height: 1.02;
+}
+.stage-meta {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  font-size: 0.84rem;
+  color: rgb(var(--ink-2));
+}
+.stage-actions {
+  display: flex;
+  gap: 0.8rem;
+  margin-top: 0.3rem;
+}
+
+/* ---------- Lanes ---------- */
+.lanes-wrap {
+  margin: 0 -2.4rem;
+}
+.lanes {
+  display: flex;
+  align-items: stretch;
+  gap: 0.9rem;
+  padding: 0.5rem 2.4rem 0.6rem;
+  overflow-x: auto;
+  scrollbar-width: none;
+  scroll-padding-inline: 2.4rem;
+}
+.lane {
+  flex: none;
+  width: 14.5rem;
+  height: 18.5rem;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 0.6rem;
+  padding: 0.9rem 0.8rem 0.8rem;
+  border-radius: 1.2rem;
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+}
+.lane[data-empty] {
+  width: 7rem;
+  background: transparent;
+  border-style: dashed;
+  border-color: rgb(var(--line) / 0.8);
+}
+.lane-end {
+  width: 9rem;
+  align-content: center;
+  background: transparent;
+  border: 0;
+}
+.lane-end .label {
+  line-height: 1.6;
+}
+.lane-head {
+  display: grid;
+  gap: 0.25rem;
+  padding: 0 0.2rem;
+}
+.lane-total {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: rgb(var(--ink));
+}
+.lane[data-empty] .lane-total {
+  color: rgb(var(--muted));
+  font-weight: 500;
+}
+.lane-chips {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  min-height: 0;
+}
+
+/* A chip's height is its time played. */
+.chip {
+  flex: none;
+  display: grid;
+  grid-template-columns: 2rem minmax(0, 1fr) auto;
+  grid-template-rows: auto auto;
+  align-content: start;
+  column-gap: 0.65rem;
+  row-gap: 0.1rem;
+  padding: 0.45rem 0.6rem 0.45rem 0.45rem;
+  border-radius: 0.85rem;
+  background: rgb(var(--tile));
+  border: 1px solid var(--tile-border);
+  overflow: hidden;
+  transition: transform 0.18s var(--ease-out);
+}
+.chip[data-focused] {
+  background: rgb(var(--mint));
+  border-color: rgb(var(--mint-line));
+  transform: scale(1.04);
+  z-index: 1;
+}
+.chip-thumb {
+  grid-row: 1 / span 2;
+  width: 2rem;
+  height: 100%;
+  max-height: 3rem;
+  border-radius: 0.35rem;
+  font-size: 0.3rem;
+}
+.chip-text {
+  display: contents;
+}
+.chip-title {
+  grid-column: 2;
+  grid-row: 1;
+  font-size: 0.72rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.chip-time {
+  grid-column: 2 / span 2;
+  grid-row: 2;
+  font-size: 0.6rem;
+  color: rgb(var(--muted));
+}
+.chip-dur {
+  grid-column: 3;
+  grid-row: 1;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: rgb(var(--accent));
+}

@@ -1,0 +1,117 @@
+import { Play } from "lucide-react";
+import { launch } from "../app-state";
+import { Backdrop, Cover, Logo, WeekBars } from "../components/shared";
+import {
+  fmtHours,
+  fmtMinutes,
+  recentGames,
+  relativeDay,
+  sessionEnd,
+  SOURCE_LABEL,
+  todayMinutes,
+  todaySessions,
+  weekMinutes,
+} from "../data/games";
+import "./ribbon.css";
+
+/** Home A: last-session ribbon on top, a jump-back grid where every tile carries this week's playtime. */
+export function RibbonHome() {
+  const [last, ...rest] = recentGames;
+  const jump = rest.slice(0, 6);
+  const maxWeek = Math.max(...recentGames.map((r) => r.weekMinutes), 1);
+  const top = [...recentGames].sort((a, b) => b.weekMinutes - a.weekMinutes).slice(0, 3);
+  const s = last.lastSession;
+
+  return (
+    <main className="ribbon-home">
+      <Backdrop className="ribbon-backdrop" />
+
+      <section className="ribbon" data-game={last.game.id} aria-label="Last played">
+        <Backdrop gameId={last.game.id} className="ribbon-art" />
+        <div className="ribbon-body">
+          <span className="kicker">
+            Last played · {relativeDay(s.dayOffset)} {s.start}–{sessionEnd(s)}
+          </span>
+          <Logo game={last.game} className="ribbon-logo" titleClass="ribbon-title" />
+          <p className="ribbon-meta num">
+            <b>{fmtMinutes(s.minutes)}</b> last session
+            <span aria-hidden>·</span>
+            {fmtMinutes(last.weekMinutes)} this week
+            <span aria-hidden>·</span>
+            {fmtHours(last.game.totalMinutes)} total
+          </p>
+        </div>
+        <button
+          className="btn btn-primary btn-lg ribbon-cta"
+          data-nav
+          data-nav-default
+          data-game={last.game.id}
+          data-kind="continue"
+          onClick={() => launch(last.game.id)}
+        >
+          <Play fill="currentColor" /> Continue
+        </button>
+      </section>
+
+      <section className="jump" aria-labelledby="jump-h">
+        <h2 id="jump-h" className="section-h">
+          Jump back in
+        </h2>
+        <div className="jump-grid" data-nav-group="jump">
+          {jump.map((r) => (
+            <button
+              key={r.game.id}
+              className="jtile"
+              data-nav
+              data-game={r.game.id}
+              data-kind="game"
+              onClick={() => launch(r.game.id)}
+            >
+              <Cover game={r.game} kind="capsule" className="jtile-art" />
+              <span className="jtile-foot">
+                <span className="jtile-title">{r.game.title}</span>
+                <span className="jtile-sub">
+                  {relativeDay(r.lastSession.dayOffset)} · {SOURCE_LABEL[r.game.source]}
+                </span>
+                <span className="meter" aria-label={`${fmtMinutes(r.weekMinutes)} played this week`}>
+                  <span className="meter-track">
+                    <i style={{ transform: `scaleX(${r.weekMinutes / maxWeek})` }} />
+                  </span>
+                  <span className="meter-val num">{r.weekMinutes ? fmtMinutes(r.weekMinutes) : "—"}</span>
+                </span>
+              </span>
+            </button>
+          ))}
+        </div>
+      </section>
+
+      <aside className="card rail" aria-label="Playdex">
+        <div className="rail-block">
+          <span className="kicker">Today</span>
+          <p className="rail-big num">{fmtMinutes(todayMinutes)}</p>
+          <p className="rail-sub">across {todaySessions} sessions</p>
+        </div>
+        <div className="rail-block">
+          <div className="rail-row">
+            <span className="label">This week</span>
+            <span className="rail-val num">{fmtMinutes(weekMinutes)}</span>
+          </div>
+          <WeekBars maxHeight="4.4rem" />
+        </div>
+        <div className="rail-block rail-top">
+          <span className="label">Most played this week</span>
+          <ol>
+            {top.map((r) => (
+              <li key={r.game.id}>
+                <Cover game={r.game} kind="portrait" className="rail-thumb" compact />
+                <span className="rail-name">{r.game.title}</span>
+                <span className="rail-val num">{fmtMinutes(r.weekMinutes)}</span>
+              </li>
+            ))}
+          </ol>
+        </div>
+        <p className="rail-note">Sample data</p>
+      </aside>
+    </main>
+  );
+}

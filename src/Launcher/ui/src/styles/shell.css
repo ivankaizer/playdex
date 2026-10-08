@@ -1,0 +1,611 @@
+/* Root type scales with the screen: 21.6px at 1080p, ~14-16px on a 1280x800 handheld, 28.8px at 1440p. */
+html {
+  font-size: min(calc(100vh / 50), calc(100vw / 88.9));
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+}
+
+body {
+  font-family: "Space Grotesk Variable", "Segoe UI", system-ui, sans-serif;
+  color: rgb(var(--ink));
+  background:
+    radial-gradient(60vw 45vh at 0% 0%, rgb(var(--blob-mint)), transparent 70%),
+    radial-gradient(50vw 55vh at 100% 38%, rgb(var(--blob-cyan)), transparent 70%),
+    radial-gradient(55vw 35vh at 45% 100%, rgb(var(--blob-sand)), transparent 70%),
+    rgb(var(--page));
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+}
+
+::selection {
+  background: rgb(var(--pill));
+  color: rgb(var(--pill-ink));
+}
+
+html[data-input="pad"],
+html[data-input="pad"] * {
+  cursor: none !important;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  text-align: inherit;
+  cursor: pointer;
+}
+
+img {
+  display: block;
+}
+
+.num {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- Focus language ----------
+ * Every focusable gets the same ring: a mint outline with an offset, plus a lift for art tiles.
+ * Only transform and opacity animate; the ring itself switches instantly so it is never late. */
+[data-nav] {
+  outline: none;
+  position: relative;
+}
+[data-nav][data-focused] {
+  outline: 0.16rem solid rgb(var(--focus));
+  outline-offset: 0.22rem;
+}
+
+.screen {
+  position: relative;
+  height: 100vh;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1.3rem;
+  padding: 1.5rem 2.4rem 1.1rem;
+}
+
+/* ---------- Kickers and labels (v3 spaced caps) ---------- */
+.kicker {
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: rgb(var(--accent));
+}
+.label {
+  font-size: 0.6rem;
+  font-weight: 500;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: rgb(var(--muted));
+}
+
+/* ---------- Surfaces ---------- */
+.card {
+  border-radius: 1.6rem;
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  box-shadow: var(--card-shadow);
+  min-width: 0;
+  min-height: 0;
+}
+.tile {
+  border-radius: 1.1rem;
+  background: rgb(var(--tile));
+  border: 1px solid var(--tile-border);
+}
+
+/* ---------- Buttons (v3 pills at TV size) ---------- */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.55rem;
+  height: 2.5rem;
+  padding: 0 1.3rem;
+  border-radius: 999px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  transition: transform 0.18s var(--ease-out);
+}
+.btn[data-focused] {
+  transform: scale(1.05);
+}
+.btn-primary {
+  background: rgb(var(--brand));
+  color: #fff;
+}
+.btn-primary[data-focused] {
+  background: rgb(var(--pill));
+  color: rgb(var(--pill-ink));
+}
+.btn-outline {
+  background: rgb(var(--surface));
+  border: 1px solid rgb(var(--line));
+  color: rgb(var(--ink-2));
+}
+.btn-lg {
+  height: 2.9rem;
+  padding: 0 1.6rem;
+  font-size: 0.92rem;
+}
+.btn svg {
+  width: 1.05em;
+  height: 1.05em;
+}
+
+/* ---------- Top bar ---------- */
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 1.4rem;
+  min-height: 2.4rem;
+}
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.3em;
+  color: rgb(var(--accent));
+}
+.brand-dot {
+  width: 0.42rem;
+  height: 0.42rem;
+  border-radius: 99px;
+  background: rgb(var(--bar));
+  box-shadow: 0 0 0 0.2rem rgb(var(--bar) / 0.2);
+}
+.tabs {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.seg {
+  display: inline-flex;
+  gap: 0.2rem;
+  padding: 0.2rem;
+  border-radius: 999px;
+  background: rgb(var(--tile) / 0.85);
+  border: 1px solid var(--tile-border);
+}
+.seg-btn {
+  height: 1.9rem;
+  padding: 0 1rem;
+  border-radius: 999px;
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: rgb(var(--muted));
+  white-space: nowrap;
+}
+.seg-btn[aria-selected="true"],
+.seg-btn[aria-pressed="true"] {
+  background: rgb(var(--seg-on));
+  color: rgb(var(--seg-on-ink));
+}
+.topbar-spacer {
+  flex: 1;
+}
+.status {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: rgb(var(--ink-2));
+}
+.status svg {
+  width: 1rem;
+  height: 1rem;
+  color: rgb(var(--muted));
+}
+.avatar {
+  width: 1.9rem;
+  height: 1.9rem;
+  border-radius: 99px;
+  display: grid;
+  place-items: center;
+  background: rgb(var(--mint));
+  color: rgb(var(--accent));
+  border: 1px solid rgb(var(--mint-line));
+  font-size: 0.74rem;
+  font-weight: 700;
+}
+.icon-btn {
+  width: 1.9rem;
+  height: 1.9rem;
+  border-radius: 99px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgb(var(--line));
+  background: rgb(var(--surface));
+  color: rgb(var(--ink-2));
+}
+.icon-btn svg {
+  width: 0.95rem;
+  height: 0.95rem;
+}
+.proto {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+/* ---------- Glyphs (controller prompts) ---------- */
+.glyph {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  height: 1.25rem;
+  min-width: 1.25rem;
+  padding: 0 0.3rem;
+  border-radius: 99px;
+  border: 1.5px solid rgb(var(--ink-2) / 0.6);
+  color: rgb(var(--ink));
+  font-size: 0.6rem;
+  font-weight: 700;
+  line-height: 1;
+}
+.glyph-a {
+  background: rgb(var(--pill));
+  border-color: rgb(var(--pill));
+  color: rgb(var(--pill-ink));
+}
+.glyph-bumper {
+  border-radius: 0.4rem;
+  min-width: 1.7rem;
+  font-size: 0.54rem;
+  letter-spacing: 0.04em;
+}
+.glyph svg {
+  width: 0.7rem;
+  height: 0.7rem;
+}
+
+/* ---------- Hint bar ---------- */
+.hints {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  min-height: 1.8rem;
+  font-size: 0.74rem;
+  font-weight: 500;
+  color: rgb(var(--ink-2));
+}
+.hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+.sync {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: rgb(var(--muted));
+}
+.sync-dot {
+  width: 0.36rem;
+  height: 0.36rem;
+  border-radius: 99px;
+  background: rgb(var(--bar));
+}
+
+/* ---------- Cover with graceful fallback ---------- */
+.cover {
+  position: relative;
+  overflow: hidden;
+  background: rgb(var(--track));
+}
+.cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0;
+  transition: opacity 0.25s ease-out;
+}
+.cover img[data-loaded] {
+  opacity: 1;
+}
+.cover-fallback {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 0.3rem;
+  padding: 0.8em;
+  background:
+    radial-gradient(120% 90% at 0% 0%, rgb(var(--mint)), transparent 70%),
+    linear-gradient(160deg, rgb(var(--surface)), rgb(var(--tile)));
+  font-weight: 600;
+  line-height: 1.15;
+  color: rgb(var(--ink));
+}
+.cover-initial {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(160deg, rgb(var(--mint)), rgb(var(--tile)));
+  color: rgb(var(--accent));
+  font-weight: 700;
+  font-size: 1rem;
+}
+.cover-fallback small {
+  font-size: 0.7em;
+  font-weight: 500;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: rgb(var(--accent));
+}
+
+/* ---------- Backdrop (crossfading art) ---------- */
+.backdrop {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+.backdrop img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0;
+  transform: scale(1.04);
+  transition:
+    opacity 0.45s ease-out,
+    transform 1.2s var(--ease-out);
+}
+.backdrop img[data-on] {
+  opacity: 1;
+  transform: none;
+}
+
+/* ---------- Week bars ---------- */
+.week {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  align-items: end;
+  gap: 0.45rem;
+}
+.week-col {
+  display: grid;
+  gap: 0.4rem;
+  justify-items: center;
+}
+.week-bar {
+  width: 100%;
+  height: var(--h-max, 4.2rem);
+  border-radius: 0.4rem;
+  background: rgb(var(--track) / 0.7);
+  display: flex;
+  align-items: flex-end;
+  overflow: hidden;
+}
+.week-fill {
+  width: 100%;
+  border-radius: 0.4rem;
+  background: rgb(var(--bar-light));
+}
+.week-col[data-today] .week-fill {
+  background: rgb(var(--bar));
+}
+.week-day {
+  font-size: 0.56rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: rgb(var(--muted));
+}
+.week-col[data-today] .week-day {
+  color: rgb(var(--accent));
+}
+
+/* ---------- Launch overlay ---------- */
+.launch {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  align-content: end;
+  padding: 3rem 3.6rem;
+  background: rgb(var(--page));
+  animation: launch-in 0.32s var(--ease-out) both;
+}
+.launch .backdrop img {
+  transform: none;
+}
+.launch-scrim {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(90deg, rgb(var(--scrim) / 0.92) 0%, rgb(var(--scrim) / 0.55) 45%, transparent 75%),
+    linear-gradient(0deg, rgb(var(--scrim) / 0.95) 0%, transparent 55%);
+}
+.launch-body {
+  position: relative;
+  display: grid;
+  gap: 1.1rem;
+  max-width: 34rem;
+}
+.launch-logo {
+  max-height: 6rem;
+  max-width: 26rem;
+  object-fit: contain;
+  object-position: left bottom;
+}
+.launch-title {
+  font-size: 2.6rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.05;
+  margin: 0;
+}
+.launch-state {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  font-size: 1rem;
+  font-weight: 500;
+  color: rgb(var(--ink-2));
+}
+.rec {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  height: 2rem;
+  padding: 0 0.9rem;
+  border-radius: 99px;
+  background: rgb(var(--mint));
+  border: 1px solid rgb(var(--mint-line));
+  color: rgb(var(--accent));
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+.live-dot {
+  width: 0.4rem;
+  height: 0.4rem;
+  border-radius: 99px;
+  background: rgb(var(--bar));
+  animation: pulse 1.8s ease-in-out infinite;
+}
+.progress {
+  height: 0.22rem;
+  border-radius: 99px;
+  background: rgb(var(--track));
+  overflow: hidden;
+  width: 18rem;
+}
+.progress i {
+  display: block;
+  height: 100%;
+  background: rgb(var(--bar));
+  transform-origin: left;
+  animation: progress 2.2s var(--ease-out) both;
+}
+.launch .hints {
+  position: relative;
+  margin-top: 1.4rem;
+}
+
+@keyframes launch-in {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes progress {
+  from {
+    transform: scaleX(0);
+  }
+}
+@keyframes pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+/* ---------- Toast ---------- */
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 3.6rem;
+  z-index: 60;
+  transform: translateX(-50%);
+  padding: 0.65rem 1.2rem;
+  border-radius: 99px;
+  background: #121a22;
+  color: #e9eef3;
+  font-size: 0.78rem;
+  font-weight: 500;
+  box-shadow: 0 1rem 2rem -0.8rem rgba(0, 0, 0, 0.6);
+  animation: toast 0.3s var(--ease-out) both;
+}
+@keyframes toast {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 0.6rem);
+  }
+}
+
+/* ---------- Placeholder tab ---------- */
+.placeholder {
+  display: grid;
+  place-items: center;
+}
+.placeholder .card {
+  max-width: 34rem;
+  padding: 2.2rem 2.4rem;
+  display: grid;
+  gap: 0.7rem;
+}
+.placeholder h2 {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.placeholder p {
+  margin: 0;
+  color: rgb(var(--ink-2));
+  font-size: 0.86rem;
+  line-height: 1.5;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Game logos are mostly white artwork; on the light theme they need a dark halo to stay legible. */
+:root[data-theme="light"] :is(.ribbon-logo, .now-logo, .stage-logo) {
+  filter: drop-shadow(0 0 0.08rem rgba(0, 0, 0, 0.7)) drop-shadow(0 0.25rem 0.9rem rgba(0, 0, 0, 0.55));
+}
+
+/* The launch screen is a cinematic moment: always dark, whatever the theme. */
+:root[data-theme="light"] .launch {
+  color-scheme: dark;
+  --ink: 230 236 241;
+  --ink-2: 195 204 213;
+  --muted: 152 163 175;
+  --page: 15 21 27;
+  --scrim: 15 21 27;
+  --track: 44 55 66;
+  --mint: 20 59 46;
+  --mint-line: 31 84 66;
+  --accent: 95 211 165;
+}
+.launch .hint {
+  white-space: nowrap;
+}
