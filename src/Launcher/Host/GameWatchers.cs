@@ -1,5 +1,4 @@
 using System.Diagnostics;
-using System.Text.RegularExpressions;
 using Microsoft.Win32;
 using Microsoft.Win32.SafeHandles;
 
@@ -263,47 +262,6 @@ internal sealed partial class SteamGameWatcher : IGameWatcher
         _key.Dispose();
         _changed.Dispose();
     }
-}
-
-internal static partial class SteamLibrary
-{
-    public static string? FindInstallDirectory(int appId)
-    {
-        var steamPath = Registry.CurrentUser.OpenSubKey(@"Software\Valve\Steam")?.GetValue("SteamPath") as string;
-        if (steamPath is null)
-        {
-            return null;
-        }
-        var libraries = new List<string> { steamPath };
-        var folders = Path.Combine(steamPath, "steamapps", "libraryfolders.vdf");
-        if (File.Exists(folders))
-        {
-            foreach (Match match in PathEntry().Matches(File.ReadAllText(folders)))
-            {
-                libraries.Add(match.Groups[1].Value.Replace(@"\\", @"\"));
-            }
-        }
-        foreach (var library in libraries)
-        {
-            var manifest = Path.Combine(library, "steamapps", $"appmanifest_{appId}.acf");
-            if (!File.Exists(manifest))
-            {
-                continue;
-            }
-            var installDir = InstallDirEntry().Match(File.ReadAllText(manifest));
-            if (installDir.Success)
-            {
-                return Path.GetFullPath(Path.Combine(library, "steamapps", "common", installDir.Groups[1].Value)) + Path.DirectorySeparatorChar;
-            }
-        }
-        return null;
-    }
-
-    [GeneratedRegex("\"path\"\\s+\"(.+?)\"")]
-    private static partial Regex PathEntry();
-
-    [GeneratedRegex("\"installdir\"\\s+\"(.+?)\"")]
-    private static partial Regex InstallDirEntry();
 }
 
 /// <summary>

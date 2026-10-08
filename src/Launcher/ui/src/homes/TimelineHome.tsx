@@ -6,6 +6,9 @@ import {
   fmtHours,
   fmtMinutes,
   gameById,
+  lastPlayedDay,
+  recentGames,
+  relativeDay,
   sessionEnd,
   sessions,
   sessionsNewestFirst,
@@ -90,6 +93,38 @@ function Chip({ s }: { s: Session }) {
 }
 
 function Stage() {
+  return sessionsNewestFirst.length ? <SessionStage /> : <GameStage />;
+}
+
+/** No sessions to show (the host library has no Playdex history yet): feature the most recently played game. */
+function GameStage() {
+  const st = recentGames[0];
+  const game = st.game;
+  const lastDay = lastPlayedDay(st);
+  return (
+    <section className="stage" aria-live="polite" aria-label="Selected game">
+      <div className="stage-body">
+        <span className="kicker">{lastDay === undefined ? "Ready to play" : `Last played ${relativeDay(lastDay).toLowerCase()}`}</span>
+        <Logo game={game} className="stage-logo" titleClass="stage-title" />
+        <p className="stage-meta">
+          {SOURCE_LABEL[game.source]}
+          <span aria-hidden>·</span>
+          Installed
+        </p>
+        <div className="stage-actions" data-nav-group="stage-actions">
+          <button className="btn btn-primary btn-lg" data-nav data-nav-default data-kind="continue" data-game={game.id} onClick={() => launch(game.id)}>
+            <Play fill="currentColor" /> Play
+          </button>
+          <button className="btn btn-outline btn-lg" data-nav data-kind="details" data-game={game.id} onClick={() => openGame(game.id)}>
+            <Info /> Details
+          </button>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function SessionStage() {
   const idx = useStore(focusedSession);
   const s = sessionsNewestFirst[idx] ?? sessionsNewestFirst[0];
   const game = gameById(s.gameId);

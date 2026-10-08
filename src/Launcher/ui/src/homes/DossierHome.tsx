@@ -5,6 +5,8 @@ import {
   fmtHours,
   fmtMinutes,
   gameById,
+  lastPlayedDay,
+  lastPlayedText,
   recentGames,
   relativeDay,
   SOURCE_LABEL,
@@ -41,7 +43,7 @@ export function DossierHome() {
                 <span className="rrow-text">
                   <span className="rrow-title">{r.game.title}</span>
                   <span className="rrow-sub">
-                    {relativeDay(r.lastSession.dayOffset)} · {SOURCE_LABEL[r.game.source]}
+                    {lastPlayedText(r)} · {SOURCE_LABEL[r.game.source]}
                   </span>
                 </span>
                 <span className="rrow-val num">{r.weekMinutes ? fmtMinutes(r.weekMinutes) : "—"}</span>
@@ -67,6 +69,7 @@ function NowCard() {
   const game = gameById(id);
   const st = statsFor(id)!;
   const isLatest = id === recentGames[0].game.id;
+  const lastDay = lastPlayedDay(st);
 
   return (
     <section className="card now" aria-live="polite" aria-label="Selected game">
@@ -75,7 +78,7 @@ function NowCard() {
         <div className="now-scrim" />
       </div>
       <div className="now-body" key={id}>
-        <span className="kicker">{isLatest ? "Continue playing" : `Last played ${relativeDay(st.lastSession.dayOffset).toLowerCase()}`}</span>
+        <span className="kicker">{isLatest && st.lastSession ? "Continue playing" : lastDay === undefined ? "Ready to play" : `Last played ${relativeDay(lastDay).toLowerCase()}`}</span>
         <Logo game={game} className="now-logo" titleClass="now-title" />
         <div className="now-stats">
           <div className="tile now-stat">
@@ -88,7 +91,7 @@ function NowCard() {
           </div>
           <div className="tile now-stat">
             <span className="label">Last session</span>
-            <b className="num">{fmtMinutes(st.lastSession.minutes)}</b>
+            <b className="num">{st.lastSession ? fmtMinutes(st.lastSession.minutes) : "—"}</b>
           </div>
           <div className="tile now-stat">
             <span className="label">Store</span>
@@ -97,7 +100,7 @@ function NowCard() {
         </div>
         <div className="now-actions" data-nav-group="now-actions">
           <button className="btn btn-primary btn-lg" data-nav data-kind="continue" data-game={id} onClick={() => launch(id)}>
-            <Play fill="currentColor" /> {isLatest ? "Continue" : "Play"}
+            <Play fill="currentColor" /> {isLatest && st.lastSession ? "Continue" : "Play"}
           </button>
           <button className="btn btn-outline btn-lg" data-nav data-kind="details" data-game={id} onClick={() => openGame(id)}>
             <Info /> Details

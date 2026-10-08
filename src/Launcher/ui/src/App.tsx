@@ -12,7 +12,7 @@ import {
   toast,
 } from "./app-state";
 import { Backdrop, Clock, Glyph, Hint, Logo } from "./components/shared";
-import { gameById, isInstalled } from "./data/games";
+import { gameById, isInstalled, recentGames } from "./data/games";
 import { DossierHome } from "./homes/DossierHome";
 import { RibbonHome } from "./homes/RibbonHome";
 import { TimelineHome } from "./homes/TimelineHome";
@@ -213,7 +213,9 @@ export function App() {
         ) : tab === "Library" ? (
           <Library />
         ) : tab === "Home" ? (
-          layout === "ribbon" ? (
+          recentGames.length === 0 ? (
+            <EmptyHome />
+          ) : layout === "ribbon" ? (
             <RibbonHome />
           ) : layout === "now" ? (
             <DossierHome />
@@ -263,6 +265,21 @@ function HintBar({ onGamePage, onHome }: { onGamePage: boolean; onHome: boolean 
         Synced with Playdex
       </span>
     </footer>
+  );
+}
+
+function EmptyHome() {
+  return (
+    <main className="placeholder">
+      <div className="card">
+        <span className="kicker">No games yet</span>
+        <h2>Install a game on Steam or add one in Playdex</h2>
+        <p>
+          The launcher lists installed Steam games and games added through the Playdex Wrapper. New games show up the
+          next time the launcher starts.
+        </p>
+      </div>
+    </main>
   );
 }
 

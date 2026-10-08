@@ -15,7 +15,8 @@ export type UiMessage =
   | { type: "ack"; id: number; presented?: boolean }
   | { type: "ready" }
   | { type: "home-ready"; reason: string }
-  | { type: "launch"; gameId: string; title: string; steamAppId?: number }
+  /** The host launches only games from its own library, by id. */
+  | { type: "launch"; gameId: string }
   | { type: "cancel"; gameId: string };
 
 interface WebView2 {

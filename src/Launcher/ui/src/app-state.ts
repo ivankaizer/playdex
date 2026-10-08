@@ -30,14 +30,8 @@ export const session = createStore<{ state: "starting" | "running" | "ended"; se
 export function launch(gameId: string) {
   launching.set(gameId);
   if (!inHost) return;
-  const game = gameById(gameId);
   session.set({ state: "starting", seconds: 0 });
-  postToHost({
-    type: "launch",
-    gameId,
-    title: game.title,
-    steamAppId: game.source === "steam" ? game.art : undefined,
-  });
+  postToHost({ type: "launch", gameId });
 }
 
 /** Leave the launch overlay. A game that has not started yet is cancelled; a running one keeps being tracked. */

@@ -1,10 +1,31 @@
-// Demo library for the design prototype. Titles and artwork are real (Steam CDN);
-// playtimes and sessions are synthetic sample data.
+// Inside the Windows host the library is what the host found on this PC (installed Steam games and games added
+// through the Playdex Wrapper), injected as window.__PLAYDEX_LIBRARY__ before this module runs. In a plain browser it
+// is the design prototype's demo library: titles and artwork are real (Steam CDN), playtimes and sessions synthetic.
 
-export type Source = "steam" | "epic" | "gog" | "xbox" | "emulator" | "psn" | "switch";
+export type Source = "steam" | "playdex" | "epic" | "gog" | "xbox" | "emulator" | "psn" | "switch";
 
 /** Sources that run on this PC. Others are history Playdex tracked on another platform. */
-export const PC_SOURCES: Source[] = ["steam", "epic", "gog", "xbox", "emulator"];
+export const PC_SOURCES: Source[] = ["steam", "playdex", "epic", "gog", "xbox", "emulator"];
+
+interface HostGame {
+  id: string;
+  title: string;
+  source: "steam" | "playdex";
+  steamAppId?: number;
+  /** Unix ms; Steam's own record of the last launch. */
+  lastPlayed?: number;
+}
+
+declare global {
+  interface Window {
+    __PLAYDEX_LIBRARY__?: HostGame[];
+  }
+}
+
+const hostLibrary = window.__PLAYDEX_LIBRARY__;
+
+/** True when showing the demo library (plain browser), false when showing this PC's games. */
+export const isDemo = !hostLibrary;
 
 export interface Game {
   id: string;
@@ -16,6 +37,8 @@ export interface Game {
   totalMinutes: number;
   /** PC games only: whether it is installed on this machine (default true). */
   installed?: boolean;
+  /** Unix ms of the last launch as the store records it, for games with no Playdex sessions here. */
+  lastPlayed?: number;
 }
 
 export interface Session {
@@ -29,6 +52,7 @@ export interface Session {
 
 export const SOURCE_LABEL: Record<Source, string> = {
   steam: "Steam",
+  playdex: "Playdex",
   epic: "Epic Games",
   gog: "GOG",
   xbox: "PC Game Pass",
@@ -40,7 +64,7 @@ export const SOURCE_LABEL: Record<Source, string> = {
 export const isOnPc = (g: Game) => PC_SOURCES.includes(g.source);
 export const isInstalled = (g: Game) => isOnPc(g) && g.installed !== false;
 
-export const games: Game[] = [
+const demoGames: Game[] = [
   { id: "hades2", title: "Hades II", source: "steam", art: 1145350, totalMinutes: 3672 },
   { id: "balatro", title: "Balatro", source: "steam", art: 2379780, totalMinutes: 5410 },
   { id: "elden", title: "Elden Ring", source: "steam", art: 1245620, totalMinutes: 9845 },
@@ -88,7 +112,7 @@ export const games: Game[] = [
   { id: "astrobot", title: "Astro Bot", source: "psn", totalMinutes: 920 },
 ];
 
-export const sessions: Session[] = [
+const demoSessions: Session[] = [
   { gameId: "hades2", dayOffset: 0, start: "21:02", minutes: 72 },
   { gameId: "balatro", dayOffset: 0, start: "13:40", minutes: 38 },
   { gameId: "celeste", dayOffset: 0, start: "08:15", minutes: 22 },
@@ -110,6 +134,20 @@ export const sessions: Session[] = [
   { gameId: "spiderman", dayOffset: 13, start: "20:00", minutes: 70 },
   { gameId: "hogwarts", dayOffset: 13, start: "14:30", minutes: 55 },
 ];
+
+export const games: Game[] = hostLibrary
+  ? hostLibrary.map((g) => ({
+      id: g.id,
+      title: g.title,
+      source: g.source,
+      art: g.steamAppId,
+      totalMinutes: 0,
+      lastPlayed: g.lastPlayed,
+    }))
+  : demoGames;
+
+/** Playdex history is not available to the launcher yet (the API key only reaches the capture routes). */
+export const sessions: Session[] = hostLibrary ? [] : demoSessions;
 
 const byId = new Map(games.map((g) => [g.id, g]));
 export const gameById = (id: string): Game => byId.get(id)!;
@@ -135,13 +173,22 @@ export function sessionEnd(s: Session): string {
 
 export interface GameStats {
   game: Game;
-  lastSession: Session;
+  /** Absent for games with no Playdex session here (the host library today). */
+  lastSession?: Session;
   weekMinutes: number;
   weekSessions: number;
 }
 
-/** Games ordered by most recent session, with this-week totals (last 7 days). */
+/**
+ * Games ordered by most recent session, with this-week totals (last 7 days). With no sessions (the host library),
+ * every game, most recently launched first, then by title.
+ */
 export const recentGames: GameStats[] = (() => {
+  if (!sessions.length) {
+    return [...games]
+      .sort((a, b) => (b.lastPlayed ?? 0) - (a.lastPlayed ?? 0) || a.title.localeCompare(b.title))
+      .map((game) => ({ game, weekMinutes: 0, weekSessions: 0 }));
+  }
   const seen = new Map<string, GameStats>();
   for (const s of sessionsNewestFirst) {
     let st = seen.get(s.gameId);
@@ -185,7 +232,9 @@ export function fmtMinutes(min: number): string {
   return `${h}h ${m}m`;
 }
 
+/** Lifetime hours; "—" when Playdex has no history for the game (the host library today). */
 export function fmtHours(min: number): string {
+  if (!min) return "—";
   return `${Math.round(min / 60).toLocaleString("en")}h`;
 }
 
@@ -200,6 +249,14 @@ export function dayLabel(offset: number): string {
   return offset < 7 ? weekday.format(d) : `${weekday.format(d)} ${dayMonth.format(d)}`;
 }
 
+/** Days since the game was last played (0 = today): its newest session, else the store's record. Undefined: never. */
+export function lastPlayedDay(st: GameStats): number | undefined {
+  if (st.lastSession) return st.lastSession.dayOffset;
+  if (!st.game.lastPlayed) return undefined;
+  const midnight = (t: number) => new Date(t).setHours(0, 0, 0, 0);
+  return Math.max(0, Math.round((midnight(Date.now()) - midnight(st.game.lastPlayed)) / 86_400_000));
+}
+
 export function relativeDay(offset: number): string {
   if (offset === 0) return "Today";
   if (offset === 1) return "Yesterday";
@@ -210,4 +267,10 @@ export function weekdayInitial(daysAgo: number): string {
   const d = new Date();
   d.setDate(d.getDate() - daysAgo);
   return weekday.format(d).slice(0, 1);
+}
+
+/** "Today", "3 days ago"…; "Installed" for a game with no record of being played. */
+export function lastPlayedText(st: GameStats): string {
+  const day = lastPlayedDay(st);
+  return day === undefined ? "Installed" : relativeDay(day);
 }

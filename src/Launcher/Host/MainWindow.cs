@@ -34,6 +34,7 @@ internal sealed partial class MainWindow : Window
     private readonly SessionQueue _queue;
     private readonly CaptureClient _api = new();
     private readonly LaunchOptions _options;
+    private readonly Task<IReadOnlyDictionary<string, LibraryGame>> _library = Task.Run(Library.Scan);
     private long _returnStart;
     private long _activateStart;
     private bool _ready;
@@ -123,6 +124,10 @@ internal sealed partial class MainWindow : Window
             web.WebMessageReceived += OnWebMessage;
             web.ProcessFailed += (_, e) => Log.Info($"webview process failed: {e.ProcessFailedKind}");
             _bridge.Attach(web);
+            // The library is in place before the page's own scripts run, so the UI renders real games on first paint.
+            // Not awaited: calls reach the browser process in order, so the script is registered before Navigate
+            // below; awaiting the round trip cost ~90 ms of cold start.
+            var injected = web.AddScriptToExecuteOnDocumentCreatedAsync($"window.__PLAYDEX_LIBRARY__ = {Library.ToJson(await _library)};");
 
             var dist = Path.Combine(AppContext.BaseDirectory, "ui");
             string url;
@@ -137,6 +142,7 @@ internal sealed partial class MainWindow : Window
             }
             Log.Info($"navigating to {url}");
             web.Navigate(url);
+            await injected;
         }
         catch (Exception ex)
         {
@@ -174,11 +180,9 @@ internal sealed partial class MainWindow : Window
                 }
                 break;
             case "launch":
-                var appId = message.TryGetProperty("steamAppId", out var steam) && steam.ValueKind == JsonValueKind.Number ? steam.GetInt32() : (int?)null;
-                _sessions.Launch(
-                    message.GetProperty("gameId").GetString()!,
-                    message.TryGetProperty("title", out var title) ? title.GetString() ?? "" : "",
-                    appId);
+                // Launch only what the host found on disk; the page never supplies a path or an app id.
+                var gameId = message.GetProperty("gameId").GetString()!;
+                _sessions.Launch(gameId, _library.IsCompletedSuccessfully ? _library.Result.GetValueOrDefault(gameId) : null);
                 break;
             case "cancel":
                 _sessions.Cancel(message.GetProperty("gameId").GetString()!);

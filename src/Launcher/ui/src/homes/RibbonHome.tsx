@@ -4,6 +4,9 @@ import { Backdrop, Cover, Logo, WeekBars } from "../components/shared";
 import {
   fmtHours,
   fmtMinutes,
+  isDemo,
+  lastPlayedDay,
+  lastPlayedText,
   recentGames,
   relativeDay,
   sessionEnd,
@@ -19,8 +22,9 @@ export function RibbonHome() {
   const [last, ...rest] = recentGames;
   const jump = rest.slice(0, 6);
   const maxWeek = Math.max(...recentGames.map((r) => r.weekMinutes), 1);
-  const top = [...recentGames].sort((a, b) => b.weekMinutes - a.weekMinutes).slice(0, 3);
+  const top = recentGames.filter((r) => r.weekMinutes > 0).sort((a, b) => b.weekMinutes - a.weekMinutes).slice(0, 3);
   const s = last.lastSession;
+  const lastDay = lastPlayedDay(last);
 
   return (
     <main className="ribbon-home">
@@ -30,16 +34,24 @@ export function RibbonHome() {
         <Backdrop gameId={last.game.id} className="ribbon-art" />
         <div className="ribbon-body">
           <span className="kicker">
-            Last played · {relativeDay(s.dayOffset)} {s.start}–{sessionEnd(s)}
+            {s
+              ? `Last played · ${relativeDay(s.dayOffset)} ${s.start}–${sessionEnd(s)}`
+              : lastDay !== undefined
+                ? `Last played · ${relativeDay(lastDay)}`
+                : "Ready to play"}
           </span>
           <Logo game={last.game} className="ribbon-logo" titleClass="ribbon-title" />
-          <p className="ribbon-meta num">
-            <b>{fmtMinutes(s.minutes)}</b> last session
-            <span aria-hidden>·</span>
-            {fmtMinutes(last.weekMinutes)} this week
-            <span aria-hidden>·</span>
-            {fmtHours(last.game.totalMinutes)} total
-          </p>
+          {s ? (
+            <p className="ribbon-meta num">
+              <b>{fmtMinutes(s.minutes)}</b> last session
+              <span aria-hidden>·</span>
+              {fmtMinutes(last.weekMinutes)} this week
+              <span aria-hidden>·</span>
+              {fmtHours(last.game.totalMinutes)} total
+            </p>
+          ) : (
+            <p className="ribbon-meta">{SOURCE_LABEL[last.game.source]} · Installed</p>
+          )}
         </div>
         <button
           className="btn btn-primary btn-lg ribbon-cta"
@@ -71,7 +83,7 @@ export function RibbonHome() {
               <span className="jtile-foot">
                 <span className="jtile-title">{r.game.title}</span>
                 <span className="jtile-sub">
-                  {relativeDay(r.lastSession.dayOffset)} · {SOURCE_LABEL[r.game.source]}
+                  {lastPlayedText(r)} · {SOURCE_LABEL[r.game.source]}
                 </span>
                 <span className="meter" aria-label={`${fmtMinutes(r.weekMinutes)} played this week`}>
                   <span className="meter-track">
@@ -98,19 +110,21 @@ export function RibbonHome() {
           </div>
           <WeekBars maxHeight="4.4rem" />
         </div>
-        <div className="rail-block rail-top">
-          <span className="label">Most played this week</span>
-          <ol>
-            {top.map((r) => (
-              <li key={r.game.id}>
-                <Cover game={r.game} kind="portrait" className="rail-thumb" compact />
-                <span className="rail-name">{r.game.title}</span>
-                <span className="rail-val num">{fmtMinutes(r.weekMinutes)}</span>
-              </li>
-            ))}
-          </ol>
-        </div>
-        <p className="rail-note">Sample data</p>
+        {top.length > 0 && (
+          <div className="rail-block rail-top">
+            <span className="label">Most played this week</span>
+            <ol>
+              {top.map((r) => (
+                <li key={r.game.id}>
+                  <Cover game={r.game} kind="portrait" className="rail-thumb" compact />
+                  <span className="rail-name">{r.game.title}</span>
+                  <span className="rail-val num">{fmtMinutes(r.weekMinutes)}</span>
+                </li>
+              ))}
+            </ol>
+          </div>
+        )}
+        <p className="rail-note">{isDemo ? "Sample data" : "No Playdex history here yet"}</p>
       </aside>
     </main>
   );

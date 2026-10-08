@@ -8,8 +8,10 @@ import {
   fmtHours,
   fmtMinutes,
   gameById,
+  isDemo,
   isInstalled,
   isOnPc,
+  lastPlayedDay,
   sessionEnd,
   sessionsFor,
   SOURCE_LABEL,
@@ -24,6 +26,7 @@ const favorites = new Set<string>(["hades2", "elden"]);
 export function GamePage({ gameId }: { gameId: string }) {
   const game = gameById(gameId);
   const st = statsFor(gameId);
+  const lastDay = st && lastPlayedDay(st);
   const recent = sessionsFor(gameId);
   const daily = dailyFor(gameId);
   const onPc = isOnPc(game);
@@ -113,7 +116,7 @@ export function GamePage({ gameId }: { gameId: string }) {
               </div>
               <div>
                 <dt className="label">Last played</dt>
-                <dd>{st ? dayLabel(st.lastSession.dayOffset) : "Over two weeks ago"}</dd>
+                <dd>{lastDay !== undefined ? dayLabel(lastDay) : isDemo ? "Over two weeks ago" : "—"}</dd>
               </div>
               <div>
                 <dt className="label">Sessions, 14 days</dt>
@@ -151,7 +154,9 @@ export function GamePage({ gameId }: { gameId: string }) {
             </ol>
           ) : (
             <p className="gs-empty">
-              No sessions in the last two weeks. Playdex holds {fmtHours(game.totalMinutes)} of history for this game.
+              {isDemo
+                ? `No sessions in the last two weeks. Playdex holds ${fmtHours(game.totalMinutes)} of history for this game.`
+                : "No sessions recorded from this PC yet."}
             </p>
           )}
           <p className="gs-note">
