@@ -19,7 +19,6 @@ public sealed class ConfigurationTests
         game.ApiGameId = "1234";
         game.GameProvider = "steam";
         game.Platform = "gog";
-        game.ApiKey = "game-key";
         config.Api.ApiKey = "global-key";
         config.Api.Platform = "steam";
         config.SteamGridDb.ApiKey = "artwork-key";
@@ -35,7 +34,7 @@ public sealed class ConfigurationTests
         Assert.Equal("steam", loaded.Games["demo"].GameProvider);
         Assert.Equal("gog", loaded.Games["demo"].Platform);
         Assert.Equal("gog", loaded.Api.ResolvePlatform(loaded.Games["demo"]));
-        Assert.Equal("game-key", loaded.Api.ResolveApiKey(loaded.Games["demo"]));
+        Assert.Equal("global-key", loaded.Api.ApiKey);
         Assert.Equal("artwork-key", loaded.SteamGridDb.ApiKey);
         Assert.Equal("C:\\Tools\\ludusavi.exe", loaded.Ludusavi.ExecutablePath);
         Assert.True(loaded.Games["demo"].Backup.DailyEnabled);
@@ -65,7 +64,7 @@ public sealed class ConfigurationTests
     {
         var path = Path.Combine(NewTempDir(), "config.json");
         var store = new ConfigStore(path);
-        var config = new WrapperConfig
+        var config = new AppConfig
         {
             Storage = new StorageConfig
             {
@@ -91,7 +90,7 @@ public sealed class ConfigurationTests
     {
         var path = Path.Combine(NewTempDir(), "config.json");
         var store = new ConfigStore(path);
-        var config = new WrapperConfig();
+        var config = new AppConfig();
         config.GetOrCreateGame("Demo").Launch.ExecutablePath = "C:\\Games\\Demo.exe";
         await store.SaveAsync(config);
 
@@ -108,11 +107,11 @@ public sealed class ConfigurationTests
         var directory = NewTempDir();
         var path = Path.Combine(directory, "config.json");
         var store = new ConfigStore(path);
-        var original = new WrapperConfig();
+        var original = new AppConfig();
         original.GetOrCreateGame("original");
         await store.SaveAsync(original);
 
-        var replacement = new WrapperConfig();
+        var replacement = new AppConfig();
         replacement.GetOrCreateGame("replacement");
         using var cancellation = new CancellationTokenSource();
         cancellation.Cancel();
@@ -151,7 +150,7 @@ public sealed class ConfigurationTests
     {
         var executable = Path.Combine(NewTempDir(), "Demo Game.exe");
         File.WriteAllBytes(executable, [0x4d, 0x5a]);
-        var config = new WrapperConfig();
+        var config = new AppConfig();
 
         var game = await GameCatalog.AddFromExecutableAsync(config, executable);
 
@@ -179,7 +178,7 @@ public sealed class ConfigurationTests
             """;
         using var client = new HttpClient(new SteamStoreHandler(HttpStatusCode.OK, html));
 
-        var game = await GameCatalog.AddFromExecutableAsync(new WrapperConfig(), executable, client);
+        var game = await GameCatalog.AddFromExecutableAsync(new AppConfig(), executable, client);
 
         Assert.Equal("Portal 2", game.GameId);
         Assert.Equal("620", game.ApiGameId);
@@ -194,7 +193,7 @@ public sealed class ConfigurationTests
         File.WriteAllBytes(executable, [0x4d, 0x5a]);
         File.WriteAllText(Path.Combine(directory, "steam_appid.txt"), "not-an-app-id");
 
-        var game = await GameCatalog.AddFromExecutableAsync(new WrapperConfig(), executable);
+        var game = await GameCatalog.AddFromExecutableAsync(new AppConfig(), executable);
 
         Assert.Equal("Demo", game.ApiGameId);
         Assert.Equal("Demo", game.DisplayName);
@@ -210,7 +209,7 @@ public sealed class ConfigurationTests
         var handler = new SteamStoreHandler(HttpStatusCode.ServiceUnavailable, "");
         using var client = new HttpClient(handler);
 
-        var game = await GameCatalog.AddFromExecutableAsync(new WrapperConfig(), executable, client);
+        var game = await GameCatalog.AddFromExecutableAsync(new AppConfig(), executable, client);
 
         Assert.Equal("Game", game.DisplayName);
         Assert.Equal("https://store.steampowered.com/app/1234", handler.RequestUri);
@@ -222,7 +221,7 @@ public sealed class ConfigurationTests
         var directory = NewTempDir();
         var path = Path.Combine(directory, "config.json");
         var store = new ConfigStore(path);
-        var config = new WrapperConfig
+        var config = new AppConfig
         {
             Storage = new StorageConfig { LauncherDirectory = Path.Combine(directory, "launchers") }
         };
@@ -263,7 +262,7 @@ public sealed class ConfigurationTests
         var directory = NewTempDir();
         var path = Path.Combine(directory, "config.json");
         var store = new ConfigStore(path);
-        var config = new WrapperConfig
+        var config = new AppConfig
         {
             Storage = new StorageConfig { LauncherDirectory = Path.Combine(directory, "launchers") }
         };
@@ -307,7 +306,7 @@ public sealed class ConfigurationTests
         var secondExecutable = Path.Combine(secondDirectory, "Demo.exe");
         File.WriteAllBytes(firstExecutable, [0x4d, 0x5a, 0x01]);
         File.WriteAllBytes(secondExecutable, [0x4d, 0x5a, 0x02]);
-        var config = new WrapperConfig();
+        var config = new AppConfig();
         var existing = await GameCatalog.AddFromExecutableAsync(config, firstExecutable);
 
         try
@@ -326,7 +325,7 @@ public sealed class ConfigurationTests
     [Fact]
     public Task TestChangeLaunchOptions()
     {
-        var config = new WrapperConfig();
+        var config = new AppConfig();
         var game = config.GetOrCreateGame("demo");
         var expected = new[] { "-windowed", "Player One", "", "say \"hello\"", @"C:\Games\Demo\" };
         var formatted = LaunchOptionsCodec.Format(expected);
@@ -345,7 +344,7 @@ public sealed class ConfigurationTests
     [Fact]
     public Task TestRemoveGame()
     {
-        var config = new WrapperConfig();
+        var config = new AppConfig();
         config.GetOrCreateGame("zeta");
         config.GetOrCreateGame("Alpha");
 
@@ -356,17 +355,6 @@ public sealed class ConfigurationTests
         Assert.True(config.Games.ContainsKey("Alpha"));
         GameCatalog.Remove(config, "Alpha");
         Assert.Empty(config.Games);
-        return Task.CompletedTask;
-    }
-
-    [Fact]
-    public Task TestApiKeyResolution()
-    {
-        var api = new ApiConfig { ApiKey = "global" };
-        var game = new GameConfig { ApiKey = "game" };
-        Assert.Equal("game", api.ResolveApiKey(game));
-        game.ApiKey = null;
-        Assert.Equal("global", api.ResolveApiKey(game));
         return Task.CompletedTask;
     }
 

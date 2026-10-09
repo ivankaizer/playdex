@@ -1,0 +1,203 @@
+using System.Text.Json;
+using System.Text.Json.Serialization;
+
+namespace Playdex.Core;
+
+/// <summary>
+/// The one config of a Playdex install (%LOCALAPPDATA%\Playdex\config.json), shared by the launcher and the Wrapper.
+/// Read and written by <see cref="ConfigStore"/>.
+/// </summary>
+public sealed class AppConfig
+{
+    public Dictionary<string, GameConfig> Games { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+    public ApiConfig Api { get; set; } = new();
+    public SteamGridDbConfig SteamGridDb { get; set; } = new();
+    public LudusaviConfig Ludusavi { get; set; } = new();
+    public StorageConfig Storage { get; set; } = new();
+
+    public GameConfig GetOrCreateGame(string gameId)
+    {
+        if (Games.TryGetValue(gameId, out var existing))
+        {
+            return existing;
+        }
+
+        var game = new GameConfig { GameId = gameId, DisplayName = gameId };
+        Games[gameId] = game;
+        return game;
+    }
+
+    public GameConfig GetGameForLaunch(string gameId)
+    {
+        if (!Games.TryGetValue(gameId, out var game) || string.IsNullOrWhiteSpace(game.Launch.ExecutablePath))
+        {
+            throw new InvalidOperationException($"Game '{gameId}' does not have an executable configured.");
+        }
+
+        return game;
+    }
+}
+
+public sealed class GameConfig
+{
+    public string GameId { get; set; } = "default";
+    public string DisplayName { get; set; } = "Default Game";
+    public string? ApiGameId { get; set; }
+    public string GameProvider { get; set; } = "steam";
+    public string? Platform { get; set; }
+    public LaunchConfig Launch { get; set; } = new();
+    public MonitorConfig Monitor { get; set; } = new();
+    public BackupConfig Backup { get; set; } = new();
+}
+
+public sealed class BackupConfig
+{
+    public bool DailyEnabled { get; set; }
+    public string? LudusaviGameTitle { get; set; }
+}
+
+public sealed class LaunchConfig
+{
+    public const int MaximumLaunchOptionsLength = 32767;
+
+    public string? ExecutablePath { get; set; }
+    public List<string> Arguments { get; set; } = [];
+}
+
+public sealed class MonitorConfig
+{
+    public MonitorMode Mode { get; set; } = MonitorMode.LaunchedProcess;
+    public string? ExecutablePath { get; set; }
+    public string? ExecutableName { get; set; }
+    public int ExitDebounceSeconds { get; set; } = 10;
+}
+
+[JsonConverter(typeof(MonitorModeJsonConverter))]
+public enum MonitorMode
+{
+    LaunchedProcess,
+    ExecutablePath,
+    ExecutableName
+}
+
+public sealed class ApiConfig
+{
+    public const int MaximumBaseUrlLength = 2048;
+    public const int MaximumApiKeyLength = 4096;
+    public const int MaximumPlatformKeyLength = 64;
+    public const string DefaultPlatform = "pc";
+    public const string DefaultBaseUrl = "https://playdex-api.ejwan.dev/api";
+
+    public string BaseUrl { get; set; } = DefaultBaseUrl;
+    public string ApiKey { get; set; } = "";
+    public string Platform { get; set; } = DefaultPlatform;
+    public int PingIntervalSeconds { get; set; } = 30;
+    public int RequestTimeoutSeconds { get; set; } = 10;
+    public bool IsEnabled => !string.IsNullOrWhiteSpace(BaseUrl);
+
+    public string ResolvePlatform(GameConfig game) =>
+        NormalizePlatform(string.IsNullOrWhiteSpace(game.Platform) ? Platform : game.Platform);
+
+    public static string NormalizePlatform(string? platform)
+    {
+        var normalized = string.IsNullOrWhiteSpace(platform)
+            ? DefaultPlatform
+            : platform.Trim().ToLowerInvariant();
+        if (normalized.Length > MaximumPlatformKeyLength)
+        {
+            throw new InvalidOperationException($"Platform key cannot exceed {MaximumPlatformKeyLength} characters.");
+        }
+
+        return normalized;
+    }
+
+    public static string? NormalizePlatformOverride(string? platform) =>
+        string.IsNullOrWhiteSpace(platform) ? null : NormalizePlatform(platform);
+
+    public static string NormalizeBaseUrl(string? baseUrl)
+    {
+        var normalized = baseUrl?.Trim().TrimEnd('/');
+        if (string.IsNullOrWhiteSpace(normalized))
+        {
+            return "";
+        }
+
+        if (normalized.Length > MaximumBaseUrlLength)
+        {
+            throw new InvalidOperationException($"API base URL cannot exceed {MaximumBaseUrlLength} characters.");
+        }
+
+        if (!Uri.TryCreate(normalized, UriKind.Absolute, out var uri) ||
+            (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps) ||
+            string.IsNullOrWhiteSpace(uri.Host))
+        {
+            throw new InvalidOperationException("API base URL must be an absolute HTTP or HTTPS URL.");
+        }
+
+        return normalized;
+    }
+}
+
+public sealed class SteamGridDbConfig
+{
+    public const int MaximumApiKeyLength = 4096;
+
+    public string ApiKey { get; set; } = "";
+    public bool IsConfigured => !string.IsNullOrWhiteSpace(ApiKey);
+
+    public static string NormalizeApiKey(string? apiKey)
+    {
+        var normalized = apiKey?.Trim() ?? "";
+        if (normalized.Length > MaximumApiKeyLength)
+        {
+            throw new InvalidOperationException($"SteamGridDB API key cannot exceed {MaximumApiKeyLength} characters.");
+        }
+
+        return normalized;
+    }
+}
+
+public sealed class LudusaviConfig
+{
+    public const int MaximumExecutablePathLength = 32767;
+
+    public string ExecutablePath { get; set; } = "";
+    public bool IsConfigured => !string.IsNullOrWhiteSpace(ExecutablePath);
+
+    public static string NormalizeExecutablePath(string? executablePath, bool requireExisting = true)
+    {
+        var normalized = executablePath?.Trim().Trim('"') ?? "";
+        if (string.IsNullOrWhiteSpace(normalized))
+        {
+            return "";
+        }
+
+        if (normalized.Length > MaximumExecutablePathLength)
+        {
+            throw new InvalidOperationException("The Ludusavi executable path is too long.");
+        }
+
+        var fullPath = Path.GetFullPath(normalized);
+        if (!string.Equals(Path.GetFileName(fullPath), "ludusavi.exe", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException("Select ludusavi.exe.");
+        }
+
+        if (requireExisting && !File.Exists(fullPath))
+        {
+            throw new InvalidOperationException("The selected Ludusavi executable does not exist.");
+        }
+
+        return fullPath;
+    }
+}
+
+public sealed class StorageConfig
+{
+    public string StateDirectory { get; init; } = Paths.DefaultStateDirectory;
+    public string LogDirectory { get; init; } = Paths.DefaultLogDirectory;
+    public string LauncherDirectory { get; init; } = Paths.DefaultLauncherDirectory;
+}
+
+/// <summary>Monitor modes as camelCase strings ("launchedProcess"), as the Wrapper has always written them.</summary>
+public sealed class MonitorModeJsonConverter() : JsonStringEnumConverter<MonitorMode>(JsonNamingPolicy.CamelCase);

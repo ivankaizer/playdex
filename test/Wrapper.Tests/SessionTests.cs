@@ -26,8 +26,7 @@ public sealed class SessionTests
             ApiGameId = "1234",
             DisplayName = "Demo Game",
             GameProvider = "steam",
-            Platform = "gog",
-            ApiKey = "game-key"
+            Platform = "gog"
         };
         using var api = new PingApiClient(config, game, logging.CreateLogger<PingApiClient>(), handler);
 
@@ -35,7 +34,7 @@ public sealed class SessionTests
         var request = handler.Requests.Single();
         Assert.Equal("POST", request.Method);
         Assert.Equal("https://example.test/api/capture/sessions/ping", request.Uri);
-        Assert.Equal("Bearer game-key", request.Authorization);
+        Assert.Equal($"Bearer {config.ApiKey}", request.Authorization);
 
         using var json = JsonDocument.Parse(request.Body);
         Assert.Equal("Demo Game", json.RootElement.GetProperty("gameTitle").GetString());
@@ -129,7 +128,7 @@ public sealed class SessionTests
     {
         var directory = NewTempDir();
         using var logging = AppLoggerFactory.CreateInDirectory(directory);
-        var config = new WrapperConfig
+        var config = new AppConfig
         {
             Api = new ApiConfig { BaseUrl = "" },
             Storage = new StorageConfig { StateDirectory = directory, LogDirectory = directory }
@@ -163,7 +162,7 @@ public sealed class SessionTests
     {
         var directory = NewTempDir();
         var gameId = $"demo-{Guid.NewGuid():N}";
-        var config = new WrapperConfig
+        var config = new AppConfig
         {
             Api = new ApiConfig
             {
@@ -196,7 +195,7 @@ public sealed class SessionTests
     {
         var directory = NewTempDir();
         var gameId = $"demo-{Guid.NewGuid():N}";
-        var config = new WrapperConfig
+        var config = new AppConfig
         {
             Storage = new StorageConfig
             {

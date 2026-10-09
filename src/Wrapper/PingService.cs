@@ -28,7 +28,7 @@ internal sealed partial class PingApiClient : IDisposable
             apiGameId,
             _game.GameProvider,
             _config.ResolvePlatform(_game));
-        var apiKey = _config.ResolveApiKey(_game);
+        var apiKey = _config.ApiKey.Trim();
         if (string.IsNullOrWhiteSpace(apiKey))
         {
             LogMissingApiKey(_logger, _game.GameId);

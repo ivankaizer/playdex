@@ -4,7 +4,7 @@ internal sealed partial class LauncherManager(ILogger<LauncherManager> logger)
 {
     private const int MaximumReadableIdLength = 48;
 
-    public IReadOnlyList<string> SynchronizeAll(WrapperConfig config, string configPath, string sourceExecutable)
+    public IReadOnlyList<string> SynchronizeAll(AppConfig config, string configPath, string sourceExecutable)
     {
         var paths = new List<string>();
         foreach (var game in config.Games.Values.OrderBy(game => game.GameId, StringComparer.OrdinalIgnoreCase))

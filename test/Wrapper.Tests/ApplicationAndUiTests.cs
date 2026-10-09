@@ -69,7 +69,8 @@ public sealed class ApplicationAndUiTests
             .Where(path => !string.Equals(Path.GetFileName(path), nameof(AppBrand) + ".cs", StringComparison.Ordinal))
             .Where(path => !string.Equals(Path.GetFileName(path), "Wrapper.csproj", StringComparison.Ordinal))
             .Where(path => File.ReadLines(path)
-                .Where(line => !line.TrimStart().StartsWith("using ", StringComparison.Ordinal))
+                .Where(line => !line.TrimStart().StartsWith("using ", StringComparison.Ordinal)
+                    && !line.TrimStart().StartsWith("global using ", StringComparison.Ordinal))
                 .Any(line => line.Contains(AppBrand.Name, StringComparison.OrdinalIgnoreCase)))
             .ToList();
 

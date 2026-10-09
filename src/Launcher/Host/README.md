@@ -47,9 +47,9 @@ Then go to Settings → Gaming → Full screen experience → Home app → Playd
 
 ## Configuration
 
-- API key: `PLAYDEX_API_KEY`, or `apiKey` in `%LOCALAPPDATA%\PlaydexLauncher\config.json`.
-- API base URL: `PLAYDEX_API_URL`, or `apiBaseUrl` in the same file. Default `https://playdex-api.ejwan.dev/api`.
-- The log, `metrics.jsonl` and the offline `queue.jsonl` live in `%LOCALAPPDATA%\PlaydexLauncher`.
+- API key and URL: `PLAYDEX_API_KEY` and `PLAYDEX_API_URL`, or `api.apiKey` and `api.baseUrl` in the install's config, `%LOCALAPPDATA%\Playdex\config.json` (shared with the Playdex Wrapper). Default URL `https://playdex-api.ejwan.dev/api`.
+- The config is created on first start from the Wrapper's `%LOCALAPPDATA%\PlaydexWrapper\config.json` and the launcher's old `%LOCALAPPDATA%\PlaydexLauncher\config.json`, which are left in place. The offline queue and the WebView2 profile move from `PlaydexLauncher` once.
+- The log, `metrics.jsonl` and the offline `queue.jsonl` live in `%LOCALAPPDATA%\Playdex`.
 - `PLAYDEX_INPUT_FORCE_POLL=1`: diagnostic that polls every XInput slot at the foreground rate, as if a pad were connected.
 - `PLAYDEX_INPUT_HZ=N`: foreground XInput poll rate (default 250), for measurements.
 
@@ -58,7 +58,7 @@ Then go to Settings → Gaming → Full screen experience → Home app → Playd
 At startup the host lists the games on this PC and injects them into the page as `window.__PLAYDEX_LIBRARY__` (a plain browser keeps the demo library):
 
 - **Steam:** every fully installed app in each Steam library folder (`libraryfolders.vdf`, `appmanifest_*.acf`), minus redistributables and runtimes. Launched with `steam://rungameid`; the host records the session.
-- **Playdex:** every generated launcher in the Playdex Wrapper's launchers folder (`%LOCALAPPDATA%\PlaydexWrapper\launchers\Playdex-*.exe` with its `.playdex.json`), matched to its entry in the Wrapper config, if the game's executable exists. Launched through that `Playdex-*.exe`, which records the session itself; the host only follows it to exit (a Job Object, so exit arrives after the Wrapper's exit debounce, 10 s by default). A Wrapper game with a Steam app id replaces the same Steam entry.
+- **Playdex:** every generated launcher in the config's launcher folder (`storage.launcherDirectory`, `%LOCALAPPDATA%\PlaydexWrapper\launchers` on an existing Wrapper install; `Playdex-*.exe` with its `.playdex.json`), matched to its game in the config, if the game's executable exists. Launched through that `Playdex-*.exe`, which records the session itself; the host only follows it to exit (a Job Object, so exit arrives after the Wrapper's exit debounce, 10 s by default). A Wrapper game with a Steam app id replaces the same Steam entry.
 
 Artwork is read in place from Steam, per image, in this order: the game's non-Steam shortcut grid art (`Steam\userdata\<user>\config\grid\<shortcut id>{p,_hero,_logo,}.*`, where the Playdex Wrapper puts SteamGridDB art; the shortcut id comes from `shortcuts.vdf`), custom grid art on its Steam app id, then Steam's artwork cache (`Steam\appcache\librarycache\<appid>\[<hash>\]`). Each user's grid folder is served as `https://<user id>.steam-grid.playdex/` and the cache as `https://steam-art.playdex/`; nothing else under `userdata` is exposed. Newer apps are only on the CDN under per-image hashes, so the fixed `cdn.cloudflare.steamstatic.com/steam/apps/<id>/...` URLs 404 for them; those URLs remain the fallback for each image none of these has.
 

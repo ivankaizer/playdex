@@ -16,42 +16,34 @@ public sealed record QueuedSession(
     string GameTitle, string GameId, string GameIdProvider, string Platform, int DurationInSeconds,
     DateTimeOffset StartedAt, DateTimeOffset EndedAt);
 
-public sealed record LauncherConfig(string? ApiKey, string? ApiBaseUrl);
-
 [JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
 [JsonSerializable(typeof(CaptureGame))]
 [JsonSerializable(typeof(RecordedSession))]
 [JsonSerializable(typeof(QueuedSession))]
-[JsonSerializable(typeof(LauncherConfig))]
 public sealed partial class CaptureJson : JsonSerializerContext;
 
 /// <summary>
 /// Playdex capture API client (POST /capture/sessions/start, /ping, /end and /capture/sessions), ported from the
-/// Wrapper's PingApiClient. The API key comes from PLAYDEX_API_KEY or config.json; it is never logged.
+/// Wrapper's PingApiClient. The API key and URL come from PLAYDEX_API_KEY and PLAYDEX_API_URL, or the install's
+/// config (<see cref="ConfigStore.Default"/>); the key is never logged.
 /// </summary>
 public sealed class CaptureClient : IDisposable
 {
-    private const string DefaultBaseUrl = "https://playdex-api.ejwan.dev/api";
-
     private readonly HttpClient _http;
     private readonly string? _apiKey;
 
-    public CaptureClient()
-        : this(ReadConfig())
-    {
-    }
-
-    private CaptureClient(LauncherConfig? config)
+    public CaptureClient(ApiConfig config)
         : this(
-            Environment.GetEnvironmentVariable("PLAYDEX_API_KEY") is { Length: > 0 } fromEnv ? fromEnv : config?.ApiKey,
-            Environment.GetEnvironmentVariable("PLAYDEX_API_URL") is { Length: > 0 } urlFromEnv ? urlFromEnv : config?.ApiBaseUrl ?? DefaultBaseUrl,
+            Environment.GetEnvironmentVariable("PLAYDEX_API_KEY") is { Length: > 0 } fromEnv ? fromEnv : config.ApiKey,
+            Environment.GetEnvironmentVariable("PLAYDEX_API_URL") is { Length: > 0 } urlFromEnv ? urlFromEnv
+                : string.IsNullOrWhiteSpace(config.BaseUrl) ? ApiConfig.DefaultBaseUrl : config.BaseUrl,
             new HttpClientHandler())
     {
     }
 
     internal CaptureClient(string? apiKey, string baseUrl, HttpMessageHandler handler)
     {
-        _apiKey = apiKey;
+        _apiKey = apiKey?.Trim();
         _http = new HttpClient(handler)
         {
             BaseAddress = new Uri(baseUrl.TrimEnd('/') + "/"),
@@ -92,21 +84,6 @@ public sealed class CaptureClient : IDisposable
         {
             Log.Info($"capture: {path} failed after {Metrics.MsSince(started):F0} ms: {ex.Message}");
             return false;
-        }
-    }
-
-    private static LauncherConfig? ReadConfig()
-    {
-        try
-        {
-            return File.Exists(Paths.ConfigFile)
-                ? JsonSerializer.Deserialize(File.ReadAllText(Paths.ConfigFile), CaptureJson.Default.LauncherConfig)
-                : null;
-        }
-        catch (Exception ex) when (ex is IOException or JsonException)
-        {
-            Log.Error("config.json unreadable", ex);
-            return null;
         }
     }
 

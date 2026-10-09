@@ -3,7 +3,7 @@ namespace Wrapper.UI;
 internal sealed partial class TraySetupApplication : IDisposable
 {
     private readonly ConfigStore store;
-    private readonly WrapperConfig config;
+    private readonly AppConfig config;
     private readonly AppLoggerFactory logging;
     private readonly ILogger<TraySetupApplication> logger;
     private readonly LauncherManager launcherManager;
@@ -17,7 +17,7 @@ internal sealed partial class TraySetupApplication : IDisposable
     private int activeGameSessions;
     private bool updateReadyNotificationShown;
 
-    public TraySetupApplication(ConfigStore store, WrapperConfig config, AppLoggerFactory logging)
+    public TraySetupApplication(ConfigStore store, AppConfig config, AppLoggerFactory logging)
     {
         this.store = store;
         this.config = config;
@@ -309,7 +309,7 @@ internal sealed partial class TraySetupApplication : IDisposable
         }
 
         var currentId = string.IsNullOrWhiteSpace(game.ApiGameId) ? game.GameId : game.ApiGameId;
-        var catalog = await LoadPlatformCatalogAsync(config.Api.ResolveApiKey(game));
+        var catalog = await LoadPlatformCatalogAsync(config.Api.ApiKey.Trim());
         using var editor = new GameSettingsDialog(
             game.DisplayName,
             currentId,

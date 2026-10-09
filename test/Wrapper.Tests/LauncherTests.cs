@@ -107,14 +107,13 @@ public sealed class LauncherTests
         var sourceExecutable = Path.Combine(directory, "published-wrapper.exe");
         File.WriteAllBytes(sourceExecutable, [0x4d, 0x5a, 0x01, 0x02]);
         var configPath = Path.Combine(directory, "wrapper.json");
-        var config = new WrapperConfig
+        var config = new AppConfig
         {
             Api = new ApiConfig { ApiKey = "global-secret" },
             Storage = new StorageConfig { LauncherDirectory = Path.Combine(directory, "launchers") }
         };
         var game = config.GetOrCreateGame("demo");
         game.DisplayName = "Demo";
-        game.ApiKey = "game-secret";
         using var logging = AppLoggerFactory.CreateInDirectory(directory);
         var manager = new LauncherManager(logging.CreateLogger<LauncherManager>());
 
@@ -129,7 +128,6 @@ public sealed class LauncherTests
         Assert.Equal(Path.GetFullPath(configPath), manifest.ConfigPath);
         Assert.Equal("demo", manifest.GameId);
         Assert.True(!manifestText.Contains("global-secret", StringComparison.Ordinal));
-        Assert.True(!manifestText.Contains("game-secret", StringComparison.Ordinal));
         return Task.CompletedTask;
     }
 
@@ -192,7 +190,7 @@ public sealed class LauncherTests
 
         var directory = NewTempDir();
         var configPath = Path.Combine(directory, "wrapper.json");
-        var config = new WrapperConfig
+        var config = new AppConfig
         {
             Api = new ApiConfig { BaseUrl = "" },
             Storage = new StorageConfig

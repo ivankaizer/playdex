@@ -15,7 +15,7 @@ param(
     [string]$ExtraArgs = ""
 )
 $ErrorActionPreference = 'Stop'
-$data = Join-Path $env:LOCALAPPDATA 'PlaydexLauncher'
+$data = Join-Path $env:LOCALAPPDATA 'Playdex'
 $metrics = Join-Path $data 'metrics.jsonl'
 if (Test-Path $metrics) { Remove-Item $metrics }
 

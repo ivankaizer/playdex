@@ -3,63 +3,13 @@ namespace Wrapper;
 using System.Net;
 using System.Text.RegularExpressions;
 
-internal sealed class WrapperConfig
-{
-    public Dictionary<string, GameConfig> Games { get; set; } = new(StringComparer.OrdinalIgnoreCase);
-    public ApiConfig Api { get; set; } = new();
-    public SteamGridDbConfig SteamGridDb { get; set; } = new();
-    public LudusaviConfig Ludusavi { get; set; } = new();
-    public StorageConfig Storage { get; set; } = new();
-
-    public GameConfig GetOrCreateGame(string gameId)
-    {
-        if (Games.TryGetValue(gameId, out var existing))
-        {
-            return existing;
-        }
-
-        var game = new GameConfig { GameId = gameId, DisplayName = gameId };
-        Games[gameId] = game;
-        return game;
-    }
-
-    public GameConfig GetGameForLaunch(string gameId)
-    {
-        if (!Games.TryGetValue(gameId, out var game) || string.IsNullOrWhiteSpace(game.Launch.ExecutablePath))
-        {
-            throw new InvalidOperationException($"Game '{gameId}' does not have an executable configured.");
-        }
-
-        return game;
-    }
-}
-
-internal sealed class GameConfig
-{
-    public string GameId { get; set; } = "default";
-    public string DisplayName { get; set; } = "Default Game";
-    public string? ApiGameId { get; set; }
-    public string GameProvider { get; set; } = "steam";
-    public string? Platform { get; set; }
-    public string? ApiKey { get; set; }
-    public LaunchConfig Launch { get; set; } = new();
-    public MonitorConfig Monitor { get; set; } = new();
-    public BackupConfig Backup { get; set; } = new();
-}
-
-internal sealed class BackupConfig
-{
-    public bool DailyEnabled { get; set; }
-    public string? LudusaviGameTitle { get; set; }
-}
-
 internal static class GameCatalog
 {
     public const int MaximumApiGameIdLength = 128;
     public const int MaximumDisplayNameLength = 128;
 
     public static async Task<GameConfig> AddFromExecutableAsync(
-        WrapperConfig config,
+        AppConfig config,
         string executablePath,
         HttpClient? steamStoreClient = null,
         CancellationToken cancellationToken = default)
@@ -97,7 +47,7 @@ internal static class GameCatalog
         return game;
     }
 
-    public static GameConfig Remove(WrapperConfig config, string gameId)
+    public static GameConfig Remove(AppConfig config, string gameId)
     {
         if (!config.Games.Remove(gameId, out var removed))
         {
@@ -107,7 +57,7 @@ internal static class GameCatalog
         return removed;
     }
 
-    public static GameConfig ChangeApiGameId(WrapperConfig config, string gameId, string? apiGameId)
+    public static GameConfig ChangeApiGameId(AppConfig config, string gameId, string? apiGameId)
     {
         if (!config.Games.TryGetValue(gameId, out var game))
         {
@@ -123,7 +73,7 @@ internal static class GameCatalog
         return game;
     }
 
-    public static GameConfig ChangeDisplayName(WrapperConfig config, string gameId, string? displayName)
+    public static GameConfig ChangeDisplayName(AppConfig config, string gameId, string? displayName)
     {
         if (!config.Games.TryGetValue(gameId, out var game))
         {
@@ -134,7 +84,7 @@ internal static class GameCatalog
         return game;
     }
 
-    public static GameConfig ChangeLaunchOptions(WrapperConfig config, string gameId, string? launchOptions)
+    public static GameConfig ChangeLaunchOptions(AppConfig config, string gameId, string? launchOptions)
     {
         if (!config.Games.TryGetValue(gameId, out var game))
         {
@@ -266,14 +216,6 @@ internal static class SteamAppIdReader
     }
 }
 
-internal sealed class LaunchConfig
-{
-    public const int MaximumLaunchOptionsLength = 32767;
-
-    public string? ExecutablePath { get; set; }
-    public List<string> Arguments { get; set; } = [];
-}
-
 internal static class LaunchOptionsCodec
 {
     public static List<string> Parse(string? launchOptions)
@@ -347,140 +289,4 @@ internal static class LaunchOptionsCodec
 
     [DllImport("kernel32.dll")]
     private static extern IntPtr LocalFree(IntPtr memory);
-}
-
-internal sealed class MonitorConfig
-{
-    public MonitorMode Mode { get; set; } = MonitorMode.LaunchedProcess;
-    public string? ExecutablePath { get; set; }
-    public string? ExecutableName { get; set; }
-    public int ExitDebounceSeconds { get; set; } = 10;
-}
-
-internal enum MonitorMode
-{
-    LaunchedProcess,
-    ExecutablePath,
-    ExecutableName
-}
-
-internal sealed class ApiConfig
-{
-    public const int MaximumBaseUrlLength = 2048;
-    public const int MaximumApiKeyLength = 4096;
-    public const int MaximumPlatformKeyLength = 64;
-    public const string DefaultPlatform = "pc";
-
-    public string BaseUrl { get; set; } = AppBrand.DefaultApiBaseUrl;
-    public string ApiKey { get; set; } = "";
-    public string Platform { get; set; } = DefaultPlatform;
-    public int PingIntervalSeconds { get; set; } = 30;
-    public int RequestTimeoutSeconds { get; set; } = 10;
-    public bool IsEnabled => !string.IsNullOrWhiteSpace(BaseUrl);
-
-    public string ResolveApiKey(GameConfig game) =>
-        string.IsNullOrWhiteSpace(game.ApiKey) ? ApiKey.Trim() : game.ApiKey.Trim();
-
-    public string ResolvePlatform(GameConfig game) =>
-        NormalizePlatform(string.IsNullOrWhiteSpace(game.Platform) ? Platform : game.Platform);
-
-    public static string NormalizePlatform(string? platform)
-    {
-        var normalized = string.IsNullOrWhiteSpace(platform)
-            ? DefaultPlatform
-            : platform.Trim().ToLowerInvariant();
-        if (normalized.Length > MaximumPlatformKeyLength)
-        {
-            throw new InvalidOperationException($"Platform key cannot exceed {MaximumPlatformKeyLength} characters.");
-        }
-
-        return normalized;
-    }
-
-    public static string? NormalizePlatformOverride(string? platform) =>
-        string.IsNullOrWhiteSpace(platform) ? null : NormalizePlatform(platform);
-
-    public static string NormalizeBaseUrl(string? baseUrl)
-    {
-        var normalized = baseUrl?.Trim().TrimEnd('/');
-        if (string.IsNullOrWhiteSpace(normalized))
-        {
-            return "";
-        }
-
-        if (normalized.Length > MaximumBaseUrlLength)
-        {
-            throw new InvalidOperationException($"API base URL cannot exceed {MaximumBaseUrlLength} characters.");
-        }
-
-        if (!Uri.TryCreate(normalized, UriKind.Absolute, out var uri) ||
-            (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps) ||
-            string.IsNullOrWhiteSpace(uri.Host))
-        {
-            throw new InvalidOperationException("API base URL must be an absolute HTTP or HTTPS URL.");
-        }
-
-        return normalized;
-    }
-}
-
-internal sealed class SteamGridDbConfig
-{
-    public const int MaximumApiKeyLength = 4096;
-
-    public string ApiKey { get; set; } = "";
-    public bool IsConfigured => !string.IsNullOrWhiteSpace(ApiKey);
-
-    public static string NormalizeApiKey(string? apiKey)
-    {
-        var normalized = apiKey?.Trim() ?? "";
-        if (normalized.Length > MaximumApiKeyLength)
-        {
-            throw new InvalidOperationException($"SteamGridDB API key cannot exceed {MaximumApiKeyLength} characters.");
-        }
-
-        return normalized;
-    }
-}
-
-internal sealed class LudusaviConfig
-{
-    public const int MaximumExecutablePathLength = 32767;
-
-    public string ExecutablePath { get; set; } = "";
-    public bool IsConfigured => !string.IsNullOrWhiteSpace(ExecutablePath);
-
-    public static string NormalizeExecutablePath(string? executablePath, bool requireExisting = true)
-    {
-        var normalized = executablePath?.Trim().Trim('"') ?? "";
-        if (string.IsNullOrWhiteSpace(normalized))
-        {
-            return "";
-        }
-
-        if (normalized.Length > MaximumExecutablePathLength)
-        {
-            throw new InvalidOperationException("The Ludusavi executable path is too long.");
-        }
-
-        var fullPath = Path.GetFullPath(normalized);
-        if (!string.Equals(Path.GetFileName(fullPath), "ludusavi.exe", StringComparison.OrdinalIgnoreCase))
-        {
-            throw new InvalidOperationException("Select ludusavi.exe.");
-        }
-
-        if (requireExisting && !File.Exists(fullPath))
-        {
-            throw new InvalidOperationException("The selected Ludusavi executable does not exist.");
-        }
-
-        return fullPath;
-    }
-}
-
-internal sealed class StorageConfig
-{
-    public string StateDirectory { get; init; } = AppBrand.DefaultStateDirectory;
-    public string LogDirectory { get; init; } = AppBrand.DefaultLogDirectory;
-    public string LauncherDirectory { get; init; } = AppBrand.DefaultLauncherDirectory;
 }

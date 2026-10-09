@@ -32,18 +32,20 @@ internal sealed partial class MainWindow : Window
     private readonly ControllerInput _input;
     private readonly SessionManager _sessions;
     private readonly SessionQueue _queue;
-    private readonly CaptureClient _api = new();
+    private readonly CaptureClient _api;
     private readonly LaunchOptions _options;
-    private readonly Task<IReadOnlyDictionary<string, LibraryGame>> _library = Task.Run(Library.Scan);
+    private readonly Task<IReadOnlyDictionary<string, LibraryGame>> _library;
     private long _returnStart;
     private long _activateStart;
     private bool _ready;
     private bool _suspended;
 
-    public MainWindow(Task<CoreWebView2Environment> environment, LaunchOptions options)
+    public MainWindow(Task<CoreWebView2Environment> environment, LaunchOptions options, AppConfig config)
     {
         _environment = environment;
         _options = options;
+        _api = new CaptureClient(config.Api);
+        _library = Task.Run(() => Library.Scan(config));
         Title = "Playdex";
         _hwnd = WindowNative.GetWindowHandle(this);
 

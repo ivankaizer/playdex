@@ -12,3 +12,4 @@ global using System.Text.Json.Serialization;
 global using System.Text.RegularExpressions;
 global using System.Windows.Forms;
 global using Microsoft.Extensions.Logging;
+global using Playdex.Core;

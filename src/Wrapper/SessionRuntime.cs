@@ -70,14 +70,14 @@ internal sealed partial class ProcessMonitor(MonitorConfig config, ILogger<Proce
 
 internal sealed partial class SessionCoordinator : IDisposable
 {
-    private readonly WrapperConfig config;
+    private readonly AppConfig config;
     private readonly GameConfig game;
     private readonly AppLoggerFactory logging;
     private readonly ILogger<SessionCoordinator> logger;
     private readonly PingApiClient? api;
     private readonly GameLock gameLock;
 
-    private SessionCoordinator(WrapperConfig config, GameConfig game, AppLoggerFactory logging)
+    private SessionCoordinator(AppConfig config, GameConfig game, AppLoggerFactory logging)
     {
         this.config = config;
         this.game = game;
@@ -90,7 +90,7 @@ internal sealed partial class SessionCoordinator : IDisposable
         gameLock = GameLock.Acquire(config.Storage.StateDirectory, game.GameId);
     }
 
-    public static SessionCoordinator Create(WrapperConfig config, GameConfig game, AppLoggerFactory logging) =>
+    public static SessionCoordinator Create(AppConfig config, GameConfig game, AppLoggerFactory logging) =>
         new(config, game, logging);
 
     public async Task RunAsync(CancellationToken cancellationToken)

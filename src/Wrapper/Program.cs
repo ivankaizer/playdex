@@ -6,6 +6,8 @@ internal static partial class Program
     public static int Main(string[] args)
     {
         using var logging = AppLoggerFactory.Create();
+        var coreLogger = logging.CreateLogger(typeof(Log).Namespace!);
+        Log.UseSink(message => LogCore(coreLogger, message));
 
         try
         {
@@ -22,7 +24,10 @@ internal static partial class Program
                 throw new InvalidDataException("The wrapper command line is invalid.");
             }
             var launcherManifest = LauncherRouting.Resolve(Environment.ProcessPath);
-            var configStore = new ConfigStore(launcherManifest?.ConfigPath ?? ConfigStore.DefaultPath);
+            // A launcher generated before the merge names the Wrapper's old config; the install's config replaces it.
+            var configStore = launcherManifest is null || ConfigStore.IsDefaultPath(launcherManifest.ConfigPath)
+                ? ConfigStore.Default()
+                : new ConfigStore(launcherManifest.ConfigPath);
             var config = configStore.LoadOrCreateAsync().GetAwaiter().GetResult();
             logging.UseDirectory(config.Storage.LogDirectory);
 
@@ -39,7 +44,7 @@ internal static partial class Program
 
     private static CommandCode RunTrayApplication(
         ConfigStore configStore,
-        WrapperConfig config,
+        AppConfig config,
         AppLoggerFactory logging,
         string? healthSignalPath)
     {
@@ -56,7 +61,7 @@ internal static partial class Program
 
     private static CommandCode RunGeneratedLauncher(
         LauncherManifest launcherManifest,
-        WrapperConfig config,
+        AppConfig config,
         AppLoggerFactory logging)
     {
         RunConfiguredGame(config, launcherManifest.GameId, logging);
@@ -64,7 +69,7 @@ internal static partial class Program
     }
 
     private static void RunConfiguredGame(
-        WrapperConfig config,
+        AppConfig config,
         string gameId,
         AppLoggerFactory logging)
     {
@@ -76,6 +81,9 @@ internal static partial class Program
 
     [LoggerMessage(EventId = 1, Level = LogLevel.Error, Message = "Fatal application error")]
     private static partial void LogFatalError(ILogger logger, Exception exception);
+
+    [LoggerMessage(EventId = 2, Level = LogLevel.Information, Message = "{Message}")]
+    private static partial void LogCore(ILogger logger, string message);
 
     private enum CommandCode
     {

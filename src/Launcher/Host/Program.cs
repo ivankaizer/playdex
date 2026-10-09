@@ -85,10 +85,12 @@ public static class Program
         }
 
         var options = LaunchOptions.Parse(args);
+        Paths.MoveLegacyLauncherData();
+        var config = ConfigStore.Default().LoadOrCreate();
         Application.Start(callback =>
         {
             SynchronizationContext.SetSynchronizationContext(new DispatcherQueueSynchronizationContext(DispatcherQueue.GetForCurrentThread()));
-            _ = new App(options, instance);
+            _ = new App(options, config, instance);
         });
         return 0;
     }
@@ -113,12 +115,14 @@ public static class Program
 internal sealed partial class App : Application
 {
     private readonly LaunchOptions _options;
+    private readonly AppConfig _config;
     private readonly AppInstance _instance;
     private MainWindow? _window;
 
-    public App(LaunchOptions options, AppInstance instance)
+    public App(LaunchOptions options, AppConfig config, AppInstance instance)
     {
         _options = options;
+        _config = config;
         _instance = instance;
     }
 
@@ -130,7 +134,7 @@ internal sealed partial class App : Application
             Path.Combine(Paths.DataDirectory, "WebView2"),
             new CoreWebView2EnvironmentOptions { AdditionalBrowserArguments = "--disable-features=msSmartScreenProtection" }).AsTask();
 
-        _window = new MainWindow(environment, _options);
+        _window = new MainWindow(environment, _options, _config);
         _instance.Activated += OnRedirected;
         _window.Show();
     }

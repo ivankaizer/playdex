@@ -344,7 +344,7 @@ internal sealed partial class BackupCoordinator : IDisposable
 {
     private static readonly TimeSpan SchedulerInterval = TimeSpan.FromMinutes(15);
     private static readonly TimeSpan FailureRetryDelay = TimeSpan.FromHours(1);
-    private readonly WrapperConfig config;
+    private readonly AppConfig config;
     private readonly ConfigStore configStore;
     private readonly BackupState state;
     private readonly BackupStateStore store;
@@ -356,7 +356,7 @@ internal sealed partial class BackupCoordinator : IDisposable
     private readonly object pendingLock = new();
     private readonly CancellationTokenSource cancellation = new();
 
-    public BackupCoordinator(WrapperConfig config, ConfigStore configStore, BackupState state, BackupStateStore store, LudusaviRunner runner, ILogger<BackupCoordinator> logger, Action stateChanged)
+    public BackupCoordinator(AppConfig config, ConfigStore configStore, BackupState state, BackupStateStore store, LudusaviRunner runner, ILogger<BackupCoordinator> logger, Action stateChanged)
     {
         this.config = config;
         this.configStore = configStore;

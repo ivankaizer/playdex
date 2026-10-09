@@ -21,15 +21,15 @@ public sealed record LibraryGame(
 public sealed partial class LibraryJson : JsonSerializerContext;
 
 /// <summary>
-/// The launcher's library: installed Steam games plus games added through the Playdex Wrapper. Read from disk once at
-/// startup (a few small files), off the UI thread; the page gets it before its scripts run.
+/// The launcher's library: installed Steam games plus games added through the Playdex Wrapper (the install's config).
+/// Read from disk once at startup (a few small files), off the UI thread; the page gets it before its scripts run.
 /// </summary>
 public static class Library
 {
-    public static IReadOnlyDictionary<string, LibraryGame> Scan()
+    public static IReadOnlyDictionary<string, LibraryGame> Scan(AppConfig config)
     {
         var games = new Dictionary<string, LibraryGame>(StringComparer.Ordinal);
-        var wrapper = WrapperGames();
+        var wrapper = WrapperGames(config);
         // A Wrapper entry for a Steam game wins: the user added it to Playdex, and its launcher records the session.
         var wrapped = wrapper.Where(g => g.SteamAppId is not null).Select(g => g.SteamAppId!.Value).ToHashSet();
         foreach (var steam in SteamLibrary.Scan().Where(s => !wrapped.Contains(s.AppId)))
@@ -90,23 +90,15 @@ public static class Library
         JsonSerializer.Serialize(games.Values.ToList(), LibraryJson.Default.ListLibraryGame);
 
     /// <summary>
-    /// Each generated launcher (launchers\Playdex-*.exe) has a .playdex.json manifest naming its Wrapper config and
-    /// game id; the game's title, provider and executable come from that config entry.
+    /// Each generated launcher (Playdex-*.exe in the config's launcher folder) has a .playdex.json manifest naming its
+    /// game id; the game's title, provider and executable come from that game in the install's config.
     /// </summary>
-    private static List<LibraryGame> WrapperGames()
+    private static List<LibraryGame> WrapperGames(AppConfig config)
     {
         var games = new List<LibraryGame>();
-        var storage = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "PlaydexWrapper");
-        var launchers = Path.Combine(storage, "launchers");
-        var configs = new Dictionary<string, JsonElement?>(StringComparer.OrdinalIgnoreCase);
+        var launchers = config.Storage.LauncherDirectory;
         try
         {
-            if (ReadJson(Path.Combine(storage, "config.json")) is { } defaultConfig
-                && Property(defaultConfig, "storage") is { } s
-                && Text(s, "launcherDirectory") is { Length: > 0 } configured)
-            {
-                launchers = configured;
-            }
             if (!Directory.Exists(launchers))
             {
                 return games;
@@ -114,30 +106,22 @@ public static class Library
             foreach (var manifestPath in Directory.EnumerateFiles(launchers, "*.playdex.json"))
             {
                 var launcher = Path.ChangeExtension(Path.ChangeExtension(manifestPath, null), ".exe");
-                if (ReadJson(manifestPath) is not { } manifest
-                    || Text(manifest, "configPath") is not { Length: > 0 } configPath
-                    || Text(manifest, "gameId") is not { Length: > 0 } gameId
-                    || !File.Exists(launcher))
+                if (GameId(manifestPath) is not { Length: > 0 } gameId || !File.Exists(launcher))
                 {
                     continue;
                 }
-                if (!configs.TryGetValue(configPath, out var config))
+                if (!config.Games.TryGetValue(gameId, out var game))
                 {
-                    configs[configPath] = config = ReadJson(configPath);
-                }
-                if (config is not { } c || Property(c, "games") is not { } entries || FindGame(entries, gameId) is not { } game)
-                {
-                    Log.Info($"library: launcher {Path.GetFileName(launcher)} has no game '{gameId}' in its config");
+                    Log.Info($"library: launcher {Path.GetFileName(launcher)} has no game '{gameId}' in the config");
                     continue;
                 }
-                var executable = Property(game, "launch") is { } launch ? Text(launch, "executablePath") : null;
-                if (executable is null || !File.Exists(executable))
+                if (game.Launch.ExecutablePath is not { } executable || !File.Exists(executable))
                 {
                     continue; // Uninstalled or moved: not playable here.
                 }
-                var title = Text(game, "displayName") is { Length: > 0 } name ? name : gameId;
-                var isSteam = string.Equals(Text(game, "gameProvider") ?? "steam", "steam", StringComparison.OrdinalIgnoreCase);
-                int? steamAppId = isSteam && int.TryParse(Text(game, "apiGameId"), out var appId) ? appId : null;
+                var title = string.IsNullOrWhiteSpace(game.DisplayName) ? gameId : game.DisplayName;
+                var isSteam = string.Equals(game.GameProvider, "steam", StringComparison.OrdinalIgnoreCase);
+                int? steamAppId = isSteam && int.TryParse(game.ApiGameId, out var appId) ? appId : null;
                 games.Add(new LibraryGame($"playdex-{gameId}", title, "playdex", steamAppId, null, launcher));
             }
         }
@@ -148,43 +132,19 @@ public static class Library
         return games;
     }
 
-    private static JsonElement? FindGame(JsonElement games, string gameId)
-    {
-        if (games.ValueKind != JsonValueKind.Object)
-        {
-            return null;
-        }
-        // The Wrapper keys games case-insensitively.
-        foreach (var entry in games.EnumerateObject())
-        {
-            if (string.Equals(entry.Name, gameId, StringComparison.OrdinalIgnoreCase))
-            {
-                return entry.Value;
-            }
-        }
-        return null;
-    }
-
-    private static JsonElement? Property(JsonElement element, string name) =>
-        element.ValueKind == JsonValueKind.Object && element.TryGetProperty(name, out var value) ? value : null;
-
-    private static string? Text(JsonElement element, string name) =>
-        Property(element, name) is { ValueKind: JsonValueKind.String } value ? value.GetString() : null;
-
-    private static JsonElement? ReadJson(string path)
+    private static string? GameId(string manifestPath)
     {
         try
         {
-            if (!File.Exists(path))
-            {
-                return null;
-            }
-            using var doc = JsonDocument.Parse(File.ReadAllBytes(path));
-            return doc.RootElement.Clone();
+            using var manifest = JsonDocument.Parse(File.ReadAllBytes(manifestPath));
+            return manifest.RootElement.ValueKind == JsonValueKind.Object
+                && manifest.RootElement.TryGetProperty("gameId", out var id) && id.ValueKind == JsonValueKind.String
+                    ? id.GetString()
+                    : null;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
         {
-            Log.Info($"library: {path} unreadable: {ex.Message}");
+            Log.Info($"library: {manifestPath} unreadable: {ex.Message}");
             return null;
         }
     }

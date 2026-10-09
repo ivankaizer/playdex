@@ -132,7 +132,7 @@ public sealed class LudusaviBackupTests
             GameProvider = "steam",
             Backup = new BackupConfig { DailyEnabled = true }
         };
-        var config = new WrapperConfig
+        var config = new AppConfig
         {
             Ludusavi = new LudusaviConfig { ExecutablePath = executable },
             Storage = new StorageConfig { StateDirectory = directory },
@@ -173,7 +173,7 @@ public sealed class LudusaviBackupTests
             ApiGameId = "3017860",
             GameProvider = "steam"
         };
-        var config = new WrapperConfig
+        var config = new AppConfig
         {
             Ludusavi = new LudusaviConfig { ExecutablePath = executable },
             Storage = new StorageConfig { StateDirectory = directory }
@@ -214,7 +214,7 @@ public sealed class LudusaviBackupTests
             ApiGameId = "3017860",
             GameProvider = "steam"
         };
-        var config = new WrapperConfig
+        var config = new AppConfig
         {
             Ludusavi = new LudusaviConfig { ExecutablePath = executable },
             Storage = new StorageConfig { StateDirectory = directory },
