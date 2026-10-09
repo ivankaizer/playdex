@@ -41,7 +41,7 @@ public sealed class WrapperPostgresFixture : IAsyncLifetime
 public sealed class ApiCaptureEndToEndTests(WrapperPostgresFixture postgres)
 {
     [Fact]
-    public async Task WrapperPingUsesLiveGenericCaptureContract()
+    public async Task WrapperStartUsesLiveGenericCaptureContract()
     {
         if (!postgres.IsConfigured) return;
 
@@ -80,26 +80,23 @@ public sealed class ApiCaptureEndToEndTests(WrapperPostgresFixture postgres)
 
         try
         {
-            using var logging = AppLoggerFactory.CreateInDirectory(TestPaths.NewTempDir());
-            using var api = new PingApiClient(
-                new ApiConfig
-                {
-                    BaseUrl = "http://localhost/api",
-                    ApiKey = apiKey,
-                    Platform = "pc",
-                },
-                new GameConfig
-                {
-                    GameId = $"wrapper-{suffix}",
-                    ApiGameId = $"app-{suffix}",
-                    DisplayName = "Wrapper contract game",
-                    GameProvider = "steam",
-                    Platform = "gog",
-                },
-                logging.CreateLogger<PingApiClient>(),
-                factory.Server.CreateHandler());
+            var apiConfig = new ApiConfig
+            {
+                BaseUrl = "http://localhost/api",
+                ApiKey = apiKey,
+                Platform = "pc",
+            };
+            var game = new GameConfig
+            {
+                GameId = $"wrapper-{suffix}",
+                ApiGameId = $"app-{suffix}",
+                DisplayName = "Wrapper contract game",
+                GameProvider = "steam",
+                Platform = "gog",
+            };
+            using var api = new CaptureClient(apiConfig, factory.Server.CreateHandler());
 
-            Assert.True(await api.PingAsync(CancellationToken.None));
+            Assert.True(await api.StartAsync(CaptureGame.From(game, apiConfig)));
 
             await using var assertion = new NpgsqlCommand("""
                 select p.key, gei.type::text, gei.external_id

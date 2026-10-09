@@ -99,7 +99,20 @@ internal sealed partial class TraySetupApplication : IDisposable
             _ = updateCoordinator.CheckAsync(explicitCheck: false);
         }
         _ = RunTrayActionAsync("Launcher synchronization", () => SynchronizeLaunchersAsync(showConfirmation: false));
+        _ = RunTrayActionAsync("Offline session upload", UploadQueuedSessionsAsync);
         _ = backupCoordinator.RunSchedulerAsync();
+    }
+
+    /// <summary>Send sessions recorded while the API was unreachable (the queue is shared with the launcher).</summary>
+    private async Task UploadQueuedSessionsAsync()
+    {
+        if (!config.Api.IsEnabled)
+        {
+            return;
+        }
+        using var api = new CaptureClient(config.Api);
+        using var queue = new SessionQueue(api);
+        await queue.FlushAsync();
     }
 
     private void RefreshGameMenu()

@@ -8,10 +8,8 @@ namespace Wrapper.Tests;
 public sealed class SessionTests
 {
     [Fact]
-    public async Task TestPingContract()
+    public async Task TestStartContract()
     {
-        var directory = NewTempDir();
-        using var logging = AppLoggerFactory.CreateInDirectory(directory);
         var handler = new RecordingHandler(HttpStatusCode.OK);
         var config = new ApiConfig
         {
@@ -28,12 +26,12 @@ public sealed class SessionTests
             GameProvider = "steam",
             Platform = "gog"
         };
-        using var api = new PingApiClient(config, game, logging.CreateLogger<PingApiClient>(), handler);
+        using var api = new CaptureClient(config, handler);
 
-        Assert.True(await api.PingAsync(CancellationToken.None));
+        Assert.True(await api.StartAsync(CaptureGame.From(game, config)));
         var request = handler.Requests.Single();
         Assert.Equal("POST", request.Method);
-        Assert.Equal("https://example.test/api/capture/sessions/ping", request.Uri);
+        Assert.Equal("https://example.test/api/capture/sessions/start", request.Uri);
         Assert.Equal($"Bearer {config.ApiKey}", request.Authorization);
 
         using var json = JsonDocument.Parse(request.Body);
@@ -45,19 +43,14 @@ public sealed class SessionTests
     }
 
     [Fact]
-    public async Task TestPingUsesGlobalPlatformDefault()
+    public Task TestCaptureGameDefaults()
     {
-        var handler = new RecordingHandler(HttpStatusCode.OK);
-        using var logging = AppLoggerFactory.CreateInDirectory(NewTempDir());
-        using var api = new PingApiClient(
-            new ApiConfig { BaseUrl = "https://example.test/api", ApiKey = "key", Platform = "steam" },
-            new GameConfig { GameId = "demo", DisplayName = "Demo", Platform = null },
-            logging.CreateLogger<PingApiClient>(),
-            handler);
+        var api = new ApiConfig { Platform = "steam" };
+        var game = CaptureGame.From(new GameConfig { GameId = "demo", DisplayName = "Demo", Platform = null }, api);
 
-        Assert.True(await api.PingAsync(CancellationToken.None));
-        using var json = JsonDocument.Parse(handler.Requests.Single().Body);
-        Assert.Equal("steam", json.RootElement.GetProperty("platform").GetString());
+        Assert.Equal("steam", game.Platform);
+        Assert.Equal("demo", game.GameId);
+        return Task.CompletedTask;
     }
 
     [Fact]
@@ -89,38 +82,28 @@ public sealed class SessionTests
     }
 
     [Fact]
-    public async Task TestPingFailureDiscarded()
+    public async Task TestSessionCoordinatorRecordsStartAndEnd()
     {
         var directory = NewTempDir();
-        var handler = new RecordingHandler(HttpStatusCode.ServiceUnavailable);
-        using var logging = AppLoggerFactory.CreateInDirectory(directory);
-        using var api = new PingApiClient(
-            new ApiConfig { BaseUrl = "https://example.test/api", ApiKey = "key" },
-            new GameConfig { GameId = "demo", DisplayName = "Demo" },
-            logging.CreateLogger<PingApiClient>(),
-            handler);
-
-        Assert.True(!await api.PingAsync(CancellationToken.None));
-        Assert.True(!await api.PingAsync(CancellationToken.None));
-        Assert.Equal(2, handler.Requests.Count);
-        Assert.Empty(Directory.GetFiles(directory, "*.events.json"));
-    }
-
-    [Fact]
-    public async Task TestPingCadence()
-    {
         var handler = new RecordingHandler(HttpStatusCode.OK);
-        using var logging = AppLoggerFactory.CreateInDirectory(NewTempDir());
-        using var api = new PingApiClient(
-            new ApiConfig { BaseUrl = "https://example.test/api", ApiKey = "key" },
-            new GameConfig { GameId = "demo", DisplayName = "Demo" },
-            logging.CreateLogger<PingApiClient>(),
-            handler);
-        using var cancellation = new CancellationTokenSource(TimeSpan.FromMilliseconds(130));
+        var config = new AppConfig
+        {
+            Api = new ApiConfig { BaseUrl = "https://example.test/api", ApiKey = "key" },
+            Storage = new StorageConfig { StateDirectory = directory, LogDirectory = directory }
+        };
+        var game = config.GetOrCreateGame($"demo-{Guid.NewGuid():N}");
+        game.Launch.ExecutablePath = TestProcess.ExecutablePath;
+        game.Launch.Arguments = [.. TestProcess.Arguments];
+        game.Monitor.ExitDebounceSeconds = 1;
+        using var logging = AppLoggerFactory.CreateInDirectory(directory);
+        using var coordinator = SessionCoordinator.Create(config, game, logging, Path.Combine(directory, "queue.jsonl"), handler);
 
-        await new PingService(api, TimeSpan.FromMilliseconds(25)).RunAsync(cancellation.Token);
+        await coordinator.RunAsync(CancellationToken.None);
 
-        Assert.True(handler.Requests.Count >= 3);
+        Assert.Equal(
+            ["https://example.test/api/capture/sessions/start", "https://example.test/api/capture/sessions/end"],
+            handler.Requests.Select(r => r.Uri));
+        Assert.False(File.Exists(Path.Combine(directory, "queue.jsonl")));
     }
 
     [Fact]
@@ -158,10 +141,11 @@ public sealed class SessionTests
     }
 
     [Fact]
-    public async Task TestSessionCoordinatorPingOutage()
+    public async Task TestSessionCoordinatorQueuesWhenTheApiIsUnreachable()
     {
         var directory = NewTempDir();
         var gameId = $"demo-{Guid.NewGuid():N}";
+        var queueFile = Path.Combine(directory, "queue.jsonl");
         var config = new AppConfig
         {
             Api = new ApiConfig
@@ -182,12 +166,14 @@ public sealed class SessionTests
         game.Launch.Arguments = [.. TestProcess.Arguments];
         game.Monitor.ExitDebounceSeconds = 1;
         using var logging = AppLoggerFactory.CreateInDirectory(directory);
-        using var coordinator = SessionCoordinator.Create(config, game, logging);
+        using var coordinator = SessionCoordinator.Create(config, game, logging, queueFile);
 
         await coordinator.RunAsync(CancellationToken.None);
 
-        Assert.Empty(Directory.GetFiles(directory, "*.events.json"));
-        Assert.Empty(Directory.GetFiles(directory, "*.session.json"));
+        // The API was unreachable, so start failed and the whole session waits in the offline queue.
+        using var queued = JsonDocument.Parse(File.ReadAllLines(queueFile).Single());
+        Assert.Equal(gameId, queued.RootElement.GetProperty("gameId").GetString());
+        Assert.True(queued.RootElement.GetProperty("durationInSeconds").GetInt32() >= 1);
     }
 
     [Fact]

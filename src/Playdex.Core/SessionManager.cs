@@ -3,8 +3,9 @@ using System.Diagnostics;
 namespace Playdex.Core;
 
 /// <summary>
-/// Launches a game, follows it to exit, records the session to Playdex and reports each state change
-/// (gameId, "starting" | "running" | "ended", seconds played) through <paramref name="report"/>, from any thread.
+/// Launches a game, follows it to exit, records the session to Playdex (<see cref="SessionRecorder"/>) and reports each
+/// state change (gameId, "starting" | "running" | "ended", seconds played) through <paramref name="report"/>, from any
+/// thread.
 /// </summary>
 public sealed class SessionManager(CaptureClient api, SessionQueue queue, Action<string, string, int> report, Action<long> gameExited)
 {
@@ -106,27 +107,12 @@ public sealed class SessionManager(CaptureClient api, SessionQueue queue, Action
     private void OnRunning(ActiveSession session)
     {
         session.RunningSince = Stopwatch.GetTimestamp();
-        session.StartedAt = DateTimeOffset.Now;
         Post(session.GameId, "running", 0);
-        if (session.Capture is null)
+        if (session.Capture is { } capture)
         {
-            return;
+            session.Recorder = new SessionRecorder(api, queue, capture, _pingInterval, seconds => Post(session.GameId, "running", seconds));
+            session.Recorder.Start();
         }
-        _ = Task.Run(async () =>
-        {
-            session.Online = await api.StartAsync(session.Capture);
-            if (!session.Online)
-            {
-                Log.Info($"session: {session.GameId} offline; it will be queued at exit");
-                return;
-            }
-            using var timer = new PeriodicTimer(_pingInterval);
-            while (await timer.WaitForNextTickAsync(session.Stop.Token).ConfigureAwait(false) is true)
-            {
-                await api.PingAsync(session.Capture);
-                Post(session.GameId, "running", session.Seconds);
-            }
-        }).ContinueWith(t => { }, TaskScheduler.Default);
     }
 
     private void OnExited(ActiveSession session, long detected, long processExit)
@@ -139,7 +125,6 @@ public sealed class SessionManager(CaptureClient api, SessionQueue queue, Action
             }
             _active = null;
         }
-        session.Stop.Cancel();
 
         if (processExit != 0)
         {
@@ -148,42 +133,23 @@ public sealed class SessionManager(CaptureClient api, SessionQueue queue, Action
             Metrics.Record("exit.detection", (detectedFileTime - processExit) / 10_000.0, $"{session.GameId}: process exit -> exit event");
         }
 
-        var seconds = session.Seconds;
-        Post(session.GameId, "ended", seconds);
+        Post(session.GameId, "ended", session.Seconds);
         gameExited(detected);
         session.Watcher.Dispose();
 
-        if (session.Capture is null || session.RunningSince is null)
+        if (session.Recorder is not { } recorder)
         {
             return;
         }
         _ = Task.Run(async () =>
         {
-            var recorded = false;
-            if (session.Online)
+            using (recorder)
             {
-                var handedOff = Metrics.MsSince(detected);
-                recorded = await api.EndAsync(session.Capture);
-                Metrics.Record("exit.session_end_sent", handedOff, $"{session.GameId}: exit event -> end request");
-                Metrics.Record("exit.session_end_acked", Metrics.MsSince(detected), $"{session.GameId}: exit event -> API 2xx={recorded}");
-                if (!recorded)
-                {
-                    // The server already holds this session and closes it 3 minutes after the last ping, so it is not
-                    // queued again (that would double count). At most one ping interval of play is lost.
-                    Log.Info($"session: end for {session.GameId} failed; the server will close it from the last ping");
-                }
-            }
-            else if (seconds >= 1)
-            {
-                var c = session.Capture;
-                await queue.EnqueueAsync(new QueuedSession(
-                    c.GameTitle, c.GameId, c.GameIdProvider, c.Platform, seconds, session.StartedAt, DateTimeOffset.Now));
-                Metrics.Record("exit.session_end_queued", Metrics.MsSince(detected), $"{session.GameId}: exit event -> queued");
-                return;
-            }
-            if (recorded)
-            {
-                await queue.FlushAsync();
+                var outcome = await recorder.FinishAsync();
+                Metrics.Record(
+                    outcome == SessionOutcome.Queued ? "exit.session_end_queued" : "exit.session_end_acked",
+                    Metrics.MsSince(detected),
+                    $"{session.GameId}: exit event -> {outcome}");
             }
         });
     }
@@ -195,10 +161,8 @@ public sealed class SessionManager(CaptureClient api, SessionQueue queue, Action
         public string GameId { get; } = gameId;
         public IGameWatcher Watcher { get; } = watcher;
         public CaptureGame? Capture { get; } = capture;
-        public CancellationTokenSource Stop { get; } = new();
+        public SessionRecorder? Recorder { get; set; }
         public long? RunningSince { get; set; }
-        public DateTimeOffset StartedAt { get; set; }
-        public bool Online { get; set; }
 
         public int Seconds => RunningSince is { } since ? (int)Stopwatch.GetElapsedTime(since).TotalSeconds : 0;
     }

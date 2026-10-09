@@ -74,24 +74,30 @@ internal sealed partial class SessionCoordinator : IDisposable
     private readonly GameConfig game;
     private readonly AppLoggerFactory logging;
     private readonly ILogger<SessionCoordinator> logger;
-    private readonly PingApiClient? api;
+    private readonly CaptureClient? api;
+    private readonly SessionQueue? queue;
     private readonly GameLock gameLock;
 
-    private SessionCoordinator(AppConfig config, GameConfig game, AppLoggerFactory logging)
+    private SessionCoordinator(AppConfig config, GameConfig game, AppLoggerFactory logging, string? queueFile, HttpMessageHandler? handler)
     {
         this.config = config;
         this.game = game;
         this.logging = logging;
         logger = logging.CreateLogger<SessionCoordinator>();
 
-        api = config.Api.IsEnabled
-            ? new PingApiClient(config.Api, game, logging.CreateLogger<PingApiClient>())
-            : null;
+        if (config.Api.IsEnabled)
+        {
+            api = new CaptureClient(config.Api, handler);
+            queue = new SessionQueue(api, queueFile);
+        }
         gameLock = GameLock.Acquire(config.Storage.StateDirectory, game.GameId);
     }
 
-    public static SessionCoordinator Create(AppConfig config, GameConfig game, AppLoggerFactory logging) =>
-        new(config, game, logging);
+    /// <param name="queueFile">The offline queue; null for the install's, shared with the launcher.</param>
+    /// <param name="handler">For tests; null sends real requests.</param>
+    public static SessionCoordinator Create(
+        AppConfig config, GameConfig game, AppLoggerFactory logging, string? queueFile = null, HttpMessageHandler? handler = null) =>
+        new(config, game, logging, queueFile, handler);
 
     public async Task RunAsync(CancellationToken cancellationToken)
     {
@@ -102,24 +108,24 @@ internal sealed partial class SessionCoordinator : IDisposable
         }
 
         using var process = LaunchGame(game);
-        if (api is null)
+        if (api is null || queue is null)
         {
             LogApiTrackingDisabled(logger, game.GameId);
             await CreateProcessMonitor().WaitForExitAsync(process, cancellationToken);
             return;
         }
 
-        using var pingCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        var pingService = new PingService(api, TimeSpan.FromSeconds(Math.Max(1, config.Api.PingIntervalSeconds)));
-        var pingTask = pingService.RunAsync(pingCancellation.Token);
+        // Start, a ping every interval, then end; or the whole session to the offline queue if start failed.
+        using var recorder = new SessionRecorder(
+            api, queue, CaptureGame.From(game, config.Api), TimeSpan.FromSeconds(Math.Max(1, config.Api.PingIntervalSeconds)));
+        recorder.Start();
         try
         {
             await CreateProcessMonitor().WaitForExitAsync(process, cancellationToken);
         }
         finally
         {
-            await pingCancellation.CancelAsync();
-            await pingTask;
+            LogSessionFinished(logger, game.GameId, recorder.Seconds, await recorder.FinishAsync());
         }
     }
 
@@ -151,8 +157,12 @@ internal sealed partial class SessionCoordinator : IDisposable
     [LoggerMessage(EventId = 3, Level = LogLevel.Information, Message = "Launching {GameId}: {ExecutablePath}")]
     private static partial void LogGameLaunching(ILogger logger, string gameId, string? executablePath);
 
+    [LoggerMessage(EventId = 4, Level = LogLevel.Information, Message = "Session of {GameId} finished after {Seconds} s: {Outcome}")]
+    private static partial void LogSessionFinished(ILogger logger, string gameId, int seconds, SessionOutcome outcome);
+
     public void Dispose()
     {
+        queue?.Dispose();
         api?.Dispose();
         gameLock.Dispose();
     }
