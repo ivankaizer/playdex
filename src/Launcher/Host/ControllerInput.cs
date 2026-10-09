@@ -13,7 +13,7 @@ internal enum InputCode : byte
 /// through a fixed ring (<see cref="InputQueue"/>) and the UI thread drains it.
 /// </summary>
 /// <remarks>
-/// Rates: 1 kHz while the launcher is in front and a pad is connected; 20 Hz Guide-only while a game is in front;
+/// Rates: 250 Hz while the launcher is in front and a pad is connected (see <see cref="DefaultPollMs"/>); 20 Hz Guide-only while a game is in front;
 /// disconnected slots are probed once a second (XInputGetState on an empty slot is slow).
 /// All connected pads are merged into one state, which also drops the duplicate presses that Steam Input's
 /// virtual pad mirrors from the physical one.
@@ -25,6 +25,14 @@ internal sealed unsafe class ControllerInput
     private const ushort GuideButton = 0x0400, A = 0x1000, B = 0x2000, XButton = 0x4000, YButton = 0x8000;
     private const int StickEngage = 16000, StickRelease = 11000;
     private const int MaxPads = 4;
+
+    /// <summary>
+    /// 250 Hz. Measured host CPU with all four slots polled (no pad, the worst case): 8.3 % of one core at 1 kHz,
+    /// 4.9 % at 500 Hz, 3.4 % at 250 Hz, 1.4 % at 125 Hz. 250 Hz adds at most 4 ms to a press, which keeps the
+    /// measured p99 (3.1 ms) inside one frame at 120 Hz (8.3 ms); 125 Hz would not. Event-driven reads aren't an
+    /// option: Windows.Gaming.Input has no reading events and neither it nor GameInput reports the Guide button.
+    /// </summary>
+    private const int DefaultPollMs = 4;
 
     private static readonly (ushort Mask, InputCode Code)[] _buttons =
     [
@@ -41,9 +49,14 @@ internal sealed unsafe class ControllerInput
     private readonly delegate* unmanaged[Stdcall]<uint, Native.XInputState*, uint> _getState;
     private readonly InputQueue _queue;
 
-    // Diagnostic: poll every slot at the foreground rate as if a pad were connected, to measure 1 kHz polling cost
+    // Diagnostic: poll every slot at the foreground rate as if a pad were connected, to measure the polling cost
     // on a machine without a controller (an empty slot is the slower case, so this is an upper bound).
     private readonly bool _forcePoll = Environment.GetEnvironmentVariable("PLAYDEX_INPUT_FORCE_POLL") == "1";
+
+    // Foreground poll interval. PLAYDEX_INPUT_HZ overrides it for measurements.
+    private readonly long _pollMs = int.TryParse(Environment.GetEnvironmentVariable("PLAYDEX_INPUT_HZ"), out var hz) && hz is > 0 and <= 1000
+        ? 1000 / hz
+        : DefaultPollMs;
     private volatile bool _foreground = true;
     private volatile int _benchRemaining;
     private long _benchInterval;
@@ -155,7 +168,7 @@ internal sealed unsafe class ControllerInput
 
             long sleepMs = _benchRemaining > 0 ? 1
                 : connected == 0 && !_forcePoll ? 1000
-                : _foreground ? 1
+                : _foreground ? _pollMs
                 : 50;
             var due = -sleepMs * 10_000; // relative, 100 ns units
             if (timer != 0 && Native.SetWaitableTimer(timer, &due, 0, 0, 0, false))

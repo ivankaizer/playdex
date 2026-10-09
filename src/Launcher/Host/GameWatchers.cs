@@ -18,7 +18,7 @@ internal interface IGameWatcher : IDisposable
 }
 
 /// <summary>
-/// Steam games: launch with steam://rungameid, learn "running" from HKCU\Software\Valve\Steam\Apps\&lt;appid&gt;\Running
+/// Steam games: launch with steam://rungameid (starting Steam and waiting for login first if it isn't running), learn "running" from HKCU\Software\Valve\Steam\Apps\&lt;appid&gt;\Running
 /// (RegNotifyChangeKeyValue, no polling) and detect exit from the game's own process handles.
 /// </summary>
 /// <remarks>
@@ -33,11 +33,19 @@ internal sealed partial class SteamGameWatcher : IGameWatcher
     private static readonly TimeSpan _startTimeout = TimeSpan.FromMinutes(5);
     private static readonly TimeSpan _bootWindow = TimeSpan.FromSeconds(30);
 
+    /// <summary>
+    /// The launch URL sent right after login worked in testing (running 4.6 s later). In case Steam is still busy
+    /// (a client update, a slow login), a cold start re-sends it this often until the game runs. Steam ignores a
+    /// repeated URL for a game that is already running.
+    /// </summary>
+    private static readonly TimeSpan _coldStartRetry = TimeSpan.FromSeconds(15);
+
     private readonly int _appId;
     private readonly RegistryKey _key;
     private readonly AutoResetEvent _changed = new(false);
     private readonly Lock _gate = new();
     private readonly List<RegisteredWaitHandle> _processWaits = [];
+    private readonly CancellationTokenSource _cancel = new();
     private readonly HashSet<uint> _tracked = [];
     private RegisteredWaitHandle? _wait;
     private string? _installDir;
@@ -74,10 +82,42 @@ internal sealed partial class SteamGameWatcher : IGameWatcher
         {
             Arm();
         }
-        Process.Start(new ProcessStartInfo($"steam://rungameid/{_appId}") { UseShellExecute = true })?.Dispose();
-        Log.Info($"steam: launch requested for {_appId}");
+        if (SteamClient.IsLoggedIn())
+        {
+            RequestLaunch();
+        }
+        else if (SteamClient.StartIfNeeded())
+        {
+            _ = Task.Factory.StartNew(LaunchAfterLogin, _cancel.Token, TaskCreationOptions.LongRunning, TaskScheduler.Default);
+        }
+        else
+        {
+            throw new InvalidOperationException("Steam is not installed.");
+        }
         // Already running (launched outside Playdex): report it straight away.
         Check();
+    }
+
+    private void RequestLaunch()
+    {
+        Process.Start(new ProcessStartInfo($"steam://rungameid/{_appId}") { UseShellExecute = true })?.Dispose();
+        Log.Info($"steam: launch requested for {_appId}");
+    }
+
+    /// <summary>Cold start: wait for Steam's login, then send the launch URL until the game runs.</summary>
+    private void LaunchAfterLogin()
+    {
+        var started = Stopwatch.GetTimestamp();
+        if (!SteamClient.WaitForLogin(_startTimeout, _cancel.Token))
+        {
+            return; // Disposed, or the start timeout ends the session.
+        }
+        Log.Info($"steam: logged in after {Stopwatch.GetElapsedTime(started).TotalSeconds:N1} s");
+        while (!_cancel.IsCancellationRequested && !_running && !_exited)
+        {
+            RequestLaunch();
+            _cancel.Token.WaitHandle.WaitOne(_coldStartRetry);
+        }
     }
 
     private void Arm()
@@ -250,6 +290,7 @@ internal sealed partial class SteamGameWatcher : IGameWatcher
 
     public void Dispose()
     {
+        _cancel.Cancel();
         lock (_gate)
         {
             _disposed = true;
