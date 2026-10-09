@@ -9,7 +9,7 @@ internal static class AppBrand
     public const string ApiSettingsAccessibleName = ProductName + " API settings";
     public const string LauncherPrefix = Name + "-";
     public const string LauncherManifestExtension = ".playdex.json";
-    public const string DefaultApiBaseUrl = "https://playdex.ejwan.dev/api";
+    public const string DefaultApiBaseUrl = "https://playdex-api.ejwan.dev/api";
     public const string PublishedWrapperEnvironmentVariable = "PLAYDEX_PUBLISHED_WRAPPER";
     public const string GitHubLatestReleaseUrl = "https://api.github.com/repos/ivankaizer/playdex/releases/latest";
     public const string ReleaseAssetPrefix = "playdex-wrapper-windows-";

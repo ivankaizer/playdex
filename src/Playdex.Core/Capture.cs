@@ -31,7 +31,7 @@ public sealed partial class CaptureJson : JsonSerializerContext;
 /// </summary>
 public sealed class CaptureClient : IDisposable
 {
-    private const string DefaultBaseUrl = "https://playdex.ejwan.dev/api";
+    private const string DefaultBaseUrl = "https://playdex-api.ejwan.dev/api";
 
     private readonly HttpClient _http;
     private readonly string? _apiKey;

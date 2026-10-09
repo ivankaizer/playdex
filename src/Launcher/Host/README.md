@@ -48,7 +48,7 @@ Then go to Settings → Gaming → Full screen experience → Home app → Playd
 ## Configuration
 
 - API key: `PLAYDEX_API_KEY`, or `apiKey` in `%LOCALAPPDATA%\PlaydexLauncher\config.json`.
-- API base URL: `PLAYDEX_API_URL`, or `apiBaseUrl` in the same file. Default `https://playdex.ejwan.dev/api`.
+- API base URL: `PLAYDEX_API_URL`, or `apiBaseUrl` in the same file. Default `https://playdex-api.ejwan.dev/api`.
 - The log, `metrics.jsonl` and the offline `queue.jsonl` live in `%LOCALAPPDATA%\PlaydexLauncher`.
 - `PLAYDEX_INPUT_FORCE_POLL=1`: diagnostic that polls every XInput slot at the foreground rate, as if a pad were connected.
 - `PLAYDEX_INPUT_HZ=N`: foreground XInput poll rate (default 250), for measurements.
