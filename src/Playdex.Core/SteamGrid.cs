@@ -2,7 +2,7 @@ using System.Buffers.Binary;
 using System.Text;
 using Microsoft.Win32;
 
-namespace Playdex.Launcher.Host;
+namespace Playdex.Core;
 
 /// <summary>
 /// Steam's custom artwork: userdata\&lt;user&gt;\config\grid\&lt;id&gt;{p,,_hero,_logo}.{png,jpg,...}. Non-Steam
@@ -10,7 +10,7 @@ namespace Playdex.Launcher.Host;
 /// shortcut's app id from shortcuts.vdf; Steam apps have art here when the user set custom art. Paths returned are
 /// "&lt;user id&gt;/&lt;file&gt;", served from &lt;user id&gt;.steam-grid.playdex (see <see cref="GridFolders"/>).
 /// </summary>
-internal static class SteamGrid
+public static class SteamGrid
 {
     private static readonly string[] _extensions = [".png", ".jpg", ".jpeg", ".webp"];
 

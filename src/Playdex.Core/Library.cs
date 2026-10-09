@@ -1,13 +1,13 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
-namespace Playdex.Launcher.Host;
+namespace Playdex.Core;
 
 /// <summary>
 /// One playable game on this PC. Source "steam": an installed Steam app. Source "playdex": a game added through the
 /// Playdex Wrapper, launched through its generated Playdex-*.exe (which records the session itself).
 /// </summary>
-internal sealed record LibraryGame(
+public sealed record LibraryGame(
     string Id,
     string Title,
     string Source,
@@ -18,13 +18,13 @@ internal sealed record LibraryGame(
 
 [JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase, DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull)]
 [JsonSerializable(typeof(List<LibraryGame>))]
-internal sealed partial class LibraryJson : JsonSerializerContext;
+public sealed partial class LibraryJson : JsonSerializerContext;
 
 /// <summary>
 /// The launcher's library: installed Steam games plus games added through the Playdex Wrapper. Read from disk once at
 /// startup (a few small files), off the UI thread; the page gets it before its scripts run.
 /// </summary>
-internal static class Library
+public static class Library
 {
     public static IReadOnlyDictionary<string, LibraryGame> Scan()
     {

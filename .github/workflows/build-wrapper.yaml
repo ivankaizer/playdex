@@ -6,6 +6,8 @@ on:
       - main
     paths:
       - "src/Wrapper/**"
+      - "src/Playdex.Core/**"
+      - "test/Playdex.Core.Tests/**"
       - "Directory.Packages.props"
       - "Directory.Build.props"
   pull_request:
@@ -29,6 +31,10 @@ jobs:
 
       - name: Run wrapper tests
         run: dotnet test test/Wrapper.Tests/Wrapper.Tests.csproj --configuration Release
+
+      # Playdex.Core tests use the registry and Job Objects, so they run here on Windows, not in test.yaml.
+      - name: Run Playdex.Core tests
+        run: dotnet test test/Playdex.Core.Tests/Playdex.Core.Tests.csproj --configuration Release
 
       - name: Upload wrapper artifacts
         if: github.ref == 'refs/heads/main'

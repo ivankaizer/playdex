@@ -1,7 +1,7 @@
-namespace Playdex.Launcher.Host;
+namespace Playdex.Core;
 
 /// <summary>Append-only text log at %LOCALAPPDATA%\PlaydexLauncher\launcher.log. Never called on the input thread.</summary>
-internal static class Log
+public static class Log
 {
     private static readonly Lock _gate = new();
     private static StreamWriter? _writer;
@@ -18,7 +18,7 @@ internal static class Log
             }
             catch (IOException)
             {
-                // Logging must never take the launcher down.
+                // Logging must never take the app down.
             }
         }
         System.Diagnostics.Debug.WriteLine(message);
@@ -27,14 +27,13 @@ internal static class Log
     public static void Error(string message, Exception ex) => Info($"ERROR {message}: {ex}");
 }
 
-internal static class Paths
+public static class Paths
 {
     public static readonly string DataDirectory = CreateDataDirectory();
     public static readonly string LogFile = Path.Combine(DataDirectory, "launcher.log");
     public static readonly string QueueFile = Path.Combine(DataDirectory, "queue.jsonl");
     public static readonly string ConfigFile = Path.Combine(DataDirectory, "config.json");
     public static readonly string MetricsFile = Path.Combine(DataDirectory, "metrics.jsonl");
-    public static readonly string WebViewData = Path.Combine(DataDirectory, "WebView2");
 
     private static string CreateDataDirectory()
     {

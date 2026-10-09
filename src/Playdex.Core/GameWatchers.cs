@@ -2,10 +2,10 @@ using System.Diagnostics;
 using Microsoft.Win32;
 using Microsoft.Win32.SafeHandles;
 
-namespace Playdex.Launcher.Host;
+namespace Playdex.Core;
 
 /// <summary>Running/exit events for one launched game. Callbacks arrive on thread-pool threads.</summary>
-internal interface IGameWatcher : IDisposable
+public interface IGameWatcher : IDisposable
 {
     event Action? Running;
 
@@ -28,7 +28,7 @@ internal interface IGameWatcher : IDisposable
 /// reported. During the first 30 s (launcher to game hand-offs such as REDprelauncher to witcher3.exe) the folder is
 /// rescanned every 2 s and only the registry may end the session. The registry remains the fallback throughout.
 /// </remarks>
-internal sealed partial class SteamGameWatcher : IGameWatcher
+public sealed partial class SteamGameWatcher : IGameWatcher
 {
     private static readonly TimeSpan _startTimeout = TimeSpan.FromMinutes(5);
     private static readonly TimeSpan _bootWindow = TimeSpan.FromSeconds(30);
@@ -309,7 +309,7 @@ internal sealed partial class SteamGameWatcher : IGameWatcher
 /// Games the launcher starts directly: the process is created suspended inside a Job Object whose completion port
 /// reports JOB_OBJECT_MSG_ACTIVE_PROCESS_ZERO once it and every child it started have exited.
 /// </summary>
-internal sealed unsafe class JobGameWatcher : IGameWatcher
+public sealed unsafe class JobGameWatcher : IGameWatcher
 {
     private const nuint StopKey = 1;
 

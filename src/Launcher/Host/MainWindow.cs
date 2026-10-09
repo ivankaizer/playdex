@@ -65,7 +65,7 @@ internal sealed partial class MainWindow : Window
         Content = root;
 
         _queue = new SessionQueue(_api);
-        _sessions = new SessionManager(_api, _queue, PostFromAnyThread, OnGameExited);
+        _sessions = new SessionManager(_api, _queue, PostSession, OnGameExited);
         _input = new ControllerInput(new InputQueue(DispatcherQueue, OnInput));
 
         Activated += OnActivated;
@@ -326,6 +326,9 @@ internal sealed partial class MainWindow : Window
     }
 
     private void PostFromAnyThread(string json) => DispatcherQueue.TryEnqueue(() => Post(json));
+
+    private void PostSession(string gameId, string state, int seconds) =>
+        PostFromAnyThread($$"""{"type":"session","gameId":{{JsonSerializer.Serialize(gameId, HostJson.Default.String)}},"state":"{{state}}","seconds":{{seconds}}}""");
 
     private void Post(string json)
     {

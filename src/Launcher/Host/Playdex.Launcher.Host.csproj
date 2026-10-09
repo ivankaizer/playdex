@@ -44,6 +44,7 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.WindowsAppSDK" />
+    <ProjectReference Include="..\..\Playdex.Core\Playdex.Core.csproj" />
   </ItemGroup>
 
   <ItemGroup>

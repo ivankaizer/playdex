@@ -1,18 +1,18 @@
 using System.Text.RegularExpressions;
 using Microsoft.Win32;
 
-namespace Playdex.Launcher.Host;
+namespace Playdex.Core;
 
-internal sealed record InstalledGame(int AppId, string Name, long LastPlayed);
+public sealed record InstalledGame(int AppId, string Name, long LastPlayed);
 
 /// <summary>Cached artwork, each a path relative to Steam's librarycache folder (forward slashes), or null.</summary>
-internal sealed record SteamArt(string? Hero, string? Logo, string? Portrait, string? Capsule);
+public sealed record SteamArt(string? Hero, string? Logo, string? Portrait, string? Capsule);
 
 /// <summary>
 /// Installed Steam games, read from disk: the library folders in steamapps\libraryfolders.vdf and one
 /// appmanifest_&lt;appid&gt;.acf per installed app. No Steam API, no network; a few small file reads.
 /// </summary>
-internal static partial class SteamLibrary
+public static partial class SteamLibrary
 {
     /// <summary>StateFlags bit 4: fully installed. Other bits (update required, downloading) still leave it launchable.</summary>
     private const int FullyInstalled = 4;

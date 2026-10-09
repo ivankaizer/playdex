@@ -4,32 +4,32 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
-namespace Playdex.Launcher.Host;
+namespace Playdex.Core;
 
-internal sealed record CaptureGame(string GameTitle, string GameId, string GameIdProvider, string Platform);
+public sealed record CaptureGame(string GameTitle, string GameId, string GameIdProvider, string Platform);
 
-internal sealed record RecordedSession(
+public sealed record RecordedSession(
     string GameTitle, string GameId, string GameIdProvider, string Platform, int DurationInSeconds);
 
 /// <summary>A session that could not reach Playdex, kept in queue.jsonl until it can be sent.</summary>
-internal sealed record QueuedSession(
+public sealed record QueuedSession(
     string GameTitle, string GameId, string GameIdProvider, string Platform, int DurationInSeconds,
     DateTimeOffset StartedAt, DateTimeOffset EndedAt);
 
-internal sealed record LauncherConfig(string? ApiKey, string? ApiBaseUrl);
+public sealed record LauncherConfig(string? ApiKey, string? ApiBaseUrl);
 
 [JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
 [JsonSerializable(typeof(CaptureGame))]
 [JsonSerializable(typeof(RecordedSession))]
 [JsonSerializable(typeof(QueuedSession))]
 [JsonSerializable(typeof(LauncherConfig))]
-internal sealed partial class CaptureJson : JsonSerializerContext;
+public sealed partial class CaptureJson : JsonSerializerContext;
 
 /// <summary>
 /// Playdex capture API client (POST /capture/sessions/start, /ping, /end and /capture/sessions), ported from the
 /// Wrapper's PingApiClient. The API key comes from PLAYDEX_API_KEY or config.json; it is never logged.
 /// </summary>
-internal sealed class CaptureClient : IDisposable
+public sealed class CaptureClient : IDisposable
 {
     private const string DefaultBaseUrl = "https://playdex.ejwan.dev/api";
 
@@ -37,13 +37,22 @@ internal sealed class CaptureClient : IDisposable
     private readonly string? _apiKey;
 
     public CaptureClient()
+        : this(ReadConfig())
     {
-        var config = ReadConfig();
-        _apiKey = Environment.GetEnvironmentVariable("PLAYDEX_API_KEY") is { Length: > 0 } fromEnv ? fromEnv : config?.ApiKey;
-        var baseUrl = Environment.GetEnvironmentVariable("PLAYDEX_API_URL") is { Length: > 0 } urlFromEnv
-            ? urlFromEnv
-            : config?.ApiBaseUrl ?? DefaultBaseUrl;
-        _http = new HttpClient
+    }
+
+    private CaptureClient(LauncherConfig? config)
+        : this(
+            Environment.GetEnvironmentVariable("PLAYDEX_API_KEY") is { Length: > 0 } fromEnv ? fromEnv : config?.ApiKey,
+            Environment.GetEnvironmentVariable("PLAYDEX_API_URL") is { Length: > 0 } urlFromEnv ? urlFromEnv : config?.ApiBaseUrl ?? DefaultBaseUrl,
+            new HttpClientHandler())
+    {
+    }
+
+    internal CaptureClient(string? apiKey, string baseUrl, HttpMessageHandler handler)
+    {
+        _apiKey = apiKey;
+        _http = new HttpClient(handler)
         {
             BaseAddress = new Uri(baseUrl.TrimEnd('/') + "/"),
             Timeout = TimeSpan.FromSeconds(10),
@@ -113,16 +122,18 @@ internal sealed class CaptureClient : IDisposable
 /// start time. The fix is an optional startedAt on that endpoint (see spike-results.md), not a launcher workaround.
 /// StartedAt is already kept in the queue file for when the API accepts it.
 /// </remarks>
-internal sealed class SessionQueue(CaptureClient api) : IDisposable
+[System.Diagnostics.CodeAnalysis.SuppressMessage("Naming", "CA1711", Justification = "It is a queue.")]
+public sealed class SessionQueue(CaptureClient api, string? file = null) : IDisposable
 {
     private readonly SemaphoreSlim _gate = new(1, 1);
+    private readonly string _file = file ?? Paths.QueueFile;
 
     public async Task EnqueueAsync(QueuedSession session)
     {
         await _gate.WaitAsync();
         try
         {
-            await File.AppendAllTextAsync(Paths.QueueFile, JsonSerializer.Serialize(session, CaptureJson.Default.QueuedSession) + "\n");
+            await File.AppendAllTextAsync(_file, JsonSerializer.Serialize(session, CaptureJson.Default.QueuedSession) + "\n");
             Log.Info($"queue: stored {session.GameTitle} ({session.DurationInSeconds}s) for later");
         }
         finally
@@ -140,12 +151,12 @@ internal sealed class SessionQueue(CaptureClient api) : IDisposable
         await _gate.WaitAsync();
         try
         {
-            if (!File.Exists(Paths.QueueFile))
+            if (!File.Exists(_file))
             {
                 return;
             }
             var remaining = new List<string>();
-            foreach (var line in await File.ReadAllLinesAsync(Paths.QueueFile))
+            foreach (var line in await File.ReadAllLinesAsync(_file))
             {
                 if (string.IsNullOrWhiteSpace(line))
                 {
@@ -175,11 +186,11 @@ internal sealed class SessionQueue(CaptureClient api) : IDisposable
             }
             if (remaining.Count == 0)
             {
-                File.Delete(Paths.QueueFile);
+                File.Delete(_file);
             }
             else
             {
-                await File.WriteAllLinesAsync(Paths.QueueFile, remaining);
+                await File.WriteAllLinesAsync(_file, remaining);
             }
             Log.Info($"queue: flushed, {remaining.Count} left");
         }

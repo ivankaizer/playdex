@@ -1,13 +1,12 @@
 using System.Diagnostics;
-using System.Text.Json;
 
-namespace Playdex.Launcher.Host;
+namespace Playdex.Core;
 
 /// <summary>
-/// Launches a game for the UI, follows it to exit, records the session to Playdex and reports
-/// {type:"session", gameId, state:"starting|running|ended", seconds} back to the UI.
+/// Launches a game, follows it to exit, records the session to Playdex and reports each state change
+/// (gameId, "starting" | "running" | "ended", seconds played) through <paramref name="report"/>, from any thread.
 /// </summary>
-internal sealed class SessionManager(CaptureClient api, SessionQueue queue, Action<string> postToUi, Action<long> gameExited)
+public sealed class SessionManager(CaptureClient api, SessionQueue queue, Action<string, string, int> report, Action<long> gameExited)
 {
     private static readonly TimeSpan _pingInterval = TimeSpan.FromSeconds(30);
 
@@ -189,8 +188,7 @@ internal sealed class SessionManager(CaptureClient api, SessionQueue queue, Acti
         });
     }
 
-    private void Post(string gameId, string state, int seconds) =>
-        postToUi($$"""{"type":"session","gameId":{{JsonSerializer.Serialize(gameId, HostJson.Default.String)}},"state":"{{state}}","seconds":{{seconds}}}""");
+    private void Post(string gameId, string state, int seconds) => report(gameId, state, seconds);
 
     private sealed class ActiveSession(string gameId, IGameWatcher watcher, CaptureGame? capture)
     {

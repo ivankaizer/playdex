@@ -127,7 +127,7 @@ internal sealed partial class App : Application
         // Start WebView2 (browser process spawn) first; window creation runs while it starts.
         var environment = CoreWebView2Environment.CreateWithOptionsAsync(
             null,
-            Paths.WebViewData,
+            Path.Combine(Paths.DataDirectory, "WebView2"),
             new CoreWebView2EnvironmentOptions { AdditionalBrowserArguments = "--disable-features=msSmartScreenProtection" }).AsTask();
 
         _window = new MainWindow(environment, _options);

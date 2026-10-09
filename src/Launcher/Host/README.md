@@ -2,6 +2,8 @@
 
 .NET 10 WinUI 3 app that shows the React UI (`../ui`) full screen in WebView2, reads the controller natively, launches games and records sessions to Playdex. Spike results: `docs/launcher/spike-results.md`.
 
+Session capture, the offline queue, game watchers, Steam and the library live in `src/Playdex.Core` (shared with the Wrapper as it moves over; see `docs/launcher/wrapper-merge-plan.md`); this project is the WinUI shell, controller input and the bridge to the page. Core's tests are `test/Playdex.Core.Tests`.
+
 Windows only. It is not in `Playdex.sln`, because CI builds the solution on Linux and the Windows App SDK XAML compiler only runs on Windows. `global.json` here allows any .NET 10 SDK (the root one pins 10.0.302).
 
 ## Run (dev)

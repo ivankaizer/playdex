@@ -1,13 +1,13 @@
 using System.Diagnostics;
 using System.Text.Json;
 
-namespace Playdex.Launcher.Host;
+namespace Playdex.Core;
 
 /// <summary>
 /// Budget measurements from docs/launcher/performance.md, appended to metrics.jsonl and the log.
 /// tools/measure.ps1 aggregates them into the numbers in docs/launcher/spike-results.md.
 /// </summary>
-internal static class Metrics
+public static class Metrics
 {
     private static readonly Lock _gate = new();
 
@@ -46,7 +46,7 @@ internal static class Metrics
 }
 
 /// <summary>Fixed-size latency sample buffer; percentiles are computed on demand off the input thread.</summary>
-internal sealed class LatencyStats(string name, int capacity = 8192)
+public sealed class LatencyStats(string name, int capacity = 8192)
 {
     private readonly double[] _samples = new double[capacity];
     private int _count;
