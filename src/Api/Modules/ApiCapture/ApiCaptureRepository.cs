@@ -7,127 +7,87 @@ public sealed class ApiCaptureRepository(PlaydexDbContext db)
 {
     public async Task<ApiIntegrationRow?> LoadCredentialByApiKey(string apiKey, CancellationToken ct)
     {
-        var credentials = await db.Database.SqlQuery<ApiIntegrationRow>($"""
-            SELECT pc.id AS "Id", pc.user_id AS "UserId"
-            FROM integrations pc
-            WHERE pc.api_key = {apiKey}
-              AND pc.type = 'api'
-              AND pc.active = true
-            """).Take(2).ToListAsync(ct);
+        var credentials = await db.Integrations
+            .AsNoTracking()
+            .Where(pc => pc.ApiKey == apiKey && pc.Type == IntegrationType.Api && pc.Active)
+            .Select(pc => new ApiIntegrationRow { Id = pc.Id, UserId = pc.UserId })
+            .Take(2)
+            .ToListAsync(ct);
         return credentials.Count == 1 ? credentials[0] : null;
     }
 
-    public Task<List<ApiCapturePlatformDto>> ListPcPlatforms(CancellationToken ct) =>
-        db.Database.SqlQuery<ApiCapturePlatformDto>($"""
-            WITH RECURSIVE pc_platforms AS (
-                SELECT id, key, name, parent_id, 0 AS depth
-                FROM platforms
-                WHERE key = 'pc'
+    public async Task<List<ApiCapturePlatformDto>> ListPcPlatforms(CancellationToken ct)
+    {
+        // The platform tree is tiny, so walk it in memory instead of using a recursive CTE.
+        var tree = await db.Platforms
+            .AsNoTracking()
+            .Select(p => new { p.Id, p.Key, p.ParentId })
+            .ToListAsync(ct);
+        var ids = tree.Where(p => p.Key == "pc").Select(p => p.Id).ToHashSet();
+        var frontier = ids.ToList();
+        while (frontier.Count > 0)
+        {
+            frontier = tree
+                .Where(p => p.ParentId is { } parentId && frontier.Contains(parentId) && ids.Add(p.Id))
+                .Select(p => p.Id)
+                .ToList();
+        }
 
-                UNION ALL
+        return await db.Platforms
+            .AsNoTracking()
+            .Where(p => ids.Contains(p.Id))
+            .OrderBy(p => p.Key == "pc" ? 0 : 1)
+            .ThenBy(p => p.Name)
+            .ThenBy(p => p.Key)
+            .Select(p => new ApiCapturePlatformDto(p.Key, p.Name))
+            .ToListAsync(ct);
+    }
 
-                SELECT child.id, child.key, child.name, child.parent_id, parent.depth + 1
-                FROM platforms child
-                JOIN pc_platforms parent ON child.parent_id = parent.id
-            )
-            SELECT key AS "Key", name AS "Name"
-            FROM pc_platforms
-            ORDER BY CASE WHEN key = 'pc' THEN 0 ELSE 1 END, name, key
-            """).ToListAsync(ct);
-
-    public async Task<long> InsertCompletePlaySession(
+    public Task<long> InsertCompletePlaySession(
         ApiIntegrationRow integration, long gameId, long platformId, DateTimeOffset startedAt, DateTimeOffset endedAt,
-        CancellationToken ct)
-    {
-        var now = DateTimeOffset.UtcNow;
-        var ids = await db.Database.SqlQuery<long>($"""
-            INSERT INTO play_sessions (game_id, user_id, platform_id, capture_method, integration_id, started_at, ended_at, created_at, updated_at)
-            VALUES ({gameId}, {integration.UserId}, {platformId}, 'api', {integration.Id}, {startedAt}, {endedAt}, {now}, {now})
-            RETURNING id
-            """).ToListAsync(ct);
-        return ids.Single();
-    }
+        CancellationToken ct) =>
+        InsertPlaySession(integration, gameId, platformId, startedAt, endedAt, ct);
 
-    public async Task<long> InsertActivePlaySession(
+    public Task<long> InsertActivePlaySession(
         ApiIntegrationRow integration, long gameId, long platformId, DateTimeOffset startedAt,
+        CancellationToken ct) =>
+        InsertPlaySession(integration, gameId, platformId, startedAt, null, ct);
+
+    private async Task<long> InsertPlaySession(
+        ApiIntegrationRow integration, long gameId, long platformId, DateTimeOffset startedAt, DateTimeOffset? endedAt,
         CancellationToken ct)
     {
         var now = DateTimeOffset.UtcNow;
-        var ids = await db.Database.SqlQuery<long>($"""
-            INSERT INTO play_sessions (game_id, user_id, platform_id, capture_method, integration_id, started_at, created_at, updated_at)
-            VALUES ({gameId}, {integration.UserId}, {platformId}, 'api', {integration.Id}, {startedAt}, {now}, {now})
-            RETURNING id
-            """).ToListAsync(ct);
-        return ids.Single();
+        var session = new PlaySession
+        {
+            GameId = gameId,
+            UserId = integration.UserId,
+            PlatformId = platformId,
+            CaptureMethod = CaptureMethod.Api,
+            IntegrationId = integration.Id,
+            StartedAt = startedAt,
+            EndedAt = endedAt,
+            CreatedAt = now,
+            UpdatedAt = now,
+        };
+        db.PlaySessions.Add(session);
+        await db.SaveChangesAsync(ct);
+        return session.Id;
     }
 
-    public async Task<int> EndActiveSessionsForCredential(
+    public Task<int> EndActiveSessionsForCredential(
         long credentialId, DateTimeOffset endedAt,
         CancellationToken ct)
     {
         var now = DateTimeOffset.UtcNow;
-        return await db.Database.ExecuteSqlInterpolatedAsync($"""
-            UPDATE play_sessions
-            SET ended_at = {endedAt}, updated_at = {now}
-            WHERE integration_id = {credentialId} AND ended_at IS NULL
-            """, ct);
+        return db.PlaySessions
+            .Where(ps => ps.IntegrationId == credentialId && ps.EndedAt == null)
+            .ExecuteUpdateAsync(set => set
+                .SetProperty(ps => ps.EndedAt, endedAt)
+                .SetProperty(ps => ps.UpdatedAt, now), ct);
     }
 
-    public async Task<int> EndActiveSessionsForCredentialExceptGame(
-        long credentialId, long gameId, DateTimeOffset endedAt,
-        CancellationToken ct)
-    {
-        var now = DateTimeOffset.UtcNow;
-        return await db.Database.ExecuteSqlInterpolatedAsync($"""
-            UPDATE play_sessions
-            SET ended_at = {endedAt}, updated_at = {now}
-            WHERE integration_id = {credentialId}
-              AND ended_at IS NULL
-              AND game_id <> {gameId}
-            """, ct);
-    }
-
-    public async Task<int> EndTimedOutActiveSessionsForCredential(
-        long credentialId, DateTimeOffset timeoutBefore, DateTimeOffset endedAt, int timeoutMinutes,
-        CancellationToken ct)
-    {
-        return await db.Database.ExecuteSqlInterpolatedAsync($"""
-            UPDATE play_sessions
-            SET ended_at = LEAST({endedAt}, updated_at + ({timeoutMinutes} * INTERVAL '1 minute')),
-                updated_at = NOW()
-            WHERE integration_id = {credentialId}
-              AND ended_at IS NULL
-              AND updated_at < {timeoutBefore}
-            """, ct);
-    }
-
-    public async Task<ActiveSessionRow?> FetchActiveSessionForCredential(
-        long credentialId,
-        CancellationToken ct)
-    {
-        return await db.Database.SqlQuery<ActiveSessionRow?>($"""
-            SELECT
-                id AS "Id",
-                game_id AS "GameId",
-                started_at AS "StartedAt",
-                updated_at AS "UpdatedAt"
-            FROM play_sessions
-            WHERE integration_id = {credentialId} AND ended_at IS NULL
-            ORDER BY started_at DESC
-            LIMIT 1
-            """).FirstOrDefaultAsync(ct);
-    }
-
-    public async Task<bool> TouchActiveSession(
-        long sessionId, DateTimeOffset touchedAt,
-        CancellationToken ct)
-    {
-        var affected = await db.Database.ExecuteSqlInterpolatedAsync($"""
-            UPDATE play_sessions SET updated_at = {touchedAt} WHERE id = {sessionId} AND ended_at IS NULL
-            """, ct);
-        return affected > 0;
-    }
-
+    // UPDATE ... FROM ... RETURNING has no ExecuteUpdate equivalent, so this stays raw.
     public async Task<List<TimedOutSessionRow>> EndTimedOutActiveSessions(
         DateTimeOffset timeoutBefore, DateTimeOffset endedAt, int timeoutMinutes,
         CancellationToken ct)
@@ -155,14 +115,6 @@ public sealed class ApiIntegrationRow
 {
     public long Id { get; set; }
     public long UserId { get; set; }
-}
-
-public sealed class ActiveSessionRow
-{
-    public long Id { get; set; }
-    public long GameId { get; set; }
-    public DateTimeOffset StartedAt { get; set; }
-    public DateTimeOffset UpdatedAt { get; set; }
 }
 
 public sealed class TimedOutSessionRow

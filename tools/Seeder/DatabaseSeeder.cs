@@ -33,12 +33,12 @@ public class DatabaseSeeder(PlaydexDbContext db)
 
         // platforms
         var platformCustom = MakePlatform("Custom");
-        var platformPlaystation = MakePlatform("psn", 167);
-        var platformXbox = MakePlatform("xbox", 169);
+        var platformPlaystation = MakePlatform("PlayStation", 167, key: "psn");
+        var platformXbox = MakePlatform("Xbox", 169);
         var platformPc = MakePlatform("PC", 6);
         await db.AddAsync(platformPc);
         await db.SaveChangesAsync();
-        var platformSteam = MakePlatform("steam", parentId: platformPc.Id);
+        var platformSteam = MakePlatform("Steam", parentId: platformPc.Id);
 
         await db.AddAsync(platformCustom);
         await db.AddAsync(platformPlaystation);
@@ -220,12 +220,13 @@ public class DatabaseSeeder(PlaydexDbContext db)
         };
     }
 
-    private static Platform MakePlatform(string name, int? igdbPlatformId = null, long? parentId = null)
+    /// <summary>Display name as the migrations seed it; the key is derived from it unless given.</summary>
+    private static Platform MakePlatform(string name, int? igdbPlatformId = null, long? parentId = null, string? key = null)
     {
         return new Platform
         {
             Name = name,
-            Key = Regex.Replace(name, "([a-z0-9])([A-Z])", "$1-$2").ToLowerInvariant(),
+            Key = key ?? Regex.Replace(name, "([a-z0-9])([A-Z])", "$1-$2").ToLowerInvariant(),
             IgdbPlatformId = igdbPlatformId,
             ParentId = parentId,
         };

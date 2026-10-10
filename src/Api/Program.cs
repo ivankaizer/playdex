@@ -7,6 +7,7 @@ using Api.Infrastructure.Http;
 using Playdex.Persistence;
 using Playdex.Persistence.Migrations;
 using Api.Modules.Accounts;
+using Api.Modules.Admin;
 using Api.Modules.ApiCapture;
 using Api.Modules.Games;
 using Api.Modules.Launcher;
@@ -14,6 +15,7 @@ using Api.Modules.Manual;
 using Api.Modules.Metrics;
 using Api.Modules.Notifications;
 using Api.Modules.Polling;
+using Api.Modules.Privacy;
 using Api.Modules.Providers;
 using Api.Modules.Recap;
 using Api.Modules.Settings;
@@ -71,6 +73,7 @@ builder.Services
     .AddAuth(builder.Configuration)
     .AddAccounts()
     .AddSettings()
+    .AddPrivacy()
     .AddGames()
     .AddManual()
     .AddApiCapture()
@@ -79,7 +82,8 @@ builder.Services
     .AddRecap()
     .AddPlaydexMetrics()
     .AddPolling(builder.Configuration)
-    .AddNotifications(builder.Configuration);
+    .AddNotifications(builder.Configuration)
+    .AddAdmin();
 
 builder.Services.AddExceptionHandler<ApiExceptionHandler>();
 builder.Services.AddProblemDetails();
@@ -130,13 +134,15 @@ api
     .MapAuth()
     .MapAccounts()
     .MapSettings()
+    .MapPrivacy()
     .MapGames()
     .MapManual()
     .MapApiCapture()
     .MapLauncher()
     .MapProviders()
     .MapRecap()
-    .MapMetrics();
+    .MapMetrics()
+    .MapAdmin();
 
 app.MapHealthChecks("/health/live", new HealthCheckOptions { Predicate = _ => false });
 app.MapHealthChecks("/health/ready");

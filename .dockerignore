@@ -4,3 +4,9 @@
 .DS_Store
 .tmp/
 node_modules/
+node_modules
+**/node_modules
+**/dist
+.env
+.env.*
+!.env.example

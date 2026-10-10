@@ -1,5 +1,6 @@
+using System.Globalization;
+using System.Linq.Expressions;
 using Microsoft.EntityFrameworkCore;
-using Npgsql;
 using Api.Infrastructure.Common;
 using Playdex.Persistence;
 using Api.Modules.Games;
@@ -42,29 +43,22 @@ public sealed class AccountsRepository(PlaydexDbContext db, IGames games)
         string sort, string direction, int limit, int offset,
         int ignoreShortMinutes, CancellationToken ct)
     {
-        var (sql, parameters) = BuildSessionQuery(
+        var query = BuildSessionQuery(
             userId, accountId, title, gameIds, platform, from, to, excludeIgnored: false);
 
-        var orderDirection = direction.Equals("asc", StringComparison.OrdinalIgnoreCase) ? "ASC" : "DESC";
-        var orderBy = sort switch
-        {
-            "duration" => $"\"DurationSeconds\" {orderDirection}",
-            _ => $"ps.started_at {orderDirection}",
-        };
+        var total = await query.CountAsync(ct);
 
-        var countParams = new List<NpgsqlParameter>(parameters);
-        var countSql = "SELECT COUNT(*) AS \"Value\" FROM (" + sql + ") cnt";
-        var total = await db.Database.SqlQueryRaw<int>(countSql, [.. countParams])
-            .FirstOrDefaultAsync(ct);
-
-        var dataParams = new List<NpgsqlParameter>(parameters)
+        var ascending = direction.Equals("asc", StringComparison.OrdinalIgnoreCase);
+        var ordered = sort switch
         {
-            new("Offset", offset),
-            new("Limit", limit),
+            "duration" => ascending
+                ? query.OrderBy(row => (row.Session.EndedAt ?? DateTimeOffset.UtcNow) - row.Session.StartedAt)
+                : query.OrderByDescending(row => (row.Session.EndedAt ?? DateTimeOffset.UtcNow) - row.Session.StartedAt),
+            _ => ascending
+                ? query.OrderBy(row => row.Session.StartedAt)
+                : query.OrderByDescending(row => row.Session.StartedAt),
         };
-        var dataSql = $"{sql} ORDER BY {orderBy} OFFSET @Offset LIMIT @Limit";
-        var sessions = await db.Database.SqlQueryRaw<SessionDbRow>(dataSql, [.. dataParams])
-            .ToListAsync(ct);
+        var sessions = await ordered.Skip(offset).Take(limit).Select(ToSessionDbRow).ToListAsync(ct);
 
         return new SessionQueryResult(total, limit, offset, sessions.Select(MapSession).ToList());
     }
@@ -76,14 +70,14 @@ public sealed class AccountsRepository(PlaydexDbContext db, IGames games)
         var todayStart = new DateTimeOffset(now.Year, now.Month, now.Day, 0, 0, 0, TimeSpan.Zero);
         var todayEnd = todayStart.AddDays(1);
 
-        var (sql, parameters) = BuildSessionQuery(
-            userId, accountId, null, null, null, null, null, excludeIgnored: false);
-        sql += " AND ((ps.started_at >= @TodayStart AND ps.started_at < @TodayEnd)" +
-            " OR (ps.ended_at IS NOT NULL AND ps.ended_at >= @TodayStart AND ps.ended_at < @TodayEnd))";
-        parameters.Add(new NpgsqlParameter("TodayStart", todayStart));
-        parameters.Add(new NpgsqlParameter("TodayEnd", todayEnd));
-        var dataSql = $"{sql} ORDER BY ps.started_at DESC LIMIT 10";
-        var sessions = await db.Database.SqlQueryRaw<SessionDbRow>(dataSql, [.. parameters])
+        var sessions = await BuildSessionQuery(
+                userId, accountId, null, null, null, null, null, excludeIgnored: false)
+            .Where(row =>
+                (row.Session.StartedAt >= todayStart && row.Session.StartedAt < todayEnd) ||
+                (row.Session.EndedAt != null && row.Session.EndedAt >= todayStart && row.Session.EndedAt < todayEnd))
+            .OrderByDescending(row => row.Session.StartedAt)
+            .Take(10)
+            .Select(ToSessionDbRow)
             .ToListAsync(ct);
 
         return sessions.Select(MapSession).ToList();
@@ -92,21 +86,20 @@ public sealed class AccountsRepository(PlaydexDbContext db, IGames games)
     public async Task<AccountSessionDto?> LoadCurrentSession(
         long userId, long? accountId, CancellationToken ct)
     {
-        var (sql, parameters) = BuildSessionQuery(
-            userId, accountId, null, null, null, null, null, excludeIgnored: false);
-        sql += " AND ps.ended_at IS NULL ORDER BY ps.started_at DESC LIMIT 1";
-        var session = await db.Database.SqlQueryRaw<SessionDbRow?>(sql, [.. parameters])
+        var session = await BuildSessionQuery(
+                userId, accountId, null, null, null, null, null, excludeIgnored: false)
+            .Where(row => row.Session.EndedAt == null)
+            .OrderByDescending(row => row.Session.StartedAt)
+            .Select(ToSessionDbRow)
             .FirstOrDefaultAsync(ct);
         return session is null ? null : MapSession(session);
     }
 
     public async Task<long> DeleteSession(long sessionId, long userId, CancellationToken ct)
     {
-        var affected = await db.Database.ExecuteSqlRawAsync("""
-            DELETE FROM play_sessions WHERE id = @Id AND user_id = @UserId
-            """,
-            [new NpgsqlParameter("Id", sessionId), new NpgsqlParameter("UserId", userId)],
-            ct);
+        var affected = await db.PlaySessions
+            .Where(session => session.Id == sessionId && session.UserId == userId)
+            .ExecuteDeleteAsync(ct);
         return affected == 1 ? sessionId : 0;
     }
 
@@ -119,10 +112,10 @@ public sealed class AccountsRepository(PlaydexDbContext db, IGames games)
         long userId, long? accountId, DateTimeOffset? from, DateTimeOffset? to,
         int ignoreShortMinutes, CancellationToken ct)
     {
-        var (sql, parameters) = BuildSessionQuery(
-            userId, accountId, null, null, null, from, to, excludeIgnored: true);
-        sql += " ORDER BY ps.started_at ASC";
-        var sessions = await db.Database.SqlQueryRaw<SessionDbRow>(sql, [.. parameters])
+        var sessions = await BuildSessionQuery(
+                userId, accountId, null, null, null, from, to, excludeIgnored: true)
+            .OrderBy(row => row.Session.StartedAt)
+            .Select(ToSessionDbRow)
             .ToListAsync(ct);
 
         return sessions.Select(MapSession).ToList();
@@ -133,10 +126,10 @@ public sealed class AccountsRepository(PlaydexDbContext db, IGames games)
         IReadOnlyCollection<long> gameIds,
         CancellationToken ct)
     {
-        var (sql, parameters) = BuildSessionQuery(
-            userId, null, null, gameIds, null, null, null, excludeIgnored: true);
-        sql += " ORDER BY ps.started_at ASC";
-        var sessions = await db.Database.SqlQueryRaw<SessionDbRow>(sql, [.. parameters])
+        var sessions = await BuildSessionQuery(
+                userId, null, null, gameIds, null, null, null, excludeIgnored: true)
+            .OrderBy(row => row.Session.StartedAt)
+            .Select(ToSessionDbRow)
             .ToListAsync(ct);
         var mapped = sessions.Select(MapSession).ToList();
         if (mapped.Count == 0)
@@ -224,91 +217,79 @@ public sealed class AccountsRepository(PlaydexDbContext db, IGames games)
             totalSeconds, sessions.Count, topGame, platforms, topGames, months);
     }
 
-    private static (string Sql, List<NpgsqlParameter> Parameters) BuildSessionQuery(
+    /// <summary>
+    /// Play time per UTC day in [from, to). Unlike the period stats, a session is split across every day it
+    /// overlaps, and a running session counts up to now, so no day can exceed 24 hours.
+    /// </summary>
+    public async Task<List<AccountDayStatDto>> ComputeDailyStats(
+        long userId, long? accountId, DateTimeOffset from, DateTimeOffset to,
+        string? platform, int ignoreShortMinutes, CancellationToken ct)
+    {
+        var now = DateTimeOffset.UtcNow;
+        var rows = await BuildSessionQuery(
+                userId, accountId, null, null, platform, null, null, excludeIgnored: true)
+            .Where(row => row.Session.StartedAt < to && (row.Session.EndedAt ?? now) > from)
+            .OrderBy(row => row.Session.StartedAt)
+            .Select(ToSessionDbRow)
+            .ToListAsync(ct);
+
+        return BuildDayStats(from, to, rows.Select(MapSession).ToList(), now);
+    }
+
+    private IQueryable<SessionQueryRow> BuildSessionQuery(
         long userId, long? accountId, string? title, IReadOnlyCollection<long>? gameIds,
         string? platform, DateTimeOffset? from, DateTimeOffset? to, bool excludeIgnored)
     {
-        var sql = """
-            SELECT ps.id AS "SessionId", ps.started_at AS "StartedAt", ps.ended_at AS "EndedAt",
-                   g.id AS "GameId", g.title AS "GameTitle",
-                   p.key AS "PlatformKey", p.name AS "PlatformName",
-                   g.capsule_url AS "CapsuleUrl",
-                   CASE
-                       WHEN COALESCE(us.ignore_short_sessions_minutes, 0) > 0
-                           AND ps.ended_at IS NOT NULL
-                           AND EXTRACT(EPOCH FROM (ps.ended_at - ps.started_at))
-                               < COALESCE(us.ignore_short_sessions_minutes, 0) * 60
-                       THEN TRUE ELSE FALSE
-                   END AS "Ignored",
-                   CASE WHEN ps.ended_at IS NOT NULL
-                       THEN GREATEST(0, FLOOR(EXTRACT(EPOCH FROM (ps.ended_at - ps.started_at))))::int
-                       ELSE GREATEST(0, FLOOR(EXTRACT(EPOCH FROM (NOW() AT TIME ZONE 'utc' - ps.started_at))))::int
-                   END AS "DurationSeconds"
-            FROM play_sessions ps
-            JOIN platforms p ON p.id = ps.platform_id
-            JOIN games g ON g.id = ps.game_id
-            LEFT JOIN user_settings us ON us.user_id = ps.user_id
-            WHERE ps.user_id = @UserId
-            """;
-
-        var parameters = new List<NpgsqlParameter>
-        {
-            new("UserId", userId),
-        };
+        var query =
+            from row in db.ClassifiedPlaySessions()
+            join p in db.Platforms on row.Session.PlatformId equals p.Id
+            join g in db.Games on row.Session.GameId equals g.Id
+            where row.Session.UserId == userId
+            select new SessionQueryRow { Session = row.Session, Game = g, Platform = p, Ignored = row.Ignored };
 
         if (accountId.HasValue)
-        {
-            sql += " AND ps.integration_id = @AccountId";
-            parameters.Add(new NpgsqlParameter("AccountId", accountId.Value));
-        }
+            query = query.Where(row => row.Session.IntegrationId == accountId.Value);
 
         if (!string.IsNullOrWhiteSpace(title))
         {
-            sql += " AND g.title ILIKE @Title";
-            parameters.Add(new NpgsqlParameter("Title", $"%{title}%"));
+            var pattern = $"%{title}%";
+            query = query.Where(row => EF.Functions.ILike(row.Game.Title, pattern));
         }
 
-        if (gameIds is { Count: 1 })
-        {
-            sql += " AND g.id = @GameId";
-            parameters.Add(new NpgsqlParameter("GameId", gameIds.First()));
-        }
-
-        else if (gameIds is { Count: > 1 })
-        {
-            sql += " AND g.id = ANY(@GameIds)";
-            parameters.Add(new NpgsqlParameter("GameIds", gameIds.ToArray()));
-        }
+        if (gameIds is { Count: > 0 })
+            query = query.Where(row => gameIds.Contains(row.Game.Id));
 
         if (!string.IsNullOrWhiteSpace(platform))
         {
-            sql += " AND p.key = @Platform";
-            parameters.Add(new NpgsqlParameter("Platform", platform.Trim().ToLowerInvariant()));
+            var platformKey = platform.Trim().ToLowerInvariant();
+            query = query.Where(row => row.Platform.Key == platformKey);
         }
 
         if (from.HasValue)
-        {
-            sql += " AND ps.started_at >= @From";
-            parameters.Add(new NpgsqlParameter("From", from.Value));
-        }
+            query = query.Where(row => row.Session.StartedAt >= from.Value);
 
         if (to.HasValue)
-        {
-            sql += " AND ps.started_at < @To";
-            parameters.Add(new NpgsqlParameter("To", to.Value));
-        }
+            query = query.Where(row => row.Session.StartedAt < to.Value);
 
         if (excludeIgnored)
-        {
-            sql += """
-                 AND NOT (COALESCE(us.ignore_short_sessions_minutes, 0) > 0
-                     AND ps.ended_at IS NOT NULL
-                     AND EXTRACT(EPOCH FROM (ps.ended_at - ps.started_at)) < COALESCE(us.ignore_short_sessions_minutes, 0) * 60)
-                """;
-        }
+            query = query.Where(row => !row.Ignored);
 
-        return (sql, parameters);
+        return query;
     }
+
+    private static readonly Expression<Func<SessionQueryRow, SessionDbRow>> ToSessionDbRow =
+        row => new SessionDbRow
+        {
+            SessionId = row.Session.Id,
+            StartedAt = row.Session.StartedAt,
+            EndedAt = row.Session.EndedAt,
+            GameId = row.Game.Id,
+            GameTitle = row.Game.Title,
+            PlatformKey = row.Platform.Key,
+            PlatformName = row.Platform.Name,
+            CapsuleUrl = row.Game.CapsuleUrl,
+            Ignored = row.Ignored,
+        };
 
     private static AccountSessionDto MapSession(SessionDbRow row)
     {
@@ -330,6 +311,54 @@ public sealed class AccountsRepository(PlaydexDbContext db, IGames games)
         s.EndedAt.HasValue
             ? (s.EndedAt.Value - s.StartedAt).TotalSeconds
             : (DateTimeOffset.UtcNow - s.StartedAt).TotalSeconds;
+
+    internal static List<AccountDayStatDto> BuildDayStats(
+        DateTimeOffset from,
+        DateTimeOffset to,
+        IReadOnlyList<AccountSessionDto> sessions,
+        DateTimeOffset now)
+    {
+        var firstDay = from.UtcDateTime.Date;
+        var seconds = new Dictionary<DateTime, double>();
+        var counts = new Dictionary<DateTime, int>();
+        var platforms = new Dictionary<DateTime, Dictionary<string, (string Name, double Seconds)>>();
+        foreach (var session in sessions)
+        {
+            var start = session.StartedAt > from ? session.StartedAt : from;
+            var end = session.EndedAt ?? now;
+            if (end > to) end = to;
+            for (var day = start.UtcDateTime.Date; day < end.UtcDateTime; day = day.AddDays(1))
+            {
+                var dayStart = new DateTimeOffset(day, TimeSpan.Zero);
+                var sliceStart = start > dayStart ? start : dayStart;
+                var sliceEnd = end < dayStart.AddDays(1) ? end : dayStart.AddDays(1);
+                if (sliceEnd <= sliceStart) continue;
+                var slice = (sliceEnd - sliceStart).TotalSeconds;
+                seconds[day] = seconds.GetValueOrDefault(day) + slice;
+                counts[day] = counts.GetValueOrDefault(day) + 1;
+                if (!platforms.TryGetValue(day, out var byPlatform))
+                    platforms[day] = byPlatform = [];
+                var current = byPlatform.GetValueOrDefault(session.PlatformKey, (session.PlatformName, 0));
+                byPlatform[session.PlatformKey] = (current.Name, current.Seconds + slice);
+            }
+        }
+
+        var days = new List<AccountDayStatDto>();
+        for (var cursor = firstDay; cursor < to.UtcDateTime; cursor = cursor.AddDays(1))
+        {
+            days.Add(new AccountDayStatDto(
+                cursor.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+                seconds.GetValueOrDefault(cursor),
+                counts.GetValueOrDefault(cursor),
+                platforms.TryGetValue(cursor, out var dayPlatforms)
+                    ? dayPlatforms
+                        .OrderBy(item => item.Key, StringComparer.Ordinal)
+                        .Select(item => new AccountDayPlatformDto(item.Key, item.Value.Name, item.Value.Seconds))
+                        .ToList()
+                    : []));
+        }
+        return days;
+    }
 
     private static List<AccountMonthStatDto> BuildMonthStats(
         DateTimeOffset from,
@@ -367,5 +396,12 @@ internal sealed class SessionDbRow
     public string PlatformName { get; set; } = string.Empty;
     public string? CapsuleUrl { get; set; }
     public bool Ignored { get; set; }
-    public int DurationSeconds { get; set; }
+}
+
+internal sealed class SessionQueryRow
+{
+    public required PlaySession Session { get; init; }
+    public required Game Game { get; init; }
+    public required Platform Platform { get; init; }
+    public bool Ignored { get; init; }
 }
