@@ -19,5 +19,31 @@
     "/",
     "/api/"
   ],
-  "tls": "edge"
+  "tls": "edge",
+  "production": {
+    "compose": "docker-compose.prod.yml",
+    "database": "dedicated",
+    "generate": {
+      "JWT_SECRET": "base64:48"
+    },
+    "env": "CORS_ORIGINS=https://playdex.dev",
+    "domains": [
+      {
+        "host": "playdex.dev",
+        "service": "ui",
+        "port": 5056,
+        "path": "/"
+      },
+      {
+        "host": "playdex.dev",
+        "service": "app",
+        "port": 3000,
+        "path": "/api"
+      }
+    ],
+    "healthcheck": [
+      "https://playdex.dev/",
+      "https://playdex.dev/api/"
+    ]
+  }
 }
