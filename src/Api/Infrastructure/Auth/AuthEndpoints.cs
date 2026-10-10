@@ -47,7 +47,9 @@ public static class AuthEndpoints
     {
         services.AddSingleton<AuthTokenService>();
         services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-            .AddJwtBearer();
+            .AddJwtBearer()
+            .AddScheme<Microsoft.AspNetCore.Authentication.AuthenticationSchemeOptions, ApiKeyAuthenticationHandler>(
+                ApiKeyAuthentication.Scheme, null);
         services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme)
             .Configure<AuthTokenService>((options, tokens) =>
             {
@@ -85,7 +87,10 @@ public static class AuthEndpoints
                     },
                 };
             });
-        services.AddAuthorization();
+        // The default policy stays "an authenticated JWT user"; ApiKey is opted into per endpoint.
+        services.AddAuthorization(authorization => authorization.AddPolicy(
+            ApiKeyAuthentication.Policy,
+            policy => policy.AddAuthenticationSchemes(ApiKeyAuthentication.Scheme).RequireAuthenticatedUser()));
         return services;
     }
 

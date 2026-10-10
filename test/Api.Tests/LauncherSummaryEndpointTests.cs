@@ -1,0 +1,117 @@
+using System.Net;
+using System.Net.Http.Headers;
+using System.Text.Json;
+using Playdex.Persistence;
+using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.EntityFrameworkCore;
+using Xunit;
+
+namespace Api.Tests;
+
+[Collection(PostgresCollectionDefinition.Name)]
+public sealed class LauncherSummaryEndpointTests(PostgresFixture postgres)
+{
+    [Fact]
+    public async Task SummaryTakesTheApiKeyAndReturnsTheUsersPlayWithSteamIdentities()
+    {
+        if (!postgres.IsConfigured) return;
+
+        ConfigureHost();
+        await using var factory = new WebApplicationFactory<Program>();
+        using var client = factory.CreateClient();
+        Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/api/launcher/summary")).StatusCode);
+
+        await using var db = CreateDb();
+        var suffix = Guid.NewGuid().ToString("n");
+        var now = DateTimeOffset.UtcNow;
+        var steam = await db.Platforms.SingleAsync(platform => platform.Key == "steam");
+        var user = new User { Email = $"launcher-summary-{suffix}@example.test", CreatedAt = now, UpdatedAt = now };
+        var other = new User { Email = $"launcher-summary-other-{suffix}@example.test", CreatedAt = now, UpdatedAt = now };
+        var game = new Game { Title = $"Launcher Game {suffix}", CreatedAt = now, UpdatedAt = now };
+        db.AddRange(user, other, game);
+        await db.SaveChangesAsync();
+        var appId = $"9{Random.Shared.Next(10_000_000, 99_999_999)}";
+        var identity = new GameExternalIdentity
+        {
+            GameId = game.Id, Type = GameExternalIdentityType.Steam, ExternalId = appId, Title = game.Title, CreatedAt = now, UpdatedAt = now,
+        };
+        var integration = new Integration
+        {
+            UserId = user.Id, Type = IntegrationType.Api, ApiKey = $"key-{suffix}", Active = true, CreatedAt = now, UpdatedAt = now,
+        };
+        db.AddRange(identity, integration);
+        await db.SaveChangesAsync();
+        PlaySession Session(long userId, DateTimeOffset startedAt, int minutes) => new()
+        {
+            GameId = game.Id, UserId = userId, PlatformId = steam.Id, CaptureMethod = CaptureMethod.Api,
+            IntegrationId = userId == user.Id ? integration.Id : null,
+            StartedAt = startedAt, EndedAt = startedAt.AddMinutes(minutes), CreatedAt = now, UpdatedAt = now,
+        };
+        var sessions = new[]
+        {
+            Session(user.Id, now.AddMinutes(-90), 60),
+            Session(user.Id, now.AddDays(-30), 120),
+            Session(other.Id, now.AddMinutes(-50), 45), // Another user's play: never in this summary.
+        };
+        db.PlaySessions.AddRange(sessions);
+        await db.SaveChangesAsync();
+
+        try
+        {
+            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", "key-that-does-not-exist");
+            Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/api/launcher/summary")).StatusCode);
+
+            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", integration.ApiKey);
+            // The key reads only what is made for it: the account endpoints still need a signed-in user.
+            Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/api/sessions")).StatusCode);
+
+            var response = await client.GetAsync("/api/launcher/summary?tz=Europe/Prague");
+            var body = await response.Content.ReadAsStringAsync();
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            using var json = JsonDocument.Parse(body);
+            var data = json.RootElement.GetProperty("data");
+
+            Assert.Equal("Europe/Prague", data.GetProperty("timeZone").GetString());
+            Assert.Equal(180 * 60, data.GetProperty("allTime").GetProperty("totalSeconds").GetInt64());
+            Assert.Equal(2, data.GetProperty("allTime").GetProperty("sessionCount").GetInt32());
+            Assert.Equal(7, data.GetProperty("days").GetArrayLength());
+            Assert.Equal(2, data.GetProperty("recentSessions").GetArrayLength());
+
+            var played = data.GetProperty("games").EnumerateArray().Single();
+            Assert.Equal(game.Title, played.GetProperty("title").GetString());
+            Assert.Equal(180 * 60, played.GetProperty("totalSeconds").GetInt64());
+            var steamIdentity = played.GetProperty("identities").EnumerateArray().Single();
+            Assert.Equal("steam", steamIdentity.GetProperty("type").GetString());
+            Assert.Equal(appId, steamIdentity.GetProperty("externalId").GetString());
+        }
+        finally
+        {
+            db.PlaySessions.RemoveRange(sessions);
+            db.Integrations.Remove(integration);
+            db.GameExternalIdentities.Remove(identity);
+            db.Games.Remove(game);
+            db.Users.RemoveRange(user, other);
+            await db.SaveChangesAsync();
+        }
+    }
+
+    private static void ConfigureHost()
+    {
+        var databaseUrl = Environment.GetEnvironmentVariable("PLAYDEX_INTEGRATION_DATABASE_URL")!;
+        Environment.SetEnvironmentVariable("DATABASE_URL", databaseUrl);
+        Environment.SetEnvironmentVariable("Auth__JwtSecret", "launcher-summary-integration-secret-at-least-thirty-two-bytes");
+        Environment.SetEnvironmentVariable("POLL_INTERVAL_SECONDS", "3600");
+    }
+
+    private PlaydexDbContext CreateDb() => new(
+        new DbContextOptionsBuilder<PlaydexDbContext>()
+            .UseNpgsql(
+                postgres.DataSource!,
+                npgsql =>
+                {
+                    npgsql.MapEnum<GameExternalIdentityType>("game_external_identity_type");
+                    npgsql.MapEnum<IntegrationType>("integration_type");
+                    npgsql.MapEnum<CaptureMethod>("capture_method");
+                })
+            .Options);
+}

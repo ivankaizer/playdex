@@ -9,6 +9,7 @@ using Playdex.Persistence.Migrations;
 using Api.Modules.Accounts;
 using Api.Modules.ApiCapture;
 using Api.Modules.Games;
+using Api.Modules.Launcher;
 using Api.Modules.Manual;
 using Api.Modules.Metrics;
 using Api.Modules.Notifications;
@@ -73,6 +74,7 @@ builder.Services
     .AddGames()
     .AddManual()
     .AddApiCapture()
+    .AddLauncher()
     .AddProviders()
     .AddRecap()
     .AddPlaydexMetrics()
@@ -131,6 +133,7 @@ api
     .MapGames()
     .MapManual()
     .MapApiCapture()
+    .MapLauncher()
     .MapProviders()
     .MapRecap()
     .MapMetrics();
