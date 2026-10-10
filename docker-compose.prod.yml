@@ -1,4 +1,4 @@
-# Production stack: https://playdex.dev (UI at /, API at /api). Deployed by preview-kit on every push
+# Production stack: https://dash.playdex.dev (UI at /, API at /api). Deployed by preview-kit on every push
 # to main that passes the tests: CI builds the images on the macserv runner and pushes them to the
 # registry on that host; Dokploy runs this file without its build sections, with IMAGE_TAG,
 # DATABASE_URL, JWT_SECRET and CORS_ORIGINS in the stack's .env. Optional keys (IGDB, Telegram,

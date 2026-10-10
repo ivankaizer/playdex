@@ -1,7 +1,7 @@
 const token = (name) => `rgb(var(--${name}) / <alpha-value>)`;
 
 module.exports = {
-  content: ["./index.html", "./src/**/*.{ts,tsx}"],
+  content: ["./index.html", "./src/**/*.{ts,tsx}", "./landing/index.html", "./landing/**/*.tsx"],
   darkMode: "class",
   theme: {
     extend: {

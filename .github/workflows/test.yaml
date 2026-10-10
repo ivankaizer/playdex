@@ -53,6 +53,10 @@ jobs:
         run: bun run build
         working-directory: src/Frontend
 
+      - name: Build landing
+        run: bun run build:landing   # playdex.dev on Cloudflare Pages; deployed by landing.yml
+        working-directory: src/Frontend
+
       - name: Strict Release build
         run: dotnet build Playdex.sln --configuration Release --warnaserror
 
@@ -83,7 +87,7 @@ jobs:
     secrets: inherit
 
   # A push to main that passes the tests builds the production images on the macserv runner and
-  # deploys them to https://playdex.dev (preview-kit's release workflow; see the "production"
+  # deploys them to https://dash.playdex.dev (preview-kit's release workflow; see the "production"
   # section of .preview/config.json). Roll back with `preview prod deploy main-<older sha>`.
   production:
     name: Production
