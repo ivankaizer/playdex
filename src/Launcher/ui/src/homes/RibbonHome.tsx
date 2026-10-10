@@ -17,11 +17,10 @@ import {
 } from "../data/games";
 import "./ribbon.css";
 
-/** Home A: last-session ribbon on top, a jump-back grid where every tile carries this week's playtime. */
+/** Home A: last-session ribbon on top, a jump-back grid of recent games. */
 export function RibbonHome() {
   const [last, ...rest] = recentGames;
   const jump = rest.slice(0, 6);
-  const maxWeek = Math.max(...recentGames.map((r) => r.weekMinutes), 1);
   const top = recentGames.filter((r) => r.weekMinutes > 0).sort((a, b) => b.weekMinutes - a.weekMinutes).slice(0, 3);
   const s = last.lastSession;
   const lastDay = lastPlayedDay(last);
@@ -84,12 +83,6 @@ export function RibbonHome() {
                 <span className="jtile-title">{r.game.title}</span>
                 <span className="jtile-sub">
                   {lastPlayedText(r)} · {SOURCE_LABEL[r.game.source]}
-                </span>
-                <span className="meter" aria-label={`${fmtMinutes(r.weekMinutes)} played this week`}>
-                  <span className="meter-track">
-                    <i style={{ transform: `scaleX(${r.weekMinutes / maxWeek})` }} />
-                  </span>
-                  <span className="meter-val num">{r.weekMinutes ? fmtMinutes(r.weekMinutes) : "—"}</span>
                 </span>
               </span>
             </button>

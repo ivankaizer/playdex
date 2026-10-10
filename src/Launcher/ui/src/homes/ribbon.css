@@ -144,35 +144,6 @@
   color: rgb(var(--muted));
 }
 
-/* The signature: this week's play drawn onto each game. */
-.meter {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  margin-top: 0.3rem;
-}
-.meter-track {
-  flex: 1;
-  height: 0.26rem;
-  border-radius: 99px;
-  background: rgb(var(--track));
-  overflow: hidden;
-}
-.meter-track i {
-  display: block;
-  height: 100%;
-  border-radius: 99px;
-  background: rgb(var(--bar));
-  transform-origin: left;
-}
-.meter-val {
-  font-size: 0.64rem;
-  font-weight: 600;
-  color: rgb(var(--accent));
-  min-width: 3.2rem;
-  text-align: right;
-}
-
 /* ---------- Playdex rail ---------- */
 .rail {
   grid-column: 2;
