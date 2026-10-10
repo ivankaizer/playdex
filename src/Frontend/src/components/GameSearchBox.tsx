@@ -127,7 +127,9 @@ export function GameSearchBox({ search, onNavigate }: GameSearchBoxProps) {
   const activeOptionId = state.activeIndex < 0 ? undefined : optionId(state.activeIndex);
 
   return (
-    <div className="relative z-50 w-full">
+    // At ≤600px the box is static so the results anchor to the header card and span its width instead of
+    // overflowing the left edge of a narrow screen.
+    <div className="relative z-50 w-full max-[600px]:static">
       <label htmlFor="global-game-search" className="sr-only">
         Search games
       </label>
@@ -173,7 +175,7 @@ export function GameSearchBox({ search, onNavigate }: GameSearchBoxProps) {
             id="game-search-results"
             role="listbox"
             aria-label="Game search results"
-            className="absolute right-0 top-full mt-2 w-72 overflow-hidden rounded-[22px] border border-line bg-surface p-1.5 shadow-pop sm:w-80"
+            className="absolute right-0 top-full z-50 mt-2 w-72 overflow-hidden rounded-[22px] border border-line bg-surface p-1.5 shadow-pop sm:w-80 max-[600px]:left-0 max-[600px]:w-auto"
           >
             {state.isLoading ? (
               <p className="px-4 py-3 text-sm text-muted">Searching...</p>

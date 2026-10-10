@@ -11,6 +11,7 @@ import {
   isSessionPlatformSaving,
   presentProvider,
   selectedSessionPlatformKey,
+  truncateMiddle,
 } from "./providersState";
 import type { Integrations } from "./useIntegrations";
 
@@ -35,22 +36,24 @@ export function IntegrationCard({ provider, integrations }: IntegrationCardProps
 
   return (
     <article className="rounded-tile border border-[var(--tile-border)] bg-tile">
-      <div className="grid grid-cols-[48px_minmax(0,1fr)_auto] items-center gap-x-4 gap-y-3 px-5 py-4 sm:grid-cols-[48px_minmax(0,1fr)_auto_auto]">
+      <div className="grid grid-cols-[48px_minmax(0,1fr)_auto_auto] items-center gap-x-4 gap-y-3 px-5 py-4 max-[600px]:flex max-[600px]:flex-wrap max-[600px]:gap-x-4 max-[600px]:gap-y-2.5 max-[600px]:px-4 max-[600px]:py-3.5">
         <div
           aria-hidden="true"
-          className="grid h-12 w-12 place-items-center rounded-[14px] text-sm font-bold tracking-[0.04em] text-white"
+          className="grid h-12 w-12 shrink-0 place-items-center rounded-[14px] text-sm font-bold tracking-[0.04em] text-white"
           style={{ background: platformColor(provider.platform, presentation.name) }}
         >
           {presentation.label}
         </div>
-        <div className="min-w-0">
+        <div className="min-w-0 max-[600px]:flex-[1_1_calc(100%-64px)]">
           <p className="text-[15px] font-semibold">{presentation.name}</p>
-          <p className="pdx-num truncate text-[13px] text-muted">{presentation.subtitle}</p>
+          <p title={presentation.subtitle} className="pdx-num truncate text-[13px] text-muted">
+            {truncateMiddle(presentation.subtitle)}
+          </p>
         </div>
         <span
           data-integration-status={provider.status}
           className={cx(
-            "col-start-2 row-start-2 inline-flex items-center gap-1.5 justify-self-start rounded-full px-3 py-1.5 text-xs font-semibold sm:col-start-auto sm:row-start-auto",
+            "inline-flex items-center gap-1.5 justify-self-start rounded-full px-3 py-1.5 text-xs font-semibold",
             active ? "bg-mint text-accent" : "bg-divider text-ink-3",
           )}
         >
@@ -66,14 +69,14 @@ export function IntegrationCard({ provider, integrations }: IntegrationCardProps
           aria-controls={editing ? panelId : undefined}
           onClick={() => integrations.toggleCredentialEditor(provider)}
           disabled={isAnySessionPlatformSaving(state) || mutationInProgress}
-          className="pdx-btn-outline !h-9 !px-4 !text-[13px]"
+          className="pdx-btn-outline !h-9 !px-4 !text-[13px] max-[600px]:ml-auto"
         >
           {editing ? "Done" : "Manage"}
         </button>
       </div>
 
       {editing ? (
-        <div id={panelId} className="flex flex-col gap-4 px-5 pb-5 sm:pl-[84px]">
+        <div id={panelId} className="flex flex-col gap-4 pb-5 pl-[84px] pr-5 max-[600px]:px-4 max-[600px]:pb-4">
           <div className="grid gap-3 [grid-template-columns:repeat(auto-fit,minmax(min(240px,100%),1fr))]">
             <label className={fieldLabelClass}>
               Account ID

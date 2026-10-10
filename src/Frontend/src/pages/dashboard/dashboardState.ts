@@ -1,5 +1,14 @@
 import { addDays, currentUtcWeek, getDurationSeconds, type DateOnly } from "@/lib/dates";
-import { formatDuration, formatHours, formatTimeLabel, formatUtcDateInput } from "@/lib/format";
+import {
+  formatCount,
+  formatCountNoun,
+  formatDuration,
+  formatHours,
+  formatHoursShort,
+  formatPercent,
+  formatTimeLabel,
+  formatUtcDateInput,
+} from "@/lib/format";
 import { encodeGameId } from "@/lib/gameHash";
 import type { ManualActiveSession } from "@/models/manual";
 import type { AccountSession } from "@/models/sessions";
@@ -87,6 +96,8 @@ export interface DashboardPlatformView {
   key: string;
   label: string;
   value: number;
+  /** Share of the total for display: "52%", or "<1%" for a non-zero sliver. */
+  share: string;
   hours: string;
 }
 
@@ -267,7 +278,8 @@ function createPlatforms(platforms: readonly AccountPlatformStat[], totalSeconds
     key: item.platformKey,
     label: item.platformName,
     value: Math.floor((item.totalSeconds / safeTotal) * 100 + 0.5),
-    hours: formatHours(item.totalSeconds, 1),
+    share: formatPercent(item.totalSeconds, totalSeconds),
+    hours: formatHoursShort(item.totalSeconds),
   }));
 }
 
@@ -306,10 +318,15 @@ export function formatShortDuration(seconds: number): string {
   return hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
 }
 
-/** Hours with one decimal and thousands separators, e.g. "1,520.4h". */
+/** Hours with one decimal and thousands separators, e.g. "1,520.4h" ("<0.1h" for a non-zero sliver). */
 export function formatHoursGrouped(seconds: number): string {
-  const hours = Math.max(0, seconds) / 3600;
-  return `${hours.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 1 })}h`;
+  return formatHoursShort(seconds);
+}
+
+/** Header greeting for the local hour: morning 5–11, afternoon 12–17, evening otherwise. */
+export function greetingFor(now: Date): string {
+  const hour = now.getHours();
+  return hour < 5 || hour >= 18 ? "Good evening" : hour < 12 ? "Good morning" : "Good afternoon";
 }
 
 function pad2(value: number): string {
@@ -340,9 +357,12 @@ export interface DashboardRecentSessionView {
 export function getRecentSessions(state: DashboardState, now: Date): DashboardRecentSessionView[] {
   return state.recentSessions.map((session) => {
     const started = new Date(session.startedAt);
+    const yesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
     const date = sameLocalDay(started, now)
       ? `Today, ${formatClock(started)}`
-      : `${monthShortNames[started.getMonth()]} ${started.getDate()}${started.getFullYear() === now.getFullYear() ? "" : `, ${started.getFullYear()}`}`;
+      : sameLocalDay(started, yesterday)
+        ? `Yesterday, ${formatClock(started)}`
+        : `${monthShortNames[started.getMonth()]} ${started.getDate()}${started.getFullYear() === now.getFullYear() ? "" : `, ${started.getFullYear()}`}`;
     return {
       sessionId: session.sessionId,
       gameId: session.gameId,
@@ -431,9 +451,15 @@ export interface WeekView {
   platforms: Array<DashboardPlatformView & { seconds: number }>;
 }
 
-function shortDate(date: DateOnly): string {
-  const [, month, day] = date.split("-").map(Number);
-  return `${monthShortNames[month - 1]} ${day}`;
+function shortDate(date: DateOnly, withYear = false): string {
+  const [year, month, day] = date.split("-").map(Number);
+  return `${monthShortNames[month - 1]} ${day}${withYear ? `, ${year}` : ""}`;
+}
+
+/** "Sep 28 – Oct 4", with years only when the week spans New Year ("Dec 29, 2025 – Jan 4, 2026"). */
+function weekRangeLabel(from: DateOnly, to: DateOnly): string {
+  const spansYears = from.slice(0, 4) !== to.slice(0, 4);
+  return `${shortDate(from, spansYears)} – ${shortDate(to, spansYears)}`;
 }
 
 export function getWeekView(activity: DashboardActivity | null, now: Date): WeekView {
@@ -472,7 +498,7 @@ export function getWeekView(activity: DashboardActivity | null, now: Date): Week
     bars,
     // Sum of the bars, so the total matches what the chart shows (time played within this week).
     totalSeconds: activity ? bars.reduce((sum, bar) => sum + bar.value, 0) : 0,
-    rangeLabel: `${shortDate(week.from)} – ${shortDate(week.to)}`,
+    rangeLabel: weekRangeLabel(week.from, week.to),
     platforms: createPlatforms(weekPlatforms, weekPlatformSeconds).map((item, index) => ({
       ...item,
       seconds: weekPlatforms[index].totalSeconds,
@@ -497,6 +523,8 @@ export interface OverviewView {
   bars: ActivityBar[];
   platforms: Array<DashboardPlatformView & { seconds: number }>;
   topGames: Array<{ gameId: string; title: string; hours: string; pct: number }>;
+  /** Dashed note under a top-games list with fewer than three games ("" when not needed). */
+  fewGamesNote: string;
 }
 
 export function getOverviewView(
@@ -509,7 +537,7 @@ export function getOverviewView(
   const total = stats?.totalSeconds ?? 0;
   const sessions = stats?.sessionCount ?? 0;
   const topGame = stats?.topGames[0] ?? null;
-  const topShare = topGame && total > 0 ? Math.floor((topGame.totalSeconds / total) * 100 + 0.5) : null;
+  const topShare = topGame && total > 0 ? formatPercent(topGame.totalSeconds, total) : null;
   const year = now.getUTCFullYear();
   const monthIndex = now.getUTCMonth();
 
@@ -524,28 +552,41 @@ export function getOverviewView(
     const daysInMonth = bars.length;
     const dayOfMonth = now.getUTCDate();
     if (activity !== null) {
-      hoursSub = `${played.length} of ${daysInMonth} days played`;
-      activityNote = `${played.length} ${played.length === 1 ? "day" : "days"} played · ${dayOfMonth} of ${daysInMonth} days in`;
+      hoursSub = `${formatCount(played.length)} of ${formatCount(daysInMonth)} days played`;
+      activityNote =
+        played.length === 0
+          ? "No play yet"
+          : `${formatCountNoun(played.length, "day")} played · ${formatCount(dayOfMonth)} of ${formatCount(daysInMonth)} days in`;
     }
   } else {
     hoursSub = "Since Jan 1";
     if (peak !== null) activityNote = `Peak ${monthLongNames[Number(peak.key) - 1]} · ${formatHoursGrouped(peak.value)}`;
+    else if (stats !== null) activityNote = "No play yet";
   }
 
   const topSub =
     topGame === null || topShare === null
       ? undefined
       : period === "month"
-        ? `${topShare}% of playtime`
-        : `${formatHoursGrouped(topGame.totalSeconds)} · ${topShare}%`;
+        ? `${topShare} of playtime`
+        : `${formatHoursGrouped(topGame.totalSeconds)} · ${topShare}`;
 
-  const topMax = Math.max(stats?.topGames[0]?.totalSeconds ?? 0, 1);
+  // Bars scale to the largest game in the list, not to the first row.
+  const topMax = Math.max(0, ...(stats?.topGames ?? []).map((game) => game.totalSeconds)) || 1;
+  const gameCount = stats?.topGames.length ?? 0;
+  const periodWord = period === "month" ? "this month" : "this year";
+  const fewGamesNote =
+    stats === null || gameCount >= 3
+      ? ""
+      : gameCount === 0
+        ? `No games yet ${periodWord}. Your ranking fills in as you play.`
+        : `Only ${gameCount === 1 ? "one game" : `${formatCount(gameCount)} games`} so far ${periodWord}. Your ranking fills in as you play.`;
   return {
     title: period === "month" ? `${monthLongNames[monthIndex]} highlights` : `${year} recap`,
     totalSeconds: total,
     kpis: [
       { label: "Hours played", value: formatHoursGrouped(total), sub: hoursSub },
-      { label: "Sessions", value: sessions.toLocaleString("en-US"), sub: sessions > 0 ? `Avg. ${formatShortDuration(total / sessions)}` : undefined },
+      { label: "Sessions", value: formatCount(sessions), sub: sessions > 0 ? `Avg. ${formatShortDuration(total / sessions)}` : stats ? "—" : undefined },
       { label: "Top title", value: stats?.topGameTitle ?? "—", sub: topSub },
     ],
     activityLabel: period === "month" ? "Daily activity" : "Monthly activity",
@@ -560,6 +601,7 @@ export function getOverviewView(
       hours: formatHoursGrouped(game.totalSeconds),
       pct: (game.totalSeconds / topMax) * 100,
     })),
+    fewGamesNote,
   };
 }
 

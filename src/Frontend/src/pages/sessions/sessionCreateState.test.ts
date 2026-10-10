@@ -3,6 +3,7 @@ import {
   clearGame,
   completeSearch,
   formatMinutes,
+  isLongDuration,
   failSave,
   openSessionCreate,
   parseInvariantDouble,
@@ -91,7 +92,7 @@ describe("session create state", () => {
 
     state = setMinutes(setHours(setMode(setPlatform(state, "pc"), "historical"), "0"), "0");
     result = tryBuildSubmission(state);
-    expect(result.state.error).toBe("Duration must be at least 1 minute.");
+    expect(result.state.error).toBe("Add how long you played.");
 
     result = tryBuildSubmission(setHours(state, "abc"));
     expect(result.state.error).toBe("Enter a valid duration.");
@@ -99,6 +100,23 @@ describe("session create state", () => {
     expect(result.state.error).toBe("Enter a valid duration.");
     result = tryBuildSubmission(setHours(setDate(state, ""), "1"));
     expect(result.state.error).toBe("Select a date.");
+  });
+
+  it("rejects minutes over 59 and hours over 99, and flags durations over 24 hours", () => {
+    const state = setPlatform(selectGame(open("historical"), savedGame), "pc");
+    expect(tryBuildSubmission(setMinutes(setHours(state, "1"), "60")).state.error).toBe("Minutes must be between 0 and 59.");
+    expect(tryBuildSubmission(setMinutes(setHours(state, "100"), "0")).state.error).toBe("Hours must be 99 or less.");
+    expect(tryBuildSubmission(setMinutes(setHours(state, "26"), "0")).submission?.body).toMatchObject({ durationMinutes: 1560 });
+    expect(isLongDuration(1440)).toBe(false);
+    expect(isLongDuration(1441)).toBe(true);
+  });
+
+  it("tracks whether the current query has been searched", () => {
+    let state = setQuery(open("historical"), "Rez");
+    expect(state.hasSearched).toBe(false);
+    state = completeSearch(state, { query: "Rez", igdbAvailable: true, results: [] });
+    expect(state.hasSearched).toBe(true);
+    expect(setQuery(state, "Re").hasSearched).toBe(false);
   });
 
   it("fractional hours floor to whole minutes", () => {
@@ -141,7 +159,7 @@ describe("save readiness", () => {
     expect(submissionBlocker(state)).toBe("Select a platform.");
     state = setPlatform(state, "pc");
     expect(submissionBlocker(state)).toBeNull();
-    expect(submissionBlocker(setMinutes(setHours(state, "0"), "0"))).toBe("Duration must be at least 1 minute.");
+    expect(submissionBlocker(setMinutes(setHours(state, "0"), "0"))).toBe("Add how long you played.");
     expect(submissionBlocker(setDate(state, ""))).toBe("Select a date.");
     expect(submissionBlocker(setMode(selectGame(openSessionCreate("historical", new Date()), savedGame), "live"))).toBe("Select a platform.");
   });

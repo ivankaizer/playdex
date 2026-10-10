@@ -11,7 +11,7 @@ import type {
   ManualPlatformsResponse,
   ManualSessionStartResponse,
 } from "@/models/manual";
-import { DraftWorkspace, type DraftWorkspaceView } from "./components/DraftWorkspace";
+import { badgeCount, DraftWorkspace, type DraftWorkspaceView } from "./components/DraftWorkspace";
 import { SessionCreateModal } from "./components/SessionCreateModal";
 import {
   cancelSearch,
@@ -205,7 +205,7 @@ export function SessionCreatePage() {
       {badge !== undefined && badge > 0 && (
         <span className="pdx-num grid h-5 min-w-5 place-items-center rounded-full bg-brand px-1.5 text-[11px] text-white">
           <span className="sr-only">(</span>
-          {badge}
+          {badgeCount(badge)}
           <span className="sr-only"> saved)</span>
         </span>
       )}

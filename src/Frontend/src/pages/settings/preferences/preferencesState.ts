@@ -5,6 +5,8 @@ export interface PreferencesState {
   savedIgnoreShortSessionsMinutes: string;
   telegramChatId: string;
   savedTelegramChatId: string;
+  /** The server sent a minimum above the stepper's range; the draft holds the clamped value until it is saved. */
+  savedMinutesOutOfRange: boolean;
   isSettingsLoading: boolean;
   isSettingsSaving: boolean;
   settingsError: string;
@@ -16,7 +18,9 @@ export interface PreferencesState {
 export const settingsPath = "/settings";
 export const testNotificationPath = "/settings/notifications/test";
 
-const MaxInt32 = 2_147_483_647;
+/** One limit for the stepper, the presets, typed values and whatever the API sends back. */
+export const MaxMinimumMinutes = 60;
+export const minutesRangeMessage = `Enter a whole number of minutes from 0 to ${MaxMinimumMinutes}.`;
 const MinInt64 = -(2n ** 63n);
 const MaxInt64 = 2n ** 63n - 1n;
 // double.TryParse(NumberStyles.Float, InvariantCulture) accepts ASCII-whitespace-padded, signed decimals with exponents.
@@ -28,6 +32,7 @@ export function createPreferencesState(): PreferencesState {
     savedIgnoreShortSessionsMinutes: "0",
     telegramChatId: "",
     savedTelegramChatId: "",
+    savedMinutesOutOfRange: false,
     isSettingsLoading: false,
     isSettingsSaving: false,
     settingsError: "",
@@ -49,28 +54,53 @@ export function canSendTestNotification(state: PreferencesState): boolean {
   );
 }
 
-/** True when either field differs from the last loaded or saved value. */
-export function isPreferencesDirty(state: PreferencesState): boolean {
+/** True when either field differs from the last loaded or saved value (Discard has something to restore). */
+export function hasDiscardableChanges(state: PreferencesState): boolean {
   return (
     state.ignoreShortSessionsMinutes !== state.savedIgnoreShortSessionsMinutes ||
     state.telegramChatId !== state.savedTelegramChatId
   );
 }
 
-/** Parsed minimum minutes for display and the stepper; null when the draft is not a whole non-negative number. */
+/** True when saving would change what the server stores: an edited field, or a clamped out-of-range minimum. */
+export function isPreferencesDirty(state: PreferencesState): boolean {
+  return hasDiscardableChanges(state) || state.savedMinutesOutOfRange;
+}
+
+/** Save is offered only for a dirty, valid form while nothing else is in flight. */
+export function canSavePreferences(state: PreferencesState): boolean {
+  return (
+    !isPreferencesBusy(state) &&
+    isPreferencesDirty(state) &&
+    parsedMinimumMinutes(state) !== null &&
+    isTelegramChatIdDraftValid(state.telegramChatId)
+  );
+}
+
+/** A blank chat ID (notifications off) or one the API accepts. */
+export function isTelegramChatIdDraftValid(draft: string): boolean {
+  const trimmed = draft.trim();
+  return trimmed.length === 0 || isValidChatId(trimmed);
+}
+
+/** Clamps any number to the stepper's whole-minute range [0, MaxMinimumMinutes]. */
+export function clampMinimumMinutes(value: number): number {
+  return Number.isFinite(value) ? Math.max(0, Math.min(MaxMinimumMinutes, Math.round(value))) : 0;
+}
+
+/** Parsed minimum minutes for display and the stepper; null unless the draft is a whole number in [0, 60]. */
 export function parsedMinimumMinutes(state: PreferencesState): number | null {
   const draft = state.ignoreShortSessionsMinutes.trim();
   if (draft.length === 0) return 0;
   if (!/^\d+$/.test(draft)) return null;
   const parsed = Number(draft);
-  return parsed > MaxInt32 ? null : parsed;
+  return parsed > MaxMinimumMinutes ? null : parsed;
 }
 
-/** Steps the minimum minutes by delta, clamped to [0, MaxInt32]; an unparsable draft steps from 0. */
+/** Steps the minimum minutes by delta, clamped to [0, 60]; an unparsable draft steps from 0. */
 export function stepIgnoreShortSessionsMinutes(state: PreferencesState, delta: number): PreferencesState {
   const current = parsedMinimumMinutes(state) ?? 0;
-  const next = Math.max(0, Math.min(MaxInt32, current + delta));
-  return setIgnoreShortSessionsMinutes(state, String(next));
+  return setIgnoreShortSessionsMinutes(state, String(clampMinimumMinutes(current + delta)));
 }
 
 /** Restores both fields to the last loaded or saved values. */
@@ -110,7 +140,7 @@ export function buildSettingsSubmission(state: PreferencesState): {
   submission: Submission | null;
 } {
   const invalidMinutes = {
-    state: { ...state, settingsError: "Enter a non-negative number of minutes." },
+    state: { ...state, settingsError: minutesRangeMessage },
     submission: null,
   };
 
@@ -124,7 +154,7 @@ export function buildSettingsSubmission(state: PreferencesState): {
     parsed = Number(draft.trim());
   }
 
-  if (!Number.isFinite(parsed) || parsed < 0 || Math.trunc(parsed) !== parsed || parsed > MaxInt32) {
+  if (!Number.isFinite(parsed) || parsed < 0 || Math.trunc(parsed) !== parsed || parsed > MaxMinimumMinutes) {
     return invalidMinutes;
   }
 
@@ -177,7 +207,7 @@ export function completeTestNotification(
   response: TestNotificationResponse,
 ): PreferencesState {
   return response.sent
-    ? { ...state, testNotificationMessage: "Test message sent." }
+    ? { ...state, testNotificationMessage: `Test message sent to chat ${state.savedTelegramChatId}.` }
     : { ...state, testNotificationError: "The test message was not sent." };
 }
 
@@ -189,12 +219,15 @@ export function endTestNotification(state: PreferencesState): PreferencesState {
   return { ...state, isTestNotificationSending: false };
 }
 
+// A stored value outside the stepper's range is shown clamped and marks the form dirty, so the next save writes it back.
 function applySettingsResponse(state: PreferencesState, response: UserSettingsResponse): PreferencesState {
   const telegramChatId = response.telegramChatId ?? "";
+  const minutes = clampMinimumMinutes(response.ignoreShortSessionsMinutes);
   return {
     ...state,
-    ignoreShortSessionsMinutes: String(response.ignoreShortSessionsMinutes),
-    savedIgnoreShortSessionsMinutes: String(response.ignoreShortSessionsMinutes),
+    ignoreShortSessionsMinutes: String(minutes),
+    savedIgnoreShortSessionsMinutes: String(minutes),
+    savedMinutesOutOfRange: minutes !== response.ignoreShortSessionsMinutes,
     telegramChatId,
     savedTelegramChatId: telegramChatId,
   };

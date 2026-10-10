@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type ChangeEvent, type Re
 import { Cover } from "@/components/ui";
 import { apiRequest, errorMessage } from "@/lib/api";
 import { cx } from "@/lib/cx";
+import { formatCount, formatCountNoun } from "@/lib/format";
 import type { DraftAcceptRequest, DraftAcceptResponse, DraftBatchDto, DraftCapabilities, DraftRowDto } from "@/models/drafts";
 import type { ManualMappingSearchResponse, ManualMappingSearchResult, ManualPlatform } from "@/models/manual";
 import {
@@ -10,11 +11,14 @@ import {
   canAccept,
   createDraftRowEdit,
   draftDuration,
+  durationCheck,
   hasGameSelection,
   hasValidDate,
   hasValidDuration,
   isDirty,
+  isReady,
   markAccepted,
+  needsDurationCheck,
   needsPlatformReview,
   rowUpdate,
   setDraftTitle,
@@ -22,7 +26,15 @@ import {
 } from "../draftReviewState";
 import { formatMinutes } from "../sessionCreateState";
 import { delay, escapeDataString, newGuid, useLatestState } from "../support";
-import { attachPaste, dataUrlBytes, draftTimezone, readAsDataUrl, supportedImageTypes, validateImage } from "./draftInterop";
+import {
+  attachPaste,
+  dataUrlBytes,
+  draftTimezone,
+  middleTruncate,
+  readAsDataUrl,
+  supportedImageTypes,
+  validateImage,
+} from "./draftInterop";
 import { BoundSelect, ChangeInput } from "./FormControls";
 
 export type DraftWorkspaceView = "compose" | "review";
@@ -96,7 +108,11 @@ const reviewFieldClass = (needsReview: boolean) => (needsReview ? "border-danger
 
 const ariaInvalid = (invalid: boolean) => (invalid ? "true" : "false");
 
-const plural = (count: number, word: string) => `${count} ${word}${count === 1 ? "" : "s"}`;
+/** Saved batches listed before "Show all". */
+export const VisibleBatchCount = 5;
+
+/** Count badge text, capped so it never outgrows its pill. */
+export const badgeCount = (count: number) => (count > 99 ? "99+" : formatCount(count));
 
 /** .NET en-US "g" format of a local time: "M/d/yyyy h:mm tt". */
 export function formatShortDateTime(value: string): string {
@@ -119,6 +135,7 @@ export function DraftWorkspace({
 }: DraftWorkspaceProps) {
   const [state, get, update] = useLatestState(initialState);
   const [pasteId] = useState(() => `draft-paste-${newGuid(true)}`);
+  const [showAllBatches, setShowAllBatches] = useState(false);
   const lifetime = useRef(new AbortController());
   const requestId = useRef(newGuid());
   const generatedBatchId = useRef<string | null>(null);
@@ -512,9 +529,12 @@ export function DraftWorkspace({
 
   const { busy, batch, rows } = state;
   const retentionDays = capabilities?.historyRetentionDays ?? 30;
-  const readyCount = rows.filter(canAccept).length;
+  // Ready rows go through "Accept all"; rows over 24 hours need their own "Accept anyway" and count as "to check".
+  const readyCount = rows.filter(isReady).length;
   const unmatchedCount = rows.filter((row) => !row.isAccepted && !hasGameSelection(row)).length;
+  const toCheckCount = rows.filter((row) => !row.isAccepted && hasGameSelection(row) && !isReady(row)).length;
   const acceptedCount = rows.filter((row) => row.isAccepted).length;
+  const shownBatches = showAllBatches ? state.batches : state.batches.slice(0, VisibleBatchCount);
 
   return (
     <div className={embedded ? "w-full" : "pdx-modal-backdrop fixed inset-0 z-[80] overflow-y-auto p-4"}>
@@ -558,8 +578,9 @@ export function DraftWorkspace({
             </span>
             <h2 className="text-xl font-semibold">Batch reviewed</h2>
             <p role="status" className="max-w-[44em] text-sm text-muted">
-              {state.reviewed > 0 && `${plural(state.reviewed, "session")} added to your history. `}
-              {state.outcome}
+              {state.reviewed > 0
+                ? `${formatCountNoun(state.reviewed, "session")} added to your history.`
+                : "Nothing from this batch was added."}
             </p>
             {onGoToSessions && (
               <button type="button" onClick={onGoToSessions} className="pdx-btn-primary mt-1.5 h-11">
@@ -600,9 +621,9 @@ export function DraftWorkspace({
                       className="pdx-input px-[22px] py-[18px] text-[15px] leading-relaxed"
                     ></textarea>
                     <span className="flex flex-wrap justify-between gap-x-4 gap-y-1 font-normal">
-                      <span>Up to {plural(capabilities.maxRows, "session")}. One session per line works best.</span>
-                      <span className="pdx-num">
-                        {state.text.length.toLocaleString("en-US")} / {capabilities.maxTextCharacters.toLocaleString("en-US")}
+                      <span>Up to {formatCountNoun(capabilities.maxRows, "session")}. One session per line works best.</span>
+                      <span aria-live="polite" className="pdx-num whitespace-nowrap">
+                        {formatCount(state.text.length)} / {formatCount(capabilities.maxTextCharacters)}
                       </span>
                     </span>
                   </label>
@@ -626,7 +647,13 @@ export function DraftWorkspace({
                       </span>
                     )}
                     <div className="min-w-0 flex-[1_1_200px]">
-                      <p className="truncate text-[15px] font-semibold">{state.image !== null ? state.fileName : "Add a screenshot"}</p>
+                      {/* File names truncate in the middle so the extension stays visible; the full name is in the title. */}
+                      <p
+                        title={state.image !== null ? state.fileName : undefined}
+                        className="text-[15px] font-semibold [overflow-wrap:anywhere]"
+                      >
+                        {state.image !== null ? middleTruncate(state.fileName, 44) : "Add a screenshot"}
+                      </p>
                       <p className="mt-0.5 text-[13px] text-muted">
                         {state.image !== null
                           ? "Attached · it will be read alongside your text."
@@ -679,12 +706,12 @@ export function DraftWorkspace({
                 </div>
                 {state.batches.length > 0 && (
                   <span className="pdx-num grid h-7 min-w-7 place-items-center rounded-full bg-mint px-2 text-[13px] font-bold text-accent">
-                    {state.batches.length}
+                    {badgeCount(state.batches.length)}
                   </span>
                 )}
               </div>
 
-              {state.batches.map((saved, index) => (
+              {shownBatches.map((saved, index) => (
                 <button
                   key={`${index}-${saved.id}`}
                   type="button"
@@ -693,9 +720,11 @@ export function DraftWorkspace({
                   className="flex items-center gap-3 rounded-[20px] border border-[color:var(--tile-border)] bg-tile px-[18px] py-4 text-left transition-colors hover:border-mint-hover disabled:opacity-[.55]"
                 >
                   <span className="min-w-0 flex-1">
-                    <span className="block text-[15px] font-semibold">Resume {formatShortDateTime(saved.createdAt)}</span>
+                    <span className="block text-[15px] font-semibold [overflow-wrap:anywhere]">
+                      Resume {formatShortDateTime(saved.createdAt)}
+                    </span>
                     <span className="mt-0.5 block text-[13px] text-muted">
-                      {saved.rows.filter((row) => row.status === "pending").length} pending
+                      {formatCountNoun(saved.rows.filter((row) => row.status === "pending").length, "draft")} pending
                     </span>
                   </span>
                   <span aria-hidden="true" className="text-base text-accent">
@@ -703,12 +732,17 @@ export function DraftWorkspace({
                   </span>
                 </button>
               ))}
-              {state.batches.length === 0 && (
-                <div className="pdx-dashed rounded-[20px]">
-                  <p className="font-semibold text-ink-2">No saved drafts.</p>
-                  <p className="mt-1 text-xs leading-5">Generated batches appear here until every pending row is accepted or deleted.</p>
-                </div>
+              {state.batches.length > VisibleBatchCount && (
+                <button
+                  type="button"
+                  aria-expanded={showAllBatches}
+                  onClick={() => setShowAllBatches((current) => !current)}
+                  className="pdx-btn-outline h-9 self-start px-4 text-[13px]"
+                >
+                  {showAllBatches ? "Show fewer" : `Show all ${formatCount(state.batches.length)}`}
+                </button>
               )}
+              {state.batches.length === 0 && <p className="pdx-dashed rounded-[20px] px-[18px] py-4 text-[13px]">Nothing waiting for review.</p>}
             </aside>
           </div>
         ) : (
@@ -723,16 +757,17 @@ export function DraftWorkspace({
                 >
                   <span aria-hidden="true">← </span>Saved batches
                 </button>
-                <p className="pdx-kicker mt-3.5">AI batch review · {formatShortDateTime(batch.createdAt)}</p>
+                <p className="pdx-kicker mt-3.5 [overflow-wrap:anywhere]">AI batch review · {formatShortDateTime(batch.createdAt)}</p>
                 <h2 className="pdx-title">Review extracted sessions</h2>
                 <div className="mt-3 flex flex-wrap gap-2">
-                  <StatusChip className="bg-mint text-accent">{readyCount} ready</StatusChip>
+                  {readyCount > 0 && <StatusChip className="bg-mint text-accent">{formatCount(readyCount)} ready</StatusChip>}
+                  {toCheckCount > 0 && <StatusChip className="bg-tile text-warn">{formatCount(toCheckCount)} to check</StatusChip>}
                   {unmatchedCount > 0 && (
                     <StatusChip className="bg-danger-tint text-danger">
-                      {unmatchedCount} {unmatchedCount === 1 ? "needs" : "need"} a game
+                      {formatCount(unmatchedCount)} {unmatchedCount === 1 ? "needs" : "need"} a game
                     </StatusChip>
                   )}
-                  {acceptedCount > 0 && <StatusChip className="bg-tile text-ink-2">{acceptedCount} added</StatusChip>}
+                  {acceptedCount > 0 && <StatusChip className="bg-tile text-ink-2">{formatCountNoun(acceptedCount, "session")} added</StatusChip>}
                 </div>
               </div>
               <div className="flex flex-wrap gap-2.5">
@@ -747,17 +782,17 @@ export function DraftWorkspace({
                 <button
                   type="button"
                   disabled={busy || readyCount === 0}
-                  onClick={() => void accept(rows.filter(canAccept).map((row) => row.id))}
+                  onClick={() => void accept(rows.filter(isReady).map((row) => row.id))}
                   className="pdx-btn-primary h-[46px] px-[22px]"
                 >
-                  Accept all ready ({readyCount})
+                  Accept all ready ({formatCount(readyCount)})
                 </button>
               </div>
             </section>
 
             <section aria-label="Session drafts" className="pdx-card flex flex-col gap-2.5 !p-5">
               <div className="flex justify-between gap-3 px-3 pb-1 pt-1.5 text-xs text-muted">
-                <span>{plural(rows.length, "draft")}</span>
+                <span>{formatCountNoun(rows.length, "draft")}</span>
                 <span aria-live="polite">{state.saving > 0 ? "Saving…" : "Edits save automatically"}</span>
               </div>
 
@@ -800,7 +835,7 @@ function acceptedMessage(rows: readonly DraftRowEdit[]): string {
     const minutes = draftDuration(row);
     return `${row.selection?.title ?? row.title}${minutes !== null ? ` · ${formatMinutes(minutes)}` : ""} added`;
   }
-  return `${plural(rows.length, "session")} added to your history`;
+  return `${formatCountNoun(rows.length, "session")} added to your history`;
 }
 
 function StatusChip({ className, children }: { className: string; children: ReactNode }) {
@@ -841,6 +876,8 @@ function DraftRowArticle({
   const invalidGame = !hasGameSelection(row);
   const invalidDate = !hasValidDate(row);
   const invalidDuration = !hasValidDuration(row);
+  const longDuration = needsDurationCheck(row);
+  const durationNote = durationCheck(row).note;
   const platformReview = needsPlatformReview(row);
   const showSearch = selected === null || changing || row.results.length > 0;
 
@@ -849,7 +886,15 @@ function DraftRowArticle({
       data-draft-row
       className={cx(
         "rounded-tile border px-4 py-3.5",
-        selected === null && !row.isAccepted ? "border-danger-line bg-danger-tint" : "border-[color:var(--tile-border)] bg-tile",
+        selected === null && !row.isAccepted
+          ? "border-danger-line bg-danger-tint"
+          : row.isAccepted
+            ? "border-[color:var(--tile-border)] bg-tile"
+            : invalidDuration
+              ? "border-danger-line bg-tile"
+              : longDuration
+                ? "border-warn bg-tile"
+                : "border-[color:var(--tile-border)] bg-tile",
       )}
     >
       <fieldset disabled={busy || row.isAccepted} className="m-0 min-w-0 border-0 p-0 disabled:opacity-[.55]">
@@ -889,10 +934,14 @@ function DraftRowArticle({
               </div>
             ) : (
               <div data-draft-match className="min-w-0 flex-1">
-                <p className="truncate text-[15px] font-semibold">{selected.title}</p>
-                <p className="mt-[3px] flex min-w-0 items-center gap-2 text-xs text-muted">
+                <p title={selected.title} className="truncate text-[15px] font-semibold">
+                  {selected.title}
+                </p>
+                <p className="mt-[3px] flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted">
                   <span className="shrink-0 whitespace-nowrap font-semibold text-accent">✓ Matched</span>
-                  <span className="truncate">from “{row.title}”</span>
+                  <span title={row.title} className="min-w-0 flex-[1_1_120px] truncate">
+                    from “{row.title}”
+                  </span>
                   <span className="shrink-0 text-[10px] font-semibold uppercase tracking-[0.14em]">
                     {selected.source === "local" ? "Saved game" : "IGDB"}
                   </span>
@@ -902,11 +951,16 @@ function DraftRowArticle({
                     </button>
                   )}
                 </p>
+                {!row.isAccepted && durationNote.length > 0 && (
+                  <p data-duration-note className={cx("mt-1 text-xs font-medium", longDuration ? "text-warn" : "text-danger")}>
+                    {durationNote}
+                  </p>
+                )}
               </div>
             )}
           </div>
 
-          <label className={cx(fieldLabelClass, "flex-[0_0_136px]")}>
+          <label className={cx(fieldLabelClass, "flex-[0_0_128px]")}>
             Date
             <ChangeInput
               type="date"
@@ -929,6 +983,7 @@ function DraftRowArticle({
                 aria-label="Hours"
                 type="number"
                 min="0"
+                max="99"
                 step="1"
                 value={row.hours}
                 onValueChange={(hours) => onField({ hours })}
@@ -942,6 +997,7 @@ function DraftRowArticle({
                 aria-label="Minutes"
                 type="number"
                 min="0"
+                max="59"
                 step="1"
                 value={row.minutes}
                 onValueChange={(minutes) => onField({ minutes })}
@@ -987,8 +1043,13 @@ function DraftRowArticle({
                 >
                   ✕
                 </button>
-                <button type="button" disabled={!canAccept(row)} onClick={onAccept} className="pdx-btn-primary h-10 px-4 text-[13px]">
-                  Accept
+                <button
+                  type="button"
+                  disabled={!canAccept(row)}
+                  onClick={onAccept}
+                  className="pdx-btn-primary h-10 whitespace-nowrap px-4 text-[13px]"
+                >
+                  {canAccept(row) && longDuration ? "Accept anyway" : "Accept"}
                 </button>
               </>
             )}
@@ -1010,7 +1071,9 @@ function DraftRowArticle({
                 >
                   <Cover title={result.title} src={result.capsuleUrl} className="h-10 w-10 rounded-xl" initialClassName="text-sm" />
                   <span className="min-w-0">
-                    <span className="block truncate text-sm font-medium">{result.title}</span>
+                    <span title={result.title} className="line-clamp-2 text-sm font-medium leading-[1.3] [overflow-wrap:anywhere]">
+                      {result.title}
+                    </span>
                     <span
                       className={cx(
                         "block text-[10px] font-semibold uppercase tracking-[0.14em]",

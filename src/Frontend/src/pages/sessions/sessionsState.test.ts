@@ -21,9 +21,10 @@ import {
   completePlatforms,
   completeStatsLoad,
   createSessionsState,
-  currentPage,
+  checkDuration,
+  dailyBars,
+  editDurationCheck,
   emptySessionEditState,
-  end,
   endDelete,
   failDelete,
   failEditSave,
@@ -32,17 +33,21 @@ import {
   formatLocalDateTimeInput,
   getRowViews,
   isEditOpen,
-  pageNumbers,
+  buildDailyRequest,
+  formatDurationInput,
+  hasMore,
+  listRequestPages,
+  nextPageSize,
+  rangeDays,
   sessionsDeleteRequest,
-  setEditEndedAt,
+  setEditDuration,
   setEditStartedAt,
   setFrom,
-  setOffset,
   setPlatform,
   setTitle,
   setTo,
+  showingLabel,
   sortBy,
-  start,
   togglePlatform,
   tryBeginStatsLoad,
   tryBuildEditSubmission,
@@ -84,15 +89,15 @@ const emptyStats = (overrides: Partial<AccountStatsPeriod> = {}): AccountStatsPe
 });
 
 describe("session edit state", () => {
-  it("opens a finished session with local date and time", () => {
+  it("opens a finished session with local start and an h/m duration", () => {
     const localStart = new Date(2026, 7, 4, 18, 30, 15);
     const opened = tryOpenEdit(
       emptySessionEditState,
-      session({ startedAt: localStart.toISOString(), endedAt: new Date(localStart.getTime() + 2 * 3_600_000).toISOString() }),
+      session({ startedAt: localStart.toISOString(), endedAt: new Date(localStart.getTime() + 125 * 60_000 + 20_000).toISOString() }),
     );
     expect(opened).not.toBeNull();
     expect(opened!.startedAt).toBe("2026-08-04T18:30:15");
-    expect(opened!.endedAt).toBe("2026-08-04T20:30:15");
+    expect(opened!.duration).toBe("2h 05m");
     expect(isEditOpen(opened!)).toBe(true);
   });
 
@@ -100,36 +105,79 @@ describe("session edit state", () => {
     expect(tryOpenEdit(emptySessionEditState, session({ endedAt: null }))).toBeNull();
   });
 
-  it("builds the owned session update request from valid local inputs", () => {
-    let state = tryOpenEdit(emptySessionEditState, session())!;
-    state = setEditStartedAt(state, "2026-08-04T18:30:15");
-    state = setEditEndedAt(state, "2026-08-04T20:45:30");
-
+  it("an untouched duration keeps the exact original length, seconds included", () => {
+    const localStart = new Date(2026, 7, 4, 18, 30, 15);
+    let state = tryOpenEdit(
+      emptySessionEditState,
+      session({ startedAt: localStart.toISOString(), endedAt: new Date(localStart.getTime() + 65 * 60_000 + 30_000).toISOString() }),
+    )!;
+    state = setEditStartedAt(state, "2026-08-05T09:00:00");
     const { submission } = tryBuildEditSubmission(state);
-
-    expect(submission).not.toBeNull();
     expect(submission!.path).toBe("/sessions/7");
     expect(submission!.method).toBe("PUT");
-    expect(new Date(submission!.body.startedAt).getTime()).toBe(new Date(2026, 7, 4, 18, 30, 15).getTime());
-    expect(new Date(submission!.body.endedAt).getTime()).toBe(new Date(2026, 7, 4, 20, 45, 30).getTime());
-    expect(submission!.body.startedAt).toMatch(/^2026-08-04T18:30:15[+-]\d{2}:\d{2}$/);
+    expect(submission!.body.startedAt).toMatch(/^2026-08-05T09:00:00[+-]\d{2}:\d{2}$/);
+    expect(new Date(submission!.body.endedAt).getTime()).toBe(new Date(2026, 7, 5, 10, 5, 30).getTime());
   });
 
-  it("rejects an end that is not later than the start", () => {
+  it("builds the end from the start plus a typed duration", () => {
     let state = tryOpenEdit(emptySessionEditState, session())!;
-    state = setEditStartedAt(state, "2026-08-04T20:45:30");
-    state = setEditEndedAt(state, "2026-08-04T20:45:30");
+    state = setEditStartedAt(state, "2026-08-04T18:30:15");
+    state = setEditDuration(state, " 2h 15m ");
+    const { submission } = tryBuildEditSubmission(state);
+    expect(new Date(submission!.body.startedAt).getTime()).toBe(new Date(2026, 7, 4, 18, 30, 15).getTime());
+    expect(new Date(submission!.body.endedAt).getTime()).toBe(new Date(2026, 7, 4, 20, 45, 15).getTime());
+  });
 
-    const result = tryBuildEditSubmission(state);
+  it.each([
+    ["", false, false, "Enter how long you played, e.g. 1h 30m."],
+    ["0m", false, false, "A session needs at least 1 minute."],
+    ["0h 0m", false, false, "A session needs at least 1 minute."],
+    ["90", false, false, "Use hours and minutes, e.g. 1h 30m."],
+    ["1.5h", false, false, "Use hours and minutes, e.g. 1h 30m."],
+    ["75m", false, false, "Minutes go up to 59. Write 1h 15m instead."],
+    ["1h 75m", false, false, "Minutes go up to 59. Write 2h 15m instead."],
+    ["45m", true, false, ""],
+    ["1H30M", true, false, ""],
+    ["24h", true, false, ""],
+    ["24h 1m", true, true, "Longer than a day. Double-check before saving."],
+    ["26h 05m", true, true, "Longer than a day. Double-check before saving."],
+  ])("duration %j: ok=%s warn=%s", (value, ok, warn, message) => {
+    const check = checkDuration(value);
+    expect(check.ok).toBe(ok);
+    expect(check.warn).toBe(warn);
+    expect(check.message).toBe(message);
+  });
 
+  it("rejects a zero or malformed duration and never builds a request for it", () => {
+    let state = setEditDuration(tryOpenEdit(emptySessionEditState, session())!, "0m");
+    expect(editDurationCheck(state).ok).toBe(false);
+    let result = tryBuildEditSubmission(state);
     expect(result.submission).toBeNull();
-    expect(result.state.error).toBe("End time must be later than start time.");
+    expect(result.state.error).toBe("A session needs at least 1 minute.");
+
+    state = setEditDuration(state, "75m");
+    result = tryBuildEditSubmission(state);
+    expect(result.submission).toBeNull();
+    expect(result.state.error).toContain("Minutes go up to 59");
+  });
+
+  it("allows a duration over 24h but flags it for confirmation", () => {
+    const state = setEditDuration(tryOpenEdit(emptySessionEditState, session())!, "26h 5m");
+    expect(editDurationCheck(state)).toMatchObject({ ok: true, warn: true, minutes: 1565 });
+    expect(tryBuildEditSubmission(state).submission).not.toBeNull();
+  });
+
+  it("formats the duration field in hours and minutes", () => {
+    expect(formatDurationInput(0)).toBe("0m");
+    expect(formatDurationInput(45 * 60 + 59)).toBe("45m");
+    expect(formatDurationInput(2 * 3600)).toBe("2h");
+    expect(formatDurationInput(26 * 3600 + 5 * 60)).toBe("26h 05m");
   });
 
   it("rejects input that is not second-precision local date time", () => {
     let state = tryOpenEdit(emptySessionEditState, session())!;
     state = setEditStartedAt(state, "2026-08-04T18:30");
-    expect(tryBuildEditSubmission(state).state.error).toBe("Enter a valid start and end date and time.");
+    expect(tryBuildEditSubmission(state).state.error).toBe("Enter a valid start date and time.");
     expect(tryParseLocal("2026-02-30T10:00:00")).toBeNull();
     expect(tryParseLocal("2026-02-28T24:00:00")).toBeNull();
   });
@@ -155,7 +203,7 @@ describe("session edit state", () => {
     state = cancelEdit();
     expect(isEditOpen(state)).toBe(false);
     expect(state.startedAt).toBe("");
-    expect(state.endedAt).toBe("");
+    expect(state.duration).toBe("");
   });
 
   it("formats local date time inputs with zero padding", () => {
@@ -174,12 +222,10 @@ describe("sessions state", () => {
     expect(buildStatsRequest(state)).toBe("/stats?from=2026-07-13&to=2026-07-19");
   });
 
-  it("trims the debounced title, resets paging and only changes the list URL", () => {
-    let state = setOffset(createSessionsState(july13), 30);
+  it("trims the debounced title and only changes the list URL", () => {
+    let state = createSessionsState(july13);
     state = setTitle(state, "  Hades II  ");
     state = applyDebouncedTitle(state, state.titleVersion)!;
-
-    expect(state.offset).toBe(0);
     expect(state.debouncedTitle).toBe("Hades II");
     expect(buildListRequest(state)).toBe(
       "/sessions?limit=10&offset=0&title=Hades+II&from=2026-07-13&to=2026-07-19&sort=date&direction=desc",
@@ -195,37 +241,33 @@ describe("sessions state", () => {
     );
   });
 
-  it("platform selection resets paging, filters both requests and toggles back to all", () => {
-    let state = setPlatform(setOffset(createSessionsState(july13), 30), "ps5");
-    expect(state.offset).toBe(0);
+  it("platform selection filters both requests and toggles back to all", () => {
+    let state = setPlatform(createSessionsState(july13), "ps5");
     expect(state.platform).toBe("ps5");
     expect(buildListRequest(state)).toBe(
       "/sessions?limit=10&offset=0&platform=ps5&from=2026-07-13&to=2026-07-19&sort=date&direction=desc",
     );
     expect(buildStatsRequest(state)).toBe("/stats?from=2026-07-13&to=2026-07-19&platform=ps5");
 
-    state = togglePlatform(setOffset(state, 20), "ps5");
+    state = togglePlatform(state, "ps5");
     expect(state.platform).toBe("");
-    expect(state.offset).toBe(0);
     expect(buildListRequest(state)).not.toContain("platform");
     expect(buildStatsRequest(state)).not.toContain("platform");
   });
 
   it("rejects a stale debounce version so older work cannot win", () => {
-    let state = setOffset(createSessionsState(july13), 20);
+    let state = createSessionsState(july13);
     state = setTitle(state, "older");
     const stale = state.titleVersion;
     state = setTitle(state, "newer");
 
     expect(applyDebouncedTitle(state, stale)).toBeNull();
-    expect(state.offset).toBe(20);
     expect(state.debouncedTitle).toBe("");
     expect(applyDebouncedTitle(state, state.titleVersion)!.debouncedTitle).toBe("newer");
   });
 
-  it("custom dates reset paging and stats require both bounds", () => {
-    let state = setFrom(setOffset(createSessionsState(july13), 20), "");
-    expect(state.offset).toBe(0);
+  it("custom dates switch to custom and stats require both bounds", () => {
+    let state = setFrom(createSessionsState(july13), "");
     expect(state.preset).toBe("custom");
     expect(buildListRequest(state)).toBe("/sessions?limit=10&offset=0&to=2026-07-19&sort=date&direction=desc");
     expect(buildStatsRequest(state)).toBeNull();
@@ -243,13 +285,12 @@ describe("sessions state", () => {
     ["this-month", "2026-07-01", "2026-07-31"],
     ["this-year", "2026-01-01", "2026-12-31"],
     ["last-year", "2025-01-01", "2025-12-31"],
-  ])("preset %s uses UTC calendar ranges and resets paging", (preset, from, to) => {
+  ])("preset %s uses UTC calendar ranges", (preset, from, to) => {
     const now = new Date("2026-07-13T23:30:00-07:00");
-    const state = applyPreset(setOffset(createSessionsState(now), 20), preset, now);
+    const state = applyPreset(createSessionsState(now), preset, now);
     expect(state.preset).toBe(preset);
     expect(state.from).toBe(from);
     expect(state.to).toBe(to);
-    expect(state.offset).toBe(0);
   });
 
   it("this-month handles February in a leap year", () => {
@@ -258,16 +299,14 @@ describe("sessions state", () => {
     expect([state.from, state.to]).toEqual(["2028-02-01", "2028-02-29"]);
   });
 
-  it("sort resets paging, toggles the active key and defaults a new key to descending", () => {
-    let state = sortBy(setOffset(createSessionsState(july13), 20), "date");
+  it("sort toggles the active key and defaults a new key to descending", () => {
+    let state = sortBy(createSessionsState(july13), "date");
     expect(state.sortKey).toBe("date");
     expect(state.sortDirection).toBe("asc");
-    expect(state.offset).toBe(0);
 
-    state = sortBy(setOffset(state, 10), "duration");
+    state = sortBy(state, "duration");
     expect(state.sortKey).toBe("duration");
     expect(state.sortDirection).toBe("desc");
-    expect(state.offset).toBe(0);
   });
 
   it("list and stats have independent loading, data and error lifecycles", () => {
@@ -291,24 +330,82 @@ describe("sessions state", () => {
     expect(state.listError).toBe("List unavailable.");
   });
 
-  it("a completed list drives the showing text and four-page window", () => {
-    const row = session({ startedAt: "1970-01-01T00:00:00Z", endedAt: "1970-01-01T00:00:00Z" });
-    let state = beginListLoad(setOffset(createSessionsState(july13), 20));
-    state = completeListLoad(state, { accountId: 1, sessions: [row], total: 47, limit: 10, offset: 20 });
+  it("load more appends the next page without duplicates and drives the showing text", () => {
+    const row = (sessionId: number) => session({ sessionId, startedAt: "1970-01-01T00:00:00Z", endedAt: "1970-01-01T00:00:00Z" });
+    let state = beginListLoad(createSessionsState(july13));
+    expect(state.isListLoading).toBe(true);
+    state = completeListLoad(state, { sessions: Array.from({ length: 10 }, (_, index) => row(index + 1)), total: 23 });
+    expect(showingLabel(state)).toBe("Showing 10 of 23 sessions");
+    expect(hasMore(state)).toBe(true);
+    expect(nextPageSize(state)).toBe(10);
+    expect(listRequestPages(state, "more")).toEqual([
+      "/sessions?limit=10&offset=10&from=2026-07-13&to=2026-07-19&sort=date&direction=desc",
+    ]);
+
+    state = beginListLoad(state, "more");
+    expect(state.isLoadingMore).toBe(true);
     expect(state.isListLoading).toBe(false);
-    expect(state.rows).toEqual([row]);
-    expect(state.total).toBe(47);
-    expect(start(state)).toBe(21);
-    expect(end(state)).toBe(30);
-    expect(currentPage(state)).toBe(3);
-    expect(pageNumbers(state)).toEqual([2, 3, 4, 5]);
+    expect(state.rows).toHaveLength(10);
+    // Row 10 shifted onto the next page meanwhile; it must not render twice.
+    state = completeListLoad(state, { sessions: [10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20].map(row), total: 23 }, "more");
+    expect(state.isLoadingMore).toBe(false);
+    expect(state.rows.map((item) => item.sessionId)).toEqual(Array.from({ length: 20 }, (_, index) => index + 1));
+    expect(nextPageSize(state)).toBe(3);
+
+    state = failListLoad(beginListLoad(state, "more"), "Load failed.", "more");
+    expect(state.rows).toHaveLength(20);
+    expect(state.listError).toBe("Load failed.");
+
+    state = completeListLoad(state, { sessions: [21, 22, 23].map(row), total: 23 }, "more");
+    expect(showingLabel(state)).toBe("Showing 23 of 23 sessions");
+    expect(hasMore(state)).toBe(false);
   });
 
-  it("an empty list shows a single page and 0-0", () => {
+  it("a refresh reloads every loaded row in pages of at most 100 and keeps rows visible", () => {
+    const rows = Array.from({ length: 230 }, (_, index) => session({ sessionId: index + 1 }));
+    const state = completeListLoad(createSessionsState(july13), { sessions: rows, total: 1284 });
+    expect(showingLabel(state)).toBe("Showing 230 of 1,284 sessions");
+    expect(listRequestPages(state, "refresh").map((path) => /limit=(\d+)&offset=(\d+)/.exec(path)!.slice(1).join("@"))).toEqual([
+      "100@0",
+      "100@100",
+      "30@200",
+    ]);
+    expect(beginListLoad(state, "refresh").isListLoading).toBe(false);
+    expect(listRequestPages(createSessionsState(july13), "refresh")).toHaveLength(1);
+    expect(listRequestPages(state, "replace")).toEqual([
+      "/sessions?limit=10&offset=0&from=2026-07-13&to=2026-07-19&sort=date&direction=desc",
+    ]);
+  });
+
+  it("an empty list shows nothing more to load", () => {
     const state = createSessionsState(july13);
-    expect(start(state)).toBe(0);
-    expect(end(state)).toBe(0);
-    expect(pageNumbers(state)).toEqual([1]);
+    expect(hasMore(state)).toBe(false);
+    expect(showingLabel(completeListLoad(state, { sessions: [session()], total: 1 }))).toBe("Showing 1 of 1 session");
+  });
+
+  it("requests per-day stats only for week-sized ranges", () => {
+    const now = new Date("2026-10-03T12:00:00Z");
+    const week = createSessionsState(now);
+    expect(rangeDays(week)).toBe(7);
+    expect(buildDailyRequest(week)).toBe("/stats/daily?from=2026-09-28&to=2026-10-04");
+    expect(buildDailyRequest(setPlatform(week, "ps5"))).toBe("/stats/daily?from=2026-09-28&to=2026-10-04&platform=ps5");
+    expect(buildDailyRequest(applyPreset(week, "today", now))).toBeNull();
+    expect(buildDailyRequest(applyPreset(week, "this-month", now))).toBeNull();
+    expect(buildDailyRequest(setFrom(week, ""))).toBeNull();
+    expect(buildDailyRequest(setTo(week, "2026-09-01"))).toBeNull();
+  });
+
+  it("daily bars cover every day of the range and mark future days as upcoming", () => {
+    const now = new Date("2026-10-03T12:00:00Z");
+    const state = completeStatsLoad(createSessionsState(now), { accountId: 1, stats: emptyStats() }, [
+      { date: "2026-09-28", totalSeconds: 3600, sessionCount: 1, platforms: [] },
+      { date: "2026-10-03", totalSeconds: 600, sessionCount: 1, platforms: [] },
+    ]);
+    const bars = dailyBars(state, now);
+    expect(bars.map((bar) => bar.label)).toEqual(["Mon 28", "Tue 29", "Wed 30", "Thu 1", "Fri 2", "Sat 3", "Sun 4"]);
+    expect(bars.map((bar) => bar.seconds)).toEqual([3600, 0, 0, 0, 0, 600, 0]);
+    expect(bars.map((bar) => bar.upcoming)).toEqual([false, false, false, false, false, false, true]);
+    expect(dailyBars(failStatsLoad(state, "x"), now)).toEqual([]);
   });
 
   it("stats load is skipped and cleared when either date bound is missing", () => {

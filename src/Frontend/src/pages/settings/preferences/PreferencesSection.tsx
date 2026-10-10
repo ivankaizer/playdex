@@ -1,9 +1,15 @@
+import { useState } from "react";
 import { cx } from "@/lib/cx";
 import { SectionHeading } from "../shared/SectionHeading";
 import {
+  canSavePreferences,
   canSendTestNotification,
+  hasDiscardableChanges,
   isPreferencesBusy,
   isPreferencesDirty,
+  isTelegramChatIdDraftValid,
+  MaxMinimumMinutes,
+  minutesRangeMessage,
   parsedMinimumMinutes,
 } from "./preferencesState";
 import type { usePreferences } from "./usePreferences";
@@ -21,18 +27,28 @@ export function PreferencesSection({ preferences }: PreferencesSectionProps) {
   const { state } = preferences;
   const busy = isPreferencesBusy(state);
   const dirty = isPreferencesDirty(state);
+  const discardable = hasDiscardableChanges(state);
   const minutes = parsedMinimumMinutes(state);
+  const chatValid = isTelegramChatIdDraftValid(state.telegramChatId);
   const telegramOn = state.savedTelegramChatId.length > 0;
+  // While typing, the field shows the raw draft; otherwise 0 reads as "Off" like the presets.
+  const [minutesFocused, setMinutesFocused] = useState(false);
+  const showOff = !minutesFocused && minutes === 0;
+  const minutesDisplay = showOff ? "Off" : state.ignoreShortSessionsMinutes;
 
   const minutesNote =
     minutes === null
-      ? "Enter a whole number of minutes."
+      ? minutesRangeMessage
       : minutes === 0
         ? "Every session is counted, however short."
         : `Sessions under ${minutes} min are ignored.`;
 
   const saveNote = state.settingsError ? (
     <span className="text-danger">{state.settingsError}</span>
+  ) : dirty && (minutes === null || !chatValid) ? (
+    <span className="text-warn">{minutes === null ? "Fix the minimum minutes to save" : "Fix the chat ID to save"}</span>
+  ) : dirty && !discardable ? (
+    <span className="text-warn">Saved minimum is above {MaxMinimumMinutes} min. Save to cap it at {MaxMinimumMinutes} min</span>
   ) : dirty ? (
     <span className="text-warn">You have unsaved changes</span>
   ) : state.isSettingsLoading ? (
@@ -71,25 +87,46 @@ export function PreferencesSection({ preferences }: PreferencesSectionProps) {
               <label className="flex min-w-[92px] items-baseline justify-center gap-1 px-1 text-lg font-semibold">
                 <span className="sr-only">Minimum minutes</span>
                 <input
-                  type="number"
-                  min="0"
-                  step="1"
+                  type="text"
+                  role="spinbutton"
                   inputMode="numeric"
-                  value={state.ignoreShortSessionsMinutes}
+                  autoComplete="off"
+                  aria-valuemin={0}
+                  aria-valuemax={MaxMinimumMinutes}
+                  aria-valuenow={minutes ?? undefined}
+                  aria-valuetext={minutes === null ? undefined : minutes === 0 ? "Off" : `${minutes} min`}
+                  aria-invalid={minutes === null || undefined}
+                  value={minutesDisplay}
+                  onFocus={(event) => {
+                    setMinutesFocused(true);
+                    event.currentTarget.select();
+                  }}
+                  onBlur={() => setMinutesFocused(false)}
                   onChange={(event) => preferences.setIgnoreShortSessionsMinutes(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key !== "ArrowUp" && event.key !== "ArrowDown") return;
+                    event.preventDefault();
+                    preferences.stepIgnoreShortSessionsMinutes(event.key === "ArrowUp" ? 1 : -1);
+                  }}
                   disabled={busy}
-                  style={{ width: `${Math.min(10, Math.max(1, state.ignoreShortSessionsMinutes.length)) + 0.6}ch` }}
-                  className="pdx-num appearance-none bg-transparent text-right text-lg font-semibold text-ink outline-none [-moz-appearance:textfield] disabled:opacity-60 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                  style={{ width: `${Math.min(10, Math.max(1, minutesDisplay.length)) + 0.6}ch` }}
+                  className={cx(
+                    "pdx-num bg-transparent text-lg font-semibold outline-none disabled:opacity-60",
+                    showOff ? "text-center" : "text-right",
+                    minutes === null ? "text-danger" : "text-ink",
+                  )}
                 />
-                <span aria-hidden="true" className="text-[15px] text-muted">
-                  min
-                </span>
+                {showOff ? null : (
+                  <span aria-hidden="true" className="text-[15px] text-muted">
+                    min
+                  </span>
+                )}
               </label>
               <button
                 type="button"
                 aria-label="Increase minimum minutes"
                 onClick={() => preferences.stepIgnoreShortSessionsMinutes(1)}
-                disabled={busy}
+                disabled={busy || (minutes ?? 0) >= MaxMinimumMinutes}
                 className={stepButtonClass}
               >
                 +
@@ -110,7 +147,9 @@ export function PreferencesSection({ preferences }: PreferencesSectionProps) {
               ))}
             </div>
           </div>
-          <p className={cx("text-[13px]", minutes === null ? "text-danger" : "text-ink-2")}>{minutesNote}</p>
+          <p className={cx("text-[13px]", minutes === null ? "text-danger" : "text-ink-2")} aria-live="polite">
+            {minutesNote}
+          </p>
         </div>
 
         <div data-settings-group="telegram" className="pdx-tile flex flex-col gap-5 !p-7">
@@ -138,10 +177,12 @@ export function PreferencesSection({ preferences }: PreferencesSectionProps) {
                 type="text"
                 inputMode="numeric"
                 placeholder="Chat ID"
+                aria-invalid={!chatValid || undefined}
+                aria-describedby="telegram-chat-note"
                 value={state.telegramChatId}
                 onChange={(event) => preferences.setTelegramChatId(event.target.value)}
                 disabled={busy}
-                className="pdx-input pdx-num !h-12 !px-5 !text-[15px]"
+                className={cx("pdx-input pdx-num !h-12 !px-5 !text-[15px]", !chatValid && "!border-danger")}
               />
             </label>
             <button
@@ -150,11 +191,13 @@ export function PreferencesSection({ preferences }: PreferencesSectionProps) {
               disabled={!canSendTestNotification(state)}
               className="pdx-btn-outline !h-12 text-ink"
             >
-              {state.isTestNotificationSending ? "Sending..." : "Send test"}
+              {state.isTestNotificationSending ? "Sending…" : "Send test"}
             </button>
           </div>
-          <p className="text-[13px]" aria-live="polite">
-            {state.testNotificationMessage ? (
+          <p id="telegram-chat-note" className="text-[13px]" aria-live="polite">
+            {!chatValid ? (
+              <span className="text-danger">Use a numeric chat ID like 77434259 or -1001234567890.</span>
+            ) : state.testNotificationMessage ? (
               <span className="text-accent">
                 <span aria-hidden="true">✓ </span>
                 {state.testNotificationMessage}
@@ -174,7 +217,7 @@ export function PreferencesSection({ preferences }: PreferencesSectionProps) {
         <p className="mr-auto text-[13px]" aria-live="polite">
           {saveNote}
         </p>
-        {dirty ? (
+        {discardable ? (
           <button
             type="button"
             onClick={preferences.discardChanges}
@@ -187,7 +230,7 @@ export function PreferencesSection({ preferences }: PreferencesSectionProps) {
         <button
           type="button"
           onClick={() => void preferences.saveSettings()}
-          disabled={busy || !dirty}
+          disabled={!canSavePreferences(state)}
           className="pdx-btn-primary !h-11 !px-6"
         >
           {state.isSettingsSaving ? "Saving..." : state.isSettingsLoading ? "Loading..." : "Save changes"}

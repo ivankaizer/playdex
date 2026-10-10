@@ -25,6 +25,8 @@ export interface SessionCreateState {
   error: string;
   searchError: string;
   isSearching: boolean;
+  /** True once a search for the current query has answered, so "no matches" can be told apart from "not searched yet". */
+  hasSearched: boolean;
   isSaving: boolean;
   isIgdbAvailable: boolean;
 }
@@ -43,6 +45,7 @@ export function createSessionCreateState(): SessionCreateState {
     error: "",
     searchError: "",
     isSearching: false,
+    hasSearched: false,
     isSaving: false,
     isIgdbAvailable: true,
   };
@@ -61,7 +64,7 @@ export function setMode(state: SessionCreateState, mode: SessionCreateMode): Ses
 }
 
 export function setQuery(state: SessionCreateState, query: string): SessionCreateState {
-  return { ...state, query, results: [], selectedGame: null, searchError: "", error: "" };
+  return { ...state, query, results: [], selectedGame: null, searchError: "", error: "", hasSearched: false };
 }
 
 export function tryBeginSearch(state: SessionCreateState): { state: SessionCreateState; path: string | null } {
@@ -81,12 +84,13 @@ export function completeSearch(state: SessionCreateState, response: ManualMappin
     results: response.results,
     isIgdbAvailable: response.igdbAvailable,
     isSearching: false,
+    hasSearched: true,
     searchError: "",
   };
 }
 
 export function failSearch(state: SessionCreateState, error: string): SessionCreateState {
-  return { ...state, results: [], isSearching: false, searchError: error };
+  return { ...state, results: [], isSearching: false, hasSearched: false, searchError: error };
 }
 
 export function cancelSearch(state: SessionCreateState): SessionCreateState {
@@ -207,7 +211,15 @@ export function parseInvariantDouble(value: string): number | null {
   return null;
 }
 
-/** Whole-minute duration, or the validation message. */
+/** Durations above this many minutes (24h) are allowed, but only after a second look. */
+export const LongDurationMinutes = 24 * 60;
+
+/** True for a valid duration over 24 hours, which the form flags before saving. */
+export function isLongDuration(totalMinutes: number): boolean {
+  return totalMinutes > LongDurationMinutes;
+}
+
+/** Whole-minute duration, or the validation message. Zero is rejected, minutes stay under 60, hours at most 99. */
 function parseDuration(hoursText: string, minutesText: string): number | string {
   const hours = parseInvariantDouble(hoursText);
   const minutes = parseInvariantDouble(minutesText);
@@ -221,8 +233,9 @@ function parseDuration(hoursText: string, minutesText: string): number | string 
   ) {
     return "Enter a valid duration.";
   }
+  if (minutes > 59) return "Minutes must be between 0 and 59.";
+  if (hours > 99) return "Hours must be 99 or less.";
 
-  // (int)Math.Floor(...) saturates in .NET.
-  const durationMinutes = Math.min(Math.floor(hours * 60 + minutes), 2_147_483_647);
-  return durationMinutes > 0 ? durationMinutes : "Duration must be at least 1 minute.";
+  const durationMinutes = Math.floor(hours * 60 + minutes);
+  return durationMinutes > 0 ? durationMinutes : "Add how long you played.";
 }

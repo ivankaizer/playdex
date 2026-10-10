@@ -1,5 +1,5 @@
-import { formatDateLabel, formatDuration, formatFixedNumber, formatHours } from "@/lib/format";
-import type { RecapResponse, WeekdayStat } from "./recapModels";
+import { formatCountNoun, formatDateLabel, formatDuration, formatFixedNumber, formatHours } from "@/lib/format";
+import type { RecapGameStat, RecapResponse, WeekdayStat } from "./recapModels";
 
 export interface ChartPoint {
   x: number;
@@ -142,4 +142,53 @@ export function gameHighlightStats(recap: RecapResponse): LabeledValue[] {
       value: longest ? `${longest.title} · ${formatDuration(longest.sessionSeconds, "full")}` : "—",
     },
   ];
+}
+
+/** Rows of the full library shown before "Show all". */
+export const LibraryPreviewCount = 20;
+
+/** A recap with nothing logged in it (a brand-new account on "All time"). */
+export function isRecapEmpty(recap: RecapResponse): boolean {
+  return recap.totalSessions <= 0 && recap.gamesTable.length === 0;
+}
+
+/** Only games with playtime rank, longest first, at most five. */
+export function topGames(recap: RecapResponse): RecapGameStat[] {
+  return recap.topGamesByTime
+    .filter((game) => game.totalSeconds > 0)
+    .sort((a, b) => b.totalSeconds - a.totalSeconds)
+    .slice(0, 5);
+}
+
+export function topGamesTitle(count: number): string {
+  return count === 1 ? "Top game" : `Top ${count} games`;
+}
+
+/** The three hero fact tiles; all time shows the longest streak, a period its average session. */
+export function heroFacts(recap: RecapResponse, allTime: boolean): LabeledValue[] {
+  return [
+    { label: "Top title", value: recap.topGameByTime?.title ?? "—" },
+    {
+      label: "Most active month",
+      value: recap.mostActiveMonth ? formatRecapMonthLabel(recap.mostActiveMonth.month) : "—",
+    },
+    allTime
+      ? { label: "Longest streak", value: formatCountNoun(recap.longestStreakDays, "day") }
+      : { label: "Avg. session", value: formatDuration(recap.averageSessionSeconds, "full") },
+  ];
+}
+
+/** Font size for the TOP TITLE tile: shorter titles keep the 20px figure, long ones step down. */
+export function titleSizeClass(title: string): string {
+  const length = Array.from(title).length;
+  if (length <= 16) return "text-xl";
+  if (length <= 28) return "text-[17px] leading-snug";
+  return "text-[15px] leading-snug";
+}
+
+const averageFormat = new Intl.NumberFormat("en-US", { maximumFractionDigits: 1 });
+
+/** Average sessions per day/week, grouped with one decimal ("1,000.5"). */
+export function formatSessionsAverage(value: number): string {
+  return averageFormat.format(Number.isFinite(value) ? value : 0);
 }

@@ -1,11 +1,13 @@
 import { useId } from "react";
 import { Cover, Dot } from "@/components/ui";
 import { cx } from "@/lib/cx";
+import { formatCountNoun } from "@/lib/format";
 import { platformColor } from "@/lib/platforms";
 import type { ManualMappingSearchResult, ManualPlatform } from "@/models/manual";
 import {
   clearGame,
   formatMinutes,
+  isLongDuration,
   selectGame,
   setDate,
   setHours,
@@ -49,6 +51,13 @@ function localDate(offset: number): string {
   date.setDate(date.getDate() + offset);
   return `${String(date.getFullYear()).padStart(4, "0")}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
+
+/** Submission messages for a field that simply has not been filled in yet, phrased as the next step. */
+const missingFieldPrompts: Readonly<Record<string, string>> = {
+  "Select a game.": "Choose a game to continue.",
+  "Select a platform.": "Choose a platform to continue.",
+  "Select a date.": "Choose a date to continue.",
+};
 
 function shortDate(value: string): string {
   const date = new Date(`${value}T12:00`);
@@ -202,9 +211,7 @@ function GameStep({
         <>
           <div className="flex items-baseline justify-between gap-3">
             <span className="pdx-label">Matches</span>
-            <span className="pdx-num text-xs text-muted">
-              {resultCount} {resultCount === 1 ? "result" : "results"}
-            </span>
+            <span className="pdx-num text-xs text-muted">{formatCountNoun(resultCount, "result")}</span>
           </div>
           <div className="grid grid-cols-[repeat(auto-fill,minmax(min(230px,100%),1fr))] gap-2.5">
             {state.results.map((result) => (
@@ -219,7 +226,13 @@ function GameStep({
         </>
       ) : (
         state.searchError.length === 0 &&
-        embedded && <p className="pdx-dashed rounded-[20px] text-sm">Search by title, then pick the exact game from the matches.</p>
+        (state.hasSearched && !state.isSearching ? (
+          <p className="pdx-dashed rounded-[20px] text-sm [overflow-wrap:anywhere]">
+            Nothing matches “{state.query.trim()}”. Try a shorter name.
+          </p>
+        ) : (
+          embedded && <p className="pdx-dashed rounded-[20px] text-sm">Search by title, then pick the exact game from the matches.</p>
+        ))
       )}
     </>
   );
@@ -239,7 +252,9 @@ function ResultButton({ result, selected, onSelect }: { result: ManualMappingSea
     >
       <Cover title={result.title} src={result.capsuleUrl} className="h-12 w-12 rounded-[14px]" />
       <span className="min-w-0">
-        <span className="block truncate text-sm font-medium">{result.title}</span>
+        <span title={result.title} className="line-clamp-2 text-sm font-medium leading-[1.3] [overflow-wrap:anywhere]">
+          {result.title}
+        </span>
         <span className={cx("mt-[3px] block text-[11px] font-semibold uppercase tracking-[0.16em]", local ? "text-accent" : "text-muted")}>
           {local ? "Saved game" : "From IGDB"}
         </span>
@@ -275,12 +290,16 @@ function DetailsStep({
   const blocker = submissionBlocker(state);
   const platformName = platforms.find((platform) => platform.key === state.platformKey)?.name ?? state.platformKey;
   const submission = blocker === null ? tryBuildSubmission(state).submission : null;
+  const missing = blocker === null ? null : (missingFieldPrompts[blocker] ?? null);
+  const long = submission?.kind === "entry" && isLongDuration(submission.body.durationMinutes);
   const summary =
     submission === null || selectedGame === null
-      ? blocker
+      ? (missing ?? blocker)
       : submission.kind === "entry"
-        ? `${selectedGame.title} · ${platformName} · ${formatMinutes(submission.body.durationMinutes)} on ${shortDate(state.date)}`
+        ? `${selectedGame.title} · ${platformName} · ${formatMinutes(submission.body.durationMinutes)} on ${shortDate(state.date)}${long ? " · over 24 hours, double-check it" : ""}`
         : `${selectedGame.title} · ${platformName} · starts now`;
+  // Missing fields read as a quiet prompt, an invalid duration as an error and a duration over 24h as a warning.
+  const summaryTone = missing !== null ? "text-muted" : blocker !== null ? "text-danger" : long ? "text-warn" : "text-ink";
   const pickDuration = (hours: number, minutes: number) =>
     onStateChange((current) => setMinutes(setHours(current, String(hours)), String(minutes)));
 
@@ -297,7 +316,9 @@ function DetailsStep({
         <div className="flex items-center gap-3.5 rounded-[20px] bg-mint px-3.5 py-3">
           <Cover title={selectedGame.title} src={selectedGame.capsuleUrl} className="h-[52px] w-[52px] rounded-[14px]" initialClassName="text-[17px]" />
           <div className="min-w-0 flex-1">
-            <p className="truncate text-[15px] font-semibold">{selectedGame.title}</p>
+            <p title={selectedGame.title} className="truncate text-[15px] font-semibold">
+              {selectedGame.title}
+            </p>
             <p className="mt-0.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-accent">Selected</p>
           </div>
           <button
@@ -369,10 +390,19 @@ function DetailsStep({
           <div className="flex flex-col gap-2.5">
             <span className="text-xs font-medium text-muted">Time played</span>
             <div className="flex flex-wrap items-center gap-2">
-              <DurationField label="Hours" unit="h" value={state.hours} onChange={(value) => onStateChange((current) => setHours(current, value))} />
+              <DurationField
+                label="Hours"
+                unit="h"
+                max={99}
+                widthClassName="w-[52px]"
+                value={state.hours}
+                onChange={(value) => onStateChange((current) => setHours(current, value))}
+              />
               <DurationField
                 label="Minutes"
                 unit="min"
+                max={59}
+                widthClassName="w-11"
                 value={state.minutes}
                 onChange={(value) => onStateChange((current) => setMinutes(current, value))}
               />
@@ -399,7 +429,7 @@ function DetailsStep({
       )}
 
       <div className="flex flex-col gap-3 border-t border-divider pt-5">
-        <p id={`${ids}-summary`} aria-live="polite" className={cx("text-[13px]", blocker === null ? "text-ink" : "text-muted")}>
+        <p id={`${ids}-summary`} aria-live="polite" className={cx("text-[13px] [overflow-wrap:anywhere]", summaryTone)}>
           {summary}
         </p>
         <div className="flex flex-wrap gap-3">
@@ -424,16 +454,31 @@ function DetailsStep({
   );
 }
 
-function DurationField({ label, unit, value, onChange }: { label: string; unit: string; value: string; onChange: (value: string) => void }) {
+function DurationField({
+  label,
+  unit,
+  max,
+  widthClassName,
+  value,
+  onChange,
+}: {
+  label: string;
+  unit: string;
+  max: number;
+  widthClassName: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
   return (
     <label className="flex h-[46px] items-center rounded-full border border-line bg-surface pl-[18px] pr-1.5 transition-colors focus-within:border-bar">
       <span className="sr-only">{label}</span>
       <input
         type="number"
         min="0"
+        max={max}
         value={value}
         onChange={(event) => onChange(event.currentTarget.value)}
-        className="pdx-num w-11 border-0 bg-transparent text-base font-semibold text-ink outline-none"
+        className={cx("pdx-num border-0 bg-transparent text-base font-semibold text-ink outline-none", widthClassName)}
       />
       <span aria-hidden="true" className="pr-2.5 text-[13px] text-muted">
         {unit}

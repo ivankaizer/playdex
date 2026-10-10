@@ -1,3 +1,5 @@
+import { useState } from "react";
+import { formatCount } from "@/lib/format";
 import { SectionHeading } from "../shared/SectionHeading";
 import { IntegrationCard } from "./IntegrationCard";
 import { IntegrationCreator } from "./IntegrationCreator";
@@ -8,10 +10,16 @@ interface IntegrationsSectionProps {
   integrations: Integrations;
 }
 
+/** Rows shown before "Show all"; up to 3 accounts per service can make the list long. */
+const IntegrationsPreviewCount = 6;
+
 export function IntegrationsSection({ integrations }: IntegrationsSectionProps) {
   const { state } = integrations;
   const visible = visibleProviders(state);
   const activeCount = visible.filter((provider) => provider.status === "active").length;
+  const [showAll, setShowAll] = useState(false);
+  const hasMore = visible.length > IntegrationsPreviewCount;
+  const shown = showAll || !hasMore ? visible : visible.slice(0, IntegrationsPreviewCount);
 
   return (
     <section data-settings-section="integrations" className="pdx-card flex flex-col gap-6">
@@ -20,11 +28,13 @@ export function IntegrationsSection({ integrations }: IntegrationsSectionProps) 
         title="Connected services"
         description="Accounts that feed activity into Playdex."
         aside={
-          !state.isProvidersLoading && visible.length > 0 ? (
+          state.isProvidersLoading || state.providersError ? null : (
             <span className="pdx-num text-[13px] text-muted">
-              {activeCount} of {visible.length} active
+              {visible.length > 0
+                ? `${formatCount(activeCount)} of ${formatCount(visible.length)} active`
+                : "No services connected"}
             </span>
-          ) : null
+          )
         }
       />
 
@@ -55,7 +65,21 @@ export function IntegrationsSection({ integrations }: IntegrationsSectionProps) 
             No integrations connected yet. Add one to start syncing playtime.
           </div>
         ) : (
-          visible.map((provider) => <IntegrationCard key={provider.id} provider={provider} integrations={integrations} />)
+          <>
+            {shown.map((provider) => (
+              <IntegrationCard key={provider.id} provider={provider} integrations={integrations} />
+            ))}
+            {hasMore ? (
+              <button
+                type="button"
+                onClick={() => setShowAll((value) => !value)}
+                aria-expanded={showAll}
+                className="pdx-btn-outline mx-1 !h-9 self-start !px-4 !text-[13px]"
+              >
+                {showAll ? "Show fewer" : `Show all ${formatCount(visible.length)}`}
+              </button>
+            ) : null}
+          </>
         )}
 
         {!state.isProvidersLoading ? <IntegrationCreator integrations={integrations} /> : null}

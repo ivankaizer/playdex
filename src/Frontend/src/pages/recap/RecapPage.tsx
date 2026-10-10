@@ -3,7 +3,7 @@ import { useLocation } from "react-router";
 import { AppLayout } from "@/components/AppLayout";
 import { BarChart, CardHeading, Cover, Dot, ErrorNote, LoadingNote, Segmented, ShareBar, StackedBar } from "@/components/ui";
 import { apiRequest, errorMessage } from "@/lib/api";
-import { formatDuration, formatHours } from "@/lib/format";
+import { formatCount, formatCountNoun, formatDuration, formatHoursShort, formatPercent } from "@/lib/format";
 import { encodeGameId } from "@/lib/gameHash";
 import { logout, useAppNavigate } from "@/lib/navigation";
 import { platformColor } from "@/lib/platforms";
@@ -28,13 +28,25 @@ import {
   type RecapState,
   type RecapStep,
 } from "./recapState";
-import { formatAverage, formatRecapDate, formatRecapMonthLabel, rangeLabel, roundPercent, type LabeledValue } from "./recapView";
+import {
+  formatRecapDate,
+  formatRecapMonthLabel,
+  formatSessionsAverage,
+  heroFacts,
+  isRecapEmpty,
+  LibraryPreviewCount,
+  rangeLabel,
+  titleSizeClass,
+  topGames,
+  topGamesTitle,
+  type LabeledValue,
+} from "./recapView";
 
 const WeekdayLabels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const WeekdayNames = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 
 const pad2 = (value: number) => String(value).padStart(2, "0");
-const count = (value: number) => value.toLocaleString("en-US");
+const sessionsNoun = (value: number) => formatCountNoun(value, "session");
 
 export function RecapPage() {
   const location = useLocation();
@@ -177,6 +189,24 @@ export function RecapPage() {
   const tabs = recapTabs(state);
   const activeLabel = tabs.find((tab) => tab.key === state.activeTab)?.label ?? "All time";
   const recap = state.recap;
+  const allTime = state.activeTab === "all-time";
+  // A brand-new account gets one empty state instead of a page of empty sections.
+  const isNewUser = recap !== null && allTime && !state.isLoading && isRecapEmpty(recap);
+  const isEmptyPeriod = recap !== null && !isNewUser && isRecapEmpty(recap);
+  const top = recap !== null ? topGames(recap) : [];
+
+  if (isNewUser) {
+    return (
+      <AppLayout title="Recap">
+        {state.error.length > 0 && <ErrorNote>{state.error}</ErrorNote>}
+        <EmptyRecap
+          title="Nothing to recap yet"
+          onStart={() => navigate("/dashboard")}
+          onSessions={() => navigate("/sessions")}
+        />
+      </AppLayout>
+    );
+  }
 
   return (
     <AppLayout title="Recap">
@@ -233,22 +263,32 @@ export function RecapPage() {
           <div className="flex flex-wrap items-end justify-between gap-8">
             <div className="min-w-0">
               <p className="text-[15px] text-ink-2">You played</p>
-              <p className="pdx-num mt-1.5 break-words text-[56px] font-semibold leading-none tracking-[-0.04em] sm:text-[80px]">
-                {formatHours(recap.totalSeconds, 1)}
+              {/* A KPI figure never truncates; it shrinks with the viewport instead. */}
+              <p className="pdx-num mt-1.5 whitespace-nowrap text-[clamp(40px,11vw,80px)] font-semibold leading-none tracking-[-0.04em]">
+                {formatHoursShort(recap.totalSeconds)}
               </p>
               <p className="mt-3 text-base text-ink-2">
-                across {count(recap.totalSessions)} {recap.totalSessions === 1 ? "session" : "sessions"} and{" "}
-                {count(recap.uniqueGames)} {recap.uniqueGames === 1 ? "game" : "games"}
+                across {sessionsNoun(recap.totalSessions)} and {formatCountNoun(recap.uniqueGames, "game")}
               </p>
             </div>
             <div className="flex flex-wrap gap-3">
-              {heroFacts(recap).map((fact) => (
+              {heroFacts(recap, allTime).map((fact, index) => (
                 <div
                   key={fact.label}
-                  className="min-w-[150px] max-w-full rounded-[20px] border border-[color:var(--card-border)] bg-surface/75 px-5 py-4"
+                  className="min-w-[min(150px,100%)] max-w-full rounded-[20px] border border-[color:var(--card-border)] bg-surface/75 px-5 py-4"
                 >
                   <p className="pdx-label">{fact.label}</p>
-                  <p className="pdx-num mt-1.5 truncate text-xl font-semibold">{fact.value}</p>
+                  {index === 0 ? (
+                    // TOP TITLE: the font steps down for long names, which wrap to two lines with the full name on hover.
+                    <p
+                      title={fact.value}
+                      className={`mt-1.5 line-clamp-2 max-w-[18rem] break-words font-semibold ${titleSizeClass(fact.value)}`}
+                    >
+                      {fact.value}
+                    </p>
+                  ) : (
+                    <p className="pdx-num mt-1.5 break-words text-xl font-semibold">{fact.value}</p>
+                  )}
                 </div>
               ))}
             </div>
@@ -256,20 +296,28 @@ export function RecapPage() {
         )}
       </section>
 
-      {recap !== null && (
+      {isEmptyPeriod && (
+        <section className="pdx-card flex flex-col items-start gap-3.5">
+          <p className="pdx-kicker">Recap</p>
+          <h2 className="pdx-title !mt-0">No sessions in this period</h2>
+          <p className="max-w-[460px] text-[15px] text-muted">Pick another period, or play or log a session to fill it in.</p>
+        </section>
+      )}
+
+      {recap !== null && !isEmptyPeriod && (
         <>
           <section className="pdx-card flex flex-col gap-6">
-            <CardHeading kicker="Most played" title="Top 5 games" />
-            {recap.topGamesByTime.length === 0 ? (
+            <CardHeading kicker="Most played" title={top.length > 0 ? topGamesTitle(top.length) : "Top games"} />
+            {top.length === 0 ? (
               <p className="pdx-dashed">No game data available yet.</p>
             ) : (
-              <div className="grid gap-5 [grid-template-columns:repeat(auto-fit,minmax(min(160px,100%),1fr))]">
-                {recap.topGamesByTime.map((game, index) => (
+              <div className="grid gap-5 [grid-template-columns:repeat(auto-fit,minmax(min(160px,100%),1fr))] max-[600px]:grid-cols-2 max-[600px]:gap-4">
+                {top.map((game, index) => (
                   <button
-                    key={index}
+                    key={`${game.gameId}-${index}`}
                     type="button"
                     onClick={() => navigateToGame(game.gameId)}
-                    className="group flex min-w-0 flex-col gap-3 text-left"
+                    className="group flex min-w-0 max-w-[260px] flex-col gap-3 text-left"
                   >
                     <div className="relative w-full">
                       <Cover
@@ -284,8 +332,10 @@ export function RecapPage() {
                       </span>
                     </div>
                     <div className="min-w-0">
-                      <p className="line-clamp-2 text-[15px] font-medium leading-[1.3] group-hover:text-accent">{game.title}</p>
-                      <p className="pdx-num mt-0.5 text-sm font-semibold text-accent">{formatHours(game.totalSeconds, 1)}</p>
+                      <p title={game.title} className="line-clamp-2 break-words text-[15px] font-medium leading-[1.3] group-hover:text-accent">
+                        {game.title}
+                      </p>
+                      <p className="pdx-num mt-0.5 text-sm font-semibold text-accent">{formatHoursShort(game.totalSeconds)}</p>
                     </div>
                   </button>
                 ))}
@@ -309,14 +359,24 @@ export function RecapPage() {
   );
 }
 
-function heroFacts(recap: RecapResponse): LabeledValue[] {
-  const facts: LabeledValue[] = [{ label: "Top title", value: recap.topGameByTime?.title ?? "—" }];
-  facts.push({
-    label: "Most active month",
-    value: recap.mostActiveMonth ? formatRecapMonthLabel(recap.mostActiveMonth.month) : "—",
-  });
-  facts.push({ label: "Avg. session", value: formatDuration(recap.averageSessionSeconds, "full") });
-  return facts;
+function EmptyRecap({ title, onStart, onSessions }: { title: string; onStart: () => void; onSessions: () => void }) {
+  return (
+    <section className="pdx-card flex flex-col items-start gap-3.5 !py-12">
+      <p className="pdx-kicker">Recap</p>
+      <h2 className="pdx-title !mt-0">{title}</h2>
+      <p className="max-w-[460px] text-[15px] text-muted">
+        Play or log a session and your hours, top games and rhythm start filling in here.
+      </p>
+      <div className="mt-1.5 flex flex-wrap gap-2.5">
+        <button type="button" onClick={onStart} className="pdx-btn-primary">
+          ▶ Start a session
+        </button>
+        <button type="button" onClick={onSessions} className="pdx-btn-outline">
+          Go to sessions
+        </button>
+      </div>
+    </section>
+  );
 }
 
 function SideNote({ children }: { children: ReactNode }) {
@@ -329,7 +389,7 @@ function RhythmCard({ recap }: { recap: RecapResponse }) {
     key: String(item.hour),
     value: item.sessionCount,
     label: item.hour % 3 === 0 ? pad2(item.hour) : "",
-    title: `${pad2(item.hour)}:00 · ${count(item.sessionCount)} sessions`,
+    title: `${pad2(item.hour)}:00 · ${sessionsNoun(item.sessionCount)}`,
     highlight: hourMax > 0 && item.sessionCount === hourMax,
   }));
 
@@ -342,13 +402,11 @@ function RhythmCard({ recap }: { recap: RecapResponse }) {
     key: WeekdayLabels[index],
     value,
     label: WeekdayLabels[index],
-    title: `${WeekdayLabels[index]} · ${count(value)} sessions`,
+    title: `${WeekdayLabels[index]} · ${sessionsNoun(value)}`,
     highlight: index === busiestIndex,
   }));
 
   const splitTotal = recap.weekendSeconds + recap.weekdaySeconds;
-  const weekendPercent = splitTotal > 0 ? (recap.weekendSeconds / splitTotal) * 100 : 0;
-  const weekdayPercent = splitTotal > 0 ? (recap.weekdaySeconds / splitTotal) * 100 : 0;
 
   return (
     <section className="pdx-card flex flex-col gap-7">
@@ -361,7 +419,7 @@ function RhythmCard({ recap }: { recap: RecapResponse }) {
               Peak{" "}
               {recap.peakHour ? (
                 <>
-                  <b className="font-semibold">{pad2(recap.peakHour.hour)}:00</b> · {count(recap.peakHour.sessionCount)} sessions
+                  <b className="font-semibold">{pad2(recap.peakHour.hour)}:00</b> · {sessionsNoun(recap.peakHour.sessionCount)}
                 </>
               ) : (
                 "—"
@@ -383,20 +441,24 @@ function RhythmCard({ recap }: { recap: RecapResponse }) {
             </span>
           </div>
           <BarChart data={weekdays} height={90} gap={10} radius={10} ariaLabel="Sessions by weekday" />
-          <div className="mt-2 flex h-2.5 gap-[3px] overflow-hidden rounded-full bg-track" aria-hidden="true">
-            {recap.weekendSeconds > 0 && <div className="bg-brand" style={{ flex: recap.weekendSeconds }}></div>}
-            {recap.weekdaySeconds > 0 && <div className="bg-info" style={{ flex: recap.weekdaySeconds }}></div>}
-          </div>
-          <div className="pdx-num flex flex-wrap justify-between gap-3 text-[13px]">
-            <span>
-              <b className="font-semibold">{roundPercent(weekendPercent)}%</b>{" "}
-              <span className="text-muted">weekend · {formatHours(recap.weekendSeconds, 1)}</span>
-            </span>
-            <span>
-              <b className="font-semibold">{roundPercent(weekdayPercent)}%</b>{" "}
-              <span className="text-muted">weekday · {formatHours(recap.weekdaySeconds, 1)}</span>
-            </span>
-          </div>
+          {splitTotal > 0 && (
+            <>
+              <div className="mt-2 flex h-2.5 gap-[3px] overflow-hidden rounded-full bg-track" aria-hidden="true">
+                {recap.weekendSeconds > 0 && <div className="bg-brand" style={{ flex: recap.weekendSeconds }}></div>}
+                {recap.weekdaySeconds > 0 && <div className="bg-info" style={{ flex: recap.weekdaySeconds }}></div>}
+              </div>
+              <div className="pdx-num flex flex-wrap justify-between gap-x-3 gap-y-1.5 text-[13px]">
+                <span>
+                  <b className="font-semibold">{formatPercent(recap.weekendSeconds, splitTotal)}</b>{" "}
+                  <span className="text-muted">weekend · {formatHoursShort(recap.weekendSeconds)}</span>
+                </span>
+                <span>
+                  <b className="font-semibold">{formatPercent(recap.weekdaySeconds, splitTotal)}</b>{" "}
+                  <span className="text-muted">weekday · {formatHoursShort(recap.weekdaySeconds)}</span>
+                </span>
+              </div>
+            </>
+          )}
         </div>
       </div>
     </section>
@@ -406,62 +468,51 @@ function RhythmCard({ recap }: { recap: RecapResponse }) {
 function ConsistencyCard({ recap }: { recap: RecapResponse }) {
   const totalDays = recap.daysPlayed + recap.daysNotPlayed;
   const playedPercent = totalDays > 0 ? (recap.daysPlayed / totalDays) * 100 : 0;
+  const playedLabel = formatPercent(recap.daysPlayed, totalDays);
+  // A sliver of play still draws a visible arc.
+  const ringPercent = playedPercent > 0 ? Math.max(playedPercent, 1) : 0;
   const day = recap.mostActiveDay;
   const month = recap.mostActiveMonth;
   const tiles: Array<{ label: string; value: ReactNode }> = [
-    { label: "Per day", value: <SessionsValue value={formatAverage(recap.averageSessionsPerDay)} /> },
-    { label: "Per week", value: <SessionsValue value={formatAverage(recap.averageSessionsPerWeek)} /> },
-    { label: "Per month", value: <SessionsValue value={formatAverage(recap.averageSessionsPerMonth)} /> },
-    { label: "Most active day", value: day ? `${formatRecapDate(day.date)} · ${count(day.sessionCount)}` : "—" },
+    { label: "Per day", value: <SessionsValue value={formatSessionsAverage(recap.averageSessionsPerDay)} /> },
+    { label: "Per week", value: <SessionsValue value={formatSessionsAverage(recap.averageSessionsPerWeek)} /> },
+    { label: "Most active day", value: day ? `${formatRecapDate(day.date)} · ${formatCount(day.sessionCount)}` : "—" },
     {
       label: "Most active month",
-      value: month ? `${formatRecapMonthLabel(month.month)} · ${month.sessionCount}` : "—",
+      value: month ? `${formatRecapMonthLabel(month.month)} · ${formatCount(month.sessionCount)}` : "—",
     },
   ];
 
   return (
     <section className="pdx-card flex flex-col gap-6">
-      <CardHeading
-        kicker="Consistency"
-        title="Days played"
-        actions={
-          <SideNote>
-            {recap.daysPlayed} / {totalDays} days
-          </SideNote>
-        }
-      />
+      <CardHeading kicker="Consistency" title="Days played" />
       <div className="flex flex-wrap items-center gap-7">
         <div
           role="img"
-          aria-label={`${roundPercent(playedPercent)}% of days played`}
+          aria-label={`${playedLabel} of days played`}
           className="grid h-[140px] w-[140px] shrink-0 place-items-center rounded-full"
           style={{
-            background: `conic-gradient(rgb(var(--bar)) 0 ${playedPercent}%, rgb(var(--track)) ${playedPercent}% 100%)`,
+            background: `conic-gradient(rgb(var(--bar)) 0 ${ringPercent}%, rgb(var(--track)) ${ringPercent}% 100%)`,
           }}
         >
           <div className="grid h-[108px] w-[108px] place-items-center rounded-full bg-surface text-center">
             <div>
-              <p className="pdx-num text-[26px] font-semibold">{roundPercent(playedPercent)}%</p>
+              <p className="pdx-num text-[26px] font-semibold">{playedLabel}</p>
               <p className="text-[11px] uppercase tracking-[0.2em] text-muted">Played</p>
             </div>
           </div>
         </div>
         <dl className="flex flex-[1_1_160px] flex-col gap-2.5 text-sm">
-          <KeyValue label="Days played" value={count(recap.daysPlayed)} />
-          <KeyValue label="Days off" value={count(recap.daysNotPlayed)} />
-          <KeyValue label="Longest streak" value={`${recap.longestStreakDays} days`} />
+          <KeyValue label="Days played" value={formatCount(recap.daysPlayed)} />
+          <KeyValue label="Days off" value={formatCount(recap.daysNotPlayed)} />
+          <KeyValue label="Longest streak" value={formatCountNoun(recap.longestStreakDays, "day")} />
         </dl>
       </div>
       <div className="grid grid-cols-2 gap-3">
-        {tiles.map((tile, index) => (
-          <div
-            key={tile.label}
-            className={`min-w-0 rounded-[20px] border border-[color:var(--tile-border)] bg-tile px-[18px] py-4 ${
-              index === tiles.length - 1 && tiles.length % 2 === 1 ? "col-span-2" : ""
-            }`}
-          >
+        {tiles.map((tile) => (
+          <div key={tile.label} className="min-w-0 rounded-[20px] border border-[color:var(--tile-border)] bg-tile px-[18px] py-4">
             <p className="pdx-label">{tile.label}</p>
-            <p className="pdx-num mt-1.5 truncate text-lg font-semibold">{tile.value}</p>
+            <p className="pdx-num mt-1.5 break-words text-lg font-semibold">{tile.value}</p>
           </div>
         ))}
       </div>
@@ -491,8 +542,8 @@ function SessionsCard({ recap }: { recap: RecapResponse }) {
   const longest = recap.gameWithLongestSession;
   const bestAverage = recap.topGameByAverageSession;
   const rows: LabeledValue[] = [
-    { label: "Total sessions", value: count(recap.totalSessions) },
-    { label: "Total time", value: formatHours(recap.totalSeconds, 1) },
+    { label: "Total sessions", value: formatCount(recap.totalSessions) },
+    { label: "Total time", value: formatHoursShort(recap.totalSeconds) },
     { label: "Median length", value: formatDuration(recap.medianSessionSeconds, "full") },
     {
       label: "Longest",
@@ -509,7 +560,7 @@ function SessionsCard({ recap }: { recap: RecapResponse }) {
     <section className="pdx-card flex flex-col gap-6">
       <CardHeading kicker="Sessions" title="Volume and length" />
       <div className="flex flex-wrap items-baseline gap-3">
-        <span className="pdx-num text-[56px] font-semibold leading-none tracking-[-0.03em]">
+        <span className="pdx-num whitespace-nowrap text-[clamp(36px,9vw,56px)] font-semibold leading-none tracking-[-0.03em]">
           {formatDuration(recap.averageSessionSeconds, "full")}
         </span>
         <span className="text-sm text-muted">average session</span>
@@ -518,7 +569,7 @@ function SessionsCard({ recap }: { recap: RecapResponse }) {
         {rows.map((row) => (
           <div key={row.label} className="flex justify-between gap-4 border-t border-divider py-3 text-sm">
             <dt className="shrink-0 text-muted">{row.label}</dt>
-            <dd className="pdx-num min-w-0 text-right font-semibold">{row.value}</dd>
+            <dd className="pdx-num min-w-0 break-words text-right font-semibold">{row.value}</dd>
           </div>
         ))}
       </dl>
@@ -527,8 +578,9 @@ function SessionsCard({ recap }: { recap: RecapResponse }) {
 }
 
 function PlatformMixCard({ recap }: { recap: RecapResponse }) {
-  const total = recap.platformTotals.reduce((sum, item) => sum + item.totalSeconds, 0);
-  const platforms = [...recap.platformTotals]
+  const total = recap.platformTotals.reduce((sum, item) => sum + Math.max(0, item.totalSeconds), 0);
+  const platforms = recap.platformTotals
+    .filter((item) => item.totalSeconds > 0)
     .sort((a, b) => b.totalSeconds - a.totalSeconds)
     .map((item) => ({ ...item, color: platformColor(item.platformKey, item.platformName) }));
 
@@ -556,13 +608,15 @@ function PlatformMixCard({ recap }: { recap: RecapResponse }) {
               >
                 <div className="flex min-w-0 items-center gap-2 text-sm font-medium">
                   <Dot color={item.color} size={10} />
-                  <span className="truncate">{item.platformName}</span>
+                  <span className="truncate" title={item.platformName}>
+                    {item.platformName}
+                  </span>
                 </div>
                 <p className="pdx-num text-[32px] font-semibold tracking-[-0.02em]">
-                  {roundPercent(total > 0 ? (item.totalSeconds / total) * 100 : 0)}%
+                  {formatPercent(item.totalSeconds, total)}
                 </p>
                 <p className="pdx-num text-[13px] text-muted">
-                  {formatHours(item.totalSeconds, 1)} · {count(item.sessionCount)} sessions
+                  {formatHoursShort(item.totalSeconds)} · {sessionsNoun(item.sessionCount)}
                 </p>
               </div>
             ))}
@@ -576,18 +630,22 @@ function PlatformMixCard({ recap }: { recap: RecapResponse }) {
 const LibraryColumns = "grid grid-cols-[26px_44px_minmax(0,2.4fr)_90px_100px_minmax(0,1.4fr)] items-center gap-4";
 
 function LibraryCard({ recap, onOpenGame }: { recap: RecapResponse; onOpenGame: (gameId: string) => void }) {
+  const [showAll, setShowAll] = useState(false);
   const binged = recap.mostBingedGame;
   const bySessions = recap.topGameBySessions;
   const chips: LabeledValue[] = [
-    { label: "Unique games", value: count(recap.uniqueGames) },
-    { label: "New games tried", value: count(recap.newGamesTried) },
-    { label: "Abandoned", value: count(recap.abandonedGames) },
-    { label: "Return rate games", value: count(recap.returnRateGames) },
-    { label: "Top 3 share", value: `${roundPercent(recap.timeOnTop3Percent)}%` },
-    { label: "Most binged", value: binged ? `${binged.title} · ${count(binged.sessionCount)}` : "—" },
-    { label: "Top by sessions", value: bySessions ? `${bySessions.title} · ${count(bySessions.sessionCount)}` : "—" },
+    { label: "Unique games", value: formatCount(recap.uniqueGames) },
+    { label: "New games tried", value: formatCount(recap.newGamesTried) },
+    { label: "Abandoned", value: formatCount(recap.abandonedGames) },
+    { label: "Return rate games", value: formatCount(recap.returnRateGames) },
+    { label: "Top 3 share", value: formatPercent(recap.timeOnTop3Percent, 100) },
+    { label: "Most binged", value: binged ? `${binged.title} · ${formatCount(binged.sessionCount)}` : "—" },
+    { label: "Top by sessions", value: bySessions ? `${bySessions.title} · ${formatCount(bySessions.sessionCount)}` : "—" },
   ];
-  const maxSeconds = Math.max(0, ...recap.gamesTable.map((game) => game.totalSeconds));
+  const games = recap.gamesTable;
+  const maxSeconds = Math.max(0, ...games.map((game) => game.totalSeconds));
+  const hasMore = games.length > LibraryPreviewCount;
+  const visible = showAll || !hasMore ? games : games.slice(0, LibraryPreviewCount);
 
   return (
     <section className="pdx-card flex flex-col gap-6">
@@ -596,16 +654,17 @@ function LibraryCard({ recap, onOpenGame }: { recap: RecapResponse; onOpenGame: 
         {chips.map((chip) => (
           <div
             key={chip.label}
+            title={`${chip.label} ${chip.value}`}
             className="max-w-full truncate rounded-full border border-[color:var(--tile-border)] bg-tile px-4 py-2.5 text-[13px]"
           >
             <span className="text-muted">{chip.label}</span> <b className="pdx-num font-semibold">{chip.value}</b>
           </div>
         ))}
       </div>
-      {recap.gamesTable.length === 0 ? (
+      {games.length === 0 ? (
         <p className="pdx-dashed">No games logged yet.</p>
       ) : (
-        <div className="max-h-[640px] overflow-auto">
+        <div className="overflow-x-auto">
           <div role="table" aria-label="Playtime by game" className="flex min-w-[620px] flex-col">
             <div role="row" className={`${LibraryColumns} px-3.5 pb-2.5 text-[11px] font-medium tracking-[0.2em] text-muted`}>
               <span role="columnheader">#</span>
@@ -619,7 +678,7 @@ function LibraryCard({ recap, onOpenGame }: { recap: RecapResponse; onOpenGame: 
               </span>
               <span role="columnheader">SHARE</span>
             </div>
-            {recap.gamesTable.map((game, index) => (
+            {visible.map((game, index) => (
               <div key={index} role="row" className={`pdx-row pdx-num ${LibraryColumns} px-3.5 py-2`}>
                 <span role="cell" className="text-[13px] text-muted">
                   {pad2(index + 1)}
@@ -639,10 +698,10 @@ function LibraryCard({ recap, onOpenGame }: { recap: RecapResponse; onOpenGame: 
                   {game.isAbandoned && <p className="text-xs text-muted">abandoned</p>}
                 </div>
                 <span role="cell" className="text-right text-sm text-ink-2">
-                  {count(game.sessionCount)}
+                  {formatCount(game.sessionCount)}
                 </span>
                 <span role="cell" className="text-right text-sm font-semibold text-accent">
-                  {formatHours(game.totalSeconds, 1)}
+                  {formatHoursShort(game.totalSeconds)}
                 </span>
                 <span role="cell">
                   <ShareBar pct={maxSeconds > 0 ? (game.totalSeconds / maxSeconds) * 100 : 0} />
@@ -651,6 +710,16 @@ function LibraryCard({ recap, onOpenGame }: { recap: RecapResponse; onOpenGame: 
             ))}
           </div>
         </div>
+      )}
+      {hasMore && (
+        <button
+          type="button"
+          onClick={() => setShowAll((current) => !current)}
+          aria-expanded={showAll}
+          className="pdx-btn-outline self-start"
+        >
+          {showAll ? `Show top ${LibraryPreviewCount}` : `Show all ${formatCountNoun(games.length, "game")}`}
+        </button>
       )}
     </section>
   );

@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
 import { ThemeProvider } from "@/lib/theme";
 import { RecapPage } from "./RecapPage";
@@ -69,12 +69,127 @@ describe("RecapPage", () => {
     // The layout's background role check (/me) is not part of the page's data flow.
     expect(calls.filter((path) => path !== "/me")).toEqual(["/recap/years", "/recap"]);
     expect(screen.getByRole("button", { name: "2026" })).toBeInTheDocument();
-    expect(screen.getByText("1 / 3 days")).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: "33% of days played" })).toBeInTheDocument();
+    expect(screen.getByText(/across 3 sessions and 1 game$/)).toBeInTheDocument();
     expect(screen.getByText("Jul 2026 · 3")).toBeInTheDocument();
     expect(screen.getByText("1.3")).toBeInTheDocument();
     expect(screen.getByText("abandoned")).toBeInTheDocument();
     expect(screen.getByText("weekend · 1h")).toBeInTheDocument();
     expect(screen.getByText("weekday · 1h")).toBeInTheDocument();
     await waitFor(() => expect(screen.queryByText("Loading recap...")).not.toBeInTheDocument());
+  });
+
+  function recapFixture(overrides: Record<string, unknown> = {}) {
+    return {
+      range: { from: null, to: null },
+      totalSessions: 0,
+      totalSeconds: 0,
+      averageSessionSeconds: 0,
+      medianSessionSeconds: 0,
+      longestSessionSeconds: 0,
+      shortestSessionSeconds: 0,
+      averageSessionsPerDay: 0,
+      averageSessionsPerWeek: 0,
+      averageSessionsPerMonth: 0,
+      mostActiveDay: null,
+      mostActiveMonth: null,
+      longestStreakDays: 0,
+      daysPlayed: 0,
+      daysNotPlayed: 0,
+      sessionsByWeekday: [],
+      sessionsByHour: [],
+      peakHour: null,
+      weekendSeconds: 0,
+      weekdaySeconds: 0,
+      uniqueGames: 0,
+      topGameBySessions: null,
+      topGameByTime: null,
+      topGamesByTime: [],
+      topGameByAverageSession: null,
+      gameWithLongestSession: null,
+      newGamesTried: 0,
+      abandonedGames: 0,
+      returnRateGames: 0,
+      timeOnTop3Percent: 0,
+      mostBingedGame: null,
+      platformTotals: [],
+      mostUsedPlatform: null,
+      gamesTable: [],
+      ...overrides,
+    };
+  }
+
+  function renderWith(recap: unknown) {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) =>
+        String(input).endsWith("/recap/years") ? json({ years: [] }) : json(recap),
+      ),
+    );
+    render(
+      <MemoryRouter initialEntries={["/recap"]}>
+        <ThemeProvider>
+          <RecapPage />
+        </ThemeProvider>
+      </MemoryRouter>,
+    );
+  }
+
+  it("shows one empty state for a brand-new account instead of empty sections", async () => {
+    renderWith(recapFixture());
+    expect(await screen.findByText("Nothing to recap yet")).toBeInTheDocument();
+    expect(screen.queryByText("Summed playtime by game")).not.toBeInTheDocument();
+    expect(screen.queryByText(/NaN/)).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Go to sessions" })).toBeInTheDocument();
+  });
+
+  it("formats worst-case figures and shows the first 20 library rows with a Show all toggle", async () => {
+    const long = "Warhammer 40,000: Dawn of War – Definitive Edition";
+    const game = (index: number, seconds: number) => ({
+      gameId: String(index),
+      title: index === 0 ? long : `Game ${index}`,
+      capsuleUrl: null,
+      totalSeconds: seconds,
+      sessionCount: index === 0 ? 1284000 : 1,
+      averageSessionSeconds: 60,
+      isAbandoned: false,
+    });
+    const table = Array.from({ length: 25 }, (_, index) => game(index, index === 0 ? 173568960 : 100));
+    renderWith(
+      recapFixture({
+        totalSessions: 1284000,
+        totalSeconds: 173568960,
+        uniqueGames: 25,
+        longestStreakDays: 1,
+        daysPlayed: 1,
+        daysNotPlayed: 999,
+        topGameByTime: table[0],
+        topGamesByTime: [table[0], game(99, 0)],
+        platformTotals: [
+          { platformKey: "steam", platformName: "Steam", sessionCount: 1284000, totalSeconds: 173568960, source: null },
+          { platformKey: "psn", platformName: "PSN", sessionCount: 1, totalSeconds: 100, source: null },
+          { platformKey: "pc", platformName: "PC", sessionCount: 0, totalSeconds: 0, source: null },
+        ],
+        gamesTable: table,
+      }),
+    );
+
+    expect(await screen.findByText("Summed playtime by game")).toBeInTheDocument();
+    expect(screen.getAllByText("48,213.6h").length).toBeGreaterThan(0);
+    expect(screen.getByText(/across 1,284,000 sessions and 25 games$/)).toBeInTheDocument();
+    // Only games with playtime rank, and the heading counts them.
+    expect(screen.getByText("Top game")).toBeInTheDocument();
+    expect(screen.getAllByTitle(long).length).toBeGreaterThan(0);
+    expect(screen.getAllByText("1 day")).toHaveLength(2);
+    expect(screen.getByRole("img", { name: "<1% of days played" })).toBeInTheDocument();
+    // A zero-hour platform is left out; a sliver reads <1% and <0.1h.
+    expect(screen.queryByText("PC")).not.toBeInTheDocument();
+    expect(screen.getByText("<0.1h · 1 session")).toBeInTheDocument();
+
+    expect(screen.getAllByRole("row")).toHaveLength(21);
+    fireEvent.click(screen.getByRole("button", { name: "Show all 25 games" }));
+    expect(screen.getAllByRole("row")).toHaveLength(26);
+    fireEvent.click(screen.getByRole("button", { name: "Show top 20" }));
+    expect(screen.getAllByRole("row")).toHaveLength(21);
   });
 });

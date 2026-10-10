@@ -3,6 +3,7 @@ import { AppFooter } from "@/components/AppFooter";
 import { PlatformChips } from "@/components/PlatformChips";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { BarChart, CardHeading, Cover, Donut, LegendRow, StatTile, type BarDatum, type DonutSegment } from "@/components/ui";
+import { formatHoursShort } from "@/lib/format";
 import { platformColor } from "@/lib/platforms";
 import { useTheme } from "@/lib/theme";
 
@@ -125,19 +126,19 @@ export function LandingPage() {
   return (
     <main className="pdx-page relative px-4 pb-10 pt-6 sm:px-8 sm:pt-8">
       <div className="relative mx-auto flex w-full max-w-[1180px] flex-col gap-7">
-        <header className="flex flex-wrap items-center gap-4 rounded-[28px] border border-[color:var(--card-border)] bg-surface/60 py-3.5 pl-7 pr-4 sm:rounded-full">
+        <header className="flex flex-wrap items-center gap-4 rounded-[28px] border border-[color:var(--card-border)] bg-surface/60 py-3.5 pl-7 pr-4 min-[721px]:rounded-full">
           <div className="mr-auto flex items-center gap-2.5">
             <span className="h-2.5 w-2.5 rounded-full bg-bar shadow-[0_0_0_4px_rgba(47,194,142,.18)]"></span>
             <span className="text-xs font-semibold uppercase tracking-[0.32em] text-accent">Playdex</span>
           </div>
           <ThemeToggle theme={theme} onToggle={toggleTheme} />
-          <a href={dashUrl} className="pdx-btn-primary !h-[38px] !px-[18px] !text-[13px] no-underline">
+          <a href={dashUrl} className="pdx-btn-outline !h-[38px] !px-[18px] !text-[13px] !text-ink no-underline">
             Sign in
           </a>
         </header>
 
         <section className="flex flex-col gap-7 px-2 pb-6 pt-6 sm:pt-10">
-          <h1 className="m-0 max-w-[16em] text-[44px] font-semibold leading-[1.02] tracking-[-0.035em] sm:text-[68px]">
+          <h1 className="m-0 max-w-[16em] text-[clamp(40px,9vw,68px)] font-semibold leading-[1.02] tracking-[-0.035em]">
             Your cross-platform playtime, <span className="text-accent">perfectly organized.</span>
           </h1>
           <p className="m-0 max-w-[34em] text-pretty text-[17px] leading-[1.55] text-ink-2 sm:text-[19px]">
@@ -231,7 +232,7 @@ export function LandingPage() {
           />
           <ol className="m-0 grid list-none gap-4 p-0 [grid-template-columns:repeat(auto-fit,minmax(min(120px,100%),1fr))]">
             {previewTopGames.map((game, index) => (
-              <li key={game.gameId} className="flex min-w-0 flex-col gap-3">
+              <li key={game.gameId} className="flex min-w-0 max-w-[240px] flex-col gap-3">
                 <div className="relative">
                   <Cover
                     title={game.title}
@@ -245,9 +246,11 @@ export function LandingPage() {
                     {index + 1}
                   </span>
                 </div>
-                <div className="flex items-baseline justify-between gap-2">
-                  <span className="min-w-0 text-[15px] font-medium leading-[1.3]">{game.title}</span>
-                  <span className="pdx-num text-sm font-semibold text-accent">{game.hours}h</span>
+                <div className="flex min-w-0 flex-col gap-0.5">
+                  <span title={game.title} className="line-clamp-2 break-words text-[15px] font-medium leading-[1.3]">
+                    {game.title}
+                  </span>
+                  <span className="pdx-num text-sm font-semibold text-accent">{formatHoursShort(game.hours * 3600)}</span>
                 </div>
               </li>
             ))}

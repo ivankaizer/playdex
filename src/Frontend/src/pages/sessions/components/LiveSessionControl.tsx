@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Cover } from "@/components/ui";
 import { isAbortError } from "@/lib/api";
 import { cx } from "@/lib/cx";
+import { formatCount } from "@/lib/format";
 import type {
   ManualActiveSession,
   ManualMappingSearchResponse,
@@ -103,7 +104,8 @@ export function LiveSessionControl({
       aria-label="Live session controls"
       className={cx(
         "pdx-card !py-3 !pl-7 !pr-3 max-sm:!pl-5",
-        expanded ? "!rounded-[28px]" : "!rounded-[28px] md:!rounded-full",
+        // A full pill only while the bar fits on one row; once it wraps (≤1040px) it becomes a 28px card.
+        expanded ? "!rounded-[28px]" : "!rounded-[28px] min-[1041px]:!rounded-full",
       )}
       style={live ? { background: "var(--live-bg)" } : undefined}
     >
@@ -222,10 +224,7 @@ function LiveRow({
   onStop: () => void | Promise<void>;
 }) {
   const now = useNow();
-  const started = new Date(session.startedAt);
-  const elapsed = Math.max(0, Math.floor((now - started.getTime()) / 1000));
-  const timer = `${Math.floor(elapsed / 3600)}:${pad2(Math.floor(elapsed / 60) % 60)}:${pad2(elapsed % 60)}`;
-  const since = Number.isNaN(started.getTime()) ? "" : `${pad2(started.getHours())}:${pad2(started.getMinutes())}`;
+  const { timer, since, staleFor } = liveTimerView(session.startedAt, now);
 
   return (
     <div className="flex flex-wrap items-center gap-4">
@@ -235,19 +234,22 @@ function LiveRow({
           <span aria-hidden="true" className="pdx-live-dot"></span>
           Playing now
         </div>
-        <p className="mt-px truncate text-[15px] font-semibold">
+        <p className="mt-px truncate text-[15px] font-semibold" title={session.title}>
           {onOpenGame ? (
-            <button type="button" onClick={() => onOpenGame(session.gameId)} className="font-semibold hover:text-accent">
+            <button type="button" onClick={() => onOpenGame(session.gameId)} className="max-w-full truncate text-left font-semibold hover:text-accent">
               {session.title}
             </button>
           ) : (
             session.title
-          )}{" "}
-          <span className="text-[13px] font-normal text-muted">
-            · {session.platformName}
-            {since && ` · since ${since}`}
-          </span>
+          )}
         </p>
+        <p className="truncate text-[13px] text-muted">
+          {session.platformName}
+          {since && ` · since ${since}`}
+        </p>
+        {staleFor && (
+          <p className="mt-0.5 text-xs font-semibold text-warn">Still playing? This session has been running for {staleFor}.</p>
+        )}
       </div>
       <span className="pdx-num text-2xl font-semibold tracking-[-0.01em] text-accent" aria-label={`Elapsed ${timer}`} role="timer">
         {timer}
@@ -260,6 +262,26 @@ function LiveRow({
       )}
     </div>
   );
+}
+
+const weekdayFormat = new Intl.DateTimeFormat("en-US", { weekday: "short" });
+
+/**
+ * Live timer texts: "H:MM:SS" under a day, "Nd Nh Nm" past it (with the start weekday in `since`), and
+ * a "Still playing?" duration once the session has run 12 hours or more.
+ */
+export function liveTimerView(startedAt: string, now: number): { timer: string; since: string; staleFor: string } {
+  const started = new Date(startedAt);
+  const valid = !Number.isNaN(started.getTime());
+  const elapsed = valid ? Math.max(0, Math.floor((now - started.getTime()) / 1000)) : 0;
+  const days = Math.floor(elapsed / 86400);
+  const timer = days
+    ? `${days}d ${Math.floor(elapsed / 3600) % 24}h ${Math.floor(elapsed / 60) % 60}m`
+    : `${Math.floor(elapsed / 3600)}:${pad2(Math.floor(elapsed / 60) % 60)}:${pad2(elapsed % 60)}`;
+  const clock = `${pad2(started.getHours())}:${pad2(started.getMinutes())}`;
+  const since = !valid ? "" : days ? `${weekdayFormat.format(started)} ${clock}` : clock;
+  const staleFor = elapsed >= 12 * 3600 ? `over ${formatCount(Math.floor(elapsed / 3600))} hours` : "";
+  return { timer, since, staleFor };
 }
 
 function useNow(): number {

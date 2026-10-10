@@ -11,14 +11,13 @@ import {
   LegendRow,
   LoadingNote,
   ShareBar,
-  StatTile,
   type BarDatum,
   type DonutSegment,
 } from "@/components/ui";
 import { apiRequest, errorMessage, isAbortError } from "@/lib/api";
 import { cx } from "@/lib/cx";
 import { formatMonthLabel, monthLabelsSpanYears } from "@/lib/dates";
-import { formatHours } from "@/lib/format";
+import { formatCount, formatHoursShort, formatPercent } from "@/lib/format";
 import { encodeGameId } from "@/lib/gameHash";
 import { useAppNavigate } from "@/lib/navigation";
 import { platformColor } from "@/lib/platforms";
@@ -31,14 +30,13 @@ import type {
   ManualSessionStopResponse,
 } from "@/models/manual";
 import type { AccountSessionsResponse, AccountSessionUpdateResponse } from "@/models/sessions";
-import type { AccountStatsRangeResponse } from "@/models/stats";
+import type { AccountDailyStatsResponse, AccountStatsRangeResponse } from "@/models/stats";
 import { ChangeInput, BoundSelect } from "./components/FormControls";
 import { LiveSessionControl } from "./components/LiveSessionControl";
 import { SessionActions } from "./components/SessionActions";
 import { SessionEditModal } from "./components/SessionEditModal";
 import {
   ActiveManualSessionRequest,
-  Limit,
   PlatformsRequest,
   SessionsRequestVersions,
   applyDebouncedTitle,
@@ -46,7 +44,7 @@ import {
   beginDelete,
   beginEditSave,
   beginListLoad,
-  buildListRequest,
+  buildDailyRequest,
   buildStatsRequest,
   cancelEdit,
   completeActiveManualSession,
@@ -56,9 +54,9 @@ import {
   completePlatforms,
   completeStatsLoad,
   createSessionsState,
-  currentPage,
+  dailyBars,
+  editDurationCheck,
   emptySessionEditState,
-  end,
   endDelete,
   failDelete,
   failEditSave,
@@ -66,22 +64,23 @@ import {
   failStatsLoad,
   getRowViews,
   groupRowViews,
-  pageNumbers,
+  hasMore,
+  listRequestPages,
+  nextPageSize,
   rangeLabel,
   selectCustomRange,
   sessionsDeleteRequest,
-  setEditEndedAt,
+  setEditDuration,
   setEditStartedAt,
   setFrom,
-  setOffset,
   setPlatform,
   setTitle,
   setTo,
+  showingLabel,
   sortBy,
-  start,
   togglePlatform,
-  totalPages,
   tryBeginStatsLoad,
+  type ListLoadMode,
   tryBuildEditSubmission,
   tryOpenEdit,
 } from "./sessionsState";
@@ -98,6 +97,31 @@ const Presets: ReadonlyArray<{ key: string; label: string }> = [
 
 const fieldLabel = "flex min-w-0 flex-col gap-1.5 text-xs font-medium text-muted";
 const autoFit = (min: number) => ({ gridTemplateColumns: `repeat(auto-fit, minmax(min(${min}px, 100%), 1fr))` });
+
+/** Long game titles step down in size so they stay readable in a KPI tile. */
+function titleSize(value: string): string {
+  const length = Array.from(value).length;
+  return length <= 12 ? "clamp(24px,2.6vw,36px)" : length <= 24 ? "clamp(20px,2vw,28px)" : "clamp(17px,1.6vw,22px)";
+}
+
+/** KPI tile whose figure shrinks with clamp() instead of being truncated; a title wraps to 3 lines. */
+function KpiTile({ label, value, size = "clamp(26px,8vw,36px)", clampLines = false }: { label: string; value: string; size?: string; clampLines?: boolean }) {
+  return (
+    <div className="pdx-tile min-w-0 !px-[26px] !py-6">
+      <p className="pdx-label">{label}</p>
+      <p
+        title={value}
+        className={cx(
+          "pdx-num mt-2.5 font-semibold leading-[1.2] tracking-[-0.02em] [overflow-wrap:anywhere]",
+          clampLines && "line-clamp-3",
+        )}
+        style={{ fontSize: size }}
+      >
+        {value}
+      </p>
+    </div>
+  );
+}
 
 function IgnoredBadge() {
   return (
@@ -125,6 +149,7 @@ export function SessionsPage() {
   const activeManualSessionRequest = useRef<AbortController | null>(null);
   const listRequestVersion = useRef(0);
   const stopping = useRef(false);
+  const focusAfterMore = useRef<number | null>(null);
 
   const setManualActionError = (manualActionError: string) => updateUi((current) => ({ ...current, manualActionError }));
   const setStopping = (value: boolean) => {
@@ -163,21 +188,29 @@ export function SessionsPage() {
     }
   };
 
-  const loadList = async () => {
+  const loadList = async (mode: ListLoadMode = "replace") => {
     listRequest.current?.abort();
     const request = createLinkedController(lifetime.current.signal);
     listRequest.current = request;
     const version = ++listRequestVersion.current;
-    updateState(beginListLoad);
+    const pages = listRequestPages(getState(), mode);
+    updateState((current) => beginListLoad(current, mode));
     try {
-      const response = await apiRequest<AccountSessionsResponse>(buildListRequest(getState()), { signal: request.signal });
+      const sessions: AccountSessionsResponse["sessions"] = [];
+      let total = 0;
+      for (const path of pages) {
+        const response = await apiRequest<AccountSessionsResponse>(path, { signal: request.signal });
+        sessions.push(...response.sessions);
+        total = response.total;
+        if (response.sessions.length === 0) break;
+      }
       if (version === listRequestVersion.current && !request.signal.aborted) {
-        updateState((current) => completeListLoad(current, response));
+        updateState((current) => completeListLoad(current, { sessions, total }, mode));
       }
     } catch (exception) {
       if (isAbortError(exception) && request.signal.aborted) return;
       if (version === listRequestVersion.current) {
-        updateState((current) => failListLoad(current, errorMessage(exception)));
+        updateState((current) => failListLoad(current, errorMessage(exception), mode));
       }
     } finally {
       if (listRequest.current === request) listRequest.current = null;
@@ -192,12 +225,16 @@ export function SessionsPage() {
     if (!begin.started) return;
 
     const path = buildStatsRequest(getState()) ?? "";
+    const dailyPath = buildDailyRequest(getState());
     const request = createLinkedController(lifetime.current.signal);
     statsRequest.current = request;
     try {
-      const response = await apiRequest<AccountStatsRangeResponse>(path, { signal: request.signal });
+      const [response, daily] = await Promise.all([
+        apiRequest<AccountStatsRangeResponse>(path, { signal: request.signal }),
+        dailyPath === null ? Promise.resolve(null) : apiRequest<AccountDailyStatsResponse>(dailyPath, { signal: request.signal }),
+      ]);
       if (requestVersions.current.isCurrentStatsRequest(version) && !request.signal.aborted) {
-        updateState((current) => completeStatsLoad(current, response));
+        updateState((current) => completeStatsLoad(current, response, daily?.days ?? null));
       }
     } catch (exception) {
       if (isAbortError(exception) && request.signal.aborted) return;
@@ -209,7 +246,8 @@ export function SessionsPage() {
     }
   };
 
-  const refreshAll = () => Promise.all([loadList(), loadStats(), loadActiveManualSession()]);
+  /** Filters changed ("replace"), or the data changed under the loaded rows ("refresh"). */
+  const refreshAll = (mode: ListLoadMode = "replace") => Promise.all([loadList(mode), loadStats(), loadActiveManualSession()]);
 
   useEffect(() => {
     if (lifetime.current.signal.aborted) lifetime.current = new AbortController();
@@ -274,20 +312,22 @@ export function SessionsPage() {
     void loadList();
   };
 
-  const setPage = (page: number) => {
-    updateState((current) => setOffset(current, (page - 1) * Limit));
-    void loadList();
+  const loadMore = () => {
+    if (getState().isLoadingMore || getState().isListLoading) return;
+    focusAfterMore.current = getState().rows.length;
+    void loadList("more");
   };
 
-  const previousPage = () => {
-    updateState((current) => setOffset(current, current.offset - Limit));
-    void loadList();
-  };
-
-  const nextPage = () => {
-    updateState((current) => setOffset(current, current.offset + Limit));
-    void loadList();
-  };
+  // After "Load more", move focus to the first new row so keyboard users continue where the list grew
+  // (the button is disabled while loading and may disappear once everything is shown).
+  useEffect(() => {
+    const index = focusAfterMore.current;
+    if (index === null || state.isLoadingMore) return;
+    focusAfterMore.current = null;
+    if (state.rows.length > index) {
+      document.querySelector<HTMLElement>(`[data-row-index="${index}"]`)?.focus();
+    }
+  }, [state.isLoadingMore, state.rows.length]);
 
   const removeSession = async (sessionId: number) => {
     const request = sessionsDeleteRequest(sessionId);
@@ -298,7 +338,7 @@ export function SessionsPage() {
     try {
       await apiRequest<unknown>(request.path, { method: request.method, signal });
       updateState(completeDelete);
-      await refreshAll();
+      await refreshAll("refresh");
     } catch (exception) {
       if (!(isAbortError(exception) && signal.aborted)) {
         updateState((current) => failDelete(current, errorMessage(exception)));
@@ -329,7 +369,7 @@ export function SessionsPage() {
     const signal = lifetime.current.signal;
     try {
       await apiRequest<ManualSessionStopResponse>("/manual/sessions/stop", { method: "POST", signal });
-      await refreshAll();
+      await refreshAll("refresh");
     } catch (exception) {
       if (!(isAbortError(exception) && signal.aborted)) setManualActionError(errorMessage(exception));
     } finally {
@@ -346,7 +386,7 @@ export function SessionsPage() {
     const signal = lifetime.current.signal;
     try {
       await apiRequest<ManualSessionStartResponse>("/manual/sessions/start", { method: "POST", body: request, signal });
-      await refreshAll();
+      await refreshAll("refresh");
     } catch (exception) {
       if (!(isAbortError(exception) && signal.aborted)) setManualActionError(errorMessage(exception));
     } finally {
@@ -363,7 +403,7 @@ export function SessionsPage() {
     try {
       await apiRequest<AccountSessionUpdateResponse>(submission.path, { method: submission.method, body: submission.body, signal });
       updateEditState(completeEditSave);
-      await refreshAll();
+      await refreshAll("refresh");
     } catch (exception) {
       if (!(isAbortError(exception) && signal.aborted)) {
         updateEditState((current) => failEditSave(current, errorMessage(exception)));
@@ -385,28 +425,25 @@ export function SessionsPage() {
   const hasRange = state.from.length > 0 || state.to.length > 0;
 
   const stats = state.stats;
-  const platformItems = (() => {
-    if (stats === null) return [];
-    const total = Math.max(
-      stats.platforms.reduce((sum, item) => sum + item.totalSeconds, 0),
-      1,
-    );
-    return stats.platforms.map((item) => ({
-      key: item.platformKey,
-      label: item.platformName,
-      pct: Math.floor((item.totalSeconds / total) * 100 + 0.5),
-      hours: formatHours(item.totalSeconds, 1),
-      seconds: item.totalSeconds,
-      color: platformColor(item.platformKey, item.platformName),
-    }));
-  })();
-  const donutSegments: DonutSegment[] = platformItems.map((item) => ({
+  const platformTotal = stats === null ? 0 : stats.platforms.reduce((sum, item) => sum + Math.max(0, item.totalSeconds), 0);
+  const platformItems = (stats?.platforms ?? []).map((item) => ({
+    key: item.platformKey,
+    label: item.platformName,
+    pct: formatPercent(item.totalSeconds, platformTotal),
+    hours: formatHoursShort(item.totalSeconds),
+    seconds: item.totalSeconds,
+    color: platformColor(item.platformKey, item.platformName),
+  }));
+  // Platforms with no time in this range are dropped rather than shown as "0% · 0h".
+  const playedPlatforms = platformItems.filter((item) => item.seconds > 0);
+  const donutSegments: DonutSegment[] = playedPlatforms.map((item) => ({
     key: item.key,
     label: item.label,
     value: item.seconds,
     color: item.color,
+    detail: item.hours,
   }));
-  const topGames = stats?.topGames ?? [];
+  const topGames = (stats?.topGames ?? []).filter((game) => game.totalSeconds > 0);
   const topGameMax = Math.max(topGames[0]?.totalSeconds ?? 0, 1);
   const months = stats?.months ?? [];
   const spansYears = monthLabelsSpanYears(months);
@@ -417,21 +454,34 @@ export function SessionsPage() {
       key: `${month.year}-${month.month}`,
       value: month.totalSeconds,
       label,
-      title: `${label}: ${formatHours(month.totalSeconds, 1)}`,
+      title: `${label}: ${formatHoursShort(month.totalSeconds)}`,
       highlight: monthPeak > 0 && month.totalSeconds === monthPeak,
     };
   });
-  const hasRecapData = stats !== null && stats.sessionCount > 0 && (platformItems.length > 0 || topGames.length > 0);
+  const days = dailyBars(state, now);
+  const dayPeak = Math.max(...days.map((day) => day.seconds), 0);
+  const dayBars: BarDatum[] = days.map((day) => ({
+    key: day.key,
+    value: day.seconds,
+    label: day.label,
+    title: `${day.label} · ${day.upcoming ? "upcoming" : day.seconds > 0 ? formatHoursShort(day.seconds) : "no play"}`,
+    highlight: dayPeak > 0 && day.seconds === dayPeak,
+    faded: day.upcoming,
+  }));
+  const hasRecapData = stats !== null && stats.sessionCount > 0 && (playedPlatforms.length > 0 || topGames.length > 0);
+  // An empty range hides the charts, as it hides the donut.
+  const showDayChart = hasRecapData && dayPeak > 0;
+  const showMonthChart = hasRecapData && !showDayChart && days.length === 0 && monthBars.length > 2 && monthPeak > 0;
   const selectedPlatformLabel =
     state.platform.length === 0 ? "" : (platformItems.find((item) => item.key === state.platform)?.label ?? state.platform);
   const kpiValue = (value: string) => (stats === null && state.isStatsLoading ? "…" : value);
+  const topTitle = kpiValue(stats?.topGameTitle?.trim() || "—");
 
-  const page = currentPage(state);
-  const pages = totalPages(state);
   const sortDirectionLabel = state.sortDirection === "asc" ? "ascending" : "descending";
   const sortGlyph = state.sortDirection === "asc" ? "↑" : "↓";
   const flatGroupLabel =
     state.sortKey === "duration" ? (state.sortDirection === "desc" ? "LONGEST FIRST" : "SHORTEST FIRST") : "SESSIONS";
+  const rowIndex = new Map(state.rows.map((row, index) => [row.sessionId, index]));
 
   const logPastSessionButton = (className: string) => (
     <button type="button" data-session-action="extended" onClick={openSessionCreator} className={className}>
@@ -447,11 +497,12 @@ export function SessionsPage() {
           <SessionEditModal
             gameTitle={editState.session.game}
             startedAt={editState.startedAt}
-            endedAt={editState.endedAt}
+            duration={editState.duration}
+            durationCheck={editDurationCheck(editState)}
             isSaving={editState.isSaving}
             error={editState.error}
             onStartedAtChanged={(value) => updateEditState((current) => setEditStartedAt(current, value))}
-            onEndedAtChanged={(value) => updateEditState((current) => setEditEndedAt(current, value))}
+            onDurationChanged={(value) => updateEditState((current) => setEditDuration(current, value))}
             onSave={() => void saveSessionEdit()}
             onCancel={cancelSessionEdit}
           />
@@ -575,12 +626,19 @@ export function SessionsPage() {
         {state.statsError.length > 0 && <ErrorNote>{state.statsError}</ErrorNote>}
 
         <div className="grid gap-4" style={autoFit(200)}>
-          <StatTile label="Hours played" value={kpiValue(formatHours(stats?.totalSeconds ?? 0, 1))} />
-          <StatTile label="Sessions" value={kpiValue((stats?.sessionCount ?? 0).toLocaleString("en-US"))} />
-          <StatTile label="Top title" value={kpiValue(stats?.topGameTitle ?? "—")} />
+          <KpiTile label="Hours played" value={kpiValue(formatHoursShort(stats?.totalSeconds ?? 0))} />
+          <KpiTile label="Sessions" value={kpiValue(formatCount(stats?.sessionCount ?? 0))} />
+          <KpiTile label="Top title" value={topTitle} size={titleSize(topTitle)} clampLines />
         </div>
 
-        {hasRecapData && monthBars.length > 2 && (
+        {showDayChart && (
+          <div className="flex flex-col gap-3.5">
+            <p className="pdx-label">Hours per day</p>
+            <BarChart data={dayBars} height={150} gap={12} radius={10} minBar={6} ariaLabel="Hours per day" />
+          </div>
+        )}
+
+        {showMonthChart && (
           <div className="flex flex-col gap-3.5">
             <p className="pdx-label">Hours per month</p>
             <BarChart data={monthBars} height={150} gap={12} radius={10} minBar={6} ariaLabel="Hours per month" />
@@ -589,23 +647,24 @@ export function SessionsPage() {
 
         {hasRecapData && (
           <div className="grid gap-4" style={autoFit(320)}>
-            <div className="pdx-tile flex flex-col gap-6 !p-7">
+            <div className="pdx-tile flex min-w-0 flex-col gap-6 !p-7">
               <p className="pdx-label">Platforms</p>
               <div className="flex flex-wrap items-center gap-8">
                 <Donut
                   segments={donutSegments}
                   center={
                     <div>
-                      <p className="pdx-num text-xl font-semibold">{formatHours(stats?.totalSeconds ?? 0, 1)}</p>
+                      <p className="pdx-num text-xl font-semibold">{formatHoursShort(stats?.totalSeconds ?? 0)}</p>
                       <p className="text-xs text-muted">total</p>
                     </div>
                   }
                 />
                 <div className="flex min-w-0 flex-[1_1_140px] flex-col gap-1">
-                  {platformItems.map((item) => (
+                  {playedPlatforms.map((item) => (
                     <button
                       key={item.key}
                       type="button"
+                      title={item.label}
                       aria-pressed={state.platform === item.key ? "true" : "false"}
                       onClick={() => togglePlatformSelection(item.key)}
                       className={cx(
@@ -614,25 +673,26 @@ export function SessionsPage() {
                         state.platform.length > 0 && state.platform !== item.key && "opacity-55",
                       )}
                     >
-                      <LegendRow color={item.color} name={item.label} pct={`${item.pct}%`} detail={item.hours} />
+                      <LegendRow color={item.color} name={item.label} pct={item.pct} detail={item.hours} />
                     </button>
                   ))}
                 </div>
               </div>
             </div>
 
-            <div className="pdx-tile flex flex-col gap-[18px] !p-7">
+            <div className="pdx-tile flex min-w-0 flex-col gap-[18px] !p-7">
               <p className="pdx-label">Top games</p>
               {topGames.map((game, index) => (
                 <button
                   key={`${game.gameId}-${game.title}`}
                   type="button"
+                  title={game.title}
                   onClick={() => navigateToGame(game.gameId)}
                   className="group grid grid-cols-[26px_minmax(0,1fr)_auto] items-baseline gap-x-3 gap-y-1.5 text-left"
                 >
                   <span className="pdx-num text-[13px] text-muted">{String(index + 1).padStart(2, "0")}</span>
                   <span className="truncate text-[15px] font-medium transition group-hover:text-accent">{game.title}</span>
-                  <span className="pdx-num text-sm font-semibold text-accent">{formatHours(game.totalSeconds, 1)}</span>
+                  <span className="pdx-num text-sm font-semibold text-accent">{formatHoursShort(game.totalSeconds)}</span>
                   <ShareBar pct={(game.totalSeconds / topGameMax) * 100} className="col-span-2 col-start-2" />
                 </button>
               ))}
@@ -644,23 +704,25 @@ export function SessionsPage() {
       </section>
 
       <section data-session-history-row className="pdx-card flex flex-col sm:!pb-8 sm:!pt-7">
-        <div className="flex flex-wrap items-center justify-end gap-2">
-          <span className="pdx-label mr-1">Sort</span>
-          {(["date", "duration"] as const).map((key) => (
-            <button
-              key={key}
-              type="button"
-              data-sort={key}
-              aria-pressed={state.sortKey === key ? "true" : "false"}
-              aria-label={`Sort by ${key}${state.sortKey === key ? `, ${sortDirectionLabel}` : ""}`}
-              onClick={() => sort(key)}
-              className="pdx-chip !h-8 !px-3.5 !text-xs"
-            >
-              {key === "date" ? "Date" : "Duration"}
-              {state.sortKey === key && <span aria-hidden="true">{sortGlyph}</span>}
-            </button>
-          ))}
-        </div>
+        {state.rows.length > 0 && (
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <span className="pdx-label mr-1">Sort</span>
+            {(["date", "duration"] as const).map((key) => (
+              <button
+                key={key}
+                type="button"
+                data-sort={key}
+                aria-pressed={state.sortKey === key ? "true" : "false"}
+                aria-label={`Sort by ${key}${state.sortKey === key ? `, ${sortDirectionLabel}` : ""}`}
+                onClick={() => sort(key)}
+                className="pdx-chip !h-8 !px-3.5 !text-xs"
+              >
+                {key === "date" ? "Date" : "Duration"}
+                {state.sortKey === key && <span aria-hidden="true">{sortGlyph}</span>}
+              </button>
+            ))}
+          </div>
+        )}
 
         {state.listError.length > 0 && (
           <div className="pt-4">
@@ -704,7 +766,8 @@ export function SessionsPage() {
                 {group.rows.map((session) => (
                   <li
                     key={session.sessionId}
-                    className="pdx-row -mx-3.5 grid grid-cols-[52px_minmax(0,1fr)_auto] items-center gap-x-[18px] gap-y-2 !rounded-[20px] px-3.5 py-2.5 sm:grid-cols-[52px_minmax(0,1fr)_90px_auto]"
+                    data-session-row
+                    className="pdx-row -mx-3.5 grid grid-cols-[52px_minmax(0,1fr)_90px_auto] items-center gap-[18px] !rounded-[20px] px-3.5 py-2.5 max-[600px]:grid-cols-[52px_minmax(0,1fr)_auto] max-[600px]:gap-3"
                   >
                     <Cover
                       title={session.title}
@@ -713,10 +776,13 @@ export function SessionsPage() {
                       initialClassName="text-[17px]"
                     />
                     <div className="min-w-0">
+                      {/* Desktop keeps one line; at 600px and below the title gets two lines. The full name is in `title`. */}
                       <button
                         type="button"
+                        title={session.title}
+                        data-row-index={rowIndex.get(session.sessionId)}
                         onClick={() => navigateToGame(session.gameId)}
-                        className="block max-w-full truncate text-left text-[15px] font-medium transition hover:text-accent"
+                        className="block max-w-full truncate text-left text-[15px] font-medium transition [overflow-wrap:anywhere] hover:text-accent max-[600px]:line-clamp-2 max-[600px]:whitespace-normal"
                       >
                         {session.title}
                       </button>
@@ -726,14 +792,19 @@ export function SessionsPage() {
                           {session.platform}
                           {!groupedByDay && ` · ${session.date}`}
                         </span>
+                        <span className="ml-auto hidden shrink-0 items-center gap-1 pl-2 max-[600px]:inline-flex">
+                          {session.ignored && <IgnoredBadge />}
+                          <span className="pdx-num whitespace-nowrap text-sm font-semibold text-accent">{session.duration}</span>
+                        </span>
                       </p>
                     </div>
-                    <div className="flex items-center justify-end gap-1.5">
+                    <div className="flex items-center justify-end gap-1.5 max-[600px]:hidden">
                       {session.ignored && <IgnoredBadge />}
-                      <span className="pdx-num text-right text-[15px] font-semibold text-accent">{session.duration}</span>
+                      <span className="pdx-num whitespace-nowrap text-right text-[15px] font-semibold text-accent">{session.duration}</span>
                     </div>
-                    <div className="col-span-2 col-start-2 flex justify-end sm:col-span-1 sm:col-start-auto">
+                    <div className="flex justify-end max-[600px]:self-start">
                       <SessionActions
+                        sessionTitle={session.title}
                         canEdit={session.canEdit}
                         disabled={state.deletingSessionIds.has(session.sessionId)}
                         onEdit={() => openSessionEditor(session.sessionId)}
@@ -747,44 +818,22 @@ export function SessionsPage() {
           ))
         )}
 
-        {state.total > 0 && (
+        {state.total > 0 && state.rows.length > 0 && !state.isListLoading && (
           <div className="mt-3 flex flex-wrap items-center justify-between gap-4 border-t border-divider pt-6">
-            <span className="pdx-num text-[13px] text-muted">
-              Showing {start(state)}–{end(state)} of {state.total.toLocaleString("en-US")} sessions
+            <span className="pdx-num text-[13px] text-muted" aria-live="polite">
+              {showingLabel(state)}
             </span>
-            {pages > 1 && (
-              <nav aria-label="Pagination" className="flex flex-wrap gap-1.5">
-                <button
-                  type="button"
-                  disabled={state.offset === 0 || state.isListLoading}
-                  onClick={previousPage}
-                  className="pdx-chip !h-[38px] !px-3.5 font-semibold"
-                >
-                  ← Prev
-                </button>
-                {pageNumbers(state).map((pageNumber) => (
-                  <button
-                    key={pageNumber}
-                    type="button"
-                    aria-current={pageNumber === page ? "page" : undefined}
-                    onClick={() => setPage(pageNumber)}
-                    className={cx(
-                      "pdx-chip !h-[38px] min-w-[38px] justify-center !px-3.5 font-semibold",
-                      pageNumber === page && "!border-brand !bg-brand !text-white",
-                    )}
-                  >
-                    {pageNumber}
-                  </button>
-                ))}
-                <button
-                  type="button"
-                  disabled={state.offset + Limit >= state.total || state.isListLoading}
-                  onClick={nextPage}
-                  className="pdx-chip !h-[38px] !px-3.5 font-semibold"
-                >
-                  Next →
-                </button>
-              </nav>
+            {hasMore(state) && (
+              <button
+                type="button"
+                data-action="load-more"
+                aria-busy={state.isLoadingMore ? "true" : undefined}
+                disabled={state.isLoadingMore}
+                onClick={loadMore}
+                className="pdx-btn-outline !h-10 !text-[13px] !text-ink"
+              >
+                {state.isLoadingMore ? "Loading…" : `Load ${formatCount(nextPageSize(state))} more`}
+              </button>
             )}
           </div>
         )}
