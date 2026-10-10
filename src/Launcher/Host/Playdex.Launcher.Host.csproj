@@ -48,6 +48,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- The window, bridge, input and quick settings shared with the desktop app (src/Desktop). -->
+    <Compile Include="..\Shell\**\*.cs" LinkBase="Shell" />
+  </ItemGroup>
+
+  <ItemGroup>
     <Manifest Include="$(ApplicationManifest)" />
     <Content Include="Assets\**" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="CustomCapability.SCCD" CopyToOutputDirectory="PreserveNewest" />

@@ -1,6 +1,7 @@
+using Playdex.Core;
 using System.Runtime.InteropServices;
 
-namespace Playdex.Launcher.Host;
+namespace Playdex.Shell;
 
 #pragma warning disable CA1069 // Win32 constants
 
@@ -99,6 +100,9 @@ internal static unsafe partial class Native
     [LibraryImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     public static partial bool AllowSetForegroundWindow(uint processId);
+
+    [LibraryImport("user32.dll")]
+    public static partial uint GetDpiForWindow(nint hwnd);
 
     /// <summary>Wall-clock now as a FILETIME (100 ns ticks), comparable with GetProcessTimes.</summary>
     public static long PreciseNow()

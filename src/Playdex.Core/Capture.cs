@@ -41,13 +41,18 @@ public sealed partial class CaptureJson : JsonSerializerContext;
 public sealed class CaptureClient : IDisposable
 {
     private readonly HttpClient _http;
-    private readonly string? _apiKey;
+    private readonly Func<string?> _apiKey;
+    private readonly Func<string> _baseUrl;
 
+    /// <summary>
+    /// A client that reads <paramref name="config"/> on every request, so a changed API key or URL applies at once.
+    /// PLAYDEX_API_KEY and PLAYDEX_API_URL override it; a blank URL means <see cref="ApiConfig.DefaultBaseUrl"/>.
+    /// </summary>
     /// <param name="handler">For tests; null sends real requests.</param>
     public CaptureClient(ApiConfig config, HttpMessageHandler? handler = null)
         : this(
-            Environment.GetEnvironmentVariable("PLAYDEX_API_KEY") is { Length: > 0 } fromEnv ? fromEnv : config.ApiKey,
-            Environment.GetEnvironmentVariable("PLAYDEX_API_URL") is { Length: > 0 } urlFromEnv ? urlFromEnv
+            () => Environment.GetEnvironmentVariable("PLAYDEX_API_KEY") is { Length: > 0 } fromEnv ? fromEnv : config.ApiKey,
+            () => Environment.GetEnvironmentVariable("PLAYDEX_API_URL") is { Length: > 0 } urlFromEnv ? urlFromEnv
                 : string.IsNullOrWhiteSpace(config.BaseUrl) ? ApiConfig.DefaultBaseUrl : config.BaseUrl,
             handler ?? new HttpClientHandler(),
             TimeSpan.FromSeconds(Math.Max(1, config.RequestTimeoutSeconds)))
@@ -55,17 +60,21 @@ public sealed class CaptureClient : IDisposable
     }
 
     internal CaptureClient(string? apiKey, string baseUrl, HttpMessageHandler handler, TimeSpan? timeout = null)
+        : this(() => apiKey, () => baseUrl, handler, timeout ?? TimeSpan.FromSeconds(10))
     {
-        _apiKey = apiKey?.Trim();
-        _http = new HttpClient(handler)
-        {
-            BaseAddress = new Uri(baseUrl.TrimEnd('/') + "/"),
-            Timeout = timeout ?? TimeSpan.FromSeconds(10),
-        };
-        Log.Info($"capture: api {_http.BaseAddress}, key {(IsConfigured ? "configured" : "missing")}");
     }
 
-    public bool IsConfigured => !string.IsNullOrWhiteSpace(_apiKey);
+    private CaptureClient(Func<string?> apiKey, Func<string> baseUrl, HttpMessageHandler handler, TimeSpan timeout)
+    {
+        _apiKey = apiKey;
+        _baseUrl = baseUrl;
+        _http = new HttpClient(handler) { Timeout = timeout };
+        Log.Info($"capture: api {_baseUrl()}, key {(IsConfigured ? "configured" : "missing")}");
+    }
+
+    public bool IsConfigured => !string.IsNullOrWhiteSpace(_apiKey());
+
+    private Uri BaseAddress => new(_baseUrl().Trim().TrimEnd('/') + "/");
 
     public Task<bool> StartAsync(CaptureGame game) => PostAsync("capture/sessions/start", game, CaptureJson.Default.CaptureGame);
 
@@ -85,15 +94,15 @@ public sealed class CaptureClient : IDisposable
         var started = Stopwatch.GetTimestamp();
         try
         {
-            using var request = new HttpRequestMessage(HttpMethod.Post, path);
+            using var request = new HttpRequestMessage(HttpMethod.Post, new Uri(BaseAddress, path));
             request.Content = JsonContent.Create(body, type);
-            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _apiKey);
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _apiKey()!.Trim());
             request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
             using var response = await _http.SendAsync(request);
             Log.Info($"capture: {path} -> {(int)response.StatusCode} in {Metrics.MsSince(started):F0} ms");
             return response.IsSuccessStatusCode;
         }
-        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or UriFormatException)
         {
             Log.Info($"capture: {path} failed after {Metrics.MsSince(started):F0} ms: {ex.Message}");
             return false;

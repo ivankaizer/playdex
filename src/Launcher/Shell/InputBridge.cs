@@ -1,6 +1,7 @@
+using Playdex.Core;
 using Microsoft.Web.WebView2.Core;
 
-namespace Playdex.Launcher.Host;
+namespace Playdex.Shell;
 
 /// <summary>
 /// Posts controller events to the UI and measures input → visible focus latency from the UI's acks.

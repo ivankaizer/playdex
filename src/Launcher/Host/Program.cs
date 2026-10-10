@@ -8,70 +8,24 @@ using Windows.ApplicationModel.Activation;
 
 namespace Playdex.Launcher.Host;
 
-internal sealed record LaunchOptions(
-    bool Dev,
-    string? UiUrl,
-    bool ExitOnReady,
-    int BenchInput,
-    int BenchIntervalMs,
-    bool ExitWhenDone,
-    string? LaunchGameId,
-    bool SuspendWhileGaming)
-{
-    /// <summary>
-    /// --dev / --ui-url=URL           load the Vite dev server instead of the packaged ui/ folder
-    /// --exit-on-ready                close once the UI is interactive (cold-start measurement)
-    /// --bench-input=N [--bench-interval=MS] [--exit-when-done]
-    ///                                inject N synthetic presses through the input pipeline and log latency
-    /// --launch=GAMEID                launch a game once the UI is ready (also playdex-launcher://launch/GAMEID)
-    /// --no-suspend                   keep the page running while a game is in front
-    /// --selftest-job                 run the Job Object exit-detection self-test and exit
-    /// --selftest-quick-settings[=toggle]
-    ///                                log the quick settings state (sound outputs, HDR, refresh rates); with =toggle,
-    ///                                switch the sound output, HDR and refresh rate of each display, check, switch back
-    /// </summary>
-    public static LaunchOptions Parse(string[] args)
-    {
-        string? Value(string name) => args.FirstOrDefault(a => a.StartsWith($"--{name}=", StringComparison.Ordinal))?[(name.Length + 3)..];
-        bool Flag(string name) => args.Contains($"--{name}");
-        var uiUrl = Value("ui-url") ?? Environment.GetEnvironmentVariable("PLAYDEX_LAUNCHER_UI_URL");
-#if DEBUG
-        var dev = !Flag("dist");
-#else
-        var dev = Flag("dev") || uiUrl is not null;
-#endif
-        return new LaunchOptions(
-            dev,
-            uiUrl,
-            Flag("exit-on-ready"),
-            int.TryParse(Value("bench-input"), out var n) ? n : 0,
-            int.TryParse(Value("bench-interval"), out var ms) ? ms : 80,
-            Flag("exit-when-done"),
-            Value("launch") ?? ProtocolGameId(args.FirstOrDefault(a => a.StartsWith("playdex-launcher:", StringComparison.OrdinalIgnoreCase))),
-            !Flag("no-suspend"));
-    }
-
-    /// <summary>playdex-launcher://launch/GAMEID → GAMEID.</summary>
-    public static string? ProtocolGameId(string? uri)
-    {
-        if (uri is null || !Uri.TryCreate(uri, UriKind.Absolute, out var parsed) || parsed.Host != "launch")
-        {
-            return null;
-        }
-        var id = parsed.AbsolutePath.Trim('/');
-        return id.Length > 0 ? Uri.UnescapeDataString(id) : null;
-    }
-}
-
+/// <summary>
+/// The launcher: the Full Screen Experience home app. One full-screen <see cref="ShellWindow"/> for the whole life of the
+/// process; every relaunch (FSE, Game Bar "Home", a second start) is redirected to it.
+/// </summary>
+/// <remarks>
+/// Flags beyond <see cref="LaunchOptions"/>:
+/// --selftest-job                 run the Job Object exit-detection self-test and exit
+/// --selftest-quick-settings[=toggle]
+///                                log the quick settings state (sound outputs, HDR, refresh rates); with =toggle,
+///                                switch the sound output, HDR and refresh rate of each display, check, switch back
+/// </remarks>
 public static class Program
 {
     /// <summary>Stopwatch timestamp at Main(); startup metrics are measured from here and from process start.</summary>
-    internal static long MainEntered { get; private set; }
-
     [STAThread]
     private static int Main(string[] args)
     {
-        MainEntered = Stopwatch.GetTimestamp();
+        Startup.MainEntered = Stopwatch.GetTimestamp();
         GCSettings.LatencyMode = GCLatencyMode.SustainedLowLatency;
         WinRT.ComWrappersSupport.InitializeComWrappers();
 
@@ -124,7 +78,7 @@ internal sealed partial class App : Application
     private readonly LaunchOptions _options;
     private readonly AppConfig _config;
     private readonly AppInstance _instance;
-    private MainWindow? _window;
+    private ShellWindow? _window;
 
     public App(LaunchOptions options, AppConfig config, AppInstance instance)
     {
@@ -141,9 +95,12 @@ internal sealed partial class App : Application
             Path.Combine(Paths.DataDirectory, "WebView2"),
             new CoreWebView2EnvironmentOptions { AdditionalBrowserArguments = "--disable-features=msSmartScreenProtection" }).AsTask();
 
-        _window = new MainWindow(environment, _options, _config);
+        var services = new ShellServices(_config, DispatcherQueue.GetForCurrentThread());
+        _window = new ShellWindow(environment, _options, services, ShellMode.FullScreen);
+        _window.Closed += (_, _) => services.Dispose();
         _instance.Activated += OnRedirected;
         _window.Show();
+        services.Start();
     }
 
     private void OnRedirected(object? sender, AppActivationArguments args)

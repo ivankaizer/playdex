@@ -1,7 +1,8 @@
+using Playdex.Core;
 using System.Diagnostics;
 using Microsoft.UI.Dispatching;
 
-namespace Playdex.Launcher.Host;
+namespace Playdex.Shell;
 
 internal enum InputCode : byte
 {

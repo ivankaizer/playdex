@@ -1,6 +1,7 @@
+using Playdex.Core;
 using System.Runtime.InteropServices;
 
-namespace Playdex.Launcher.Host;
+namespace Playdex.Shell;
 
 /// <summary>Win32 imports for quick settings: Core Audio, display configuration (HDR, refresh rate) and power.</summary>
 internal static unsafe partial class Native

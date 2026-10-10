@@ -1,3 +1,4 @@
+using Playdex.Core;
 using System.Diagnostics;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -7,19 +8,38 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.Web.WebView2.Core;
+using Windows.Graphics;
 using WinRT.Interop;
 
-namespace Playdex.Launcher.Host;
+namespace Playdex.Shell;
 
 [JsonSerializable(typeof(string))]
 internal sealed partial class HostJson : JsonSerializerContext;
 
+/// <summary>How the shell window presents the UI.</summary>
+internal enum ShellMode
+{
+    /// <summary>The launcher: full screen, the Full Screen Experience home; it comes back to the front after a game.</summary>
+    FullScreen,
+
+    /// <summary>The desktop app: a normal window opened from the tray, mouse and keyboard first.</summary>
+    Desktop,
+}
+
+/// <summary>When Main() started, for the startup metrics.</summary>
+internal static class Startup
+{
+    public static long MainEntered { get; set; }
+}
+
 /// <summary>
-/// The one full-screen window: a native splash under a WebView2 that hosts the React UI. Code-only (no XAML) to
-/// keep startup short.
+/// A window hosting the React UI in WebView2, over a native splash. The launcher keeps one full-screen window for its
+/// whole life; the desktop app opens a normal one from the tray and closes it (releasing WebView2) when hidden. Sessions,
+/// controller input and the library live in <see cref="ShellServices"/>, so they outlive the window. Code-only (no XAML)
+/// to keep startup short.
 /// </summary>
-#pragma warning disable CA1001 // Owned disposables are released in Closed; the window lives as long as the process.
-internal sealed partial class MainWindow : Window
+#pragma warning disable CA1001 // The bridge's stats are flushed in Closed; the window owns nothing else disposable.
+internal sealed partial class ShellWindow : Window
 #pragma warning restore CA1001
 {
     private const string DevUrl = "http://localhost:5190/";
@@ -29,23 +49,29 @@ internal sealed partial class MainWindow : Window
     private readonly WebView2 _webView;
     private readonly nint _hwnd;
     private readonly InputBridge _bridge = new();
-    private readonly ControllerInput _input;
-    private readonly SessionManager _sessions;
-    private readonly SessionQueue _queue;
-    private readonly CaptureClient _api;
+    private readonly ShellServices _services;
     private readonly LaunchOptions _options;
-    private readonly Task<IReadOnlyDictionary<string, LibraryGame>> _library;
+    private readonly ShellMode _mode;
+    private readonly Func<string, JsonElement, bool>? _onMessage;
+    private string? _libraryScriptId;
     private long _returnStart;
     private long _activateStart;
     private bool _ready;
     private bool _suspended;
 
-    public MainWindow(Task<CoreWebView2Environment> environment, LaunchOptions options, AppConfig config)
+    /// <param name="onMessage">Page messages the shell doesn't handle (the desktop app's own); true when handled.</param>
+    public ShellWindow(
+        Task<CoreWebView2Environment> environment,
+        LaunchOptions options,
+        ShellServices services,
+        ShellMode mode,
+        Func<string, JsonElement, bool>? onMessage = null)
     {
         _environment = environment;
         _options = options;
-        _api = new CaptureClient(config.Api);
-        _library = Task.Run(() => Library.Scan(config));
+        _services = services;
+        _mode = mode;
+        _onMessage = onMessage;
         Title = "Playdex";
         _hwnd = WindowNative.GetWindowHandle(this);
 
@@ -66,30 +92,42 @@ internal sealed partial class MainWindow : Window
         root.Children.Add(_webView);
         Content = root;
 
-        _queue = new SessionQueue(_api);
-        _sessions = new SessionManager(config, _api, _queue, PostSession, OnGameExited);
-        _input = new ControllerInput(new InputQueue(DispatcherQueue, OnInput));
-
+        services.SessionChanged += PostSession;
+        services.GameExited += OnGameExited;
+        services.InputReceived += OnInput;
         Activated += OnActivated;
         Closed += (_, _) =>
         {
+            services.SessionChanged -= PostSession;
+            services.GameExited -= OnGameExited;
+            services.InputReceived -= OnInput;
+            services.Input.Foreground = false;
             _bridge.Flush();
-            _queue.Dispose();
-            _api.Dispose();
         };
 
-        // Newer builds ignore a presenter set before the window is shown, so set it again once it is.
-        AppWindow.SetPresenter(AppWindowPresenterKind.FullScreen);
+        if (mode == ShellMode.FullScreen)
+        {
+            // Newer builds ignore a presenter set before the window is shown, so Show sets it again once it is.
+            AppWindow.SetPresenter(AppWindowPresenterKind.FullScreen);
+        }
+        else
+        {
+            var scale = Native.GetDpiForWindow(_hwnd) / 96.0;
+            AppWindow.Resize(new SizeInt32((int)(1360 * scale), (int)(860 * scale)));
+        }
     }
+
+    public nint Handle => _hwnd;
 
     public void Show()
     {
         Activate();
-        DispatcherQueue.TryEnqueue(() => AppWindow.SetPresenter(AppWindowPresenterKind.FullScreen));
-        Metrics.Record("startup.window_shown", Metrics.MsSince(Program.MainEntered));
+        if (_mode == ShellMode.FullScreen)
+        {
+            DispatcherQueue.TryEnqueue(() => AppWindow.SetPresenter(AppWindowPresenterKind.FullScreen));
+        }
+        Metrics.Record("startup.window_shown", Metrics.MsSince(Startup.MainEntered));
         _ = InitializeWebViewAsync();
-        _input.Start();
-        _ = Task.Run(_queue.FlushAsync);
     }
 
     /// <summary>Another activation (second launch, FSE, Game Bar "Home", protocol link): come to the front, go home.</summary>
@@ -104,6 +142,26 @@ internal sealed partial class MainWindow : Window
         }
     }
 
+    /// <summary>Show the library as it is now: rescan, replace the injected script and reload the page.</summary>
+    public async Task ReloadLibraryAsync()
+    {
+        var library = await _services.RescanLibrary();
+        if (_webView.CoreWebView2 is not { } web)
+        {
+            return;
+        }
+        if (_libraryScriptId is not null)
+        {
+            web.RemoveScriptToExecuteOnDocumentCreated(_libraryScriptId);
+        }
+        _libraryScriptId = await web.AddScriptToExecuteOnDocumentCreatedAsync(PageScript(library));
+        web.Reload();
+    }
+
+    /// <summary>The library, and the mode the page lays itself out for, in place before the page's own scripts run.</summary>
+    private string PageScript(IReadOnlyDictionary<string, LibraryGame> library) =>
+        $"window.__PLAYDEX_LIBRARY__ = {Library.ToJson(library)}; window.__PLAYDEX_MODE__ = \"{(_mode == ShellMode.Desktop ? "desktop" : "fse")}\";";
+
     private async Task InitializeWebViewAsync()
     {
         try
@@ -112,7 +170,7 @@ internal sealed partial class MainWindow : Window
             var environment = await _environment;
             Metrics.Record("startup.webview_environment_wait", Metrics.MsSince(started));
             await _webView.EnsureCoreWebView2Async(environment);
-            Metrics.Record("startup.webview_ready", Metrics.MsSince(Program.MainEntered));
+            Metrics.Record("startup.webview_ready", Metrics.MsSince(Startup.MainEntered));
 
             var web = _webView.CoreWebView2;
             var settings = web.Settings;
@@ -129,7 +187,7 @@ internal sealed partial class MainWindow : Window
             // The library is in place before the page's own scripts run, so the UI renders real games on first paint.
             // Not awaited: calls reach the browser process in order, so the script is registered before Navigate
             // below; awaiting the round trip cost ~90 ms of cold start.
-            var injected = web.AddScriptToExecuteOnDocumentCreatedAsync($"window.__PLAYDEX_LIBRARY__ = {Library.ToJson(await _library)};");
+            var injected = web.AddScriptToExecuteOnDocumentCreatedAsync(PageScript(await _services.LibraryScan));
 
             if (SteamLibrary.ArtCacheDirectory is { } artCache)
             {
@@ -156,7 +214,7 @@ internal sealed partial class MainWindow : Window
             }
             Log.Info($"navigating to {url}");
             web.Navigate(url);
-            await injected;
+            _libraryScriptId = await injected;
         }
         catch (Exception ex)
         {
@@ -168,7 +226,8 @@ internal sealed partial class MainWindow : Window
     {
         using var doc = JsonDocument.Parse(args.WebMessageAsJson);
         var message = doc.RootElement;
-        switch (message.GetProperty("type").GetString())
+        var type = message.GetProperty("type").GetString();
+        switch (type)
         {
             case "ack":
                 _bridge.Ack(message.GetProperty("id").GetInt32(), message.TryGetProperty("presented", out var presented) && presented.GetBoolean());
@@ -196,10 +255,10 @@ internal sealed partial class MainWindow : Window
             case "launch":
                 // Launch only what the host found on disk; the page never supplies a path or an app id.
                 var gameId = message.GetProperty("gameId").GetString()!;
-                _sessions.Launch(gameId, _library.IsCompletedSuccessfully ? _library.Result.GetValueOrDefault(gameId) : null);
+                _services.Sessions.Launch(gameId, _services.FindGame(gameId));
                 break;
             case "cancel":
-                _sessions.Cancel(message.GetProperty("gameId").GetString()!);
+                _services.Sessions.Cancel(message.GetProperty("gameId").GetString()!);
                 break;
             case "quick-settings":
                 PostQuickSettings(null, "read quick settings");
@@ -232,6 +291,12 @@ internal sealed partial class MainWindow : Window
                         break;
                 }
                 break;
+            default:
+                if (type is null || _onMessage?.Invoke(type, message) != true)
+                {
+                    Log.Info($"page: unknown message {type}");
+                }
+                break;
         }
     }
 
@@ -250,8 +315,8 @@ internal sealed partial class MainWindow : Window
         _ready = true;
         var processStart = Process.GetCurrentProcess().StartTime;
         Metrics.Record("startup.cold_to_interactive", (DateTime.Now - processStart).TotalMilliseconds, "process start -> first interactive frame");
-        Metrics.Record("startup.main_to_interactive", Metrics.MsSince(Program.MainEntered), "Main() -> first interactive frame");
-        Log.Info($"controller: {_input.ConnectedPads} pad(s), guide {(_input.GuideSupported ? "supported" : "unsupported")}");
+        Metrics.Record("startup.main_to_interactive", Metrics.MsSince(Startup.MainEntered), "Main() -> first interactive frame");
+        Log.Info($"controller: {_services.Input.ConnectedPads} pad(s), guide {(_services.Input.GuideSupported ? "supported" : "unsupported")}");
 
         if (_options.ExitOnReady)
         {
@@ -260,7 +325,7 @@ internal sealed partial class MainWindow : Window
         }
         if (_options.BenchInput > 0)
         {
-            _input.StartBench(_options.BenchInput, _options.BenchIntervalMs);
+            _services.Input.StartBench(_options.BenchInput, _options.BenchIntervalMs);
         }
         if (_options.LaunchGameId is { } gameId)
         {
@@ -282,8 +347,11 @@ internal sealed partial class MainWindow : Window
     {
         if (code == InputCode.Guide && !IsForeground())
         {
-            // A game is in front: the Guide button brings the launcher back.
-            OnRedirectedActivation(null);
+            // A game is in front: the Guide button brings the launcher back. The desktop app leaves it to Windows.
+            if (_mode == ShellMode.FullScreen)
+            {
+                OnRedirectedActivation(null);
+            }
             return;
         }
         _bridge.Deliver(code, timestamp);
@@ -295,20 +363,23 @@ internal sealed partial class MainWindow : Window
         {
             _returnStart = detected;
             ResumeWebView();
-            BringToFront();
-            Metrics.Record("return_home.window_activated", Metrics.MsSince(detected), "exit event -> launcher in front");
+            if (_mode == ShellMode.FullScreen)
+            {
+                BringToFront();
+                Metrics.Record("return_home.window_activated", Metrics.MsSince(detected), "exit event -> launcher in front");
+            }
         });
     }
 
     private void OnActivated(object sender, WindowActivatedEventArgs args)
     {
         var active = args.WindowActivationState != WindowActivationState.Deactivated;
-        _input.Foreground = active;
+        _services.Input.Foreground = active;
         if (active)
         {
             ResumeWebView();
         }
-        else if (_sessions.IsGameRunning && _options.SuspendWhileGaming)
+        else if (_mode == ShellMode.FullScreen && _services.Sessions.IsGameRunning && _options.SuspendWhileGaming)
         {
             _ = SuspendWebViewAsync();
         }
@@ -342,14 +413,17 @@ internal sealed partial class MainWindow : Window
 
     private bool IsForeground() => Native.GetForegroundWindow() == _hwnd;
 
-    private void BringToFront()
+    public void BringToFront()
     {
         ResumeWebView();
         if (Native.IsIconic(_hwnd))
         {
             Native.ShowWindow(_hwnd, Native.SwRestore);
         }
-        AppWindow.SetPresenter(AppWindowPresenterKind.FullScreen);
+        if (_mode == ShellMode.FullScreen)
+        {
+            AppWindow.SetPresenter(AppWindowPresenterKind.FullScreen);
+        }
         if (Native.SetForegroundWindow(_hwnd) && IsForeground())
         {
             return;
@@ -364,12 +438,13 @@ internal sealed partial class MainWindow : Window
         Log.Info($"bring to front via AttachThreadInput: {(IsForeground() ? "ok" : "failed")}");
     }
 
-    private void PostFromAnyThread(string json) => DispatcherQueue.TryEnqueue(() => Post(json));
+    /// <summary>Post a message to the page from any thread.</summary>
+    public void PostFromAnyThread(string json) => DispatcherQueue.TryEnqueue(() => Post(json));
 
     private void PostSession(string gameId, string state, int seconds) =>
         PostFromAnyThread($$"""{"type":"session","gameId":{{JsonSerializer.Serialize(gameId, HostJson.Default.String)}},"state":"{{state}}","seconds":{{seconds}}}""");
 
-    private void Post(string json)
+    public void Post(string json)
     {
         if (_webView.CoreWebView2 is { } web)
         {

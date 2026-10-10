@@ -1,8 +1,9 @@
+using Playdex.Core;
 using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
-namespace Playdex.Launcher.Host;
+namespace Playdex.Shell;
 
 internal sealed record AudioOutput(string Id, string Name, bool IsDefault);
 
