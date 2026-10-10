@@ -1,13 +1,13 @@
 import type { ReactNode } from "react";
+import { Link } from "react-router";
 import { AppFooter } from "@/components/AppFooter";
 import { PlatformChips } from "@/components/PlatformChips";
-import { ThemeToggle } from "@/components/ThemeToggle";
 import { BarChart, CardHeading, Cover, Donut, LegendRow, StatTile, type BarDatum, type DonutSegment } from "@/components/ui";
 import { platformColor } from "@/lib/platforms";
-import { useTheme } from "@/lib/theme";
+import { dashUrl } from "./dashUrl";
+import { LandingHeader } from "./LandingHeader";
 
-/** The app lives on its own host; the landing never talks to the API and only links there. */
-export const dashUrl = (import.meta.env.VITE_DASH_URL as string | undefined) ?? "https://dash.playdex.dev";
+export { dashUrl };
 
 /*
  * Landing-page preview of the recap. These are the page's illustrative sample
@@ -120,21 +120,10 @@ const features: ReadonlyArray<{ title: string; body: string; icon: ReactNode }> 
 
 /** playdex.dev: the public landing, a static page served from Cloudflare Pages. */
 export function LandingPage() {
-  const { theme, toggleTheme } = useTheme();
-
   return (
     <main className="pdx-page relative px-4 pb-10 pt-6 sm:px-8 sm:pt-8">
       <div className="relative mx-auto flex w-full max-w-[1180px] flex-col gap-7">
-        <header className="flex flex-wrap items-center gap-4 rounded-[28px] border border-[color:var(--card-border)] bg-surface/60 py-3.5 pl-7 pr-4 sm:rounded-full">
-          <div className="mr-auto flex items-center gap-2.5">
-            <span className="h-2.5 w-2.5 rounded-full bg-bar shadow-[0_0_0_4px_rgba(47,194,142,.18)]"></span>
-            <span className="text-xs font-semibold uppercase tracking-[0.32em] text-accent">Playdex</span>
-          </div>
-          <ThemeToggle theme={theme} onToggle={toggleTheme} />
-          <a href={dashUrl} className="pdx-btn-primary !h-[38px] !px-[18px] !text-[13px] no-underline">
-            Sign in
-          </a>
-        </header>
+        <LandingHeader />
 
         <section className="flex flex-col gap-7 px-2 pb-6 pt-6 sm:pt-10">
           <h1 className="m-0 max-w-[16em] text-[44px] font-semibold leading-[1.02] tracking-[-0.035em] sm:text-[68px]">
@@ -170,6 +159,39 @@ export function LandingPage() {
               </div>
             ))}
           </div>
+        </section>
+
+        <section aria-labelledby="launcher-teaser">
+          <Link
+            to="/launcher"
+            className="pdx-card group grid items-center gap-7 text-inherit no-underline transition-[border-color,transform] duration-200 hover:-translate-y-0.5 hover:border-mint-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent motion-reduce:transition-none motion-reduce:hover:translate-y-0 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]"
+          >
+            <div className="flex flex-col gap-4">
+              <p className="pdx-kicker">New · Playdex Launcher</p>
+              <h2 id="launcher-teaser" className="m-0 text-[32px] font-semibold leading-[1.1] tracking-[-0.01em]">
+                A console home screen for your Windows PC
+              </h2>
+              <p className="m-0 text-[15px] leading-relaxed text-muted">
+                Boot into your library instead of the desktop. The launcher replaces Steam Big Picture in Windows Full Screen
+                Experience, opens on the game you were playing and records every session to Playdex on its own.
+              </p>
+              <span className="mt-1 inline-flex items-center gap-1.5 text-[15px] font-semibold text-accent">
+                See the launcher
+                <span aria-hidden="true" className="transition-transform duration-200 group-hover:translate-x-1 motion-reduce:transition-none">
+                  →
+                </span>
+              </span>
+            </div>
+            <img
+              src="/launcher/home.webp"
+              alt="The Playdex Launcher home screen: the last played game leads, with Playdex stats on the right"
+              width={1920}
+              height={1080}
+              loading="lazy"
+              decoding="async"
+              className="aspect-video w-full rounded-[22px] bg-tile object-cover shadow-cover"
+            />
+          </Link>
         </section>
 
         <section className="pdx-card flex flex-col gap-7">
