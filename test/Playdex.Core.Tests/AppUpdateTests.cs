@@ -1,0 +1,170 @@
+using System.Diagnostics;
+using System.IO.Compression;
+using System.Net;
+using System.Security.Cryptography;
+using System.Text;
+using static Playdex.Core.Tests.TestPaths;
+
+namespace Playdex.Core.Tests;
+
+public sealed class AppUpdateTests
+{
+    [Fact]
+    public void VersionsParseFromStableTagsAndCompare()
+    {
+        Assert.True(ReleaseVersion.TryParseTag("v2.10.3", out var version));
+        Assert.Equal(new ReleaseVersion(2, 10, 3), version);
+        Assert.True(new ReleaseVersion(2, 10, 3) > new ReleaseVersion(2, 9, 9));
+        Assert.True(new ReleaseVersion(1, 1, 0) < new ReleaseVersion(2, 0, 0));
+        foreach (var tag in new[] { "2.0.0", "v2.0", "v02.0.0", "v2.0.0-beta", "v1.1", "1.0" })
+        {
+            Assert.False(ReleaseVersion.TryParseTag(tag, out _), tag);
+        }
+    }
+
+    [Fact]
+    public void OnlyStableReleasesWithHttpsAssetsCount()
+    {
+        static GitHubReleaseDto Dto(string tag, bool draft = false, bool prerelease = false) => new()
+        {
+            TagName = tag,
+            Draft = draft,
+            Prerelease = prerelease,
+            Assets =
+            [
+                new() { Name = "playdex-windows-v2.0.0.zip", BrowserDownloadUrl = "https://example.test/a.zip", Size = 10 },
+                new() { Name = "insecure.zip", BrowserDownloadUrl = "http://example.test/b.zip", Size = 10 },
+                new() { Name = "twice.zip", BrowserDownloadUrl = "https://example.test/c.zip" },
+                new() { Name = "twice.zip", BrowserDownloadUrl = "https://example.test/d.zip" },
+            ],
+        };
+
+        Assert.Null(GitHubReleases.ToRelease(Dto("v2.0.0", draft: true)));
+        Assert.Null(GitHubReleases.ToRelease(Dto("v2.0.0", prerelease: true)));
+        Assert.Null(GitHubReleases.ToRelease(Dto("latest")));
+        var release = GitHubReleases.ToRelease(Dto("v2.0.0"))!;
+        Assert.Equal(["playdex-windows-v2.0.0.zip"], release.Assets.Select(a => a.Name));
+    }
+
+    [Fact]
+    public void ChecksumFilesNameTheArchive()
+    {
+        var hash = new string('a', 64);
+        Assert.Equal(hash, AppUpdate.ParseChecksum($"{hash.ToUpperInvariant()}  playdex-windows-v2.0.0.zip\n", "playdex-windows-v2.0.0.zip"));
+        Assert.Throws<InvalidDataException>(() => AppUpdate.ParseChecksum($"{hash}  other.zip", "playdex-windows-v2.0.0.zip"));
+        Assert.Throws<InvalidDataException>(() => AppUpdate.ParseChecksum("nonsense", "playdex-windows-v2.0.0.zip"));
+    }
+
+    [Fact]
+    public void ExtractionRefusesPathsOutsideTheFolderAndNeedsBothExecutables()
+    {
+        var directory = NewTempDir();
+        var unsafeZip = Zip(directory, "unsafe.zip", ("../escape.txt", "x"), ("Playdex.exe", "x"), ("Playdex.Run.exe", "x"));
+        Assert.Throws<InvalidDataException>(() => AppUpdate.Extract(unsafeZip, Path.Combine(directory, "a")));
+        Assert.False(File.Exists(Path.Combine(directory, "escape.txt")));
+
+        var incomplete = Zip(directory, "incomplete.zip", ("Playdex.exe", "x"));
+        Assert.Throws<InvalidDataException>(() => AppUpdate.Extract(incomplete, Path.Combine(directory, "b")));
+
+        var good = Zip(directory, "good.zip", ("Playdex.exe", "x"), ("Playdex.Run.exe", "x"), ("ui/index.html", "<html>"));
+        AppUpdate.Extract(good, Path.Combine(directory, "c"));
+        Assert.True(File.Exists(Path.Combine(directory, "c", "ui", "index.html")));
+    }
+
+    [Fact]
+    public async Task StagingVerifiesTheChecksumAndWritesAManifest()
+    {
+        var directory = NewTempDir();
+        var zipPath = Zip(directory, "source.zip", ("Playdex.exe", "new app"), ("Playdex.Run.exe", "new helper"));
+        var zipBytes = await File.ReadAllBytesAsync(zipPath);
+        var name = "playdex-windows-v2.1.0.zip";
+        var goodHash = Convert.ToHexStringLower(SHA256.HashData(zipBytes));
+        var release = new Release(new ReleaseVersion(2, 1, 0),
+        [
+            new ReleaseAsset(name, new Uri("https://example.test/app.zip"), zipBytes.Length),
+            new ReleaseAsset(name + ".sha256", new Uri("https://example.test/app.sha256"), null),
+        ]);
+        var install = Path.Combine(directory, "install");
+        Directory.CreateDirectory(install);
+
+        using (var bad = new GitHubReleases(new AssetHandler(zipBytes, $"{new string('0', 64)}  {name}")))
+        {
+            await Assert.ThrowsAsync<InvalidDataException>(() => AppUpdate.StageAsync(bad, release, install, Path.Combine(directory, "updates")));
+        }
+        using var good = new GitHubReleases(new AssetHandler(zipBytes, $"{goodHash}  {name}"));
+        var manifestPath = await AppUpdate.StageAsync(good, release, install, Path.Combine(directory, "updates"));
+
+        var manifest = AppUpdate.Load(manifestPath);
+        Assert.Equal("2.1.0", manifest.Version);
+        Assert.Equal(goodHash, manifest.ArchiveHash);
+        Assert.Equal("new app", await File.ReadAllTextAsync(Path.Combine(manifest.StagedDirectory, "Playdex.exe")));
+        Assert.Equal(Path.GetFullPath(install), manifest.TargetDirectory);
+    }
+
+    [Fact]
+    public async Task AVersionThatDoesNotStartIsRolledBack()
+    {
+        // Needs a real executable for the helper and the "apps": the published Playdex.Run.exe. Started with
+        // --update-health it exits at once without confirming, which is exactly an update that doesn't start.
+        var published = Environment.GetEnvironmentVariable("PLAYDEX_PUBLISHED_RUN");
+        if (string.IsNullOrWhiteSpace(published))
+        {
+            return;
+        }
+        var directory = NewTempDir();
+        var install = Path.Combine(directory, "Programs", "Playdex");
+        var updates = Path.Combine(directory, "updates");
+        var staged = Path.Combine(updates, "v9.9.9", "app");
+        foreach (var (folder, marker) in new[] { (install, "old"), (staged, "new") })
+        {
+            Directory.CreateDirectory(folder);
+            File.Copy(published, Path.Combine(folder, "Playdex.exe"));
+            File.Copy(published, Path.Combine(folder, "Playdex.Run.exe"));
+            await File.WriteAllTextAsync(Path.Combine(folder, "version.txt"), marker);
+        }
+        var manifestPath = Path.Combine(updates, "v9.9.9", "update.json");
+        await File.WriteAllTextAsync(manifestPath, System.Text.Json.JsonSerializer.Serialize(
+            new StagedUpdate("9.9.9", new string('a', 64), staged, install, updates), UpdateJson.Default.StagedUpdate));
+
+        var start = AppUpdate.PrepareApply(manifestPath);
+        // The helper waits for the app it replaces to exit; stand in a process that already has.
+        using (var exited = Process.Start(new ProcessStartInfo(TestProcess.ExecutablePath, "/c exit") { CreateNoWindow = true, UseShellExecute = false })!)
+        {
+            await exited.WaitForExitAsync();
+            start.ArgumentList[2] = exited.Id.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        }
+        var started = Stopwatch.StartNew();
+        using var helper = Process.Start(start)!;
+        await helper.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(90));
+
+        Assert.Equal(1, helper.ExitCode);
+        Assert.True(started.Elapsed < TimeSpan.FromSeconds(20), "the helper did not wait for a process that had exited");
+        Assert.False(Directory.Exists(staged), "the new version was moved in before it was rolled back");
+        Assert.Equal("old", await File.ReadAllTextAsync(Path.Combine(install, "version.txt")));
+        Assert.Contains("could not be installed", await File.ReadAllTextAsync(Path.Combine(updates, "last-failure.txt")), StringComparison.Ordinal);
+        Assert.Empty(Directory.GetDirectories(Path.GetDirectoryName(install)!, "Playdex.old-*"));
+    }
+
+    private static string Zip(string directory, string name, params (string Path, string Content)[] entries)
+    {
+        var path = Path.Combine(directory, name);
+        using var zip = ZipFile.Open(path, ZipArchiveMode.Create);
+        foreach (var (entryPath, content) in entries)
+        {
+            using var writer = new StreamWriter(zip.CreateEntry(entryPath).Open(), Encoding.UTF8);
+            writer.Write(content);
+        }
+        return path;
+    }
+
+    private sealed class AssetHandler(byte[] archive, string checksum) : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) =>
+            Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = request.RequestUri!.AbsolutePath.EndsWith(".zip", StringComparison.Ordinal)
+                    ? new ByteArrayContent(archive)
+                    : new StringContent(checksum),
+            });
+    }
+}

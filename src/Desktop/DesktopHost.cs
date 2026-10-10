@@ -185,6 +185,23 @@ internal sealed partial class DesktopHost : IDisposable
             case "app.quit":
                 _quit();
                 return Json(new MessageView("Quitting."));
+            case "update.check":
+                if (Updates is null)
+                {
+                    throw new InvalidOperationException("This build of Playdex doesn't update itself.");
+                }
+                await Updates.CheckAsync(explicitCheck: true);
+                return StateJson();
+            case "update.apply":
+                if (Updates is null)
+                {
+                    throw new InvalidOperationException("This build of Playdex doesn't update itself.");
+                }
+                Updates.Apply();
+                _quit();
+                return Json(new MessageView("Restarting to update."));
+            case "fse.install":
+                return Json(new MessageView(await (Fse ?? throw new InvalidOperationException("Not available.")).InstallAsync()));
             default:
                 throw new InvalidOperationException($"Unknown request '{method}'.");
         }
@@ -373,15 +390,15 @@ internal sealed partial class DesktopHost : IDisposable
             _config.Ludusavi.ExecutablePath,
             StartsWithWindows());
         return new DesktopState(
-            Version, games, settings, Updates?.View ?? new UpdateView("unavailable", "Updates are checked in installed builds.", null),
+            Version, games, settings, Updates?.View ?? new UpdateView("unavailable", "This build of Playdex doesn't update itself (installed builds do).", null),
             Fse?.View ?? new FseView("unavailable", "Not available in this build."), _config.Storage.LauncherDirectory, _runExecutable is not null);
     }
 
-    /// <summary>The app's own updates (set by the app; null in development builds).</summary>
-    public IUpdateFeature? Updates { get; set; }
+    /// <summary>The app's self-updater (set by the app; null when this build can't update itself).</summary>
+    public UpdateFeature? Updates { get; set; }
 
     /// <summary>"Use as Full Screen Experience home" (set by the app).</summary>
-    public IFseFeature? Fse { get; set; }
+    public FseFeature? Fse { get; set; }
 
     public static string Version =>
         typeof(DesktopHost).Assembly.GetName().Version is { } v ? $"{v.Major}.{v.Minor}.{v.Build}" : "0.0.0";
@@ -454,16 +471,4 @@ internal sealed partial class DesktopHost : IDisposable
         _backups.Dispose();
         _backupStore.Dispose();
     }
-}
-
-/// <summary>The app's self-updater, as the desktop screens see it.</summary>
-internal interface IUpdateFeature
-{
-    UpdateView View { get; }
-}
-
-/// <summary>Installing the launcher as the Full Screen Experience home, as the desktop screens see it.</summary>
-internal interface IFseFeature
-{
-    FseView View { get; }
 }

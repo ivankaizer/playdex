@@ -11,11 +11,20 @@ namespace Playdex.Run;
 /// <remarks>
 /// Exit codes: 0 the game ran, 1 it could not run (see run-&lt;date&gt;.log in the config's log folder), 2 this exe was
 /// started on its own rather than as a generated launcher.
+/// A copy of it is also the desktop app's update helper: <c>--apply-update &lt;apply.json&gt; &lt;pid&gt;</c> replaces
+/// the app's folder once that process exits (<see cref="AppUpdate.ApplyAsync"/>); 0 installed, 1 rolled back.
 /// </remarks>
 internal static class Program
 {
-    private static int Main()
+    private static int Main(string[] args)
     {
+        if (args is ["--apply-update", var applyPath, var parent] && int.TryParse(parent, out var parentProcessId))
+        {
+            // In the update folder of the update being applied: apply.json sits one folder below it.
+            Log.UseFile(Path.Combine(Path.GetDirectoryName(Path.GetDirectoryName(Path.GetFullPath(applyPath)))!, "update.log"));
+            return AppUpdate.ApplyAsync(Path.GetFullPath(applyPath), parentProcessId).GetAwaiter().GetResult() ? 0 : 1;
+        }
+
         Log.UseFile(Path.Combine(Paths.DataDirectory, "run.log"));
         LauncherManifest? manifest;
         try

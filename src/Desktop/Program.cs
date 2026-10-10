@@ -61,6 +61,8 @@ internal sealed partial class App : Application
     private ShellServices? _services;
     private DesktopHost? _host;
     private TrayIcon? _tray;
+    private UpdateFeature? _updates;
+    private FseFeature? _fse;
     private ShellWindow? _window;
 
     public App(LaunchOptions options, ConfigStore store, AppConfig config, AppInstance instance, bool background, string? healthSignal)
@@ -106,6 +108,20 @@ internal sealed partial class App : Application
         _host = new DesktopHost(_store, _config, _services, () => _window, Quit);
         _tray = new TrayIcon("Playdex", ShowWindow, Quit);
         _host.Tray = _tray;
+        if (UpdateFeature.InstallDirectory is not null)
+        {
+            // News goes to a Windows notification only while no window is open; the window shows it on its Settings tab.
+            _updates = new UpdateFeature(_host.PushState, () => _services.Sessions.IsGameRunning, (title, text) =>
+            {
+                if (_window is null)
+                {
+                    _tray.Notify(title, text);
+                }
+            });
+            _host.Updates = _updates;
+        }
+        _fse = new FseFeature(_host.PushState);
+        _host.Fse = _fse;
         _instance.Activated += (_, _) => dispatcher.TryEnqueue(ShowWindow);
 
         if (!_background)
@@ -114,6 +130,8 @@ internal sealed partial class App : Application
         }
         _services.Start();
         _host.Start();
+        _updates?.Start();
+        _fse.Start();
         if (_healthSignal is not null)
         {
             ConfirmHealthy(_healthSignal);
@@ -137,6 +155,8 @@ internal sealed partial class App : Application
         Log.Info("desktop: quitting");
         _window?.Close();
         _tray?.Dispose();
+        _updates?.Dispose();
+        _fse?.Dispose();
         _host?.Dispose();
         _services?.Dispose();
         Exit();
