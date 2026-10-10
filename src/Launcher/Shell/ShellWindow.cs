@@ -275,6 +275,12 @@ internal sealed partial class ShellWindow : Window
                 // Also after the desktop app reloads the page: it starts with nothing playing.
                 _nowPlayingPosted = false;
                 _ = RefreshNowPlayingAsync();
+                // The script injected at startup may predate the summary we have now (a reloaded page): send it, then
+                // check for a newer one.
+                if (_services.Summary.Current is { } summary)
+                {
+                    Post($$"""{"type":"playdex-summary","summary":{{summary}}}""");
+                }
                 RefreshSummary(force: true);
                 OnUiReady();
                 break;
