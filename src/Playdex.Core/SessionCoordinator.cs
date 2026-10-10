@@ -42,7 +42,7 @@ public sealed partial class SessionCoordinator : IDisposable
         if (string.IsNullOrWhiteSpace(game.Launch.ExecutablePath))
         {
             LogMissingExecutable(logger, game.GameId);
-            throw new InvalidOperationException("Game executable path is not configured. Open tray setup to configure it.");
+            throw new InvalidOperationException("Game executable path is not configured. Open Playdex settings to configure it.");
         }
 
         using var process = LaunchGame(game);
@@ -70,18 +70,8 @@ public sealed partial class SessionCoordinator : IDisposable
 
     private Process LaunchGame(GameConfig selectedGame)
     {
-        var start = new ProcessStartInfo(selectedGame.Launch.ExecutablePath!)
-        {
-            UseShellExecute = true,
-            WorkingDirectory = Path.GetDirectoryName(selectedGame.Launch.ExecutablePath)
-        };
-        foreach (var arg in selectedGame.Launch.Arguments)
-        {
-            start.ArgumentList.Add(arg);
-        }
-
         LogGameLaunching(logger, selectedGame.GameId, selectedGame.Launch.ExecutablePath);
-        return Process.Start(start) ?? throw new InvalidOperationException("Game process did not start.");
+        return GameProcess.Start(selectedGame);
     }
 
     [LoggerMessage(EventId = 1, Level = LogLevel.Warning, Message = "Game {GameId} has no executable configured")]

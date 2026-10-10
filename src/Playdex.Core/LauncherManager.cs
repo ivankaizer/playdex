@@ -95,7 +95,7 @@ public sealed partial class LauncherManager(ILogger<LauncherManager> logger)
         }
 
         throw new InvalidOperationException(
-            $"Per-game launchers require the published single-file wrapper. Started from '{sourceExecutable}' and no sibling single-file build was found.");
+            $"Per-game launchers need a published single-file executable (Playdex.Run.exe, or the Wrapper's). '{sourceExecutable}' is a build with a separate .dll and no single-file build was found next to it.");
     }
 
     private static string? FindAncestorDirectory(string startPath, string directoryName)

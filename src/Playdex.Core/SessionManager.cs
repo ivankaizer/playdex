@@ -7,7 +7,8 @@ namespace Playdex.Core;
 /// state change (gameId, "starting" | "running" | "ended", seconds played) through <paramref name="report"/>, from any
 /// thread.
 /// </summary>
-public sealed class SessionManager(CaptureClient api, SessionQueue queue, Action<string, string, int> report, Action<long> gameExited)
+public sealed class SessionManager(
+    AppConfig config, CaptureClient api, SessionQueue queue, Action<string, string, int> report, Action<long> gameExited)
 {
     private static readonly TimeSpan _pingInterval = TimeSpan.FromSeconds(30);
 
@@ -40,12 +41,11 @@ public sealed class SessionManager(CaptureClient api, SessionQueue queue, Action
 
         IGameWatcher? watcher = null;
         CaptureGame? capture = null;
-        if (game?.LauncherPath is { } launcher)
+        if (game?.ConfigGameId is { } configId && config.Games.TryGetValue(configId, out var configured))
         {
-            // A Playdex Wrapper launcher starts the game and records the session itself, so no capture here. The Job
-            // Object follows the launcher and the game it starts; it signals exit once the launcher has seen the game
-            // exit (see ProcessMonitor).
-            watcher = new JobGameWatcher(launcher, "");
+            // A game added to Playdex: started directly with its launch settings and monitor, recorded here.
+            watcher = new ConfiguredGameWatcher(config, configured);
+            capture = CaptureGame.From(configured, config.Api);
         }
         else if (game?.SteamAppId is { } appId)
         {
@@ -71,7 +71,7 @@ public sealed class SessionManager(CaptureClient api, SessionQueue queue, Action
         {
             watcher.Start();
         }
-        catch (InvalidOperationException ex)
+        catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception)
         {
             Log.Error($"session: could not launch {gameId}", ex);
             lock (_gate)
@@ -145,7 +145,8 @@ public sealed class SessionManager(CaptureClient api, SessionQueue queue, Action
         {
             using (recorder)
             {
-                var outcome = await recorder.FinishAsync();
+                // The game's own exit time where the watcher knows it (the monitor's debounce is not play).
+                var outcome = await recorder.FinishAsync(processExit != 0 ? DateTimeOffset.FromFileTime(processExit) : null);
                 Metrics.Record(
                     outcome == SessionOutcome.Queued ? "exit.session_end_queued" : "exit.session_end_acked",
                     Metrics.MsSince(detected),

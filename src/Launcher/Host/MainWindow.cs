@@ -67,7 +67,7 @@ internal sealed partial class MainWindow : Window
         Content = root;
 
         _queue = new SessionQueue(_api);
-        _sessions = new SessionManager(_api, _queue, PostSession, OnGameExited);
+        _sessions = new SessionManager(config, _api, _queue, PostSession, OnGameExited);
         _input = new ControllerInput(new InputQueue(DispatcherQueue, OnInput));
 
         Activated += OnActivated;

@@ -4,8 +4,9 @@ using System.Text.Json.Serialization;
 namespace Playdex.Core;
 
 /// <summary>
-/// One playable game on this PC. Source "steam": an installed Steam app. Source "playdex": a game added through the
-/// Playdex Wrapper, launched through its generated Playdex-*.exe (which records the session itself).
+/// One playable game on this PC. Source "steam": an installed Steam app. Source "playdex": a game added to Playdex (the
+/// config's games), started directly by id (<see cref="ConfigGameId"/>). <see cref="LauncherPath"/> is that game's
+/// generated Steam-shortcut launcher, used only to find its Steam grid art.
 /// </summary>
 public sealed record LibraryGame(
     string Id,
@@ -14,7 +15,8 @@ public sealed record LibraryGame(
     int? SteamAppId,
     long? LastPlayed,
     [property: JsonIgnore] string? LauncherPath,
-    SteamArt? Images = null);
+    SteamArt? Images = null,
+    [property: JsonIgnore] string? ConfigGameId = null);
 
 [JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase, DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull)]
 [JsonSerializable(typeof(List<LibraryGame>))]
@@ -30,7 +32,7 @@ public static class Library
     {
         var games = new Dictionary<string, LibraryGame>(StringComparer.Ordinal);
         var wrapper = WrapperGames(config);
-        // A Wrapper entry for a Steam game wins: the user added it to Playdex, and its launcher records the session.
+        // A game added to Playdex wins over the same Steam app: its launch settings and monitor are the user's.
         var wrapped = wrapper.Where(g => g.SteamAppId is not null).Select(g => g.SteamAppId!.Value).ToHashSet();
         foreach (var steam in SteamLibrary.Scan().Where(s => !wrapped.Contains(s.AppId)))
         {
@@ -50,7 +52,7 @@ public static class Library
                 withArt++;
             }
         }
-        Log.Info($"library: {games.Count} game(s), {wrapper.Count} from the Playdex Wrapper, {withArt} with local art");
+        Log.Info($"library: {games.Count} game(s), {wrapper.Count} added to Playdex, {withArt} with local art");
         return games;
     }
 
@@ -90,62 +92,25 @@ public static class Library
         JsonSerializer.Serialize(games.Values.ToList(), LibraryJson.Default.ListLibraryGame);
 
     /// <summary>
-    /// Each generated launcher (Playdex-*.exe in the config's launcher folder) has a .playdex.json manifest naming its
-    /// game id; the game's title, provider and executable come from that game in the install's config.
+    /// The games added to Playdex whose executable is on this PC. Each is started directly; its generated launcher
+    /// (the exe its Steam shortcut points at) is only looked up for Steam grid art.
     /// </summary>
     private static List<LibraryGame> WrapperGames(AppConfig config)
     {
         var games = new List<LibraryGame>();
-        var launchers = config.Storage.LauncherDirectory;
-        try
+        foreach (var game in config.Games.Values)
         {
-            if (!Directory.Exists(launchers))
+            if (game.Launch.ExecutablePath is not { } executable || !File.Exists(executable))
             {
-                return games;
+                continue; // Uninstalled or moved: not playable here.
             }
-            foreach (var manifestPath in Directory.EnumerateFiles(launchers, "*.playdex.json"))
-            {
-                var launcher = Path.ChangeExtension(Path.ChangeExtension(manifestPath, null), ".exe");
-                if (GameId(manifestPath) is not { Length: > 0 } gameId || !File.Exists(launcher))
-                {
-                    continue;
-                }
-                if (!config.Games.TryGetValue(gameId, out var game))
-                {
-                    Log.Info($"library: launcher {Path.GetFileName(launcher)} has no game '{gameId}' in the config");
-                    continue;
-                }
-                if (game.Launch.ExecutablePath is not { } executable || !File.Exists(executable))
-                {
-                    continue; // Uninstalled or moved: not playable here.
-                }
-                var title = string.IsNullOrWhiteSpace(game.DisplayName) ? gameId : game.DisplayName;
-                var isSteam = string.Equals(game.GameProvider, "steam", StringComparison.OrdinalIgnoreCase);
-                int? steamAppId = isSteam && int.TryParse(game.ApiGameId, out var appId) ? appId : null;
-                games.Add(new LibraryGame($"playdex-{gameId}", title, "playdex", steamAppId, null, launcher));
-            }
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            Log.Info($"library: Playdex Wrapper launchers unreadable: {ex.Message}");
+            var title = string.IsNullOrWhiteSpace(game.DisplayName) ? game.GameId : game.DisplayName;
+            var isSteam = string.Equals(game.GameProvider, "steam", StringComparison.OrdinalIgnoreCase);
+            int? steamAppId = isSteam && int.TryParse(game.ApiGameId, out var appId) ? appId : null;
+            var launcher = LauncherManager.GetLauncherPath(config.Storage, game);
+            games.Add(new LibraryGame(
+                $"playdex-{game.GameId}", title, "playdex", steamAppId, null, File.Exists(launcher) ? launcher : null, ConfigGameId: game.GameId));
         }
         return games;
-    }
-
-    private static string? GameId(string manifestPath)
-    {
-        try
-        {
-            using var manifest = JsonDocument.Parse(File.ReadAllBytes(manifestPath));
-            return manifest.RootElement.ValueKind == JsonValueKind.Object
-                && manifest.RootElement.TryGetProperty("gameId", out var id) && id.ValueKind == JsonValueKind.String
-                    ? id.GetString()
-                    : null;
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
-        {
-            Log.Info($"library: {manifestPath} unreadable: {ex.Message}");
-            return null;
-        }
     }
 }

@@ -179,10 +179,10 @@ public sealed class LauncherTests
     }
 
     [Fact]
-    public async Task TestPublishedLauncherIntegration()
+    public async Task TestPublishedRunLauncherIntegration()
     {
-        var publishedWrapper = Environment.GetEnvironmentVariable("PLAYDEX_PUBLISHED_WRAPPER");
-        if (string.IsNullOrWhiteSpace(publishedWrapper))
+        var publishedRun = Environment.GetEnvironmentVariable("PLAYDEX_PUBLISHED_RUN");
+        if (string.IsNullOrWhiteSpace(publishedRun))
         {
             return;
         }
@@ -208,7 +208,7 @@ public sealed class LauncherTests
 
         using var logging = TestLogging.CreateInDirectory(config.Storage.LogDirectory);
         var launcher = new LauncherManager(logging.CreateLogger<LauncherManager>())
-            .SynchronizeGame(config.Storage, game, configPath, publishedWrapper);
+            .SynchronizeGame(config.Storage, game, configPath, publishedRun);
         using var process = Process.Start(new ProcessStartInfo(launcher)
         {
             UseShellExecute = false
