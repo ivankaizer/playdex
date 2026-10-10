@@ -11,7 +11,11 @@ export type HostMessage =
   /** Launch request from outside the UI: playdex-launcher://launch/<gameId> or the host's --launch flag. */
   | { type: "launch"; gameId: string }
   /** Quick settings state, sent after every quick settings request. `error` is set when a change failed. */
-  | { type: "quick-settings" } & QuickSettingsState;
+  | ({ type: "quick-settings" } & QuickSettingsState)
+  /** The desktop app's reply to a {type:"desktop"} request (see host/desktop.ts). */
+  | { type: "desktop-result"; id: number; ok: boolean; result?: unknown; error?: unknown }
+  /** The desktop app's state changed (backups, updates). */
+  | { type: "desktop-state"; state: unknown };
 
 export type AudioOutput = { id: string; name: string; isDefault: boolean };
 export type DisplayState = {
@@ -39,7 +43,9 @@ export type UiMessage =
   | { type: "audio-output"; id: string }
   | { type: "hdr"; display: string; on: boolean }
   | { type: "refresh-rate"; display: string; hz: number }
-  | { type: "power"; action: PowerAction };
+  | { type: "power"; action: PowerAction }
+  /** A desktop app request (see host/desktop.ts). */
+  | { type: "desktop"; id: number; method: string; params?: object };
 
 interface WebView2 {
   postMessage(message: unknown): void;

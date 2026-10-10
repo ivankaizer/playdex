@@ -1,5 +1,5 @@
 import { Moon, SlidersHorizontal, Sun, Wifi } from "lucide-react";
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import {
   closeGame,
   launch,
@@ -23,8 +23,13 @@ import { focusDefault, focusEl, forgetGroups } from "./nav/focus";
 import { onAction } from "./nav/input";
 import { focusedGame, focusedKind, useStore } from "./nav/store";
 import { inHost, onHostMessage, signalAfterFrame } from "./host/bridge";
+import { isDesktop, loadDesktopState } from "./host/desktop";
 import { GamePage } from "./screens/GamePage";
 import { Library } from "./screens/Library";
+
+// Desktop-only screens: the full-screen launcher never downloads them.
+const Manage = lazy(() => import("./screens/Manage").then((m) => ({ default: m.Manage })));
+const Settings = lazy(() => import("./screens/Settings").then((m) => ({ default: m.Settings })));
 
 let readySent = false;
 
@@ -35,8 +40,21 @@ const LAYOUTS = [
 ] as const;
 type LayoutId = (typeof LAYOUTS)[number]["id"];
 
-const TABS = ["Home", "Library", "Playdex"] as const;
-type Tab = (typeof TABS)[number];
+/* The desktop app adds the management screens the WinForms Wrapper had: the games added to Playdex, and settings. */
+const ALL_TABS = ["Home", "Library", "Playdex", "Manage", "Settings"] as const;
+type Tab = (typeof ALL_TABS)[number];
+const TABS: readonly Tab[] = isDesktop ? ALL_TABS : ["Home", "Library", "Playdex"];
+
+/** The desktop app reloads the page after games change; the open tab survives that. */
+function initialTab(): Tab {
+  if (!isDesktop) return "Home";
+  try {
+    const saved = sessionStorage.getItem("pdx.tab");
+    return TABS.includes(saved as Tab) ? (saved as Tab) : "Home";
+  } catch {
+    return "Home";
+  }
+}
 
 function read<T extends string>(key: string, allowed: readonly T[], fallback: T): T {
   const fromUrl = new URLSearchParams(location.search).get(key);
@@ -61,7 +79,7 @@ function persist(key: string, value: string) {
 export function App() {
   const [layout, setLayout] = useState<LayoutId>(() => read("layout", LAYOUTS.map((l) => l.id), "ribbon"));
   const [theme, setTheme] = useState<"dark" | "light">(() => read("theme", ["dark", "light"], "dark"));
-  const [tab, setTab] = useState<Tab>("Home");
+  const [tab, setTab] = useState<Tab>(initialTab);
   const playing = useStore(launching);
   const gameOpen = useStore(openGameId);
   const settingsOpen = useStore(quickSettingsOpen);
@@ -71,6 +89,19 @@ export function App() {
     document.documentElement.dataset.theme = theme;
     persist("theme", theme);
   }, [theme]);
+
+  useEffect(() => {
+    if (!isDesktop) return;
+    try {
+      sessionStorage.setItem("pdx.tab", tab);
+    } catch {
+      /* storage unavailable */
+    }
+  }, [tab]);
+
+  useEffect(() => {
+    if (isDesktop) void loadDesktopState().catch(() => undefined);
+  }, []);
 
   useEffect(() => {
     persist("layout", layout);
@@ -230,6 +261,14 @@ export function App() {
           <GamePage key={gameOpen} gameId={gameOpen} />
         ) : tab === "Library" ? (
           <Library />
+        ) : tab === "Manage" ? (
+          <Suspense fallback={<main />}>
+            <Manage />
+          </Suspense>
+        ) : tab === "Settings" ? (
+          <Suspense fallback={<main />}>
+            <Settings />
+          </Suspense>
         ) : tab === "Home" ? (
           recentGames.length === 0 ? (
             <EmptyHome />

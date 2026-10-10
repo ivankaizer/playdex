@@ -280,6 +280,10 @@ img {
 }
 
 /* ---------- Hint bar ---------- */
+/* In the desktop app, controller hints only show while a controller is in use. */
+html[data-mode="desktop"][data-input="pointer"] .hints .hint {
+  display: none;
+}
 .hints {
   display: flex;
   align-items: center;
