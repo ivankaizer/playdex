@@ -68,7 +68,7 @@ public sealed class RunningGamesTests : IDisposable
         finally
         {
             Kill(elsewhere);
-            Directory.Delete(Path.GetDirectoryName(elsewhere)!, recursive: true);
+            DeleteDirectory(Path.GetDirectoryName(elsewhere)!);
         }
     }
 
@@ -79,7 +79,7 @@ public sealed class RunningGamesTests : IDisposable
     public void Dispose()
     {
         Kill(_game);
-        Directory.Delete(Path.GetDirectoryName(_game)!, recursive: true);
+        DeleteDirectory(Path.GetDirectoryName(_game)!);
     }
 
     private AppConfig Config(MonitorConfig monitor, string? launch = null)
@@ -103,9 +103,33 @@ public sealed class RunningGamesTests : IDisposable
             {
                 if (string.Equals(process.MainModule?.FileName, executable, StringComparison.OrdinalIgnoreCase))
                 {
-                    process.Kill();
+                    process.Kill(entireProcessTree: true);
                     process.WaitForExit();
                 }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Windows can keep a just-exited executable locked for a moment (the image unmapping, or Defender scanning the
+    /// fresh copy), so retry before giving up. A leftover temp folder must not fail a test.
+    /// </summary>
+    private static void DeleteDirectory(string path)
+    {
+        for (var attempt = 1; ; attempt++)
+        {
+            try
+            {
+                Directory.Delete(path, recursive: true);
+                return;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                if (attempt == 20)
+                {
+                    return;
+                }
+                Thread.Sleep(100);
             }
         }
     }
