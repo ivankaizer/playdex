@@ -2,6 +2,8 @@ name: Test
 
 on:
   pull_request:
+  push:
+    branches: [main]
 
 jobs:
   test:
@@ -78,4 +80,17 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
+    secrets: inherit
+
+  # A push to main that passes the tests builds the production images on the macserv runner and
+  # deploys them to https://playdex.dev (preview-kit's release workflow; see the "production"
+  # section of .preview/config.json). Roll back with `preview prod deploy main-<older sha>`.
+  production:
+    name: Production
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    uses: ivankaizer/preview-kit/.github/workflows/release.yml@v1
+    with:
+      runner: '["self-hosted","macserv"]'
+      tag: main-${{ github.sha }}
     secrets: inherit
