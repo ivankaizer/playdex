@@ -165,8 +165,8 @@ describe("SessionsPage", () => {
     expect(calls.some((call) => call.path.startsWith("/sessions?limit=10&offset=10&"))).toBe(true);
     expect(container.querySelectorAll("[data-session-row]")).toHaveLength(13);
     expect(screen.queryByRole("button", { name: /Load \d+ more/ })).toBeNull();
-    // Focus moves to the first newly loaded row.
-    expect(container.querySelector("[data-row-index='10']")).toHaveFocus();
+    // Focus moves to the first newly loaded row once loading has finished (an effect after the rows render).
+    await waitFor(() => expect(container.querySelector("[data-row-index='10']")).toHaveFocus());
 
     // A delete refreshes every loaded row, not just the first page.
     vi.spyOn(window, "confirm").mockReturnValue(true);
