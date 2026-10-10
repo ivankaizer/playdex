@@ -9,7 +9,14 @@ export type HostMessage =
   | { type: "home" }
   | { type: "session"; gameId: string; state: "starting" | "running" | "ended"; seconds: number }
   /** Launch request from outside the UI: playdex-launcher://launch/<gameId> or the host's --launch flag. */
-  | { type: "launch"; gameId: string };
+  | { type: "launch"; gameId: string }
+  /** Quick settings state, sent after every quick settings request. `error` is set when a change failed. */
+  | { type: "quick-settings" } & QuickSettingsState;
+
+export type AudioOutput = { id: string; name: string; isDefault: boolean };
+export type DisplayState = { id: string; name: string; hdrSupported: boolean; hdrOn: boolean };
+export type QuickSettingsState = { outputs: AudioOutput[]; displays: DisplayState[]; error?: string };
+export type PowerAction = "sleep" | "restart" | "shutdown";
 
 export type UiMessage =
   | { type: "ack"; id: number; presented?: boolean }
@@ -17,7 +24,12 @@ export type UiMessage =
   | { type: "home-ready"; reason: string }
   /** The host launches only games from its own library, by id. */
   | { type: "launch"; gameId: string }
-  | { type: "cancel"; gameId: string };
+  | { type: "cancel"; gameId: string }
+  /** Read the quick settings state; the host answers with a "quick-settings" message, as it does for the rest. */
+  | { type: "quick-settings" }
+  | { type: "audio-output"; id: string }
+  | { type: "hdr"; display: string; on: boolean }
+  | { type: "power"; action: PowerAction };
 
 interface WebView2 {
   postMessage(message: unknown): void;

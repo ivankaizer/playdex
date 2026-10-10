@@ -1,5 +1,6 @@
 import { gameById } from "./data/games";
 import { inHost, onHostMessage, postToHost, signalAfterFrame } from "./host/bridge";
+import { current, focusDefault, focusEl } from "./nav/focus";
 import { createStore } from "./nav/store";
 
 /** Game currently being launched / played (drives the launch overlay). */
@@ -65,4 +66,24 @@ export function openGame(gameId: string) {
 
 export function closeGame() {
   openGameId.set(null);
+}
+
+/** The quick settings panel (sound output, HDR, power), over whatever screen is open. */
+export const quickSettingsOpen = createStore(false);
+let quickSettingsOpener: HTMLElement | null = null;
+
+export function openQuickSettings() {
+  if (launching.get() || quickSettingsOpen.get()) return;
+  quickSettingsOpener = current();
+  quickSettingsOpen.set(true);
+}
+
+/** Close the panel and give focus back to whatever opened it. */
+export function closeQuickSettings() {
+  if (!quickSettingsOpen.get()) return;
+  quickSettingsOpen.set(false);
+  const opener = quickSettingsOpener;
+  quickSettingsOpener = null;
+  // After the screen behind is no longer inert.
+  window.setTimeout(() => (opener?.isConnected ? focusEl(opener) : focusDefault()));
 }

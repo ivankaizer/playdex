@@ -1,4 +1,4 @@
-import { Moon, Sun, Wifi } from "lucide-react";
+import { Moon, SlidersHorizontal, Sun, Wifi } from "lucide-react";
 import { useEffect, useState } from "react";
 import {
   closeGame,
@@ -7,10 +7,13 @@ import {
   leaveLaunch,
   openGame,
   openGameId,
+  openQuickSettings,
+  quickSettingsOpen,
   session,
   takeReturnFocus,
   toast,
 } from "./app-state";
+import { QuickSettings } from "./components/QuickSettings";
 import { Backdrop, Clock, Glyph, Hint, Logo } from "./components/shared";
 import { gameById, isInstalled, recentGames } from "./data/games";
 import { DossierHome } from "./homes/DossierHome";
@@ -61,6 +64,7 @@ export function App() {
   const [tab, setTab] = useState<Tab>("Home");
   const playing = useStore(launching);
   const gameOpen = useStore(openGameId);
+  const settingsOpen = useStore(quickSettingsOpen);
   const toastMsg = useStore(toast);
 
   useEffect(() => {
@@ -117,6 +121,10 @@ export function App() {
           setTab("Home");
           return true;
         }
+        if (a === "menu") {
+          openQuickSettings();
+          return true;
+        }
         if (a === "back" && openGameId.get()) {
           closeGame();
           return true;
@@ -144,7 +152,7 @@ export function App() {
 
   return (
     <>
-      <div className="screen" inert={playing ? true : undefined}>
+      <div className="screen" inert={playing || settingsOpen ? true : undefined}>
         <header className="topbar">
           <span className="brand">
             <span className="brand-dot" />
@@ -199,7 +207,17 @@ export function App() {
               {theme === "dark" ? <Sun /> : <Moon />}
             </button>
           </div>
-          <div className="status">
+          <div className="status" data-nav-group="status">
+            <button
+              className="icon-btn"
+              data-nav
+              data-kind="quick-settings"
+              aria-label="Quick settings"
+              aria-haspopup="dialog"
+              onClick={openQuickSettings}
+            >
+              <SlidersHorizontal />
+            </button>
             <Wifi aria-label="Online" />
             <Clock />
             <span className="avatar" aria-label="Signed in to Playdex">
@@ -229,6 +247,7 @@ export function App() {
         <HintBar onGamePage={!!gameOpen} onHome={tab === "Home"} />
       </div>
 
+      {settingsOpen && !playing && <QuickSettings />}
       {playing && <LaunchOverlay gameId={playing} />}
       {toastMsg && (
         <div className="toast" role="status">
@@ -260,6 +279,7 @@ function HintBar({ onGamePage, onHome }: { onGamePage: boolean; onHome: boolean 
       {onGamePage && <Hint glyph="B">Back</Hint>}
       <Hint glyph="LB">Sections</Hint>
       {onHome && !onGamePage && <Hint glyph="VIEW">Home layout</Hint>}
+      <Hint glyph="MENU">Quick settings</Hint>
       <span className="sync">
         <span className="sync-dot" />
         Synced with Playdex

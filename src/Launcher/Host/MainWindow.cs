@@ -201,8 +201,40 @@ internal sealed partial class MainWindow : Window
             case "cancel":
                 _sessions.Cancel(message.GetProperty("gameId").GetString()!);
                 break;
+            case "quick-settings":
+                PostQuickSettings(null, "read quick settings");
+                break;
+            case "audio-output":
+                var outputId = message.GetProperty("id").GetString()!;
+                PostQuickSettings(() => AudioOutputs.SetDefault(outputId), "switch the sound output");
+                break;
+            case "hdr":
+                var displayId = message.GetProperty("display").GetString()!;
+                var on = message.GetProperty("on").GetBoolean();
+                PostQuickSettings(() => Displays.SetHdr(displayId, on), on ? "turn HDR on" : "turn HDR off");
+                break;
+            case "power":
+                switch (message.GetProperty("action").GetString())
+                {
+                    case "sleep":
+                        PostQuickSettings(Power.Sleep, "put the PC to sleep");
+                        break;
+                    case "restart":
+                        PostQuickSettings(Power.Restart, "restart the PC");
+                        break;
+                    case "shutdown":
+                        PostQuickSettings(Power.ShutDown, "shut down the PC");
+                        break;
+                }
+                break;
         }
     }
+
+    /// <summary>Quick settings run off the UI thread; the page gets the fresh state (and any error) back.</summary>
+    private void PostQuickSettings(Action? change, string description) => _ = PostQuickSettingsAsync(change, description);
+
+    private async Task PostQuickSettingsAsync(Action? change, string description) =>
+        PostFromAnyThread(await QuickSettings.ApplyAsync(change, description));
 
     private void OnUiReady()
     {

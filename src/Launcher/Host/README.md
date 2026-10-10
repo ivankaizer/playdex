@@ -44,6 +44,7 @@ Then go to Settings → Gaming → Full screen experience → Home app → Playd
 | `--launch=GAMEID` | Launch a game once the UI is ready (also `playdex-launcher://launch/GAMEID`). Ids: `steam-<appid>`, `playdex-<wrapper game id>` |
 | `--no-suspend` | Keep the page running while a game is in front |
 | `--selftest-job` | Job Object exit-detection self-test |
+| `--selftest-quick-settings[=toggle]` | Log the sound outputs and HDR state; `=toggle` switches the sound output and each HDR display, checks, and switches back |
 
 ## Configuration
 
@@ -63,3 +64,14 @@ At startup the host lists the games on this PC and injects them into the page as
 Artwork is read in place from Steam, per image, in this order: the game's non-Steam shortcut grid art (`Steam\userdata\<user>\config\grid\<shortcut id>{p,_hero,_logo,}.*`, where the Playdex Wrapper puts SteamGridDB art; the shortcut id comes from `shortcuts.vdf`), custom grid art on its Steam app id, then Steam's artwork cache (`Steam\appcache\librarycache\<appid>\[<hash>\]`). Each user's grid folder is served as `https://<user id>.steam-grid.playdex/` and the cache as `https://steam-art.playdex/`; nothing else under `userdata` is exposed. Newer apps are only on the CDN under per-image hashes, so the fixed `cdn.cloudflare.steamstatic.com/steam/apps/<id>/...` URLs 404 for them; those URLs remain the fallback for each image none of these has.
 
 New games appear the next time the launcher starts.
+
+## Quick settings
+
+Menu on the controller (or the sliders button in the top bar, or `m`) opens a panel over the current screen. B or Menu closes it.
+
+- **Sound output:** the active playback devices; picking one makes it the default for every role (console, multimedia, communications), as Settings → Sound does. Listed with Core Audio's `IMMDeviceEnumerator`; set with `IPolicyConfig`, which is undocumented but stable since Windows 7 (EarTrumpet and similar tools use it).
+- **HDR:** one switch per active display that supports HDR, the same switch as Settings → Display → Use HDR (`DisplayConfigSetDeviceInfo` with `DISPLAYCONFIG_SET_HDR_STATE`, falling back to the pre-24H2 advanced color call).
+- **Power:** Sleep, Restart, Shut down. Each needs a second press within 4 s. Restart and shut down ask apps to close (never forced); shut down is hybrid when Fast startup is on, as in the Start menu. On Modern Standby PCs (most handhelds) Sleep turns the display off, which is what puts them to sleep; elsewhere it suspends.
+
+The page asks with `{type:"quick-settings"}`, `{type:"audio-output", id}`, `{type:"hdr", display, on}` and `{type:"power", action}`; the host answers each with the current state (`{type:"quick-settings", outputs, displays, error?}`). In a plain browser the panel shows stand-in devices.
+

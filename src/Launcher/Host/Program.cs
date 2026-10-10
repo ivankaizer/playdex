@@ -26,6 +26,9 @@ internal sealed record LaunchOptions(
     /// --launch=GAMEID                launch a game once the UI is ready (also playdex-launcher://launch/GAMEID)
     /// --no-suspend                   keep the page running while a game is in front
     /// --selftest-job                 run the Job Object exit-detection self-test and exit
+    /// --selftest-quick-settings[=toggle]
+    ///                                log the quick settings state (sound outputs, HDR); with =toggle, switch the sound
+    ///                                output and each HDR display, check, and switch back
     /// </summary>
     public static LaunchOptions Parse(string[] args)
     {
@@ -75,6 +78,10 @@ public static class Program
         if (args.Contains("--selftest-job"))
         {
             return SelfTest.JobExit();
+        }
+        if (args.FirstOrDefault(a => a.StartsWith("--selftest-quick-settings", StringComparison.Ordinal)) is { } quickSettings)
+        {
+            return SelfTest.QuickSettingsState(toggle: quickSettings.EndsWith("=toggle", StringComparison.Ordinal));
         }
 
         var instance = AppInstance.FindOrRegisterForKey("playdex-launcher");

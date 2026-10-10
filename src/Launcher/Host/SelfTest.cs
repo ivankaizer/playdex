@@ -44,4 +44,51 @@ internal static class SelfTest
         Log.Info($"selftest-job: {(failures == 0 ? "PASS" : $"FAIL ({failures})")}");
         return failures == 0 ? 0 : 1;
     }
+
+    /// <summary>
+    /// Logs what the quick settings panel would show. With <paramref name="toggle"/>: makes another sound output the
+    /// default and flips HDR on every display that supports it, reads each change back, then restores both.
+    /// </summary>
+    public static int QuickSettingsState(bool toggle)
+    {
+        var outputs = AudioOutputs.List();
+        var displays = Displays.List();
+        foreach (var output in outputs)
+        {
+            Log.Info($"selftest-quick-settings: output {(output.IsDefault ? "*" : " ")} {output.Name} [{output.Id}]");
+        }
+        foreach (var display in displays)
+        {
+            Log.Info($"selftest-quick-settings: display {display.Name} [{display.Id}] hdr supported={display.HdrSupported} on={display.HdrOn}");
+        }
+        if (!toggle)
+        {
+            Log.Info("selftest-quick-settings: PASS (read only)");
+            return 0;
+        }
+
+        var failures = 0;
+        if (outputs.FirstOrDefault(o => o.IsDefault) is { } original && outputs.FirstOrDefault(o => !o.IsDefault) is { } other)
+        {
+            AudioOutputs.SetDefault(other.Id);
+            var switched = AudioOutputs.List().Single(o => o.IsDefault).Id == other.Id;
+            AudioOutputs.SetDefault(original.Id);
+            var restored = AudioOutputs.List().Single(o => o.IsDefault).Id == original.Id;
+            failures += switched && restored ? 0 : 1;
+            Log.Info($"selftest-quick-settings: output switched={switched} restored={restored}");
+        }
+        foreach (var display in displays.Where(d => d.HdrSupported))
+        {
+            Displays.SetHdr(display.Id, !display.HdrOn);
+            Thread.Sleep(1500);
+            var flipped = Displays.List().Single(d => d.Id == display.Id).HdrOn == !display.HdrOn;
+            Displays.SetHdr(display.Id, display.HdrOn);
+            Thread.Sleep(1500);
+            var restored = Displays.List().Single(d => d.Id == display.Id).HdrOn == display.HdrOn;
+            failures += flipped && restored ? 0 : 1;
+            Log.Info($"selftest-quick-settings: {display.Name} hdr flipped={flipped} restored={restored}");
+        }
+        Log.Info($"selftest-quick-settings: {(failures == 0 ? "PASS" : $"FAIL ({failures})")}");
+        return failures == 0 ? 0 : 1;
+    }
 }
