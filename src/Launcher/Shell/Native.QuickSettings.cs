@@ -244,4 +244,30 @@ internal static unsafe partial class Native
     [return: MarshalAs(UnmanagedType.Bool)]
     public static partial bool AdjustTokenPrivileges(
         nint token, [MarshalAs(UnmanagedType.Bool)] bool disableAll, TokenPrivileges* newState, uint length, nint previous, nint returnLength);
+
+    // ---- Keyboard input (the NVIDIA overlay's hotkey) ----
+
+    /// <summary>INPUT with a KEYBDINPUT (x64: the union starts at 8 and is as large as MOUSEINPUT, 40 bytes in all).</summary>
+    [StructLayout(LayoutKind.Explicit, Size = 40)]
+    public struct KeyInput
+    {
+        [FieldOffset(0)] public uint Type;
+        [FieldOffset(8)] public ushort VirtualKey;
+        [FieldOffset(10)] public ushort ScanCode;
+        [FieldOffset(12)] public uint Flags;
+
+        public static KeyInput Create(ushort virtualKey, bool up) => new()
+        {
+            Type = 1, // INPUT_KEYBOARD
+            VirtualKey = virtualKey,
+            ScanCode = (ushort)MapVirtualKey(virtualKey, 0), // MAPVK_VK_TO_VSC
+            Flags = up ? 0x2u : 0, // KEYEVENTF_KEYUP
+        };
+    }
+
+    [LibraryImport("user32.dll", SetLastError = true)]
+    public static partial uint SendInput(uint count, KeyInput* inputs, int size);
+
+    [LibraryImport("user32.dll", EntryPoint = "MapVirtualKeyW")]
+    public static partial uint MapVirtualKey(uint code, uint mapType);
 }

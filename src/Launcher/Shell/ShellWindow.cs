@@ -277,6 +277,9 @@ internal sealed partial class ShellWindow : Window
                 var hz = message.GetProperty("hz").GetInt32();
                 PostQuickSettings(() => Displays.SetRefreshRate(rateDisplay, hz), $"switch to {hz} Hz");
                 break;
+            case "fps-counter":
+                PostQuickSettings(NvidiaOverlay.ToggleStatistics, "show or hide the FPS counter");
+                break;
             case "power":
                 switch (message.GetProperty("action").GetString())
                 {

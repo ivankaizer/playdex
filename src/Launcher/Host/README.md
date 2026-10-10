@@ -44,7 +44,7 @@ Then go to Settings → Gaming → Full screen experience → Home app → Playd
 | `--launch=GAMEID` | Launch a game once the UI is ready (also `playdex-launcher://launch/GAMEID`). Ids: `steam-<appid>`, `playdex-<wrapper game id>` |
 | `--no-suspend` | Keep the page running while a game is in front |
 | `--selftest-job` | Job Object exit-detection self-test |
-| `--selftest-quick-settings[=toggle]` | Log the sound outputs, HDR and refresh rates; `=toggle` switches the sound output, HDR and refresh rate of each display, checks, and switches back |
+| `--selftest-quick-settings[=toggle]` | Log the sound outputs, HDR, refresh rates and the FPS counter; `=toggle` switches the sound output, HDR and refresh rate of each display, checks, and switches back, then toggles the FPS counter twice |
 
 ## Configuration
 
@@ -72,7 +72,8 @@ Menu on the controller (or the sliders button in the top bar, or `m`) opens a pa
 - **Sound output:** the active playback devices; picking one makes it the default for every role (console, multimedia, communications), as Settings → Sound does. Listed with Core Audio's `IMMDeviceEnumerator`; set with `IPolicyConfig`, which is undocumented but stable since Windows 7 (EarTrumpet and similar tools use it).
 - **HDR:** one switch per active display that supports HDR, the same switch as Settings → Display → Use HDR (`DisplayConfigSetDeviceInfo` with `DISPLAYCONFIG_SET_HDR_STATE`, falling back to the pre-24H2 advanced color call).
 - **Refresh rate:** per display, the rates offered at its current resolution and colour depth (`EnumDisplaySettingsEx` on its GDI device); picking one keeps the resolution and is saved, as in Settings → Display → Advanced display (`ChangeDisplaySettingsEx` with `CDS_UPDATEREGISTRY`). Rates are whole Hz: this API reports 59.94 Hz as 59.
+- **FPS counter:** shows or hides the NVIDIA App's statistics overlay (FPS, GPU, CPU, latency) by pressing its hotkey, Alt+R unless rebound; the hotkey is read from the overlay's settings (`HKCU\Software\NVIDIA Corporation\Global\ShadowPlay\NVSPCAPS`, `PMOCOverlayHKey*`). Listed only while the NVIDIA overlay runs. NVIDIA has no API for it and keeps no readable on/off state, so it is a toggle, not a switch.
 - **Power:** Sleep, Restart, Shut down. Each needs a second press within 4 s. Restart and shut down ask apps to close (never forced); shut down is hybrid when Fast startup is on, as in the Start menu. On Modern Standby PCs (most handhelds) Sleep turns the display off, which is what puts them to sleep; elsewhere it suspends.
 
-The page asks with `{type:"quick-settings"}`, `{type:"audio-output", id}`, `{type:"hdr", display, on}`, `{type:"refresh-rate", display, hz}` and `{type:"power", action}`; the host answers each with the current state (`{type:"quick-settings", outputs, displays, error?}`). In a plain browser the panel shows stand-in devices.
+The page asks with `{type:"quick-settings"}`, `{type:"audio-output", id}`, `{type:"hdr", display, on}`, `{type:"refresh-rate", display, hz}`, `{type:"fps-counter"}` and `{type:"power", action}`; the host answers each with the current state (`{type:"quick-settings", outputs, displays, fpsCounter?, error?}`). In a plain browser the panel shows stand-in devices.
 

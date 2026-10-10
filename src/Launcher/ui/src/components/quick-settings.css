@@ -91,6 +91,12 @@
   height: 1.05rem;
   color: rgb(var(--accent));
 }
+.qs-row-action {
+  flex: none;
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: rgb(var(--muted));
+}
 .qs-row-off {
   opacity: 0.6;
 }

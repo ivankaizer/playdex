@@ -13,15 +13,17 @@ internal sealed record DisplayState(
     string Id, string Name, bool HdrSupported, bool HdrOn, int RefreshRate, IReadOnlyList<int> RefreshRates);
 
 /// <summary>What the quick settings panel shows; posted to the page with type "quick-settings".</summary>
-internal sealed record QuickSettingsState(string Type, IReadOnlyList<AudioOutput> Outputs, IReadOnlyList<DisplayState> Displays, string? Error);
+/// <param name="FpsCounter">The NVIDIA statistics overlay; null (left out) when it isn't available.</param>
+internal sealed record QuickSettingsState(
+    string Type, IReadOnlyList<AudioOutput> Outputs, IReadOnlyList<DisplayState> Displays, FpsCounter? FpsCounter, string? Error);
 
 [JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase, DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull)]
 [JsonSerializable(typeof(QuickSettingsState))]
 internal sealed partial class QuickSettingsJson : JsonSerializerContext;
 
 /// <summary>
-/// The quick settings panel's system controls: the default sound output, HDR and refresh rate per display, and sleep,
-/// restart and shut down. Every call blocks briefly (COM, display configuration), so callers run it off the UI thread; calls are
+/// The quick settings panel's system controls: the default sound output, HDR and refresh rate per display, the NVIDIA
+/// FPS counter, and sleep, restart and shut down. Every call blocks briefly (COM, display configuration), so callers run it off the UI thread; calls are
 /// serialized so two toggles never overlap.
 /// </summary>
 internal static class QuickSettings
@@ -50,7 +52,9 @@ internal static class QuickSettings
                         error = $"Couldn't {description}.";
                     }
                 }
-                return JsonSerializer.Serialize(new QuickSettingsState("quick-settings", ReadOutputs(), ReadDisplays(), error), QuickSettingsJson.Default.QuickSettingsState);
+                return JsonSerializer.Serialize(
+                    new QuickSettingsState("quick-settings", ReadOutputs(), ReadDisplays(), NvidiaOverlay.Read(), error),
+                    QuickSettingsJson.Default.QuickSettingsState);
             });
         }
         finally

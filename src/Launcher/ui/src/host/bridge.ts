@@ -28,7 +28,15 @@ export type DisplayState = {
   /** Rates at the current resolution, ascending. */
   refreshRates: number[];
 };
-export type QuickSettingsState = { outputs: AudioOutput[]; displays: DisplayState[]; error?: string };
+/** The NVIDIA App's statistics overlay; `hotkey` as NVIDIA shows it ("Alt+R"). */
+export type FpsCounter = { hotkey: string };
+export type QuickSettingsState = {
+  outputs: AudioOutput[];
+  displays: DisplayState[];
+  /** Absent when the NVIDIA overlay isn't running. */
+  fpsCounter?: FpsCounter;
+  error?: string;
+};
 export type PowerAction = "sleep" | "restart" | "shutdown";
 
 export type UiMessage =
@@ -43,6 +51,8 @@ export type UiMessage =
   | { type: "audio-output"; id: string }
   | { type: "hdr"; display: string; on: boolean }
   | { type: "refresh-rate"; display: string; hz: number }
+  /** Press the NVIDIA statistics overlay's hotkey (it toggles; the overlay's state can't be read). */
+  | { type: "fps-counter" }
   | { type: "power"; action: PowerAction }
   /** A desktop app request (see host/desktop.ts). */
   | { type: "desktop"; id: number; method: string; params?: object };

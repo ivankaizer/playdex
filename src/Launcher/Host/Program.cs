@@ -16,8 +16,9 @@ namespace Playdex.Launcher.Host;
 /// Flags beyond <see cref="LaunchOptions"/>:
 /// --selftest-job                 run the Job Object exit-detection self-test and exit
 /// --selftest-quick-settings[=toggle]
-///                                log the quick settings state (sound outputs, HDR, refresh rates); with =toggle,
-///                                switch the sound output, HDR and refresh rate of each display, check, switch back
+///                                log the quick settings state (sound outputs, HDR, refresh rates, FPS counter); with
+///                                =toggle, switch the sound output, HDR and refresh rate of each display, check, switch
+///                                back, then toggle the FPS counter twice
 /// </remarks>
 public static class Program
 {

@@ -48,7 +48,7 @@ internal static class SelfTest
     /// <summary>
     /// Logs what the quick settings panel would show. With <paramref name="toggle"/>: makes another sound output the
     /// default, flips HDR on every display that supports it, switches each display to another refresh rate, reads each
-    /// change back, then restores all of them.
+    /// change back, then restores all of them; then toggles the NVIDIA FPS counter twice, 3 s apart.
     /// </summary>
     public static int QuickSettingsState(bool toggle)
     {
@@ -62,6 +62,8 @@ internal static class SelfTest
         {
             Log.Info($"selftest-quick-settings: display {display.Name} [{display.Id}] hdr supported={display.HdrSupported} on={display.HdrOn} refresh={display.RefreshRate} Hz of [{string.Join(", ", display.RefreshRates)}]");
         }
+        var fpsCounter = NvidiaOverlay.Read();
+        Log.Info($"selftest-quick-settings: fps counter {(fpsCounter is null ? "unavailable" : $"NVIDIA overlay, {fpsCounter.Hotkey}")}");
         if (!toggle)
         {
             Log.Info("selftest-quick-settings: PASS (read only)");
@@ -100,6 +102,14 @@ internal static class SelfTest
             var restored = Displays.List().Single(d => d.Id == display.Id).RefreshRate == display.RefreshRate;
             failures += switched && restored ? 0 : 1;
             Log.Info($"selftest-quick-settings: {display.Name} refresh {display.RefreshRate} -> {otherRate} Hz switched={switched} restored={restored}");
+        }
+        if (fpsCounter is not null)
+        {
+            // The overlay's state can't be read back: pressed twice, so it ends as it was; check the screen in between.
+            NvidiaOverlay.ToggleStatistics();
+            Thread.Sleep(3000);
+            NvidiaOverlay.ToggleStatistics();
+            Log.Info("selftest-quick-settings: fps counter toggled twice");
         }
         Log.Info($"selftest-quick-settings: {(failures == 0 ? "PASS" : $"FAIL ({failures})")}");
         return failures == 0 ? 0 : 1;

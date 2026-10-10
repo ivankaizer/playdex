@@ -1,4 +1,4 @@
-import { Check, Gauge, Headphones, Monitor, Moon, Power, RotateCcw, Speaker, Sun } from "lucide-react";
+import { Activity, Check, Gauge, Headphones, Monitor, Moon, Power, RotateCcw, Speaker, Sun } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { closeQuickSettings, showToast } from "../app-state";
 import {
@@ -22,6 +22,7 @@ const DEMO: QuickSettingsState = {
     { id: "speakers", name: "Speakers (Realtek(R) Audio)", isDefault: false },
   ],
   displays: [{ id: "tv", name: "LG TV", hdrSupported: true, hdrOn: false, refreshRate: 60, refreshRates: [24, 30, 50, 60, 100, 120] }],
+  fpsCounter: { hotkey: "Alt+R" },
 };
 
 const POWER: { action: PowerAction; label: string; armed: string; done: string; Icon: typeof Power }[] = [
@@ -47,7 +48,7 @@ function OutputIcon({ output }: { output: AudioOutput }) {
 }
 
 /**
- * Quick settings: the default sound output, HDR and refresh rate per display, and sleep / restart / shut down. A panel over the current
+ * Quick settings: the default sound output, HDR and refresh rate per display, the NVIDIA FPS counter, and sleep / restart / shut down. A panel over the current
  * screen (which is inert while it is open); B or Menu closes it. Power actions take a second press to confirm.
  */
 export function QuickSettings() {
@@ -62,7 +63,7 @@ export function QuickSettings() {
         return;
       }
       if (m.type !== "quick-settings") return;
-      setState({ outputs: m.outputs, displays: m.displays });
+      setState({ outputs: m.outputs, displays: m.displays, fpsCounter: m.fpsCounter });
       if (m.error) showToast(m.error);
     });
     postToHost({ type: "quick-settings" });
@@ -124,6 +125,15 @@ export function QuickSettings() {
     setArmed(null);
     setState((s) => s && { ...s, displays: s.displays.map((d) => (d.id === id ? { ...d, refreshRate: hz } : d)) });
     postToHost({ type: "refresh-rate", display: id, hz });
+  }
+
+  function toggleFpsCounter() {
+    setArmed(null);
+    if (!inHost) {
+      showToast("The FPS counter works in the Playdex launcher on Windows");
+      return;
+    }
+    postToHost({ type: "fps-counter" });
   }
 
   function power(action: PowerAction) {
@@ -262,6 +272,25 @@ export function QuickSettings() {
             ))
           )}
         </section>
+
+        {state?.fpsCounter && (
+          <section className="qs-section" aria-labelledby="qs-performance">
+            <h2 id="qs-performance" className="label">
+              Performance
+            </h2>
+            {/* NVIDIA's overlay keeps its on/off state to itself, so this is a toggle, not a switch. */}
+            <div className="qs-list" data-nav-group="qs-performance">
+              <button className="qs-row" data-nav data-kind="qs-fps" onClick={toggleFpsCounter}>
+                <Activity aria-hidden />
+                <span className="qs-row-text">
+                  <span className="qs-row-name">FPS counter</span>
+                  <small>NVIDIA overlay · {state.fpsCounter.hotkey}</small>
+                </span>
+                <span className="qs-row-action">Show / hide</span>
+              </button>
+            </div>
+          </section>
+        )}
 
         <section className="qs-section" aria-labelledby="qs-power">
           <h2 id="qs-power" className="label">
