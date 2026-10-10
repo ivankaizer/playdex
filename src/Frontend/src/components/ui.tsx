@@ -1,5 +1,6 @@
 import { useRef, useState, type CSSProperties, type KeyboardEvent, type MouseEvent, type ReactNode } from "react";
 import { cx } from "@/lib/cx";
+import { formatPercent, initialOf } from "@/lib/format";
 
 /** Kicker over a card title, with optional right-side actions. */
 export function CardHeading({
@@ -64,7 +65,7 @@ export function Cover({
   initialClassName?: string;
 }) {
   const [failed, setFailed] = useState(false);
-  const initial = title.trim().charAt(0).toUpperCase() || "?";
+  const initial = initialOf(title);
   const showImage = !!src && !failed;
   return (
     <div
@@ -98,9 +99,7 @@ export interface DonutSegment {
 
 /** Rounded share of the total, as "52%" (or "<1%" for a sliver). */
 function sharePercent(value: number, total: number): string {
-  if (total <= 0) return "0%";
-  const pct = (value / total) * 100;
-  return pct > 0 && pct < 1 ? "<1%" : `${Math.round(pct)}%`;
+  return formatPercent(value, total);
 }
 
 function segmentHoverText(segment: DonutSegment, total: number): string {

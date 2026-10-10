@@ -87,3 +87,44 @@ function toDate(date: Date | string): Date {
 function pad2(value: number): string {
   return String(value).padStart(2, "0");
 }
+
+const integerFormat = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 });
+const pluralRules = new Intl.PluralRules("en-US");
+
+/** Grouped whole number, e.g. "12,480". */
+export function formatCount(value: number): string {
+  return integerFormat.format(Number.isFinite(value) ? value : 0);
+}
+
+/** "1 session" / "12,480 sessions"; `plural` defaults to `${one}s`. */
+export function formatCountNoun(value: number, one: string, plural = `${one}s`): string {
+  const safe = Number.isFinite(value) ? value : 0;
+  return `${formatCount(safe)} ${pluralRules.select(safe) === "one" ? one : plural}`;
+}
+
+/** Hours with one decimal, shown as "<0.1h" for a non-zero value that would round to zero. */
+export function formatHoursShort(seconds: number): string {
+  if (!Number.isFinite(seconds) || seconds <= 0) return "0h";
+  const hours = seconds / 3600;
+  if (hours < 0.05) return "<0.1h";
+  return `${new Intl.NumberFormat("en-US", { maximumFractionDigits: 1 }).format(hours)}h`;
+}
+
+/** Rounded share as "52%", or "<1%" for a non-zero sliver. */
+export function formatPercent(value: number, total: number): string {
+  if (!(total > 0) || !(value > 0)) return "0%";
+  const pct = (value / total) * 100;
+  return pct < 1 ? "<1%" : `${Math.round(pct)}%`;
+}
+
+/** First letter or digit grapheme of a name, uppercased ("?" when there is none). Safe for emoji and CJK. */
+export function initialOf(text: string | null | undefined): string {
+  const value = (text ?? "").trim();
+  if (!value) return "?";
+  const graphemes =
+    typeof Intl.Segmenter === "function"
+      ? Array.from(new Intl.Segmenter(undefined, { granularity: "grapheme" }).segment(value), (part) => part.segment)
+      : Array.from(value);
+  const first = graphemes.find((grapheme) => /[\p{L}\p{N}]/u.test(grapheme)) ?? graphemes[0];
+  return first.toUpperCase();
+}

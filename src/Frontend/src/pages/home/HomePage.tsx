@@ -3,6 +3,7 @@ import { AppFooter } from "@/components/AppFooter";
 import { PlatformChips } from "@/components/PlatformChips";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { apiRequest, errorMessage } from "@/lib/api";
+import { initialOf } from "@/lib/format";
 import { authSession, type LoginRequest, type LoginResponse, type MeResponse } from "@/lib/auth";
 import { logout } from "@/lib/navigation";
 import { useTheme } from "@/lib/theme";
@@ -78,7 +79,7 @@ export function HomePage() {
   const openDashboard = () => window.location.assign("/dashboard");
   const focusLogin = () => emailInputRef.current?.focus();
   const label = profileLabel(state);
-  const initial = state.sessionEmail.trim().charAt(0).toUpperCase() || "?";
+  const initial = initialOf(state.sessionEmail);
 
   return (
     <main className="pdx-page relative px-4 pb-10 pt-6 sm:px-8 sm:pt-8">
