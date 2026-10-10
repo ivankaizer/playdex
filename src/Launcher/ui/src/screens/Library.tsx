@@ -1,0 +1,180 @@
+import { Download, MonitorSmartphone } from "lucide-react";
+import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { openGame } from "../app-state";
+import { Cover } from "../components/shared";
+import { fmtHours, games, isInstalled, isOnPc, recentGames, SOURCE_LABEL, type Game } from "../data/games";
+import { playdexGame, playdexSummary } from "../data/playdex";
+import { useStore } from "../nav/store";
+import "./library.css";
+
+/* By source: Steam's own games, and local games (added to Playdex through the desktop app / Wrapper). */
+const SCOPES = [
+  { id: "all", label: "All", test: () => true, empty: "Nothing here yet." },
+  { id: "steam", label: "Steam", test: (g: Game) => g.source === "steam", empty: "No Steam games installed." },
+  {
+    id: "local",
+    label: "Local",
+    test: (g: Game) => g.source === "playdex",
+    empty: "Games you add in the Playdex desktop app show up here.",
+  },
+] as const;
+
+const lastPlayedRank = new Map(recentGames.map((r, i) => [r.game.id, i]));
+const SORTS = [
+  {
+    id: "recent",
+    label: "Recent",
+    cmp: (a: Game, b: Game) =>
+      (lastPlayedRank.get(a.id) ?? 1e9) - (lastPlayedRank.get(b.id) ?? 1e9) || a.title.localeCompare(b.title),
+  },
+  { id: "az", label: "A–Z", cmp: (a: Game, b: Game) => a.title.localeCompare(b.title) },
+  { id: "most", label: "Most played", cmp: (a: Game, b: Game) => b.totalMinutes - a.totalMinutes },
+] as const;
+
+type ScopeId = (typeof SCOPES)[number]["id"];
+type SortId = (typeof SORTS)[number]["id"];
+
+/* Grid geometry in rem; the virtualizer converts with the live root font size. */
+const COL_W = 9.6;
+const GAP_X = 1.1;
+const ROW_H = 18.2;
+const OVERSCAN_ROWS = 2;
+
+export function Library() {
+  const [scope, setScope] = useState<ScopeId>("all");
+  const [sort, setSort] = useState<SortId>("recent");
+
+  // Filtered and sorted once per choice, never per render or per focus move.
+  const list = useMemo(() => {
+    const s = SCOPES.find((x) => x.id === scope)!;
+    const o = SORTS.find((x) => x.id === sort)!;
+    return games.filter(s.test).sort(o.cmp);
+  }, [scope, sort]);
+
+  return (
+    <main className="library">
+      <header className="lib-head">
+        <div className="seg" role="group" aria-label="Source" data-nav-group="scope">
+          {SCOPES.map((s) => (
+            <button
+              key={s.id}
+              className="seg-btn"
+              aria-pressed={scope === s.id}
+              data-nav
+              data-kind="filter"
+              onClick={() => setScope(s.id)}
+            >
+              {s.label}
+              <span className="lib-count num">{games.filter(s.test).length}</span>
+            </button>
+          ))}
+        </div>
+        <span className="topbar-spacer" />
+        <span className="label">Sort</span>
+        <div className="seg" role="group" aria-label="Sort" data-nav-group="sort">
+          {SORTS.map((s) => (
+            <button
+              key={s.id}
+              className="seg-btn"
+              aria-pressed={sort === s.id}
+              data-nav
+              data-kind="filter"
+              onClick={() => setSort(s.id)}
+            >
+              {s.label}
+            </button>
+          ))}
+        </div>
+      </header>
+      <CoverGrid key={`${scope}-${sort}`} list={list} empty={SCOPES.find((x) => x.id === scope)!.empty} />
+    </main>
+  );
+}
+
+/** Row-virtualized grid: only the rows in view (plus overscan) are mounted, whatever the library size. */
+function CoverGrid({ list, empty }: { list: Game[]; empty: string }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [box, setBox] = useState({ w: 0, h: 0, rem: 16 });
+  const [range, setRange] = useState({ first: 0, last: 3 });
+
+  useLayoutEffect(() => {
+    const el = ref.current!;
+    const measure = () =>
+      setBox({ w: el.clientWidth, h: el.clientHeight, rem: parseFloat(getComputedStyle(document.documentElement).fontSize) });
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  const cols = Math.max(1, Math.floor((box.w / box.rem + GAP_X) / (COL_W + GAP_X)));
+  const rows = Math.ceil(list.length / cols);
+  const rowPx = ROW_H * box.rem;
+
+  useEffect(() => {
+    const el = ref.current!;
+    const update = () => {
+      const first = Math.max(0, Math.floor(el.scrollTop / rowPx) - OVERSCAN_ROWS);
+      const last = Math.min(rows - 1, Math.ceil((el.scrollTop + el.clientHeight) / rowPx) + OVERSCAN_ROWS);
+      setRange((r) => (r.first === first && r.last === last ? r : { first, last }));
+    };
+    update();
+    el.addEventListener("scroll", update, { passive: true });
+    return () => el.removeEventListener("scroll", update);
+  }, [rowPx, rows, box.h]);
+
+  const rowEls = [];
+  for (let r = range.first; r <= range.last && r < rows; r++) {
+    rowEls.push(
+      <div key={r} className="lib-row" style={{ transform: `translateY(${r * ROW_H}rem)`, gridTemplateColumns: `repeat(${cols}, ${COL_W}rem)` }}>
+        {list.slice(r * cols, r * cols + cols).map((g, i) => (
+          <CoverItem key={g.id} game={g} isDefault={r === 0 && i === 0} />
+        ))}
+      </div>,
+    );
+  }
+
+  return (
+    <div className="lib-scroll" ref={ref} data-scroll="y" data-scroll-center data-nav-group="grid">
+      {list.length === 0 ? (
+        <p className="lib-empty">{empty}</p>
+      ) : (
+        <div className="lib-canvas" style={{ height: `${rows * ROW_H}rem` }}>
+          {rowEls}
+        </div>
+      )}
+    </div>
+  );
+}
+
+const CoverItem = memo(function CoverItem({ game, isDefault }: { game: Game; isDefault: boolean }) {
+  const onPc = isOnPc(game);
+  const installed = isInstalled(game);
+  // Hours played as Playdex has them; "—" for a game with no Playdex sessions.
+  const played = playdexGame(useStore(playdexSummary), game);
+  return (
+    <button
+      className="lcover"
+      data-nav
+      data-nav-default={isDefault ? "" : undefined}
+      data-game={game.id}
+      data-kind={installed ? "cover" : "cover-off"}
+      data-state={installed ? undefined : onPc ? "missing" : "elsewhere"}
+      onClick={() => openGame(game.id)}
+    >
+      <span className="lcover-art">
+        <Cover game={game} kind="portrait" />
+        {!installed && (
+          <span className="lcover-badge">
+            {onPc ? <Download /> : <MonitorSmartphone />}
+            {onPc ? "Not installed" : SOURCE_LABEL[game.source]}
+          </span>
+        )}
+      </span>
+      <span className="lcover-title">{game.title}</span>
+      <span className="lcover-sub num">
+        {fmtHours(played ? Math.round(played.totalSeconds / 60) : 0)} · {SOURCE_LABEL[game.source]}
+      </span>
+    </button>
+  );
+});

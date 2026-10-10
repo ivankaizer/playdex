@@ -1,0 +1,76 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    Windows-only: WinUI 3 + WebView2, packaged as MSIX for the Full Screen Experience. Not in Playdex.sln because the
+    solution is built on Linux in CI and the Windows App SDK XAML compiler only runs on Windows.
+
+    Dev (unpackaged, loads http://localhost:5190):  dotnet run
+    MSIX (packaged, serves ../ui/dist):             see README.md
+  -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows10.0.26100.0</TargetFramework>
+    <TargetPlatformMinVersion>10.0.26100.0</TargetPlatformMinVersion>
+    <SupportedOSPlatformVersion>10.0.26100.0</SupportedOSPlatformVersion>
+    <RootNamespace>Playdex.Launcher.Host</RootNamespace>
+    <AssemblyName>Playdex.Launcher</AssemblyName>
+    <Platforms>x64;ARM64</Platforms>
+    <RuntimeIdentifiers>win-x64;win-arm64</RuntimeIdentifiers>
+    <RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == '' And '$(Platform)' == 'ARM64'">win-arm64</RuntimeIdentifier>
+    <RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == ''">win-x64</RuntimeIdentifier>
+    <UseWinUI>true</UseWinUI>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <DefineConstants>$(DefineConstants);DISABLE_XAML_GENERATED_MAIN</DefineConstants>
+
+    <!-- No Windows App SDK runtime install needed, packaged or not. -->
+    <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
+    <SelfContained>true</SelfContained>
+    <EnableMsixTooling>true</EnableMsixTooling>
+    <WindowsPackageType Condition="'$(PackageMsix)' != 'true'">None</WindowsPackageType>
+    <AppxCustomCapabilityCcd>CustomCapability.SCCD</AppxCustomCapabilityCcd>
+
+    <PublishAot Condition="'$(Configuration)' == 'Release'">true</PublishAot>
+    <ConcurrentGarbageCollection>false</ConcurrentGarbageCollection>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <TieredPGO>true</TieredPGO>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(PackageMsix)' == 'true'">
+    <GenerateAppxPackageOnBuild>true</GenerateAppxPackageOnBuild>
+    <AppxBundle>Never</AppxBundle>
+    <AppxPackageSigningEnabled Condition="'$(PackageCertificateKeyFile)' != ''">true</AppxPackageSigningEnabled>
+    <AppxPackageDir>$(MSBuildProjectDirectory)\AppPackages\</AppxPackageDir>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.WindowsAppSDK" />
+    <ProjectReference Include="..\..\Playdex.Core\Playdex.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The window, bridge, input and quick settings shared with the desktop app (src/Desktop). -->
+    <Compile Include="..\Shell\**\*.cs" LinkBase="Shell" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Manifest Include="$(ApplicationManifest)" />
+    <Content Include="Assets\**" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="CustomCapability.SCCD" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="Public\**" CopyToOutputDirectory="PreserveNewest" />
+    <!-- Release builds serve the built UI from disk through a WebView2 virtual host. Run `bun run build` in ../ui first. -->
+    <Content Include="..\ui\dist\**" Link="ui\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <!--
+    The packaging targets rewrite TargetDeviceFamily from TargetPlatformMinVersion (10.0.26100.0) and offer no opt-out.
+    FSE home apps need build 26100.7019, so patch the generated manifest before it is packaged.
+  -->
+  <Target Name="PlaydexSetFseMinVersion" AfterTargets="_GenerateCurrentProjectAppxManifest" Condition="'$(PackageMsix)' == 'true'">
+    <PropertyGroup>
+      <_PlaydexManifest>$([System.IO.File]::ReadAllText('$(FinalAppxManifestName)'))</_PlaydexManifest>
+      <_PlaydexManifest>$([System.Text.RegularExpressions.Regex]::Replace('$(_PlaydexManifest)', 'MinVersion="10\.0\.26100\.0"', 'MinVersion="10.0.26100.7019"'))</_PlaydexManifest>
+      <_PlaydexManifest>$([System.Text.RegularExpressions.Regex]::Replace('$(_PlaydexManifest)', 'MaxVersionTested="[0-9.]+"', 'MaxVersionTested="10.0.26200.0"'))</_PlaydexManifest>
+    </PropertyGroup>
+    <WriteLinesToFile File="$(FinalAppxManifestName)" Lines="$(_PlaydexManifest)" Overwrite="true" WriteOnlyWhenDifferent="true" />
+  </Target>
+</Project>

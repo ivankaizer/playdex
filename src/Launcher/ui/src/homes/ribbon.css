@@ -1,0 +1,289 @@
+/* The heading sits above the games only, so the rail lines up with the ribbon's top and the cards' bottom. */
+.ribbon-home {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 19rem;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 0.8rem 1.5rem;
+  min-height: 0;
+}
+
+/* Whole-screen art follows focus, kept faint so tiles stay the subject. */
+.ribbon-backdrop {
+  position: fixed;
+  z-index: -1;
+  opacity: 0.22;
+  mask-image: linear-gradient(180deg, #000 0%, transparent 85%);
+}
+:root[data-theme="light"] .ribbon-backdrop {
+  opacity: 0.16;
+}
+
+/*
+ * ---------- Ribbon: the last played game, the grid's lead tile ----------
+ * The whole first row, wide like the hero art (Steam heroes are about 3:1); the other recent games are wide cards
+ * in the row below.
+ */
+.ribbon {
+  position: relative;
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: flex-end;
+  min-height: 0;
+  border-radius: 1.4rem;
+  background: var(--live-bg);
+  border: 1px solid rgb(var(--mint-line));
+  box-shadow: var(--card-shadow);
+  overflow: hidden;
+  text-align: left;
+  transition: transform 0.2s var(--ease-out);
+}
+.ribbon[data-focused] {
+  transform: scale(1.015);
+  z-index: 1;
+  box-shadow: var(--lift-shadow);
+}
+.ribbon-scrim {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(0deg, rgb(var(--scrim) / 0.9) 0%, transparent 55%),
+    linear-gradient(90deg, rgb(var(--scrim) / 0.8) 0%, rgb(var(--scrim) / 0.45) 32%, transparent 58%);
+}
+.ribbon-body {
+  position: relative;
+  display: grid;
+  justify-items: start;
+  gap: 0.7rem;
+  min-width: 0;
+  padding: 1.6rem 1.8rem 1.7rem;
+}
+.ribbon-logo {
+  height: 4.6rem;
+  max-width: 24rem;
+  object-fit: contain;
+  object-position: left bottom;
+  filter: drop-shadow(0 0.2rem 0.6rem rgba(0, 0, 0, 0.45));
+}
+.ribbon-title {
+  margin: 0;
+  font-size: 2.4rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.05;
+}
+.ribbon-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  font-size: 0.82rem;
+  color: rgb(var(--ink-2));
+}
+.ribbon-meta b {
+  color: rgb(var(--ink));
+  font-weight: 600;
+}
+.ribbon-cta {
+  margin-top: 0.3rem;
+}
+.ribbon[data-focused] .ribbon-cta {
+  background: rgb(var(--pill));
+  color: rgb(var(--pill-ink));
+}
+
+/* ---------- Jump back in ---------- */
+/* Its heading and grid are placed in the home's grid directly. */
+.jump {
+  display: contents;
+}
+.jump > .section-h {
+  grid-column: 1;
+  grid-row: 1;
+}
+.jump > .jump-grid {
+  grid-column: 1;
+  grid-row: 2;
+}
+.section-h {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+}
+.jump-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  /* The ribbon takes the height the cards leave. */
+  grid-template-rows: minmax(0, 1fr) auto;
+  gap: 1.1rem 1.2rem;
+  min-height: 0;
+}
+.jtile {
+  display: grid;
+  grid-template-rows: auto auto;
+  align-self: start;
+  border-radius: 1.1rem;
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  transition: transform 0.2s var(--ease-out);
+}
+.jtile::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: var(--lift-shadow);
+  opacity: 0;
+  transition: opacity 0.2s var(--ease-out);
+  pointer-events: none;
+}
+.jtile[data-focused] {
+  transform: translateY(-0.25rem) scale(1.035);
+  z-index: 1;
+}
+.jtile[data-focused]::after {
+  opacity: 1;
+}
+/* Steam's capsule art, wide (616 x 353), shown whole. */
+.jtile-art {
+  border-radius: 1.1rem 1.1rem 0 0;
+  aspect-ratio: 616 / 353;
+  font-size: 1.1rem;
+}
+.jtile-foot {
+  display: grid;
+  gap: 0.2rem;
+  padding: 0.65rem 0.9rem 0.75rem;
+}
+.jtile-title {
+  font-size: 0.84rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.jtile-sub {
+  font-size: 0.66rem;
+  color: rgb(var(--muted));
+}
+
+/* ---------- Playdex rail ---------- */
+.rail {
+  grid-column: 2;
+  grid-row: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 1.3rem;
+  padding: 1.5rem 1.4rem;
+  overflow: hidden;
+}
+.rail-block {
+  display: grid;
+  gap: 0.55rem;
+}
+.rail-big {
+  margin: 0.2rem 0 0;
+  font-size: 2.6rem;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  line-height: 1;
+}
+.rail-sub {
+  margin: 0;
+  font-size: 0.72rem;
+  color: rgb(var(--muted));
+}
+.rail-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+.rail-val {
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: rgb(var(--ink-2));
+}
+.rail-top ol {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.55rem;
+}
+.rail-top li {
+  display: grid;
+  grid-template-columns: 1.7rem minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.7rem;
+}
+/* Playdex's capsule art, or the title's initial. */
+.rail-thumb {
+  width: 1.7rem;
+  aspect-ratio: 2 / 3;
+  border-radius: 0.35rem;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  background: rgb(var(--track));
+  color: rgb(var(--muted));
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+.rail-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.rail-game {
+  display: grid;
+  gap: 0.3rem;
+  min-width: 0;
+}
+.rail-meter {
+  height: 0.2rem;
+  border-radius: 99px;
+  background: rgb(var(--track));
+  overflow: hidden;
+}
+.rail-meter i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: rgb(var(--bar));
+}
+.rail-streak {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.66rem;
+  font-weight: 600;
+  color: rgb(var(--accent));
+}
+.rail-streak svg {
+  width: 0.85rem;
+  height: 0.85rem;
+}
+.rail-last {
+  margin: 0;
+  display: grid;
+  gap: 0.15rem;
+}
+.rail-mid {
+  font-size: 1.3rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+.rail-empty {
+  gap: 0.7rem;
+}
+.rail-name {
+  font-size: 0.74rem;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.rail-note {
+  margin: auto 0 0;
+  font-size: 0.6rem;
+  color: rgb(var(--muted));
+}

@@ -1,0 +1,61 @@
+name: Build Windows apps
+
+# Builds and tests the Windows apps on every pull request and on main: Playdex.Core (with a real generated launcher
+# from the published Playdex.Run), the desktop app and the Full Screen Experience launcher. The WinUI projects can't
+# build on Linux, so they are not in Playdex.sln and build here instead of in test.yaml.
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "src/Playdex.Core/**"
+      - "src/Playdex.Run/**"
+      - "src/Playdex.Setup/**"
+      - "src/Desktop/**"
+      - "src/Launcher/**"
+      - "test/Playdex.Core.Tests/**"
+      - "Directory.Packages.props"
+      - "Directory.Build.props"
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build and test the Windows apps
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+
+      - name: Publish Playdex.Run (Native AOT)
+        run: dotnet publish src/Playdex.Run/Playdex.Run.csproj -c Release -r win-x64 -o ./artifacts/run
+
+      # Playdex.Core tests use the registry and Job Objects, so they run here on Windows, not in test.yaml. With the
+      # published Playdex.Run they also run a real generated per-game launcher and a real update rollback.
+      - name: Run Playdex.Core tests
+        run: dotnet test test/Playdex.Core.Tests/Playdex.Core.Tests.csproj --configuration Release
+        env:
+          PLAYDEX_PUBLISHED_RUN: ${{ github.workspace }}\artifacts\run\Playdex.Run.exe
+
+      - name: Build the UI
+        working-directory: src/Launcher/ui
+        run: |
+          bun install --frozen-lockfile
+          bun run build
+
+      - name: Build the desktop app, the launcher and the setup
+        run: |
+          dotnet build src/Desktop/Playdex.Desktop.csproj -c Release
+          dotnet build src/Launcher/Host/Playdex.Launcher.Host.csproj -c Release
+          dotnet build src/Playdex.Setup/Playdex.Setup.csproj -c Release

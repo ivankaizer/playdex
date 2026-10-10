@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    Installs the Playdex desktop app for the current user (see Program.cs). One small Native AOT exe: released as
+    Playdex-Setup.exe, and as Wrapper.exe in playdex-wrapper-windows-v<version>.zip, which is how the last WinForms
+    Wrapper updates itself into the desktop app.
+  -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <RootNamespace>Playdex.Setup</RootNamespace>
+    <AssemblyName>Playdex.Setup</AssemblyName>
+    <ApplicationIcon>Assets\app.ico</ApplicationIcon>
+    <Version>2.0.0</Version>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <EnableWindowsTargeting Condition="$([MSBuild]::IsOSPlatform('OSX')) Or $([MSBuild]::IsOSPlatform('Linux'))">true</EnableWindowsTargeting>
+    <PublishAot>true</PublishAot>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <OptimizationPreference>Size</OptimizationPreference>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Playdex.Core\Playdex.Core.csproj" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,243 @@
+/* ---------- Quick settings: a sheet on the right, over an inert, dimmed screen ---------- */
+.qs-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  justify-content: flex-end;
+}
+.qs-scrim {
+  position: absolute;
+  inset: 0;
+  background: rgb(var(--scrim) / 0.55);
+  animation: qs-fade 0.22s ease-out both;
+}
+.qs {
+  position: relative;
+  width: 27rem;
+  margin: 1.2rem;
+  padding: 1.6rem 1.5rem 1.2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.3rem;
+  overflow: hidden auto;
+  border-radius: 1.6rem;
+  background: rgb(var(--page));
+  border: 1px solid var(--card-border);
+  box-shadow: var(--lift-shadow);
+  animation: qs-in 0.28s var(--ease-out) both;
+}
+.qs-section {
+  display: grid;
+  gap: 0.6rem;
+}
+.qs-section h2 {
+  margin: 0;
+}
+.qs-list {
+  display: grid;
+  gap: 0.45rem;
+}
+
+/* Rows: sound outputs and HDR switches. */
+.qs-row {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  min-height: 3.2rem;
+  padding: 0.5rem 0.95rem;
+  border-radius: 1rem;
+  background: rgb(var(--tile));
+  border: 1px solid var(--tile-border);
+  color: rgb(var(--ink));
+  width: 100%;
+}
+.qs-row > svg {
+  flex: none;
+  width: 1.15rem;
+  height: 1.15rem;
+  color: rgb(var(--muted));
+}
+.qs-row[aria-checked="true"][role="radio"] {
+  background: rgb(var(--mint));
+  border-color: rgb(var(--mint-line));
+}
+.qs-row[aria-checked="true"][role="radio"] > svg {
+  color: rgb(var(--accent));
+}
+.qs-row-text {
+  display: grid;
+  gap: 0.1rem;
+  min-width: 0;
+  flex: 1;
+}
+.qs-row-name {
+  font-size: 0.84rem;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.qs-row-text small {
+  font-size: 0.66rem;
+  font-weight: 500;
+  color: rgb(var(--muted));
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.qs-row > .qs-check {
+  width: 1.05rem;
+  height: 1.05rem;
+  color: rgb(var(--accent));
+}
+.qs-row-action {
+  flex: none;
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: rgb(var(--muted));
+}
+.qs-row-off {
+  opacity: 0.6;
+}
+.qs-placeholder {
+  background: rgb(var(--track) / 0.6);
+  animation: pulse 1.4s ease-in-out infinite;
+}
+.qs-empty,
+.qs-note {
+  margin: 0;
+  font-size: 0.7rem;
+  color: rgb(var(--muted));
+}
+.qs-note {
+  min-height: 1rem;
+}
+
+/* HDR switch: the knob slides with a transform; on is the brand pill colour. */
+.qs-switch {
+  flex: none;
+  width: 2.3rem;
+  height: 1.3rem;
+  padding: 0.16rem;
+  border-radius: 99px;
+  background: rgb(var(--track));
+}
+.qs-switch i {
+  display: block;
+  width: 0.98rem;
+  height: 0.98rem;
+  border-radius: 99px;
+  background: rgb(var(--ink-2));
+  transition: transform 0.22s var(--ease-out);
+}
+.qs-row[aria-checked="true"] .qs-switch {
+  background: rgb(var(--pill));
+}
+.qs-row[aria-checked="true"] .qs-switch i {
+  background: rgb(var(--pill-ink));
+  transform: translateX(1rem);
+}
+
+/* Power: three tiles; a first press arms one, the second confirms. */
+.qs-power {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.5rem;
+}
+.qs-power-btn {
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: 0.45rem;
+  min-height: 4.6rem;
+  padding: 0.6rem 0.4rem;
+  border-radius: 1rem;
+  background: rgb(var(--tile));
+  border: 1px solid var(--tile-border);
+  font-size: 0.74rem;
+  font-weight: 600;
+  text-align: center;
+  transition: transform 0.18s var(--ease-out);
+}
+.qs-power-btn svg {
+  width: 1.2rem;
+  height: 1.2rem;
+  color: rgb(var(--muted));
+}
+.qs-power-btn[data-focused] {
+  transform: scale(1.04);
+}
+.qs-power-btn[data-armed] {
+  background: rgb(var(--pill));
+  border-color: rgb(var(--pill));
+  color: rgb(var(--pill-ink));
+}
+.qs-power-btn[data-armed] svg {
+  color: rgb(var(--pill-ink));
+}
+
+.qs-hints {
+  margin-top: auto;
+  padding-top: 0.4rem;
+}
+
+@keyframes qs-in {
+  from {
+    opacity: 0;
+    transform: translateX(2rem);
+  }
+}
+@keyframes qs-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+/* Refresh rate: a row of pills under its label; long lists scroll sideways with focus. */
+.qs-rate {
+  display: grid;
+  gap: 0.55rem;
+  padding: 0.6rem 0.95rem 0.75rem;
+  border-radius: 1rem;
+  background: rgb(var(--tile));
+  border: 1px solid var(--tile-border);
+}
+.qs-rate-head {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+}
+.qs-rate-head > svg {
+  flex: none;
+  width: 1.15rem;
+  height: 1.15rem;
+  color: rgb(var(--muted));
+}
+.qs-rate-options {
+  display: flex;
+  gap: 0.4rem;
+  overflow-x: auto;
+  scrollbar-width: none;
+  /* Room for the focus ring, which sits outside the pill. */
+  padding: 0.4rem;
+  margin: -0.4rem;
+  scroll-padding-inline: 0.4rem;
+}
+.qs-pill {
+  flex: none;
+  height: 2rem;
+  padding: 0 0.9rem;
+  border-radius: 999px;
+  background: rgb(var(--surface));
+  border: 1px solid rgb(var(--line));
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: rgb(var(--ink-2));
+  white-space: nowrap;
+}
+.qs-pill[aria-checked="true"] {
+  background: rgb(var(--pill));
+  border-color: rgb(var(--pill));
+  color: rgb(var(--pill-ink));
+}

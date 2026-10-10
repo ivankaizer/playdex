@@ -1,0 +1,148 @@
+using Api.Infrastructure.Common;
+using Api.Modules.Launcher;
+using Xunit;
+
+namespace Api.Tests;
+
+public sealed class LauncherSummaryBuilderTests
+{
+    // Saturday 2026-10-10, 18:00 in Prague (UTC+2 in summer time).
+    private static readonly DateTimeOffset Now = new(2026, 10, 10, 16, 0, 0, TimeSpan.Zero);
+    private static readonly TimeZoneInfo Prague = TimeZoneInfo.FindSystemTimeZoneById("Europe/Prague");
+
+    private static readonly Dictionary<long, LauncherGameRow> Games = new()
+    {
+        [1] = new LauncherGameRow(1, "Control", "https://cdn/1.webp"),
+        [2] = new LauncherGameRow(2, "Hades II", null),
+        [3] = new LauncherGameRow(3, "Balatro", null),
+    };
+
+    [Fact]
+    public void DaysAreLocalCalendarDaysAndASessionCountsTowardTheDayItStarted()
+    {
+        // 23:30 UTC on the 9th is 01:30 on the 10th in Prague: today, not yesterday.
+        var sessions = new[]
+        {
+            Session(1, 1, new DateTimeOffset(2026, 10, 9, 23, 30, 0, TimeSpan.Zero), minutes: 60),
+            Session(2, 2, new DateTimeOffset(2026, 10, 9, 20, 0, 0, TimeSpan.Zero), minutes: 30),
+        };
+
+        var summary = LauncherSummaryBuilder.Build(sessions, Games, [], Now, Prague);
+
+        Assert.Equal(7, summary.Days.Count);
+        Assert.Equal("2026-10-04", summary.Days[0].Date);
+        Assert.Equal("2026-10-10", summary.Days[^1].Date);
+        Assert.Equal(new LauncherPeriodDto(3600, 1), summary.Today);
+        Assert.Equal(new LauncherDayDto("2026-10-09", 1800, 1), summary.Days[^2]);
+        Assert.Equal(new LauncherPeriodDto(5400, 2), summary.Week);
+    }
+
+    [Fact]
+    public void ARunningSessionCountsUpToNow()
+    {
+        var running = new LauncherSessionRow(1, 1, "steam", Now.AddMinutes(-25), null);
+
+        var summary = LauncherSummaryBuilder.Build([running], Games, [], Now, Prague);
+
+        Assert.Equal(25 * 60, summary.Today.TotalSeconds);
+        Assert.Null(summary.RecentSessions.Single().EndedAt);
+        Assert.Equal(25 * 60, summary.RecentSessions.Single().DurationSeconds);
+    }
+
+    [Fact]
+    public void TopGamesAreTheWeeksMostPlayedAndOlderSessionsOnlyCountAllTime()
+    {
+        var sessions = new[]
+        {
+            Session(1, 1, Now.AddDays(-1), minutes: 40),
+            Session(2, 2, Now.AddDays(-2), minutes: 90),
+            Session(3, 1, Now.AddDays(-3), minutes: 30),
+            Session(4, 3, Now.AddDays(-10), minutes: 500), // Before the 7 days.
+        };
+
+        var summary = LauncherSummaryBuilder.Build(sessions, Games, [], Now, Prague);
+
+        Assert.Equal(["Hades II", "Control"], summary.TopGames.Select(game => game.Title));
+        Assert.Equal(new LauncherTopGameDto(GameId.Encode(1), "Control", 70 * 60, 2), summary.TopGames[1]);
+        Assert.Equal(new LauncherPeriodDto(160 * 60, 3), summary.Week);
+        Assert.Equal(new LauncherPeriodDto(660 * 60, 4), summary.AllTime);
+    }
+
+    [Fact]
+    public void GamesCarryTotalsAndIdentitiesMostRecentFirst()
+    {
+        var sessions = new[]
+        {
+            Session(1, 1, Now.AddDays(-20), minutes: 120),
+            Session(2, 2, Now.AddDays(-1), minutes: 15),
+            Session(3, 1, Now.AddDays(-5), minutes: 60),
+        };
+        LauncherIdentityRow[] identities = [new(1, "steam", "3669870"), new(2, "steam", "split-fiction")];
+
+        var summary = LauncherSummaryBuilder.Build(sessions, Games, identities, Now, Prague);
+
+        Assert.Equal([GameId.Encode(2), GameId.Encode(1)], summary.Games.Select(game => game.GameId));
+        var control = summary.Games[1];
+        Assert.Equal(180 * 60, control.TotalSeconds);
+        Assert.Equal(2, control.SessionCount);
+        Assert.Equal(Now.AddDays(-5), control.LastPlayedAt);
+        Assert.Equal("https://cdn/1.webp", control.CapsuleUrl);
+        Assert.Equal([new LauncherGameIdentityDto("steam", "3669870")], control.Identities);
+    }
+
+    [Fact]
+    public void RecentSessionsAreTheNewestTwenty()
+    {
+        var sessions = Enumerable.Range(1, 25).Select(i => Session(i, 1, Now.AddHours(-i), minutes: 10)).ToArray();
+
+        var summary = LauncherSummaryBuilder.Build(sessions, Games, [], Now, Prague);
+
+        Assert.Equal(20, summary.RecentSessions.Count);
+        Assert.Equal("1", summary.RecentSessions[0].SessionId);
+        Assert.Equal("20", summary.RecentSessions[^1].SessionId);
+    }
+
+    [Theory]
+    [InlineData(new[] { 0, 1, 2 }, 3)] // Today and the two days before.
+    [InlineData(new[] { 1, 2 }, 2)] // Nothing yet today: the streak up to yesterday still counts.
+    [InlineData(new[] { 0, 2, 3 }, 1)] // A gap ends it.
+    [InlineData(new[] { 2, 3 }, 0)]
+    public void StreakCountsConsecutiveDaysEndingTodayOrYesterday(int[] daysAgo, int streak)
+    {
+        var sessions = daysAgo.Select((days, i) => Session(i + 1, 1, Now.AddDays(-days), minutes: 10)).ToArray();
+
+        Assert.Equal(streak, LauncherSummaryBuilder.Build(sessions, Games, [], Now, Prague).CurrentStreakDays);
+    }
+
+    [Fact]
+    public void NoSessionsIsAnEmptySummary()
+    {
+        var summary = LauncherSummaryBuilder.Build([], Games, [], Now, Prague);
+
+        Assert.Equal(new LauncherPeriodDto(0, 0), summary.AllTime);
+        Assert.All(summary.Days, day => Assert.Equal(0, day.TotalSeconds));
+        Assert.Empty(summary.TopGames);
+        Assert.Empty(summary.Games);
+        Assert.Equal(0, summary.CurrentStreakDays);
+    }
+
+    [Fact]
+    public void TimeZoneIsAnIanaOrWindowsIdThenAnOffsetThenUtc()
+    {
+        Assert.Equal(Prague.BaseUtcOffset, LauncherSummaryBuilder.ResolveTimeZone("Europe/Prague", null).BaseUtcOffset);
+        Assert.Equal(
+            Prague.GetUtcOffset(Now),
+            LauncherSummaryBuilder.ResolveTimeZone("Central Europe Standard Time", null).GetUtcOffset(Now));
+
+        var fromOffset = LauncherSummaryBuilder.ResolveTimeZone("Nowhere/Unknown", 330);
+        Assert.Equal(TimeSpan.FromMinutes(330), fromOffset.BaseUtcOffset);
+        Assert.Equal("UTC+05:30", fromOffset.Id);
+        Assert.Equal(TimeSpan.FromHours(-14), LauncherSummaryBuilder.ResolveTimeZone(null, -100_000).BaseUtcOffset);
+
+        Assert.Equal(TimeZoneInfo.Utc, LauncherSummaryBuilder.ResolveTimeZone("Nowhere/Unknown", null));
+        Assert.Equal(TimeZoneInfo.Utc, LauncherSummaryBuilder.ResolveTimeZone(null, null));
+    }
+
+    private static LauncherSessionRow Session(long id, long gameId, DateTimeOffset startedAt, int minutes) =>
+        new(id, gameId, "steam", startedAt, startedAt.AddMinutes(minutes));
+}

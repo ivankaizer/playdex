@@ -1,0 +1,85 @@
+/*
+ * Playdex v3 tokens, adapted for a 10-foot launcher. Values come from the web app
+ * (ivankaizer/playdex src/Frontend/src/styles/app.css); dark is the launcher default.
+ * Colors are RGB channels so `rgb(var(--x) / a)` works.
+ */
+:root {
+  color-scheme: dark;
+
+  --ink: 230 236 241;
+  --ink-2: 195 204 213;
+  --muted: 152 163 175;
+  --faint: 111 123 136;
+
+  --page: 15 21 27;
+  --blob-mint: 15 58 44;
+  --blob-cyan: 14 47 59;
+  --blob-sand: 43 38 23;
+
+  --surface: 34 45 55;
+  --tile: 28 37 46;
+  --track: 44 55 66;
+  --line: 51 64 76;
+
+  --accent: 95 211 165;
+  --brand: 9 134 94;
+  --pill: 111 227 181;
+  --pill-ink: 11 61 44;
+  --bar: 47 194 142;
+  --bar-light: 58 148 116;
+  --mint: 20 59 46;
+  --mint-line: 31 84 66;
+  --seg-on: 111 227 181;
+  --seg-on-ink: 11 61 44;
+
+  --card-bg: rgba(24, 32, 41, 0.8);
+  --card-border: rgba(255, 255, 255, 0.07);
+  --tile-border: rgba(255, 255, 255, 0.06);
+  --live-bg: linear-gradient(110deg, rgba(20, 70, 52, 0.92), rgba(24, 32, 41, 0.82) 62%);
+  --scrim: 15 21 27;
+  --card-shadow: 0 1px 2px rgba(0, 0, 0, 0.2), 0 16px 40px -20px rgba(0, 0, 0, 0.6);
+  --lift-shadow: 0 1.4rem 2.6rem -1rem rgba(0, 0, 0, 0.75);
+
+  --focus: var(--pill);
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+
+  --ink: 24 33 43;
+  --ink-2: 58 70 82;
+  --muted: 88 99 111;
+  --faint: 138 150 163;
+
+  --page: 228 234 240;
+  --blob-mint: 196 238 221;
+  --blob-cyan: 198 235 243;
+  --blob-sand: 242 234 210;
+
+  --surface: 255 255 255;
+  --tile: 237 241 245;
+  --track: 221 228 234;
+  --line: 213 221 229;
+
+  --accent: 9 120 84;
+  --brand: 9 134 94;
+  --pill: 111 227 181;
+  --pill-ink: 11 61 44;
+  --bar: 47 194 142;
+  --bar-light: 143 224 192;
+  --mint: 217 246 234;
+  --mint-line: 191 230 214;
+  --seg-on: 255 255 255;
+  --seg-on-ink: 24 33 43;
+
+  --card-bg: rgba(255, 255, 255, 0.74);
+  --card-border: rgba(255, 255, 255, 0.9);
+  --tile-border: rgba(255, 255, 255, 0.8);
+  --live-bg: linear-gradient(110deg, rgba(214, 247, 233, 0.95), rgba(255, 255, 255, 0.78) 62%);
+  --scrim: 228 234 240;
+  --card-shadow: 0 1px 2px rgba(30, 50, 70, 0.04), 0 16px 40px -20px rgba(30, 50, 70, 0.18);
+  --lift-shadow: 0 1.4rem 2.6rem -1rem rgba(30, 50, 70, 0.4);
+
+  --focus: var(--brand);
+}

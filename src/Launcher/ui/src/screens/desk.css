@@ -1,0 +1,276 @@
+/* ---------- Desktop screens: Manage and Settings ----------
+ * The desktop app is a window at arm's length, so these screens are denser than the 10-foot ones, but they use the
+ * same surfaces, pills and focus ring. */
+.desk {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 1rem;
+  min-height: 0;
+}
+.desk-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+.desk-title {
+  margin: 0.2rem 0 0;
+  font-size: 1.5rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.desk-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+.desk .btn {
+  height: 2.1rem;
+  padding: 0 1rem;
+  font-size: 0.74rem;
+}
+.desk .btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.desk-loading {
+  height: 6rem;
+  border-radius: 1.2rem;
+  background: rgb(var(--track) / 0.5);
+  animation: pulse 1.4s ease-in-out infinite;
+}
+
+/* Game list */
+.desk-list {
+  list-style: none;
+  margin: -0.4rem;
+  padding: 0.4rem;
+  display: grid;
+  align-content: start;
+  gap: 0.7rem;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+.desk-row {
+  padding: 0.8rem 1rem;
+  display: grid;
+  gap: 0.9rem;
+}
+.desk-row-main {
+  display: grid;
+  grid-template-columns: 2.6rem minmax(0, 1fr) auto;
+  grid-template-areas:
+    "thumb text chip"
+    "thumb actions actions";
+  align-items: center;
+  column-gap: 1rem;
+  row-gap: 0.6rem;
+}
+.desk-thumb {
+  grid-area: thumb;
+  width: 2.6rem;
+  aspect-ratio: 2 / 3;
+  border-radius: 0.5rem;
+  align-self: start;
+}
+.desk-row-text {
+  grid-area: text;
+  display: grid;
+  gap: 0.12rem;
+  min-width: 0;
+}
+.desk-row-title {
+  margin: 0;
+  font-size: 0.92rem;
+  font-weight: 600;
+}
+.desk-row-sub {
+  font-size: 0.66rem;
+  color: rgb(var(--ink-2));
+}
+.desk-row-path {
+  font-size: 0.6rem;
+  color: rgb(var(--muted));
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.desk-row-actions {
+  grid-area: actions;
+  display: flex;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+}
+.desk-chip {
+  grid-area: chip;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  max-width: 16rem;
+  height: 1.7rem;
+  padding: 0 0.75rem;
+  border-radius: 99px;
+  background: rgb(var(--tile));
+  border: 1px solid var(--tile-border);
+  font-size: 0.62rem;
+  font-weight: 500;
+  color: rgb(var(--ink-2));
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.desk-chip svg {
+  flex: none;
+  width: 0.85rem;
+  height: 0.85rem;
+}
+.desk-chip[data-kind="success"] {
+  background: rgb(var(--mint));
+  border-color: rgb(var(--mint-line));
+  color: rgb(var(--accent));
+}
+.desk-chip[data-kind="failed"],
+.desk-chip[data-kind="unsupported"] {
+  color: rgb(var(--ink));
+  border-color: rgb(var(--line));
+}
+.desk-danger[data-armed] {
+  background: rgb(var(--pill));
+  border-color: rgb(var(--pill));
+  color: rgb(var(--pill-ink));
+}
+.desk-empty {
+  display: grid;
+  justify-items: start;
+  gap: 0.5rem;
+  max-width: 34rem;
+  padding: 1.6rem 1.8rem;
+  align-self: start;
+}
+.desk-empty svg {
+  width: 1.6rem;
+  height: 1.6rem;
+  color: rgb(var(--accent));
+}
+.desk-empty h2 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+.desk-empty p {
+  margin: 0;
+  font-size: 0.78rem;
+  line-height: 1.5;
+  color: rgb(var(--ink-2));
+}
+
+/* Forms */
+.desk-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.8rem 1.2rem;
+  padding-top: 0.9rem;
+  border-top: 1px solid rgb(var(--line) / 0.6);
+}
+.desk-form-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 0.5rem;
+}
+.field {
+  display: grid;
+  gap: 0.35rem;
+  min-width: 0;
+}
+.field small {
+  font-size: 0.6rem;
+  line-height: 1.4;
+  color: rgb(var(--muted));
+}
+.field-row {
+  display: flex;
+  gap: 0.5rem;
+}
+.field-row .text {
+  flex: 1;
+  min-width: 0;
+}
+.text {
+  height: 2.2rem;
+  padding: 0 0.85rem;
+  border-radius: 0.75rem;
+  border: 1px solid rgb(var(--line));
+  background: rgb(var(--surface));
+  color: rgb(var(--ink));
+  font: inherit;
+  font-size: 0.76rem;
+  outline: none;
+  user-select: text;
+}
+.text::placeholder {
+  color: rgb(var(--faint));
+}
+select.text {
+  padding-right: 0.5rem;
+}
+.field-check {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 0.76rem;
+  color: rgb(var(--ink-2));
+}
+.field-check input {
+  width: 1rem;
+  height: 1rem;
+  accent-color: rgb(var(--bar));
+}
+
+/* Settings */
+.desk-sections {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(22rem, 1fr));
+  align-content: start;
+  gap: 0.9rem;
+  overflow-y: auto;
+  margin: -0.4rem;
+  padding: 0.4rem;
+  scrollbar-width: thin;
+}
+.desk-section {
+  display: grid;
+  align-content: start;
+  gap: 0.75rem;
+  padding: 1.1rem 1.2rem 1.2rem;
+}
+.desk-section-title {
+  margin: 0;
+  font-size: 0.92rem;
+  font-weight: 600;
+}
+.desk-note {
+  margin: -0.4rem 0 0;
+  font-size: 0.66rem;
+  line-height: 1.45;
+  color: rgb(var(--muted));
+}
+.desk-line {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  padding-top: 0.7rem;
+  border-top: 1px solid rgb(var(--line) / 0.6);
+}
+.desk-line > svg {
+  flex: none;
+  width: 1rem;
+  height: 1rem;
+  color: rgb(var(--muted));
+}
+.desk-line-text {
+  flex: 1;
+  font-size: 0.7rem;
+  line-height: 1.4;
+  color: rgb(var(--ink-2));
+}

@@ -1,0 +1,52 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    The desktop app: Playdex in a normal window and the tray, the successor of the WinForms Wrapper (see
+    docs/launcher/wrapper-merge-plan.md, phase 4). WinUI 3 + WebView2 showing the launcher's React UI in desktop mode,
+    unpackaged and self-contained; it installs per user (%LOCALAPPDATA%\Programs\Playdex) and updates itself from the
+    download feed (download.playdex.dev). Not in Playdex.sln for the same reason as the launcher host: the WinUI XAML compiler only runs on Windows.
+
+    Dev (loads the Vite dev server at http://localhost:5190):  dotnet run
+    Release folder (Native AOT, with ui/ and Playdex.Run.exe): tools/publish.ps1
+  -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows10.0.26100.0</TargetFramework>
+    <TargetPlatformMinVersion>10.0.19041.0</TargetPlatformMinVersion>
+    <SupportedOSPlatformVersion>10.0.19041.0</SupportedOSPlatformVersion>
+    <RootNamespace>Playdex.Desktop</RootNamespace>
+    <AssemblyName>Playdex</AssemblyName>
+    <ApplicationIcon>Assets\app.ico</ApplicationIcon>
+    <Version>2.0.0</Version>
+    <Platforms>x64;ARM64</Platforms>
+    <RuntimeIdentifiers>win-x64;win-arm64</RuntimeIdentifiers>
+    <RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == '' And '$(Platform)' == 'ARM64'">win-arm64</RuntimeIdentifier>
+    <RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == ''">win-x64</RuntimeIdentifier>
+    <UseWinUI>true</UseWinUI>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <DefineConstants>$(DefineConstants);DISABLE_XAML_GENERATED_MAIN</DefineConstants>
+
+    <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
+    <SelfContained>true</SelfContained>
+    <WindowsPackageType>None</WindowsPackageType>
+
+    <PublishAot Condition="'$(Configuration)' == 'Release'">true</PublishAot>
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.WindowsAppSDK" />
+    <ProjectReference Include="..\Playdex.Core\Playdex.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The window, bridge, input and quick settings shared with the launcher. -->
+    <Compile Include="..\Launcher\Shell\**\*.cs" LinkBase="Shell" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Manifest Include="$(ApplicationManifest)" />
+    <!-- Release builds serve the built UI from disk. Run `bun run build` in ../Launcher/ui first. -->
+    <Content Include="..\Launcher\ui\dist\**" Link="ui\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

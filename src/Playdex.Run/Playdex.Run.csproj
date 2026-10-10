@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    The exe behind every generated per-game launcher (the target of a game's Steam shortcut). Published with Native AOT
+    as one small file, which the desktop app hard-links (or copies) once per game. See Program.cs.
+  -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <RootNamespace>Playdex.Run</RootNamespace>
+    <AssemblyName>Playdex.Run</AssemblyName>
+    <ApplicationIcon>Assets\app.ico</ApplicationIcon>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <EnableWindowsTargeting Condition="$([MSBuild]::IsOSPlatform('OSX')) Or $([MSBuild]::IsOSPlatform('Linux'))">true</EnableWindowsTargeting>
+    <PublishAot>true</PublishAot>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <OptimizationPreference>Size</OptimizationPreference>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Playdex.Core\Playdex.Core.csproj" />
+  </ItemGroup>
+</Project>
