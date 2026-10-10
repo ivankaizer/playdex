@@ -1,14 +1,16 @@
 import { Moon, SlidersHorizontal, Sun } from "lucide-react";
-import { lazy, Suspense, useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import {
   closeGame,
   launch,
   launching,
   leaveLaunch,
+  nowPlaying,
   openGame,
   openGameId,
   openQuickSettings,
   quickSettingsOpen,
+  resumeGame,
   session,
   takeReturnFocus,
   toast,
@@ -212,6 +214,7 @@ export function App() {
             <Glyph name="RB" />
           </nav>
           <span className="topbar-spacer" />
+          <NowPlaying />
           <div className="proto" data-nav-group="proto">
             <span className="label">Layout</span>
             <div className="seg" role="group" aria-label="Home layout">
@@ -305,7 +308,55 @@ const PRIMARY: Record<string, string> = {
   install: "Install",
   favorite: "Favorite",
   details: "Open",
+  "now-playing": "Resume",
 };
+
+/** "12:34", or "1:02:03" past an hour. */
+function formatClock(seconds: number) {
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = String(seconds % 60).padStart(2, "0");
+  return h > 0 ? `${h}:${String(m).padStart(2, "0")}:${s}` : `${m}:${s}`;
+}
+
+/** Seconds since `since` (epoch ms), ticking once a second; null without a start time. */
+function useElapsed(since: number | null) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (since === null) return;
+    const t = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(t);
+  }, [since]);
+  return since === null ? null : Math.max(0, Math.floor((now - since) / 1000));
+}
+
+/** The running game in the top bar, however it was started; A switches to it. */
+function NowPlaying() {
+  const playing = useStore(nowPlaying);
+  if (!playing) return null;
+  return <NowPlayingPill gameId={playing.gameId} since={playing.since} />;
+}
+
+function NowPlayingPill({ gameId, since }: { gameId: string; since: number | null }) {
+  const game = gameById(gameId);
+  const elapsed = useElapsed(since);
+  return (
+    <div data-nav-group="now-playing">
+      <button
+        className="now-playing"
+        data-nav
+        data-kind="now-playing"
+        aria-label={`Now playing ${game.title}. Resume`}
+        onClick={resumeGame}
+      >
+        <span className="live-dot" aria-hidden />
+        <span className="now-playing-label">Playing</span>
+        <span className="now-playing-title">{game.title}</span>
+        {elapsed !== null && <span className="now-playing-clock num">{formatClock(elapsed)}</span>}
+      </button>
+    </div>
+  );
+}
 
 function HintBar({ onGamePage, onHome }: { onGamePage: boolean; onHome: boolean }) {
   const kind = useStore(focusedKind);
@@ -364,6 +415,8 @@ function LaunchOverlay({ gameId }: { gameId: string }) {
   // In the host, "running" and the session seconds come from the host; it reports exit too. The 1 s ticker only
   // advances the clock between host updates. In a plain browser the launch is simulated: running after 3 s.
   const running = inHost ? hostSession?.state === "running" : elapsed >= 3;
+  const runningRef = useRef(running);
+  runningRef.current = running;
 
   useEffect(() => {
     if (inHost && !running) return;
@@ -379,13 +432,17 @@ function LaunchOverlay({ gameId }: { gameId: string }) {
           leaveLaunch();
           return true;
         }
+        if (a === "confirm" && runningRef.current) {
+          resumeGame();
+          return true;
+        }
         return true;
       }),
     [],
   );
 
   const playedFor = inHost ? (hostSession?.seconds ?? 0) + elapsed : Math.max(0, elapsed - 3);
-  const clock = `${Math.floor(playedFor / 60)}:${String(playedFor % 60).padStart(2, "0")}`;
+  const clock = formatClock(playedFor);
 
   return (
     <div className="launch" role="dialog" aria-modal="true" aria-label={`Launching ${game.title}`}>
@@ -410,6 +467,7 @@ function LaunchOverlay({ gameId }: { gameId: string }) {
           </div>
         )}
         <footer className="hints">
+          {running && <Hint glyph="A">Resume game</Hint>}
           <Hint glyph="B">Back to home</Hint>
           <span>The game window takes over here; the Xbox button brings this screen back.</span>
         </footer>

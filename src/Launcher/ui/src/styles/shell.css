@@ -248,6 +248,38 @@ img {
   gap: 0.55rem;
 }
 
+/* Now playing: the running game, however it was started; A switches to it. */
+.now-playing {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  height: 2.1rem;
+  max-width: 24rem;
+  padding: 0 1rem;
+  border-radius: 99px;
+  background: rgb(var(--mint));
+  border: 1px solid rgb(var(--mint-line));
+  color: rgb(var(--ink));
+  font-size: 0.74rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.now-playing-label {
+  color: rgb(var(--accent));
+  font-size: 0.62rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+.now-playing-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.now-playing-clock {
+  color: rgb(var(--muted));
+  font-weight: 500;
+}
+
 /* ---------- Glyphs (controller prompts) ---------- */
 .glyph {
   display: inline-grid;

@@ -65,6 +65,12 @@ Artwork is read in place from Steam, per image, in this order: the game's non-St
 
 New games appear the next time the launcher starts.
 
+## Now playing
+
+While a game runs, the top bar shows it with its play time; A on it switches to the game. The game is the one launched here, or else one started elsewhere (`RunningGames` in Core): a game added to Playdex whose process runs (matched by its monitor settings, or its launch executable), or Steam's running app (`HKCU\Software\Valve\Steam\RunningAppID`; no play time, Steam doesn't say when it started). The host checks every 3 s while its window is active and posts `{type:"now-playing", gameId, since}` (epoch ms or null; gameId null when nothing runs) when it changes.
+
+Resume (`{type:"resume-game"}`) brings back the window that was in front when the launcher was called up over the game (Guide, Game Bar "Home"), else a window of the game's process, else the topmost app window below the launcher that isn't Steam's. The launch overlay offers it too (A). If no window is found the page shows a toast (`{type:"resume-failed"}`).
+
 ## Quick settings
 
 Menu on the controller (or the sliders button in the top bar, or `m`) opens a panel over the current screen. B or Menu closes it.

@@ -12,6 +12,13 @@ export type HostMessage =
   | { type: "launch"; gameId: string }
   /** Quick settings state, sent after every quick settings request. `error` is set when a change failed. */
   | ({ type: "quick-settings" } & QuickSettingsState)
+  /**
+   * The game running now (null: none), however it was started; sent when it changes. `since` is epoch ms, null when
+   * unknown (Steam games started elsewhere).
+   */
+  | { type: "now-playing"; gameId: string | null; since?: number | null }
+  /** A {type:"resume-game"} found no game window to switch to. */
+  | { type: "resume-failed" }
   /** The desktop app's reply to a {type:"desktop"} request (see host/desktop.ts). */
   | { type: "desktop-result"; id: number; ok: boolean; result?: unknown; error?: unknown }
   /** The desktop app's state changed (backups, updates). */
@@ -46,6 +53,8 @@ export type UiMessage =
   /** The host launches only games from its own library, by id. */
   | { type: "launch"; gameId: string }
   | { type: "cancel"; gameId: string }
+  /** Switch to the running game's window. */
+  | { type: "resume-game" }
   /** Read the quick settings state; the host answers with a "quick-settings" message, as it does for the rest. */
   | { type: "quick-settings" }
   | { type: "audio-output"; id: string }

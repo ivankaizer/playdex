@@ -59,6 +59,16 @@ internal sealed partial class ShellWindow : Window
     private bool _ready;
     private bool _suspended;
 
+    // Now playing: polled while the window is active (games started elsewhere don't announce themselves).
+    private static readonly TimeSpan _nowPlayingInterval = TimeSpan.FromSeconds(3);
+    private readonly Microsoft.UI.Dispatching.DispatcherQueueTimer _nowPlayingTimer;
+    private RunningGame? _nowPlaying;
+    private bool _nowPlayingPosted;
+    private bool _detecting;
+
+    /// <summary>The window in front when the shell was called up over a game: what "Resume" returns to.</summary>
+    private nint _gameWindow;
+
     /// <param name="onMessage">Page messages the shell doesn't handle (the desktop app's own); true when handled.</param>
     public ShellWindow(
         Task<CoreWebView2Environment> environment,
@@ -92,12 +102,17 @@ internal sealed partial class ShellWindow : Window
         root.Children.Add(_webView);
         Content = root;
 
+        _nowPlayingTimer = DispatcherQueue.CreateTimer();
+        _nowPlayingTimer.Interval = _nowPlayingInterval;
+        _nowPlayingTimer.Tick += (_, _) => _ = RefreshNowPlayingAsync();
+
         services.SessionChanged += PostSession;
         services.GameExited += OnGameExited;
         services.InputReceived += OnInput;
         Activated += OnActivated;
         Closed += (_, _) =>
         {
+            _nowPlayingTimer.Stop();
             services.SessionChanged -= PostSession;
             services.GameExited -= OnGameExited;
             services.InputReceived -= OnInput;
@@ -134,6 +149,10 @@ internal sealed partial class ShellWindow : Window
     public void OnRedirectedActivation(string? launchGameId)
     {
         _activateStart = Stopwatch.GetTimestamp();
+        if (Native.GetForegroundWindow() is var foreground && foreground != _hwnd)
+        {
+            _gameWindow = foreground; // GameWindows checks it is an app window before going back to it.
+        }
         BringToFront();
         Post("""{"type":"home"}""");
         if (launchGameId is not null)
@@ -237,6 +256,9 @@ internal sealed partial class ShellWindow : Window
                 }
                 break;
             case "ready":
+                // Also after the desktop app reloads the page: it starts with nothing playing.
+                _nowPlayingPosted = false;
+                _ = RefreshNowPlayingAsync();
                 OnUiReady();
                 break;
             case "home-ready":
@@ -276,6 +298,12 @@ internal sealed partial class ShellWindow : Window
                 var rateDisplay = message.GetProperty("display").GetString()!;
                 var hz = message.GetProperty("hz").GetInt32();
                 PostQuickSettings(() => Displays.SetRefreshRate(rateDisplay, hz), $"switch to {hz} Hz");
+                break;
+            case "resume-game":
+                if (!GameWindows.Activate(_hwnd, _gameWindow, _nowPlaying?.ProcessId))
+                {
+                    Post("""{"type":"resume-failed"}""");
+                }
                 break;
             case "fps-counter":
                 PostQuickSettings(NvidiaOverlay.ToggleStatistics, "show or hide the FPS counter");
@@ -381,10 +409,63 @@ internal sealed partial class ShellWindow : Window
         if (active)
         {
             ResumeWebView();
+            _ = RefreshNowPlayingAsync();
+            _nowPlayingTimer.Start();
         }
-        else if (_mode == ShellMode.FullScreen && _services.Sessions.IsGameRunning && _options.SuspendWhileGaming)
+        else
         {
-            _ = SuspendWebViewAsync();
+            _nowPlayingTimer.Stop();
+            if (_mode == ShellMode.FullScreen && _services.Sessions.IsGameRunning && _options.SuspendWhileGaming)
+            {
+                _ = SuspendWebViewAsync();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Tell the page which game is running, if any: the one launched here, else one started elsewhere
+    /// (<see cref="RunningGames"/>). Posted when it changes; "since" is epoch ms, or null when unknown.
+    /// </summary>
+    private async Task RefreshNowPlayingAsync()
+    {
+        if (_detecting)
+        {
+            return;
+        }
+        _detecting = true;
+        try
+        {
+            var game = _services.Sessions.Current;
+            if (game is null && _services.LibraryScan.IsCompletedSuccessfully)
+            {
+                var library = _services.LibraryScan.Result;
+                game = await Task.Run(() => RunningGames.Detect(_services.Config, library));
+            }
+            var changed = !_nowPlayingPosted
+                || game?.GameId != _nowPlaying?.GameId
+                || game?.Since is null != _nowPlaying?.Since is null
+                || (game?.Since is { } since && _nowPlaying?.Since is { } before && Math.Abs((since - before).TotalSeconds) > 2);
+            _nowPlaying = game;
+            if (game is null)
+            {
+                _gameWindow = 0;
+            }
+            if (!changed)
+            {
+                return;
+            }
+            _nowPlayingPosted = true;
+            Post(game is null
+                ? """{"type":"now-playing","gameId":null}"""
+                : $$"""{"type":"now-playing","gameId":{{JsonSerializer.Serialize(game.GameId, HostJson.Default.String)}},"since":{{(game.Since is { } at ? at.ToUnixTimeMilliseconds().ToString(System.Globalization.CultureInfo.InvariantCulture) : "null")}}}""");
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception or IOException)
+        {
+            Log.Error("now playing: detection failed", ex);
+        }
+        finally
+        {
+            _detecting = false;
         }
     }
 
@@ -444,8 +525,11 @@ internal sealed partial class ShellWindow : Window
     /// <summary>Post a message to the page from any thread.</summary>
     public void PostFromAnyThread(string json) => DispatcherQueue.TryEnqueue(() => Post(json));
 
-    private void PostSession(string gameId, string state, int seconds) =>
+    private void PostSession(string gameId, string state, int seconds)
+    {
         PostFromAnyThread($$"""{"type":"session","gameId":{{JsonSerializer.Serialize(gameId, HostJson.Default.String)}},"state":"{{state}}","seconds":{{seconds}}}""");
+        DispatcherQueue.TryEnqueue(() => _ = RefreshNowPlayingAsync());
+    }
 
     public void Post(string json)
     {

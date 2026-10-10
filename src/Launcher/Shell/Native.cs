@@ -104,6 +104,38 @@ internal static unsafe partial class Native
     [LibraryImport("user32.dll")]
     public static partial uint GetDpiForWindow(nint hwnd);
 
+    public const uint GwHwndNext = 2;
+    public const uint GwOwner = 4;
+    public const int GwlExStyle = -20;
+    public const long WsExToolWindow = 0x80;
+    public const uint DwmwaCloaked = 14;
+
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool IsWindow(nint hwnd);
+
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool IsWindowVisible(nint hwnd);
+
+    [LibraryImport("user32.dll")]
+    public static partial nint GetTopWindow(nint hwnd);
+
+    [LibraryImport("user32.dll")]
+    public static partial nint GetWindow(nint hwnd, uint command);
+
+    [LibraryImport("user32.dll", EntryPoint = "GetWindowLongPtrW")]
+    public static partial nint GetWindowLongPtr(nint hwnd, int index);
+
+    [LibraryImport("user32.dll", EntryPoint = "GetWindowTextLengthW")]
+    public static partial int GetWindowTextLength(nint hwnd);
+
+    [LibraryImport("user32.dll", EntryPoint = "GetClassNameW")]
+    public static partial int GetClassName(nint hwnd, char* name, int capacity);
+
+    [LibraryImport("dwmapi.dll")]
+    public static partial int DwmGetWindowAttribute(nint hwnd, uint attribute, out int value, uint size);
+
     /// <summary>Wall-clock now as a FILETIME (100 ns ticks), comparable with GetProcessTimes.</summary>
     public static long PreciseNow()
     {

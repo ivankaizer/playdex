@@ -26,6 +26,20 @@ public sealed class SessionManager(
         }
     }
 
+    /// <summary>The game launched here, once it runs; null before that and after it exits.</summary>
+    public RunningGame? Current
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _active is { RunningSince: { } since } session
+                    ? new RunningGame(session.GameId, DateTimeOffset.Now - Stopwatch.GetElapsedTime(since), null)
+                    : null;
+            }
+        }
+    }
+
     /// <summary>UI thread. <paramref name="game"/> is the host's own library entry (null: not a game on this PC).</summary>
     public void Launch(string gameId, LibraryGame? game)
     {

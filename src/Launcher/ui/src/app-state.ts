@@ -1,4 +1,4 @@
-import { gameById } from "./data/games";
+import { gameById, recentGames } from "./data/games";
 import { inHost, onHostMessage, postToHost, signalAfterFrame } from "./host/bridge";
 import { current, focusDefault, focusEl } from "./nav/focus";
 import { createStore } from "./nav/store";
@@ -58,6 +58,33 @@ onHostMessage((m) => {
   }
   session.set({ state: m.state, seconds: m.seconds });
 });
+
+/**
+ * The game running now, however it was started (from here, Steam, a Playdex shortcut); `since` is epoch ms, null when
+ * unknown. Only games in the library. A plain browser shows the first game with ?playing.
+ */
+export const nowPlaying = createStore<{ gameId: string; since: number | null } | null>(
+  !inHost && new URLSearchParams(location.search).has("playing") && recentGames[0]
+    ? { gameId: recentGames[0].game.id, since: Date.now() - 754_000 }
+    : null,
+);
+
+onHostMessage((m) => {
+  if (m.type === "now-playing") {
+    nowPlaying.set(m.gameId && gameById(m.gameId) ? { gameId: m.gameId, since: m.since ?? null } : null);
+  } else if (m.type === "resume-failed") {
+    showToast("Couldn't find the game's window");
+  }
+});
+
+/** Switch to the running game's window. */
+export function resumeGame() {
+  if (!inHost) {
+    showToast("Resume works in the Playdex launcher on Windows");
+    return;
+  }
+  postToHost({ type: "resume-game" });
+}
 
 export function openGame(gameId: string) {
   returnFocusGame = gameId;

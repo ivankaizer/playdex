@@ -73,15 +73,19 @@ public sealed class ProcessMonitor(MonitorConfig config)
         return found;
     }
 
-    private bool Matches(Process process)
+    private bool Matches(Process process) => Matches(config, process);
+
+    /// <summary>
+    /// Whether <paramref name="process"/> is the monitored executable (<see cref="MonitorMode.ExecutablePath"/> or
+    /// <see cref="MonitorMode.ExecutableName"/>; false for <see cref="MonitorMode.LaunchedProcess"/>).
+    /// </summary>
+    public static bool Matches(MonitorConfig config, Process process)
     {
         try
         {
             return config.Mode switch
             {
-                MonitorMode.ExecutablePath => ImagePath(process) is { } path
-                    && !string.IsNullOrWhiteSpace(config.ExecutablePath)
-                    && string.Equals(path, Path.GetFullPath(config.ExecutablePath), StringComparison.OrdinalIgnoreCase),
+                MonitorMode.ExecutablePath => !string.IsNullOrWhiteSpace(config.ExecutablePath) && IsImage(process, config.ExecutablePath),
                 MonitorMode.ExecutableName => !string.IsNullOrWhiteSpace(config.ExecutableName)
                     && (string.Equals(process.ProcessName + ".exe", config.ExecutableName, StringComparison.OrdinalIgnoreCase)
                         || string.Equals(process.ProcessName, config.ExecutableName, StringComparison.OrdinalIgnoreCase)),
@@ -93,6 +97,10 @@ public sealed class ProcessMonitor(MonitorConfig config)
             return false; // Exited while being inspected.
         }
     }
+
+    /// <summary>Whether <paramref name="process"/> runs <paramref name="executablePath"/>. False if it can't be opened.</summary>
+    public static bool IsImage(Process process, string executablePath) =>
+        ImagePath(process) is { } path && string.Equals(path, Path.GetFullPath(executablePath), StringComparison.OrdinalIgnoreCase);
 
     private static string? ImagePath(Process process)
     {
