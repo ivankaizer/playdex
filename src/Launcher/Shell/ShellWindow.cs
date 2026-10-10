@@ -69,6 +69,11 @@ internal sealed partial class ShellWindow : Window
     /// <summary>The window in front when the shell was called up over a game: what "Resume" returns to.</summary>
     private nint _gameWindow;
 
+    // Playdex summary: refreshed when the page loads, after sessions, and every few minutes while the window is active.
+    private static readonly TimeSpan _summaryInterval = TimeSpan.FromMinutes(5);
+    private long _summaryRefreshedAt;
+    private bool _refreshingSummary;
+
     /// <param name="onMessage">Page messages the shell doesn't handle (the desktop app's own); true when handled.</param>
     public ShellWindow(
         Task<CoreWebView2Environment> environment,
@@ -104,7 +109,11 @@ internal sealed partial class ShellWindow : Window
 
         _nowPlayingTimer = DispatcherQueue.CreateTimer();
         _nowPlayingTimer.Interval = _nowPlayingInterval;
-        _nowPlayingTimer.Tick += (_, _) => _ = RefreshNowPlayingAsync();
+        _nowPlayingTimer.Tick += (_, _) =>
+        {
+            _ = RefreshNowPlayingAsync();
+            RefreshSummary(force: false);
+        };
 
         services.SessionChanged += PostSession;
         services.GameExited += OnGameExited;
@@ -178,8 +187,15 @@ internal sealed partial class ShellWindow : Window
     }
 
     /// <summary>The library, and the mode the page lays itself out for, in place before the page's own scripts run.</summary>
+    /// <summary>
+    /// The library, the last Playdex summary (null before the first one), whether there is an API key, and the mode the
+    /// page lays itself out for, in place before the page's own scripts run.
+    /// </summary>
     private string PageScript(IReadOnlyDictionary<string, LibraryGame> library) =>
-        $"window.__PLAYDEX_LIBRARY__ = {Library.ToJson(library)}; window.__PLAYDEX_MODE__ = \"{(_mode == ShellMode.Desktop ? "desktop" : "fse")}\";";
+        $"window.__PLAYDEX_LIBRARY__ = {Library.ToJson(library)}; " +
+        $"window.__PLAYDEX_SUMMARY__ = {_services.Summary.Current ?? "null"}; " +
+        $"window.__PLAYDEX_API__ = {(_services.Api.IsConfigured ? "true" : "false")}; " +
+        $"window.__PLAYDEX_MODE__ = \"{(_mode == ShellMode.Desktop ? "desktop" : "fse")}\";";
 
     private async Task InitializeWebViewAsync()
     {
@@ -259,6 +275,7 @@ internal sealed partial class ShellWindow : Window
                 // Also after the desktop app reloads the page: it starts with nothing playing.
                 _nowPlayingPosted = false;
                 _ = RefreshNowPlayingAsync();
+                RefreshSummary(force: true);
                 OnUiReady();
                 break;
             case "home-ready":
@@ -528,7 +545,52 @@ internal sealed partial class ShellWindow : Window
     private void PostSession(string gameId, string state, int seconds)
     {
         PostFromAnyThread($$"""{"type":"session","gameId":{{JsonSerializer.Serialize(gameId, HostJson.Default.String)}},"state":"{{state}}","seconds":{{seconds}}}""");
-        DispatcherQueue.TryEnqueue(() => _ = RefreshNowPlayingAsync());
+        DispatcherQueue.TryEnqueue(() =>
+        {
+            _ = RefreshNowPlayingAsync();
+            if (state == "ended" || (state == "running" && seconds == 0))
+            {
+                // Once when the game starts running and when it ends (not on every 30 s ping): the session is in
+                // Playdex once start (or end) went through, so give it a moment.
+                _ = RefreshSummaryAfterAsync(TimeSpan.FromSeconds(5));
+            }
+        });
+    }
+
+    /// <summary>
+    /// Fetch the Playdex summary and post it to the page when it changed: forced when the page loads and after a session
+    /// starts or ends, otherwise at most every <see cref="_summaryInterval"/> while the window is active.
+    /// </summary>
+    private void RefreshSummary(bool force)
+    {
+        if (_refreshingSummary || (!force && Stopwatch.GetElapsedTime(_summaryRefreshedAt) < _summaryInterval && _summaryRefreshedAt != 0))
+        {
+            return;
+        }
+        _ = RefreshSummaryAsync();
+    }
+
+    private async Task RefreshSummaryAfterAsync(TimeSpan delay)
+    {
+        await Task.Delay(delay);
+        RefreshSummary(force: true);
+    }
+
+    private async Task RefreshSummaryAsync()
+    {
+        _refreshingSummary = true;
+        try
+        {
+            _summaryRefreshedAt = Stopwatch.GetTimestamp();
+            if (await Task.Run(() => _services.Summary.RefreshAsync()))
+            {
+                Post($$"""{"type":"playdex-summary","summary":{{_services.Summary.Current ?? "null"}}}""");
+            }
+        }
+        finally
+        {
+            _refreshingSummary = false;
+        }
     }
 
     public void Post(string json)

@@ -23,6 +23,9 @@ interface HostGame {
   lastPlayed?: number;
   /** Artwork from Steam's local cache, served by the host. */
   images?: GameImages;
+  /** Local games: how they are recorded to Playdex (provider and game id). */
+  captureProvider?: string;
+  captureId?: string;
 }
 
 declare global {
@@ -50,6 +53,8 @@ export interface Game {
   lastPlayed?: number;
   /** Local artwork (host only); each missing kind falls back to the Steam CDN by `art`. */
   images?: GameImages;
+  /** Local games (host only): the identity they are recorded to Playdex with; Steam games use `art`. */
+  capture?: { provider: string; id: string };
 }
 
 export interface Session {
@@ -155,6 +160,7 @@ export const games: Game[] = hostLibrary
       totalMinutes: 0,
       lastPlayed: g.lastPlayed,
       images: g.images,
+      capture: g.captureProvider && g.captureId ? { provider: g.captureProvider, id: g.captureId } : undefined,
     }))
   : demoGames;
 

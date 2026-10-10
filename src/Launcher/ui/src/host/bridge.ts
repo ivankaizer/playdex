@@ -19,6 +19,8 @@ export type HostMessage =
   | { type: "now-playing"; gameId: string | null; since?: number | null }
   /** A {type:"resume-game"} found no game window to switch to. */
   | { type: "resume-failed" }
+  /** A newer Playdex summary (data/playdex.ts); null when the API key was removed. */
+  | { type: "playdex-summary"; summary: unknown }
   /** The desktop app's reply to a {type:"desktop"} request (see host/desktop.ts). */
   | { type: "desktop-result"; id: number; ok: boolean; result?: unknown; error?: unknown }
   /** The desktop app's state changed (backups, updates). */

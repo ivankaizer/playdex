@@ -6,7 +6,9 @@ namespace Playdex.Core;
 /// <summary>
 /// One playable game on this PC. Source "steam": an installed Steam app. Source "playdex": a game added to Playdex (the
 /// config's games), started directly by id (<see cref="ConfigGameId"/>). <see cref="LauncherPath"/> is that game's
-/// generated Steam-shortcut launcher, used only to find its Steam grid art.
+/// generated Steam-shortcut launcher, used only to find its Steam grid art. <see cref="CaptureProvider"/> and
+/// <see cref="CaptureId"/> are how a "playdex" game is recorded to Playdex (<see cref="CaptureGame.From"/>), so the page can
+/// match it to the user's Playdex games; a Steam game is recorded as ("steam", its app id).
 /// </summary>
 public sealed record LibraryGame(
     string Id,
@@ -16,7 +18,9 @@ public sealed record LibraryGame(
     long? LastPlayed,
     [property: JsonIgnore] string? LauncherPath,
     SteamArt? Images = null,
-    [property: JsonIgnore] string? ConfigGameId = null);
+    [property: JsonIgnore] string? ConfigGameId = null,
+    string? CaptureProvider = null,
+    string? CaptureId = null);
 
 [JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase, DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull)]
 [JsonSerializable(typeof(List<LibraryGame>))]
@@ -108,8 +112,10 @@ public static class Library
             var isSteam = string.Equals(game.GameProvider, "steam", StringComparison.OrdinalIgnoreCase);
             int? steamAppId = isSteam && int.TryParse(game.ApiGameId, out var appId) ? appId : null;
             var launcher = LauncherManager.GetLauncherPath(config.Storage, game);
+            var capture = CaptureGame.From(game, config.Api);
             games.Add(new LibraryGame(
-                $"playdex-{game.GameId}", title, "playdex", steamAppId, null, File.Exists(launcher) ? launcher : null, ConfigGameId: game.GameId));
+                $"playdex-{game.GameId}", title, "playdex", steamAppId, null, File.Exists(launcher) ? launcher : null, ConfigGameId: game.GameId,
+                CaptureProvider: capture.GameIdProvider, CaptureId: capture.GameId));
         }
         return games;
     }

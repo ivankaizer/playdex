@@ -15,6 +15,7 @@ internal sealed class ShellServices : IDisposable
         Config = config;
         Api = new CaptureClient(config.Api);
         Queue = new SessionQueue(Api);
+        Summary = new PlaydexSummary(Api);
         Sessions = new SessionManager(
             config, Api, Queue, (gameId, state, seconds) => SessionChanged?.Invoke(gameId, state, seconds), detected => GameExited?.Invoke(detected));
         Input = new ControllerInput(new InputQueue(dispatcher, (code, timestamp) => InputReceived?.Invoke(code, timestamp)));
@@ -26,6 +27,9 @@ internal sealed class ShellServices : IDisposable
     public CaptureClient Api { get; }
 
     public SessionQueue Queue { get; }
+
+    /// <summary>The user's Playdex data the page shows (stats, play time per game); cached between runs.</summary>
+    public PlaydexSummary Summary { get; }
 
     public SessionManager Sessions { get; }
 
@@ -57,6 +61,7 @@ internal sealed class ShellServices : IDisposable
 
     public void Dispose()
     {
+        Summary.Dispose();
         Queue.Dispose();
         Api.Dispose();
     }

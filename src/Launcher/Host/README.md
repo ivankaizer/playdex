@@ -65,6 +65,12 @@ Artwork is read in place from Steam, per image, in this order: the game's non-St
 
 New games appear the next time the launcher starts.
 
+## Playdex data
+
+The Home rail and the hours on game tiles are the user's Playdex data, nothing local: `GET /api/launcher/summary` (src/Api/Modules/Launcher), which takes the install's API key (`ApiKey` auth scheme in the Api; the key reaches nothing else beyond capture). The launcher sends its time zone (Windows id, with the UTC offset as a fallback) so "today" and the 7-day bars are local days. The response has today, the last 7 days, the week's top games, the newest sessions, all-time totals, the streak, and every played game with its identities (`steam:<appid>`, or what a local game is captured with), which the page matches to library games.
+
+`PlaydexSummary` (Core) keeps the last response in `%LOCALAPPDATA%\Playdex\playdex-summary.json` and the host injects it as `window.__PLAYDEX_SUMMARY__` before the page runs, so the rail has data on its first frame and offline. It is fetched again when the page loads, once a game starts running and when it ends, and every 5 minutes while the window is active; a change is posted as `{type:"playdex-summary", summary}`. Without an API key nothing is fetched, the cache is removed, and the rail says where to add the key.
+
 ## Now playing
 
 While a game runs, the top bar shows it with its play time; A on it switches to the game. The game is the one launched here, or else one started elsewhere (`RunningGames` in Core): a game added to Playdex whose process runs (matched by its monitor settings, or its launch executable), or Steam's running app (`HKCU\Software\Valve\Steam\RunningAppID`; no play time, Steam doesn't say when it started). The host checks every 3 s while its window is active and posts `{type:"now-playing", gameId, since}` (epoch ms or null; gameId null when nothing runs) when it changes.

@@ -3,6 +3,8 @@ import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from "rea
 import { openGame } from "../app-state";
 import { Cover } from "../components/shared";
 import { fmtHours, games, isInstalled, isOnPc, recentGames, SOURCE_LABEL, type Game } from "../data/games";
+import { playdexGame, playdexSummary } from "../data/playdex";
+import { useStore } from "../nav/store";
 import "./library.css";
 
 /* By source: Steam's own games, and local games (added to Playdex through the desktop app / Wrapper). */
@@ -148,6 +150,8 @@ function CoverGrid({ list, empty }: { list: Game[]; empty: string }) {
 const CoverItem = memo(function CoverItem({ game, isDefault }: { game: Game; isDefault: boolean }) {
   const onPc = isOnPc(game);
   const installed = isInstalled(game);
+  // Hours played as Playdex has them; "—" for a game with no Playdex sessions.
+  const played = playdexGame(useStore(playdexSummary), game);
   return (
     <button
       className="lcover"
@@ -169,7 +173,7 @@ const CoverItem = memo(function CoverItem({ game, isDefault }: { game: Game; isD
       </span>
       <span className="lcover-title">{game.title}</span>
       <span className="lcover-sub num">
-        {fmtHours(game.totalMinutes)} · {SOURCE_LABEL[game.source]}
+        {fmtHours(played ? Math.round(played.totalSeconds / 60) : 0)} · {SOURCE_LABEL[game.source]}
       </span>
     </button>
   );

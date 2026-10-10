@@ -144,11 +144,12 @@ export function Backdrop({ gameId, className = "" }: { gameId?: string; classNam
 
 /* ---------- This-week bars ---------- */
 
-export function WeekBars({ maxHeight }: { maxHeight?: string }) {
-  const max = Math.max(...weekByDay, 1);
+/** Seven daily bars, oldest first (index 6 = today); `minutes` defaults to the local session history. */
+export function WeekBars({ maxHeight, minutes = weekByDay }: { maxHeight?: string; minutes?: number[] }) {
+  const max = Math.max(...minutes, 1);
   return (
     <div className="week" style={maxHeight ? ({ "--h-max": maxHeight } as React.CSSProperties) : undefined}>
-      {weekByDay.map((m, i) => (
+      {minutes.map((m, i) => (
         <div key={i} className="week-col" data-today={i === 6 ? "" : undefined}>
           <div className="week-bar" title={`${m} min`}>
             <div className="week-fill" style={{ height: `${Math.max(m ? 6 : 0, (m / max) * 100)}%` }} />

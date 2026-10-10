@@ -34,7 +34,8 @@ public sealed record QueuedSession(
 public sealed partial class CaptureJson : JsonSerializerContext;
 
 /// <summary>
-/// Playdex capture API client (POST /capture/sessions/start, /ping, /end and /capture/sessions). The API key and URL
+/// Playdex API client for what the API key reaches: capture (POST /capture/sessions/start, /ping, /end and
+/// /capture/sessions) and the launcher's read endpoint (GET /launcher/summary). The API key and URL
 /// come from PLAYDEX_API_KEY and PLAYDEX_API_URL, or the install's config (<see cref="ConfigStore.Default"/>); the key
 /// is never logged.
 /// </summary>
@@ -84,6 +85,43 @@ public sealed class CaptureClient : IDisposable
 
     public Task<bool> RecordAsync(RecordedSession session) =>
         PostAsync("capture/sessions", session, CaptureJson.Default.RecordedSession);
+
+    /// <summary>
+    /// The user's Playdex data for the launcher (GET launcher/summary, API key only), in this PC's time zone: the
+    /// response's "data" as raw JSON, or null without a key, offline, or on an error.
+    /// </summary>
+    public async Task<string?> GetLauncherSummaryAsync(CancellationToken ct = default)
+    {
+        if (!IsConfigured)
+        {
+            return null;
+        }
+        var zone = TimeZoneInfo.Local;
+        var offset = (int)zone.GetUtcOffset(DateTimeOffset.UtcNow).TotalMinutes;
+        var path = $"launcher/summary?tz={Uri.EscapeDataString(zone.Id)}&utcOffsetMinutes={offset.ToString(System.Globalization.CultureInfo.InvariantCulture)}";
+        var started = Stopwatch.GetTimestamp();
+        try
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, new Uri(BaseAddress, path));
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _apiKey()!.Trim());
+            request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+            using var response = await _http.SendAsync(request, ct);
+            Log.Info($"playdex: launcher/summary -> {(int)response.StatusCode} in {Metrics.MsSince(started):F0} ms");
+            if (!response.IsSuccessStatusCode)
+            {
+                return null;
+            }
+            using var body = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync(ct), cancellationToken: ct);
+            return body.RootElement.TryGetProperty("data", out var data) && data.ValueKind == JsonValueKind.Object
+                ? data.GetRawText()
+                : null;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or UriFormatException or JsonException)
+        {
+            Log.Info($"playdex: launcher/summary failed after {Metrics.MsSince(started):F0} ms: {ex.Message}");
+            return null;
+        }
+    }
 
     private async Task<bool> PostAsync<T>(string path, T body, System.Text.Json.Serialization.Metadata.JsonTypeInfo<T> type)
     {
