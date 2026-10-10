@@ -89,8 +89,10 @@
 }
 .recent-list {
   list-style: none;
-  margin: 0;
-  padding: 0.3rem 0.4rem;
+  /* A scrolling list clips on both axes. The focused row grows (scale 1.02) and its ring sits outside it, about
+     0.55rem past each edge at TV width, so the padding leaves that much room and the margin keeps rows in place. */
+  margin: -0.2rem -0.2rem;
+  padding: 0.5rem 0.6rem;
   display: grid;
   align-content: start;
   gap: 0.35rem;
