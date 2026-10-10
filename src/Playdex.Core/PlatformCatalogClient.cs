@@ -1,18 +1,22 @@
-namespace Wrapper;
+using System.Net.Http.Headers;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
-internal sealed record PlatformOption(string Key, string Name)
+namespace Playdex.Core;
+
+public sealed record PlatformOption(string Key, string Name)
 {
     public override string ToString() => Name;
 }
 
-internal sealed record PlatformCatalogLoad(
+public sealed record PlatformCatalogLoad(
     IReadOnlyList<PlatformOption> Platforms,
     string? Error)
 {
     public bool IsAvailable => Error is null;
 }
 
-internal sealed class PlatformCatalogClient : IDisposable
+public sealed class PlatformCatalogClient : IDisposable
 {
     private readonly HttpClient http;
     private readonly bool ownsClient;
@@ -46,10 +50,7 @@ internal sealed class PlatformCatalogClient : IDisposable
             }
 
             await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
-            var envelope = await JsonSerializer.DeserializeAsync<PlatformCatalogEnvelope>(
-                stream,
-                JsonOptions.Create(),
-                cancellationToken);
+            var envelope = await JsonSerializer.DeserializeAsync(stream, PlatformCatalogJson.Default.PlatformCatalogEnvelope, cancellationToken);
             if (envelope?.Data is null)
             {
                 return new PlatformCatalogLoad([], "Platform catalog returned an invalid response.");
@@ -75,5 +76,10 @@ internal sealed class PlatformCatalogClient : IDisposable
         }
     }
 
-    private sealed record PlatformCatalogEnvelope(IReadOnlyList<PlatformOption>? Data);
 }
+
+internal sealed record PlatformCatalogEnvelope(IReadOnlyList<PlatformOption>? Data);
+
+[JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
+[JsonSerializable(typeof(PlatformCatalogEnvelope))]
+internal sealed partial class PlatformCatalogJson : JsonSerializerContext;

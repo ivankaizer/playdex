@@ -1,17 +1,30 @@
 namespace Playdex.Core;
 
 /// <summary>
-/// Core's log. By default an append-only text file, <see cref="Paths.LogFile"/>; an app with its own logging routes it
-/// there with <see cref="UseSink"/>. Never called on the input thread.
+/// Core's log. By default an append-only text file, <see cref="Paths.LogFile"/> (the launcher's); another app picks its
+/// own file with <see cref="UseFile"/>, or routes lines to its own logging with <see cref="UseSink"/>. Classes that take
+/// an <c>ILogger</c> reach it through <see cref="LogLoggerFactory"/>. Never called on the input thread.
 /// </summary>
 public static class Log
 {
     private static readonly Lock _gate = new();
     private static StreamWriter? _writer;
     private static Action<string>? _sink;
+    private static string _file = Paths.LogFile;
 
     /// <summary>Send every line to <paramref name="sink"/> instead of the log file. It may be called from any thread.</summary>
     public static void UseSink(Action<string> sink) => _sink = sink;
+
+    /// <summary>Write to <paramref name="path"/> instead of the launcher's log. Call before the first line.</summary>
+    public static void UseFile(string path)
+    {
+        lock (_gate)
+        {
+            _writer?.Dispose();
+            _writer = null;
+            _file = path;
+        }
+    }
 
     public static void Info(string message)
     {
@@ -24,8 +37,11 @@ public static class Log
         {
             try
             {
-                _writer ??= new StreamWriter(
-                    new FileStream(Paths.LogFile, FileMode.Append, FileAccess.Write, FileShare.ReadWrite)) { AutoFlush = true };
+                if (_writer is null)
+                {
+                    Directory.CreateDirectory(Path.GetDirectoryName(_file)!);
+                    _writer = new StreamWriter(new FileStream(_file, FileMode.Append, FileAccess.Write, FileShare.ReadWrite)) { AutoFlush = true };
+                }
                 _writer.WriteLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff} [{Environment.CurrentManagedThreadId}] {message}");
             }
             catch (IOException)

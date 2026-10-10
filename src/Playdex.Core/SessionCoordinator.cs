@@ -1,6 +1,14 @@
-namespace Wrapper;
+using System.Diagnostics;
+using Microsoft.Extensions.Logging;
 
-internal sealed partial class SessionCoordinator : IDisposable
+namespace Playdex.Core;
+
+/// <summary>
+/// Runs one configured game: launches it, follows it to exit (<see cref="ProcessMonitor"/>) and records the session
+/// (<see cref="SessionRecorder"/>). Holds the game's <see cref="GameLock"/>, so a game is never tracked twice.
+/// </summary>
+
+public sealed partial class SessionCoordinator : IDisposable
 {
     private readonly AppConfig config;
     private readonly GameConfig game;
@@ -9,11 +17,11 @@ internal sealed partial class SessionCoordinator : IDisposable
     private readonly SessionQueue? queue;
     private readonly GameLock gameLock;
 
-    private SessionCoordinator(AppConfig config, GameConfig game, AppLoggerFactory logging, string? queueFile, HttpMessageHandler? handler)
+    private SessionCoordinator(AppConfig config, GameConfig game, ILogger<SessionCoordinator> logger, string? queueFile, HttpMessageHandler? handler)
     {
         this.config = config;
         this.game = game;
-        logger = logging.CreateLogger<SessionCoordinator>();
+        this.logger = logger;
 
         if (config.Api.IsEnabled)
         {
@@ -26,8 +34,8 @@ internal sealed partial class SessionCoordinator : IDisposable
     /// <param name="queueFile">The offline queue; null for the install's, shared with the launcher.</param>
     /// <param name="handler">For tests; null sends real requests.</param>
     public static SessionCoordinator Create(
-        AppConfig config, GameConfig game, AppLoggerFactory logging, string? queueFile = null, HttpMessageHandler? handler = null) =>
-        new(config, game, logging, queueFile, handler);
+        AppConfig config, GameConfig game, ILogger<SessionCoordinator> logger, string? queueFile = null, HttpMessageHandler? handler = null) =>
+        new(config, game, logger, queueFile, handler);
 
     public async Task RunAsync(CancellationToken cancellationToken)
     {

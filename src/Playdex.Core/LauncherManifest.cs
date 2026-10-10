@@ -1,15 +1,18 @@
-namespace Wrapper;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
-internal sealed record LauncherManifest(string ConfigPath, string GameId)
+namespace Playdex.Core;
+
+public sealed record LauncherManifest(string ConfigPath, string GameId)
 {
-    public static string GetPath(string executablePath) => Path.ChangeExtension(executablePath, AppBrand.LauncherManifestExtension);
+    public static string GetPath(string executablePath) => Path.ChangeExtension(executablePath, Brand.LauncherManifestExtension);
 
     public static LauncherManifest Load(string path)
     {
         try
         {
             using var stream = File.OpenRead(path);
-            var manifest = JsonSerializer.Deserialize<LauncherManifest>(stream, JsonOptions.Create());
+            var manifest = JsonSerializer.Deserialize(stream, LauncherJson.Default.LauncherManifest);
             if (manifest is null || string.IsNullOrWhiteSpace(manifest.ConfigPath) || string.IsNullOrWhiteSpace(manifest.GameId))
             {
                 throw new InvalidDataException("The launcher manifest must contain configPath and gameId.");
@@ -26,9 +29,9 @@ internal sealed record LauncherManifest(string ConfigPath, string GameId)
     }
 }
 
-internal static class LauncherRouting
+public static class LauncherRouting
 {
-    public const string GeneratedLauncherPrefix = AppBrand.LauncherPrefix;
+    public const string GeneratedLauncherPrefix = Brand.LauncherPrefix;
 
     public static LauncherManifest? Resolve(string? processPath)
     {
@@ -48,3 +51,7 @@ internal static class LauncherRouting
             : null;
     }
 }
+
+[JsonSourceGenerationOptions(WriteIndented = true, PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
+[JsonSerializable(typeof(LauncherManifest))]
+internal sealed partial class LauncherJson : JsonSerializerContext;

@@ -196,7 +196,7 @@ internal sealed partial class TraySetupApplication : IDisposable
         Interlocked.Increment(ref activeGameSessions);
         try
         {
-            using var coordinator = SessionCoordinator.Create(config, game, logging);
+            using var coordinator = SessionCoordinator.Create(config, game, logging.CreateLogger<SessionCoordinator>());
             await coordinator.RunAsync(CancellationToken.None);
         }
         catch (Exception ex)

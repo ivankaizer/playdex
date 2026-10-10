@@ -1,6 +1,9 @@
-namespace Wrapper;
+using System.Security.Cryptography;
+using System.Text;
 
-internal sealed class GameLock : IDisposable
+namespace Playdex.Core;
+
+public sealed class GameLock : IDisposable
 {
     private readonly FileStream _stream;
 

@@ -1,9 +1,11 @@
-namespace Wrapper;
-
 using System.Net;
+using System.Runtime.InteropServices;
+using System.Text;
 using System.Text.RegularExpressions;
 
-internal static class GameCatalog
+namespace Playdex.Core;
+
+public static class GameCatalog
 {
     public const int MaximumApiGameIdLength = 128;
     public const int MaximumDisplayNameLength = 128;
@@ -128,7 +130,7 @@ internal static class GameCatalog
     }
 }
 
-internal static partial class SteamStoreTitleReader
+public static partial class SteamStoreTitleReader
 {
     private static readonly HttpClient SharedClient = new()
     {
@@ -145,7 +147,7 @@ internal static partial class SteamStoreTitleReader
             using var request = new HttpRequestMessage(
                 HttpMethod.Get,
                 $"https://store.steampowered.com/app/{Uri.EscapeDataString(appId)}");
-            request.Headers.UserAgent.ParseAdd($"{AppBrand.Name.Replace(' ', '-')}-Wrapper/1.0");
+            request.Headers.UserAgent.ParseAdd(Brand.UserAgent);
 
             using var response = await (httpClient ?? SharedClient).SendAsync(request, cancellationToken);
             if (!response.IsSuccessStatusCode)
@@ -184,7 +186,7 @@ internal static partial class SteamStoreTitleReader
     private static partial Regex HtmlTagRegex();
 }
 
-internal static class SteamAppIdReader
+public static class SteamAppIdReader
 {
     public static string? TryReadForExecutable(string executablePath)
     {
@@ -216,7 +218,7 @@ internal static class SteamAppIdReader
     }
 }
 
-internal static class LaunchOptionsCodec
+public static partial class LaunchOptionsCodec
 {
     public static List<string> Parse(string? launchOptions)
     {
@@ -282,11 +284,9 @@ internal static class LaunchOptionsCodec
         return output.ToString();
     }
 
-    [DllImport("shell32.dll", SetLastError = true)]
-    private static extern IntPtr CommandLineToArgvW(
-        [MarshalAs(UnmanagedType.LPWStr)] string commandLine,
-        out int argumentCount);
+    [LibraryImport("shell32.dll", EntryPoint = "CommandLineToArgvW", SetLastError = true, StringMarshalling = StringMarshalling.Utf16)]
+    private static partial IntPtr CommandLineToArgvW(string commandLine, out int argumentCount);
 
-    [DllImport("kernel32.dll")]
-    private static extern IntPtr LocalFree(IntPtr memory);
+    [LibraryImport("kernel32.dll")]
+    private static partial IntPtr LocalFree(IntPtr memory);
 }

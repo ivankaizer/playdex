@@ -2,12 +2,11 @@ using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
-using Wrapper;
-using static Wrapper.Tests.TestPaths;
+using static Playdex.Core.Tests.TestPaths;
 
-namespace Wrapper.Tests;
+namespace Playdex.Core.Tests;
 
-public sealed class SteamIntegrationTests
+public sealed class SteamShortcutsTests
 {
     [Fact]
     public Task TestAddSteamShortcutAndAvoidDuplicate()
@@ -60,7 +59,7 @@ public sealed class SteamIntegrationTests
         Assert.True(secondResult.WasAdded);
         Assert.True(!firstAgain.WasAdded);
         Assert.Equal(firstResult.AppId, firstAgain.AppId);
-        Assert.True(File.Exists(Path.Combine(userConfig, $"shortcuts.vdf.{AppBrand.Name.ToLowerInvariant()}.bak")));
+        Assert.True(File.Exists(Path.Combine(userConfig, "shortcuts.vdf.playdex.bak")));
         return Task.CompletedTask;
     }
 

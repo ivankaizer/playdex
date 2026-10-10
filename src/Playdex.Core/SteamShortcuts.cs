@@ -1,12 +1,14 @@
 using System.Buffers.Binary;
+using System.Diagnostics;
+using System.Text;
 using System.Text.RegularExpressions;
 using Microsoft.Win32;
 
-namespace Wrapper;
+namespace Playdex.Core;
 
-internal sealed record SteamShortcutResult(uint AppId, string UserConfigDirectory, bool WasAdded);
+public sealed record SteamShortcutResult(uint AppId, string UserConfigDirectory, bool WasAdded);
 
-internal static class SteamIntegration
+public static class SteamIntegration
 {
     public static SteamShortcutResult AddShortcut(GameConfig game, string launcherPath)
     {
@@ -55,7 +57,7 @@ internal static class SteamIntegration
     private static string Quote(string value) => $"\"{value}\"";
 }
 
-internal static class SteamInstallation
+public static class SteamInstallation
 {
     public static string FindActiveUserConfigDirectory()
     {
@@ -158,7 +160,7 @@ internal static class SteamInstallation
     }
 }
 
-internal static class SteamShortcutId
+public static class SteamShortcutId
 {
     public static uint Calculate(string quotedExecutable, string appName)
     {
@@ -177,7 +179,7 @@ internal static class SteamShortcutId
     }
 }
 
-internal static class SteamShortcutsFile
+public static class SteamShortcutsFile
 {
     private const byte ObjectType = 0;
     private const byte StringType = 1;
@@ -244,7 +246,7 @@ internal static class SteamShortcutsFile
             File.WriteAllBytes(temporaryPath, output.ToArray());
             if (File.Exists(path))
             {
-                File.Copy(path, $"{path}.{AppBrand.Name.ToLowerInvariant()}.bak", overwrite: true);
+                File.Copy(path, $"{path}.playdex.bak", overwrite: true);
             }
             File.Move(temporaryPath, path, overwrite: true);
         }

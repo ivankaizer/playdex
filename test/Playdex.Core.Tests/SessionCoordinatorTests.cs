@@ -1,11 +1,10 @@
 using System.Net;
 using System.Text.Json;
-using Wrapper;
-using static Wrapper.Tests.TestPaths;
+using static Playdex.Core.Tests.TestPaths;
 
-namespace Wrapper.Tests;
+namespace Playdex.Core.Tests;
 
-public sealed class SessionTests
+public sealed class SessionCoordinatorTests
 {
     [Fact]
     public async Task TestStartContract()
@@ -95,8 +94,8 @@ public sealed class SessionTests
         game.Launch.ExecutablePath = TestProcess.ExecutablePath;
         game.Launch.Arguments = [.. TestProcess.Arguments];
         game.Monitor.ExitDebounceSeconds = 1;
-        using var logging = AppLoggerFactory.CreateInDirectory(directory);
-        using var coordinator = SessionCoordinator.Create(config, game, logging, Path.Combine(directory, "queue.jsonl"), handler);
+        using var logging = TestLogging.CreateInDirectory(directory);
+        using var coordinator = SessionCoordinator.Create(config, game, logging.CreateLogger<SessionCoordinator>(), Path.Combine(directory, "queue.jsonl"), handler);
 
         await coordinator.RunAsync(CancellationToken.None);
 
@@ -110,7 +109,7 @@ public sealed class SessionTests
     public async Task TestApiDisabledSession()
     {
         var directory = NewTempDir();
-        using var logging = AppLoggerFactory.CreateInDirectory(directory);
+        using var logging = TestLogging.CreateInDirectory(directory);
         var config = new AppConfig
         {
             Api = new ApiConfig { BaseUrl = "" },
@@ -121,7 +120,7 @@ public sealed class SessionTests
         game.Launch.Arguments = [.. TestProcess.Arguments];
         game.Monitor.ExitDebounceSeconds = 1;
 
-        using var coordinator = SessionCoordinator.Create(config, game, logging);
+        using var coordinator = SessionCoordinator.Create(config, game, logging.CreateLogger<SessionCoordinator>());
         await coordinator.RunAsync(CancellationToken.None);
 
         Assert.True(File.ReadAllText(logging.FilePath).Contains("api tracking disabled", StringComparison.OrdinalIgnoreCase));
@@ -152,8 +151,8 @@ public sealed class SessionTests
         game.Launch.ExecutablePath = TestProcess.ExecutablePath;
         game.Launch.Arguments = [.. TestProcess.Arguments];
         game.Monitor.ExitDebounceSeconds = 1;
-        using var logging = AppLoggerFactory.CreateInDirectory(directory);
-        using var coordinator = SessionCoordinator.Create(config, game, logging, queueFile);
+        using var logging = TestLogging.CreateInDirectory(directory);
+        using var coordinator = SessionCoordinator.Create(config, game, logging.CreateLogger<SessionCoordinator>(), queueFile);
 
         await coordinator.RunAsync(CancellationToken.None);
 
@@ -178,8 +177,8 @@ public sealed class SessionTests
         };
         var game = config.GetOrCreateGame(gameId);
 
-        using var logging = AppLoggerFactory.CreateInDirectory(directory);
-        using var coordinator = SessionCoordinator.Create(config, game, logging);
+        using var logging = TestLogging.CreateInDirectory(directory);
+        using var coordinator = SessionCoordinator.Create(config, game, logging.CreateLogger<SessionCoordinator>());
 
         try
         {

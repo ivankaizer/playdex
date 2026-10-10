@@ -1,9 +1,8 @@
 using System.Diagnostics;
 using System.Text.Json;
-using Wrapper;
-using static Wrapper.Tests.TestPaths;
+using static Playdex.Core.Tests.TestPaths;
 
-namespace Wrapper.Tests;
+namespace Playdex.Core.Tests;
 
 public sealed class LauncherTests
 {
@@ -21,7 +20,7 @@ public sealed class LauncherTests
             GameId = "demo",
             Launch = new LaunchConfig { ExecutablePath = gameExecutable }
         };
-        using var logging = AppLoggerFactory.CreateInDirectory(directory);
+        using var logging = TestLogging.CreateInDirectory(directory);
         var manager = new LauncherManager(logging.CreateLogger<LauncherManager>());
         var launcher = manager.SynchronizeGame(storage, game, Path.Combine(directory, "config.json"), sourceExecutable);
         var manifest = LauncherManifest.GetPath(launcher);
@@ -39,11 +38,11 @@ public sealed class LauncherTests
     public Task TestLauncherManifestRouting()
     {
         var directory = NewTempDir();
-        var launcherPath = Path.Combine(directory, $"{AppBrand.LauncherPrefix}demo.exe");
+        var launcherPath = Path.Combine(directory, $"{Brand.LauncherPrefix}demo.exe");
         var configPath = Path.Combine(directory, "wrapper.json");
         File.WriteAllText(
             LauncherManifest.GetPath(launcherPath),
-            JsonSerializer.Serialize(new LauncherManifest(configPath, "demo"), JsonOptions.Create()));
+            JsonSerializer.Serialize(new LauncherManifest(configPath, "demo"), LauncherJson.Default.LauncherManifest));
 
         var manifest = LauncherRouting.Resolve(launcherPath) ?? throw new InvalidOperationException("Launcher manifest was not resolved.");
 
@@ -56,7 +55,7 @@ public sealed class LauncherTests
     public Task TestInvalidLauncherManifest()
     {
         var directory = NewTempDir();
-        var missingManifestLauncher = Path.Combine(directory, $"{AppBrand.LauncherPrefix}missing.exe");
+        var missingManifestLauncher = Path.Combine(directory, $"{Brand.LauncherPrefix}missing.exe");
         try
         {
             LauncherRouting.Resolve(missingManifestLauncher);
@@ -66,7 +65,7 @@ public sealed class LauncherTests
         {
         }
 
-        var invalidManifestLauncher = Path.Combine(directory, $"{AppBrand.LauncherPrefix}invalid.exe");
+        var invalidManifestLauncher = Path.Combine(directory, $"{Brand.LauncherPrefix}invalid.exe");
         File.WriteAllText(LauncherManifest.GetPath(invalidManifestLauncher), "{not-json");
         try
         {
@@ -114,7 +113,7 @@ public sealed class LauncherTests
         };
         var game = config.GetOrCreateGame("demo");
         game.DisplayName = "Demo";
-        using var logging = AppLoggerFactory.CreateInDirectory(directory);
+        using var logging = TestLogging.CreateInDirectory(directory);
         var manager = new LauncherManager(logging.CreateLogger<LauncherManager>());
 
         var first = manager.SynchronizeAll(config, configPath, sourceExecutable).Single();
@@ -148,7 +147,7 @@ public sealed class LauncherTests
 
         var resolved = LauncherManager.ResolveSingleFileSource(oldExecutable);
         var storage = new StorageConfig { LauncherDirectory = Path.Combine(directory, "launchers") };
-        using var logging = AppLoggerFactory.CreateInDirectory(directory);
+        using var logging = TestLogging.CreateInDirectory(directory);
         var launcher = new LauncherManager(logging.CreateLogger<LauncherManager>()).SynchronizeGame(
             storage,
             new GameConfig { GameId = "demo" },
@@ -182,7 +181,7 @@ public sealed class LauncherTests
     [Fact]
     public async Task TestPublishedLauncherIntegration()
     {
-        var publishedWrapper = Environment.GetEnvironmentVariable(AppBrand.PublishedWrapperEnvironmentVariable);
+        var publishedWrapper = Environment.GetEnvironmentVariable("PLAYDEX_PUBLISHED_WRAPPER");
         if (string.IsNullOrWhiteSpace(publishedWrapper))
         {
             return;
@@ -207,7 +206,7 @@ public sealed class LauncherTests
         game.Monitor.ExitDebounceSeconds = 1;
         await new ConfigStore(configPath).SaveAsync(config);
 
-        using var logging = AppLoggerFactory.CreateInDirectory(config.Storage.LogDirectory);
+        using var logging = TestLogging.CreateInDirectory(config.Storage.LogDirectory);
         var launcher = new LauncherManager(logging.CreateLogger<LauncherManager>())
             .SynchronizeGame(config.Storage, game, configPath, publishedWrapper);
         using var process = Process.Start(new ProcessStartInfo(launcher)

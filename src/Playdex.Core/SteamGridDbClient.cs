@@ -1,10 +1,11 @@
 using System.Net;
+using System.Text.Json;
 
-namespace Wrapper;
+namespace Playdex.Core;
 
-internal sealed record SteamGridDbSyncResult(int DownloadedCount, int AvailableCount);
+public sealed record SteamGridDbSyncResult(int DownloadedCount, int AvailableCount);
 
-internal sealed class SteamGridDbClient(HttpClient? httpClient = null)
+public sealed class SteamGridDbClient(HttpClient? httpClient = null)
 {
     private static readonly HttpClient SharedClient = new()
     {
@@ -139,7 +140,7 @@ internal sealed class SteamGridDbClient(HttpClient? httpClient = null)
             HttpMethod.Get,
             $"https://www.steamgriddb.com/api/v2/{relativePath}");
         request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", apiKey);
-        request.Headers.UserAgent.ParseAdd($"{AppBrand.Name.Replace(' ', '-')}-Wrapper/1.0");
+        request.Headers.UserAgent.ParseAdd(Brand.UserAgent);
         using var response = await client.SendAsync(request, cancellationToken);
         if (allowNotFound && response.StatusCode == HttpStatusCode.NotFound) return null;
         if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)

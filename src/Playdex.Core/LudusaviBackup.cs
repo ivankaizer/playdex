@@ -1,6 +1,12 @@
-namespace Wrapper;
+using System.Diagnostics;
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using Microsoft.Extensions.Logging;
 
-internal enum BackupResultKind
+namespace Playdex.Core;
+
+[JsonConverter(typeof(BackupResultKindJsonConverter))]
+public enum BackupResultKind
 {
     Never,
     Running,
@@ -9,7 +15,7 @@ internal enum BackupResultKind
     Failed
 }
 
-internal sealed class GameBackupState
+public sealed class GameBackupState
 {
     public BackupResultKind Result { get; set; } = BackupResultKind.Never;
     public string? ResolvedTitle { get; set; }
@@ -18,15 +24,21 @@ internal sealed class GameBackupState
     public string? LastError { get; set; }
 }
 
-internal sealed class BackupState
+public sealed class BackupState
 {
     public Dictionary<string, GameBackupState> Games { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 }
 
-internal sealed class BackupStateStore(string path) : IDisposable
+/// <summary>Backup results as camelCase strings ("success"), as the Wrapper has always written them.</summary>
+public sealed class BackupResultKindJsonConverter() : JsonStringEnumConverter<BackupResultKind>(JsonNamingPolicy.CamelCase);
+
+[JsonSourceGenerationOptions(WriteIndented = true, PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
+[JsonSerializable(typeof(BackupState))]
+internal sealed partial class BackupJson : JsonSerializerContext;
+
+public sealed class BackupStateStore(string path) : IDisposable
 {
     private readonly SemaphoreSlim gate = new(1, 1);
-    private static readonly JsonSerializerOptions Options = JsonOptions.Create();
 
     public string PathToState { get; } = path;
 
@@ -38,7 +50,7 @@ internal sealed class BackupStateStore(string path) : IDisposable
         }
 
         await using var stream = File.OpenRead(PathToState);
-        var state = await JsonSerializer.DeserializeAsync<BackupState>(stream, Options, cancellationToken) ?? new BackupState();
+        var state = await JsonSerializer.DeserializeAsync(stream, BackupJson.Default.BackupState, cancellationToken) ?? new BackupState();
         state.Games = new Dictionary<string, GameBackupState>(
             state.Games ?? new Dictionary<string, GameBackupState>(),
             StringComparer.OrdinalIgnoreCase);
@@ -69,7 +81,7 @@ internal sealed class BackupStateStore(string path) : IDisposable
             {
                 await using (var stream = new FileStream(temporaryPath, FileMode.CreateNew, FileAccess.Write, FileShare.None, 4096, FileOptions.Asynchronous | FileOptions.WriteThrough))
                 {
-                    await JsonSerializer.SerializeAsync(stream, state, Options, cancellationToken);
+                    await JsonSerializer.SerializeAsync(stream, state, BackupJson.Default.BackupState, cancellationToken);
                     await stream.FlushAsync(cancellationToken);
                 }
                 File.Move(temporaryPath, PathToState, overwrite: true);
@@ -88,14 +100,14 @@ internal sealed class BackupStateStore(string path) : IDisposable
     public void Dispose() => gate.Dispose();
 }
 
-internal sealed record LudusaviProcessResult(int ExitCode, string StandardOutput, string StandardError);
+public sealed record LudusaviProcessResult(int ExitCode, string StandardOutput, string StandardError);
 
-internal interface ILudusaviProcess
+public interface ILudusaviProcess
 {
     Task<LudusaviProcessResult> RunAsync(string executablePath, IReadOnlyList<string> arguments, CancellationToken cancellationToken);
 }
 
-internal sealed class LudusaviProcess : ILudusaviProcess
+public sealed class LudusaviProcess : ILudusaviProcess
 {
     public async Task<LudusaviProcessResult> RunAsync(string executablePath, IReadOnlyList<string> arguments, CancellationToken cancellationToken)
     {
@@ -133,12 +145,12 @@ internal sealed class LudusaviProcess : ILudusaviProcess
     }
 }
 
-internal sealed record LudusaviBackupResult(BackupResultKind Kind, string? ResolvedTitle, string? Error)
+public sealed record LudusaviBackupResult(BackupResultKind Kind, string? ResolvedTitle, string? Error)
 {
     public bool IsSuccess => Kind == BackupResultKind.Success;
 }
 
-internal sealed class LudusaviRunner
+public sealed class LudusaviRunner
 {
     private static readonly TimeSpan DefaultValidationTimeout = TimeSpan.FromSeconds(15);
     private static readonly TimeSpan DefaultDiscoveryTimeout = TimeSpan.FromMinutes(1);
@@ -340,7 +352,7 @@ internal sealed class LudusaviRunner
     }
 }
 
-internal sealed partial class BackupCoordinator : IDisposable
+public sealed partial class BackupCoordinator : IDisposable
 {
     private static readonly TimeSpan SchedulerInterval = TimeSpan.FromMinutes(15);
     private static readonly TimeSpan FailureRetryDelay = TimeSpan.FromHours(1);
@@ -411,7 +423,8 @@ internal sealed partial class BackupCoordinator : IDisposable
         }
     }
 
-    internal static bool IsDue(GameBackupState? state, DateTimeOffset now)
+    /// <summary>Not backed up successfully today, and no attempt within the last hour.</summary>
+    public static bool IsDue(GameBackupState? state, DateTimeOffset now)
     {
         if (state?.LastSuccessAt?.ToLocalTime().Date == now.ToLocalTime().Date) return false;
         return state?.LastAttemptAt is null || now - state.LastAttemptAt >= FailureRetryDelay;

@@ -75,7 +75,7 @@ internal static partial class Program
     {
         var game = config.GetGameForLaunch(gameId);
 
-        using var coordinator = SessionCoordinator.Create(config, game, logging);
+        using var coordinator = SessionCoordinator.Create(config, game, logging.CreateLogger<SessionCoordinator>());
         coordinator.RunAsync(CancellationToken.None).GetAwaiter().GetResult();
     }
 

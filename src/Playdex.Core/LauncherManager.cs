@@ -1,6 +1,12 @@
-namespace Wrapper;
+using System.Runtime.InteropServices;
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
+using Microsoft.Extensions.Logging;
 
-internal sealed partial class LauncherManager(ILogger<LauncherManager> logger)
+namespace Playdex.Core;
+
+public sealed partial class LauncherManager(ILogger<LauncherManager> logger)
 {
     private const int MaximumReadableIdLength = 48;
 
@@ -122,7 +128,7 @@ internal sealed partial class LauncherManager(ILogger<LauncherManager> logger)
         }
 
         var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(game.GameId)))[..8].ToLowerInvariant();
-        return Path.Combine(GetLauncherDirectory(storage), $"{LauncherRouting.GeneratedLauncherPrefix}{readableId}-{hash}.exe");
+        return Path.Combine(GetLauncherDirectory(storage), $"{Brand.LauncherPrefix}{readableId}-{hash}.exe");
     }
 
     public void RemoveLauncherArtifacts(StorageConfig storage, GameConfig game)
@@ -146,7 +152,7 @@ internal sealed partial class LauncherManager(ILogger<LauncherManager> logger)
             return;
         }
 
-        var error = Marshal.GetLastWin32Error();
+        var error = Marshal.GetLastPInvokeError();
         File.Copy(sourceExecutable, launcherPath, overwrite: true);
         LogHardLinkUnavailable(logger, error, launcherPath);
     }
@@ -174,7 +180,7 @@ internal sealed partial class LauncherManager(ILogger<LauncherManager> logger)
         {
             using (var stream = File.Create(temporaryPath))
             {
-                JsonSerializer.Serialize(stream, manifest, JsonOptions.Create());
+                JsonSerializer.Serialize(stream, manifest, LauncherJson.Default.LauncherManifest);
             }
 
             File.Move(temporaryPath, path, overwrite: true);
@@ -191,9 +197,9 @@ internal sealed partial class LauncherManager(ILogger<LauncherManager> logger)
         return string.Concat(value.Select(character => invalid.Contains(character) ? '_' : character)).Trim(' ', '.');
     }
 
-    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    [LibraryImport("kernel32.dll", EntryPoint = "CreateHardLinkW", SetLastError = true, StringMarshalling = StringMarshalling.Utf16)]
     [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool CreateHardLink(string newFileName, string existingFileName, IntPtr securityAttributes);
+    private static partial bool CreateHardLink(string newFileName, string existingFileName, IntPtr securityAttributes);
 
     [LoggerMessage(EventId = 1, Level = LogLevel.Information, Message = "Using single-file launcher source: {SourceExecutable}")]
     private static partial void LogUsingSingleFileSource(ILogger logger, string sourceExecutable);

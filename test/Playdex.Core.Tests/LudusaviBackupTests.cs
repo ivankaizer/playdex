@@ -1,8 +1,7 @@
 using Microsoft.Extensions.Logging.Abstractions;
-using Wrapper;
-using static Wrapper.Tests.TestPaths;
+using static Playdex.Core.Tests.TestPaths;
 
-namespace Wrapper.Tests;
+namespace Playdex.Core.Tests;
 
 public sealed class LudusaviBackupTests
 {
@@ -181,7 +180,7 @@ public sealed class LudusaviBackupTests
         var process = new RecordingLudusaviProcess(
             new(0, "{\"games\":{\"Doom: The Dark Ages\":{}}}", ""),
             new(0, "{\"errors\":[]}", ""));
-        using var logging = AppLoggerFactory.CreateInDirectory(directory);
+        using var logging = TestLogging.CreateInDirectory(directory);
         using var stateStore = new BackupStateStore(Path.Combine(directory, "backups.json"));
         using var coordinator = new BackupCoordinator(
             config,

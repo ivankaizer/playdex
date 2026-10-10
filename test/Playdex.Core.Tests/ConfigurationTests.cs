@@ -1,9 +1,7 @@
-using Wrapper;
-using Wrapper.UI;
-using static Wrapper.Tests.TestPaths;
+using static Playdex.Core.Tests.TestPaths;
 using System.Net;
 
-namespace Wrapper.Tests;
+namespace Playdex.Core.Tests;
 
 public sealed class ConfigurationTests
 {
@@ -78,7 +76,7 @@ public sealed class ConfigurationTests
         var loaded = await store.LoadOrCreateAsync();
 
         Assert.Equal(Path.GetFullPath("relative-state"), loaded.Storage.StateDirectory);
-        Assert.Equal(AppBrand.DefaultLogDirectory, loaded.Storage.LogDirectory);
+        Assert.Equal(Paths.DefaultLogDirectory, loaded.Storage.LogDirectory);
         Assert.Equal(Path.GetFullPath("relative-launchers"), loaded.Storage.LauncherDirectory);
         Assert.True(Path.IsPathFullyQualified(new StorageConfig().StateDirectory));
         Assert.True(Path.IsPathFullyQualified(new StorageConfig().LogDirectory));
@@ -239,7 +237,6 @@ public sealed class ConfigurationTests
         Assert.True(config.Games.ContainsKey("Cronos"));
         Assert.Equal("Cronos", game.GameId);
         Assert.Equal(launcherPath, LauncherManager.GetLauncherPath(config.Storage, game));
-        Assert.Equal("Steam - 1850570", TrayGamePresentation.From(game).Subtitle);
 
         await store.SaveAsync(config);
         var loaded = await store.LoadOrCreateAsync();
@@ -279,7 +276,6 @@ public sealed class ConfigurationTests
         Assert.Equal("1850570", game.ApiGameId);
         Assert.Equal(Path.Combine(directory, "Cronos.exe"), game.Launch.ExecutablePath);
         Assert.Equal(launcherPath, LauncherManager.GetLauncherPath(config.Storage, game));
-        Assert.Equal("Cronos: The New Dawn", TrayGamePresentation.From(game).Title);
 
         await store.SaveAsync(config);
         var loaded = await store.LoadOrCreateAsync();

@@ -1,9 +1,8 @@
 using Playdex.Persistence;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Npgsql;
-using Wrapper;
 
-namespace Wrapper.Tests;
+namespace Playdex.Core.Tests;
 
 [CollectionDefinition(WrapperPostgresCollectionDefinition.Name, DisableParallelization = true)]
 public sealed class WrapperPostgresCollectionDefinition : ICollectionFixture<WrapperPostgresFixture>
