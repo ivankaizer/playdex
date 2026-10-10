@@ -43,7 +43,9 @@ public sealed class LauncherSummaryEndpointTests(PostgresFixture postgres)
         await db.SaveChangesAsync();
         PlaySession Session(long userId, DateTimeOffset startedAt, int minutes) => new()
         {
-            GameId = game.Id, UserId = userId, PlatformId = steam.Id, CaptureMethod = CaptureMethod.Api,
+            // A session with no integration must be manual (play_sessions_manual_integration_check).
+            GameId = game.Id, UserId = userId, PlatformId = steam.Id,
+            CaptureMethod = userId == user.Id ? CaptureMethod.Api : CaptureMethod.Manual,
             IntegrationId = userId == user.Id ? integration.Id : null,
             StartedAt = startedAt, EndedAt = startedAt.AddMinutes(minutes), CreatedAt = now, UpdatedAt = now,
         };
