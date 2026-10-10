@@ -6,7 +6,7 @@ namespace Playdex.Setup;
 
 /// <summary>
 /// Installs the Playdex desktop app for this user into %LOCALAPPDATA%\Programs\Playdex: downloads
-/// playdex-windows-v&lt;version&gt;.zip from the GitHub release this exe was built for (its .sha256 checked), extracts it,
+/// playdex-windows-v&lt;version&gt;.zip from the release this exe was built for (its .sha256 checked), extracts it,
 /// adds a Start menu shortcut and starts Playdex. Once Playdex is installed, running this again just starts it.
 /// </summary>
 /// <remarks>
@@ -89,9 +89,9 @@ internal static partial class Program
                 {
                     throw new InvalidOperationException($"This setup has no release version ({Version}).");
                 }
-                using var releases = new GitHubReleases();
+                using var releases = new ReleaseFeed();
                 var release = await releases.ForVersionAsync(version)
-                    ?? throw new InvalidOperationException($"Playdex {version} is not on GitHub Releases.");
+                    ?? throw new InvalidOperationException($"Playdex {version} is not on download.playdex.dev.");
                 var manifest = AppUpdate.Load(await AppUpdate.StageAsync(releases, release, _install, staging));
                 app = manifest.StagedDirectory;
             }

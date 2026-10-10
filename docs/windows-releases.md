@@ -1,6 +1,6 @@
 # Windows releases
 
-The Windows apps release together from one `v<major>.<minor>.<patch>` tag (`.github/workflows/release-windows.yaml`):
+The Windows apps release together from one `v<major>.<minor>.<patch>` tag (`.github/workflows/release-windows.yaml`). The assets go to the GitHub release and to **download.playdex.dev**, the public feed that installs and updates read (this repository is private):
 
 | Asset | What it is |
 |---|---|
@@ -8,6 +8,21 @@ The Windows apps release together from one `v<major>.<minor>.<patch>` tag (`.git
 | `Playdex-Setup.exe` | Installs the desktop app for the current user into `%LOCALAPPDATA%\Programs\Playdex`, adds a Start menu shortcut and starts it. |
 | `playdex-wrapper-windows-v<version>.zip` + `.sha256` | `Playdex-Setup.exe` named `Wrapper.exe`: how WinForms Wrapper installs (v1.x) move to the desktop app. **Every release must keep it**, because a v1.x Wrapper only ever looks for this asset in the latest release. |
 | `playdex-launcher-v<version>.msix`, `playdex-launcher.cer` | The Full Screen Experience launcher, signed, and its public certificate. Only when the signing secrets are set. |
+
+## The download feed
+
+`download.playdex.dev` is the Cloudflare R2 bucket `playdex-downloads` with a custom domain. `tools/downloads/publish.mjs release` (the last step of the release workflow) writes:
+
+| Path | What it is |
+|---|---|
+| `windows/<tag>/<asset>` | Every asset of the release above, cached as immutable. |
+| `windows/releases/<tag>.json` | The release in GitHub's release JSON shape (`tag_name`, `assets[].browser_download_url`, `size`), pointing at those files. `Playdex-Setup.exe` installs the version it was built for from here. |
+| `windows/releases/latest.json` | The same for the highest version. The desktop app checks it for updates. Written last, and never moved back to an older tag. |
+| `windows/Playdex-Setup.exe` | The latest setup at a stable URL: the download button on playdex.dev/launcher. |
+
+`ReleaseFeed` (`src/Playdex.Core/AppUpdate.cs`) reads it. Set it up once with `bun tools/downloads/publish.mjs setup` (creates the bucket and attaches the domain); CI needs the `CLOUDFLARE_API_TOKEN` (Workers R2 Storage: Edit; setup also needs Zone: Read on playdex.dev) and `CLOUDFLARE_ACCOUNT_ID` secrets.
+
+v1.x WinForms Wrappers still update from the GitHub release, so it keeps being created.
 
 ## Publishing
 
@@ -27,7 +42,7 @@ Users trust the certificate once: the desktop app's "Use as Full Screen Experien
 
 ## Updates
 
-- **Desktop app.** Checks GitHub Releases at startup and daily, downloads and verifies `playdex-windows-v<version>.zip`, and offers "Restart to update". A copy of `Playdex.Run.exe` swaps the app folder, starts the new version and waits up to 60 s for it to confirm; otherwise the old folder is restored and started, and the next start reports why. Details: `src/Desktop/README.md`.
+- **Desktop app.** Checks `download.playdex.dev/windows/releases/latest.json` at startup and daily, downloads and verifies `playdex-windows-v<version>.zip`, and offers "Restart to update". A copy of `Playdex.Run.exe` swaps the app folder, starts the new version and waits up to 60 s for it to confirm; otherwise the old folder is restored and started, and the next start reports why. Details: `src/Desktop/README.md`.
 - **From the WinForms Wrapper.** A v1.x Wrapper's updater downloads `playdex-wrapper-windows-v<version>.zip`, verifies it, and on "Restart to update" replaces `Wrapper.exe` with the setup and starts it with `--update-health`. The setup confirms at once (the Wrapper waits only 30 s), then installs the desktop app from the same release and starts it. The desktop app migrates the Wrapper's config (`%LOCALAPPDATA%\PlaydexWrapper\config.json` into `%LOCALAPPDATA%\Playdex\config.json`; the old file stays), keeps its storage folders and backup state, and regenerates every generated launcher from `Playdex.Run.exe`, so Steam shortcuts keep working. From then on `Wrapper.exe` just opens Playdex.
 - **Launcher.** Installing a newer MSIX over an older one updates it (Settings → This app → Install in the desktop app, or `tools/install-dev.ps1` for local builds).
 

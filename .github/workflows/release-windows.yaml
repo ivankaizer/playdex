@@ -8,6 +8,7 @@ name: Release Windows apps
 #   playdex-launcher-v<version>.msix, playdex-launcher.cer
 #                                                       the Full Screen Experience launcher, signed, when the
 #                                                       LAUNCHER_SIGNING_PFX and LAUNCHER_SIGNING_PASSWORD secrets are set
+# The same files go to download.playdex.dev, the public feed that installs, updates and the landing use.
 
 on:
   push:
@@ -178,3 +179,11 @@ jobs:
           files: |
             artifacts/playdex-launcher-v${{ steps.version.outputs.number }}.msix
             artifacts/playdex-launcher.cer
+
+      # download.playdex.dev (Cloudflare R2): the public feed installs and updates read, since this repository is
+      # private. Every asset under windows/<tag>/, then the release JSON, then latest.json (tools/downloads/publish.mjs).
+      - name: Publish to download.playdex.dev
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: bun tools/downloads/publish.mjs release ${{ github.ref_name }} artifacts

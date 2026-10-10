@@ -4,7 +4,7 @@ using Microsoft.Win32;
 namespace Playdex.Desktop;
 
 /// <summary>
-/// Keeps the desktop app up to date from GitHub Releases (<see cref="AppUpdate"/>): checks at startup and once a day,
+/// Keeps the desktop app up to date from the download feed (<see cref="ReleaseFeed"/>, <see cref="AppUpdate"/>): checks at startup and once a day,
 /// downloads and verifies the new version in the background, and installs it when the user restarts to update. Only
 /// installed builds update (a Release build with Playdex.Run.exe next to it in a folder the user can write).
 /// </summary>
@@ -12,7 +12,7 @@ internal sealed class UpdateFeature(Action changed, Func<bool> gameRunning, Acti
 {
     private static readonly TimeSpan _interval = TimeSpan.FromHours(24);
 
-    private readonly GitHubReleases _releases = new();
+    private readonly ReleaseFeed _releases = new();
     private readonly CancellationTokenSource _stop = new();
     private readonly Lock _gate = new();
     private Task? _check;
@@ -155,7 +155,7 @@ internal sealed class FseFeature(Action changed) : IDisposable
 {
     public const string PackageName = "Playdex.Launcher";
 
-    private readonly GitHubReleases _releases = new();
+    private readonly ReleaseFeed _releases = new();
 
     public FseView View { get; private set; } = new("unavailable", "Checking the Full Screen Experience launcher…");
 
@@ -192,7 +192,7 @@ internal sealed class FseFeature(Action changed) : IDisposable
         try
         {
             var running = ReleaseVersion.TryParseTag($"v{DesktopHost.Version}", out var v) ? v : throw new InvalidOperationException("Unknown Playdex version.");
-            var release = await _releases.ForVersionAsync(running) ?? throw new InvalidOperationException($"Playdex {running} has no release on GitHub.");
+            var release = await _releases.ForVersionAsync(running) ?? throw new InvalidOperationException($"Playdex {running} has no release on download.playdex.dev.");
             var msix = release.Asset($"playdex-launcher-{running.Tag}.msix");
             var cer = release.Asset("playdex-launcher.cer");
             if (msix is null || cer is null)

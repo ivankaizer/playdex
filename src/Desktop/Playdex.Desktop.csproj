@@ -2,8 +2,8 @@
   <!--
     The desktop app: Playdex in a normal window and the tray, the successor of the WinForms Wrapper (see
     docs/launcher/wrapper-merge-plan.md, phase 4). WinUI 3 + WebView2 showing the launcher's React UI in desktop mode,
-    unpackaged and self-contained; it installs per user (%LOCALAPPDATA%\Programs\Playdex) and updates itself from GitHub
-    Releases. Not in Playdex.sln for the same reason as the launcher host: the WinUI XAML compiler only runs on Windows.
+    unpackaged and self-contained; it installs per user (%LOCALAPPDATA%\Programs\Playdex) and updates itself from the
+    download feed (download.playdex.dev). Not in Playdex.sln for the same reason as the launcher host: the WinUI XAML compiler only runs on Windows.
 
     Dev (loads the Vite dev server at http://localhost:5190):  dotnet run
     Release folder (Native AOT, with ui/ and Playdex.Run.exe): tools/publish.ps1
