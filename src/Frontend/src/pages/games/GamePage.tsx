@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import { AppLayout } from "@/components/AppLayout";
-import { BarChart, CardHeading, Cover, Dot, StatTile, type BarDatum } from "@/components/ui";
+import { BarChart, CardHeading, Cover, Dot, type BarDatum } from "@/components/ui";
 import { apiRequest, errorMessage } from "@/lib/api";
 import { getDurationSeconds } from "@/lib/dates";
-import { formatDateLabel, formatDuration, formatHours, formatTimeLabel } from "@/lib/format";
+import { formatCount, formatDateLabel, formatDuration, formatHoursShort, formatTimeLabel } from "@/lib/format";
 import { cx } from "@/lib/cx";
 import { logout } from "@/lib/navigation";
 import { platformColor } from "@/lib/platforms";
@@ -242,16 +242,16 @@ export function GamePage({ hash }: { hash: string | null }) {
           <div className="flex min-w-0 flex-col gap-7">
             <div className="min-w-0">
               <p className="pdx-kicker">Game</p>
-              <h2 className="mt-2 break-words text-[40px] font-semibold leading-[1.08] tracking-[-0.025em] text-ink">{title}</h2>
+              <h2 className="mt-2 break-words text-[clamp(28px,6vw,40px)] font-semibold leading-[1.08] tracking-[-0.025em] text-ink">{title}</h2>
               {state.gameDetailsError.length > 0 && (
                 <p className="mt-3 text-[13px] text-danger">{state.gameDetailsError}</p>
               )}
             </div>
 
             <div className="grid grid-cols-[repeat(auto-fit,minmax(min(170px,100%),1fr))] gap-4">
-              <StatTile label="Hours played" value={formatHours(totalSeconds(state), 1)} />
-              <StatTile label="Sessions" value={state.stats?.sessionCount ?? 0} />
-              <StatTile label="Last played" value={lastPlayedLabel(state)} />
+              <KpiTile label="Hours played" value={formatHoursShort(totalSeconds(state))} />
+              <KpiTile label="Sessions" value={formatCount(state.stats?.sessionCount ?? 0)} />
+              <KpiTile label="Last played" value={lastPlayedLabel(state)} />
             </div>
 
             <div className="grid grid-cols-[repeat(auto-fit,minmax(min(280px,100%),1fr))] gap-4">
@@ -493,6 +493,16 @@ export function GamePage({ hash }: { hash: string | null }) {
   );
 }
 
+/** KPI tile whose figure never truncates: it shrinks with clamp() and wraps only as a last resort. */
+function KpiTile({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="pdx-tile min-w-0">
+      <p className="pdx-label">{label}</p>
+      <p className="pdx-num mt-2.5 break-words text-[clamp(24px,5vw,36px)] font-semibold leading-tight tracking-[-0.02em]">{value}</p>
+    </div>
+  );
+}
+
 function placeholderBars(count: number): BarDatum[] {
   return Array.from({ length: count }, (_, item) => ({ key: String(item), value: 0, label: " " }));
 }
@@ -501,7 +511,7 @@ function placeholderBars(count: number): BarDatum[] {
 function chartBars(buckets: GameChartBucket[]): BarDatum[] {
   const peak = Math.max(...buckets.map((item) => item.seconds), 0);
   return buckets.map((item) => {
-    const hoursLabel = `${formatHours(item.seconds, 1)} played`;
+    const hoursLabel = `${formatHoursShort(item.seconds)} played`;
     return {
       key: item.key,
       value: item.hours,

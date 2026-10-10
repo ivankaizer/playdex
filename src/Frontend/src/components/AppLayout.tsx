@@ -56,7 +56,7 @@ export function AppLayout({ title, children, overlay }: AppLayoutProps) {
   );
 
   return (
-    <main className="pdx-page relative px-4 pb-10 pt-6 sm:px-8 sm:pt-12">
+    <main className="pdx-page relative px-4 pb-8 pt-6 sm:px-8 sm:pb-10 sm:pt-12">
       <div className="relative mx-auto flex w-full max-w-[1180px] flex-col gap-7">
         <AppHeader
           title={title}

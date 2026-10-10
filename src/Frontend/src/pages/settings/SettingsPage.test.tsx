@@ -101,12 +101,12 @@ describe("SettingsPage", () => {
     expect(await screen.findByText("steam-account")).toBeInTheDocument();
     // Save stays disabled until a field changes.
     expect(await screen.findByRole("button", { name: "Save changes" })).toBeDisabled();
-    expect(screen.getByRole("spinbutton")).toHaveValue(5);
+    expect(screen.getByRole("spinbutton")).toHaveValue("5");
     fireEvent.click(screen.getByRole("button", { name: "Increase minimum minutes" }));
-    expect(screen.getByRole("spinbutton")).toHaveValue(6);
+    expect(screen.getByRole("spinbutton")).toHaveValue("6");
     expect(screen.getByRole("button", { name: "Save changes" })).toBeEnabled();
     fireEvent.click(screen.getByRole("button", { name: "Discard" }));
-    expect(screen.getByRole("spinbutton")).toHaveValue(5);
+    expect(screen.getByRole("spinbutton")).toHaveValue("5");
     expect(screen.getByRole("button", { name: "Save changes" })).toBeDisabled();
     expect(await screen.findByText("No games connected yet. Pick two above to merge their playtime.")).toBeInTheDocument();
 
@@ -164,5 +164,79 @@ describe("SettingsPage", () => {
       search.resolve({ query: "Hades", results: [{ gameId: "1", title: "Hades", platform: "steam", capsuleUrl: null }] }),
     );
     await waitFor(() => expect(screen.getByText("Search to find the primary game.")).toBeInTheDocument());
+  });
+
+  it("shows 0 minutes as Off, clamps a stored value above 60 and lets saving write it back", async () => {
+    const put = vi.fn<Handler>(() => Promise.resolve({ ignoreShortSessionsMinutes: 60, telegramChatId: null }));
+    routeApi({
+      "GET /settings": () => Promise.resolve({ ignoreShortSessionsMinutes: 120, telegramChatId: null }),
+      "PUT /settings": put,
+    });
+    renderPage();
+
+    const spin = await screen.findByRole("spinbutton");
+    await waitFor(() => expect(spin).toHaveValue("60"));
+    expect(screen.getByRole("button", { name: "Increase minimum minutes" })).toBeDisabled();
+    expect(screen.getByText(/Saved minimum is above 60 min/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Discard" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+    expect(put).toHaveBeenCalledWith(
+      "/settings",
+      expect.objectContaining({ body: { ignoreShortSessionsMinutes: 60, telegramChatId: null } }),
+    );
+    await waitFor(() => expect(screen.getByRole("button", { name: "Save changes" })).toBeDisabled());
+
+    fireEvent.click(screen.getByRole("button", { name: "Off" }));
+    expect(spin).toHaveValue("Off");
+    expect(spin).toHaveAttribute("aria-valuetext", "Off");
+    expect(screen.getByRole("button", { name: "Discard" })).toBeInTheDocument();
+  });
+
+  it("blocks saving an invalid chat ID with an inline note", async () => {
+    routeApi();
+    renderPage();
+    const input = await screen.findByPlaceholderText("Chat ID");
+    await waitFor(() => expect(input).toBeEnabled());
+    fireEvent.change(input, { target: { value: "@channel" } });
+    expect(input).toHaveAttribute("aria-invalid", "true");
+    expect(screen.getByText("Use a numeric chat ID like 77434259 or -1001234567890.")).toBeInTheDocument();
+    expect(screen.getByText("Fix the chat ID to save")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Save changes" })).toBeDisabled();
+  });
+
+  it("lists the first 10 game connections with a pluralized count and Show all", async () => {
+    const connections = Array.from({ length: 12 }, (_, index) => ({
+      gameId: `p${index}`,
+      title: `Primary game ${index}`,
+      platform: "steam",
+      capsuleUrl: null,
+      connectedGameId: `s${index}`,
+      connectedTitle: `Merged game ${index}`,
+      connectedPlatform: "psn",
+      connectedCapsuleUrl: null,
+    }));
+    routeApi({ "GET /games/connections": () => Promise.resolve({ connections }) });
+    renderPage();
+
+    expect(await screen.findByText("12 pairs")).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: /^Unlink / })).toHaveLength(10);
+    expect(screen.getByRole("button", { name: "Primary game 0" })).toHaveAttribute("title", "Primary game 0");
+    fireEvent.click(screen.getByRole("button", { name: "Show all 12" }));
+    expect(screen.getAllByRole("button", { name: /^Unlink / })).toHaveLength(12);
+    fireEvent.click(screen.getByRole("button", { name: "Show fewer" }));
+    expect(screen.getAllByRole("button", { name: /^Unlink / })).toHaveLength(10);
+  });
+
+  it("keeps long integration IDs whole in the tooltip and shows the first 6 integrations", async () => {
+    const longId = "thisisaverylongusernamethatisall (76561198012345678)";
+    const providers = Array.from({ length: 7 }, (_, index) => ({ ...steam, id: index + 1, accountId: index === 0 ? longId : `acct-${index}` }));
+    routeApi({ "GET /providers": () => Promise.resolve({ providers }) });
+    renderPage();
+
+    expect(await screen.findByTitle(longId)).toHaveTextContent("thisisaverylongusern…198012345678)");
+    expect(screen.getByText("7 of 7 active")).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: "Manage" })).toHaveLength(6);
+    fireEvent.click(screen.getByRole("button", { name: "Show all 7" }));
+    expect(screen.getAllByRole("button", { name: "Manage" })).toHaveLength(7);
   });
 });

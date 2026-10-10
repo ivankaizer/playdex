@@ -2,13 +2,11 @@ import { act, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { useState } from "react";
 import type { DraftBatchDto, DraftCapabilities, DraftRowDto } from "@/models/drafts";
 import type { ManualMappingSearchResult, ManualSessionStartRequest } from "@/models/manual";
-import { openSessionCreate, completeSearch, type SessionCreateState } from "../sessionCreateState";
-import { dataUrlBytes, readAsDataUrl } from "./draftInterop";
+import { openSessionCreate, completeSearch, setQuery, type SessionCreateState } from "../sessionCreateState";
+import { dataUrlBytes, middleTruncate, readAsDataUrl } from "./draftInterop";
 import { DraftWorkspace } from "./DraftWorkspace";
 import { LiveSessionControl } from "./LiveSessionControl";
-import { SessionActions } from "./SessionActions";
 import { SessionCreateModal } from "./SessionCreateModal";
-import { SessionEditModal } from "./SessionEditModal";
 
 vi.mock("./draftInterop", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./draftInterop")>()),
@@ -29,38 +27,6 @@ const buttonByText = (text: string) =>
 
 const buttonStartingWith = (text: string) =>
   screen.getAllByRole("button").find((button) => button.textContent?.trim().startsWith(text)) as HTMLButtonElement;
-
-describe("SessionActions", () => {
-  it("offers edit and remove for finished sessions", () => {
-    const { container } = render(<SessionActions canEdit />);
-    expect(container.querySelector("button[data-action=edit]")?.textContent).toBe("Edit");
-    expect(container.querySelector("button[data-action=remove]")?.textContent).toBe("Remove");
-  });
-
-  it("does not offer edit for active sessions", () => {
-    const { container } = render(<SessionActions canEdit={false} />);
-    expect(container.querySelectorAll("button[data-action=edit]")).toHaveLength(0);
-    expect(container.querySelectorAll("button[data-action=remove]")).toHaveLength(1);
-  });
-});
-
-describe("SessionEditModal", () => {
-  it("renders an accessible second-precision date time editor", () => {
-    const { container } = render(
-      <SessionEditModal gameTitle="Hades II" startedAt="2026-08-04T18:30:15" endedAt="2026-08-04T20:45:30" />,
-    );
-    const dialog = screen.getByRole("dialog");
-    expect(dialog).toHaveAttribute("aria-modal", "true");
-    expect(dialog).toHaveTextContent("Hades II");
-    const inputs = container.querySelectorAll<HTMLInputElement>("input[type=datetime-local]");
-    expect(inputs).toHaveLength(2);
-    inputs.forEach((input) => expect(input).toHaveAttribute("step", "1"));
-    expect(inputs[0].getAttribute("value")).toBe("2026-08-04T18:30:15");
-    expect(inputs[1].getAttribute("value")).toBe("2026-08-04T20:45:30");
-    expect(container.querySelector("button[data-action=cancel]")?.textContent).toBe("Cancel");
-    expect(container.querySelector("button[data-action=save]")?.textContent).toBe("Save session");
-  });
-});
 
 function CreateModalHarness({
   initial,
@@ -149,7 +115,7 @@ describe("SessionCreateModal readiness", () => {
     const { container } = render(<CreateModalHarness initial={{ ...state, date: "2026-10-04" }} embedded />);
     const save = container.querySelector<HTMLButtonElement>("button[data-action=save]")!;
     expect(save).toBeDisabled();
-    expect(container).toHaveTextContent("Select a game.");
+    expect(container).toHaveTextContent("Choose a game to continue.");
     fireEvent.click(screen.getAllByRole("button").find((button) => button.textContent?.includes("Hades II"))!);
     expect(save).toBeDisabled();
     fireEvent.click(container.querySelector("button[data-platform=pc]")!);
@@ -157,7 +123,44 @@ describe("SessionCreateModal readiness", () => {
     expect(save).not.toBeDisabled();
     expect(container).toHaveTextContent("Hades II · PC · 30m on Oct 4");
   });
+
+  it("rejects minutes over 59 and warns about sessions over 24 hours", () => {
+    const base = completeSearch(openSessionCreate("historical", new Date(2026, 9, 4)), {
+      query: "Hades",
+      igdbAvailable: true,
+      results: [{ source: "local", gameId: "g1", igdbId: null, title: "Hades II", platform: null, platformId: null, capsuleUrl: null }],
+    });
+    const ready = { ...base, date: "2026-10-04", selectedGame: base.results[0], platformKey: "pc" };
+    const { container, unmount } = render(<CreateModalHarness initial={{ ...ready, hours: "1", minutes: "75" }} embedded />);
+    expect(container.querySelector("button[data-action=save]")).toBeDisabled();
+    expect(screen.getByText("Minutes must be between 0 and 59.")).toHaveClass("text-danger");
+    unmount();
+
+    const long = render(<CreateModalHarness initial={{ ...ready, hours: "26", minutes: "0" }} embedded />);
+    expect(long.container.querySelector("button[data-action=save]")).not.toBeDisabled();
+    expect(screen.getByText(/over 24 hours, double-check it/)).toHaveClass("text-warn");
+  });
+
+  it("labels the result count with plurals and wraps long names with a title", () => {
+    const title = "Kirby and the Forgotten Land – Nintendo Switch 2 Edition + Star-Crossed World";
+    const state = completeSearch(setQueryFor("Kirby"), {
+      query: "Kirby",
+      igdbAvailable: true,
+      results: [{ source: "igdb", gameId: null, igdbId: "1", title, platform: null, platformId: null, capsuleUrl: null }],
+    });
+    const { container } = render(<CreateModalHarness initial={state} embedded />);
+    expect(container).toHaveTextContent("1 result");
+    expect(screen.getByTitle(title)).toHaveClass("line-clamp-2");
+  });
+
+  it("says when a search found nothing", () => {
+    const state = completeSearch(setQueryFor("zzz"), { query: "zzz", igdbAvailable: true, results: [] });
+    const { container } = render(<CreateModalHarness initial={state} embedded />);
+    expect(container).toHaveTextContent("Nothing matches “zzz”. Try a shorter name.");
+  });
 });
+
+const setQueryFor = (query: string) => setQuery(openSessionCreate("historical", new Date(2026, 9, 4)), query);
 
 describe("LiveSessionControl", () => {
   it("search shows the poster and start requires a selection and platform", async () => {
@@ -303,7 +306,7 @@ describe("DraftWorkspace", () => {
   ])("discloses administrator retention of %s days", async (days, period) => {
     stubFetch(() => json([]));
     const { container } = render(<DraftWorkspace embedded capabilities={capabilities({ historyRetentionDays: days })} />);
-    await waitFor(() => expect(container.innerHTML).toContain("No saved drafts"));
+    await waitFor(() => expect(container.innerHTML).toContain("Nothing waiting for review"));
     expect(container.innerHTML).toContain("Playdex retains your input, screenshot, and AI results");
     expect(container.innerHTML).toContain(period);
     expect(container.innerHTML).toContain("administrator review");
@@ -383,15 +386,16 @@ describe("DraftWorkspace", () => {
     await resume();
     await waitFor(() => expect(container.querySelectorAll("article")).toHaveLength(1));
     fireEvent.click(buttonStartingWith("Accept all ready"));
-    await waitFor(() => expect(container.innerHTML).toContain("removed from saved review"));
+    await waitFor(() => expect(container.innerHTML).toContain("Batch reviewed"));
+    expect(container.innerHTML).toContain("1 session added to your history.");
     expect(accepted).toHaveBeenCalled();
-    await waitFor(() => expect(container.innerHTML).toContain("No saved drafts"));
+    await waitFor(() => expect(container.innerHTML).toContain("Nothing waiting for review"));
   });
 
   it("embedded workspace uses a full-page composer and saved batch rail", async () => {
     stubFetch(() => json([]));
     const { container } = render(<DraftWorkspace embedded capabilities={capabilities()} />);
-    await waitFor(() => expect(container.innerHTML).toContain("No saved drafts"));
+    await waitFor(() => expect(container.innerHTML).toContain("Nothing waiting for review"));
     expect(screen.queryByRole("dialog")).toBeNull();
     expect(container.innerHTML).not.toContain(">Close<");
     expect(container.innerHTML).toContain("Create AI batch");
@@ -532,5 +536,43 @@ describe("DraftWorkspace", () => {
     expect(patchBody).toMatchObject({ revision: 1, gameId: null, igdbId: "114283" });
     expect(buttonByText("Accept")).not.toBeDisabled();
     expect(container.querySelectorAll("[data-game-result]")).toHaveLength(0);
+  });
+
+  it("lists the first saved batches with a Show all toggle", async () => {
+    const batches = Array.from({ length: 7 }, () => batchOf(draftRow(), draftRow()));
+    stubFetch(() => json(batches));
+    const { container } = render(<DraftWorkspace embedded capabilities={capabilities()} />);
+    await waitFor(() => expect(buttonByText("Show all 7")).toBeInTheDocument());
+    expect(container.querySelectorAll("aside button").length).toBe(6);
+    expect(container.innerHTML).toContain("2 drafts pending");
+    fireEvent.click(buttonByText("Show all 7"));
+    expect(container.querySelectorAll("aside button").length).toBe(8);
+    expect(buttonByText("Show fewer")).toBeInTheDocument();
+  });
+
+  it("holds drafts over 24 hours out of Accept all and asks to accept them one by one", async () => {
+    const normal = draftRow();
+    const long = draftRow({ durationMinutes: 26 * 60 });
+    stubFetch(batchServer(batchOf(normal, long)));
+    const { container } = render(<DraftWorkspace />);
+    await resume();
+    await waitFor(() => expect(container.querySelectorAll("article")).toHaveLength(2));
+    expect(buttonStartingWith("Accept all ready")).toHaveTextContent("Accept all ready (1)");
+    expect(container).toHaveTextContent("1 to check");
+    expect(container).toHaveTextContent("Over 24 hours. Check the duration before accepting.");
+    expect(buttonByText("Accept anyway")).not.toBeDisabled();
+    expect(container.querySelectorAll("article")[1]).toHaveClass("border-warn");
+  });
+});
+
+describe("middleTruncate", () => {
+  it("keeps the start and the extension", () => {
+    const name = "IMG_20250914_183022_HDR_portrait_edited_edited.webp";
+    const short = middleTruncate(name, 44);
+    expect(Array.from(short)).toHaveLength(44);
+    expect(short.startsWith("IMG_2025")).toBe(true);
+    expect(short.endsWith("edited.webp")).toBe(true);
+    expect(short).toContain("…");
+    expect(middleTruncate("shot.png", 44)).toBe("shot.png");
   });
 });

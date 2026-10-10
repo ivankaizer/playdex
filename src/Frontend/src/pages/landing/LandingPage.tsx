@@ -3,6 +3,7 @@ import { Link } from "react-router";
 import { AppFooter } from "@/components/AppFooter";
 import { PlatformChips } from "@/components/PlatformChips";
 import { BarChart, CardHeading, Cover, Donut, LegendRow, StatTile, type BarDatum, type DonutSegment } from "@/components/ui";
+import { formatHoursShort } from "@/lib/format";
 import { platformColor } from "@/lib/platforms";
 import { dashUrl } from "./dashUrl";
 import { LandingHeader } from "./LandingHeader";
@@ -126,7 +127,7 @@ export function LandingPage() {
         <LandingHeader />
 
         <section className="flex flex-col gap-7 px-2 pb-6 pt-6 sm:pt-10">
-          <h1 className="m-0 max-w-[16em] text-[44px] font-semibold leading-[1.02] tracking-[-0.035em] sm:text-[68px]">
+          <h1 className="m-0 max-w-[16em] text-[clamp(40px,9vw,68px)] font-semibold leading-[1.02] tracking-[-0.035em]">
             Your cross-platform playtime, <span className="text-accent">perfectly organized.</span>
           </h1>
           <p className="m-0 max-w-[34em] text-pretty text-[17px] leading-[1.55] text-ink-2 sm:text-[19px]">
@@ -253,7 +254,7 @@ export function LandingPage() {
           />
           <ol className="m-0 grid list-none gap-4 p-0 [grid-template-columns:repeat(auto-fit,minmax(min(120px,100%),1fr))]">
             {previewTopGames.map((game, index) => (
-              <li key={game.gameId} className="flex min-w-0 flex-col gap-3">
+              <li key={game.gameId} className="flex min-w-0 max-w-[240px] flex-col gap-3">
                 <div className="relative">
                   <Cover
                     title={game.title}
@@ -267,9 +268,11 @@ export function LandingPage() {
                     {index + 1}
                   </span>
                 </div>
-                <div className="flex items-baseline justify-between gap-2">
-                  <span className="min-w-0 text-[15px] font-medium leading-[1.3]">{game.title}</span>
-                  <span className="pdx-num text-sm font-semibold text-accent">{game.hours}h</span>
+                <div className="flex min-w-0 flex-col gap-0.5">
+                  <span title={game.title} className="line-clamp-2 break-words text-[15px] font-medium leading-[1.3]">
+                    {game.title}
+                  </span>
+                  <span className="pdx-num text-sm font-semibold text-accent">{formatHoursShort(game.hours * 3600)}</span>
                 </div>
               </li>
             ))}

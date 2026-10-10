@@ -304,6 +304,14 @@ export function presentProvider(provider: ProviderStatus): ProviderPresentation 
   return { label, name: formatProviderName(provider.platform), subtitle };
 }
 
+/** Keeps both ends of a long account ID ("name … (7656…)") instead of cutting the tail off. */
+export function truncateMiddle(value: string, max = 34): string {
+  const chars = Array.from(value);
+  if (chars.length <= max) return value;
+  const head = Math.ceil((max - 1) * 0.6);
+  return `${chars.slice(0, head).join("")}…${chars.slice(chars.length - (max - 1 - head)).join("")}`;
+}
+
 function providerMark(platform: string): string {
   switch (platform) {
     case "steam":

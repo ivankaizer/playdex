@@ -21,8 +21,9 @@ export function AppHeader({ title, navItems, path, onNavigate, onLogout, theme, 
         <p className="text-[11px] font-semibold uppercase tracking-[0.32em] text-accent">Playdex</p>
         <h1 className="truncate text-2xl font-semibold tracking-[-0.01em]">{title}</h1>
       </div>
-      <div className="flex flex-wrap items-center gap-3">
-        <nav data-header-nav aria-label="Main" className="flex flex-wrap gap-1.5">
+      {/* At ≤600px the tools take the full row: nav pills on top, then toggle, a stretching search and log out. */}
+      <div data-header-tools className="flex flex-wrap items-center gap-3 max-[600px]:w-full">
+        <nav data-header-nav aria-label="Main" className="flex flex-wrap gap-1.5 max-[600px]:w-full">
           {navItems.map((item) => {
             const active = path === item.path || (item.path !== "/" && path.startsWith(`${item.path}/`));
             return (
@@ -42,9 +43,9 @@ export function AppHeader({ title, navItems, path, onNavigate, onLogout, theme, 
             );
           })}
         </nav>
-        <div data-header-utilities className="flex items-center gap-3">
+        <div data-header-utilities className="flex items-center gap-3 max-[600px]:w-full">
           <ThemeToggle theme={theme} onToggle={onToggleTheme} />
-          <div data-header-search className="w-[190px] min-w-0 max-sm:w-[150px]">
+          <div data-header-search className="w-[190px] min-w-0 max-[600px]:w-auto max-[600px]:flex-[1_1_0]">
             <GameSearchBox search={search} onNavigate={onNavigate} />
           </div>
           <button

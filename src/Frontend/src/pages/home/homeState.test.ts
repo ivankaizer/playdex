@@ -5,6 +5,8 @@ import {
   completeLogin,
   completeProfile,
   failLogin,
+  homeMiniStats,
+  homeStatsRequest,
   initialHomeState,
   isLoginDisabled,
   profileLabel,
@@ -54,5 +56,29 @@ describe("homeState", () => {
     state = completeProfile(state, { userId: 42, email: "loaded@example.com" });
     expect(state.isProfileLoading).toBe(false);
     expect(profileLabel(state)).toBe("loaded@example.com");
+  });
+
+  describe("homeMiniStats", () => {
+    const now = new Date("2026-10-07T12:00:00Z"); // Wednesday
+    const day = (date: string, totalSeconds: number) => ({ date, totalSeconds, sessionCount: 1, platforms: [] });
+
+    it("asks for a 365-day window ending today", () => {
+      expect(homeStatsRequest(now)).toBe("/stats/daily?from=2025-10-08&to=2026-10-07");
+    });
+
+    it("sums today and the week from Monday and counts the streak ending today", () => {
+      const stats = homeMiniStats([day("2026-10-04", 900), day("2026-10-05", 3600), day("2026-10-06", 60), day("2026-10-07", 120)], now);
+      expect(stats).toEqual({ todaySeconds: 120, weekSeconds: 3780, streakDays: 4, streakCapped: false });
+    });
+
+    it("keeps yesterday's streak alive before today's first session and reports zero for an empty history", () => {
+      expect(homeMiniStats([day("2026-10-05", 60), day("2026-10-06", 60), day("2026-10-07", 0)], now).streakDays).toBe(2);
+      expect(homeMiniStats([], now)).toEqual({ todaySeconds: 0, weekSeconds: 0, streakDays: 0, streakCapped: false });
+    });
+
+    it("flags a streak that runs past the window", () => {
+      const days = Array.from({ length: 365 }, (_, i) => day(new Date(Date.UTC(2026, 9, 7 - i)).toISOString().slice(0, 10), 60));
+      expect(homeMiniStats(days, now)).toMatchObject({ streakDays: 365, streakCapped: true });
+    });
   });
 });

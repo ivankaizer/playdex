@@ -21,6 +21,9 @@ describe("LandingPage", () => {
     expect(screen.getByRole("link", { name: "Open Playdex →" })).toHaveAttribute("href", dashUrl);
     expect(screen.queryByRole("form", { name: "Sign in" })).not.toBeInTheDocument();
     expect(screen.getByText("Top 5 games from recap")).toBeInTheDocument();
+    // Top 5 names wrap to two lines and keep the full name in the title.
+    expect(screen.getByTitle("Baldur's Gate 3")).toHaveClass("line-clamp-2");
+    expect(screen.queryByRole("navigation", { name: "Footer" })).not.toBeInTheDocument();
     expect(fetchMock).not.toHaveBeenCalled();
   });
 });

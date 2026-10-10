@@ -132,7 +132,7 @@ export function LauncherPage() {
             ← Playdex
           </Link>
           <p className="pdx-kicker">Playdex Launcher · Windows preview</p>
-          <h1 className="m-0 max-w-[15em] text-[44px] font-semibold leading-[1.02] tracking-[-0.035em] sm:text-[68px]">
+          <h1 className="m-0 max-w-[15em] text-[clamp(40px,9vw,68px)] font-semibold leading-[1.02] tracking-[-0.035em]">
             Your gaming PC, <span className="text-accent">as a console.</span>
           </h1>
           <p className="m-0 max-w-[36em] text-pretty text-[17px] leading-[1.55] text-ink-2 sm:text-[19px]">

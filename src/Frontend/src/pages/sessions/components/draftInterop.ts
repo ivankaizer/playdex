@@ -68,3 +68,19 @@ export function dataUrlBytes(dataUrl: string): Uint8Array<ArrayBuffer> {
   for (let index = 0; index < binary.length; index++) bytes[index] = binary.charCodeAt(index);
   return bytes;
 }
+
+/**
+ * Shortens a file name in the middle so the start and the extension stay visible:
+ * "IMG_20250914_183022_HDR_portrait_edited_edited.webp" → "IMG_20250914_183022_HDR_…ed_edited.webp".
+ * Works on code points so emoji and other astral characters are never split.
+ */
+export function middleTruncate(name: string, max: number): string {
+  const chars = Array.from(name);
+  if (chars.length <= max) return name;
+  const dot = name.lastIndexOf(".");
+  const extension = dot > 0 && name.length - dot <= 6 ? Array.from(name.slice(dot)) : [];
+  const base = chars.slice(0, chars.length - extension.length);
+  const keep = Math.max(2, max - extension.length - 1);
+  const head = Math.ceil(keep * 0.6);
+  return [...base.slice(0, head), "…", ...base.slice(base.length - (keep - head)), ...extension].join("");
+}

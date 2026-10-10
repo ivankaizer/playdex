@@ -1,5 +1,7 @@
+import { useState } from "react";
 import { Cover } from "@/components/ui";
 import { cx } from "@/lib/cx";
+import { formatCount, formatCountNoun } from "@/lib/format";
 import type { GameConnection, GameSearchResult } from "@/models/games";
 import { SectionHeading } from "../shared/SectionHeading";
 import type { GameSearchState, SearchSlot } from "./mappingState";
@@ -8,6 +10,12 @@ import { useMapping } from "./useMapping";
 type Mapping = ReturnType<typeof useMapping>;
 
 const platformLabel = (platform: string | null | undefined) => (platform ? platform : "Unknown platform");
+
+/** Pairs shown before "Show all". */
+const PairsPreviewCount = 10;
+
+/** Identifying game names wrap to two lines; the full name stays in the title tooltip. */
+const twoLineName = "line-clamp-2 [overflow-wrap:anywhere]";
 
 const secondaryCoverStyle = { background: "linear-gradient(135deg,#8a96a3,#b5bfc9)" };
 
@@ -19,6 +27,10 @@ export function MappingSection() {
   const canConnect =
     primary !== null && secondary !== null && primary.gameId !== secondary.gameId && !state.isConnectionSaving;
   const pairCount = state.gameConnections.length;
+  const [showAllPairs, setShowAllPairs] = useState(false);
+  const hasMorePairs = pairCount > PairsPreviewCount;
+  const shownPairs =
+    showAllPairs || !hasMorePairs ? state.gameConnections : state.gameConnections.slice(0, PairsPreviewCount);
 
   return (
     <section id="game-connections" data-settings-section="game-connections" className="pdx-card flex flex-col gap-6">
@@ -54,9 +66,9 @@ export function MappingSection() {
             search={state.primary}
             mapping={mapping}
           />
-          <div className="hidden flex-col gap-2 md:flex" aria-hidden="true">
-            <span className="pdx-label">&nbsp;</span>
-            <span className="grid h-12 place-items-center text-lg text-accent">⟵</span>
+          <div className="flex flex-col gap-2" aria-hidden="true">
+            <span className="pdx-label hidden md:block">&nbsp;</span>
+            <span className="grid rotate-90 place-items-center text-lg text-accent md:h-12 md:rotate-0">⟵</span>
           </div>
           <GameSearchField
             slot="secondary"
@@ -95,9 +107,7 @@ export function MappingSection() {
         <div className="pdx-label flex justify-between px-1 pb-2">
           <span>Connected pairs</span>
           {!state.isGameConnectionsLoading ? (
-            <span className="pdx-num">
-              {pairCount} {pairCount === 1 ? "pair" : "pairs"}
-            </span>
+            <span className="pdx-num">{formatCountNoun(pairCount, "pair")}</span>
           ) : null}
         </div>
         {state.isGameConnectionsLoading ? (
@@ -112,9 +122,25 @@ export function MappingSection() {
             No games connected yet. Pick two above to merge their playtime.
           </div>
         ) : (
-          state.gameConnections.map((connection) => (
-            <ConnectionRow key={`${connection.gameId}-${connection.connectedGameId}`} connection={connection} mapping={mapping} />
-          ))
+          <>
+            {shownPairs.map((connection) => (
+              <ConnectionRow
+                key={`${connection.gameId}-${connection.connectedGameId}`}
+                connection={connection}
+                mapping={mapping}
+              />
+            ))}
+            {hasMorePairs ? (
+              <button
+                type="button"
+                onClick={() => setShowAllPairs((value) => !value)}
+                aria-expanded={showAllPairs}
+                className="pdx-btn-outline mx-1 mt-1.5 !h-9 self-start !px-4 !text-[13px]"
+              >
+                {showAllPairs ? "Show fewer" : `Show all ${formatCount(pairCount)}`}
+              </button>
+            ) : null}
+          </>
         )}
       </div>
     </section>
@@ -193,7 +219,9 @@ function SearchResultButton({ result, onSelect }: { result: GameSearchResult; on
     >
       <Cover title={result.title} src={result.capsuleUrl} className="h-9 w-9 rounded-[10px]" initialClassName="text-sm" />
       <span className="min-w-0">
-        <span className="block truncate text-sm font-semibold">{result.title}</span>
+        <span title={result.title} className={cx("block text-sm font-semibold leading-snug", twoLineName)}>
+          {result.title}
+        </span>
         <span className="block text-xs text-muted">{platformLabel(result.platform)}</span>
       </span>
     </button>
@@ -202,7 +230,7 @@ function SearchResultButton({ result, onSelect }: { result: GameSearchResult; on
 
 function ConnectionRow({ connection, mapping }: { connection: GameConnection; mapping: Mapping }) {
   return (
-    <div className="pdx-row grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3.5 gap-y-2 !rounded-[20px] px-3.5 py-3 sm:grid-cols-[minmax(0,1fr)_32px_minmax(0,1fr)_auto]">
+    <div className="pdx-row grid grid-cols-[minmax(0,1fr)_32px_minmax(0,1fr)_auto] items-center gap-3.5 !rounded-[20px] px-3.5 py-3 max-[600px]:grid-cols-[minmax(0,1fr)] max-[600px]:gap-2.5">
       <ConnectionGame
         title={connection.title}
         capsuleUrl={connection.capsuleUrl}
@@ -213,11 +241,11 @@ function ConnectionRow({ connection, mapping }: { connection: GameConnection; ma
       />
       <span
         aria-hidden="true"
-        className="hidden h-8 w-8 place-items-center rounded-full bg-mint text-sm text-accent sm:grid"
+        className="grid h-8 w-8 place-items-center rounded-full bg-mint text-sm text-accent max-[600px]:hidden"
       >
         ⟵
       </span>
-      <div className="col-start-1 row-start-2 min-w-0 sm:col-start-auto sm:row-start-auto">
+      <div className="min-w-0 max-[600px]:pl-5">
         <ConnectionGame
           title={connection.connectedTitle}
           capsuleUrl={connection.connectedCapsuleUrl}
@@ -231,7 +259,7 @@ function ConnectionRow({ connection, mapping }: { connection: GameConnection; ma
         onClick={() => void mapping.disconnectGames(connection.gameId, connection.connectedGameId)}
         disabled={mapping.state.isConnectionSaving}
         aria-label={`Unlink ${connection.connectedTitle} from ${connection.title}`}
-        className="pdx-btn-danger col-start-2 row-span-2 row-start-1 !h-8 !px-3.5 !text-xs sm:col-start-auto sm:row-span-1 sm:row-start-auto"
+        className="pdx-btn-danger !h-8 !px-3.5 !text-xs max-[600px]:justify-self-end"
       >
         Unlink
       </button>
@@ -267,7 +295,8 @@ function ConnectionGame({
         <button
           type="button"
           onClick={onOpen}
-          className="block max-w-full truncate text-left text-[15px] font-medium transition-colors hover:text-accent"
+          title={title}
+          className={cx("block max-w-full text-left text-[15px] font-medium leading-[1.3] transition-colors hover:text-accent", twoLineName)}
         >
           {title}
         </button>

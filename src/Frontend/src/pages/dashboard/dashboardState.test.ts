@@ -13,6 +13,7 @@ import {
   getRecentSessions,
   getTodayView,
   getWeekView,
+  greetingFor,
   failRefresh,
   getCurrentSession,
   getStatsView,
@@ -358,5 +359,85 @@ describe("dashboard redesign views", () => {
     const state = completeRefresh(initialDashboardState, { ...data, recentSessions: [older] }, now);
     expect(getRecentSessions(state, now)[0]).toMatchObject({ date: "Jun 30", duration: "1h 55m" });
     expect(formatShortDuration(600)).toBe("10m");
+  });
+
+  it("shows <1% and <0.1h for slivers and plural-aware notes", () => {
+    const week = getWeekView(
+      {
+        days: { "2026-07-13": 36060 },
+        dayPlatforms: {
+          "2026-07-13": [
+            { platformKey: "steam", platformName: "Steam", totalSeconds: 36000 },
+            { platformKey: "custom", platformName: "Custom", totalSeconds: 60 },
+          ],
+        },
+      },
+      now,
+    );
+    expect(week.platforms.map((item) => [item.share, item.hours])).toEqual([
+      ["100%", "10h"],
+      ["<1%", "<0.1h"],
+    ]);
+
+    const state = completeRefresh(initialDashboardState, snapshot(), now);
+    const oneDay = getOverviewView(state, { days: { "2026-07-13": 600 } }, "month", now);
+    expect(oneDay.activityNote).toBe("1 day played · 13 of 31 days in");
+  });
+
+  it("renders an empty account without NaN and with empty-state notes", () => {
+    const empty: AccountStatsPeriod = { totalSeconds: 0, sessionCount: 0, topGameTitle: null, platforms: [], topGames: [], months: [] };
+    const state = completeRefresh(initialDashboardState, { ...snapshot(), monthlyStats: empty, yearlyStats: empty, recentSessions: [] }, now);
+    const month = getOverviewView(state, { days: {} }, "month", now);
+    expect(month.kpis).toEqual([
+      { label: "Hours played", value: "0h", sub: "0 of 31 days played" },
+      { label: "Sessions", value: "0", sub: "—" },
+      { label: "Top title", value: "—", sub: undefined },
+    ]);
+    expect(month.activityNote).toBe("No play yet");
+    expect(month.fewGamesNote).toBe("No games yet this month. Your ranking fills in as you play.");
+    const year = getOverviewView(state, null, "year", now);
+    expect(year.activityNote).toBe("No play yet");
+    expect(JSON.stringify([month, year])).not.toContain("NaN");
+    expect(getWeekView(null, now).platforms).toEqual([]);
+  });
+
+  it("notes a short top-games list and scales bars to the largest game", () => {
+    const state = completeRefresh(initialDashboardState, snapshot(), now);
+    const two: AccountStatsPeriod = {
+      totalSeconds: 3_000_000,
+      sessionCount: 128_403,
+      topGameTitle: "B",
+      platforms: [],
+      topGames: [
+        { gameId: "1", title: "A", totalSeconds: 1000 },
+        { gameId: "2", title: "B", totalSeconds: 2000 },
+      ],
+      months: [],
+    };
+    const view = getOverviewView({ ...state, yearlyStats: two }, null, "year", now);
+    expect(view.topGames.map((game) => game.pct)).toEqual([50, 100]);
+    expect(view.fewGamesNote).toBe("Only 2 games so far this year. Your ranking fills in as you play.");
+    expect(view.kpis[0].value).toBe("833.3h");
+    expect(view.kpis[1].value).toBe("128,403");
+    expect(view.kpis[2].sub).toBe("0.3h · <1%");
+    expect(getOverviewView(state, null, "month", now).fewGamesNote).toBe(
+      "Only one game so far this month. Your ranking fills in as you play.",
+    );
+  });
+
+  it("labels yesterday's sessions and a week that spans New Year", () => {
+    const data = snapshot();
+    const yesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1, 23, 58);
+    const late = { ...data.todaySessions[0], sessionId: 10, startedAt: yesterday.toISOString(), endedAt: now.toISOString() };
+    const state = completeRefresh(initialDashboardState, { ...data, recentSessions: [late] }, now);
+    expect(getRecentSessions(state, now)[0].date).toBe("Yesterday, 23:58");
+    expect(getWeekView(null, new Date("2026-01-01T12:00:00Z")).rangeLabel).toBe("Dec 29, 2025 – Jan 4, 2026");
+  });
+
+  it("greets by the local hour", () => {
+    expect(greetingFor(new Date(2026, 9, 10, 4))).toBe("Good evening");
+    expect(greetingFor(new Date(2026, 9, 10, 9))).toBe("Good morning");
+    expect(greetingFor(new Date(2026, 9, 10, 13))).toBe("Good afternoon");
+    expect(greetingFor(new Date(2026, 9, 10, 19))).toBe("Good evening");
   });
 });

@@ -27,7 +27,8 @@ describe("preferencesState", () => {
     ["   ", 0],
     ["0", 0],
     ["1.0", 1],
-    ["1e2", 100],
+    ["1e1", 10],
+    ["60", 60],
     [" 15 ", 15],
   ])("accepts integer minutes %j", (draft, expected) => {
     const { submission } = p.buildSettingsSubmission(withMinutes(draft));
@@ -39,12 +40,12 @@ describe("preferencesState", () => {
     expect(submission!.body.telegramChatId).toBeNull();
   });
 
-  it.each(["-1", "1.5", "nope", "Infinity", "NaN", "0x10", "1e400", "2147483648", "1,000"])(
-    "rejects non-integer or negative minutes %j",
+  it.each(["-1", "1.5", "nope", "Infinity", "NaN", "0x10", "1e400", "2147483648", "1,000", "61", "1e2"])(
+    "rejects non-integer, negative or out-of-range minutes %j",
     (draft) => {
       const result = p.buildSettingsSubmission(withMinutes(draft));
       expect(result.submission).toBeNull();
-      expect(result.state.settingsError).toBe("Enter a non-negative number of minutes.");
+      expect(result.state.settingsError).toBe("Enter a whole number of minutes from 0 to 60.");
     },
   );
 
@@ -92,7 +93,7 @@ describe("preferencesState", () => {
     expect(p.canSendTestNotification(state)).toBe(false);
     state = p.endTestNotification(p.completeTestNotification(state, { sent: true }));
     expect(p.canSendTestNotification(state)).toBe(true);
-    expect(state.testNotificationMessage).toBe("Test message sent.");
+    expect(state.testNotificationMessage).toBe("Test message sent to chat 987654321.");
     expect(state.testNotificationError).toBe("");
 
     state = p.endTestNotification(p.failTestNotification(p.beginTestNotification(state), "Apprise unavailable."));
@@ -126,5 +127,40 @@ describe("preferencesState", () => {
     expect(p.stepIgnoreShortSessionsMinutes(state, 1).ignoreShortSessionsMinutes).toBe("1");
     expect(p.stepIgnoreShortSessionsMinutes(p.createPreferencesState(), -1).ignoreShortSessionsMinutes).toBe("0");
     expect(p.parsedMinimumMinutes(p.setIgnoreShortSessionsMinutes(state, " "))).toBe(0);
+  });
+
+  it("caps stepping at 60 and treats typed values above 60 as invalid", () => {
+    const at60 = withMinutes("60");
+    expect(p.parsedMinimumMinutes(at60)).toBe(60);
+    expect(p.stepIgnoreShortSessionsMinutes(at60, 1).ignoreShortSessionsMinutes).toBe("60");
+    expect(p.parsedMinimumMinutes(withMinutes("61"))).toBeNull();
+    expect(p.stepIgnoreShortSessionsMinutes(withMinutes("500"), 1).ignoreShortSessionsMinutes).toBe("1");
+  });
+
+  it("shows a stored minimum above 60 clamped and keeps the form dirty until it is saved", () => {
+    let state = p.completeSettingsLoad(p.createPreferencesState(), { ignoreShortSessionsMinutes: 120, telegramChatId: null });
+    expect(state.ignoreShortSessionsMinutes).toBe("60");
+    expect(p.hasDiscardableChanges(state)).toBe(false);
+    expect(p.isPreferencesDirty(state)).toBe(true);
+    expect(p.canSavePreferences(state)).toBe(true);
+
+    // Discard restores the clamped value; the write-back is still pending.
+    state = p.discardSettingsChanges(p.stepIgnoreShortSessionsMinutes(state, -5));
+    expect(state.ignoreShortSessionsMinutes).toBe("60");
+    expect(p.isPreferencesDirty(state)).toBe(true);
+    expect(p.buildSettingsSubmission(state).submission!.body.ignoreShortSessionsMinutes).toBe(60);
+
+    state = p.completeSettingsSave(state, { ignoreShortSessionsMinutes: 60, telegramChatId: null });
+    expect(p.isPreferencesDirty(state)).toBe(false);
+  });
+
+  it("only allows saving a dirty form with valid minutes and chat ID", () => {
+    const loaded = p.completeSettingsLoad(p.createPreferencesState(), { ignoreShortSessionsMinutes: 5, telegramChatId: null });
+    expect(p.canSavePreferences(loaded)).toBe(false);
+    expect(p.canSavePreferences(p.setIgnoreShortSessionsMinutes(loaded, "6"))).toBe(true);
+    expect(p.canSavePreferences(p.setIgnoreShortSessionsMinutes(loaded, "90"))).toBe(false);
+    expect(p.canSavePreferences(p.setTelegramChatId(loaded, "@channel"))).toBe(false);
+    expect(p.canSavePreferences(p.setTelegramChatId(loaded, " -1001234567890 "))).toBe(true);
+    expect(p.isTelegramChatIdDraftValid("  ")).toBe(true);
   });
 });

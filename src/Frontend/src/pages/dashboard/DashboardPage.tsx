@@ -10,9 +10,9 @@ import {
   Segmented,
   ShareBar,
   StackedBar,
-  StatTile,
 } from "@/components/ui";
 import { apiRequest, errorMessage, isAbortError } from "@/lib/api";
+import { formatCountNoun } from "@/lib/format";
 import { encodeGameId } from "@/lib/gameHash";
 import { logout, useAppNavigate } from "@/lib/navigation";
 import { platformColor } from "@/lib/platforms";
@@ -44,17 +44,75 @@ import {
   getRecentSessions,
   getTodayView,
   getWeekView,
+  greetingFor,
   initialDashboardState,
   recapPath,
   recentSessionsRequest,
   waitAllOrCancel,
   type DashboardActivity,
+  type DashboardPlatformView,
   type DashboardState,
+  type OverviewKpi,
   type OverviewPeriod,
   type RecapRange,
 } from "./dashboardState";
 
 const utcMonthName = new Intl.DateTimeFormat("en-US", { month: "long", timeZone: "UTC" });
+
+/** Long game titles step down in size so they stay readable in a KPI tile. */
+function kpiTitleSize(value: string): string {
+  const length = Array.from(value).length;
+  return length <= 12 ? "clamp(24px,2.6vw,36px)" : length <= 24 ? "clamp(20px,2vw,28px)" : "clamp(17px,1.6vw,22px)";
+}
+
+/**
+ * Overview KPI tile. Figures never truncate; they shrink with clamp(). The top title wraps to three lines
+ * with the full name in `title`.
+ */
+function KpiTile({ kpi, loading, text }: { kpi: OverviewKpi; loading: boolean; text: boolean }) {
+  const value = loading ? "—" : kpi.value;
+  return (
+    <div className="pdx-tile">
+      <p className="pdx-label">{kpi.label}</p>
+      {text ? (
+        <p
+          title={value}
+          className="mt-2.5 line-clamp-3 font-semibold leading-[1.2] tracking-[-0.02em] [overflow-wrap:anywhere]"
+          style={{ fontSize: kpiTitleSize(value) }}
+        >
+          {value}
+        </p>
+      ) : (
+        <p className="pdx-num mt-2.5 whitespace-nowrap text-[clamp(26px,8vw,36px)] font-semibold leading-tight tracking-[-0.02em]">
+          {value}
+        </p>
+      )}
+      {!loading && kpi.sub !== undefined && <p className="mt-1 text-[13px] text-muted">{kpi.sub}</p>}
+    </div>
+  );
+}
+
+/** Two-column (auto-fit) platform legend with "52% · 64.9h" per row. */
+function PlatformLegend({ items, className }: { items: readonly DashboardPlatformView[]; className?: string }) {
+  return (
+    <div className={className}>
+      {items.map((item) => (
+        <LegendRow
+          key={item.key}
+          color={platformColor(item.key, item.label)}
+          name={<span title={item.label}>{item.label}</span>}
+          pct={item.share}
+          detail={item.hours}
+        />
+      ))}
+    </div>
+  );
+}
+
+/** Hides every bar label except the first of each quarter on phones (the year chart's minor months). */
+function minorLabel(label: string, minor: boolean) {
+  return minor ? <span className="max-[600px]:invisible">{label}</span> : label;
+}
 
 export function DashboardPage() {
   const navigate = useAppNavigate();
@@ -214,13 +272,13 @@ export function DashboardPage() {
   const week = getWeekView(activity, now);
   const recent = getRecentSessions(state, now);
   const overview = getOverviewView(state, activity, period, now);
-  const overviewStats = period === "month" ? state.monthlyStats : state.yearlyStats;
-  const gameCount = overview.topGames.length;
+  const overviewBars =
+    period === "year" ? overview.bars.map((bar, index) => ({ ...bar, label: minorLabel(bar.label, index % 3 !== 0) })) : overview.bars;
 
   return (
-    <AppLayout title="Dashboard">
+    <AppLayout title={greetingFor(now)}>
       {loading ? (
-        <section aria-label="Live session controls" aria-busy="true" className="pdx-card !rounded-[28px] !py-3 !pl-7 !pr-3 md:!rounded-full">
+        <section aria-label="Live session controls" aria-busy="true" className="pdx-card !rounded-[28px] !py-3 !pl-7 !pr-3 min-[1041px]:!rounded-full">
           <div className="flex h-10 items-center gap-3">
             <span aria-hidden="true" className="h-[7px] w-[7px] rounded-full bg-faint-2"></span>
             <span className="h-3 w-40 rounded-full bg-track"></span>
@@ -268,7 +326,7 @@ export function DashboardPage() {
               </span>
               {!loading && (
                 <span className="text-[15px] text-muted">
-                  played across {today.sessions} {today.sessions === 1 ? "session" : "sessions"}
+                  played across {formatCountNoun(today.sessions, "session")}
                 </span>
               )}
             </div>
@@ -288,36 +346,24 @@ export function DashboardPage() {
           <div className="flex flex-col gap-3.5">
             <div className="flex flex-wrap items-baseline justify-between gap-x-3">
               <span className="pdx-label">Platforms this week</span>
-              {week.platforms.length > 0 && (
-                <span className="text-[13px] text-muted">
-                  {week.platforms.length} {week.platforms.length === 1 ? "platform" : "platforms"}
-                </span>
-              )}
+              {activity !== null && <span className="text-[13px] text-muted">{formatCountNoun(week.platforms.length, "platform")}</span>}
             </div>
+            <StackedBar
+              segments={week.platforms.map((item) => ({
+                key: item.key,
+                label: item.label,
+                value: item.seconds,
+                color: platformColor(item.key, item.label),
+                detail: item.hours,
+              }))}
+            />
             {week.platforms.length === 0 ? (
-              <p className="pdx-dashed">No play logged this week yet.</p>
+              <p className="text-sm text-muted">No play this week yet.</p>
             ) : (
-              <>
-                <StackedBar
-                  segments={week.platforms.map((item) => ({
-                    key: item.key,
-                    label: item.label,
-                    value: item.seconds,
-                    color: platformColor(item.key, item.label),
-                  }))}
-                />
-                <div className="grid grid-cols-2 gap-x-6 gap-y-2.5 max-[420px]:grid-cols-1">
-                  {week.platforms.map((item) => (
-                    <LegendRow
-                      key={item.key}
-                      color={platformColor(item.key, item.label)}
-                      name={item.label}
-                      pct={`${item.value}%`}
-                      detail={item.hours}
-                    />
-                  ))}
-                </div>
-              </>
+              <PlatformLegend
+                items={week.platforms}
+                className="grid gap-x-6 gap-y-2.5 [grid-template-columns:repeat(auto-fit,minmax(min(170px,100%),1fr))]"
+              />
             )}
           </div>
         </div>
@@ -345,7 +391,7 @@ export function DashboardPage() {
               </div>
             ))
           ) : recent.length === 0 ? (
-            <p className="pdx-dashed">No sessions logged yet.</p>
+            <p className="pdx-dashed">No sessions yet. Start one above, or log a past session from Sessions.</p>
           ) : (
             recent.map((session) => (
               <div
@@ -361,13 +407,16 @@ export function DashboardPage() {
                   <button
                     type="button"
                     onClick={() => navigateToGame(session.gameId)}
+                    title={session.title}
                     className="block max-w-full truncate text-left text-[15px] font-medium transition-colors hover:text-accent"
                   >
                     {session.title}
                   </button>
-                  <p className="mt-0.5 flex items-center gap-1.5 truncate text-[13px] text-muted">
+                  <p className="mt-0.5 flex items-center gap-1.5 text-[13px] text-muted">
                     <Dot color={platformColor(session.platformKey, session.platform)} size={7} />
-                    {session.platform} · {session.date}
+                    <span className="min-w-0 truncate">
+                      {session.platform} · {session.date}
+                    </span>
                   </p>
                 </div>
                 <span className="pdx-num text-[15px] font-semibold text-accent">{session.duration}</span>
@@ -401,7 +450,7 @@ export function DashboardPage() {
 
         <div className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(min(200px,100%),1fr))]">
           {overview.kpis.map((kpi) => (
-            <StatTile key={kpi.label} label={kpi.label} value={loading ? "—" : kpi.value} sub={loading ? undefined : kpi.sub} />
+            <KpiTile key={kpi.label} kpi={kpi} loading={loading} text={kpi.label === "Top title"} />
           ))}
         </div>
 
@@ -411,7 +460,7 @@ export function DashboardPage() {
             {overview.activityNote && <span className="pdx-num text-[13px] text-muted">{overview.activityNote}</span>}
           </div>
           <BarChart
-            data={overview.bars}
+            data={overviewBars}
             height={140}
             gap={period === "month" ? 4 : 6}
             radius={period === "month" ? 6 : 8}
@@ -432,6 +481,7 @@ export function DashboardPage() {
                   label: item.label,
                   value: item.seconds,
                   color: platformColor(item.key, item.label),
+                  detail: item.hours,
                 }))}
                 center={
                   <div>
@@ -440,21 +490,11 @@ export function DashboardPage() {
                   </div>
                 }
               />
-              <div className="flex min-w-0 flex-[1_1_140px] flex-col gap-3.5">
-                {overview.platforms.length === 0 ? (
-                  <p className="text-sm text-muted">No platforms yet.</p>
-                ) : (
-                  overview.platforms.map((item) => (
-                    <LegendRow
-                      key={item.key}
-                      color={platformColor(item.key, item.label)}
-                      name={item.label}
-                      pct={`${item.value}%`}
-                      detail={item.hours}
-                    />
-                  ))
-                )}
-              </div>
+              {overview.platforms.length === 0 ? (
+                <p className="min-w-0 flex-[1_1_140px] text-sm text-muted">No play yet. Platforms show up after your first session.</p>
+              ) : (
+                <PlatformLegend items={overview.platforms} className="flex min-w-0 flex-[1_1_140px] flex-col gap-3.5" />
+              )}
             </div>
           </div>
 
@@ -466,6 +506,7 @@ export function DashboardPage() {
                 <button
                   type="button"
                   onClick={() => navigateToGame(game.gameId)}
+                  title={game.title}
                   className="truncate text-left text-[15px] font-medium transition-colors hover:text-accent"
                 >
                   {game.title}
@@ -474,13 +515,7 @@ export function DashboardPage() {
                 <ShareBar pct={game.pct} className="col-start-2 col-end-4" />
               </div>
             ))}
-            {!loading && overviewStats !== null && gameCount < 3 && (
-              <p className="pdx-dashed mt-auto">
-                {gameCount === 0
-                  ? `No games played yet this ${period}.`
-                  : `Only ${gameCount === 1 ? "one game" : `${gameCount} games`} so far this ${period}. Your ranking fills in as you play.`}
-              </p>
-            )}
+            {!loading && overview.fewGamesNote && <p className="pdx-dashed mt-auto">{overview.fewGamesNote}</p>}
           </div>
         </div>
       </section>

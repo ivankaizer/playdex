@@ -40,17 +40,41 @@ describe("HomePage", () => {
     vi.unstubAllGlobals();
   });
 
-  it("shows the cached email for a logged in session without fetching the profile", () => {
+  it("shows the cached email for a logged in session without fetching the profile", async () => {
     localStorage.setItem("playdex.token", "token");
     localStorage.setItem("playdex.email", "cached@example.com");
-    const fetchMock = vi.spyOn(globalThis, "fetch");
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(jsonResponse(200, { data: { accountId: null, days: [] }, error: null }));
 
     renderHome();
 
     // Shown in the header pill bar and in the auth card.
     expect(screen.getAllByText("cached@example.com")).toHaveLength(2);
-    expect(screen.getByText("Session active.")).toBeInTheDocument();
-    expect(fetchMock).not.toHaveBeenCalled();
+    expect(screen.getByText("Session active")).toBeInTheDocument();
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    expect(String(fetchMock.mock.calls[0][0])).toMatch(/\/stats\/daily\?/);
+  });
+
+  it("fills the Today / This week / Streak tiles from the daily breakdown", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-10-07T12:00:00Z")); // a Wednesday
+    localStorage.setItem("playdex.token", "token");
+    localStorage.setItem("playdex.email", "jo@example.com");
+    const day = (date: string, totalSeconds: number) => ({ date, totalSeconds, sessionCount: 1, platforms: [] });
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      jsonResponse(200, {
+        data: { accountId: null, days: [day("2026-10-05", 3600), day("2026-10-06", 1800), day("2026-10-07", 2820)] },
+        error: null,
+      }),
+    );
+
+    renderHome();
+
+    expect(await screen.findByText("47m")).toBeInTheDocument();
+    expect(screen.getByText("2.3h")).toBeInTheDocument();
+    expect(screen.getByText("3 days")).toBeInTheDocument();
+    vi.useRealTimers();
   });
 
   it("loads the profile when a token exists without a cached email", async () => {

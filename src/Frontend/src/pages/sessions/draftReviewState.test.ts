@@ -6,6 +6,9 @@ import {
   canAccept,
   corrections,
   createDraftRowEdit,
+  draftDuration,
+  durationCheck,
+  isReady,
   isDirty,
   isValidDate,
   markAccepted,
@@ -68,6 +71,20 @@ describe("draft row edit", () => {
     expect(canAccept(edit)).toBe(false);
     edit = { ...edit, hours: "0", minutes: "1.5" };
     expect(canAccept(edit)).toBe(false);
+  });
+
+  it("rejects zero, minutes over 59 and hours over 99, and holds back drafts over 24 hours", () => {
+    const edit = createDraftRowEdit(row());
+    expect(durationCheck({ hours: "0", minutes: "0" }).note).toBe("Add how long you played.");
+    expect(draftDuration({ hours: "0", minutes: "75" })).toBeNull();
+    expect(corrections({ ...edit, hours: "0", minutes: "75" })).toContain("Minutes must be between 0 and 59.");
+    expect(durationCheck({ hours: "100", minutes: "0" }).note).toBe("Hours must be 99 or less.");
+
+    const long = { ...edit, hours: "26", minutes: "0" };
+    expect(durationCheck(long)).toMatchObject({ minutes: 1560, long: true });
+    expect(canAccept(long)).toBe(true);
+    expect(isReady(long)).toBe(false);
+    expect(isReady({ ...edit, hours: "24", minutes: "0" })).toBe(true);
   });
 
   it("splits the server duration into hours and minutes", () => {
