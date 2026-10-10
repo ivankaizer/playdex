@@ -1,78 +1,9 @@
 namespace Wrapper;
 
-internal sealed partial class ProcessMonitor(MonitorConfig config, ILogger<ProcessMonitor> logger)
-{
-    public async Task WaitForExitAsync(Process launchedProcess, CancellationToken cancellationToken)
-    {
-        while (!cancellationToken.IsCancellationRequested)
-        {
-            if (!IsRunning(launchedProcess))
-            {
-                LogExitDebounceStarted(logger);
-                await Task.Delay(TimeSpan.FromSeconds(Math.Max(1, config.ExitDebounceSeconds)), cancellationToken);
-                if (!IsRunning(launchedProcess))
-                {
-                    return;
-                }
-            }
-
-            await Task.Delay(TimeSpan.FromSeconds(1), cancellationToken);
-        }
-    }
-
-    private bool IsRunning(Process launchedProcess) =>
-        config.Mode switch
-        {
-            MonitorMode.LaunchedProcess => !launchedProcess.HasExited,
-            MonitorMode.ExecutablePath => AnyProcessMatches(p => PathsEqual(SafeFileName(p), config.ExecutablePath)),
-            MonitorMode.ExecutableName => AnyProcessMatches(p =>
-                string.Equals(p.ProcessName + ".exe", config.ExecutableName, StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(p.ProcessName, config.ExecutableName, StringComparison.OrdinalIgnoreCase)),
-            _ => !launchedProcess.HasExited
-        };
-
-    private static bool AnyProcessMatches(Func<Process, bool> predicate)
-    {
-        var processes = Process.GetProcesses();
-        try
-        {
-            return processes.Any(predicate);
-        }
-        finally
-        {
-            foreach (var process in processes)
-            {
-                process.Dispose();
-            }
-        }
-    }
-
-    private static string? SafeFileName(Process process)
-    {
-        try
-        {
-            return process.MainModule?.FileName;
-        }
-        catch
-        {
-            return null;
-        }
-    }
-
-    private static bool PathsEqual(string? left, string? right) =>
-        !string.IsNullOrWhiteSpace(left) &&
-        !string.IsNullOrWhiteSpace(right) &&
-        string.Equals(Path.GetFullPath(left), Path.GetFullPath(right), StringComparison.OrdinalIgnoreCase);
-
-    [LoggerMessage(EventId = 1, Level = LogLevel.Information, Message = "Monitor target stopped; starting exit debounce")]
-    private static partial void LogExitDebounceStarted(ILogger logger);
-}
-
 internal sealed partial class SessionCoordinator : IDisposable
 {
     private readonly AppConfig config;
     private readonly GameConfig game;
-    private readonly AppLoggerFactory logging;
     private readonly ILogger<SessionCoordinator> logger;
     private readonly CaptureClient? api;
     private readonly SessionQueue? queue;
@@ -82,7 +13,6 @@ internal sealed partial class SessionCoordinator : IDisposable
     {
         this.config = config;
         this.game = game;
-        this.logging = logging;
         logger = logging.CreateLogger<SessionCoordinator>();
 
         if (config.Api.IsEnabled)
@@ -111,7 +41,7 @@ internal sealed partial class SessionCoordinator : IDisposable
         if (api is null || queue is null)
         {
             LogApiTrackingDisabled(logger, game.GameId);
-            await CreateProcessMonitor().WaitForExitAsync(process, cancellationToken);
+            await new ProcessMonitor(game.Monitor).WaitForExitAsync(process, cancellationToken);
             return;
         }
 
@@ -119,13 +49,14 @@ internal sealed partial class SessionCoordinator : IDisposable
         using var recorder = new SessionRecorder(
             api, queue, CaptureGame.From(game, config.Api), TimeSpan.FromSeconds(Math.Max(1, config.Api.PingIntervalSeconds)));
         recorder.Start();
+        DateTimeOffset? exitedAt = null;
         try
         {
-            await CreateProcessMonitor().WaitForExitAsync(process, cancellationToken);
+            exitedAt = await new ProcessMonitor(game.Monitor).WaitForExitAsync(process, cancellationToken);
         }
         finally
         {
-            LogSessionFinished(logger, game.GameId, recorder.Seconds, await recorder.FinishAsync());
+            LogSessionFinished(logger, game.GameId, await recorder.FinishAsync(exitedAt));
         }
     }
 
@@ -145,9 +76,6 @@ internal sealed partial class SessionCoordinator : IDisposable
         return Process.Start(start) ?? throw new InvalidOperationException("Game process did not start.");
     }
 
-    private ProcessMonitor CreateProcessMonitor() =>
-        new(game.Monitor, logging.CreateLogger<ProcessMonitor>());
-
     [LoggerMessage(EventId = 1, Level = LogLevel.Warning, Message = "Game {GameId} has no executable configured")]
     private static partial void LogMissingExecutable(ILogger logger, string gameId);
 
@@ -157,8 +85,8 @@ internal sealed partial class SessionCoordinator : IDisposable
     [LoggerMessage(EventId = 3, Level = LogLevel.Information, Message = "Launching {GameId}: {ExecutablePath}")]
     private static partial void LogGameLaunching(ILogger logger, string gameId, string? executablePath);
 
-    [LoggerMessage(EventId = 4, Level = LogLevel.Information, Message = "Session of {GameId} finished after {Seconds} s: {Outcome}")]
-    private static partial void LogSessionFinished(ILogger logger, string gameId, int seconds, SessionOutcome outcome);
+    [LoggerMessage(EventId = 4, Level = LogLevel.Information, Message = "Session of {GameId} finished: {Outcome}")]
+    private static partial void LogSessionFinished(ILogger logger, string gameId, SessionOutcome outcome);
 
     public void Dispose()
     {

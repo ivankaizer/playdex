@@ -50,15 +50,19 @@ public sealed class SessionRecorder(
         _run = Task.Run(RunAsync);
     }
 
-    /// <summary>The game has exited: end the session online, or queue it if it never got online.</summary>
-    public async Task<SessionOutcome> FinishAsync()
+    /// <summary>
+    /// The game has exited: end the session online, or queue it if it never got online. <paramref name="exitedAt"/> is
+    /// when the game's last process exited, if that was before now (the Wrapper's exit debounce); a queued session ends
+    /// there. An online session ends when the end request arrives: the API takes no end time yet.
+    /// </summary>
+    public async Task<SessionOutcome> FinishAsync(DateTimeOffset? exitedAt = null)
     {
         if (_run is null)
         {
             throw new InvalidOperationException("The session has not started.");
         }
-        var seconds = Seconds;
-        var endedAt = DateTimeOffset.Now;
+        var endedAt = exitedAt is { } exit && exit < DateTimeOffset.Now ? exit : DateTimeOffset.Now;
+        var seconds = Math.Min(Seconds, Math.Max(0, (int)(endedAt - StartedAt).TotalSeconds));
         await _stop.CancelAsync();
         // A start request still in flight decides whether this session is online, so wait for it.
         var online = await _run;

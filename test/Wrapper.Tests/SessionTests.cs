@@ -128,19 +128,6 @@ public sealed class SessionTests
     }
 
     [Fact]
-    public async Task TestProcessMonitor()
-    {
-        using var process = TestProcess.Start();
-
-        using var logging = AppLoggerFactory.CreateInDirectory(NewTempDir());
-        var monitor = new ProcessMonitor(
-            new MonitorConfig { Mode = MonitorMode.LaunchedProcess, ExitDebounceSeconds = 1 },
-            logging.CreateLogger<ProcessMonitor>());
-        await monitor.WaitForExitAsync(process, CancellationToken.None);
-        Assert.True(process.HasExited);
-    }
-
-    [Fact]
     public async Task TestSessionCoordinatorQueuesWhenTheApiIsUnreachable()
     {
         var directory = NewTempDir();

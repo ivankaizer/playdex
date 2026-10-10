@@ -43,8 +43,8 @@ public sealed class SessionManager(CaptureClient api, SessionQueue queue, Action
         if (game?.LauncherPath is { } launcher)
         {
             // A Playdex Wrapper launcher starts the game and records the session itself, so no capture here. The Job
-            // Object follows the launcher and the game it starts; it signals exit once the launcher's own exit
-            // debounce (10 s by default) has passed.
+            // Object follows the launcher and the game it starts; it signals exit once the launcher has seen the game
+            // exit (see ProcessMonitor).
             watcher = new JobGameWatcher(launcher, "");
         }
         else if (game?.SteamAppId is { } appId)

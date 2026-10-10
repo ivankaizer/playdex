@@ -49,6 +49,23 @@ public sealed class SessionRecorderTests : IDisposable
     }
 
     [Fact]
+    public async Task AQueuedSessionEndsWhenTheGameExitedNotAfterTheDebounce()
+    {
+        var handler = new PathHandler(_ => HttpStatusCode.ServiceUnavailable);
+        using var api = new CaptureClient("key", "https://playdex.test/api", handler);
+        using var queue = new SessionQueue(api, _queueFile);
+        using var recorder = new SessionRecorder(api, queue, _game, TimeSpan.FromMinutes(1));
+
+        recorder.Start();
+        await Task.Delay(2200);
+        var outcome = await recorder.FinishAsync(recorder.StartedAt.AddSeconds(1.1));
+
+        Assert.Equal(SessionOutcome.Queued, outcome);
+        var queued = File.ReadAllLines(_queueFile).Single();
+        Assert.Contains("\"durationInSeconds\":1,", queued, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task AFailedEndIsNotQueuedAsWell()
     {
         var handler = new PathHandler(path => path.EndsWith("/end", StringComparison.Ordinal) ? HttpStatusCode.BadGateway : HttpStatusCode.OK);
