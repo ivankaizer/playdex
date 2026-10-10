@@ -1,4 +1,4 @@
-import { Moon, SlidersHorizontal, Sun, Wifi } from "lucide-react";
+import { Moon, SlidersHorizontal, Sun } from "lucide-react";
 import { lazy, Suspense, useEffect, useState } from "react";
 import {
   closeGame,
@@ -249,7 +249,6 @@ export function App() {
             >
               <SlidersHorizontal />
             </button>
-            <Wifi aria-label="Online" />
             <Clock />
             <span className="avatar" aria-label="Signed in to Playdex">
               I
