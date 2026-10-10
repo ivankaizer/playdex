@@ -17,10 +17,13 @@ import {
 } from "../data/games";
 import "./ribbon.css";
 
-/** Home A: last-session ribbon on top, a jump-back grid of recent games. */
+/**
+ * Home A: one grid of recent games, led by the last played as a large tile with its art, session and Continue, so
+ * it reads as the first game of the list rather than a banner above it.
+ */
 export function RibbonHome() {
   const [last, ...rest] = recentGames;
-  const jump = rest.slice(0, 6);
+  const others = rest.slice(0, 4);
   const top = recentGames.filter((r) => r.weekMinutes > 0).sort((a, b) => b.weekMinutes - a.weekMinutes).slice(0, 3);
   const s = last.lastSession;
   const lastDay = lastPlayedDay(last);
@@ -29,47 +32,48 @@ export function RibbonHome() {
     <main className="ribbon-home">
       <Backdrop className="ribbon-backdrop" />
 
-      <section className="ribbon" data-game={last.game.id} aria-label="Last played">
-        <Backdrop gameId={last.game.id} className="ribbon-art" />
-        <div className="ribbon-body">
-          <span className="kicker">
-            {s
-              ? `Last played · ${relativeDay(s.dayOffset)} ${s.start}–${sessionEnd(s)}`
-              : lastDay !== undefined
-                ? `Last played · ${relativeDay(lastDay)}`
-                : "Ready to play"}
-          </span>
-          <Logo game={last.game} className="ribbon-logo" titleClass="ribbon-title" />
-          {s ? (
-            <p className="ribbon-meta num">
-              <b>{fmtMinutes(s.minutes)}</b> last session
-              <span aria-hidden>·</span>
-              {fmtMinutes(last.weekMinutes)} this week
-              <span aria-hidden>·</span>
-              {fmtHours(last.game.totalMinutes)} total
-            </p>
-          ) : (
-            <p className="ribbon-meta">{SOURCE_LABEL[last.game.source]} · Installed</p>
-          )}
-        </div>
-        <button
-          className="btn btn-primary btn-lg ribbon-cta"
-          data-nav
-          data-nav-default
-          data-game={last.game.id}
-          data-kind="continue"
-          onClick={() => launch(last.game.id)}
-        >
-          <Play fill="currentColor" /> Continue
-        </button>
-      </section>
-
       <section className="jump" aria-labelledby="jump-h">
         <h2 id="jump-h" className="section-h">
           Jump back in
         </h2>
         <div className="jump-grid" data-nav-group="jump">
-          {jump.map((r) => (
+          <button
+            className="ribbon"
+            data-nav
+            data-nav-default
+            data-game={last.game.id}
+            data-kind="continue"
+            onClick={() => launch(last.game.id)}
+          >
+            <Backdrop gameId={last.game.id} className="ribbon-art" />
+            <span className="ribbon-scrim" aria-hidden />
+            <span className="ribbon-body">
+              <span className="kicker">
+                {s
+                  ? `Last played · ${relativeDay(s.dayOffset)} ${s.start}–${sessionEnd(s)}`
+                  : lastDay !== undefined
+                    ? `Last played · ${relativeDay(lastDay)}`
+                    : "Ready to play"}
+              </span>
+              <Logo game={last.game} className="ribbon-logo" titleClass="ribbon-title" />
+              {s ? (
+                <span className="ribbon-meta num">
+                  <b>{fmtMinutes(s.minutes)}</b> last session
+                  <span aria-hidden>·</span>
+                  {fmtMinutes(last.weekMinutes)} this week
+                  <span aria-hidden>·</span>
+                  {fmtHours(last.game.totalMinutes)} total
+                </span>
+              ) : (
+                <span className="ribbon-meta">{SOURCE_LABEL[last.game.source]} · Installed</span>
+              )}
+              {/* The whole tile is the button; this is its label. */}
+              <span className="btn btn-primary btn-lg ribbon-cta" aria-hidden>
+                <Play fill="currentColor" /> Continue
+              </span>
+            </span>
+          </button>
+          {others.map((r) => (
             <button
               key={r.game.id}
               className="jtile"

@@ -1,8 +1,9 @@
+/* The heading sits above the games only, so the rail lines up with the ribbon's top and the cards' bottom. */
 .ribbon-home {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 19rem;
   grid-template-rows: auto minmax(0, 1fr);
-  gap: 1.3rem 1.5rem;
+  gap: 0.8rem 1.5rem;
   min-height: 0;
 }
 
@@ -17,49 +18,60 @@
   opacity: 0.16;
 }
 
-/* ---------- Ribbon ---------- */
+/*
+ * ---------- Ribbon: the last played game, the grid's lead tile ----------
+ * The whole first row, wide like the hero art (Steam heroes are about 3:1); the other recent games are wide cards
+ * in the row below.
+ */
 .ribbon {
   position: relative;
-  grid-column: 1;
+  grid-column: 1 / -1;
   display: flex;
-  align-items: center;
-  gap: 2rem;
-  min-height: 9rem;
-  padding: 1.4rem 1.8rem;
-  border-radius: 1.6rem;
+  align-items: flex-end;
+  min-height: 0;
+  border-radius: 1.4rem;
   background: var(--live-bg);
   border: 1px solid rgb(var(--mint-line));
   box-shadow: var(--card-shadow);
   overflow: hidden;
+  text-align: left;
+  transition: transform 0.2s var(--ease-out);
 }
-.ribbon-art {
-  left: 38%;
-  mask-image: linear-gradient(90deg, transparent 0%, #000 45%);
-  opacity: 0.85;
+.ribbon[data-focused] {
+  transform: scale(1.015);
+  z-index: 1;
+  box-shadow: var(--lift-shadow);
+}
+.ribbon-scrim {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(0deg, rgb(var(--scrim) / 0.9) 0%, transparent 55%),
+    linear-gradient(90deg, rgb(var(--scrim) / 0.8) 0%, rgb(var(--scrim) / 0.45) 32%, transparent 58%);
 }
 .ribbon-body {
   position: relative;
-  flex: 1;
   display: grid;
-  gap: 0.6rem;
+  justify-items: start;
+  gap: 0.7rem;
   min-width: 0;
+  padding: 1.6rem 1.8rem 1.7rem;
 }
 .ribbon-logo {
-  height: 3.6rem;
-  max-width: 20rem;
+  height: 4.6rem;
+  max-width: 24rem;
   object-fit: contain;
-  object-position: left center;
+  object-position: left bottom;
   filter: drop-shadow(0 0.2rem 0.6rem rgba(0, 0, 0, 0.45));
 }
 .ribbon-title {
   margin: 0;
-  font-size: 2.2rem;
+  font-size: 2.4rem;
   font-weight: 600;
   letter-spacing: -0.02em;
   line-height: 1.05;
 }
 .ribbon-meta {
-  margin: 0;
   display: flex;
   flex-wrap: wrap;
   gap: 0.55rem;
@@ -71,17 +83,25 @@
   font-weight: 600;
 }
 .ribbon-cta {
-  position: relative;
-  flex: none;
+  margin-top: 0.3rem;
+}
+.ribbon[data-focused] .ribbon-cta {
+  background: rgb(var(--pill));
+  color: rgb(var(--pill-ink));
 }
 
 /* ---------- Jump back in ---------- */
+/* Its heading and grid are placed in the home's grid directly. */
 .jump {
+  display: contents;
+}
+.jump > .section-h {
   grid-column: 1;
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
-  gap: 0.8rem;
-  min-height: 0;
+  grid-row: 1;
+}
+.jump > .jump-grid {
+  grid-column: 1;
+  grid-row: 2;
 }
 .section-h {
   margin: 0;
@@ -91,15 +111,16 @@
 }
 .jump-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  grid-template-rows: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  /* The ribbon takes the height the cards leave. */
+  grid-template-rows: minmax(0, 1fr) auto;
   gap: 1.1rem 1.2rem;
   min-height: 0;
 }
 .jtile {
   display: grid;
-  grid-template-rows: minmax(0, 1fr) auto;
-  min-height: 0;
+  grid-template-rows: auto auto;
+  align-self: start;
   border-radius: 1.1rem;
   background: var(--card-bg);
   border: 1px solid var(--card-border);
@@ -122,9 +143,10 @@
 .jtile[data-focused]::after {
   opacity: 1;
 }
+/* Steam's capsule art, wide (616 x 353), shown whole. */
 .jtile-art {
   border-radius: 1.1rem 1.1rem 0 0;
-  min-height: 0;
+  aspect-ratio: 616 / 353;
   font-size: 1.1rem;
 }
 .jtile-foot {
@@ -147,7 +169,7 @@
 /* ---------- Playdex rail ---------- */
 .rail {
   grid-column: 2;
-  grid-row: 1 / span 2;
+  grid-row: 2;
   display: flex;
   flex-direction: column;
   gap: 1.6rem;
