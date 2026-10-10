@@ -5,10 +5,16 @@ import { Cover } from "../components/shared";
 import { fmtHours, games, isInstalled, isOnPc, recentGames, SOURCE_LABEL, type Game } from "../data/games";
 import "./library.css";
 
+/* By source: Steam's own games, and local games (added to Playdex through the desktop app / Wrapper). */
 const SCOPES = [
-  { id: "installed", label: "Installed", test: isInstalled },
-  { id: "pc", label: "On this PC", test: isOnPc },
-  { id: "all", label: "Everything you've played", test: () => true },
+  { id: "all", label: "All", test: () => true, empty: "Nothing here yet." },
+  { id: "steam", label: "Steam", test: (g: Game) => g.source === "steam", empty: "No Steam games installed." },
+  {
+    id: "local",
+    label: "Local",
+    test: (g: Game) => g.source === "playdex",
+    empty: "Games you add in the Playdex desktop app show up here.",
+  },
 ] as const;
 
 const lastPlayedRank = new Map(recentGames.map((r, i) => [r.game.id, i]));
@@ -33,7 +39,7 @@ const ROW_H = 18.2;
 const OVERSCAN_ROWS = 2;
 
 export function Library() {
-  const [scope, setScope] = useState<ScopeId>("installed");
+  const [scope, setScope] = useState<ScopeId>("all");
   const [sort, setSort] = useState<SortId>("recent");
 
   // Filtered and sorted once per choice, never per render or per focus move.
@@ -46,7 +52,7 @@ export function Library() {
   return (
     <main className="library">
       <header className="lib-head">
-        <div className="seg" role="group" aria-label="Show" data-nav-group="scope">
+        <div className="seg" role="group" aria-label="Source" data-nav-group="scope">
           {SCOPES.map((s) => (
             <button
               key={s.id}
@@ -78,13 +84,13 @@ export function Library() {
           ))}
         </div>
       </header>
-      <CoverGrid key={`${scope}-${sort}`} list={list} />
+      <CoverGrid key={`${scope}-${sort}`} list={list} empty={SCOPES.find((x) => x.id === scope)!.empty} />
     </main>
   );
 }
 
 /** Row-virtualized grid: only the rows in view (plus overscan) are mounted, whatever the library size. */
-function CoverGrid({ list }: { list: Game[] }) {
+function CoverGrid({ list, empty }: { list: Game[]; empty: string }) {
   const ref = useRef<HTMLDivElement>(null);
   const [box, setBox] = useState({ w: 0, h: 0, rem: 16 });
   const [range, setRange] = useState({ first: 0, last: 3 });
@@ -129,7 +135,7 @@ function CoverGrid({ list }: { list: Game[] }) {
   return (
     <div className="lib-scroll" ref={ref} data-scroll="y" data-scroll-center data-nav-group="grid">
       {list.length === 0 ? (
-        <p className="lib-empty">Nothing here yet.</p>
+        <p className="lib-empty">{empty}</p>
       ) : (
         <div className="lib-canvas" style={{ height: `${rows * ROW_H}rem` }}>
           {rowEls}
