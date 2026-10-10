@@ -35,12 +35,16 @@ const Settings = lazy(() => import("./screens/Settings").then((m) => ({ default:
 
 let readySent = false;
 
-const LAYOUTS = [
-  { id: "ribbon", label: "Ribbon" },
-  { id: "now", label: "Now card" },
-  { id: "timeline", label: "Timeline" },
-] as const;
-type LayoutId = (typeof LAYOUTS)[number]["id"];
+/*
+ * Home is the Ribbon. The earlier prototypes stay reachable for development only, with ?layout=now or
+ * ?layout=timeline in the page URL; nothing in the UI switches layouts and no choice is saved.
+ */
+const LAYOUTS = ["ribbon", "now", "timeline"] as const;
+type LayoutId = (typeof LAYOUTS)[number];
+const layout: LayoutId = (() => {
+  const v = new URLSearchParams(location.search).get("layout");
+  return (LAYOUTS as readonly string[]).includes(v ?? "") ? (v as LayoutId) : "ribbon";
+})();
 
 /* The desktop app adds the management screens the WinForms Wrapper had: the games added to Playdex, and settings. */
 const ALL_TABS = ["Home", "Library", "Playdex", "Manage", "Settings"] as const;
@@ -79,7 +83,6 @@ function persist(key: string, value: string) {
 }
 
 export function App() {
-  const [layout, setLayout] = useState<LayoutId>(() => read("layout", LAYOUTS.map((l) => l.id), "ribbon"));
   const [theme, setTheme] = useState<"dark" | "light">(() => read("theme", ["dark", "light"], "dark"));
   const [tab, setTab] = useState<Tab>(initialTab);
   const playing = useStore(launching);
@@ -105,13 +108,6 @@ export function App() {
     if (isDesktop) void loadDesktopState().catch(() => undefined);
   }, []);
 
-  useEffect(() => {
-    persist("layout", layout);
-    const url = new URL(location.href);
-    url.searchParams.set("layout", layout);
-    history.replaceState(null, "", url);
-  }, [layout]);
-
   // New screen: forget per-group focus memory and land on the screen's default item. Closing a game page
   // returns focus to the tile that opened it.
   useEffect(() => {
@@ -129,7 +125,7 @@ export function App() {
       }
     });
     return () => window.clearTimeout(t);
-  }, [layout, tab, playing, gameOpen]);
+  }, [tab, playing, gameOpen]);
 
   // The host asks for home on every relaunch (FSE, Game Bar "Home", a second instance) and on the Guide button.
   useEffect(
@@ -175,10 +171,6 @@ export function App() {
           launch(game);
           return true;
         }
-        if (a === "view" && !openGameId.get()) {
-          setLayout((l) => LAYOUTS[(LAYOUTS.findIndex((x) => x.id === l) + 1) % LAYOUTS.length].id);
-          return true;
-        }
       }),
     [],
   );
@@ -216,21 +208,6 @@ export function App() {
           <span className="topbar-spacer" />
           <NowPlaying />
           <div className="proto" data-nav-group="proto">
-            <span className="label">Layout</span>
-            <div className="seg" role="group" aria-label="Home layout">
-              {LAYOUTS.map((l) => (
-                <button
-                  key={l.id}
-                  className="seg-btn"
-                  aria-pressed={layout === l.id}
-                  data-nav
-                  data-kind="layout"
-                  onClick={() => setLayout(l.id)}
-                >
-                  {l.label}
-                </button>
-              ))}
-            </div>
             <button
               className="icon-btn"
               data-nav
@@ -285,7 +262,7 @@ export function App() {
           <Placeholder tab={tab} />
         )}
 
-        <HintBar onGamePage={!!gameOpen} onHome={tab === "Home"} />
+        <HintBar onGamePage={!!gameOpen} />
       </div>
 
       {settingsOpen && !playing && <QuickSettings />}
@@ -358,7 +335,7 @@ function NowPlayingPill({ gameId, since }: { gameId: string; since: number | nul
   );
 }
 
-function HintBar({ onGamePage, onHome }: { onGamePage: boolean; onHome: boolean }) {
+function HintBar({ onGamePage }: { onGamePage: boolean }) {
   const kind = useStore(focusedKind);
   return (
     <footer className="hints">
@@ -367,7 +344,6 @@ function HintBar({ onGamePage, onHome }: { onGamePage: boolean; onHome: boolean 
       {!onGamePage && ["game", "session", "continue", "cover", "cover-off"].includes(kind) && <Hint glyph="Y">Details</Hint>}
       {onGamePage && <Hint glyph="B">Back</Hint>}
       <Hint glyph="LB">Sections</Hint>
-      {onHome && !onGamePage && <Hint glyph="VIEW">Home layout</Hint>}
       <Hint glyph="MENU">Quick settings</Hint>
       <span className="sync">
         <span className="sync-dot" />
