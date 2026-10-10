@@ -6,7 +6,10 @@ namespace Playdex.Launcher.Host;
 
 internal sealed record AudioOutput(string Id, string Name, bool IsDefault);
 
-internal sealed record DisplayState(string Id, string Name, bool HdrSupported, bool HdrOn);
+/// <param name="RefreshRate">Current refresh rate in whole Hz (Windows reports 59.94 Hz as 59), 0 if unknown.</param>
+/// <param name="RefreshRates">Rates available at the current resolution and colour depth, ascending.</param>
+internal sealed record DisplayState(
+    string Id, string Name, bool HdrSupported, bool HdrOn, int RefreshRate, IReadOnlyList<int> RefreshRates);
 
 /// <summary>What the quick settings panel shows; posted to the page with type "quick-settings".</summary>
 internal sealed record QuickSettingsState(string Type, IReadOnlyList<AudioOutput> Outputs, IReadOnlyList<DisplayState> Displays, string? Error);
@@ -16,8 +19,8 @@ internal sealed record QuickSettingsState(string Type, IReadOnlyList<AudioOutput
 internal sealed partial class QuickSettingsJson : JsonSerializerContext;
 
 /// <summary>
-/// The quick settings panel's system controls: the default sound output, HDR per display, and sleep, restart and shut
-/// down. Every call blocks briefly (COM, display configuration), so callers run it off the UI thread; calls are
+/// The quick settings panel's system controls: the default sound output, HDR and refresh rate per display, and sleep,
+/// restart and shut down. Every call blocks briefly (COM, display configuration), so callers run it off the UI thread; calls are
 /// serialized so two toggles never overlap.
 /// </summary>
 internal static class QuickSettings
@@ -243,9 +246,14 @@ internal static unsafe class AudioOutputs
 }
 
 /// <summary>
-/// HDR per display through the display configuration API: DISPLAYCONFIG_GET_ADVANCED_COLOR_INFO_2 and
+/// Per active display:
+/// <list type="bullet">
+/// <item>HDR through the display configuration API: DISPLAYCONFIG_GET_ADVANCED_COLOR_INFO_2 and
 /// DISPLAYCONFIG_SET_HDR_STATE on Windows 11 24H2, the older advanced color calls before that. The same switch as
-/// Settings → Display → Use HDR.
+/// Settings → Display → Use HDR.</item>
+/// <item>Refresh rate through the display mode API (EnumDisplaySettingsEx, ChangeDisplaySettingsEx) on the display's
+/// GDI device, keeping its resolution and colour depth, and saved like Settings → Display → Advanced display.</item>
+/// </list>
 /// </summary>
 internal static unsafe class Displays
 {
@@ -267,20 +275,37 @@ internal static unsafe class Displays
                 continue; // Duplicated (clone) displays share a target.
             }
             var (supported, on) = Hdr(path.TargetAdapterId, path.TargetId);
-            displays.Add(new DisplayState(id, Name(path.TargetAdapterId, path.TargetId, displays.Count + 1), supported, on));
+            var (rate, rates) = SourceDevice(path) is { } device ? RefreshRates(device) : (0, []);
+            displays.Add(new DisplayState(id, Name(path.TargetAdapterId, path.TargetId, displays.Count + 1), supported, on, rate, rates));
         }
         return displays;
     }
 
+    public static void SetRefreshRate(string id, int hz)
+    {
+        var device = SourceDevice(Find(id)) ?? throw new InvalidOperationException("The display has no GDI device.");
+        var (_, rates) = RefreshRates(device);
+        if (!rates.Contains(hz))
+        {
+            throw new ArgumentException($"{hz} Hz is not available.", nameof(hz));
+        }
+        var mode = new Native.DevMode { Size = (ushort)sizeof(Native.DevMode) };
+        if (!Native.EnumDisplaySettingsEx(device, Native.EnumCurrentSettings, &mode, 0))
+        {
+            throw new InvalidOperationException("EnumDisplaySettingsEx failed.");
+        }
+        mode.DisplayFrequency = (uint)hz;
+        mode.Fields = Native.DmPelsWidth | Native.DmPelsHeight | Native.DmBitsPerPel | Native.DmDisplayFrequency;
+        var status = Native.ChangeDisplaySettingsEx(device, &mode, 0, Native.CdsUpdateRegistry, 0);
+        if (status != Native.DispChangeSuccessful)
+        {
+            throw new InvalidOperationException($"ChangeDisplaySettingsEx failed: {status}");
+        }
+    }
+
     public static void SetHdr(string id, bool on)
     {
-        var paths = ActivePaths();
-        var index = Array.FindIndex(paths, p => Id(p.TargetAdapterId, p.TargetId) == id);
-        if (index < 0)
-        {
-            throw new ArgumentException("No such display.", nameof(id));
-        }
-        var path = paths[index];
+        var path = Find(id);
         var request = new Native.DisplayConfigSetState
         {
             Header = Header(Native.DisplayConfigSetHdrState, sizeof(Native.DisplayConfigSetState), path.TargetAdapterId, path.TargetId),
@@ -320,6 +345,50 @@ internal static unsafe class Displays
         // Wide color forced on means a non-HDR display using advanced color for color management, not HDR.
         var supported = (legacy.Value & AdvancedColorSupported) != 0 && (legacy.Value & WideColorEnforced) == 0;
         return (supported, supported && (legacy.Value & AdvancedColorEnabled) != 0);
+    }
+
+    /// <summary>
+    /// The current rate and every rate the display offers at its current resolution and colour depth (progressive
+    /// modes only). Rates are whole Hz: the mode API rounds 59.94 down to 59.
+    /// </summary>
+    private static (int Current, int[] Rates) RefreshRates(string device)
+    {
+        var current = new Native.DevMode { Size = (ushort)sizeof(Native.DevMode) };
+        if (!Native.EnumDisplaySettingsEx(device, Native.EnumCurrentSettings, &current, 0))
+        {
+            return (0, []);
+        }
+        var rates = new SortedSet<int>();
+        var mode = new Native.DevMode { Size = (ushort)sizeof(Native.DevMode) };
+        for (var i = 0; Native.EnumDisplaySettingsEx(device, i, &mode, 0); i++)
+        {
+            if (mode.PelsWidth == current.PelsWidth && mode.PelsHeight == current.PelsHeight
+                && mode.BitsPerPel == current.BitsPerPel && (mode.DisplayFlags & Native.DmInterlaced) == 0
+                && mode.DisplayFrequency > 1) // 0 and 1 mean "hardware default".
+            {
+                rates.Add((int)mode.DisplayFrequency);
+            }
+        }
+        return ((int)current.DisplayFrequency, [.. rates]);
+    }
+
+    /// <summary>The GDI device (\\.\DISPLAY1) of the path's source, which the display mode API takes.</summary>
+    private static string? SourceDevice(Native.DisplayConfigPathInfo path)
+    {
+        var name = new Native.DisplayConfigSourceDeviceName
+        {
+            Header = Header(Native.DisplayConfigGetSourceName, sizeof(Native.DisplayConfigSourceDeviceName), path.SourceAdapterId, path.SourceId),
+        };
+        return Native.DisplayConfigGetDeviceInfo(&name.Header) == 0 && new string(name.ViewGdiDeviceName) is { Length: > 0 } device
+            ? device
+            : null;
+    }
+
+    private static Native.DisplayConfigPathInfo Find(string id)
+    {
+        var paths = ActivePaths();
+        var index = Array.FindIndex(paths, p => Id(p.TargetAdapterId, p.TargetId) == id);
+        return index >= 0 ? paths[index] : throw new ArgumentException("No such display.", nameof(id));
     }
 
     private static string Name(Native.Luid adapter, uint target, int number)

@@ -27,8 +27,8 @@ internal sealed record LaunchOptions(
     /// --no-suspend                   keep the page running while a game is in front
     /// --selftest-job                 run the Job Object exit-detection self-test and exit
     /// --selftest-quick-settings[=toggle]
-    ///                                log the quick settings state (sound outputs, HDR); with =toggle, switch the sound
-    ///                                output and each HDR display, check, and switch back
+    ///                                log the quick settings state (sound outputs, HDR, refresh rates); with =toggle,
+    ///                                switch the sound output, HDR and refresh rate of each display, check, switch back
     /// </summary>
     public static LaunchOptions Parse(string[] args)
     {

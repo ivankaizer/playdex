@@ -7,8 +7,8 @@ import { focusedGame, focusedKind } from "./store";
  * pure CSS (:focus-visible) and React never re-renders a list when focus moves.
  *
  * - `data-nav-group="name"`: items in a group are preferred while moving inside it, and the group remembers
- *   its last focused item so re-entering lands where you left. With `data-nav-entry="first"` a group is always
- *   entered at its first item instead.
+ *   its last focused item so re-entering lands where you left. `data-nav-entry` overrides that: "first" always
+ *   enters at the first item, "selected" at the checked or selected one (a radio row lands on the current choice).
  * - `data-nav-default`: the item focused when nothing is focused.
  * - `data-game="id"`: publishes the focused game to the `focusedGame` store.
  * - `data-kind="..."`: publishes a hint context to `focusedKind`.
@@ -130,9 +130,14 @@ export function move(dir: Dir) {
   const g = groupOf(target);
   if (g && g !== curGroup) {
     const group = target.closest<HTMLElement>("[data-nav-group]")!;
-    const first = group.dataset.navEntry === "first" ? group.querySelector<HTMLElement>("[data-nav]") : null;
+    const entry =
+      group.dataset.navEntry === "first"
+        ? group.querySelector<HTMLElement>("[data-nav]")
+        : group.dataset.navEntry === "selected"
+          ? group.querySelector<HTMLElement>('[data-nav][aria-checked="true"], [data-nav][aria-selected="true"]')
+          : null;
     const remembered = memory.get(g);
-    if (first && visible(first)) target = first;
+    if (entry && visible(entry)) target = entry;
     else if (remembered && visible(remembered)) target = remembered;
   }
   focusEl(target);

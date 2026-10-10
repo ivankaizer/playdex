@@ -14,7 +14,16 @@ export type HostMessage =
   | { type: "quick-settings" } & QuickSettingsState;
 
 export type AudioOutput = { id: string; name: string; isDefault: boolean };
-export type DisplayState = { id: string; name: string; hdrSupported: boolean; hdrOn: boolean };
+export type DisplayState = {
+  id: string;
+  name: string;
+  hdrSupported: boolean;
+  hdrOn: boolean;
+  /** Whole Hz (Windows reports 59.94 Hz as 59); 0 if unknown. */
+  refreshRate: number;
+  /** Rates at the current resolution, ascending. */
+  refreshRates: number[];
+};
 export type QuickSettingsState = { outputs: AudioOutput[]; displays: DisplayState[]; error?: string };
 export type PowerAction = "sleep" | "restart" | "shutdown";
 
@@ -29,6 +38,7 @@ export type UiMessage =
   | { type: "quick-settings" }
   | { type: "audio-output"; id: string }
   | { type: "hdr"; display: string; on: boolean }
+  | { type: "refresh-rate"; display: string; hz: number }
   | { type: "power"; action: PowerAction };
 
 interface WebView2 {

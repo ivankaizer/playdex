@@ -2,7 +2,7 @@ using System.Runtime.InteropServices;
 
 namespace Playdex.Launcher.Host;
 
-/// <summary>Win32 imports for quick settings: Core Audio, display configuration (HDR) and power.</summary>
+/// <summary>Win32 imports for quick settings: Core Audio, display configuration (HDR, refresh rate) and power.</summary>
 internal static unsafe partial class Native
 {
     // ---- COM ----
@@ -46,6 +46,7 @@ internal static unsafe partial class Native
 
     public const uint QdcOnlyActivePaths = 0x2;
     public const int ErrorInsufficientBuffer = 122;
+    public const int DisplayConfigGetSourceName = 1;
     public const int DisplayConfigGetTargetName = 2;
     public const int DisplayConfigGetAdvancedColorInfo = 9;
     public const int DisplayConfigSetAdvancedColorState = 10;
@@ -60,10 +61,12 @@ internal static unsafe partial class Native
         public int HighPart;
     }
 
-    /// <summary>DISPLAYCONFIG_PATH_INFO. Only the target's adapter and id are read.</summary>
+    /// <summary>DISPLAYCONFIG_PATH_INFO. Only the source's and the target's adapter and id are read.</summary>
     [StructLayout(LayoutKind.Explicit, Size = 72)]
     public struct DisplayConfigPathInfo
     {
+        [FieldOffset(0)] public Luid SourceAdapterId;
+        [FieldOffset(8)] public uint SourceId;
         [FieldOffset(20)] public Luid TargetAdapterId;
         [FieldOffset(28)] public uint TargetId;
     }
@@ -75,6 +78,14 @@ internal static unsafe partial class Native
         public uint Size;
         public Luid AdapterId;
         public uint Id;
+    }
+
+    /// <summary>DISPLAYCONFIG_SOURCE_DEVICE_NAME: the GDI name (\\.\DISPLAY1) that the display mode APIs take.</summary>
+    [StructLayout(LayoutKind.Sequential)]
+    public struct DisplayConfigSourceDeviceName
+    {
+        public DisplayConfigDeviceInfoHeader Header;
+        public fixed char ViewGdiDeviceName[32];
     }
 
     [StructLayout(LayoutKind.Sequential)]
@@ -138,6 +149,37 @@ internal static unsafe partial class Native
 
     [LibraryImport("user32.dll")]
     public static partial int DisplayConfigSetDeviceInfo(DisplayConfigDeviceInfoHeader* request);
+
+    // ---- Display modes (refresh rate) ----
+
+    public const int EnumCurrentSettings = -1;
+    public const uint DmBitsPerPel = 0x40000;
+    public const uint DmPelsWidth = 0x80000;
+    public const uint DmPelsHeight = 0x100000;
+    public const uint DmDisplayFrequency = 0x400000;
+    public const uint DmInterlaced = 0x2;
+    public const uint CdsUpdateRegistry = 0x1;
+    public const int DispChangeSuccessful = 0;
+
+    /// <summary>DEVMODEW, display fields only (220 bytes).</summary>
+    [StructLayout(LayoutKind.Explicit, Size = 220)]
+    public struct DevMode
+    {
+        [FieldOffset(68)] public ushort Size;
+        [FieldOffset(72)] public uint Fields;
+        [FieldOffset(168)] public uint BitsPerPel;
+        [FieldOffset(172)] public uint PelsWidth;
+        [FieldOffset(176)] public uint PelsHeight;
+        [FieldOffset(180)] public uint DisplayFlags;
+        [FieldOffset(184)] public uint DisplayFrequency;
+    }
+
+    [LibraryImport("user32.dll", EntryPoint = "EnumDisplaySettingsExW", StringMarshalling = StringMarshalling.Utf16)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool EnumDisplaySettingsEx(string deviceName, int modeNumber, DevMode* mode, uint flags);
+
+    [LibraryImport("user32.dll", EntryPoint = "ChangeDisplaySettingsExW", StringMarshalling = StringMarshalling.Utf16)]
+    public static partial int ChangeDisplaySettingsEx(string deviceName, DevMode* mode, nint hwnd, uint flags, nint parameter);
 
     // ---- Power ----
 

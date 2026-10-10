@@ -47,7 +47,8 @@ internal static class SelfTest
 
     /// <summary>
     /// Logs what the quick settings panel would show. With <paramref name="toggle"/>: makes another sound output the
-    /// default and flips HDR on every display that supports it, reads each change back, then restores both.
+    /// default, flips HDR on every display that supports it, switches each display to another refresh rate, reads each
+    /// change back, then restores all of them.
     /// </summary>
     public static int QuickSettingsState(bool toggle)
     {
@@ -59,7 +60,7 @@ internal static class SelfTest
         }
         foreach (var display in displays)
         {
-            Log.Info($"selftest-quick-settings: display {display.Name} [{display.Id}] hdr supported={display.HdrSupported} on={display.HdrOn}");
+            Log.Info($"selftest-quick-settings: display {display.Name} [{display.Id}] hdr supported={display.HdrSupported} on={display.HdrOn} refresh={display.RefreshRate} Hz of [{string.Join(", ", display.RefreshRates)}]");
         }
         if (!toggle)
         {
@@ -87,6 +88,18 @@ internal static class SelfTest
             var restored = Displays.List().Single(d => d.Id == display.Id).HdrOn == display.HdrOn;
             failures += flipped && restored ? 0 : 1;
             Log.Info($"selftest-quick-settings: {display.Name} hdr flipped={flipped} restored={restored}");
+        }
+        foreach (var display in displays.Where(d => d.RefreshRates.Count > 1))
+        {
+            var otherRate = display.RefreshRates.Contains(60) && display.RefreshRate != 60 ? 60 : display.RefreshRates.First(r => r != display.RefreshRate);
+            Displays.SetRefreshRate(display.Id, otherRate);
+            Thread.Sleep(2000);
+            var switched = Displays.List().Single(d => d.Id == display.Id).RefreshRate == otherRate;
+            Displays.SetRefreshRate(display.Id, display.RefreshRate);
+            Thread.Sleep(2000);
+            var restored = Displays.List().Single(d => d.Id == display.Id).RefreshRate == display.RefreshRate;
+            failures += switched && restored ? 0 : 1;
+            Log.Info($"selftest-quick-settings: {display.Name} refresh {display.RefreshRate} -> {otherRate} Hz switched={switched} restored={restored}");
         }
         Log.Info($"selftest-quick-settings: {(failures == 0 ? "PASS" : $"FAIL ({failures})")}");
         return failures == 0 ? 0 : 1;

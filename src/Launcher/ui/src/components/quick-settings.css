@@ -187,3 +187,51 @@
     opacity: 0;
   }
 }
+
+/* Refresh rate: a row of pills under its label; long lists scroll sideways with focus. */
+.qs-rate {
+  display: grid;
+  gap: 0.55rem;
+  padding: 0.6rem 0.95rem 0.75rem;
+  border-radius: 1rem;
+  background: rgb(var(--tile));
+  border: 1px solid var(--tile-border);
+}
+.qs-rate-head {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+}
+.qs-rate-head > svg {
+  flex: none;
+  width: 1.15rem;
+  height: 1.15rem;
+  color: rgb(var(--muted));
+}
+.qs-rate-options {
+  display: flex;
+  gap: 0.4rem;
+  overflow-x: auto;
+  scrollbar-width: none;
+  /* Room for the focus ring, which sits outside the pill. */
+  padding: 0.4rem;
+  margin: -0.4rem;
+  scroll-padding-inline: 0.4rem;
+}
+.qs-pill {
+  flex: none;
+  height: 2rem;
+  padding: 0 0.9rem;
+  border-radius: 999px;
+  background: rgb(var(--surface));
+  border: 1px solid rgb(var(--line));
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: rgb(var(--ink-2));
+  white-space: nowrap;
+}
+.qs-pill[aria-checked="true"] {
+  background: rgb(var(--pill));
+  border-color: rgb(var(--pill));
+  color: rgb(var(--pill-ink));
+}

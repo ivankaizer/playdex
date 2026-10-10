@@ -213,6 +213,11 @@ internal sealed partial class MainWindow : Window
                 var on = message.GetProperty("on").GetBoolean();
                 PostQuickSettings(() => Displays.SetHdr(displayId, on), on ? "turn HDR on" : "turn HDR off");
                 break;
+            case "refresh-rate":
+                var rateDisplay = message.GetProperty("display").GetString()!;
+                var hz = message.GetProperty("hz").GetInt32();
+                PostQuickSettings(() => Displays.SetRefreshRate(rateDisplay, hz), $"switch to {hz} Hz");
+                break;
             case "power":
                 switch (message.GetProperty("action").GetString())
                 {

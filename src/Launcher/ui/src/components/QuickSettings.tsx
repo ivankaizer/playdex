@@ -1,4 +1,4 @@
-import { Check, Headphones, Monitor, Moon, Power, RotateCcw, Speaker, Sun } from "lucide-react";
+import { Check, Gauge, Headphones, Monitor, Moon, Power, RotateCcw, Speaker, Sun } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { closeQuickSettings, showToast } from "../app-state";
 import {
@@ -21,7 +21,7 @@ const DEMO: QuickSettingsState = {
     { id: "headset", name: "Headphones (Xbox Wireless Headset)", isDefault: false },
     { id: "speakers", name: "Speakers (Realtek(R) Audio)", isDefault: false },
   ],
-  displays: [{ id: "tv", name: "LG TV", hdrSupported: true, hdrOn: false }],
+  displays: [{ id: "tv", name: "LG TV", hdrSupported: true, hdrOn: false, refreshRate: 60, refreshRates: [24, 30, 50, 60, 100, 120] }],
 };
 
 const POWER: { action: PowerAction; label: string; armed: string; done: string; Icon: typeof Power }[] = [
@@ -47,7 +47,7 @@ function OutputIcon({ output }: { output: AudioOutput }) {
 }
 
 /**
- * Quick settings: the default sound output, HDR per display, and sleep / restart / shut down. A panel over the current
+ * Quick settings: the default sound output, HDR and refresh rate per display, and sleep / restart / shut down. A panel over the current
  * screen (which is inert while it is open); B or Menu closes it. Power actions take a second press to confirm.
  */
 export function QuickSettings() {
@@ -120,6 +120,12 @@ export function QuickSettings() {
     postToHost({ type: "hdr", display: id, on });
   }
 
+  function setRefreshRate(id: string, hz: number) {
+    setArmed(null);
+    setState((s) => s && { ...s, displays: s.displays.map((d) => (d.id === id ? { ...d, refreshRate: hz } : d)) });
+    postToHost({ type: "refresh-rate", display: id, hz });
+  }
+
   function power(action: PowerAction) {
     if (armed !== action) {
       setArmed(action);
@@ -181,44 +187,80 @@ export function QuickSettings() {
           <h2 id="qs-display" className="label">
             Display
           </h2>
-          <div className="qs-list" data-nav-group="qs-display">
-            {!state ? (
-              <div className="qs-row qs-placeholder" />
-            ) : state.displays.length === 0 ? (
-              <p className="qs-empty">No displays found.</p>
-            ) : (
-              state.displays.map((d) =>
-                d.hdrSupported ? (
-                  <button
-                    key={d.id}
-                    className="qs-row"
-                    role="switch"
-                    aria-checked={d.hdrOn}
-                    data-nav
-                    data-kind="qs-hdr"
-                    onClick={() => toggleHdr(d.id, !d.hdrOn)}
-                  >
-                    <Sun aria-hidden />
-                    <span className="qs-row-text">
-                      <span className="qs-row-name">HDR</span>
-                      <small>{d.name}</small>
-                    </span>
-                    <span className="qs-switch" aria-hidden>
-                      <i />
-                    </span>
-                  </button>
-                ) : (
-                  <div key={d.id} className="qs-row qs-row-off">
-                    <Sun aria-hidden />
-                    <span className="qs-row-text">
-                      <span className="qs-row-name">HDR</span>
-                      <small>{d.name} · not supported</small>
-                    </span>
+          {!state ? (
+            <div className="qs-row qs-placeholder" />
+          ) : state.displays.length === 0 ? (
+            <p className="qs-empty">No displays found.</p>
+          ) : (
+            state.displays.map((d) => (
+              <div key={d.id} className="qs-list">
+                <div data-nav-group={`qs-hdr-${d.id}`}>
+                  {d.hdrSupported ? (
+                    <button
+                      className="qs-row"
+                      role="switch"
+                      aria-checked={d.hdrOn}
+                      data-nav
+                      data-kind="qs-hdr"
+                      onClick={() => toggleHdr(d.id, !d.hdrOn)}
+                    >
+                      <Sun aria-hidden />
+                      <span className="qs-row-text">
+                        <span className="qs-row-name">HDR</span>
+                        <small>{d.name}</small>
+                      </span>
+                      <span className="qs-switch" aria-hidden>
+                        <i />
+                      </span>
+                    </button>
+                  ) : (
+                    <div className="qs-row qs-row-off">
+                      <Sun aria-hidden />
+                      <span className="qs-row-text">
+                        <span className="qs-row-name">HDR</span>
+                        <small>{d.name} · not supported</small>
+                      </span>
+                    </div>
+                  )}
+                </div>
+                {d.refreshRates.length > 1 && (
+                  <div className="qs-rate">
+                    <div className="qs-rate-head">
+                      <Gauge aria-hidden />
+                      <span className="qs-row-text">
+                        <span className="qs-row-name" id={`qs-rate-${d.id}`}>
+                          Refresh rate
+                        </span>
+                        <small>{d.name}</small>
+                      </span>
+                    </div>
+                    <div
+                      className="qs-rate-options"
+                      role="radiogroup"
+                      aria-labelledby={`qs-rate-${d.id}`}
+                      data-scroll="x"
+                      data-nav-group={`qs-rate-${d.id}`}
+                      data-nav-entry="selected"
+                    >
+                      {d.refreshRates.map((hz) => (
+                        <button
+                          key={hz}
+                          className="qs-pill num"
+                          role="radio"
+                          aria-checked={hz === d.refreshRate}
+                          data-nav
+                          data-kind="qs-rate"
+                          onClick={() => setRefreshRate(d.id, hz)}
+                        >
+                          {hz} Hz
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                ),
-              )
-            )}
-          </div>
+                )}
+              </div>
+            ))
+          )}
         </section>
 
         <section className="qs-section" aria-labelledby="qs-power">
