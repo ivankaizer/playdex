@@ -42,7 +42,7 @@ The only launcher whose library *is* your Playdex history. It knows what you pla
 - **Playdex link:**
   - A Playdex account is required, paired through a device-code flow.
   - Sessions are captured through the Playdex capture API (start / ping / end) and queued on disk while offline.
-  - The Playdex Wrapper's tracking and Steam/SteamGridDB code moves into a shared library.
+  - Tracking, Steam and SteamGridDB code is shared with the desktop app (`src/Playdex.Core`); the desktop app replaced the WinForms Wrapper.
 
 ## Capabilities and Constraints
 

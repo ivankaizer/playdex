@@ -25,7 +25,6 @@ internal static class Program
             return AppUpdate.ApplyAsync(Path.GetFullPath(applyPath), parentProcessId).GetAwaiter().GetResult() ? 0 : 1;
         }
 
-        Log.UseFile(Path.Combine(Paths.DataDirectory, "run.log"));
         LauncherManifest? manifest;
         try
         {
@@ -33,12 +32,13 @@ internal static class Program
         }
         catch (InvalidDataException ex)
         {
+            Log.UseFile(Path.Combine(Paths.DataDirectory, "run.log"));
             Log.Error("run: the launcher manifest is unusable", ex);
             return 1;
         }
         if (manifest is null)
         {
-            Log.Info($"run: {Environment.ProcessPath} is not a generated launcher (no {Brand.LauncherManifestExtension} next to it)");
+            // Started on its own, not as a generated launcher: nothing to do, and nothing worth a log line.
             return 2;
         }
 

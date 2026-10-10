@@ -2,7 +2,7 @@
 
 .NET 10 WinUI 3 app that shows the React UI (`../ui`) full screen in WebView2, reads the controller natively, launches games and records sessions to Playdex. Spike results: `docs/launcher/spike-results.md`.
 
-Session capture, the offline queue, game watchers, Steam and the library live in `src/Playdex.Core` (shared with the Wrapper as it moves over; see `docs/launcher/wrapper-merge-plan.md`); this project is the WinUI shell, controller input and the bridge to the page. Core's tests are `test/Playdex.Core.Tests`.
+Session capture, the offline queue, game watchers, Steam and the library live in `src/Playdex.Core`, shared with the desktop app (`src/Desktop`); the window, page bridge, controller input and quick settings are in `src/Launcher/Shell`, compiled into both. This project is the full-screen launcher itself: the Full Screen Experience home app, its MSIX and its self-tests. Core's tests are `test/Playdex.Core.Tests`.
 
 Windows only. It is not in `Playdex.sln`, because CI builds the solution on Linux and the Windows App SDK XAML compiler only runs on Windows. `global.json` here allows any .NET 10 SDK (the root one pins 10.0.302).
 
@@ -48,7 +48,7 @@ Then go to Settings → Gaming → Full screen experience → Home app → Playd
 
 ## Configuration
 
-- API key and URL: `PLAYDEX_API_KEY` and `PLAYDEX_API_URL`, or `api.apiKey` and `api.baseUrl` in the install's config, `%LOCALAPPDATA%\Playdex\config.json` (shared with the Playdex Wrapper). Default URL `https://playdex-api.ejwan.dev/api`.
+- API key and URL: `PLAYDEX_API_KEY` and `PLAYDEX_API_URL`, or `api.apiKey` and `api.baseUrl` in the install's config, `%LOCALAPPDATA%\Playdex\config.json` (shared with the desktop app). Default URL `https://playdex-api.ejwan.dev/api`.
 - The config is created on first start from the Wrapper's `%LOCALAPPDATA%\PlaydexWrapper\config.json` and the launcher's old `%LOCALAPPDATA%\PlaydexLauncher\config.json`, which are left in place. The offline queue and the WebView2 profile move from `PlaydexLauncher` once.
 - The log, `metrics.jsonl` and the offline `queue.jsonl` live in `%LOCALAPPDATA%\Playdex`.
 - `PLAYDEX_INPUT_FORCE_POLL=1`: diagnostic that polls every XInput slot at the foreground rate, as if a pad were connected.

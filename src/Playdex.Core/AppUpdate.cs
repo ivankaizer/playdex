@@ -262,7 +262,7 @@ public static class AppUpdate
     }
 
     /// <summary>Extract every entry under <paramref name="destination"/> (no path may leave it); the app must be at the root.</summary>
-    internal static void Extract(string archivePath, string destination)
+    public static void Extract(string archivePath, string destination)
     {
         Directory.CreateDirectory(destination);
         var root = Path.GetFullPath(destination) + Path.DirectorySeparatorChar;
@@ -394,7 +394,7 @@ public static class AppUpdate
         }
     }
 
-    internal static StagedUpdate Load(string path)
+    public static StagedUpdate Load(string path)
     {
         var info = new FileInfo(path);
         if (!info.Exists || info.Length > 64 * 1024)
