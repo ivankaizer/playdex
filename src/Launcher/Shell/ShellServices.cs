@@ -17,7 +17,12 @@ internal sealed class ShellServices : IDisposable
         Queue = new SessionQueue(Api);
         Summary = new PlaydexSummary(Api);
         Sessions = new SessionManager(
-            config, Api, Queue, (gameId, state, seconds) => SessionChanged?.Invoke(gameId, state, seconds), detected => GameExited?.Invoke(detected));
+            config,
+            Api,
+            Queue,
+            (gameId, state, seconds) => SessionChanged?.Invoke(gameId, state, seconds),
+            detected => GameExited?.Invoke(detected),
+            () => Summary.SteamPolling);
         Input = new ControllerInput(new InputQueue(dispatcher, (code, timestamp) => InputReceived?.Invoke(code, timestamp)));
         LibraryScan = Task.Run(() => Library.Scan(Config));
     }
