@@ -26,6 +26,30 @@ public sealed partial class PlaydexSummary(CaptureClient api, string? file = nul
         }
     }
 
+    /// <summary>
+    /// Playdex polls the user's Steam account (an active Steam integration), so it records Steam games itself. False
+    /// without a summary: the launcher records them then, as an offline launcher with no history must.
+    /// </summary>
+    public bool SteamPolling
+    {
+        get
+        {
+            if (Current is not { } json)
+            {
+                return false;
+            }
+            try
+            {
+                using var document = System.Text.Json.JsonDocument.Parse(json);
+                return document.RootElement.TryGetProperty("steamPolling", out var value) && value.ValueKind == System.Text.Json.JsonValueKind.True;
+            }
+            catch (System.Text.Json.JsonException)
+            {
+                return false;
+            }
+        }
+    }
+
     /// <summary>Fetch the summary; true when it changed (then <see cref="Current"/> is the new one).</summary>
     public async Task<bool> RefreshAsync(CancellationToken ct = default)
     {

@@ -57,6 +57,11 @@ public sealed class LauncherSummaryEndpointTests(PostgresFixture postgres)
         };
         db.PlaySessions.AddRange(sessions);
         await db.SaveChangesAsync();
+        var steamIntegration = new Integration
+        {
+            UserId = user.Id, Type = IntegrationType.Steam, PlatformId = steam.Id, AccountId = $"steam-{suffix}",
+            ApiKey = $"steam-key-{suffix}", Active = true, CreatedAt = now, UpdatedAt = now,
+        };
 
         try
         {
@@ -85,9 +90,20 @@ public sealed class LauncherSummaryEndpointTests(PostgresFixture postgres)
             var steamIdentity = played.GetProperty("identities").EnumerateArray().Single();
             Assert.Equal("steam", steamIdentity.GetProperty("type").GetString());
             Assert.Equal(appId, steamIdentity.GetProperty("externalId").GetString());
+            Assert.False(data.GetProperty("steamPolling").GetBoolean());
+
+            // With Steam polling on, Playdex records Steam games itself and the launcher must not record them too.
+            db.Integrations.Add(steamIntegration);
+            await db.SaveChangesAsync();
+            using var polled = JsonDocument.Parse(await client.GetStringAsync("/api/launcher/summary"));
+            Assert.True(polled.RootElement.GetProperty("data").GetProperty("steamPolling").GetBoolean());
         }
         finally
         {
+            if (steamIntegration.Id != 0)
+            {
+                db.Integrations.Remove(steamIntegration);
+            }
             db.PlaySessions.RemoveRange(sessions);
             db.Integrations.Remove(integration);
             db.GameExternalIdentities.Remove(identity);

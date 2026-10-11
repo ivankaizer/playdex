@@ -47,6 +47,22 @@ public sealed class PlaydexSummaryTests : IDisposable
         Assert.Contains("120", summary.Current, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task SteamPollingComesFromTheSummaryAndIsOffWithoutOne()
+    {
+        var handler = new SummaryHandler(Envelope("""{"generatedAt":"2026-10-10T16:00:00Z","steamPolling":true}"""));
+        using var api = new CaptureClient("plx_key", "https://playdex.test/api", handler);
+        using var summary = new PlaydexSummary(api, CacheFile);
+        Assert.False(summary.SteamPolling);
+
+        Assert.True(await summary.RefreshAsync());
+        Assert.True(summary.SteamPolling);
+
+        handler.Body = Envelope("""{"generatedAt":"2026-10-10T16:05:00Z","steamPolling":false}""");
+        Assert.True(await summary.RefreshAsync());
+        Assert.False(summary.SteamPolling);
+    }
+
     [Theory]
     [InlineData(HttpStatusCode.Unauthorized)]
     [InlineData(HttpStatusCode.InternalServerError)]

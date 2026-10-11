@@ -12,6 +12,10 @@ namespace Api.Modules.Launcher;
 /// <param name="RecentSessions">The newest sessions, at most 20, newest first.</param>
 /// <param name="Games">Every game the user has played, most recently played first, with its identities so the launcher can match its own games.</param>
 /// <param name="CurrentStreakDays">Consecutive days played, ending today (or yesterday if nothing was played yet today).</param>
+/// <param name="SteamPolling">
+/// The user has an active Steam integration, so Playdex records Steam games by polling; the launcher then starts them
+/// without recording them itself, which would count each session twice.
+/// </param>
 public sealed record LauncherSummaryDto(
     string TimeZone,
     DateTimeOffset GeneratedAt,
@@ -22,7 +26,8 @@ public sealed record LauncherSummaryDto(
     IReadOnlyList<LauncherDayDto> Days,
     IReadOnlyList<LauncherTopGameDto> TopGames,
     IReadOnlyList<LauncherSessionDto> RecentSessions,
-    IReadOnlyList<LauncherGameDto> Games);
+    IReadOnlyList<LauncherGameDto> Games,
+    bool SteamPolling = false);
 
 public sealed record LauncherPeriodDto(long TotalSeconds, int SessionCount);
 

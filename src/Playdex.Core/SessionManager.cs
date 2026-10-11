@@ -5,10 +5,16 @@ namespace Playdex.Core;
 /// <summary>
 /// Launches a game, follows it to exit, records the session to Playdex (<see cref="SessionRecorder"/>) and reports each
 /// state change (gameId, "starting" | "running" | "ended", seconds played) through <paramref name="report"/>, from any
-/// thread.
+/// thread. A Steam game is not recorded while <paramref name="steamPolling"/> says Playdex polls the user's Steam
+/// account: that records it already, and recording it here too would count the session twice.
 /// </summary>
 public sealed class SessionManager(
-    AppConfig config, CaptureClient api, SessionQueue queue, Action<string, string, int> report, Action<long> gameExited)
+    AppConfig config,
+    CaptureClient api,
+    SessionQueue queue,
+    Action<string, string, int> report,
+    Action<long> gameExited,
+    Func<bool> steamPolling)
 {
     private static readonly TimeSpan _pingInterval = TimeSpan.FromSeconds(30);
 
@@ -64,7 +70,14 @@ public sealed class SessionManager(
         else if (game?.SteamAppId is { } appId)
         {
             watcher = SteamGameWatcher.Create(appId);
-            capture = new CaptureGame(game.Title, appId.ToString(System.Globalization.CultureInfo.InvariantCulture), "steam", "pc");
+            if (steamPolling())
+            {
+                Log.Info($"session: {gameId} is recorded by Steam polling, not here");
+            }
+            else
+            {
+                capture = new CaptureGame(game.Title, appId.ToString(System.Globalization.CultureInfo.InvariantCulture), "steam", "pc");
+            }
         }
         if (watcher is null)
         {
