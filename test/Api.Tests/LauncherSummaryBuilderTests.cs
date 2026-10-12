@@ -71,6 +71,41 @@ public sealed class LauncherSummaryBuilderTests
     }
 
     [Fact]
+    public void PeriodsDetailTodayTheWeekAndTheCalendarMonthByGameAndPlatform()
+    {
+        // Now is Saturday 2026-10-10 in Prague.
+        var deck = Now.AddHours(-3);
+        var sessions = new[]
+        {
+            new LauncherSessionRow(1, 1, "steam-deck", "Steam Deck", deck, deck.AddMinutes(60)), // today
+            Session(2, 2, Now.AddDays(-2), minutes: 30), // this week
+            Session(3, 2, Now.AddDays(-8), minutes: 45), // 2 October: this month, not the last 7 days
+            Session(4, 1, Now.AddDays(-20), minutes: 100), // September
+        };
+
+        var periods = LauncherSummaryBuilder.Build(sessions, Games, [], Now, Prague).Periods;
+
+        Assert.Equal(60 * 60, periods.Today.TotalSeconds);
+        Assert.Equal([new LauncherPlatformDto("steam-deck", "Steam Deck", 60 * 60, 1)], periods.Today.Platforms);
+        Assert.Equal((90 * 60, 2), (periods.Week.TotalSeconds, periods.Week.SessionCount));
+        Assert.Equal((135 * 60, 3), (periods.Month.TotalSeconds, periods.Month.SessionCount));
+        Assert.Equal(["Hades II", "Control"], periods.Month.TopGames.Select(game => game.Title));
+        Assert.Equal(
+            [new LauncherPlatformDto("pc", "PC", 75 * 60, 2), new LauncherPlatformDto("steam-deck", "Steam Deck", 60 * 60, 1)],
+            periods.Month.Platforms);
+    }
+
+    [Fact]
+    public void MonthDaysRunFromTheFirstToToday()
+    {
+        var days = LauncherSummaryBuilder.Build([Session(1, 1, Now.AddHours(-2), minutes: 20)], Games, [], Now, Prague).MonthDays;
+
+        Assert.Equal(10, days.Count);
+        Assert.Equal("2026-10-01", days[0].Date);
+        Assert.Equal(new LauncherDayDto("2026-10-10", 20 * 60, 1), days[^1]);
+    }
+
+    [Fact]
     public void GamesCarryTotalsAndIdentitiesMostRecentFirst()
     {
         var sessions = new[]

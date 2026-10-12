@@ -40,8 +40,38 @@ public static class LauncherSummaryBuilder
             .ToList();
         var weekStart = today.AddDays(-(DayCount - 1));
         var week = played.Where(session => session.Day >= weekStart && session.Day <= today).ToList();
+        var monthStart = new DateOnly(today.Year, today.Month, 1);
+        var month = played.Where(session => session.Day >= monthStart && session.Day <= today).ToList();
+        var monthDays = Enumerable.Range(0, today.Day)
+            .Select(offset => monthStart.AddDays(offset))
+            .Select(day =>
+            {
+                var onDay = month.Where(session => session.Day == day).ToList();
+                return new LauncherDayDto(
+                    day.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture), onDay.Sum(session => session.Seconds), onDay.Count);
+            })
+            .ToList();
 
         string Title(long gameId) => games.TryGetValue(gameId, out var game) ? game.Title : "Unknown game";
+
+        LauncherPeriodDetailDto Detail(IReadOnlyCollection<(LauncherSessionRow Row, DateOnly Day, long Seconds)> period) => new(
+            period.Sum(session => session.Seconds),
+            period.Count,
+            period
+                .GroupBy(session => session.Row.GameId)
+                .Select(group => new LauncherTopGameDto(
+                    GameId.Encode(group.Key), Title(group.Key), group.Sum(session => session.Seconds), group.Count()))
+                .OrderByDescending(game => game.TotalSeconds)
+                .ThenBy(game => game.Title, StringComparer.Ordinal)
+                .Take(TopGameCount)
+                .ToList(),
+            period
+                .GroupBy(session => session.Row.PlatformKey)
+                .Select(group => new LauncherPlatformDto(
+                    group.Key, group.First().Row.PlatformName, group.Sum(session => session.Seconds), group.Count()))
+                .OrderByDescending(platform => platform.TotalSeconds)
+                .ThenBy(platform => platform.PlatformName, StringComparer.Ordinal)
+                .ToList());
 
         var topGames = week
             .GroupBy(session => session.Row.GameId)
@@ -94,7 +124,9 @@ public static class LauncherSummaryBuilder
             days,
             topGames,
             recent,
-            gameTotals);
+            gameTotals,
+            new LauncherPeriodsDto(Detail(played.Where(session => session.Day == today).ToList()), Detail(week), Detail(month)),
+            monthDays);
     }
 
     /// <summary>

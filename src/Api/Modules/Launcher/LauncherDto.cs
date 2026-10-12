@@ -12,6 +12,8 @@ namespace Api.Modules.Launcher;
 /// <param name="RecentSessions">The newest sessions, at most 20, newest first.</param>
 /// <param name="Games">Every game the user has played, most recently played first, with its identities so the launcher can match its own games.</param>
 /// <param name="CurrentStreakDays">Consecutive days played, ending today (or yesterday if nothing was played yet today).</param>
+/// <param name="Periods">Today, those 7 days and this calendar month in detail: the launcher's Playdex overview.</param>
+/// <param name="MonthDays">This calendar month's local days, from the 1st to today.</param>
 public sealed record LauncherSummaryDto(
     string TimeZone,
     DateTimeOffset GeneratedAt,
@@ -22,7 +24,21 @@ public sealed record LauncherSummaryDto(
     IReadOnlyList<LauncherDayDto> Days,
     IReadOnlyList<LauncherTopGameDto> TopGames,
     IReadOnlyList<LauncherSessionDto> RecentSessions,
-    IReadOnlyList<LauncherGameDto> Games);
+    IReadOnlyList<LauncherGameDto> Games,
+    LauncherPeriodsDto Periods,
+    IReadOnlyList<LauncherDayDto> MonthDays);
+
+public sealed record LauncherPeriodsDto(LauncherPeriodDetailDto Today, LauncherPeriodDetailDto Week, LauncherPeriodDetailDto Month);
+
+/// <param name="TopGames">The period's most played games, at most 5.</param>
+/// <param name="Platforms">Time per platform, most played first, with names from Playdex's catalog.</param>
+public sealed record LauncherPeriodDetailDto(
+    long TotalSeconds,
+    int SessionCount,
+    IReadOnlyList<LauncherTopGameDto> TopGames,
+    IReadOnlyList<LauncherPlatformDto> Platforms);
+
+public sealed record LauncherPlatformDto(string PlatformKey, string PlatformName, long TotalSeconds, int SessionCount);
 
 public sealed record LauncherPeriodDto(long TotalSeconds, int SessionCount);
 

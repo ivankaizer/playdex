@@ -83,6 +83,19 @@ public sealed class LauncherSummaryEndpointTests(PostgresFixture postgres)
             var steamIdentity = played.GetProperty("identities").EnumerateArray().Single();
             Assert.Equal("steam", steamIdentity.GetProperty("type").GetString());
             Assert.Equal(appId, steamIdentity.GetProperty("externalId").GetString());
+            Assert.Equal("Steam", data.GetProperty("recentSessions")[0].GetProperty("platformName").GetString());
+            foreach (var platform in data.GetProperty("periods").GetProperty("week").GetProperty("platforms").EnumerateArray())
+            {
+                Assert.Equal("Steam", platform.GetProperty("platformName").GetString());
+            }
+
+            // The yearly recap, as the web computes it, with the same key; only this user's play.
+            var recap = await client.GetAsync($"/api/launcher/recap?year={now.UtcDateTime.Year}");
+            Assert.Equal(HttpStatusCode.OK, recap.StatusCode);
+            using var recapJson = JsonDocument.Parse(await recap.Content.ReadAsStringAsync());
+            var recapData = recapJson.RootElement.GetProperty("data");
+            Assert.Equal(sessions.Count(s => s.UserId == user.Id && s.StartedAt.UtcDateTime.Year == now.UtcDateTime.Year), recapData.GetProperty("totalSessions").GetInt32());
+            Assert.Equal(HttpStatusCode.BadRequest, (await client.GetAsync("/api/launcher/recap?year=1")).StatusCode);
         }
         finally
         {
