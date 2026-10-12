@@ -1,13 +1,15 @@
 name: Release Windows apps
 
 # A v<major>.<minor>.<patch> tag releases the Windows apps (see docs/windows-releases.md):
-#   playdex-windows-v<version>.zip (+ .sha256)          the desktop app folder; what Playdex updates itself from
-#   Playdex-Setup.exe                                   installs it for the current user
-#   playdex-wrapper-windows-v<version>.zip (+ .sha256)  Playdex-Setup.exe as Wrapper.exe: how WinForms Wrapper
-#                                                       installs (v1.x) update themselves into the desktop app
+#   playdex-windows-v<version>.zip (+ .sha256)          the app folder; what Playdex updates itself from
+#   Playdex-Setup.exe                                   the offline installer: installs, updates and uninstalls Playdex
+#                                                       for the current user; the app (and the FSE package) is inside
+#   playdex-wrapper-windows-v<version>.zip (+ .sha256)  the online setup as Wrapper.exe: how WinForms Wrapper
+#                                                       installs (v1.x) update themselves into the app
 #   playdex-launcher-v<version>.msix, playdex-launcher.cer
-#                                                       the Full Screen Experience launcher, signed, when the
+#                                                       the Full Screen Experience package, signed, when the
 #                                                       LAUNCHER_SIGNING_PFX and LAUNCHER_SIGNING_PASSWORD secrets are set
+# The files are made by tools/package-windows.ps1, which also builds them locally for a test.
 # The same files go to download.playdex.dev, the public feed that installs, updates and the landing use.
 
 on:
@@ -65,44 +67,6 @@ jobs:
           bun install --frozen-lockfile
           bun run build
 
-      - name: Publish the desktop app (Native AOT)
-        shell: pwsh
-        run: |
-          dotnet publish src/Desktop/Playdex.Desktop.csproj -c Release -r win-x64 `
-            -p:Version=${{ steps.version.outputs.number }} `
-            -p:IncludeSourceRevisionInInformationalVersion=false `
-            -o artifacts/app
-          if ($LASTEXITCODE) { throw "Desktop publish failed." }
-          Copy-Item artifacts/run/Playdex.Run.exe artifacts/app/
-          Get-ChildItem artifacts/app -Recurse -Filter *.pdb | Remove-Item
-
-      - name: Publish the setup (Native AOT)
-        shell: pwsh
-        run: |
-          dotnet publish src/Playdex.Setup/Playdex.Setup.csproj -c Release -r win-x64 `
-            -p:Version=${{ steps.version.outputs.number }} `
-            -p:IncludeSourceRevisionInInformationalVersion=false `
-            -o artifacts/setup
-          if ($LASTEXITCODE) { throw "Setup publish failed." }
-          Copy-Item artifacts/setup/Playdex.Setup.exe artifacts/Playdex-Setup.exe
-
-      - name: Create the archives and checksums
-        shell: pwsh
-        run: |
-          $tag = "${{ github.ref_name }}"
-          function Write-Checksum($path) {
-            $name = Split-Path $path -Leaf
-            $hash = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant()
-            Set-Content -LiteralPath "$path.sha256" -Value "$hash  $name" -Encoding ascii -NoNewline
-          }
-          Compress-Archive -Path artifacts/app/* -DestinationPath "artifacts/playdex-windows-$tag.zip"
-          Write-Checksum "artifacts/playdex-windows-$tag.zip"
-          # The WinForms Wrapper's updater installs the single Wrapper.exe in this archive: the setup.
-          New-Item -ItemType Directory artifacts/bridge | Out-Null
-          Copy-Item artifacts/setup/Playdex.Setup.exe artifacts/bridge/Wrapper.exe
-          Compress-Archive -Path artifacts/bridge/Wrapper.exe -DestinationPath "artifacts/playdex-wrapper-windows-$tag.zip"
-          Write-Checksum "artifacts/playdex-wrapper-windows-$tag.zip"
-
       - name: Package and sign the launcher (MSIX)
         id: launcher
         shell: pwsh
@@ -134,6 +98,17 @@ jobs:
           Remove-Item $pfx
           "built=true" >> $env:GITHUB_OUTPUT
 
+      - name: Package the Windows apps (Native AOT)
+        shell: pwsh
+        run: |
+          $version = "${{ steps.version.outputs.number }}"
+          $package = @{ Version = $version; Out = 'artifacts'; Run = 'artifacts/run/Playdex.Run.exe' }
+          if ('${{ steps.launcher.outputs.built }}' -eq 'true') {
+            $package.Msix = "artifacts/playdex-launcher-v$version.msix"
+            $package.Cer = 'artifacts/playdex-launcher.cer'
+          }
+          ./tools/package-windows.ps1 @package
+
       - name: Verify the release contract
         shell: pwsh
         run: |
@@ -152,9 +127,11 @@ jobs:
           Add-Type -AssemblyName System.IO.Compression.FileSystem
           $app = [IO.Compression.ZipFile]::OpenRead("artifacts/playdex-windows-$tag.zip")
           $names = $app.Entries.FullName; $app.Dispose()
-          foreach ($required in 'Playdex.exe', 'Playdex.Run.exe', 'ui/index.html') {
+          foreach ($required in 'Playdex.exe', 'Playdex.Run.exe', 'Playdex-Setup.exe', 'ui/index.html') {
             if ($names -notcontains $required -and $names -notcontains $required.Replace('/', '\')) { throw "The app archive has no $required." }
           }
+          # The offline setup carries the app: it is bigger than the app archive.
+          if ((Get-Item artifacts/Playdex-Setup.exe).Length -le (Get-Item "artifacts/playdex-windows-$tag.zip").Length) { throw "Playdex-Setup.exe has no app inside." }
           $bridge = [IO.Compression.ZipFile]::OpenRead("artifacts/playdex-wrapper-windows-$tag.zip")
           $bridgeNames = @($bridge.Entries.FullName); $bridge.Dispose()
           if ($bridgeNames.Count -ne 1 -or $bridgeNames[0] -ne 'Wrapper.exe') { throw "The Wrapper archive must hold only Wrapper.exe." }

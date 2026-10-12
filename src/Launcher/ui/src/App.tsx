@@ -21,13 +21,14 @@ import { gameById, isInstalled, recentGames } from "./data/games";
 import { DossierHome } from "./homes/DossierHome";
 import { RibbonHome } from "./homes/RibbonHome";
 import { TimelineHome } from "./homes/TimelineHome";
-import { focusDefault, focusEl, forgetGroups } from "./nav/focus";
+import { focusEl, focusScreenDefault, forgetGroups } from "./nav/focus";
 import { onAction } from "./nav/input";
 import { focusedGame, focusedKind, useStore } from "./nav/store";
 import { inHost, onHostMessage, signalAfterFrame } from "./host/bridge";
 import { isDesktop, loadDesktopState } from "./host/desktop";
 import { GamePage } from "./screens/GamePage";
 import { Library } from "./screens/Library";
+import { PlaydexScreen } from "./screens/Playdex";
 
 // Desktop-only screens: the full-screen launcher never downloads them.
 const Manage = lazy(() => import("./screens/Manage").then((m) => ({ default: m.Manage })));
@@ -118,7 +119,7 @@ export function App() {
     const t = window.setTimeout(() => {
       const from = back ? document.querySelector<HTMLElement>(`[data-nav][data-game="${back}"]`) : null;
       if (from) focusEl(from);
-      else focusDefault();
+      else focusScreenDefault();
       if (!readySent) {
         readySent = true;
         signalAfterFrame({ type: "ready" });
@@ -184,7 +185,7 @@ export function App() {
             PLAYDEX
           </span>
           <nav className="tabs" aria-label="Sections">
-            <Glyph name="LB" />
+            {!isDesktop && <Glyph name="LB" />}
             <div className="seg" role="tablist" data-nav-group="tabs">
               {TABS.map((t) => (
                 <button
@@ -203,7 +204,7 @@ export function App() {
                 </button>
               ))}
             </div>
-            <Glyph name="RB" />
+            {!isDesktop && <Glyph name="RB" />}
           </nav>
           <span className="topbar-spacer" />
           <NowPlaying />
@@ -259,7 +260,7 @@ export function App() {
             <TimelineHome />
           )
         ) : (
-          <Placeholder tab={tab} />
+          <PlaydexScreen />
         )}
 
         <HintBar onGamePage={!!gameOpen} />
@@ -362,21 +363,6 @@ function EmptyHome() {
         <p>
           The launcher lists installed Steam games and games added through the Playdex Wrapper. New games show up the
           next time the launcher starts.
-        </p>
-      </div>
-    </main>
-  );
-}
-
-function Placeholder({ tab }: { tab: Tab }) {
-  return (
-    <main className="placeholder">
-      <div className="card">
-        <span className="kicker">{tab}</span>
-        <h2>Your Playdex stats are designed next</h2>
-        <p>
-          Recaps, streaks and per-platform totals from your Playdex account will live here. Switch sections with{" "}
-          <Glyph name="LB" /> <Glyph name="RB" />.
         </p>
       </div>
     </main>

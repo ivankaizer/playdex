@@ -33,6 +33,21 @@ public sealed record QueuedSession(
 [JsonSerializable(typeof(QueuedSession))]
 public sealed partial class CaptureJson : JsonSerializerContext;
 
+public enum ApiKeyStatus
+{
+    /// <summary>The server answered with the user's data.</summary>
+    Accepted,
+
+    /// <summary>The server refused the key (401 or 403).</summary>
+    Rejected,
+
+    /// <summary>No answer, or one that says nothing about the key (a wrong URL, a server error).</summary>
+    Unreachable,
+}
+
+/// <param name="Detail">Why the key couldn't be checked: "HTTP 502", or the connection error.</param>
+public sealed record ApiKeyCheck(ApiKeyStatus Status, string? Detail = null);
+
 /// <summary>
 /// Playdex API client for what the API key reaches: capture (POST /capture/sessions/start, /ping, /end and
 /// /capture/sessions) and the launcher's read endpoint (GET /launcher/summary). The API key and URL
@@ -90,15 +105,21 @@ public sealed class CaptureClient : IDisposable
     /// The user's Playdex data for the launcher (GET launcher/summary, API key only), in this PC's time zone: the
     /// response's "data" as raw JSON, or null without a key, offline, or on an error.
     /// </summary>
-    public async Task<string?> GetLauncherSummaryAsync(CancellationToken ct = default)
+    public Task<string?> GetLauncherSummaryAsync(CancellationToken ct = default) => GetDataAsync(SummaryPath(), "launcher/summary", ct);
+
+    /// <summary>
+    /// The web's recap of one calendar year (GET launcher/recap?year=, API key only), as raw JSON, or null without a
+    /// key, offline, or on an error.
+    /// </summary>
+    public Task<string?> GetLauncherRecapAsync(int year, CancellationToken ct = default) =>
+        GetDataAsync($"launcher/recap?year={year.ToString(System.Globalization.CultureInfo.InvariantCulture)}", "launcher/recap", ct);
+
+    private async Task<string?> GetDataAsync(string path, string name, CancellationToken ct)
     {
         if (!IsConfigured)
         {
             return null;
         }
-        var zone = TimeZoneInfo.Local;
-        var offset = (int)zone.GetUtcOffset(DateTimeOffset.UtcNow).TotalMinutes;
-        var path = $"launcher/summary?tz={Uri.EscapeDataString(zone.Id)}&utcOffsetMinutes={offset.ToString(System.Globalization.CultureInfo.InvariantCulture)}";
         var started = Stopwatch.GetTimestamp();
         try
         {
@@ -106,7 +127,7 @@ public sealed class CaptureClient : IDisposable
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _apiKey()!.Trim());
             request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
             using var response = await _http.SendAsync(request, ct);
-            Log.Info($"playdex: launcher/summary -> {(int)response.StatusCode} in {Metrics.MsSince(started):F0} ms");
+            Log.Info($"playdex: {name} -> {(int)response.StatusCode} in {Metrics.MsSince(started):F0} ms");
             if (!response.IsSuccessStatusCode)
             {
                 return null;
@@ -118,9 +139,47 @@ public sealed class CaptureClient : IDisposable
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or UriFormatException or JsonException)
         {
-            Log.Info($"playdex: launcher/summary failed after {Metrics.MsSince(started):F0} ms: {ex.Message}");
+            Log.Info($"playdex: {name} failed after {Metrics.MsSince(started):F0} ms: {ex.Message}");
             return null;
         }
+    }
+
+    /// <summary>
+    /// Whether the server takes the API key, asked the way the launcher reads its data (GET launcher/summary). The
+    /// installer checks a key before it saves it.
+    /// </summary>
+    public async Task<ApiKeyCheck> CheckKeyAsync(CancellationToken ct = default)
+    {
+        if (!IsConfigured)
+        {
+            return new ApiKeyCheck(ApiKeyStatus.Rejected);
+        }
+        var started = Stopwatch.GetTimestamp();
+        try
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, new Uri(BaseAddress, SummaryPath()));
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _apiKey()!.Trim());
+            request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+            using var response = await _http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
+            var status = (int)response.StatusCode;
+            Log.Info($"playdex: key check -> {status} in {Metrics.MsSince(started):F0} ms");
+            return response.IsSuccessStatusCode ? new ApiKeyCheck(ApiKeyStatus.Accepted)
+                : status is 401 or 403 ? new ApiKeyCheck(ApiKeyStatus.Rejected)
+                : new ApiKeyCheck(ApiKeyStatus.Unreachable, $"HTTP {status}");
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or UriFormatException)
+        {
+            Log.Info($"playdex: key check failed after {Metrics.MsSince(started):F0} ms: {ex.Message}");
+            return new ApiKeyCheck(ApiKeyStatus.Unreachable, ex is TaskCanceledException ? "no answer in time" : ex.Message);
+        }
+    }
+
+    /// <summary>launcher/summary in this PC's time zone (Windows id, with the UTC offset as a fallback).</summary>
+    private static string SummaryPath()
+    {
+        var zone = TimeZoneInfo.Local;
+        var offset = (int)zone.GetUtcOffset(DateTimeOffset.UtcNow).TotalMinutes;
+        return $"launcher/summary?tz={Uri.EscapeDataString(zone.Id)}&utcOffsetMinutes={offset.ToString(System.Globalization.CultureInfo.InvariantCulture)}";
     }
 
     private async Task<bool> PostAsync<T>(string path, T body, System.Text.Json.Serialization.Metadata.JsonTypeInfo<T> type)

@@ -80,7 +80,7 @@ onHostMessage((m) => {
 /** Switch to the running game's window. */
 export function resumeGame() {
   if (!inHost) {
-    showToast("Resume works in the Playdex launcher on Windows");
+    showToast("Resume works in the Playdex app on Windows");
     return;
   }
   postToHost({ type: "resume-game" });

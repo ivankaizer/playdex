@@ -5,7 +5,7 @@ using static Playdex.Desktop.NativeDesktop;
 namespace Playdex.Desktop;
 
 /// <summary>
-/// The notification area icon: a click opens Playdex, the context menu offers Open and Quit, and <see cref="Notify"/>
+/// The notification area icon: a click opens Playdex, the context menu offers Open, switching the mode and Quit, and <see cref="Notify"/>
 /// shows a Windows notification. Plain Shell_NotifyIcon on a hidden window owned by the UI thread (WinUI has no tray
 /// API). The icon is added again when Explorer restarts (the "TaskbarCreated" broadcast).
 /// </summary>
@@ -14,22 +14,28 @@ internal sealed unsafe class TrayIcon : IDisposable
     private const uint CallbackMessage = WmApp + 1;
     private const nuint OpenCommand = 1;
     private const nuint QuitCommand = 2;
+    private const nuint SwitchModeCommand = 3;
 
     private static TrayIcon? _current;
 
     private readonly Action _open;
     private readonly Action _quit;
+    private readonly Func<string> _switchModeLabel;
+    private readonly Action _switchMode;
     private readonly uint _taskbarCreated;
     private readonly nint _window;
     private readonly nint _icon;
     private readonly string _tooltip;
 
     /// <summary>Call on the UI thread: the hidden window's messages arrive through its message loop.</summary>
-    public TrayIcon(string tooltip, Action open, Action quit)
+    /// <param name="switchModeLabel">The menu item that switches between desktop mode and Big Picture, as it reads now.</param>
+    public TrayIcon(string tooltip, Action open, Action quit, Func<string> switchModeLabel, Action switchMode)
     {
         _tooltip = tooltip;
         _open = open;
         _quit = quit;
+        _switchModeLabel = switchModeLabel;
+        _switchMode = switchMode;
         _current = this;
         _taskbarCreated = RegisterWindowMessage("TaskbarCreated");
 
@@ -101,6 +107,7 @@ internal sealed unsafe class TrayIcon : IDisposable
     {
         var menu = CreatePopupMenu();
         AppendMenu(menu, MfString, OpenCommand, "Open Playdex");
+        AppendMenu(menu, MfString, SwitchModeCommand, _switchModeLabel());
         AppendMenu(menu, MfSeparator, 0, null);
         AppendMenu(menu, MfString, QuitCommand, "Quit Playdex");
         GetCursorPos(out var point);
@@ -113,6 +120,9 @@ internal sealed unsafe class TrayIcon : IDisposable
         {
             case OpenCommand:
                 _open();
+                break;
+            case SwitchModeCommand:
+                _switchMode();
                 break;
             case QuitCommand:
                 _quit();

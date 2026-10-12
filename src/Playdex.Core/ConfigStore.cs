@@ -18,8 +18,11 @@ internal sealed record LegacyLauncherConfig(string? ApiKey, string? ApiBaseUrl);
 /// </summary>
 public sealed class ConfigStore
 {
-    /// <summary>The API URL the Wrapper used to default to and wrote into every config. It answers POSTs with 405.</summary>
-    private const string BrokenDefaultBaseUrl = "https://playdex.ejwan.dev/api";
+    /// <summary>
+    /// API URLs that used to be the default and were written into configs: the Wrapper's (it answers POSTs with 405) and
+    /// playdex-api.ejwan.dev (retired). A config that still has one gets <see cref="ApiConfig.DefaultBaseUrl"/>.
+    /// </summary>
+    private static readonly string[] _retiredDefaultBaseUrls = ["https://playdex.ejwan.dev/api", "https://playdex-api.ejwan.dev/api"];
 
     private readonly string? _legacyWrapperConfig;
     private readonly string? _legacyLauncherConfig;
@@ -143,10 +146,6 @@ public sealed class ConfigStore
                 using var document = JsonDocument.Parse(json);
                 KeepLegacyStorage(config, document.RootElement);
                 DropGameApiKeys(config, document.RootElement);
-                if (string.Equals(config.Api.BaseUrl?.Trim().TrimEnd('/'), BrokenDefaultBaseUrl, StringComparison.OrdinalIgnoreCase))
-                {
-                    config.Api.BaseUrl = ApiConfig.DefaultBaseUrl;
-                }
                 Log.Info($"config: migrated {config.Games.Count} game(s) from {_legacyWrapperConfig}");
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
@@ -230,6 +229,10 @@ public sealed class ConfigStore
             config.Games ?? new Dictionary<string, GameConfig>(),
             StringComparer.OrdinalIgnoreCase);
         config.Api ??= new ApiConfig();
+        if (_retiredDefaultBaseUrls.Contains(config.Api.BaseUrl?.Trim().TrimEnd('/'), StringComparer.OrdinalIgnoreCase))
+        {
+            config.Api.BaseUrl = ApiConfig.DefaultBaseUrl;
+        }
         config.Api.Platform = ApiConfig.NormalizePlatform(config.Api.Platform);
         config.SteamGridDb ??= new SteamGridDbConfig();
         config.SteamGridDb.ApiKey = SteamGridDbConfig.NormalizeApiKey(config.SteamGridDb.ApiKey);
@@ -244,6 +247,8 @@ public sealed class ConfigStore
             LogDirectory = NormalizeStoragePath(storage.LogDirectory, Paths.DefaultLogDirectory),
             LauncherDirectory = NormalizeStoragePath(storage.LauncherDirectory, Paths.DefaultLauncherDirectory),
         };
+        config.Shell ??= new ShellConfig();
+        config.Shell.Mode = ShellConfig.NormalizeMode(config.Shell.Mode);
 
         foreach (var game in config.Games.Values)
         {

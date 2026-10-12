@@ -67,6 +67,19 @@ public sealed class ConfigStoreTests : IDisposable
         Assert.Equal(ApiConfig.DefaultBaseUrl, Store().LoadOrCreate().Api.BaseUrl);
     }
 
+    [Theory]
+    [InlineData("https://playdex-api.ejwan.dev/api", "https://dash.playdex.dev/api")]
+    [InlineData("https://PLAYDEX-API.ejwan.dev/api/", "https://dash.playdex.dev/api")]
+    [InlineData("https://preview.test/api", "https://preview.test/api")]
+    public void ASavedRetiredDefaultMovesToTheCurrentOne(string saved, string expected)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(ConfigPath)!);
+        File.WriteAllText(ConfigPath, $$"""{ "api": { "baseUrl": "{{saved}}", "apiKey": "key" } }""");
+
+        Assert.Equal(expected, new ConfigStore(ConfigPath).LoadOrCreate().Api.BaseUrl);
+        Assert.Equal("https://dash.playdex.dev/api", new ConfigStore(Path.Combine(_directory, "new.json")).LoadOrCreate().Api.BaseUrl);
+    }
+
     [Fact]
     public void TakesTheLaunchersKeyAndUrlWhenThereIsNoWrapper()
     {
@@ -121,6 +134,24 @@ public sealed class ConfigStoreTests : IDisposable
 
         Assert.Equal("", config.Api.ApiKey);
         Assert.Empty(config.Games);
+    }
+
+    [Fact]
+    public async Task TheModeIsDesktopUnlessBigPictureWasSaved()
+    {
+        var store = new ConfigStore(ConfigPath);
+        Directory.CreateDirectory(Path.GetDirectoryName(ConfigPath)!);
+        File.WriteAllText(ConfigPath, """{ "api": { "apiKey": "key" } }""");
+        Assert.Equal(ShellConfig.DesktopMode, store.LoadOrCreate().Shell.Mode);
+
+        File.WriteAllText(ConfigPath, """{ "shell": { "mode": "BIGPICTURE", "executablePath": "C:\\Playdex\\Playdex.exe" } }""");
+        var config = await store.LoadOrCreateAsync();
+        Assert.Equal(ShellConfig.BigPictureMode, config.Shell.Mode);
+        Assert.Equal(@"C:\Playdex\Playdex.exe", config.Shell.ExecutablePath);
+
+        config.Shell.Mode = "something else";
+        await store.SaveAsync(config);
+        Assert.Equal(ShellConfig.DesktopMode, store.LoadOrCreate().Shell.Mode);
     }
 
     public void Dispose() => Directory.Delete(_directory, recursive: true);

@@ -1,4 +1,4 @@
-import { Activity, Check, Gauge, Headphones, Monitor, Moon, Power, RotateCcw, Speaker, Sun } from "lucide-react";
+import { Activity, AppWindow, Check, Gamepad2, Gauge, Headphones, Monitor, Moon, Power, RotateCcw, Speaker, Sun } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { closeQuickSettings, showToast } from "../app-state";
 import {
@@ -9,6 +9,7 @@ import {
   type PowerAction,
   type QuickSettingsState,
 } from "../host/bridge";
+import { isDesktop, switchMode } from "../host/desktop";
 import { focusDefault } from "../nav/focus";
 import { onAction } from "../nav/input";
 import { Hint } from "./shared";
@@ -48,7 +49,8 @@ function OutputIcon({ output }: { output: AudioOutput }) {
 }
 
 /**
- * Quick settings: the default sound output, HDR and refresh rate per display, the NVIDIA FPS counter, and sleep / restart / shut down. A panel over the current
+ * Quick settings: the default sound output, HDR and refresh rate per display, the NVIDIA FPS counter, switching between
+ * Big Picture and desktop mode, and sleep / restart / shut down. A panel over the current
  * screen (which is inert while it is open); B or Menu closes it. Power actions take a second press to confirm.
  */
 export function QuickSettings() {
@@ -130,10 +132,16 @@ export function QuickSettings() {
   function toggleFpsCounter() {
     setArmed(null);
     if (!inHost) {
-      showToast("The FPS counter works in the Playdex launcher on Windows");
+      showToast("The FPS counter works in the Playdex app on Windows");
       return;
     }
     postToHost({ type: "fps-counter" });
+  }
+
+  function changeMode() {
+    setArmed(null);
+    closeQuickSettings();
+    switchMode(isDesktop ? "bigPicture" : "desktop").catch((e: unknown) => showToast(e instanceof Error ? e.message : String(e)));
   }
 
   function power(action: PowerAction) {
@@ -144,7 +152,7 @@ export function QuickSettings() {
     const p = POWER.find((x) => x.action === action)!;
     closeQuickSettings();
     if (!inHost) {
-      showToast(`${p.label} works in the Playdex launcher on Windows`);
+      showToast(`${p.label} works in the Playdex app on Windows`);
       return;
     }
     showToast(p.done);
@@ -291,6 +299,22 @@ export function QuickSettings() {
             </div>
           </section>
         )}
+
+        <section className="qs-section" aria-labelledby="qs-mode">
+          <h2 id="qs-mode" className="label">
+            Playdex
+          </h2>
+          <div className="qs-list" data-nav-group="qs-mode">
+            <button className="qs-row" data-nav data-kind="qs-mode" onClick={changeMode}>
+              {isDesktop ? <Gamepad2 aria-hidden /> : <AppWindow aria-hidden />}
+              <span className="qs-row-text">
+                <span className="qs-row-name">{isDesktop ? "Big Picture" : "Desktop mode"}</span>
+                <small>{isDesktop ? "Full screen, controller first" : "A window and the tray, mouse first"}</small>
+              </span>
+              <span className="qs-row-action">Switch</span>
+            </button>
+          </div>
+        </section>
 
         <section className="qs-section" aria-labelledby="qs-power">
           <h2 id="qs-power" className="label">

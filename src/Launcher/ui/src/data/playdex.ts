@@ -6,7 +6,7 @@
  */
 import { inHost, onHostMessage } from "../host/bridge";
 import { createStore } from "../nav/store";
-import { gameById, games, isDemo, sessions, type Game } from "./games";
+import { gameById, games, isDemo, sessions, SOURCE_LABEL, type Game } from "./games";
 
 export type PlaydexPeriod = { totalSeconds: number; sessionCount: number };
 export type PlaydexDay = { date: string; totalSeconds: number; sessionCount: number };
@@ -16,11 +16,16 @@ export type PlaydexSession = {
   gameId: string;
   title: string;
   platformKey: string;
+  /** The platform's name from Playdex's catalog; absent from servers older than the field. */
+  platformName?: string;
   startedAt: string;
   endedAt: string | null;
   durationSeconds: number;
 };
 export type PlaydexIdentity = { type: string; externalId: string };
+export type PlaydexPlatform = { platformKey: string; platformName: string; totalSeconds: number; sessionCount: number };
+/** A period with its most played games (at most 5) and time per platform, most played first. */
+export type PlaydexPeriodDetail = PlaydexPeriod & { topGames: PlaydexTopGame[]; platforms: PlaydexPlatform[] };
 export type PlaydexGame = {
   gameId: string;
   title: string;
@@ -42,6 +47,10 @@ export type PlaydexSummary = {
   topGames: PlaydexTopGame[];
   recentSessions: PlaydexSession[];
   games: PlaydexGame[];
+  /** Today, the last 7 days and this calendar month in detail; absent from servers older than the field. */
+  periods?: { today: PlaydexPeriodDetail; week: PlaydexPeriodDetail; month: PlaydexPeriodDetail };
+  /** This calendar month's local days, from the 1st to today; absent from older servers. */
+  monthDays?: PlaydexDay[];
 };
 
 declare global {
@@ -87,6 +96,27 @@ export function playdexGame(summary: PlaydexSummary | null, g: Game): PlaydexGam
   return key ? indexed.byKey.get(key) : undefined;
 }
 
+let reverse: { summary: PlaydexSummary | null; byPlaydexId: Map<string, Game> } = { summary: null, byPlaydexId: new Map() };
+
+/** The library game a Playdex game is, when it is on this PC (installed, or added to Playdex here). */
+export function libraryGame(summary: PlaydexSummary | null, playdexGameId: string): Game | undefined {
+  if (!summary) return undefined;
+  if (reverse.summary !== summary) {
+    const byKey = new Map<string, Game>();
+    for (const g of games) {
+      const key = captureKey(g);
+      if (key) byKey.set(key, g);
+    }
+    const byPlaydexId = new Map<string, Game>();
+    for (const pg of summary.games) {
+      const local = pg.identities.map((i) => byKey.get(identityKey(i.type, i.externalId))).find(Boolean);
+      if (local) byPlaydexId.set(pg.gameId, local);
+    }
+    reverse = { summary, byPlaydexId };
+  }
+  return reverse.byPlaydexId.get(playdexGameId);
+}
+
 /** Days since an ISO time, in local calendar days (0 = today). */
 export function daysAgo(iso: string): number {
   const midnight = (t: number) => new Date(t).setHours(0, 0, 0, 0);
@@ -111,6 +141,7 @@ function demoSummary(): PlaydexSummary {
       gameId: s.gameId,
       title: gameById(s.gameId).title,
       platformKey: gameById(s.gameId).source,
+      platformName: SOURCE_LABEL[gameById(s.gameId).source],
       startedAt: startedAt.toISOString(),
       endedAt: new Date(startedAt.getTime() + s.minutes * 60_000).toISOString(),
       durationSeconds: s.minutes * 60,
@@ -126,6 +157,25 @@ function demoSummary(): PlaydexSummary {
   for (const r of rows) byGame.set(r.gameId, [...(byGame.get(r.gameId) ?? []), r]);
   const weekByGame = new Map<string, typeof rows>();
   for (const r of week) weekByGame.set(r.gameId, [...(weekByGame.get(r.gameId) ?? []), r]);
+  const detail = (list: typeof rows): PlaydexPeriodDetail => {
+    const group = <K,>(key: (r: (typeof rows)[number]) => K) => {
+      const m = new Map<K, typeof rows>();
+      for (const r of list) m.set(key(r), [...(m.get(key(r)) ?? []), r]);
+      return [...m.entries()];
+    };
+    return {
+      ...period(list),
+      topGames: group((r) => r.gameId)
+        .map(([gameId, l]) => ({ gameId, title: gameById(gameId).title, ...period(l) }))
+        .sort((a, b) => b.totalSeconds - a.totalSeconds)
+        .slice(0, 5),
+      platforms: group((r) => r.platformKey)
+        .map(([platformKey, l]) => ({ platformKey, platformName: l[0].platformName, ...period(l) }))
+        .sort((a, b) => b.totalSeconds - a.totalSeconds),
+    };
+  };
+  const monthDayCount = now.getDate();
+  const month = rows.filter((r) => r.dayOffset < monthDayCount);
   const played = new Set(rows.map((r) => r.dayOffset));
   let streak = 0;
   for (let d = played.has(0) ? 0 : 1; played.has(d); d++) streak++;
@@ -161,5 +211,10 @@ function demoSummary(): PlaydexSummary {
           identities: g.art ? [{ type: "steam", externalId: String(g.art) }] : [],
         };
       }),
+    periods: { today: detail(rows.filter((r) => r.dayOffset === 0)), week: detail(week), month: detail(month) },
+    monthDays: Array.from({ length: monthDayCount }, (_, i) => {
+      const offset = monthDayCount - 1 - i;
+      return { date: at(offset, "12:00").toISOString().slice(0, 10), ...period(rows.filter((r) => r.dayOffset === offset)) };
+    }),
   };
 }

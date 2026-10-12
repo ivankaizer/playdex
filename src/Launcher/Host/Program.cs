@@ -1,120 +1,139 @@
-using System.Diagnostics;
-using System.Runtime;
-using Microsoft.UI.Dispatching;
-using Microsoft.UI.Xaml;
-using Microsoft.Web.WebView2.Core;
 using Microsoft.Windows.AppLifecycle;
 using Windows.ApplicationModel.Activation;
 
 namespace Playdex.Launcher.Host;
 
 /// <summary>
-/// The launcher: the Full Screen Experience home app. One full-screen <see cref="ShellWindow"/> for the whole life of the
-/// process; every relaunch (FSE, Game Bar "Home", a second start) is redirected to it.
+/// The Full Screen Experience entry: the packaged home app Windows starts in FSE (and again on every Game Bar "Home" or
+/// second start). It has no window of its own. It starts the Playdex app (Playdex.exe, installed outside the package)
+/// in Big Picture, outside the package's container, and stays running while Playdex runs, so FSE sees its home app
+/// alive. Later activations just hand on: Playdex is single instance and goes home.
 /// </summary>
 /// <remarks>
-/// Flags beyond <see cref="LaunchOptions"/>:
-/// --selftest-job                 run the Job Object exit-detection self-test and exit
-/// --selftest-quick-settings[=toggle]
-///                                log the quick settings state (sound outputs, HDR, refresh rates, FPS counter); with
-///                                =toggle, switch the sound output, HDR and refresh rate of each display, check, switch
-///                                back, then toggle the FPS counter twice
+/// playdex-launcher://launch/GAMEID (and --launch=GAMEID) are passed on as --launch=GAMEID.
 /// </remarks>
 public static class Program
 {
-    /// <summary>Stopwatch timestamp at Main(); startup metrics are measured from here and from process start.</summary>
+    private const string AppExecutable = "Playdex.exe";
+
     [STAThread]
     private static int Main(string[] args)
     {
-        Startup.MainEntered = Stopwatch.GetTimestamp();
-        GCSettings.LatencyMode = GCLatencyMode.SustainedLowLatency;
-        WinRT.ComWrappersSupport.InitializeComWrappers();
-
-        if (args.Contains("--selftest-job"))
+        AppDomain.CurrentDomain.UnhandledException += (_, e) => Log.Info($"ERROR fse entry: unhandled exception, terminating: {e.ExceptionObject}");
+        var gameId = RequestedGameId(args);
+        var app = FindApp();
+        if (app is null)
         {
-            return SelfTest.JobExit();
-        }
-        if (args.FirstOrDefault(a => a.StartsWith("--selftest-quick-settings", StringComparison.Ordinal)) is { } quickSettings)
-        {
-            return SelfTest.QuickSettingsState(toggle: quickSettings.EndsWith("=toggle", StringComparison.Ordinal));
+            Log.Info("fse entry: Playdex.exe not found");
+            NativeEntry.MessageBox(0, "Playdex isn't installed on this PC.\n\nInstall Playdex for Windows (Playdex-Setup.exe), then open the Full Screen Experience again.", "Playdex", 0x30);
+            return 1;
         }
 
-        var instance = AppInstance.FindOrRegisterForKey("playdex-launcher");
-        if (!instance.IsCurrent)
+        using var resident = new Mutex(initiallyOwned: false, @"Local\PlaydexFullScreenEntry", out var first);
+        // Started by the shell, this process may set the foreground; hand that on to Playdex.
+        NativeEntry.AllowSetForegroundWindow(NativeEntry.AnyProcess);
+        var arguments = $"--big-picture{(gameId is null ? "" : $" --launch={gameId}")}";
+        int processId;
+        try
         {
-            Redirect(instance);
-            return 0;
+            processId = NativeEntry.StartOutsidePackage(app, arguments);
         }
-
-        var options = LaunchOptions.Parse(args);
-        Paths.MoveLegacyLauncherData();
-        var config = ConfigStore.Default().LoadOrCreate();
-        Application.Start(callback =>
+        catch (System.ComponentModel.Win32Exception ex)
         {
-            SynchronizationContext.SetSynchronizationContext(new DispatcherQueueSynchronizationContext(DispatcherQueue.GetForCurrentThread()));
-            _ = new App(options, config, instance);
-        });
+            Log.Error($"fse entry: could not start {app}", ex);
+            NativeEntry.MessageBox(0, $"Playdex could not be started.\n\n{ex.Message}", "Playdex", 0x10);
+            return 1;
+        }
+        Log.Info($"fse entry: started {app} {arguments} (pid {processId}){(first ? "" : ", handing on")}");
+        if (!first)
+        {
+            return 0; // Another entry is already resident.
+        }
+        StayWhilePlaydexRuns(processId, Path.GetFileNameWithoutExtension(app));
+        Log.Info("fse entry: Playdex exited");
         return 0;
     }
 
     /// <summary>
-    /// Hand this activation to the running launcher, which comes to the front and goes home. Bounded, so a hung
-    /// primary instance cannot hang every later launch.
+    /// Wait for the process started here, then for the running Playdex: the one started may have only handed its request
+    /// to an instance that was already running.
     /// </summary>
-    private static void Redirect(AppInstance primary)
+    private static void StayWhilePlaydexRuns(int processId, string processName)
     {
-        Native.AllowSetForegroundWindow(primary.ProcessId);
-        var args = AppInstance.GetCurrent().GetActivatedEventArgs();
-        // The redirect must not run on this STA thread.
-        var redirect = Task.Run(() => primary.RedirectActivationToAsync(args).AsTask().Wait(TimeSpan.FromSeconds(3)));
-        if (!redirect.Wait(TimeSpan.FromSeconds(4)))
+        try
         {
-            Log.Info("redirect to the running launcher timed out");
+            using var started = System.Diagnostics.Process.GetProcessById(processId);
+            started.WaitForExit();
+        }
+        catch (ArgumentException)
+        {
+            // Already gone.
+        }
+        while (true)
+        {
+            var running = System.Diagnostics.Process.GetProcessesByName(processName);
+            try
+            {
+                if (running.Length == 0)
+                {
+                    return;
+                }
+                running[0].WaitForExit();
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception)
+            {
+                Thread.Sleep(1000);
+            }
+            finally
+            {
+                foreach (var process in running)
+                {
+                    process.Dispose();
+                }
+            }
         }
     }
-}
 
-internal sealed partial class App : Application
-{
-    private readonly LaunchOptions _options;
-    private readonly AppConfig _config;
-    private readonly AppInstance _instance;
-    private ShellWindow? _window;
-
-    public App(LaunchOptions options, AppConfig config, AppInstance instance)
+    /// <summary>The Playdex.exe that last ran (recorded in the install's config), else the per-user install.</summary>
+    private static string? FindApp()
     {
-        _options = options;
-        _config = config;
-        _instance = instance;
+        if (File.Exists(Paths.ConfigFile))
+        {
+            try
+            {
+                if (ConfigStore.Default().LoadOrCreate().Shell.ExecutablePath is { } recorded && File.Exists(recorded))
+                {
+                    return recorded;
+                }
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Text.Json.JsonException)
+            {
+                Log.Error("fse entry: could not read the config", ex);
+            }
+        }
+        var installed = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs", "Playdex", AppExecutable);
+        return File.Exists(installed) ? installed : null;
     }
 
-    protected override void OnLaunched(Microsoft.UI.Xaml.LaunchActivatedEventArgs args)
+    private static string? RequestedGameId(string[] args)
     {
-        // Start WebView2 (browser process spawn) first; window creation runs while it starts.
-        var environment = CoreWebView2Environment.CreateWithOptionsAsync(
-            null,
-            Path.Combine(Paths.DataDirectory, "WebView2"),
-            new CoreWebView2EnvironmentOptions { AdditionalBrowserArguments = "--disable-features=msSmartScreenProtection" }).AsTask();
-
-        var services = new ShellServices(_config, DispatcherQueue.GetForCurrentThread());
-        _window = new ShellWindow(environment, _options, services, ShellMode.FullScreen);
-        _window.Closed += (_, _) => services.Dispose();
-        _instance.Activated += OnRedirected;
-        _window.Show();
-        services.Start();
+        var activation = AppInstance.GetCurrent().GetActivatedEventArgs();
+        var uri = activation.Kind == ExtendedActivationKind.Protocol && activation.Data is IProtocolActivatedEventArgs protocol
+            ? protocol.Uri.AbsoluteUri
+            : args.FirstOrDefault(a => a.StartsWith("playdex-launcher:", StringComparison.OrdinalIgnoreCase));
+        var id = args.FirstOrDefault(a => a.StartsWith("--launch=", StringComparison.Ordinal))?["--launch=".Length..] ?? ProtocolGameId(uri);
+        // Passed on in a command line: ids are steam-<appid> or playdex-<id>, never spaces or quotes.
+        return id is not null && id.All(c => char.IsAsciiLetterOrDigit(c) || c is '-' or '_' or '.') ? id : null;
     }
 
-    private void OnRedirected(object? sender, AppActivationArguments args)
+    /// <summary>playdex-launcher://launch/GAMEID → GAMEID.</summary>
+    private static string? ProtocolGameId(string? uri)
     {
-        string? gameId = null;
-        if (args.Kind == ExtendedActivationKind.Protocol && args.Data is IProtocolActivatedEventArgs protocol)
+        if (uri is null || !Uri.TryCreate(uri, UriKind.Absolute, out var parsed) || parsed.Host != "launch")
         {
-            gameId = LaunchOptions.ProtocolGameId(protocol.Uri.AbsoluteUri);
+            return null;
         }
-        else if (args.Kind == ExtendedActivationKind.Launch && args.Data is ILaunchActivatedEventArgs launch)
-        {
-            gameId = LaunchOptions.ProtocolGameId(launch.Arguments?.Split(' ').FirstOrDefault(a => a.StartsWith("playdex-launcher:", StringComparison.OrdinalIgnoreCase)));
-        }
-        _window?.DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.High, () => _window.OnRedirectedActivation(gameId));
+        var id = parsed.AbsolutePath.Trim('/');
+        return id.Length > 0 ? Uri.UnescapeDataString(id) : null;
     }
 }

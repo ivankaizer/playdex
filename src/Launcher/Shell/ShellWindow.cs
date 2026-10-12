@@ -19,10 +19,10 @@ internal sealed partial class HostJson : JsonSerializerContext;
 /// <summary>How the shell window presents the UI.</summary>
 internal enum ShellMode
 {
-    /// <summary>The launcher: full screen, the Full Screen Experience home; it comes back to the front after a game.</summary>
+    /// <summary>Big Picture: full screen, controller first (also the Full Screen Experience home); it comes back to the front after a game.</summary>
     FullScreen,
 
-    /// <summary>The desktop app: a normal window opened from the tray, mouse and keyboard first.</summary>
+    /// <summary>Desktop mode: a normal window opened from the tray, mouse and keyboard first.</summary>
     Desktop,
 }
 
@@ -33,8 +33,8 @@ internal static class Startup
 }
 
 /// <summary>
-/// A window hosting the React UI in WebView2, over a native splash. The launcher keeps one full-screen window for its
-/// whole life; the desktop app opens a normal one from the tray and closes it (releasing WebView2) when hidden. Sessions,
+/// A window hosting the React UI in WebView2, over a native splash: full screen in Big Picture, a normal window in
+/// desktop mode. The app opens one from the tray and closes it (releasing WebView2) when hidden or when the mode changes. Sessions,
 /// controller input and the library live in <see cref="ShellServices"/>, so they outlive the window. Code-only (no XAML)
 /// to keep startup short.
 /// </summary>
@@ -136,6 +136,7 @@ internal sealed partial class ShellWindow : Window
         }
         else
         {
+            // The size it restores to; it opens maximized (Show).
             var scale = Native.GetDpiForWindow(_hwnd) / 96.0;
             AppWindow.Resize(new SizeInt32((int)(1360 * scale), (int)(860 * scale)));
         }
@@ -143,8 +144,15 @@ internal sealed partial class ShellWindow : Window
 
     public nint Handle => _hwnd;
 
+    public ShellMode Mode => _mode;
+
     public void Show()
     {
+        if (_mode == ShellMode.Desktop && AppWindow.Presenter is OverlappedPresenter overlapped)
+        {
+            // Desktop mode opens using the whole screen, with its title bar and the taskbar still there.
+            overlapped.Maximize();
+        }
         Activate();
         if (_mode == ShellMode.FullScreen)
         {
@@ -186,7 +194,6 @@ internal sealed partial class ShellWindow : Window
         web.Reload();
     }
 
-    /// <summary>The library, and the mode the page lays itself out for, in place before the page's own scripts run.</summary>
     /// <summary>
     /// The library, the last Playdex summary (null before the first one), whether there is an API key, and the mode the
     /// page lays itself out for, in place before the page's own scripts run.
@@ -322,6 +329,9 @@ internal sealed partial class ShellWindow : Window
                 var hz = message.GetProperty("hz").GetInt32();
                 PostQuickSettings(() => Displays.SetRefreshRate(rateDisplay, hz), $"switch to {hz} Hz");
                 break;
+            case "playdex-recap":
+                _ = PostRecapAsync(message.GetProperty("year").GetInt32());
+                break;
             case "resume-game":
                 if (!GameWindows.Activate(_hwnd, _gameWindow, _nowPlaying?.ProcessId))
                 {
@@ -352,6 +362,16 @@ internal sealed partial class ShellWindow : Window
                 }
                 break;
         }
+    }
+
+    /// <summary>
+    /// A year's Playdex recap for the Playdex tab, asked for when the page shows it; "recap" is null offline or without
+    /// a key.
+    /// </summary>
+    private async Task PostRecapAsync(int year)
+    {
+        var recap = await Task.Run(() => _services.Api.GetLauncherRecapAsync(year));
+        Post($$"""{"type":"playdex-recap","year":{{year.ToString(System.Globalization.CultureInfo.InvariantCulture)}},"recap":{{recap ?? "null"}}}""");
     }
 
     /// <summary>Quick settings run off the UI thread; the page gets the fresh state (and any error) back.</summary>
@@ -401,7 +421,7 @@ internal sealed partial class ShellWindow : Window
     {
         if (code == InputCode.Guide && !IsForeground())
         {
-            // A game is in front: the Guide button brings the launcher back. The desktop app leaves it to Windows.
+            // A game is in front: the Guide button brings Big Picture back. Desktop mode leaves it to Windows.
             if (_mode == ShellMode.FullScreen)
             {
                 OnRedirectedActivation(null);

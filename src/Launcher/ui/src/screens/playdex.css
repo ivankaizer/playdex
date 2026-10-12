@@ -1,0 +1,217 @@
+/* ---------- Playdex tab ---------- */
+/* Overview (today, this week, this month) or Recap (a year), switched in the bar above, as on the web. */
+.pdx {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 1.1rem;
+  min-height: 0;
+}
+.pdx-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.pdx-message {
+  display: grid;
+  place-items: center;
+}
+.pdx-message .card {
+  max-width: 34rem;
+  padding: 1.8rem 2rem;
+}
+.pdx-message h2 {
+  margin: 0.5rem 0 0.4rem;
+  font-size: 1.2rem;
+}
+.pdx-message p {
+  margin: 0;
+  color: rgb(var(--muted));
+  font-size: 0.8rem;
+}
+.pdx-loading {
+  color: rgb(var(--muted));
+  font-size: 0.8rem;
+}
+
+/* Overview: three periods side by side, each scrolling on its own. */
+.pdx-periods {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1.3rem;
+  min-height: 0;
+}
+.pdx-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  padding: 1.4rem 1.3rem;
+  min-height: 0;
+}
+/* Scrolled by the wheel and by focus (data-scroll), without a bar. */
+.pdx-period {
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+.pdx-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+.pdx-big {
+  margin: 0.15rem 0 0;
+  font-size: 2.4rem;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  line-height: 1;
+}
+.pdx-sub {
+  margin: 0;
+  font-size: 0.68rem;
+  color: rgb(var(--muted));
+}
+.pdx-block {
+  display: grid;
+  gap: 0.45rem;
+  margin-top: 0.5rem;
+}
+.pdx-rows {
+  display: grid;
+  gap: 0.15rem;
+}
+.pdx-row {
+  display: grid;
+  grid-template-columns: 1.8rem minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.4rem 0.5rem;
+  margin: 0 -0.5rem;
+  border-radius: 0.7rem;
+}
+.pdx-row[data-focused] {
+  background: rgb(var(--tile));
+}
+.pdx-thumb {
+  width: 1.8rem;
+}
+.pdx-main {
+  display: grid;
+  gap: 0.25rem;
+  min-width: 0;
+}
+.pdx-name {
+  overflow: hidden;
+  font-size: 0.8rem;
+  font-weight: 500;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.pdx-val {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: rgb(var(--ink-2));
+}
+
+/* Platforms: one bar of shares, and a legend. */
+.pdx-share {
+  display: flex;
+  height: 0.45rem;
+  border-radius: 99px;
+  overflow: hidden;
+  background: rgb(var(--track));
+}
+.pdx-share i + i {
+  border-left: 2px solid var(--card-bg);
+}
+.pdx-share [data-tone="0"],
+.pdx-dot[data-tone="0"] {
+  background: rgb(var(--bar));
+}
+.pdx-share [data-tone="1"],
+.pdx-dot[data-tone="1"] {
+  background: rgb(var(--chart-cyan));
+}
+.pdx-share [data-tone="2"],
+.pdx-dot[data-tone="2"] {
+  background: rgb(var(--chart-sand));
+}
+.pdx-share [data-tone="3"],
+.pdx-dot[data-tone="3"] {
+  background: rgb(var(--muted));
+}
+.pdx-legend {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.3rem;
+}
+.pdx-legend li {
+  display: grid;
+  grid-template-columns: 0.55rem minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.55rem;
+  font-size: 0.74rem;
+}
+.pdx-dot {
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 50%;
+}
+.pdx-legend-name {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* Columns of values (a month's days, weekdays, hours), styled like the week chart. */
+.pdx-bars {
+  display: grid;
+  grid-template-columns: repeat(var(--n), minmax(0, 1fr));
+  align-items: end;
+  gap: 0.25rem;
+}
+.pdx-bars .week-day {
+  min-height: 0.7rem;
+  font-size: 0.52rem;
+}
+
+/* Recap: the numbers with the week's rhythm, the games with the day's, and the highlights. */
+.pdx-recap {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr) minmax(0, 1fr);
+  gap: 1.3rem;
+  min-height: 0;
+}
+.pdx-recap > .pdx-card {
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+.pdx-facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.9rem 1rem;
+  margin: 0.6rem 0 0;
+}
+.pdx-highlights {
+  display: grid;
+  gap: 0.8rem;
+  margin: 0;
+}
+.pdx-fact {
+  display: grid;
+  gap: 0.2rem;
+}
+.pdx-fact dd {
+  display: grid;
+  gap: 0.1rem;
+  margin: 0;
+  min-width: 0;
+}
+.pdx-fact-value {
+  overflow: hidden;
+  font-size: 1.05rem;
+  font-weight: 600;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}

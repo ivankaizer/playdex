@@ -45,6 +45,12 @@ internal static unsafe partial class NativeDesktop
     [LibraryImport("kernel32.dll", EntryPoint = "GetModuleHandleW")]
     public static partial nint GetModuleHandle(char* moduleName);
 
+    /// <summary>15700 (APPMODEL_ERROR_NO_PACKAGE) when the process has no package identity.</summary>
+    [LibraryImport("kernel32.dll")]
+    public static partial int GetCurrentPackageFullName(uint* length, char* name);
+
+    public const int NoPackage = 15700;
+
     [LibraryImport("user32.dll", EntryPoint = "RegisterClassExW", SetLastError = true)]
     public static partial ushort RegisterClassEx(WndClassEx* windowClass);
 

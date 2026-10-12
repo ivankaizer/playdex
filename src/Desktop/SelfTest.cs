@@ -1,8 +1,8 @@
 using System.Diagnostics;
 
-namespace Playdex.Launcher.Host;
+namespace Playdex.Desktop;
 
-/// <summary>Headless checks run with command-line flags; results go to launcher.log and metrics.jsonl.</summary>
+/// <summary>Headless checks run with command-line flags; results go to desktop.log and metrics.jsonl.</summary>
 internal static class SelfTest
 {
     /// <summary>

@@ -1,14 +1,14 @@
 ﻿<#
-  Measures the launcher budgets from docs/launcher/performance.md on this machine and prints a summary.
-  Numbers come from the host's own metrics (metrics.jsonl) plus process sampling for memory and CPU.
+  Measures the Big Picture budgets from docs/launcher/performance.md on this machine and prints a summary.
+  Numbers come from the app's own metrics (metrics.jsonl) plus process sampling for memory and CPU.
 
-  Usage (Windows PowerShell 5.1 or 7, from the repo root, with the release build published):
-    powershell -File src/Launcher/Host/tools/measure.ps1 [-Exe <path>] [-ColdRuns 12] [-Presses 600] [-IdleSeconds 60]
+  Usage (Windows PowerShell 5.1 or 7, from the repo root, with the release build of src/Desktop published):
+    powershell -File tools/measure-big-picture.ps1 [-Exe <path>] [-ColdRuns 12] [-Presses 600] [-IdleSeconds 60]
 
-  Close any running launcher first: it is single instance.
+  Quit Playdex first (tray → Quit): it is single instance.
 #>
 param(
-    [string]$Exe = "$PSScriptRoot\..\bin\Release\net10.0-windows10.0.26100.0\win-x64\publish\Playdex.Launcher.exe",
+    [string]$Exe = "$PSScriptRoot\..\src\Desktop\bin\Release\net10.0-windows10.0.26100.0\win-x64\publish\Playdex.exe",
     [int]$ColdRuns = 12,
     [int]$Presses = 600,
     [int]$IdleSeconds = 60,
@@ -41,14 +41,14 @@ function PrivateWorkingSetMB([int[]]$ids) {
 # 1. Cold start: process start -> first interactive frame.
 Write-Host "Cold start x$ColdRuns..."
 for ($i = 0; $i -lt $ColdRuns; $i++) {
-    $p = Start-Process $Exe -ArgumentList "--exit-on-ready $ExtraArgs" -PassThru
+    $p = Start-Process $Exe -ArgumentList "--big-picture --exit-on-ready $ExtraArgs" -PassThru
     if (-not $p.WaitForExit(20000)) { $p.Kill(); Write-Warning "run $i did not reach ready" }
     Start-Sleep -Milliseconds 800
 }
 
 # 2. Input latency with synthetic presses, then idle memory and CPU on the home screen.
 Write-Host "Input bench ($Presses presses), then $IdleSeconds s idle..."
-$p = Start-Process $Exe -ArgumentList "--bench-input=$Presses $ExtraArgs" -PassThru
+$p = Start-Process $Exe -ArgumentList "--big-picture --bench-input=$Presses $ExtraArgs" -PassThru
 Start-Sleep -Seconds ([Math]::Ceiling($Presses * 0.08) + 8)
 Start-Sleep -Seconds 10 # settle
 $tree = Tree $p.Id

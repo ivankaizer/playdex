@@ -21,6 +21,8 @@ export type HostMessage =
   | { type: "resume-failed" }
   /** A newer Playdex summary (data/playdex.ts); null when the API key was removed. */
   | { type: "playdex-summary"; summary: unknown }
+  /** The answer to {type:"playdex-recap"} (data/recap.ts); null offline or without a key. */
+  | { type: "playdex-recap"; year: number; recap: unknown }
   /** The desktop app's reply to a {type:"desktop"} request (see host/desktop.ts). */
   | { type: "desktop-result"; id: number; ok: boolean; result?: unknown; error?: unknown }
   /** The desktop app's state changed (backups, updates). */
@@ -65,6 +67,8 @@ export type UiMessage =
   /** Press the NVIDIA statistics overlay's hotkey (it toggles; the overlay's state can't be read). */
   | { type: "fps-counter" }
   | { type: "power"; action: PowerAction }
+  /** A year's Playdex recap for the Playdex tab; the host answers with a "playdex-recap" message. */
+  | { type: "playdex-recap"; year: number }
   /** A desktop app request (see host/desktop.ts). */
   | { type: "desktop"; id: number; method: string; params?: object };
 

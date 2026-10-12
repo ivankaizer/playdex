@@ -4,10 +4,13 @@ import { createRoot } from "react-dom/client";
 import { App } from "./App";
 import { isDesktop } from "./host/desktop";
 import "./nav/input";
+import { inputMode } from "./nav/store";
 import "./styles/tokens.css";
 import "./styles/shell.css";
 
-document.documentElement.dataset.input = "pad";
+// Desktop mode starts mouse first (no controller hints until a pad or the arrow keys are used); Big Picture pad first.
+inputMode.set(isDesktop ? "pointer" : "pad");
+document.documentElement.dataset.input = inputMode.get();
 document.documentElement.dataset.mode = isDesktop ? "desktop" : "fse";
 
 createRoot(document.getElementById("root")!).render(
