@@ -59,6 +59,20 @@ public sealed record AccountTopGameDto(string GameId, string Title, double Total
 
 public sealed record AccountMonthStatDto(int Year, int Month, double TotalSeconds);
 
+/// <summary>
+/// Play time within one UTC calendar day ("yyyy-MM-dd"), with sessions split at midnight;
+/// <paramref name="SessionCount"/> counts sessions that overlap the day.
+/// </summary>
+public sealed record AccountDayStatDto(
+    string Date, double TotalSeconds, int SessionCount, IReadOnlyList<AccountDayPlatformDto> Platforms);
+
+/// <summary>One platform's share of a day's play time.</summary>
+public sealed record AccountDayPlatformDto(string PlatformKey, string PlatformName, double TotalSeconds);
+
+public sealed record AccountDailyStatsResponseDto(
+    long? AccountId,
+    IReadOnlyList<AccountDayStatDto> Days);
+
 public sealed record AccountStatsResponseDto(
     long? AccountId,
     AccountStatsPeriodDto Monthly,

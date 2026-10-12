@@ -1,3 +1,4 @@
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using OpenTelemetry.Trace;
 
 namespace Api.Modules.Polling;
@@ -25,6 +26,9 @@ public static class PollingModule
         services.AddOpenTelemetry()
             .WithTracing(tracing => tracing.AddSource(PollingBackgroundService.ActivitySourceName));
         services.AddHostedService<PollingBackgroundService>();
+        services.TryAddSingleton(TimeProvider.System);
+        services.AddSingleton<PollResultRetention>();
+        services.AddHostedService<PollResultCleanup>();
         return services;
     }
 }

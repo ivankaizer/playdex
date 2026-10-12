@@ -43,7 +43,9 @@ public sealed class LauncherSummaryEndpointTests(PostgresFixture postgres)
         await db.SaveChangesAsync();
         PlaySession Session(long userId, DateTimeOffset startedAt, int minutes) => new()
         {
-            GameId = game.Id, UserId = userId, PlatformId = steam.Id, CaptureMethod = CaptureMethod.Api,
+            // A session with no integration must be manual (play_sessions_manual_integration_check).
+            GameId = game.Id, UserId = userId, PlatformId = steam.Id,
+            CaptureMethod = userId == user.Id ? CaptureMethod.Api : CaptureMethod.Manual,
             IntegrationId = userId == user.Id ? integration.Id : null,
             StartedAt = startedAt, EndedAt = startedAt.AddMinutes(minutes), CreatedAt = now, UpdatedAt = now,
         };
@@ -55,6 +57,11 @@ public sealed class LauncherSummaryEndpointTests(PostgresFixture postgres)
         };
         db.PlaySessions.AddRange(sessions);
         await db.SaveChangesAsync();
+        var steamIntegration = new Integration
+        {
+            UserId = user.Id, Type = IntegrationType.Steam, PlatformId = steam.Id, AccountId = $"steam-{suffix}",
+            ApiKey = $"steam-key-{suffix}", Active = true, CreatedAt = now, UpdatedAt = now,
+        };
 
         try
         {
@@ -96,9 +103,21 @@ public sealed class LauncherSummaryEndpointTests(PostgresFixture postgres)
             var recapData = recapJson.RootElement.GetProperty("data");
             Assert.Equal(sessions.Count(s => s.UserId == user.Id && s.StartedAt.UtcDateTime.Year == now.UtcDateTime.Year), recapData.GetProperty("totalSessions").GetInt32());
             Assert.Equal(HttpStatusCode.BadRequest, (await client.GetAsync("/api/launcher/recap?year=1")).StatusCode);
+
+            Assert.False(data.GetProperty("steamPolling").GetBoolean());
+
+            // With Steam polling on, Playdex records Steam games itself and the launcher must not record them too.
+            db.Integrations.Add(steamIntegration);
+            await db.SaveChangesAsync();
+            using var polled = JsonDocument.Parse(await client.GetStringAsync("/api/launcher/summary"));
+            Assert.True(polled.RootElement.GetProperty("data").GetProperty("steamPolling").GetBoolean());
         }
         finally
         {
+            if (steamIntegration.Id != 0)
+            {
+                db.Integrations.Remove(steamIntegration);
+            }
             db.PlaySessions.RemoveRange(sessions);
             db.Integrations.Remove(integration);
             db.GameExternalIdentities.Remove(identity);

@@ -25,7 +25,7 @@ public sealed class AppUpdateTests
     [Fact]
     public void OnlyStableReleasesWithHttpsAssetsCount()
     {
-        static GitHubReleaseDto Dto(string tag, bool draft = false, bool prerelease = false) => new()
+        static ReleaseDto Dto(string tag, bool draft = false, bool prerelease = false) => new()
         {
             TagName = tag,
             Draft = draft,
@@ -39,11 +39,32 @@ public sealed class AppUpdateTests
             ],
         };
 
-        Assert.Null(GitHubReleases.ToRelease(Dto("v2.0.0", draft: true)));
-        Assert.Null(GitHubReleases.ToRelease(Dto("v2.0.0", prerelease: true)));
-        Assert.Null(GitHubReleases.ToRelease(Dto("latest")));
-        var release = GitHubReleases.ToRelease(Dto("v2.0.0"))!;
+        Assert.Null(ReleaseFeed.ToRelease(Dto("v2.0.0", draft: true)));
+        Assert.Null(ReleaseFeed.ToRelease(Dto("v2.0.0", prerelease: true)));
+        Assert.Null(ReleaseFeed.ToRelease(Dto("latest")));
+        var release = ReleaseFeed.ToRelease(Dto("v2.0.0"))!;
         Assert.Equal(["playdex-windows-v2.0.0.zip"], release.Assets.Select(a => a.Name));
+    }
+
+    [Fact]
+    public async Task ReleasesAreReadFromThePublicFeed()
+    {
+        const string json = """
+            {"tag_name":"v2.1.0","draft":false,"prerelease":false,"assets":[
+              {"name":"Playdex-Setup.exe","browser_download_url":"https://download.playdex.dev/windows/v2.1.0/Playdex-Setup.exe","size":42}]}
+            """;
+        var handler = new FeedHandler(json);
+        using var feed = new ReleaseFeed(handler);
+
+        var latest = await feed.LatestAsync();
+        var tagged = await feed.ForVersionAsync(new ReleaseVersion(2, 1, 0));
+
+        Assert.Equal(
+            ["https://download.playdex.dev/windows/releases/latest.json", "https://download.playdex.dev/windows/releases/v2.1.0.json"],
+            handler.Requested.Select(uri => uri.AbsoluteUri));
+        Assert.Equal(new ReleaseVersion(2, 1, 0), latest!.Version);
+        Assert.Equal(new Uri("https://download.playdex.dev/windows/v2.1.0/Playdex-Setup.exe"), tagged!.Asset("Playdex-Setup.exe")!.DownloadUri);
+        Assert.Null(await new ReleaseFeed(new FeedHandler(null)).LatestAsync());
     }
 
     [Fact]
@@ -87,11 +108,11 @@ public sealed class AppUpdateTests
         var install = Path.Combine(directory, "install");
         Directory.CreateDirectory(install);
 
-        using (var bad = new GitHubReleases(new AssetHandler(zipBytes, $"{new string('0', 64)}  {name}")))
+        using (var bad = new ReleaseFeed(new AssetHandler(zipBytes, $"{new string('0', 64)}  {name}")))
         {
             await Assert.ThrowsAsync<InvalidDataException>(() => AppUpdate.StageAsync(bad, release, install, Path.Combine(directory, "updates")));
         }
-        using var good = new GitHubReleases(new AssetHandler(zipBytes, $"{goodHash}  {name}"));
+        using var good = new ReleaseFeed(new AssetHandler(zipBytes, $"{goodHash}  {name}"));
         var manifestPath = await AppUpdate.StageAsync(good, release, install, Path.Combine(directory, "updates"));
 
         var manifest = AppUpdate.Load(manifestPath);
@@ -166,5 +187,19 @@ public sealed class AppUpdateTests
                     ? new ByteArrayContent(archive)
                     : new StringContent(checksum),
             });
+    }
+
+    /// <summary>Serves <paramref name="json"/> for every feed request, or 404 when it is null.</summary>
+    private sealed class FeedHandler(string? json) : HttpMessageHandler
+    {
+        public List<Uri> Requested { get; } = [];
+
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            Requested.Add(request.RequestUri!);
+            return Task.FromResult(json is null
+                ? new HttpResponseMessage(HttpStatusCode.NotFound)
+                : new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(json) });
+        }
     }
 }

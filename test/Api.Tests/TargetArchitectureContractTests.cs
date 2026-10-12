@@ -44,22 +44,20 @@ public sealed class TargetArchitectureContractTests
     }
 
     [Fact]
-    public void ApiHasNoAdminModuleOrRoutes()
+    public void AdminRoutesLiveOnlyInTheAdminModule()
     {
-        Assert.False(
-            Directory.Exists(Path.Combine(FindApiRoot(), "Modules", "Admin")),
-            "The Admin module must live in the standalone Admin application.");
-
         var program = File.ReadAllText(Path.Combine(FindApiRoot(), "Program.cs"));
-        Assert.DoesNotContain("MapAdmin", program);
-        Assert.DoesNotContain("AddAdmin", program);
-        Assert.DoesNotContain("Modules.Admin", program);
+        Assert.Contains("MapAdmin", program);
+        Assert.Contains("AddAdmin", program);
 
-        var endpoints = Directory
+        var endpoints = File.ReadAllText(Path.Combine(FindApiRoot(), "Modules", "Admin", "AdminEndpoints.cs"));
+        Assert.Contains("RequireAuthorization(AdministratorRequirement.PolicyName)", endpoints);
+
+        var otherModules = Directory
             .EnumerateFiles(Path.Combine(FindApiRoot(), "Modules"), "*.cs", SearchOption.AllDirectories)
-            .Where(path => !path.EndsWith("AdminEndpoints.cs", StringComparison.Ordinal))
+            .Where(path => !path.Contains(Path.Combine("Modules", "Admin"), StringComparison.Ordinal))
             .Select(path => File.ReadAllText(path));
-        Assert.DoesNotContain(endpoints, content => content.Contains("/admin", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(otherModules, content => content.Contains("\"/admin", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]

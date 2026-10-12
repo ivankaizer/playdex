@@ -4,7 +4,7 @@ Playdex uses Sentry Cloud as its only persisted observability backend. The API s
 
 ## What is captured
 
-- Unexpected ASP.NET and Blazor exceptions are grouped into Sentry issues.
+- Unexpected ASP.NET and browser (React) exceptions are grouped into Sentry issues.
 - `ILogger` records are sent to Sentry Logs; information and warning records also provide breadcrumbs on issues.
 - Browser API operations propagate into ASP.NET Core OpenTelemetry spans and Npgsql spans. A game load should read as `ui.api_request` → `http.server` → `db` in Sentry.
 - Expected application problems and invalid JSON are warnings, not issues.
@@ -23,13 +23,13 @@ Copy `.env.example` to the ignored `.env` file and set:
 | `SENTRY_RELEASE` | No | Immutable release, ideally `playdex@<git-sha>` |
 | `SENTRY_TRACES_SAMPLE_RATE` | No | Number from `0.0` to `1.0`; defaults to `0.2` |
 
-The API exposes only browser-safe values at `GET /api/observability/sentry`. The Blazor client loads them before enabling its Sentry SDK. If the API is unavailable during this short bootstrap, the UI still starts with browser telemetry disabled.
+The API exposes only browser-safe values at `GET /api/observability/sentry`. The React frontend loads them before enabling its Sentry SDK. If the API is unavailable during this short bootstrap, the UI still starts with browser telemetry disabled.
 
-For direct frontend development, `src/Web/wwwroot/appsettings.Development.json` may contain a local `Sentry` section. Never put a Sentry auth token there; browser code needs only the public DSN.
+For direct frontend development, `src/Frontend/public/appsettings.json` may contain a local `Sentry` section (do not commit a DSN there). Never put a Sentry auth token there; browser code needs only the public DSN.
 
 ## Sentry setup
 
-Create an ASP.NET Core project in Sentry. A separate Blazor/browser project is recommended because it gives cleaner ownership, alert rules, and issue streams, but a single project works: omit `SENTRY_WEB_DSN` to reuse the API DSN.
+Create an ASP.NET Core project in Sentry. A separate browser (React) project is recommended because it gives cleaner ownership, alert rules, and issue streams, but a single project works: omit `SENTRY_WEB_DSN` to reuse the API DSN.
 
 Use these initial alerts:
 

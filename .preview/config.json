@@ -1,0 +1,49 @@
+{
+  "project": "playdex",
+  "domain": "deployment.lat",
+  "dokploy": "https://dash.deployment.lat",
+  "compose": "docker-compose.preview.yml",
+  "routes": [
+    {
+      "service": "ui",
+      "port": 5056,
+      "path": "/"
+    },
+    {
+      "service": "app",
+      "port": 3000,
+      "path": "/api"
+    }
+  ],
+  "healthcheck": [
+    "/",
+    "/api/"
+  ],
+  "tls": "edge",
+  "production": {
+    "compose": "docker-compose.prod.yml",
+    "database": "dedicated",
+    "generate": {
+      "JWT_SECRET": "base64:48"
+    },
+    "env": "CORS_ORIGINS=https://dash.playdex.dev",
+    "domains": [
+      {
+        "host": "dash.playdex.dev",
+        "service": "ui",
+        "port": 5056,
+        "path": "/"
+      },
+      {
+        "host": "dash.playdex.dev",
+        "service": "app",
+        "port": 3000,
+        "path": "/api"
+      }
+    ],
+    "healthcheck": [
+      "https://dash.playdex.dev/",
+      "https://dash.playdex.dev/api/"
+    ]
+  }
+}

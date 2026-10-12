@@ -14,6 +14,10 @@ namespace Api.Modules.Launcher;
 /// <param name="CurrentStreakDays">Consecutive days played, ending today (or yesterday if nothing was played yet today).</param>
 /// <param name="Periods">Today, those 7 days and this calendar month in detail: the launcher's Playdex overview.</param>
 /// <param name="MonthDays">This calendar month's local days, from the 1st to today.</param>
+/// <param name="SteamPolling">
+/// The user has an active Steam integration, so Playdex records Steam games by polling; the launcher then starts them
+/// without recording them itself, which would count each session twice.
+/// </param>
 public sealed record LauncherSummaryDto(
     string TimeZone,
     DateTimeOffset GeneratedAt,
@@ -26,7 +30,8 @@ public sealed record LauncherSummaryDto(
     IReadOnlyList<LauncherSessionDto> RecentSessions,
     IReadOnlyList<LauncherGameDto> Games,
     LauncherPeriodsDto Periods,
-    IReadOnlyList<LauncherDayDto> MonthDays);
+    IReadOnlyList<LauncherDayDto> MonthDays,
+    bool SteamPolling = false);
 
 public sealed record LauncherPeriodsDto(LauncherPeriodDetailDto Today, LauncherPeriodDetailDto Week, LauncherPeriodDetailDto Month);
 

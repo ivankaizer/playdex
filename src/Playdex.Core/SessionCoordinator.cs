@@ -64,7 +64,8 @@ public sealed partial class SessionCoordinator : IDisposable
         }
         finally
         {
-            LogSessionFinished(logger, game.GameId, await recorder.FinishAsync(exitedAt));
+            var finished = await recorder.FinishAsync(exitedAt);
+            LogSessionFinished(logger, game.GameId, finished);
         }
     }
 

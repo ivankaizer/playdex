@@ -22,8 +22,13 @@ public sealed class ManualRepository(PlaydexDbContext db)
             ct);
     }
 
-    public Task<int> EndActiveSessions(long userId, CancellationToken ct) =>
-        db.Database.ExecuteSqlInterpolatedAsync($"update play_sessions set ended_at=now(),updated_at=now() where user_id={userId} and capture_method='manual' and ended_at is null", ct);
+    public Task<int> EndActiveSessions(long userId, CancellationToken ct)
+    {
+        var now = DateTimeOffset.UtcNow;
+        return db.PlaySessions
+            .Where(session => session.UserId == userId && session.CaptureMethod == CaptureMethod.Manual && session.EndedAt == null)
+            .ExecuteUpdateAsync(set => set.SetProperty(session => session.EndedAt, now).SetProperty(session => session.UpdatedAt, now), ct);
+    }
 
     public async Task<long> CreatePlaySession(long userId, long gameId, long platformId, DateTimeOffset startedAt, DateTimeOffset? endedAt, CancellationToken ct)
     {

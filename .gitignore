@@ -37,7 +37,7 @@ package-lock.json
 
 dist/
 src/Api/dist/
-src/Web/dist/
+src/Frontend/dist/
 todo.md
 *.internal
 

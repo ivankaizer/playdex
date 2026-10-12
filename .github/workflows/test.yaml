@@ -2,10 +2,12 @@ name: Test
 
 on:
   pull_request:
+  push:
+    branches: [main]
 
 jobs:
   test:
-    name: .NET, Blazor, and compatibility tests
+    name: .NET and frontend tests
     runs-on: ubuntu-latest
     services:
       db:
@@ -35,17 +37,25 @@ jobs:
         with:
           bun-version: 1.3.14
 
-      - name: Install Bun dependencies
+      - name: Install frontend dependencies
         run: bun install --frozen-lockfile
-        working-directory: src/Web
+        working-directory: src/Frontend
 
-      - name: Install CSS dependencies
-        run: bun install --frozen-lockfile
-        working-directory: src/Web
+      - name: Typecheck frontend
+        run: bun run typecheck
+        working-directory: src/Frontend
 
-      - name: Build Blazor CSS
-        run: bun run css:build
-        working-directory: src/Web
+      - name: Test frontend
+        run: bun run test
+        working-directory: src/Frontend
+
+      - name: Build frontend
+        run: bun run build
+        working-directory: src/Frontend
+
+      - name: Build landing
+        run: bun run build:landing   # playdex.dev on Cloudflare Pages; deployed by landing.yml
+        working-directory: src/Frontend
 
       - name: Strict Release build
         run: dotnet build Playdex.sln --configuration Release --warnaserror
@@ -56,10 +66,35 @@ jobs:
           DATABASE_URL: postgresql://playdex:playdex@127.0.0.1:5432/playdex_db_test
           Auth__JwtSecret: test-secret-for-ci
 
-      - name: Run .NET and Blazor tests
+      - name: Run .NET tests
         run: |
           dotnet test test/Api.Tests/Api.Tests.csproj --configuration Release --no-build
-          dotnet test test/Web.Tests/Web.Tests.csproj --configuration Release --no-build
-          dotnet test test/Admin.Tests/Admin.Tests.csproj --configuration Release --no-build
         env:
           PLAYDEX_INTEGRATION_DATABASE_URL: postgresql://playdex:playdex@127.0.0.1:5432/playdex_db_test
+
+  preview:
+    name: Preview
+    needs: test
+    # Secrets are unavailable to fork PRs.
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    uses: ivankaizer/preview-kit/.github/workflows/preview.yml@v1
+    with:
+      # One comment per deploy, so earlier demos stay in the PR thread.
+      comment: new
+    permissions:
+      contents: write
+      pull-requests: write
+    secrets: inherit
+
+  # A push to main that passes the tests builds the production images on the macserv runner and
+  # deploys them to https://dash.playdex.dev (preview-kit's release workflow; see the "production"
+  # section of .preview/config.json). Roll back with `preview prod deploy main-<older sha>`.
+  production:
+    name: Production
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    uses: ivankaizer/preview-kit/.github/workflows/release.yml@v1
+    with:
+      runner: '["self-hosted","macserv"]'
+      tag: main-${{ github.sha }}
+    secrets: inherit

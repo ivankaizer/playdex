@@ -48,7 +48,8 @@ public sealed record Release(ReleaseVersion Version, IReadOnlyList<ReleaseAsset>
     public ReleaseAsset? Asset(string name) => Assets.SingleOrDefault(a => a.Name == name);
 }
 
-internal sealed class GitHubReleaseDto
+/// <summary>A release in the feed: the shape of GitHub's release JSON, which the feed mirrors.</summary>
+internal sealed class ReleaseDto
 {
     [JsonPropertyName("tag_name")]
     public string TagName { get; init; } = "";
@@ -60,10 +61,10 @@ internal sealed class GitHubReleaseDto
     public bool Prerelease { get; init; }
 
     [JsonPropertyName("assets")]
-    public List<GitHubAssetDto> Assets { get; init; } = [];
+    public List<ReleaseAssetDto> Assets { get; init; } = [];
 }
 
-internal sealed class GitHubAssetDto
+internal sealed class ReleaseAssetDto
 {
     [JsonPropertyName("name")]
     public string Name { get; init; } = "";
@@ -86,14 +87,19 @@ public sealed record StagedUpdate(
     string? FailurePath = null);
 
 [JsonSourceGenerationOptions(WriteIndented = true, PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
-[JsonSerializable(typeof(GitHubReleaseDto))]
+[JsonSerializable(typeof(ReleaseDto))]
 [JsonSerializable(typeof(StagedUpdate))]
 internal sealed partial class UpdateJson : JsonSerializerContext;
 
-/// <summary>Stable releases of ivankaizer/playdex on GitHub: the latest one, or the one for a tag.</summary>
-public sealed class GitHubReleases(HttpMessageHandler? handler = null) : IDisposable
+/// <summary>
+/// Stable releases from the public download feed (download.playdex.dev, Cloudflare R2): the latest one, or the one for a
+/// tag. The release workflow publishes each release's assets and writes windows/releases/&lt;tag&gt;.json and latest.json
+/// in GitHub's release JSON shape (tools/downloads/publish.mjs). The GitHub repository is private, so clients never
+/// read it.
+/// </summary>
+public sealed class ReleaseFeed(HttpMessageHandler? handler = null) : IDisposable
 {
-    public const string Repository = "ivankaizer/playdex";
+    public static readonly Uri BaseUri = new("https://download.playdex.dev/windows/releases/");
     internal const int MaximumMetadataBytes = 1024 * 1024;
 
     private readonly HttpClient _http = CreateClient(handler);
@@ -103,19 +109,18 @@ public sealed class GitHubReleases(HttpMessageHandler? handler = null) : IDispos
         var http = handler is null ? new HttpClient() : new HttpClient(handler);
         http.Timeout = TimeSpan.FromMinutes(5);
         http.DefaultRequestHeaders.UserAgent.ParseAdd(Brand.UserAgent);
-        http.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/vnd.github+json"));
-        http.DefaultRequestHeaders.Add("X-GitHub-Api-Version", "2022-11-28");
+        http.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
         return http;
     }
 
     /// <summary>The latest stable release, or null when it is a draft, a prerelease or not a v&lt;x.y.z&gt; tag.</summary>
     public Task<Release?> LatestAsync(CancellationToken cancellationToken = default) =>
-        GetAsync($"https://api.github.com/repos/{Repository}/releases/latest", cancellationToken);
+        GetAsync(new Uri(BaseUri, "latest.json"), cancellationToken);
 
     public Task<Release?> ForVersionAsync(ReleaseVersion version, CancellationToken cancellationToken = default) =>
-        GetAsync($"https://api.github.com/repos/{Repository}/releases/tags/{version.Tag}", cancellationToken);
+        GetAsync(new Uri(BaseUri, $"{version.Tag}.json"), cancellationToken);
 
-    private async Task<Release?> GetAsync(string url, CancellationToken cancellationToken)
+    private async Task<Release?> GetAsync(Uri url, CancellationToken cancellationToken)
     {
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         timeout.CancelAfter(TimeSpan.FromSeconds(15));
@@ -129,11 +134,11 @@ public sealed class GitHubReleases(HttpMessageHandler? handler = null) : IDispos
         await using var bounded = new MemoryStream();
         await CopyBoundedAsync(body, bounded, MaximumMetadataBytes, timeout.Token);
         bounded.Position = 0;
-        var dto = await JsonSerializer.DeserializeAsync(bounded, UpdateJson.Default.GitHubReleaseDto, timeout.Token);
+        var dto = await JsonSerializer.DeserializeAsync(bounded, UpdateJson.Default.ReleaseDto, timeout.Token);
         return dto is null ? null : ToRelease(dto);
     }
 
-    internal static Release? ToRelease(GitHubReleaseDto dto)
+    internal static Release? ToRelease(ReleaseDto dto)
     {
         if (dto.Draft || dto.Prerelease || !ReleaseVersion.TryParseTag(dto.TagName, out var version))
         {
@@ -207,7 +212,7 @@ public static class AppUpdate
 
     /// <summary>Download, verify and extract <paramref name="release"/>. Returns the manifest's path.</summary>
     public static async Task<string> StageAsync(
-        GitHubReleases releases, Release release, string targetDirectory, string updateRoot, CancellationToken cancellationToken = default)
+        ReleaseFeed releases, Release release, string targetDirectory, string updateRoot, CancellationToken cancellationToken = default)
     {
         var archiveName = ArchiveName(release.Version);
         var archive = release.Asset(archiveName) ?? throw new InvalidDataException($"The release has no {archiveName}.");

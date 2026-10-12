@@ -7,9 +7,9 @@ namespace Playdex.Setup;
 /// <summary>
 /// Installs Playdex for this user into %LOCALAPPDATA%\Programs\Playdex, updates an older install in place, and
 /// uninstalls it (<see cref="Uninstaller"/>). The app comes from the setup's own payload (the offline setup a release
-/// ships, see <see cref="SetupPayload"/>), else from playdex-windows-v&lt;version&gt;.zip on the GitHub release this exe
-/// was built for. It adds a Start menu shortcut and the Settings → Apps entry (with itself as the uninstaller), can set
-/// up the Full Screen Experience package, and starts Playdex. When the same or a newer Playdex is installed, running it
+/// ships, see <see cref="SetupPayload"/>), else from playdex-windows-v&lt;version&gt;.zip of the release this exe was
+/// built for on download.playdex.dev. It adds a Start menu shortcut and the Settings → Apps entry (with itself as the
+/// uninstaller), can set up the Full Screen Experience package, and starts Playdex. When the same or a newer Playdex is installed, running it
 /// just starts Playdex.
 /// </summary>
 /// <remarks>
@@ -199,9 +199,9 @@ internal static partial class Program
             else
             {
                 report("Downloading Playdex…");
-                using var releases = new GitHubReleases();
+                using var releases = new ReleaseFeed();
                 var release = await releases.ForVersionAsync(ThisVersion)
-                    ?? throw new InvalidOperationException($"Playdex {ThisVersion} is not on GitHub Releases.");
+                    ?? throw new InvalidOperationException($"Playdex {ThisVersion} is not on download.playdex.dev.");
                 var manifest = AppUpdate.Load(await AppUpdate.StageAsync(releases, release, _install, staging));
                 app = manifest.StagedDirectory;
                 report("Installing Playdex…");
@@ -286,9 +286,9 @@ internal static partial class Program
         var cer = fseFolder is not null && Directory.Exists(fseFolder) ? Directory.EnumerateFiles(fseFolder, "*.cer").FirstOrDefault() : null;
         if (msix is null || cer is null)
         {
-            using var releases = new GitHubReleases();
+            using var releases = new ReleaseFeed();
             var release = await releases.ForVersionAsync(ThisVersion)
-                ?? throw new InvalidOperationException($"Playdex {ThisVersion} is not on GitHub Releases.");
+                ?? throw new InvalidOperationException($"Playdex {ThisVersion} is not on download.playdex.dev.");
             var msixAsset = release.Asset($"playdex-launcher-{ThisVersion.Tag}.msix");
             var cerAsset = release.Asset("playdex-launcher.cer");
             if (msixAsset is null || cerAsset is null)

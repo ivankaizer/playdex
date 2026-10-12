@@ -1,0 +1,71 @@
+import { fireEvent, render, screen } from "@testing-library/react";
+import { checkDuration } from "../sessionsState";
+import { SessionEditModal } from "./SessionEditModal";
+
+describe("SessionEditModal", () => {
+  it("renders an accessible start and duration editor", () => {
+    const { container } = render(<SessionEditModal gameTitle="Hades II" startedAt="2026-08-04T18:30:15" duration="2h 15m" />);
+    const dialog = screen.getByRole("dialog");
+    expect(dialog).toHaveAttribute("aria-modal", "true");
+    expect(dialog).toHaveTextContent("Hades II");
+    const started = container.querySelector<HTMLInputElement>("input[type=datetime-local]")!;
+    expect(started).toHaveAttribute("step", "1");
+    expect(started.getAttribute("value")).toBe("2026-08-04T18:30:15");
+    expect(started).toHaveFocus();
+    expect(screen.getByLabelText(/Duration/)).toHaveValue("2h 15m");
+    expect(container.querySelector("button[data-action=cancel]")?.textContent).toBe("Cancel");
+    expect(container.querySelector("button[data-action=save]")?.textContent).toBe("Save session");
+    expect(container.querySelector("button[data-action=save]")).toBeEnabled();
+  });
+
+  it("blocks saving a zero or malformed duration and explains why", () => {
+    const onSave = vi.fn();
+    const { container, rerender } = render(
+      <SessionEditModal gameTitle="Rez" startedAt="2026-08-04T18:30:15" duration="0m" durationCheck={checkDuration("0m")} onSave={onSave} />,
+    );
+    const save = container.querySelector<HTMLButtonElement>("button[data-action=save]")!;
+    const input = screen.getByLabelText(/Duration/);
+    expect(save).toBeDisabled();
+    expect(input).toHaveAttribute("aria-invalid", "true");
+    expect(screen.getByText("A session needs at least 1 minute.")).toBeInTheDocument();
+    fireEvent.submit(save.closest("form")!);
+    expect(onSave).not.toHaveBeenCalled();
+
+    rerender(
+      <SessionEditModal gameTitle="Rez" startedAt="2026-08-04T18:30:15" duration="75m" durationCheck={checkDuration("75m")} onSave={onSave} />,
+    );
+    expect(screen.getByText("Minutes go up to 59. Write 1h 15m instead.")).toBeInTheDocument();
+    expect(save).toBeDisabled();
+  });
+
+  it("asks for confirmation for more than 24 hours", () => {
+    const onSave = vi.fn();
+    const { container } = render(
+      <SessionEditModal gameTitle="Rez" startedAt="2026-08-04T18:30:15" duration="26h 5m" durationCheck={checkDuration("26h 5m")} onSave={onSave} />,
+    );
+    const save = container.querySelector<HTMLButtonElement>("button[data-action=save]")!;
+    expect(screen.getByText("Longer than a day. Double-check before saving.")).toHaveAttribute("data-duration-hint", "warn");
+    expect(save).toHaveTextContent("Save anyway");
+    expect(screen.getByLabelText(/Duration/)).not.toHaveAttribute("aria-invalid");
+    fireEvent.click(save);
+    expect(onSave).toHaveBeenCalledTimes(1);
+  });
+
+  it("reports typed durations and closes on Escape", () => {
+    const onDurationChanged = vi.fn();
+    const onCancel = vi.fn();
+    render(
+      <SessionEditModal
+        gameTitle="Rez"
+        startedAt="2026-08-04T18:30:15"
+        duration="1h"
+        onDurationChanged={onDurationChanged}
+        onCancel={onCancel}
+      />,
+    );
+    fireEvent.change(screen.getByLabelText(/Duration/), { target: { value: "1h 30m" } });
+    expect(onDurationChanged).toHaveBeenCalledWith("1h 30m");
+    fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
+    expect(onCancel).toHaveBeenCalledTimes(1);
+  });
+});

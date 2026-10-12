@@ -26,7 +26,7 @@ public static class InstallRegistration
         entry.SetValue("InstallDate", DateTime.Now.ToString("yyyyMMdd", CultureInfo.InvariantCulture));
         entry.SetValue("UninstallString", $"\"{setup}\" --uninstall");
         entry.SetValue("QuietUninstallString", $"\"{setup}\" --uninstall --quiet");
-        entry.SetValue("URLInfoAbout", $"https://github.com/{GitHubReleases.Repository}");
+        entry.SetValue("URLInfoAbout", "https://playdex.dev");
         entry.SetValue("NoModify", 1, RegistryValueKind.DWord);
         entry.SetValue("NoRepair", 1, RegistryValueKind.DWord);
         entry.SetValue("EstimatedSize", SizeInKilobytes(installDirectory), RegistryValueKind.DWord);

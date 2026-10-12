@@ -22,6 +22,9 @@ public sealed class LauncherRepository(PlaydexDbContext db)
         return rows.Select(row => new LauncherSessionRow(row.SessionId, row.GameId, row.PlatformKey, row.PlatformName, row.StartedAt, row.EndedAt)).ToList();
     }
 
+    public Task<bool> HasActiveSteamIntegration(long userId, CancellationToken ct) =>
+        db.Integrations.AnyAsync(row => row.UserId == userId && row.Type == IntegrationType.Steam && row.Active, ct);
+
     public async Task<Dictionary<long, LauncherGameRow>> LoadGames(long[] gameIds, CancellationToken ct)
     {
         if (gameIds.Length == 0)

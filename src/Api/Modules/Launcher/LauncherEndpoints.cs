@@ -44,11 +44,13 @@ public static class LauncherEndpoints
         int? utcOffsetMinutes,
         CancellationToken ct)
     {
-        var sessions = await repository.ListSessions(principal.GetUserId(), ct);
+        var userId = principal.GetUserId();
+        var sessions = await repository.ListSessions(userId, ct);
         var gameIds = sessions.Select(session => session.GameId).Distinct().ToArray();
         var games = await repository.LoadGames(gameIds, ct);
         var identities = await repository.LoadIdentities(gameIds, ct);
         var zone = LauncherSummaryBuilder.ResolveTimeZone(tz, utcOffsetMinutes);
-        return TypedResults.Ok(LauncherSummaryBuilder.Build(sessions, games, identities, DateTimeOffset.UtcNow, zone));
+        var summary = LauncherSummaryBuilder.Build(sessions, games, identities, DateTimeOffset.UtcNow, zone);
+        return TypedResults.Ok(summary with { SteamPolling = await repository.HasActiveSteamIntegration(userId, ct) });
     }
 }
