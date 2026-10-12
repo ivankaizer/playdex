@@ -1,8 +1,8 @@
-import { Download, MonitorPlay, Power, Save } from "lucide-react";
+import { Download, Gamepad2, MonitorPlay, Power, Save } from "lucide-react";
 import { useEffect, useState } from "react";
 import { focusDefault } from "../nav/focus";
 import { showToast } from "../app-state";
-import { desktopState, rpc, type DesktopSettings, type MessageView, type PlatformOption } from "../host/desktop";
+import { desktopState, rpc, switchMode, type DesktopSettings, type MessageView, type PlatformOption } from "../host/desktop";
 import { useStore } from "../nav/store";
 import "./desk.css";
 
@@ -11,8 +11,8 @@ function failed(error: unknown) {
 }
 
 /**
- * The desktop app's settings (the WinForms Wrapper's Settings dialog, plus the app itself): the Playdex API, SteamGridDB
- * and Ludusavi, starting with Windows, updates and the Full Screen Experience launcher. Keys never come back to the
+ * The app's settings (the WinForms Wrapper's Settings dialog, plus the app itself): the Playdex API, SteamGridDB and
+ * Ludusavi, the mode Playdex opens in, starting with Windows, updates and the Full Screen Experience entry. Keys never come back to the
  * page: a saved key shows as saved, and typing replaces it.
  */
 export function Settings() {
@@ -168,6 +168,16 @@ function SettingsForm({ saved }: { saved: DesktopSettings }) {
 
         <section className="card desk-section" data-nav-group="settings-app" data-nav-entry="first">
           <h2 className="desk-section-title">This app</h2>
+          <div className="desk-line">
+            <Gamepad2 aria-hidden />
+            <span className="desk-line-text">
+              Big Picture: full screen and controller first, for the TV or a handheld. Playdex then opens that way from the tray
+              and at start; switch back from Quick settings.
+            </span>
+            <button className="btn btn-outline" data-nav data-kind="desk" onClick={() => switchMode("bigPicture").catch(failed)}>
+              Switch to Big Picture
+            </button>
+          </div>
           <label className="field field-check">
             <input type="checkbox" checked={startWithWindows} onChange={(e) => setStartWithWindows(e.target.checked)} data-nav data-kind="field" />
             <span>Start with Windows, in the tray (backups and game launchers stay up to date)</span>

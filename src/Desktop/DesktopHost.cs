@@ -35,6 +35,7 @@ internal sealed record DesktopState(
     DesktopSettings Settings,
     UpdateView Update,
     FseView Fse,
+    string Mode,
     string LauncherDirectory,
     bool RunAvailable);
 
@@ -69,19 +70,22 @@ internal sealed partial class DesktopHost : IDisposable
     private readonly ShellServices _services;
     private readonly Func<ShellWindow?> _window;
     private readonly Action _quit;
+    private readonly Action _modeChanged;
     private readonly LauncherManager _launchers = new(LogLoggerFactory.Instance.CreateLogger<LauncherManager>());
     private readonly LudusaviRunner _ludusavi = new(new LudusaviProcess());
     private readonly BackupStateStore _backupStore;
     private readonly BackupCoordinator _backups;
     private readonly string? _runExecutable;
 
-    public DesktopHost(ConfigStore store, AppConfig config, ShellServices services, Func<ShellWindow?> window, Action quit)
+    /// <param name="modeChanged">Show Playdex in the saved mode (called once the reply has reached the page).</param>
+    public DesktopHost(ConfigStore store, AppConfig config, ShellServices services, Func<ShellWindow?> window, Action quit, Action modeChanged)
     {
         _store = store;
         _config = config;
         _services = services;
         _window = window;
         _quit = quit;
+        _modeChanged = modeChanged;
         var run = Path.Combine(AppContext.BaseDirectory, "Playdex.Run.exe");
         _runExecutable = File.Exists(run) ? run : null;
         // The Wrapper's backup state, in place: backups carry on where it left off.
@@ -182,6 +186,10 @@ internal sealed partial class DesktopHost : IDisposable
                 Directory.CreateDirectory(_config.Storage.LauncherDirectory);
                 Process.Start(new ProcessStartInfo(_config.Storage.LauncherDirectory) { UseShellExecute = true })?.Dispose();
                 return Json(new MessageView("Opened the launchers folder."));
+            case "mode.set":
+                SetMode(Text(parameters, "mode"));
+                _ = SwitchSoonAsync();
+                return StateJson();
             case "app.quit":
                 _quit();
                 return Json(new MessageView("Quitting."));
@@ -342,6 +350,22 @@ internal sealed partial class DesktopHost : IDisposable
         return new MessageView($"{paths.Count} game launcher(s) regenerated.");
     }
 
+    /// <summary>Save how Playdex opens: <see cref="ShellConfig.DesktopMode"/> or <see cref="ShellConfig.BigPictureMode"/>.</summary>
+    public void SetMode(string mode)
+    {
+        _config.Shell.Mode = ShellConfig.NormalizeMode(mode);
+        _store.Save(_config);
+        Log.Info($"desktop: mode set to {_config.Shell.Mode}");
+        PushState();
+    }
+
+    /// <summary>The window is replaced, so the reply goes out first.</summary>
+    private async Task SwitchSoonAsync()
+    {
+        await Task.Delay(150);
+        _modeChanged();
+    }
+
     private GameConfig Game(string gameId) =>
         _config.Games.TryGetValue(gameId, out var game) ? game : throw new InvalidOperationException($"Game '{gameId}' is not in Playdex.");
 
@@ -391,7 +415,7 @@ internal sealed partial class DesktopHost : IDisposable
             StartsWithWindows());
         return new DesktopState(
             Version, games, settings, Updates?.View ?? new UpdateView("unavailable", "This build of Playdex doesn't update itself (installed builds do).", null),
-            Fse?.View ?? new FseView("unavailable", "Not available in this build."), _config.Storage.LauncherDirectory, _runExecutable is not null);
+            Fse?.View ?? new FseView("unavailable", "Not available in this build."), _config.Shell.Mode, _config.Storage.LauncherDirectory, _runExecutable is not null);
     }
 
     /// <summary>The app's self-updater (set by the app; null when this build can't update itself).</summary>

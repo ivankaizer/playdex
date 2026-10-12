@@ -14,6 +14,7 @@ public sealed class AppConfig
     public SteamGridDbConfig SteamGridDb { get; set; } = new();
     public LudusaviConfig Ludusavi { get; set; } = new();
     public StorageConfig Storage { get; set; } = new();
+    public ShellConfig Shell { get; set; } = new();
 
     public GameConfig GetOrCreateGame(string gameId)
     {
@@ -190,6 +191,25 @@ public sealed class LudusaviConfig
 
         return fullPath;
     }
+}
+
+/// <summary>How the Playdex app presents itself, and where it is (for the Full Screen Experience entry).</summary>
+public sealed class ShellConfig
+{
+    public const string DesktopMode = "desktop";
+    public const string BigPictureMode = "bigPicture";
+
+    /// <summary>"desktop" (a window and the tray) or "bigPicture" (full screen, controller first).</summary>
+    public string Mode { get; set; } = DesktopMode;
+
+    /// <summary>
+    /// The Playdex.exe that last started (installed and published builds, not Debug ones). The Full Screen Experience
+    /// package starts it in Big Picture; it lives outside the package.
+    /// </summary>
+    public string? ExecutablePath { get; set; }
+
+    public static string NormalizeMode(string? mode) =>
+        string.Equals(mode, BigPictureMode, StringComparison.OrdinalIgnoreCase) ? BigPictureMode : DesktopMode;
 }
 
 public sealed class StorageConfig

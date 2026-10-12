@@ -9,12 +9,12 @@ import { inHost, onHostMessage, postToHost } from "./bridge";
 
 declare global {
   interface Window {
-    /** "desktop" in the desktop app, "fse" in the launcher; absent in a plain browser. */
+    /** "desktop" in desktop mode, "fse" in Big Picture; absent in a plain browser. */
     __PLAYDEX_MODE__?: "desktop" | "fse";
   }
 }
 
-/** True in the desktop app (or with ?mode=desktop in a browser). */
+/** True in desktop mode (or with ?mode=desktop in a browser); false in Big Picture. */
 export const isDesktop =
   window.__PLAYDEX_MODE__ === "desktop" || new URLSearchParams(location.search).get("mode") === "desktop";
 
@@ -55,8 +55,12 @@ export interface FseView {
   message: string;
 }
 
+/** How Playdex opens: a window and the tray, or full screen and controller first. */
+export type AppMode = "desktop" | "bigPicture";
+
 export interface DesktopState {
   version: string;
+  mode: AppMode;
   games: DesktopGame[];
   settings: DesktopSettings;
   update: UpdateView;
@@ -113,10 +117,16 @@ export function loadDesktopState() {
   return rpc<DesktopState>("state");
 }
 
+/** Save the mode and switch to it: the app replaces this window with one in the other mode. */
+export function switchMode(mode: AppMode) {
+  return rpc<DesktopState>("mode.set", { mode });
+}
+
 /* ---------- Stand-in for a plain browser ---------- */
 
 let demoState: DesktopState = {
   version: "2.0.0",
+  mode: isDesktop ? "desktop" : "bigPicture",
   launcherDirectory: "C:\\Users\\you\\AppData\\Local\\Playdex\\launchers",
   runAvailable: true,
   games: [
@@ -154,7 +164,7 @@ let demoState: DesktopState = {
     startWithWindows: true,
   },
   update: { kind: "idle", message: "Playdex is up to date." },
-  fse: { state: "available", message: "Use the launcher as the Full Screen Experience home." },
+  fse: { state: "available", message: "Use Playdex in Big Picture as the Full Screen Experience home." },
 };
 
 async function demo(method: string, params?: Record<string, unknown>): Promise<unknown> {
@@ -199,6 +209,10 @@ async function demo(method: string, params?: Record<string, unknown>): Promise<u
           steamGridDbKeySet: demoState.settings.steamGridDbKeySet || !!params!.steamGridDbKey,
         },
       };
+      return demoState;
+    case "mode.set":
+      // The browser stand-in for replacing the window: reload in the other layout.
+      location.search = params?.mode === "desktop" ? "?mode=desktop" : "";
       return demoState;
     case "settings.browseLudusavi":
       return { path: "C:\\Tools\\ludusavi.exe" };

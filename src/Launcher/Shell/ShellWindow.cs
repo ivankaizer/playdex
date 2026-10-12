@@ -19,10 +19,10 @@ internal sealed partial class HostJson : JsonSerializerContext;
 /// <summary>How the shell window presents the UI.</summary>
 internal enum ShellMode
 {
-    /// <summary>The launcher: full screen, the Full Screen Experience home; it comes back to the front after a game.</summary>
+    /// <summary>Big Picture: full screen, controller first (also the Full Screen Experience home); it comes back to the front after a game.</summary>
     FullScreen,
 
-    /// <summary>The desktop app: a normal window opened from the tray, mouse and keyboard first.</summary>
+    /// <summary>Desktop mode: a normal window opened from the tray, mouse and keyboard first.</summary>
     Desktop,
 }
 
@@ -33,8 +33,8 @@ internal static class Startup
 }
 
 /// <summary>
-/// A window hosting the React UI in WebView2, over a native splash. The launcher keeps one full-screen window for its
-/// whole life; the desktop app opens a normal one from the tray and closes it (releasing WebView2) when hidden. Sessions,
+/// A window hosting the React UI in WebView2, over a native splash: full screen in Big Picture, a normal window in
+/// desktop mode. The app opens one from the tray and closes it (releasing WebView2) when hidden or when the mode changes. Sessions,
 /// controller input and the library live in <see cref="ShellServices"/>, so they outlive the window. Code-only (no XAML)
 /// to keep startup short.
 /// </summary>
@@ -143,6 +143,8 @@ internal sealed partial class ShellWindow : Window
 
     public nint Handle => _hwnd;
 
+    public ShellMode Mode => _mode;
+
     public void Show()
     {
         Activate();
@@ -186,7 +188,6 @@ internal sealed partial class ShellWindow : Window
         web.Reload();
     }
 
-    /// <summary>The library, and the mode the page lays itself out for, in place before the page's own scripts run.</summary>
     /// <summary>
     /// The library, the last Playdex summary (null before the first one), whether there is an API key, and the mode the
     /// page lays itself out for, in place before the page's own scripts run.
@@ -401,7 +402,7 @@ internal sealed partial class ShellWindow : Window
     {
         if (code == InputCode.Guide && !IsForeground())
         {
-            // A game is in front: the Guide button brings the launcher back. The desktop app leaves it to Windows.
+            // A game is in front: the Guide button brings Big Picture back. Desktop mode leaves it to Windows.
             if (_mode == ShellMode.FullScreen)
             {
                 OnRedirectedActivation(null);

@@ -123,6 +123,24 @@ public sealed class ConfigStoreTests : IDisposable
         Assert.Empty(config.Games);
     }
 
+    [Fact]
+    public async Task TheModeIsDesktopUnlessBigPictureWasSaved()
+    {
+        var store = new ConfigStore(ConfigPath);
+        Directory.CreateDirectory(Path.GetDirectoryName(ConfigPath)!);
+        File.WriteAllText(ConfigPath, """{ "api": { "apiKey": "key" } }""");
+        Assert.Equal(ShellConfig.DesktopMode, store.LoadOrCreate().Shell.Mode);
+
+        File.WriteAllText(ConfigPath, """{ "shell": { "mode": "BIGPICTURE", "executablePath": "C:\\Playdex\\Playdex.exe" } }""");
+        var config = await store.LoadOrCreateAsync();
+        Assert.Equal(ShellConfig.BigPictureMode, config.Shell.Mode);
+        Assert.Equal(@"C:\Playdex\Playdex.exe", config.Shell.ExecutablePath);
+
+        config.Shell.Mode = "something else";
+        await store.SaveAsync(config);
+        Assert.Equal(ShellConfig.DesktopMode, store.LoadOrCreate().Shell.Mode);
+    }
+
     public void Dispose() => Directory.Delete(_directory, recursive: true);
 
     private ConfigStore Store() => new(ConfigPath, WrapperConfig, LauncherConfig);

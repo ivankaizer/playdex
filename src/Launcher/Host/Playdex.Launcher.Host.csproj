@@ -1,10 +1,11 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <!--
-    Windows-only: WinUI 3 + WebView2, packaged as MSIX for the Full Screen Experience. Not in Playdex.sln because the
-    solution is built on Linux in CI and the Windows App SDK XAML compiler only runs on Windows.
+    The Full Screen Experience entry: the MSIX that Windows can pick as the FSE home app. It has no UI; it starts the
+    Playdex app (src/Desktop, Playdex.exe) in Big Picture and stays resident while it runs. Windows-only, not in
+    Playdex.sln because the solution is built on Linux in CI and the Windows App SDK tooling only runs on Windows.
 
-    Dev (unpackaged, loads http://localhost:5190):  dotnet run
-    MSIX (packaged, serves ../ui/dist):             see README.md
+    Dev (unpackaged, starts the Playdex.exe the config records):  dotnet run
+    MSIX:                                                         see README.md
   -->
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
@@ -30,9 +31,7 @@
     <AppxCustomCapabilityCcd>CustomCapability.SCCD</AppxCustomCapabilityCcd>
 
     <PublishAot Condition="'$(Configuration)' == 'Release'">true</PublishAot>
-    <ConcurrentGarbageCollection>false</ConcurrentGarbageCollection>
     <InvariantGlobalization>true</InvariantGlobalization>
-    <TieredPGO>true</TieredPGO>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(PackageMsix)' == 'true'">
@@ -48,17 +47,10 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- The window, bridge, input and quick settings shared with the desktop app (src/Desktop). -->
-    <Compile Include="..\Shell\**\*.cs" LinkBase="Shell" />
-  </ItemGroup>
-
-  <ItemGroup>
     <Manifest Include="$(ApplicationManifest)" />
     <Content Include="Assets\**" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="CustomCapability.SCCD" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="Public\**" CopyToOutputDirectory="PreserveNewest" />
-    <!-- Release builds serve the built UI from disk through a WebView2 virtual host. Run `bun run build` in ../ui first. -->
-    <Content Include="..\ui\dist\**" Link="ui\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <!--

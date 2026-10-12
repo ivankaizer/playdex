@@ -244,6 +244,8 @@ public sealed class ConfigStore
             LogDirectory = NormalizeStoragePath(storage.LogDirectory, Paths.DefaultLogDirectory),
             LauncherDirectory = NormalizeStoragePath(storage.LauncherDirectory, Paths.DefaultLauncherDirectory),
         };
+        config.Shell ??= new ShellConfig();
+        config.Shell.Mode = ShellConfig.NormalizeMode(config.Shell.Mode);
 
         foreach (var game in config.Games.Values)
         {

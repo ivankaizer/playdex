@@ -1,10 +1,10 @@
 <#
-  Builds the signed MSIX for local FSE testing.
+  Builds the signed MSIX (the Full Screen Experience entry) for local FSE testing. It starts Playdex.exe, so install
+  or publish src/Desktop as well.
 
-  1. Builds the UI (bun run build in src/Launcher/ui).
-  2. Creates a self-signed code-signing certificate as files in %LOCALAPPDATA%\PlaydexLauncher\dev-cert (first run
+  1. Creates a self-signed code-signing certificate as files in %LOCALAPPDATA%\PlaydexLauncher\dev-cert (first run
      only). Nothing is put in a certificate store here; install-dev.ps1 does that, elevated.
-  3. Publishes the host (Native AOT) and packages + signs the MSIX into src/Launcher/Host/AppPackages.
+  2. Publishes the entry (Native AOT) and packages + signs the MSIX into src/Launcher/Host/AppPackages.
 
   Never commit the .pfx or its password. The subject must match Publisher in Package.appxmanifest.
 #>
@@ -14,9 +14,6 @@ $certDir = Join-Path $env:LOCALAPPDATA 'PlaydexLauncher\dev-cert'
 $pfx = Join-Path $certDir 'playdex-launcher-dev.pfx'
 $passwordFile = Join-Path $certDir 'password.txt'
 $subject = 'CN=Playdex Launcher Dev'
-
-Push-Location "$hostDir\..\ui"
-try { bun install --frozen-lockfile; bun run build; if ($LASTEXITCODE) { throw 'UI build failed' } } finally { Pop-Location }
 
 if (-not (Test-Path $pfx)) {
     New-Item -ItemType Directory -Force $certDir | Out-Null

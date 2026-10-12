@@ -146,10 +146,10 @@ internal sealed class UpdateFeature(Action changed, Func<bool> gameRunning, Acti
 }
 
 /// <summary>
-/// "Use as Full Screen Experience home": installs the launcher's MSIX from the release Playdex came from. The package is
-/// signed with the project's self-signed certificate (the .cer next to it in the release), so Windows must trust that
-/// certificate first: one admin prompt imports it into Trusted People. Developer Mode must be on, because the
-/// gamingHome capability is only granted with the developer-mode SCCD.
+/// "Use as Full Screen Experience home": installs the FSE entry's MSIX (it opens Playdex in Big Picture) from the
+/// release Playdex came from. The package is signed with the project's self-signed certificate (the .cer next to it in
+/// the release), so Windows must trust that certificate first: one admin prompt imports it into Trusted People.
+/// Developer Mode must be on, because the gamingHome capability is only granted with the developer-mode SCCD.
 /// </summary>
 internal sealed class FseFeature(Action changed) : IDisposable
 {
@@ -157,14 +157,14 @@ internal sealed class FseFeature(Action changed) : IDisposable
 
     private readonly GitHubReleases _releases = new();
 
-    public FseView View { get; private set; } = new("unavailable", "Checking the Full Screen Experience launcher…");
+    public FseView View { get; private set; } = new("unavailable", "Checking the Full Screen Experience home…");
 
     public void Start() => _ = Task.Run(async () =>
     {
         try
         {
             Set(await IsInstalledAsync()
-                ? new FseView("installed", "The Full Screen Experience launcher is installed. Choose Playdex in Settings → Gaming → Full screen experience.")
+                ? new FseView("installed", "Playdex is ready to be your Full Screen Experience home: choose it in Settings → Gaming → Full screen experience. It opens in Big Picture.")
                 : Available());
         }
         catch (Exception ex) when (ex is IOException or System.ComponentModel.Win32Exception or InvalidOperationException)
@@ -176,9 +176,9 @@ internal sealed class FseFeature(Action changed) : IDisposable
 
     private static FseView Available() =>
 #if DEBUG
-        new("unavailable", "Install the launcher with src/Launcher/Host/tools/package.ps1 in development builds.");
+        new("unavailable", "Install the Full Screen Experience package with src/Launcher/Host/tools/package.ps1 in development builds.");
 #else
-        new("available", "Install the Full Screen Experience launcher (needs Developer Mode and one admin prompt).");
+        new("available", "Use Playdex in Big Picture as the Full Screen Experience home (needs Developer Mode and one admin prompt).");
 #endif
 
     public async Task<string> InstallAsync()
@@ -188,7 +188,7 @@ internal sealed class FseFeature(Action changed) : IDisposable
             Process.Start(new ProcessStartInfo("ms-settings:developers") { UseShellExecute = true })?.Dispose();
             throw new InvalidOperationException("Turn on Developer Mode first (Settings → System → For developers), then install again.");
         }
-        Set(new FseView("installing", "Installing the Full Screen Experience launcher…"));
+        Set(new FseView("installing", "Installing the Full Screen Experience package…"));
         try
         {
             var running = ReleaseVersion.TryParseTag($"v{DesktopHost.Version}", out var v) ? v : throw new InvalidOperationException("Unknown Playdex version.");
@@ -197,7 +197,7 @@ internal sealed class FseFeature(Action changed) : IDisposable
             var cer = release.Asset("playdex-launcher.cer");
             if (msix is null || cer is null)
             {
-                throw new InvalidOperationException($"Playdex {running} has no signed launcher package.");
+                throw new InvalidOperationException($"Playdex {running} has no signed Full Screen Experience package.");
             }
             var folder = Path.Combine(AppUpdate.UpdateRoot, $"launcher-{running.Tag}");
             if (Directory.Exists(folder))
@@ -215,16 +215,16 @@ internal sealed class FseFeature(Action changed) : IDisposable
             await RunPowerShellAsync($"Add-AppxPackage -Path {Quote(msixPath)} -ForceApplicationShutdown", elevated: false);
             if (!await IsInstalledAsync())
             {
-                throw new InvalidOperationException("Windows did not install the launcher package.");
+                throw new InvalidOperationException("Windows did not install the Full Screen Experience package.");
             }
-            Set(new FseView("installed", "The Full Screen Experience launcher is installed. Choose Playdex in Settings → Gaming → Full screen experience."));
+            Set(new FseView("installed", "Playdex is ready to be your Full Screen Experience home: choose it in Settings → Gaming → Full screen experience. It opens in Big Picture."));
             Process.Start(new ProcessStartInfo("ms-settings:gaming") { UseShellExecute = true })?.Dispose();
             return "Installed. In Settings → Gaming → Full screen experience, choose Playdex as the home app.";
         }
         catch (Exception ex)
         {
             Log.Error("fse: install failed", ex);
-            Set(new FseView("failed", $"The launcher was not installed: {ex.Message}"));
+            Set(new FseView("failed", $"The Full Screen Experience package was not installed: {ex.Message}"));
             throw;
         }
     }
