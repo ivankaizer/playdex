@@ -70,6 +70,7 @@ internal static unsafe partial class Native
 
     public const int SwRestore = 9;
     public const int SwShow = 5;
+    public const int SwMaximize = 3;
 
     [LibraryImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
