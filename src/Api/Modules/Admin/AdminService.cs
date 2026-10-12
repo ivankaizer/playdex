@@ -82,7 +82,8 @@ public sealed partial class AdminService(
         var sessionIds = request.SessionIds?.Distinct().ToArray() ?? [];
         if (sessionIds.Length == 0) throw AppProblemException.Validation("At least one session is required.");
         var deleted = await repository.DeleteSessions(sessionIds, ct);
-        LogSessionDelete(logger, "delete-sessions", sessionIds.Length, deleted, CorrelationId());
+        var correlationId = CorrelationId();
+        LogSessionDelete(logger, "delete-sessions", sessionIds.Length, deleted, correlationId);
         return new AdminDeleteSessionsResultDto(deleted);
     }
 
