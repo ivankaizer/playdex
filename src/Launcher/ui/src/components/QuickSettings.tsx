@@ -1,6 +1,6 @@
-import { Activity, AppWindow, Check, Gamepad2, Gauge, Headphones, Monitor, Moon, Power, RotateCcw, Speaker, Sun } from "lucide-react";
+import { Activity, AppWindow, Check, ExternalLink, Gamepad2, Gauge, Headphones, Monitor, Moon, Power, RotateCcw, Speaker, Sun } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { closeQuickSettings, showToast } from "../app-state";
+import { closeQuickSettings, openSteam, showToast } from "../app-state";
 import {
   inHost,
   onHostMessage,
@@ -312,6 +312,22 @@ export function QuickSettings() {
                 <small>{isDesktop ? "Full screen, controller first" : "A window and the tray, mouse first"}</small>
               </span>
               <span className="qs-row-action">Switch</span>
+            </button>
+            <button
+              className="qs-row"
+              data-nav
+              data-kind="qs-steam"
+              onClick={() => {
+                closeQuickSettings();
+                openSteam();
+              }}
+            >
+              <ExternalLink aria-hidden />
+              <span className="qs-row-text">
+                <span className="qs-row-name">Steam</span>
+                <small>{isDesktop ? "The Steam window" : "Steam Big Picture"}</small>
+              </span>
+              <span className="qs-row-action">Open</span>
             </button>
           </div>
         </section>

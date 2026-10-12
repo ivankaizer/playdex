@@ -332,6 +332,9 @@ internal sealed partial class ShellWindow : Window
             case "playdex-recap":
                 _ = PostRecapAsync(message.GetProperty("year").GetInt32());
                 break;
+            case "open-steam":
+                OpenSteam();
+                break;
             case "resume-game":
                 if (!GameWindows.Activate(_hwnd, _gameWindow, _nowPlaying?.ProcessId))
                 {
@@ -372,6 +375,26 @@ internal sealed partial class ShellWindow : Window
     {
         var recap = await Task.Run(() => _services.Api.GetLauncherRecapAsync(year));
         Post($$"""{"type":"playdex-recap","year":{{year.ToString(System.Globalization.CultureInfo.InvariantCulture)}},"recap":{{recap ?? "null"}}}""");
+    }
+
+    /// <summary>
+    /// Steam's Big Picture from Big Picture (controller first, like here), the Steam window from desktop mode. Through
+    /// the steam:// protocol, so Steam handles an instance that is already running.
+    /// </summary>
+    private void OpenSteam()
+    {
+        var uri = _mode == ShellMode.FullScreen ? "steam://open/bigpicture" : "steam://open/main";
+        try
+        {
+            Process.Start(new ProcessStartInfo(uri) { UseShellExecute = true })?.Dispose();
+            Log.Info($"opened {uri}");
+        }
+        catch (System.ComponentModel.Win32Exception ex)
+        {
+            // No handler for steam:// means Steam isn't installed.
+            Log.Error($"could not open {uri}", ex);
+            Post("""{"type":"open-steam-failed"}""");
+        }
     }
 
     /// <summary>Quick settings run off the UI thread; the page gets the fresh state (and any error) back.</summary>

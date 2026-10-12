@@ -6,7 +6,7 @@
  */
 import { inHost, onHostMessage } from "../host/bridge";
 import { createStore } from "../nav/store";
-import { gameById, games, isDemo, sessions, SOURCE_LABEL, type Game } from "./games";
+import { gameById, games, isDemo, markPlayed, sessions, SOURCE_LABEL, type Game } from "./games";
 
 export type PlaydexPeriod = { totalSeconds: number; sessionCount: number };
 export type PlaydexDay = { date: string; totalSeconds: number; sessionCount: number };
@@ -71,6 +71,17 @@ export const playdexSummary = createStore<PlaydexSummary | null>(
 onHostMessage((m) => {
   if (m.type === "playdex-summary") playdexSummary.set(m.summary as PlaydexSummary | null);
 });
+
+/** Playdex's last session of each library game counts as its last play (also play recorded on another PC). */
+function markPlayedFromPlaydex(summary: PlaydexSummary | null) {
+  if (!summary || isDemo) return;
+  for (const g of games) {
+    const played = playdexGame(summary, g);
+    if (played) markPlayed(g.id, Date.parse(played.lastPlayedAt));
+  }
+}
+playdexSummary.subscribe(() => markPlayedFromPlaydex(playdexSummary.get()));
+queueMicrotask(() => markPlayedFromPlaydex(playdexSummary.get()));
 
 /** "steam:3669870": how a game is recorded to Playdex, the key a library game and a Playdex game share. */
 const identityKey = (type: string, id: string) => `${type.toLowerCase()}:${id}`;

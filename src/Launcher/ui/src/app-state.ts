@@ -1,4 +1,4 @@
-import { gameById, recentGames } from "./data/games";
+import { gameById, markPlayed, recentGames } from "./data/games";
 import { inHost, onHostMessage, postToHost, signalAfterFrame } from "./host/bridge";
 import { current, focusDefault, focusEl } from "./nav/focus";
 import { createStore } from "./nav/store";
@@ -48,7 +48,10 @@ onHostMessage((m) => {
     if (!launching.get() && gameById(m.gameId)) launch(m.gameId);
     return;
   }
-  if (m.type !== "session" || m.gameId !== launching.get()) return;
+  if (m.type !== "session") return;
+  // The home screen's order follows play: a game that starts or ends here is the last played.
+  if (m.state === "running" || m.state === "ended") markPlayed(m.gameId);
+  if (m.gameId !== launching.get()) return;
   if (m.state === "ended") {
     launching.set(null);
     session.set(null);
@@ -72,10 +75,23 @@ export const nowPlaying = createStore<{ gameId: string; since: number | null } |
 onHostMessage((m) => {
   if (m.type === "now-playing") {
     nowPlaying.set(m.gameId && gameById(m.gameId) ? { gameId: m.gameId, since: m.since ?? null } : null);
+    // A game started elsewhere (Steam, a shortcut) is the last played too.
+    if (m.gameId) markPlayed(m.gameId);
   } else if (m.type === "resume-failed") {
     showToast("Couldn't find the game's window");
+  } else if (m.type === "open-steam-failed") {
+    showToast("Steam isn't installed on this PC");
   }
 });
+
+/** Open Steam: its Big Picture in Big Picture mode, its window in desktop mode. */
+export function openSteam() {
+  if (!inHost) {
+    showToast("Opening Steam works in the Playdex app on Windows");
+    return;
+  }
+  postToHost({ type: "open-steam" });
+}
 
 /** Switch to the running game's window. */
 export function resumeGame() {

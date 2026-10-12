@@ -2,6 +2,8 @@
 // through the Playdex Wrapper), injected as window.__PLAYDEX_LIBRARY__ before this module runs. In a plain browser it
 // is the design prototype's demo library: titles and artwork are real (Steam CDN), playtimes and sessions synthetic.
 
+import { createStore, useStore } from "../nav/store";
+
 export type Source = "steam" | "playdex" | "epic" | "gog" | "xbox" | "emulator" | "psn" | "switch";
 
 /** Sources that run on this PC. Others are history Playdex tracked on another platform. */
@@ -197,16 +199,28 @@ export interface GameStats {
   weekSessions: number;
 }
 
+/** Games played since the page loaded (launched here, running, or in Playdex's records), newest last: they lead. */
+const playedNow = new Map<string, number>();
+
 /**
  * Games ordered by most recent session, with this-week totals (last 7 days). With no sessions (the host library),
- * every game, most recently launched first, then by title.
+ * every game, most recently launched first, then by title. Live: a game played since the page loaded moves to the
+ * front (markPlayed), so the home screen follows switching between games without a restart.
  */
-export const recentGames: GameStats[] = (() => {
+function computeRecent(): GameStats[] {
   if (!sessions.length) {
     return [...games]
       .sort((a, b) => (b.lastPlayed ?? 0) - (a.lastPlayed ?? 0) || a.title.localeCompare(b.title))
       .map((game) => ({ game, weekMinutes: 0, weekSessions: 0 }));
   }
+  const fromSessions = statsFromSessions();
+  const touched = fromSessions
+    .filter((r) => playedNow.has(r.game.id))
+    .sort((a, b) => playedNow.get(b.game.id)! - playedNow.get(a.game.id)!);
+  return [...touched, ...fromSessions.filter((r) => !playedNow.has(r.game.id))];
+}
+
+function statsFromSessions(): GameStats[] {
   const seen = new Map<string, GameStats>();
   for (const s of sessionsNewestFirst) {
     let st = seen.get(s.gameId);
@@ -220,7 +234,27 @@ export const recentGames: GameStats[] = (() => {
     }
   }
   return [...seen.values()];
-})();
+}
+
+/** The recent games now; read it in event handlers, subscribe with useRecentGames in components. */
+export let recentGames: GameStats[] = computeRecent();
+const recentStore = createStore(recentGames);
+
+/** The recent games, re-rendering when a game is played. */
+export const useRecentGames = () => useStore(recentStore);
+
+/**
+ * Record that a game was played at `at` (now by default): when it started or ended here, when it is found running, or
+ * Playdex's last session of it. Only ever moves a game's last-played time forward.
+ */
+export function markPlayed(gameId: string, at = Date.now()) {
+  const game = byId.get(gameId);
+  if (!game || !Number.isFinite(at) || (game.lastPlayed ?? 0) >= at) return;
+  game.lastPlayed = at;
+  playedNow.set(gameId, at);
+  recentGames = computeRecent();
+  recentStore.set(recentGames);
+}
 
 export const statsFor = (id: string): GameStats | undefined => recentGames.find((r) => r.game.id === id);
 

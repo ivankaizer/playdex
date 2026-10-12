@@ -287,6 +287,7 @@ const PRIMARY: Record<string, string> = {
   favorite: "Favorite",
   details: "Open",
   "now-playing": "Resume",
+  steam: "Open",
 };
 
 /** "12:34", or "1:02:03" past an hour. */
