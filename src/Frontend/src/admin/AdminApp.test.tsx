@@ -141,4 +141,53 @@ describe("AdminApp", () => {
     const last = fetchMock.mock.calls.filter(([url]) => String(url).includes("/api/admin/dashboard")).at(-1)!;
     expect(new URL(String(last[0])).searchParams.get("query")).toBe("hades");
   });
+
+  it("deletes the selected sessions after a confirmation and reloads the page", async () => {
+    const user = userEvent.setup();
+    authSession.storeTokens("access", "refresh");
+    const session = (id: number, game: string) => ({
+      id,
+      email: "player@example.test",
+      platform: "Steam",
+      accountId: "7656",
+      game,
+      startedAt: "2026-10-10T18:00:00Z",
+      endedAt: "2026-10-10T19:00:00Z",
+      live: false,
+    });
+    let rows = [session(1, "Hades II"), session(2, "Balatro")];
+    const bodies: unknown[] = [];
+    fetchMock.mockImplementation(async (input, init) => {
+      const path = new URL(String(input)).pathname;
+      if (path === "/api/me") return ok({ userId: 1, email: "a@b.test", isAdmin: true });
+      if (path === "/api/admin/integrations") return ok([]);
+      if (path === "/api/admin/sessions") return ok({ sessions: rows, total: rows.length, page: 0, pageSize: 25 });
+      if (path === "/api/admin/sessions/delete") {
+        const body = JSON.parse(String(init?.body)) as { sessionIds: number[] };
+        bodies.push(body);
+        rows = rows.filter((row) => !body.sessionIds.includes(row.id));
+        return ok({ deleted: body.sessionIds.length });
+      }
+      return json(404, { data: null, error: { error: "Route not found." } });
+    });
+    const confirm = vi.fn(() => true);
+    vi.stubGlobal("confirm", confirm);
+    renderAt("/admin/sessions");
+
+    const first = await screen.findByLabelText("Select session 1");
+    expect(screen.getByRole("button", { name: "Delete selected" })).toBeDisabled();
+    await user.click(first);
+    await user.click(screen.getByRole("button", { name: "Delete selected (1)" }));
+
+    expect(confirm).toHaveBeenCalledWith("Delete 1 selected session? This can't be undone.");
+    expect(bodies).toEqual([{ sessionIds: [1] }]);
+    expect(await screen.findByText("Deleted 1 session.")).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByText("Hades II")).not.toBeInTheDocument());
+    expect(screen.getByText("Balatro")).toBeInTheDocument();
+
+    confirm.mockReturnValueOnce(false);
+    await user.click(screen.getByLabelText("Select session 2"));
+    await user.click(screen.getByRole("button", { name: "Delete selected (1)" }));
+    expect(bodies).toHaveLength(1);
+  });
 });

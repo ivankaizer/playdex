@@ -17,6 +17,7 @@ public sealed class AdminAuthorizationIntegrationTests(AdminApiFixture fixture)
         ("PATCH", "/api/admin/integrations/1"),
         ("GET", "/api/admin/sessions"),
         ("POST", "/api/admin/sessions/transfer"),
+        ("POST", "/api/admin/sessions/delete"),
         ("GET", "/api/admin/games"),
         ("PATCH", "/api/admin/games/1"),
         ("POST", "/api/admin/games/merge"),

@@ -212,6 +212,9 @@ export const adminApi = {
   transferSessions(sessionIds: number[], targetIntegrationId: number) {
     return send<{ transferred: number }>("POST", "admin/sessions/transfer", { sessionIds, targetIntegrationId });
   },
+  deleteSessions(sessionIds: number[]) {
+    return send<{ deleted: number }>("POST", "admin/sessions/delete", { sessionIds });
+  },
   games(search: string, options?: CallOptions) {
     return get<GameSummary[]>(`admin/games${query({ query: search.trim() })}`, options);
   },

@@ -225,6 +225,20 @@ public sealed class AdminEndpointsIntegrationTests(AdminApiFixture fixture)
             Assert.Equal(HttpStatusCode.NotFound, missing.StatusCode);
             Assert.Equal("Target integration not found.", await AdminApiFixture.ReadErrorAsync(missing));
         }
+
+        // Delete: the selection goes, repeated and unknown ids are ignored, the rest stays.
+        var doomed = byEmail.Sessions.Skip(2).Take(3).Select(row => row.Id).ToArray();
+        var deleted = await AdminApiFixture.ReadDataAsync<AdminDeleteSessionsResultDto>(await client.PostAsJsonAsync(
+            "/api/admin/sessions/delete", new { sessionIds = doomed.Append(doomed[0]).Append(long.MaxValue).ToArray() }));
+        Assert.Equal(3, deleted.Deleted);
+        Assert.False(await db.PlaySessions.AsNoTracking().AnyAsync(row => doomed.Contains(row.Id)));
+        Assert.Equal(22, (await Sessions(client, source.AccountId!, 0)).Total);
+
+        using (var none = await client.PostAsJsonAsync("/api/admin/sessions/delete", new { sessionIds = Array.Empty<long>() }))
+        {
+            Assert.Equal(HttpStatusCode.BadRequest, none.StatusCode);
+            Assert.Equal("At least one session is required.", await AdminApiFixture.ReadErrorAsync(none));
+        }
     }
 
     [Fact]

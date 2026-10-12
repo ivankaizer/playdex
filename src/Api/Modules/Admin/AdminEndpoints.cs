@@ -18,6 +18,7 @@ public static class AdminEndpoints
 
         admin.MapGet("/sessions", SearchSessions);
         admin.MapPost("/sessions/transfer", TransferSessions);
+        admin.MapPost("/sessions/delete", DeleteSessions);
 
         admin.MapGet("/games", SearchGames);
         admin.MapPatch("/games/{id:long}", UpdateGame);
@@ -76,6 +77,16 @@ public static class AdminEndpoints
     {
         if (request is null) return TypedResults.Problem("Request body is required.", statusCode: 400);
         return TypedResults.Ok(await service.TransferSessions(request, ct));
+    }
+
+    /// <summary>A POST with the selection in its body, as transfer: DELETE bodies are not reliably passed through.</summary>
+    private static async Task<IResult> DeleteSessions(
+        AdminDeleteSessionsRequest? request,
+        AdminService service,
+        CancellationToken ct)
+    {
+        if (request is null) return TypedResults.Problem("Request body is required.", statusCode: 400);
+        return TypedResults.Ok(await service.DeleteSessions(request, ct));
     }
 
     private static async Task<IResult> SearchGames(AdminService service, string? query, CancellationToken ct) =>
