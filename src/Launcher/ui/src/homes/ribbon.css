@@ -57,6 +57,11 @@
   min-width: 0;
   padding: 1.6rem 1.8rem 1.7rem;
 }
+.ribbon-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
 .ribbon-logo {
   height: 4.6rem;
   max-width: 24rem;

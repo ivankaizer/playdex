@@ -1,6 +1,6 @@
 import { Flame, Play } from "lucide-react";
-import { launch } from "../app-state";
-import { Backdrop, Cover, Logo, WeekBars } from "../components/shared";
+import { launch, nowPlaying, resumeGame } from "../app-state";
+import { Backdrop, Cover, formatClock, Logo, useElapsed, WeekBars } from "../components/shared";
 import {
   fmtMinutes,
   isDemo,
@@ -19,7 +19,8 @@ const minutes = (seconds: number) => Math.round(seconds / 60);
 
 /**
  * Home A: one grid of recent games, led by the last played as a large tile with its art, session and Continue, so
- * it reads as the first game of the list rather than a banner above it. The rail shows the user's Playdex stats.
+ * it reads as the first game of the list rather than a banner above it. While that game runs, the tile says so and
+ * resumes it. The rail shows the user's Playdex stats.
  */
 export function RibbonHome() {
   const summary = useStore(playdexSummary);
@@ -28,6 +29,9 @@ export function RibbonHome() {
   const s = last.lastSession;
   const lastDay = lastPlayedDay(last);
   const played = playdexGame(summary, last.game);
+  const running = useStore(nowPlaying);
+  const playing = running?.gameId === last.game.id;
+  const elapsed = useElapsed(playing ? running.since : null);
 
   return (
     <main className="ribbon-home">
@@ -43,19 +47,27 @@ export function RibbonHome() {
             data-nav
             data-nav-default
             data-game={last.game.id}
-            data-kind="continue"
-            onClick={() => launch(last.game.id)}
+            data-kind={playing ? "playing" : "continue"}
+            onClick={() => (playing ? resumeGame() : launch(last.game.id))}
           >
             <Backdrop gameId={last.game.id} className="ribbon-art" />
             <span className="ribbon-scrim" aria-hidden />
             <span className="ribbon-body">
-              <span className="kicker">
-                {s
-                  ? `Last played · ${relativeDay(s.dayOffset)} ${s.start}–${sessionEnd(s)}`
-                  : lastDay !== undefined
-                    ? `Last played · ${relativeDay(lastDay)}`
-                    : "Ready to play"}
-              </span>
+              {playing ? (
+                <span className="kicker ribbon-live">
+                  <span className="live-dot" aria-hidden />
+                  Playing now
+                  {elapsed !== null && <span className="num">· {formatClock(elapsed)}</span>}
+                </span>
+              ) : (
+                <span className="kicker">
+                  {s
+                    ? `Last played · ${relativeDay(s.dayOffset)} ${s.start}–${sessionEnd(s)}`
+                    : lastDay !== undefined
+                      ? `Last played · ${relativeDay(lastDay)}`
+                      : "Ready to play"}
+                </span>
+              )}
               <Logo game={last.game} className="ribbon-logo" titleClass="ribbon-title" />
               {played ? (
                 <span className="ribbon-meta num">
@@ -70,7 +82,7 @@ export function RibbonHome() {
               )}
               {/* The whole tile is the button; this is its label. */}
               <span className="btn btn-primary btn-lg ribbon-cta" aria-hidden>
-                <Play fill="currentColor" /> Continue
+                <Play fill="currentColor" /> {playing ? "Resume" : "Continue"}
               </span>
             </span>
           </button>

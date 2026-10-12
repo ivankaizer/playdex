@@ -16,7 +16,7 @@ import {
   toast,
 } from "./app-state";
 import { QuickSettings } from "./components/QuickSettings";
-import { Backdrop, Clock, Glyph, Hint, Logo } from "./components/shared";
+import { Backdrop, Clock, formatClock, Glyph, Hint, Logo, useElapsed } from "./components/shared";
 import { gameById, isInstalled, recentGames } from "./data/games";
 import { DossierHome } from "./homes/DossierHome";
 import { RibbonHome } from "./homes/RibbonHome";
@@ -164,7 +164,7 @@ export function App() {
           setTab((t) => TABS[(TABS.indexOf(t) + (a === "rb" ? 1 : TABS.length - 1)) % TABS.length]);
           return true;
         }
-        if (a === "y" && game && !openGameId.get() && ["game", "session", "continue", "cover", "cover-off"].includes(kind)) {
+        if (a === "y" && game && !openGameId.get() && ["game", "session", "continue", "playing", "cover", "cover-off"].includes(kind)) {
           openGame(game);
           return true;
         }
@@ -287,27 +287,9 @@ const PRIMARY: Record<string, string> = {
   favorite: "Favorite",
   details: "Open",
   "now-playing": "Resume",
+  playing: "Resume",
   steam: "Open",
 };
-
-/** "12:34", or "1:02:03" past an hour. */
-function formatClock(seconds: number) {
-  const h = Math.floor(seconds / 3600);
-  const m = Math.floor((seconds % 3600) / 60);
-  const s = String(seconds % 60).padStart(2, "0");
-  return h > 0 ? `${h}:${String(m).padStart(2, "0")}:${s}` : `${m}:${s}`;
-}
-
-/** Seconds since `since` (epoch ms), ticking once a second; null without a start time. */
-function useElapsed(since: number | null) {
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    if (since === null) return;
-    const t = window.setInterval(() => setNow(Date.now()), 1000);
-    return () => window.clearInterval(t);
-  }, [since]);
-  return since === null ? null : Math.max(0, Math.floor((now - since) / 1000));
-}
 
 /** The running game in the top bar, however it was started; A switches to it. */
 function NowPlaying() {
@@ -343,7 +325,7 @@ function HintBar({ onGamePage }: { onGamePage: boolean }) {
     <footer className="hints">
       <Hint glyph="A">{PRIMARY[kind] ?? "Select"}</Hint>
       {kind === "cover" && <Hint glyph="X">Play</Hint>}
-      {!onGamePage && ["game", "session", "continue", "cover", "cover-off"].includes(kind) && <Hint glyph="Y">Details</Hint>}
+      {!onGamePage && ["game", "session", "continue", "playing", "cover", "cover-off"].includes(kind) && <Hint glyph="Y">Details</Hint>}
       {onGamePage && <Hint glyph="B">Back</Hint>}
       <Hint glyph="LB">Sections</Hint>
       <Hint glyph="MENU">Quick settings</Hint>
