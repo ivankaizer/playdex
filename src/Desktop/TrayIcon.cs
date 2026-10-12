@@ -27,6 +27,9 @@ internal sealed unsafe class TrayIcon : IDisposable
     private readonly nint _icon;
     private readonly string _tooltip;
 
+    /// <summary>NOTIFYICON_VERSION_4 took: a click arrives as NIN_SELECT (and a WM_LBUTTONUP too, which is then ignored).</summary>
+    private bool _version4;
+
     /// <summary>Call on the UI thread: the hidden window's messages arrive through its message loop.</summary>
     /// <param name="switchModeLabel">The menu item that switches between desktop mode and Big Picture, as it reads now.</param>
     public TrayIcon(string tooltip, Action open, Action quit, Func<string> switchModeLabel, Action switchMode)
@@ -78,7 +81,7 @@ internal sealed unsafe class TrayIcon : IDisposable
             return;
         }
         data.VersionOrTimeout = NotifyIconVersion4;
-        ShellNotifyIcon(NimSetVersion, &data);
+        _version4 = ShellNotifyIcon(NimSetVersion, &data);
     }
 
     private NotifyIconData Data(uint flags)
@@ -138,10 +141,12 @@ internal sealed unsafe class TrayIcon : IDisposable
         {
             if (tray is not null && message == CallbackMessage)
             {
-                // NOTIFYICON_VERSION_4: the event is the low word of lParam.
+                // NOTIFYICON_VERSION_4: the event is the low word of lParam. One click sends both NIN_SELECT and
+                // WM_LBUTTONUP; opening on both made two windows.
                 switch ((uint)(lParam & 0xFFFF))
                 {
-                    case WmLButtonUp or NinSelect or NinKeySelect:
+                    case NinSelect or NinKeySelect:
+                    case WmLButtonUp when !tray._version4:
                         tray._open();
                         break;
                     case WmContextMenu:
