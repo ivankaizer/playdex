@@ -336,7 +336,7 @@ function Bars({ values, labels, highlight, height }: { values: number[]; labels:
   return (
     <div className="pdx-bars" style={{ "--n": values.length, "--h-max": height } as React.CSSProperties}>
       {values.map((v, i) => (
-        <div key={i} className="week-col" data-today={i === highlight ? "" : undefined}>
+        <div key={i} className="week-col" data-today={i === highlight ? "" : undefined} style={{ "--i": i } as React.CSSProperties}>
           <div className="week-bar">
             <div className="week-fill" style={{ height: `${Math.max(v ? 6 : 0, (v / max) * 100)}%` }} />
           </div>
