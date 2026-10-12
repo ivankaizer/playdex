@@ -173,3 +173,24 @@ export function Clock() {
   }, []);
   return <span className="num">{clockFmt.format(now)}</span>;
 }
+
+/* ---------- Play clock ---------- */
+
+/** "12:34", or "1:02:03" past an hour. */
+export function formatClock(seconds: number) {
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = String(seconds % 60).padStart(2, "0");
+  return h > 0 ? `${h}:${String(m).padStart(2, "0")}:${s}` : `${m}:${s}`;
+}
+
+/** Seconds since `since` (epoch ms), ticking once a second; null without a start time. */
+export function useElapsed(since: number | null) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (since === null) return;
+    const t = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(t);
+  }, [since]);
+  return since === null ? null : Math.max(0, Math.floor((now - since) / 1000));
+}

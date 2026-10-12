@@ -200,6 +200,16 @@ img {
   background: rgb(var(--seg-on));
   color: rgb(var(--seg-on-ink));
 }
+.tab-dot {
+  display: inline-block;
+  width: 0.4rem;
+  height: 0.4rem;
+  margin-left: 0.4rem;
+  vertical-align: 0.15em;
+  border-radius: 99px;
+  background: rgb(var(--bar));
+  box-shadow: 0 0 0 0.15rem rgb(var(--bar) / 0.25);
+}
 .topbar-spacer {
   flex: 1;
 }

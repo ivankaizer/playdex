@@ -54,6 +54,23 @@ function mark(el: HTMLElement) {
   focusedKind.set(el.dataset.kind ?? "");
 }
 
+/**
+ * Where an item sits without its own transform. A focused tile lifts and grows (translate + scale), so its box starts
+ * above the tiles beside it; measured as drawn, a neighbour in the same row would count as below it.
+ */
+function layoutRect(el: HTMLElement): DOMRect {
+  const r = el.getBoundingClientRect();
+  const style = getComputedStyle(el);
+  if (style.transform === "none") return r;
+  const { a, d, e, f } = new DOMMatrixReadOnly(style.transform);
+  if (!a || !d) return r;
+  const [ox, oy] = style.transformOrigin.split(" ").map(parseFloat);
+  const width = r.width / a;
+  const height = r.height / d;
+  // Drawn left = layout left + ox·(1 − a) + e, for a scale and translate about the origin.
+  return new DOMRect(r.left - (ox || 0) * (1 - a) - e, r.top - (oy || 0) * (1 - d) - f, width, height);
+}
+
 /** Score a candidate: distance along the axis plus a heavy penalty for being off-axis. */
 function score(from: DOMRect, to: DOMRect, dir: Dir): number | null {
   const tol = 2;
@@ -121,7 +138,7 @@ export function focusScreenDefault() {
 export function move(dir: Dir) {
   const cur = current();
   if (!cur) return focusDefault();
-  const from = cur.getBoundingClientRect();
+  const from = layoutRect(cur);
   const curGroup = groupOf(cur);
   let best: HTMLElement | null = null;
   let bestScore = Infinity;
@@ -129,7 +146,7 @@ export function move(dir: Dir) {
   let bestSameScore = Infinity;
   for (const el of all()) {
     if (el === cur) continue;
-    const s = score(from, el.getBoundingClientRect(), dir);
+    const s = score(from, layoutRect(el), dir);
     if (s === null) continue;
     if (s < bestScore) [best, bestScore] = [el, s];
     if (curGroup && groupOf(el) === curGroup && s < bestSameScore && s < 10_000) [bestSame, bestSameScore] = [el, s];

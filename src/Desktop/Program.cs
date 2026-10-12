@@ -114,6 +114,9 @@ internal sealed partial class App : Application
     private ShellWindow? _window;
     private bool _windowOpened;
 
+    /// <summary>A window is being created: creating it pumps messages, so another Open can run before it is _window.</summary>
+    private bool _creatingWindow;
+
     /// <summary>Opened from the Full Screen Experience entry: switching to desktop mode leaves the FSE first.</summary>
     private bool _fromFse;
 
@@ -232,6 +235,10 @@ internal sealed partial class App : Application
     /// </summary>
     private void Open(ShellMode? requested = null, string? launchGameId = null)
     {
+        if (_creatingWindow)
+        {
+            return; // the window being created comes up anyway
+        }
         var mode = requested ?? (IsBigPicture ? ShellMode.FullScreen : ShellMode.Desktop);
         if (mode == ShellMode.Desktop && _fromFse)
         {
@@ -271,7 +278,16 @@ internal sealed partial class App : Application
             ? _options with { LaunchGameId = launchGameId, ExitOnReady = false, BenchInput = 0, ExitWhenDone = false }
             : launchGameId is null ? _options : _options with { LaunchGameId = launchGameId };
         _windowOpened = true;
-        var window = new ShellWindow(_environment!, options, _services!, mode, _host!.HandleMessage);
+        ShellWindow window;
+        _creatingWindow = true;
+        try
+        {
+            window = new ShellWindow(_environment!, options, _services!, mode, _host!.HandleMessage);
+        }
+        finally
+        {
+            _creatingWindow = false;
+        }
         window.Closed += (_, _) =>
         {
             if (_window != window)

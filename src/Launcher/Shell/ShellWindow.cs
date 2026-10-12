@@ -148,15 +148,16 @@ internal sealed partial class ShellWindow : Window
 
     public void Show()
     {
-        if (_mode == ShellMode.Desktop && AppWindow.Presenter is OverlappedPresenter overlapped)
-        {
-            // Desktop mode opens using the whole screen, with its title bar and the taskbar still there.
-            overlapped.Maximize();
-        }
         Activate();
         if (_mode == ShellMode.FullScreen)
         {
             DispatcherQueue.TryEnqueue(() => AppWindow.SetPresenter(AppWindowPresenterKind.FullScreen));
+        }
+        else
+        {
+            // Desktop mode opens using the whole screen, with its title bar and the taskbar still there. After Activate:
+            // it shows the window at its normal size, which undid a Maximize made before it.
+            Native.ShowWindow(_hwnd, Native.SwMaximize);
         }
         Metrics.Record("startup.window_shown", Metrics.MsSince(Startup.MainEntered));
         _ = InitializeWebViewAsync();
