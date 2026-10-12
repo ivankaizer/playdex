@@ -382,6 +382,9 @@ public sealed class AdminRepository(PlaydexDbContext db)
             .Select(row => new AdminGenerationImage(row.Image!, row.ImageContentType!))
             .SingleOrDefaultAsync(ct);
 
+    public Task<int> DeleteSessions(IReadOnlyCollection<long> sessionIds, CancellationToken ct) =>
+        db.PlaySessions.Where(row => sessionIds.Contains(row.Id)).ExecuteDeleteAsync(ct);
+
     public async Task<bool> DeleteGeneration(Guid id, CancellationToken ct) =>
         await db.AiGenerations.Where(row => row.Id == id).ExecuteDeleteAsync(ct) > 0;
 }

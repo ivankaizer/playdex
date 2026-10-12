@@ -73,6 +73,10 @@ public sealed record AdminTransferSessionsRequest(IReadOnlyList<long>? SessionId
 
 public sealed record AdminTransferSessionsResultDto(int Transferred);
 
+public sealed record AdminDeleteSessionsRequest(IReadOnlyList<long>? SessionIds);
+
+public sealed record AdminDeleteSessionsResultDto(int Deleted);
+
 public sealed record AdminGameDto(long Id, string Title, string? CapsuleUrl, bool TitleLocked, bool CapsuleUrlLocked);
 
 public sealed record AdminUpdateGameRequest(

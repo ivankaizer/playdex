@@ -109,6 +109,27 @@ export function SessionsPage() {
     if (reload) await load(result?.page ?? 0);
   };
 
+  const remove = async () => {
+    if (loading || selected.size === 0) return;
+    const count = selected.size;
+    if (!window.confirm(`Delete ${count} selected ${count === 1 ? "session" : "sessions"}? This can't be undone.`)) return;
+    setLoading(true);
+    let reload = false;
+    try {
+      const response = await adminApi.deleteSessions([...selected]);
+      notify.success("Sessions deleted", `Deleted ${response.deleted} ${response.deleted === 1 ? "session" : "sessions"}.`);
+      reload = true;
+    } catch (caught) {
+      const message = errorMessage(caught);
+      setError(message);
+      notify.error("Delete failed", message);
+    } finally {
+      setLoading(false);
+    }
+    // The page may now be past the end: stay on it only if something is left there.
+    if (reload) await load(result && result.sessions.length > count ? result.page : Math.max(0, (result?.page ?? 0) - 1));
+  };
+
   return (
     <>
       <Panel label="Sessions" kicker="Operate" title="All sessions">
@@ -143,7 +164,7 @@ export function SessionsPage() {
           </Toolbar>
         </form>
         <div className="pdx-tile flex flex-col gap-3 !px-5 !py-4">
-          <p className="pdx-label">Transfer to another integration</p>
+          <p className="pdx-label">With the selected sessions</p>
           <Toolbar>
             <Select
               className="sm:!w-96"
@@ -164,6 +185,9 @@ export function SessionsPage() {
               disabled={loading || selected.size === 0 || target === ""}
             >
               Transfer selected{selected.size > 0 ? ` (${selected.size})` : ""}
+            </Button>
+            <Button variant="danger" onClick={() => void remove()} disabled={loading || selected.size === 0}>
+              Delete selected{selected.size > 0 ? ` (${selected.size})` : ""}
             </Button>
           </Toolbar>
         </div>

@@ -73,6 +73,20 @@ public sealed partial class AdminService(
         return new AdminTransferSessionsResultDto(updated);
     }
 
+    /// <summary>
+    /// Delete the selected sessions, of any kind (polled, captured, manual, running); stats and recaps no longer count
+    /// them. If the game of a deleted running polled session is still running, the next poll starts a new session.
+    /// </summary>
+    public async Task<AdminDeleteSessionsResultDto> DeleteSessions(AdminDeleteSessionsRequest request, CancellationToken ct)
+    {
+        var sessionIds = request.SessionIds?.Distinct().ToArray() ?? [];
+        if (sessionIds.Length == 0) throw AppProblemException.Validation("At least one session is required.");
+        var deleted = await repository.DeleteSessions(sessionIds, ct);
+        var correlationId = CorrelationId();
+        LogSessionDelete(logger, "delete-sessions", sessionIds.Length, deleted, correlationId);
+        return new AdminDeleteSessionsResultDto(deleted);
+    }
+
     public async Task<IReadOnlyList<AdminGameDto>> SearchGames(string? query, CancellationToken ct)
     {
         var term = query?.Trim() ?? "";
@@ -229,6 +243,11 @@ public sealed partial class AdminService(
     [LoggerMessage(Level = LogLevel.Information,
         Message = "Admin mutation {Operation} integration {IntegrationId} count {Count} correlation {CorrelationId}")]
     private static partial void LogSessionTransfer(ILogger logger, string operation, long integrationId, int count,
+        string correlationId);
+
+    [LoggerMessage(Level = LogLevel.Information,
+        Message = "Admin mutation {Operation} requested {Requested} deleted {Count} correlation {CorrelationId}")]
+    private static partial void LogSessionDelete(ILogger logger, string operation, int requested, int count,
         string correlationId);
 
     [LoggerMessage(Level = LogLevel.Information,
