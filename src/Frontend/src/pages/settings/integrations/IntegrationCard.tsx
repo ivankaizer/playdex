@@ -1,6 +1,7 @@
 import { cx } from "@/lib/cx";
 import { platformColor } from "@/lib/platforms";
 import type { ProviderStatus } from "../models";
+import { PlaydexAppSetup } from "./PlaydexAppSetup";
 import {
   isAnySessionPlatformSaving,
   isCredentialSaving,
@@ -74,6 +75,8 @@ export function IntegrationCard({ provider, integrations }: IntegrationCardProps
           {editing ? "Done" : "Manage"}
         </button>
       </div>
+
+      {provider.platform === "api" && provider.apiKey ? <PlaydexAppSetup apiKey={provider.apiKey} /> : null}
 
       {editing ? (
         <div id={panelId} className="flex flex-col gap-4 pb-5 pl-[84px] pr-5 max-[600px]:px-4 max-[600px]:pb-4">

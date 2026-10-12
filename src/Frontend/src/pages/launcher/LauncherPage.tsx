@@ -2,12 +2,11 @@ import { useEffect, type ReactNode } from "react";
 import { Link } from "react-router";
 import { AppFooter } from "@/components/AppFooter";
 import { CardHeading } from "@/components/ui";
+import { setupUrl } from "@/lib/downloads";
 import { dashUrl } from "@/pages/landing/dashUrl";
 import { LandingHeader } from "@/pages/landing/LandingHeader";
 
-/** The latest Playdex-Setup.exe on the public download feed (R2, see docs/windows-releases.md). It installs the desktop app,
- * which installs the launcher. */
-export const setupUrl = "https://download.playdex.dev/windows/Playdex-Setup.exe";
+export { setupUrl };
 
 /* Screenshots of the real launcher at 3840×2160, downscaled to 1920 in landing/public/launcher. */
 const screenshot = (name: string) => `/launcher/${name}.webp`;
@@ -92,15 +91,15 @@ const gallery: ReadonlyArray<{ src: string; title: string; body: string; alt: st
 const installSteps: ReadonlyArray<{ title: string; body: string }> = [
   {
     title: "Install Playdex for Windows",
-    body: "Download and run Playdex-Setup.exe. It installs the desktop app for your user and starts it.",
+    body: "Download and run Playdex-Setup.exe. It installs Playdex for your user, keeps it up to date, and can be removed from Settings → Apps.",
   },
   {
     title: "Connect it to your account",
-    body: "Add your Playdex API key in the desktop app's Settings, so sessions land in your history and the launcher can show it.",
+    body: "The setup asks for the Playdex server and your API key: both are on your dashboard under Settings → Integrations → Playdex app, with Copy buttons.",
   },
   {
     title: "Make it your home screen",
-    body: "In the desktop app, choose “Use as Full Screen Experience home”. It trusts the launcher's certificate (one admin prompt) and installs it.",
+    body: "Tick “Also use Playdex as the Full Screen Experience home” in the setup, or choose it later in Playdex → Settings → This app. It trusts the launcher's certificate (one admin prompt) and installs it.",
   },
 ];
 
