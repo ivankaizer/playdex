@@ -23,6 +23,9 @@ export type PlaydexSession = {
   durationSeconds: number;
 };
 export type PlaydexIdentity = { type: string; externalId: string };
+export type PlaydexPlatform = { platformKey: string; platformName: string; totalSeconds: number; sessionCount: number };
+/** A period with its most played games (at most 5) and time per platform, most played first. */
+export type PlaydexPeriodDetail = PlaydexPeriod & { topGames: PlaydexTopGame[]; platforms: PlaydexPlatform[] };
 export type PlaydexGame = {
   gameId: string;
   title: string;
@@ -44,6 +47,10 @@ export type PlaydexSummary = {
   topGames: PlaydexTopGame[];
   recentSessions: PlaydexSession[];
   games: PlaydexGame[];
+  /** Today, the last 7 days and this calendar month in detail; absent from servers older than the field. */
+  periods?: { today: PlaydexPeriodDetail; week: PlaydexPeriodDetail; month: PlaydexPeriodDetail };
+  /** This calendar month's local days, from the 1st to today; absent from older servers. */
+  monthDays?: PlaydexDay[];
 };
 
 declare global {
@@ -150,6 +157,25 @@ function demoSummary(): PlaydexSummary {
   for (const r of rows) byGame.set(r.gameId, [...(byGame.get(r.gameId) ?? []), r]);
   const weekByGame = new Map<string, typeof rows>();
   for (const r of week) weekByGame.set(r.gameId, [...(weekByGame.get(r.gameId) ?? []), r]);
+  const detail = (list: typeof rows): PlaydexPeriodDetail => {
+    const group = <K,>(key: (r: (typeof rows)[number]) => K) => {
+      const m = new Map<K, typeof rows>();
+      for (const r of list) m.set(key(r), [...(m.get(key(r)) ?? []), r]);
+      return [...m.entries()];
+    };
+    return {
+      ...period(list),
+      topGames: group((r) => r.gameId)
+        .map(([gameId, l]) => ({ gameId, title: gameById(gameId).title, ...period(l) }))
+        .sort((a, b) => b.totalSeconds - a.totalSeconds)
+        .slice(0, 5),
+      platforms: group((r) => r.platformKey)
+        .map(([platformKey, l]) => ({ platformKey, platformName: l[0].platformName, ...period(l) }))
+        .sort((a, b) => b.totalSeconds - a.totalSeconds),
+    };
+  };
+  const monthDayCount = now.getDate();
+  const month = rows.filter((r) => r.dayOffset < monthDayCount);
   const played = new Set(rows.map((r) => r.dayOffset));
   let streak = 0;
   for (let d = played.has(0) ? 0 : 1; played.has(d); d++) streak++;
@@ -185,5 +211,10 @@ function demoSummary(): PlaydexSummary {
           identities: g.art ? [{ type: "steam", externalId: String(g.art) }] : [],
         };
       }),
+    periods: { today: detail(rows.filter((r) => r.dayOffset === 0)), week: detail(week), month: detail(month) },
+    monthDays: Array.from({ length: monthDayCount }, (_, i) => {
+      const offset = monthDayCount - 1 - i;
+      return { date: at(offset, "12:00").toISOString().slice(0, 10), ...period(rows.filter((r) => r.dayOffset === offset)) };
+    }),
   };
 }

@@ -27,6 +27,9 @@
   --pill-ink: 11 61 44;
   --bar: 47 194 142;
   --bar-light: 58 148 116;
+  /* Series in charts after --bar (mint): the identity's cyan and sand. */
+  --chart-cyan: 86 190 226;
+  --chart-sand: 222 182 102;
   --mint: 20 59 46;
   --mint-line: 31 84 66;
   --seg-on: 111 227 181;
@@ -68,6 +71,8 @@
   --pill-ink: 11 61 44;
   --bar: 47 194 142;
   --bar-light: 143 224 192;
+  --chart-cyan: 38 150 196;
+  --chart-sand: 196 146 52;
   --mint: 217 246 234;
   --mint-line: 191 230 214;
   --seg-on: 255 255 255;

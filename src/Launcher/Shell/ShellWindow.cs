@@ -329,6 +329,9 @@ internal sealed partial class ShellWindow : Window
                 var hz = message.GetProperty("hz").GetInt32();
                 PostQuickSettings(() => Displays.SetRefreshRate(rateDisplay, hz), $"switch to {hz} Hz");
                 break;
+            case "playdex-recap":
+                _ = PostRecapAsync(message.GetProperty("year").GetInt32());
+                break;
             case "resume-game":
                 if (!GameWindows.Activate(_hwnd, _gameWindow, _nowPlaying?.ProcessId))
                 {
@@ -359,6 +362,16 @@ internal sealed partial class ShellWindow : Window
                 }
                 break;
         }
+    }
+
+    /// <summary>
+    /// A year's Playdex recap for the Playdex tab, asked for when the page shows it; "recap" is null offline or without
+    /// a key.
+    /// </summary>
+    private async Task PostRecapAsync(int year)
+    {
+        var recap = await Task.Run(() => _services.Api.GetLauncherRecapAsync(year));
+        Post($$"""{"type":"playdex-recap","year":{{year.ToString(System.Globalization.CultureInfo.InvariantCulture)}},"recap":{{recap ?? "null"}}}""");
     }
 
     /// <summary>Quick settings run off the UI thread; the page gets the fresh state (and any error) back.</summary>

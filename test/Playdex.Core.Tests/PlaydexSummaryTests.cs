@@ -86,6 +86,22 @@ public sealed class PlaydexSummaryTests : IDisposable
         Assert.False(File.Exists(CacheFile));
     }
 
+    [Fact]
+    public async Task FetchesAYearsRecapWithTheKey()
+    {
+        var handler = new SummaryHandler(Envelope("""{"totalSessions":12}"""));
+        using var api = new CaptureClient("plx_key", "https://playdex.test/api", handler);
+
+        Assert.Equal("""{"totalSessions":12}""", await api.GetLauncherRecapAsync(2025));
+        var request = Assert.Single(handler.Requests);
+        Assert.Equal("https://playdex.test/api/launcher/recap?year=2025", request.Uri);
+        Assert.Equal("Bearer plx_key", request.Authorization);
+
+        handler.Body = "";
+        using var offline = new CaptureClient("plx_key", "https://playdex.test/api", new SummaryHandler("") { Throw = true });
+        Assert.Null(await offline.GetLauncherRecapAsync(2025));
+    }
+
     [Theory]
     [InlineData(HttpStatusCode.OK, ApiKeyStatus.Accepted, null)]
     [InlineData(HttpStatusCode.Unauthorized, ApiKeyStatus.Rejected, null)]

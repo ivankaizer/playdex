@@ -105,7 +105,16 @@ public sealed class CaptureClient : IDisposable
     /// The user's Playdex data for the launcher (GET launcher/summary, API key only), in this PC's time zone: the
     /// response's "data" as raw JSON, or null without a key, offline, or on an error.
     /// </summary>
-    public async Task<string?> GetLauncherSummaryAsync(CancellationToken ct = default)
+    public Task<string?> GetLauncherSummaryAsync(CancellationToken ct = default) => GetDataAsync(SummaryPath(), "launcher/summary", ct);
+
+    /// <summary>
+    /// The web's recap of one calendar year (GET launcher/recap?year=, API key only), as raw JSON, or null without a
+    /// key, offline, or on an error.
+    /// </summary>
+    public Task<string?> GetLauncherRecapAsync(int year, CancellationToken ct = default) =>
+        GetDataAsync($"launcher/recap?year={year.ToString(System.Globalization.CultureInfo.InvariantCulture)}", "launcher/recap", ct);
+
+    private async Task<string?> GetDataAsync(string path, string name, CancellationToken ct)
     {
         if (!IsConfigured)
         {
@@ -114,11 +123,11 @@ public sealed class CaptureClient : IDisposable
         var started = Stopwatch.GetTimestamp();
         try
         {
-            using var request = new HttpRequestMessage(HttpMethod.Get, new Uri(BaseAddress, SummaryPath()));
+            using var request = new HttpRequestMessage(HttpMethod.Get, new Uri(BaseAddress, path));
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _apiKey()!.Trim());
             request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
             using var response = await _http.SendAsync(request, ct);
-            Log.Info($"playdex: launcher/summary -> {(int)response.StatusCode} in {Metrics.MsSince(started):F0} ms");
+            Log.Info($"playdex: {name} -> {(int)response.StatusCode} in {Metrics.MsSince(started):F0} ms");
             if (!response.IsSuccessStatusCode)
             {
                 return null;
@@ -130,7 +139,7 @@ public sealed class CaptureClient : IDisposable
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or UriFormatException or JsonException)
         {
-            Log.Info($"playdex: launcher/summary failed after {Metrics.MsSince(started):F0} ms: {ex.Message}");
+            Log.Info($"playdex: {name} failed after {Metrics.MsSince(started):F0} ms: {ex.Message}");
             return null;
         }
     }
