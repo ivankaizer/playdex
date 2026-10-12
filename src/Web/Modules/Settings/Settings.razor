@@ -178,6 +178,42 @@
                                 </div>
                             </div>
 
+                            @if (provider.Platform == "api" && !string.IsNullOrEmpty(provider.ApiKey))
+                            {
+                                <div data-playdex-app-setup class="mt-4 rounded-xl border border-emerald-200 bg-emerald-50/70 p-4 dark:border-emerald-900/60 dark:bg-emerald-950/20">
+                                    <p class="text-sm font-semibold text-slate-900 dark:text-white">Set up Playdex for Windows</p>
+                                    <p class="mt-1 text-xs text-slate-600 dark:text-slate-300">
+                                        The Playdex app records the games you play on your PC. Download and run
+                                        <a href="https://github.com/ivankaizer/playdex/releases/latest" target="_blank" rel="noreferrer" class="font-semibold text-emerald-700 underline dark:text-emerald-300">Playdex-Setup.exe</a>,
+                                        and enter these two values when it asks (they are also in the app under Settings → Your Playdex account).
+                                    </p>
+                                    <div class="mt-3 grid gap-3 sm:grid-cols-2">
+                                        <div class="text-xs font-medium text-slate-600 dark:text-slate-300">
+                                            <span class="block">Playdex server (API URL)</span>
+                                            <div class="mt-2 flex gap-2">
+                                                <input type="text" value="@Api.ApiBaseUrl" readonly aria-readonly="true" aria-label="Playdex server"
+                                                       class="min-w-0 flex-1 rounded-xl border border-slate-300 bg-white/90 px-3 py-2 font-mono text-sm text-slate-900 outline-none dark:border-slate-700 dark:bg-slate-950/80 dark:text-white" />
+                                                <button type="button" @onclick='() => CopyAsync("server", Api.ApiBaseUrl)'
+                                                        class="shrink-0 rounded-full border border-slate-300 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-700 transition hover:border-emerald-400 dark:border-slate-700 dark:text-slate-200">
+                                                    @(_copied == "server" ? "Copied" : "Copy")
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <div class="text-xs font-medium text-slate-600 dark:text-slate-300">
+                                            <span class="block">API key</span>
+                                            <div class="mt-2 flex gap-2">
+                                                <input type="password" value="@provider.ApiKey" readonly aria-readonly="true" aria-label="API key" autocomplete="off"
+                                                       class="min-w-0 flex-1 rounded-xl border border-slate-300 bg-white/90 px-3 py-2 font-mono text-sm text-slate-900 outline-none dark:border-slate-700 dark:bg-slate-950/80 dark:text-white" />
+                                                <button type="button" @onclick='() => CopyAsync("key", provider.ApiKey!)'
+                                                        class="shrink-0 rounded-full border border-slate-300 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-700 transition hover:border-emerald-400 dark:border-slate-700 dark:text-slate-200">
+                                                    @(_copied == "key" ? "Copied" : "Copy")
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+
                             @if (_state.IsEditingCredential(provider.Id))
                             {
                                 <div class="mt-5 border-t border-slate-200 pt-5 dark:border-slate-800">

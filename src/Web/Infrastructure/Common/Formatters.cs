@@ -20,6 +20,7 @@ public static class Formatters
         "xbox" => "Xbox",
         "playnite" => "Playnite",
         "manual" => "Manual",
+        "api" => "Playdex app",
         _ => platform,
     };
 

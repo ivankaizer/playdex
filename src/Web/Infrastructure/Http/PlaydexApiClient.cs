@@ -12,6 +12,9 @@ public sealed class PlaydexApiClient(HttpClient httpClient, AuthSession auth, st
     private readonly string _apiBase = apiBase.Trim().TrimEnd('/');
     private readonly Uri? _apiOrigin = ResolveAbsoluteUrl(apiBase.Trim(), httpClient.BaseAddress);
 
+    /// <summary>The API's absolute URL without a trailing slash: what the Playdex app is told to use as its server.</summary>
+    public string ApiBaseUrl => (ResolveAbsoluteUrl(_apiBase + "/", httpClient.BaseAddress)?.AbsoluteUri ?? _apiBase).TrimEnd('/');
+
     public async Task<T> SendAsync<T>(
         string path,
         HttpMethod? method = null,

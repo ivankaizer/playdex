@@ -1,5 +1,6 @@
 using System.Globalization;
 using Microsoft.AspNetCore.Components;
+using Web.Infrastructure.Browser;
 using Web.Infrastructure.Http;
 using Web.Modules.Settings;
 using Web.Infrastructure.Common;
@@ -554,6 +555,31 @@ public partial class Settings : ComponentBase, IDisposable
 
     [Inject]
     private PlaydexApiClient Api { get; set; } = null!;
+
+    [Inject]
+    private BrowserInterop Browser { get; set; } = null!;
+
+    /// <summary>Which value was just copied ("server" or "key"), for the button's "Copied" for a moment.</summary>
+    private string? _copied;
+
+    private async Task CopyAsync(string what, string text)
+    {
+        try
+        {
+            await Browser.CopyAsync(text);
+            _copied = what;
+            StateHasChanged();
+            await Task.Delay(2000, _lifetime.Token);
+            _copied = null;
+        }
+        catch (OperationCanceledException) when (_lifetime.IsCancellationRequested)
+        {
+        }
+        catch (Microsoft.JSInterop.JSException)
+        {
+            _copied = null; // The browser refused the clipboard; the value stays selectable.
+        }
+    }
 
     protected override Task OnInitializedAsync() =>
         SettingsInitialLoadFlow.RunAsync(LoadProvidersAsync, LoadSettingsAsync);

@@ -18,4 +18,7 @@ public sealed class BrowserInterop(IJSRuntime js)
 
     public ValueTask ScrollToTopAsync() =>
         js.InvokeVoidAsync("playdex.scrollToTop");
+
+    public ValueTask CopyAsync(string text) =>
+        js.InvokeVoidAsync("navigator.clipboard.writeText", text);
 }

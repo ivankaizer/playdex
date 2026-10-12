@@ -12,6 +12,16 @@ namespace Web.Tests.Api;
 
 public sealed class PlaydexApiClientTests
 {
+    [Theory]
+    [InlineData("https://app.test/api/", "https://app.test/api")]
+    [InlineData("https://app.test/api", "https://app.test/api")]
+    [InlineData("/api/", "https://ui.test/api")]
+    public void TheApiUrlForThePlaydexAppIsAbsoluteWithoutATrailingSlash(string apiBase, string expected)
+    {
+        using var handler = new RecordingHandler((_, _) => new HttpResponseMessage(HttpStatusCode.NoContent));
+        Assert.Equal(expected, CreateClient(handler, apiBase: apiBase).ApiBaseUrl);
+    }
+
     [Fact]
     public async Task NoContentDeleteCompletesWithoutParsingJson()
     {

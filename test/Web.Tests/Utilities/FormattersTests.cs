@@ -8,6 +8,7 @@ public sealed class FormattersTests
     [Theory]
     [InlineData("psn", "PlayStation")]
     [InlineData("steam", "Steam")]
+    [InlineData("api", "Playdex app")]
     [InlineData("other", "other")]
     public void FormatProviderNameUsesTheReactMappingOrFallsBack(string platform, string expected)
     {
