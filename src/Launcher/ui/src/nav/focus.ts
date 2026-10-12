@@ -1,4 +1,4 @@
-import { focusedGame, focusedKind } from "./store";
+import { focusedGame, focusedKind, inputMode } from "./store";
 
 /*
  * Spatial focus engine.
@@ -106,6 +106,16 @@ function reveal(el: HTMLElement) {
 export function focusDefault() {
   const els = all();
   focusEl(els.find((e) => e.hasAttribute("data-nav-default")) ?? els[0]);
+}
+
+/**
+ * A new screen's first focus: its default item for a controller or the keyboard. With the mouse, focus stays on what
+ * was clicked (the tab that opened the screen) instead of jumping into the screen, or to the first item on the page
+ * while a lazily loaded screen is still empty.
+ */
+export function focusScreenDefault() {
+  if (inputMode.get() === "pointer" && current()) return;
+  focusDefault();
 }
 
 export function move(dir: Dir) {

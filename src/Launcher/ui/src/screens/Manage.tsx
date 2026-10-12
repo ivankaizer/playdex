@@ -10,7 +10,7 @@ import {
   type MessageView,
   type PlatformOption,
 } from "../host/desktop";
-import { focusDefault, focusEl } from "../nav/focus";
+import { focusEl, focusScreenDefault } from "../nav/focus";
 import { useStore } from "../nav/store";
 import "./desk.css";
 
@@ -38,7 +38,7 @@ export function Manage() {
   // This screen loads after the tab switch focused the page, so it lands on its own default once it has rendered.
   useEffect(() => {
     if (!loaded) return;
-    const t = window.setTimeout(focusDefault);
+    const t = window.setTimeout(focusScreenDefault);
     return () => window.clearTimeout(t);
   }, [loaded]);
 

@@ -1,6 +1,6 @@
 import { Download, Gamepad2, MonitorPlay, Power, Save } from "lucide-react";
 import { useEffect, useState } from "react";
-import { focusDefault } from "../nav/focus";
+import { focusScreenDefault } from "../nav/focus";
 import { showToast } from "../app-state";
 import { desktopState, rpc, switchMode, type DesktopSettings, type MessageView, type PlatformOption } from "../host/desktop";
 import { useStore } from "../nav/store";
@@ -34,7 +34,7 @@ function SettingsForm({ saved }: { saved: DesktopSettings }) {
 
   // This screen loads after the tab switch focused the page, so it lands on its own default once it has rendered.
   useEffect(() => {
-    const t = window.setTimeout(focusDefault);
+    const t = window.setTimeout(focusScreenDefault);
     return () => window.clearTimeout(t);
   }, []);
 
