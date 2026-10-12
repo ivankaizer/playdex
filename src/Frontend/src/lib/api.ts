@@ -117,6 +117,16 @@ async function tryRefresh(signal: AbortSignal | undefined): Promise<boolean> {
   }
 }
 
+/** The API's absolute URL without a trailing slash: what the Playdex app is told to use as its server. */
+export function apiBaseUrl(): string {
+  const configured = getConfig().apiBase.trim();
+  try {
+    return new URL(configured, window.location.href).href.replace(/\/+$/, "");
+  } catch {
+    return configured.replace(/\/+$/, "");
+  }
+}
+
 export function buildUrl(path: string): string {
   if (/^https?:\/\//i.test(path)) return path;
   const apiBase = getConfig().apiBase.trim().replace(/\/+$/, "");

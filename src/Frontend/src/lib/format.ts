@@ -12,6 +12,8 @@ export function formatProviderName(platform: string): string {
       return "Playnite";
     case "manual":
       return "Manual";
+    case "api":
+      return "Playdex app";
     default:
       return platform;
   }
