@@ -150,7 +150,7 @@ export function WeekBars({ maxHeight, minutes = weekByDay }: { maxHeight?: strin
   return (
     <div className="week" style={maxHeight ? ({ "--h-max": maxHeight } as React.CSSProperties) : undefined}>
       {minutes.map((m, i) => (
-        <div key={i} className="week-col" data-today={i === 6 ? "" : undefined}>
+        <div key={i} className="week-col" data-today={i === 6 ? "" : undefined} style={{ "--i": i } as React.CSSProperties}>
           <div className="week-bar" title={`${m} min`}>
             <div className="week-fill" style={{ height: `${Math.max(m ? 6 : 0, (m / max) * 100)}%` }} />
           </div>

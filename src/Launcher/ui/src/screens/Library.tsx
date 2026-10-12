@@ -1,8 +1,8 @@
-import { Download, MonitorSmartphone } from "lucide-react";
+import { Download, ExternalLink, MonitorSmartphone } from "lucide-react";
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { openGame } from "../app-state";
+import { openGame, openSteam } from "../app-state";
 import { Cover } from "../components/shared";
-import { fmtHours, games, isInstalled, isOnPc, recentGames, SOURCE_LABEL, type Game } from "../data/games";
+import { fmtHours, games, isInstalled, isOnPc, recentGames, SOURCE_LABEL, useRecentGames, type Game, type GameStats } from "../data/games";
 import { playdexGame, playdexSummary } from "../data/playdex";
 import { useStore } from "../nav/store";
 import "./library.css";
@@ -19,13 +19,18 @@ const SCOPES = [
   },
 ] as const;
 
-const lastPlayedRank = new Map(recentGames.map((r, i) => [r.game.id, i]));
+/** Position in the recent games, rebuilt when a game is played (the order is live). */
+let rank: { of: GameStats[]; at: Map<string, number> } = { of: [], at: new Map() };
+function lastPlayedRank(id: string): number {
+  if (rank.of !== recentGames) rank = { of: recentGames, at: new Map(recentGames.map((r, i) => [r.game.id, i])) };
+  return rank.at.get(id) ?? 1e9;
+}
+
 const SORTS = [
   {
     id: "recent",
     label: "Recent",
-    cmp: (a: Game, b: Game) =>
-      (lastPlayedRank.get(a.id) ?? 1e9) - (lastPlayedRank.get(b.id) ?? 1e9) || a.title.localeCompare(b.title),
+    cmp: (a: Game, b: Game) => lastPlayedRank(a.id) - lastPlayedRank(b.id) || a.title.localeCompare(b.title),
   },
   { id: "az", label: "A–Z", cmp: (a: Game, b: Game) => a.title.localeCompare(b.title) },
   { id: "most", label: "Most played", cmp: (a: Game, b: Game) => b.totalMinutes - a.totalMinutes },
@@ -43,13 +48,14 @@ const OVERSCAN_ROWS = 2;
 export function Library() {
   const [scope, setScope] = useState<ScopeId>("all");
   const [sort, setSort] = useState<SortId>("recent");
+  const recent = useRecentGames();
 
-  // Filtered and sorted once per choice, never per render or per focus move.
+  // Filtered and sorted once per choice (and per game played, for Recent), never per render or per focus move.
   const list = useMemo(() => {
     const s = SCOPES.find((x) => x.id === scope)!;
     const o = SORTS.find((x) => x.id === sort)!;
     return games.filter(s.test).sort(o.cmp);
-  }, [scope, sort]);
+  }, [scope, sort, sort === "recent" ? recent : null]);
 
   return (
     <main className="library">
@@ -84,6 +90,11 @@ export function Library() {
               {s.label}
             </button>
           ))}
+        </div>
+        <div data-nav-group="lib-steam">
+          <button className="btn btn-outline lib-steam" data-nav data-kind="steam" onClick={openSteam}>
+            <ExternalLink aria-hidden /> Open Steam
+          </button>
         </div>
       </header>
       <CoverGrid key={`${scope}-${sort}`} list={list} empty={SCOPES.find((x) => x.id === scope)!.empty} />

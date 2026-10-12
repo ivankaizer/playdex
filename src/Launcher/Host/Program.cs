@@ -32,7 +32,8 @@ public static class Program
         using var resident = new Mutex(initiallyOwned: false, @"Local\PlaydexFullScreenEntry", out var first);
         // Started by the shell, this process may set the foreground; hand that on to Playdex.
         NativeEntry.AllowSetForegroundWindow(NativeEntry.AnyProcess);
-        var arguments = $"--big-picture{(gameId is null ? "" : $" --launch={gameId}")}";
+        // --fse: switching Playdex to desktop mode then leaves the Full Screen Experience.
+        var arguments = $"--big-picture --fse{(gameId is null ? "" : $" --launch={gameId}")}";
         int processId;
         try
         {

@@ -17,6 +17,7 @@ namespace Playdex.Desktop;
 /// Flags beyond <see cref="LaunchOptions"/>:
 /// --background                   start in the tray without a window (how it starts with Windows)
 /// --big-picture                  open in Big Picture whatever the saved mode (the Full Screen Experience entry)
+/// --fse                          started from the Full Screen Experience: switching to desktop mode leaves it
 /// --quit                         quit the running Playdex (the setup, before it updates or uninstalls it)
 /// --update-health=PATH           started by the updater: confirm a healthy start by writing PATH
 /// --selftest-job                 run the Job Object exit-detection self-test and exit
@@ -29,6 +30,7 @@ public static class Program
 {
     public const string BigPictureFlag = "--big-picture";
     public const string QuitFlag = "--quit";
+    public const string FseFlag = "--fse";
 
     [STAThread]
     private static int Main(string[] args)
@@ -67,6 +69,7 @@ public static class Program
         var options = LaunchOptions.Parse(args);
         var background = args.Contains("--background");
         var bigPicture = args.Contains(BigPictureFlag);
+        var fromFse = args.Contains(FseFlag);
         var healthSignal = args.FirstOrDefault(a => a.StartsWith("--update-health=", StringComparison.Ordinal))?["--update-health=".Length..];
         Paths.MoveLegacyLauncherData();
         var store = ConfigStore.Default();
@@ -75,7 +78,7 @@ public static class Program
         Application.Start(callback =>
         {
             SynchronizationContext.SetSynchronizationContext(new DispatcherQueueSynchronizationContext(DispatcherQueue.GetForCurrentThread()));
-            _ = new App(options, store, config, instance, background, bigPicture, healthSignal);
+            _ = new App(options, store, config, instance, background, bigPicture, fromFse, healthSignal);
         });
         return 0;
     }
@@ -111,8 +114,12 @@ internal sealed partial class App : Application
     private ShellWindow? _window;
     private bool _windowOpened;
 
-    public App(LaunchOptions options, ConfigStore store, AppConfig config, AppInstance instance, bool background, bool bigPicture, string? healthSignal)
+    /// <summary>Opened from the Full Screen Experience entry: switching to desktop mode leaves the FSE first.</summary>
+    private bool _fromFse;
+
+    public App(LaunchOptions options, ConfigStore store, AppConfig config, AppInstance instance, bool background, bool bigPicture, bool fromFse, string? healthSignal)
     {
+        _fromFse = fromFse;
         _options = options;
         _store = store;
         _config = config;
@@ -171,7 +178,7 @@ internal sealed partial class App : Application
         _host.Fse = _fse;
         _instance.Activated += (_, e) =>
         {
-            var (bigPicture, gameId, quit) = Requested(e);
+            var (bigPicture, gameId, quit, fromFse) = Requested(e);
             dispatcher.TryEnqueue(() =>
             {
                 if (quit)
@@ -179,6 +186,7 @@ internal sealed partial class App : Application
                     Quit();
                     return;
                 }
+                _fromFse |= fromFse;
                 Open(bigPicture ? ShellMode.FullScreen : null, gameId);
             });
         };
@@ -225,6 +233,20 @@ internal sealed partial class App : Application
     private void Open(ShellMode? requested = null, string? launchGameId = null)
     {
         var mode = requested ?? (IsBigPicture ? ShellMode.FullScreen : ShellMode.Desktop);
+        if (mode == ShellMode.Desktop && _fromFse)
+        {
+            // Desktop mode belongs on the desktop: leave the Full Screen Experience, then show the window once the
+            // shell has switched (it animates).
+            _fromFse = false;
+            if (FullScreenExperience.Leave())
+            {
+                var fullScreen = _window;
+                _window = null;
+                fullScreen?.Close();
+                _ = OpenAfterAsync(TimeSpan.FromMilliseconds(900), mode, launchGameId);
+                return;
+            }
+        }
         if (_window is { } open)
         {
             if (open.Mode == mode)
@@ -266,7 +288,13 @@ internal sealed partial class App : Application
         window.Show();
     }
 
-    /// <summary>The tray's "Switch to вЂ¦": save the other mode and show it.</summary>
+    private async Task OpenAfterAsync(TimeSpan delay, ShellMode mode, string? launchGameId)
+    {
+        await Task.Delay(delay);
+        Open(mode, launchGameId);
+    }
+
+    /// <summary>The tray's "Switch to …": save the other mode and show it.</summary>
     private void ToggleMode()
     {
         _host!.SetMode(IsBigPicture ? ShellConfig.DesktopMode : ShellConfig.BigPictureMode);
@@ -274,14 +302,15 @@ internal sealed partial class App : Application
     }
 
     /// <summary>
-    /// What a second start asked for: Big Picture (the Full Screen Experience entry), a game to launch, or to quit (the
-    /// setup).
+    /// What a second start asked for: Big Picture (the Full Screen Experience entry, which also says --fse), a game to
+    /// launch, or to quit (the setup).
     /// </summary>
-    private static (bool BigPicture, string? GameId, bool Quit) Requested(AppActivationArguments args)
+    private static (bool BigPicture, string? GameId, bool Quit, bool FromFse) Requested(AppActivationArguments args)
     {
         var line = args.Kind == ExtendedActivationKind.Launch && args.Data is ILaunchActivatedEventArgs launch ? launch.Arguments ?? "" : "";
         var parts = line.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Select(p => p.Trim('"')).ToArray();
-        return (parts.Contains(Program.BigPictureFlag), LaunchOptions.Parse(parts).LaunchGameId, parts.Contains(Program.QuitFlag));
+        return (parts.Contains(Program.BigPictureFlag), LaunchOptions.Parse(parts).LaunchGameId, parts.Contains(Program.QuitFlag),
+            parts.Contains(Program.FseFlag));
     }
 
     /// <summary>The Full Screen Experience package lives elsewhere and starts this exe; tell it where it is.</summary>

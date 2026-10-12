@@ -6,10 +6,10 @@ import {
   isDemo,
   lastPlayedDay,
   lastPlayedText,
-  recentGames,
   relativeDay,
   sessionEnd,
   SOURCE_LABEL,
+  useRecentGames,
 } from "../data/games";
 import { daysAgo, playdexConnected, playdexGame, playdexSummary, type PlaydexSummary } from "../data/playdex";
 import { useStore } from "../nav/store";
@@ -23,7 +23,7 @@ const minutes = (seconds: number) => Math.round(seconds / 60);
  */
 export function RibbonHome() {
   const summary = useStore(playdexSummary);
-  const [last, ...rest] = recentGames;
+  const [last, ...rest] = useRecentGames();
   const others = rest.slice(0, 4);
   const s = last.lastSession;
   const lastDay = lastPlayedDay(last);

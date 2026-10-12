@@ -615,6 +615,71 @@ html[data-mode="desktop"][data-input="pointer"] .hints .hint {
   white-space: nowrap;
 }
 
+/* ---------- Motion ---------- */
+/* Light entrances when a screen, a view or a chart appears: transform and opacity only, played once on mount, never
+ * idle (performance.md). A screen kept mounted (home under the launch overlay) does not replay them. */
+@keyframes view-in {
+  from {
+    opacity: 0;
+    transform: translateY(0.6rem);
+  }
+}
+@keyframes tile-in {
+  from {
+    opacity: 0;
+    transform: translateY(0.8rem) scale(0.98);
+  }
+}
+@keyframes rail-in {
+  from {
+    opacity: 0;
+    transform: translateX(1rem);
+  }
+}
+@keyframes bar-grow {
+  from {
+    transform: scaleY(0);
+  }
+}
+@keyframes meter-grow {
+  from {
+    transform: scaleX(0);
+  }
+}
+
+:is(.library, .desk, .placeholder) {
+  animation: view-in 0.32s var(--ease-out) both;
+}
+/* Home: the tiles one after another, then the Playdex rail. */
+.jump-grid > * {
+  animation: tile-in 0.42s var(--ease-out) both;
+}
+.jump-grid > :nth-child(2) {
+  animation-delay: 45ms;
+}
+.jump-grid > :nth-child(3) {
+  animation-delay: 90ms;
+}
+.jump-grid > :nth-child(4) {
+  animation-delay: 135ms;
+}
+.jump-grid > :nth-child(5) {
+  animation-delay: 180ms;
+}
+.rail {
+  animation: rail-in 0.48s var(--ease-out) 0.12s both;
+}
+/* Charts grow from their base, column after column (--i is the column's index). */
+.week-fill {
+  transform-origin: bottom;
+  animation: bar-grow 0.55s var(--ease-out) both;
+  animation-delay: calc(var(--i, 0) * 22ms + 0.1s);
+}
+.rail-meter i {
+  transform-origin: left;
+  animation: meter-grow 0.6s var(--ease-out) 0.15s both;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
