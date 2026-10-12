@@ -86,6 +86,35 @@ public sealed class PlaydexSummaryTests : IDisposable
         Assert.False(File.Exists(CacheFile));
     }
 
+    [Theory]
+    [InlineData(HttpStatusCode.OK, ApiKeyStatus.Accepted, null)]
+    [InlineData(HttpStatusCode.Unauthorized, ApiKeyStatus.Rejected, null)]
+    [InlineData(HttpStatusCode.Forbidden, ApiKeyStatus.Rejected, null)]
+    [InlineData(HttpStatusCode.NotFound, ApiKeyStatus.Unreachable, "HTTP 404")]
+    [InlineData(HttpStatusCode.BadGateway, ApiKeyStatus.Unreachable, "HTTP 502")]
+    public async Task ChecksTheKeyWithTheSummaryRequest(HttpStatusCode status, ApiKeyStatus expected, string? detail)
+    {
+        var handler = new SummaryHandler(Envelope("{}")) { Status = status };
+        using var api = new CaptureClient(" plx_key ", "https://playdex.test/api/", handler);
+
+        Assert.Equal(new ApiKeyCheck(expected, detail), await api.CheckKeyAsync());
+        var request = Assert.Single(handler.Requests);
+        Assert.StartsWith("https://playdex.test/api/launcher/summary?", request.Uri, StringComparison.Ordinal);
+        Assert.Equal("Bearer plx_key", request.Authorization);
+    }
+
+    [Fact]
+    public async Task AKeyCheckWithoutAnAnswerIsUnreachableAndWithoutAKeyIsRejected()
+    {
+        using var offline = new CaptureClient("plx_key", "https://playdex.test/api", new SummaryHandler("") { Throw = true });
+        Assert.Equal(new ApiKeyCheck(ApiKeyStatus.Unreachable, "No route to host."), await offline.CheckKeyAsync());
+
+        var handler = new SummaryHandler("");
+        using var keyless = new CaptureClient(" ", "https://playdex.test/api", handler);
+        Assert.Equal(ApiKeyStatus.Rejected, (await keyless.CheckKeyAsync()).Status);
+        Assert.Empty(handler.Requests);
+    }
+
     public void Dispose() => Directory.Delete(_dir, recursive: true);
 
     private static string Envelope(string data) => $$"""{"data":{{data}},"error":null}""";

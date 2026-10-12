@@ -10,6 +10,11 @@ namespace Playdex.Setup;
 /// adds a Start menu shortcut and starts Playdex. Once Playdex is installed, running this again just starts it.
 /// </summary>
 /// <remarks>
+/// <para>A fresh install without an API key in the install's config asks for the Playdex server and API key first, in
+/// a small window that checks the key with the server and then shows the install running (<see cref="SetupWindow"/>).
+/// Skip installs without one; Playdex → Settings takes it later.</para>
+/// </remarks>
+/// <remarks>
 /// <para>It is also the bridge from the WinForms Wrapper. The last Wrapper release ships this exe as Wrapper.exe; the
 /// Wrapper's updater swaps it in and starts it with <c>--update-health &lt;path&gt;</c>, waiting only 30 seconds for that
 /// file, so it is written first and the download follows. From then on Wrapper.exe opens Playdex. The desktop app takes
@@ -17,7 +22,8 @@ namespace Playdex.Setup;
 /// Playdex.Run.exe), so Steam shortcuts keep working.</para>
 /// <para>Flags: --reinstall installs even when Playdex is already there (Playdex must not be running). For testing:
 /// --archive=PATH installs from a local zip instead of the release, --install-dir=PATH installs elsewhere, --no-shortcut
-/// and --no-start skip the Start menu shortcut and starting Playdex.</para>
+/// and --no-start skip the Start menu shortcut and starting Playdex. --api-url=URL and --api-key=KEY save the server and key
+/// without asking (scripted installs); --no-prompt installs without asking, --prompt asks even when a key is saved.</para>
 /// </remarks>
 internal static partial class Program
 {
@@ -28,15 +34,23 @@ internal static partial class Program
     private static int Main(string[] args)
     {
         Log.UseFile(Path.Combine(Paths.DataDirectory, "setup.log"));
+        var updater = false;
         if (args is ["--update-health", var health, ..])
         {
             // The Wrapper's updater rolls back unless this appears within 30 s; the download takes longer.
             Confirm(health);
+            updater = true;
         }
         string? Value(string name) => args.FirstOrDefault(a => a.StartsWith($"--{name}=", StringComparison.Ordinal))?[(name.Length + 3)..];
         _install = Value("install-dir") is { } directory ? Path.GetFullPath(directory) : _install;
         var start = !args.Contains("--no-start");
         var executable = Path.Combine(_install, AppUpdate.AppExecutable);
+        var apiUrl = Value("api-url");
+        var apiKey = Value("api-key");
+        if (apiUrl is not null || apiKey is not null)
+        {
+            SaveApi(apiUrl, apiKey);
+        }
         if (File.Exists(executable) && !args.Contains("--reinstall"))
         {
             Log.Info("setup: Playdex is installed; starting it");
@@ -49,10 +63,31 @@ internal static partial class Program
 
         try
         {
-            InstallAsync(Value("archive")).GetAwaiter().GetResult();
-            if (!args.Contains("--no-shortcut"))
+            async Task Install()
             {
-                CreateStartMenuShortcut(executable);
+                await InstallAsync(Value("archive"));
+                if (!args.Contains("--no-shortcut"))
+                {
+                    CreateStartMenuShortcut(executable);
+                }
+            }
+
+            // The Wrapper's updater runs unattended, and its users bring their config (and key) with them.
+            if (args.Contains("--prompt") || (!updater && !args.Contains("--no-prompt") && !HasApiKey()))
+            {
+                var (outcome, failure) = SetupWindow.Run(BaseUrl(), CheckKeyAsync, SaveApi, Install);
+                if (outcome == SetupOutcome.Cancelled)
+                {
+                    return 1;
+                }
+                if (failure is not null)
+                {
+                    System.Runtime.ExceptionServices.ExceptionDispatchInfo.Throw(failure);
+                }
+            }
+            else
+            {
+                Install().GetAwaiter().GetResult();
             }
             Log.Info($"setup: installed Playdex {Version} into {_install}");
             if (start)
@@ -67,6 +102,34 @@ internal static partial class Program
             MessageBox(0, $"Playdex could not be installed.\n\n{ex.Message}\n\nDetails are in {Path.Combine(Paths.DataDirectory, "setup.log")}.", "Playdex", 0x10);
             return 1;
         }
+    }
+
+    private static bool HasApiKey() => !string.IsNullOrWhiteSpace(ConfigStore.Default().LoadOrCreate().Api.ApiKey);
+
+    private static string BaseUrl() =>
+        ConfigStore.Default().LoadOrCreate().Api.BaseUrl is { Length: > 0 } url ? url : ApiConfig.DefaultBaseUrl;
+
+    private static async Task<ApiKeyCheck> CheckKeyAsync(string baseUrl, string apiKey)
+    {
+        using var client = new CaptureClient(new ApiConfig { BaseUrl = baseUrl, ApiKey = apiKey });
+        return await client.CheckKeyAsync();
+    }
+
+    /// <summary>The server and key into the install's config, which Playdex reads at start. Null leaves one as it is.</summary>
+    private static void SaveApi(string? baseUrl, string? apiKey)
+    {
+        var store = ConfigStore.Default();
+        var config = store.LoadOrCreate();
+        if (baseUrl is not null)
+        {
+            config.Api.BaseUrl = ApiConfig.NormalizeBaseUrl(baseUrl);
+        }
+        if (apiKey is not null)
+        {
+            config.Api.ApiKey = apiKey.Trim();
+        }
+        store.Save(config);
+        Log.Info($"setup: saved the API settings (API {config.Api.BaseUrl}, key {(string.IsNullOrWhiteSpace(config.Api.ApiKey) ? "missing" : "set")})");
     }
 
     private static string Version =>

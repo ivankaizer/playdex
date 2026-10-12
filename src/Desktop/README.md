@@ -105,7 +105,7 @@ The page asks with `{type:"quick-settings"}`, `{type:"audio-output", id}`, `{typ
 
 ## Install and release
 
-`Playdex-Setup.exe` (`src/Playdex.Setup`) installs it into `%LOCALAPPDATA%\Programs\Playdex`; the same exe, as `Wrapper.exe`, moves WinForms Wrapper installs over. Releases, signing and the Wrapper migration: `docs/windows-releases.md`.
+`Playdex-Setup.exe` (`src/Playdex.Setup`) installs it into `%LOCALAPPDATA%\Programs\Playdex`; the same exe, as `Wrapper.exe`, moves WinForms Wrapper installs over. A fresh install without a saved API key first asks for the Playdex server (API URL, prefilled) and API key in a small window, checks the key with the server (`GET launcher/summary`: a refused key is shown as such; an unreachable server can be saved anyway), saves both to the config and shows the install running; Skip installs without a key. `--api-url=URL --api-key=KEY` save them without asking, `--no-prompt` never asks, `--prompt` always does. The Wrapper's updater path never asks. Releases, signing and the Wrapper migration: `docs/windows-releases.md`.
 
 ## Files
 
