@@ -9,7 +9,9 @@ internal static unsafe partial class NativeSetup
     public const uint WsChild = 0x40000000, WsVisible = 0x10000000, WsTabStop = 0x00010000, WsDisabled = 0x08000000;
     public const uint WsExControlParent = 0x00010000, WsExClientEdge = 0x00000200;
     public const uint EsAutoHScroll = 0x0080, EsPassword = 0x0020;
-    public const uint BsPushButton = 0x0000, BsDefPushButton = 0x0001;
+    public const uint BsPushButton = 0x0000, BsDefPushButton = 0x0001, BsAutoCheckBox = 0x0003;
+    public const uint BmGetCheck = 0x00F0, BmSetCheck = 0x00F1;
+    public const int SwHide = 0;
     public const uint SsLeft = 0x0000;
 
     public const uint WmDestroy = 0x0002, WmClose = 0x0010, WmSetFont = 0x0030, WmCommand = 0x0111;

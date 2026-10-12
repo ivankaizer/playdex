@@ -4,10 +4,12 @@ The Windows apps release together from one `v<major>.<minor>.<patch>` tag (`.git
 
 | Asset | What it is |
 |---|---|
-| `playdex-windows-v<version>.zip` + `.sha256` | The desktop app's folder (`Playdex.exe`, `Playdex.Run.exe`, the Windows App SDK, `ui/`). What Playdex updates itself from. |
-| `Playdex-Setup.exe` | Installs the desktop app for the current user into `%LOCALAPPDATA%\Programs\Playdex`, adds a Start menu shortcut and starts it. |
-| `playdex-wrapper-windows-v<version>.zip` + `.sha256` | `Playdex-Setup.exe` named `Wrapper.exe`: how WinForms Wrapper installs (v1.x) move to the desktop app. **Every release must keep it**, because a v1.x Wrapper only ever looks for this asset in the latest release. |
-| `playdex-launcher-v<version>.msix`, `playdex-launcher.cer` | The Full Screen Experience launcher, signed, and its public certificate. Only when the signing secrets are set. |
+| `playdex-windows-v<version>.zip` + `.sha256` | The app's folder (`Playdex.exe`, `Playdex.Run.exe`, `Playdex-Setup.exe` as its uninstaller, the Windows App SDK, `ui/`). What Playdex updates itself from. |
+| `Playdex-Setup.exe` | The offline installer: the setup with the app folder (and the Full Screen Experience package, when signed) appended. Installs Playdex for the current user into `%LOCALAPPDATA%\Programs\Playdex`, updates an older install in place, adds the Start menu shortcut and the Settings → Apps entry, and starts it. |
+| `playdex-wrapper-windows-v<version>.zip` + `.sha256` | The online setup (no payload; it downloads the app from the release) named `Wrapper.exe`: how WinForms Wrapper installs (v1.x) move to the app. **Every release must keep it**, because a v1.x Wrapper only ever looks for this asset in the latest release. |
+| `playdex-launcher-v<version>.msix`, `playdex-launcher.cer` | The Full Screen Experience package, signed, and its public certificate. Only when the signing secrets are set. |
+
+`tools/package-windows.ps1` makes every file but the MSIX (which `src/Launcher/Host/tools/package.ps1` makes locally, signed with the dev certificate); the workflow runs it too, so a local run gives the same files for a test.
 
 ## Publishing
 
@@ -31,6 +33,12 @@ Users trust the certificate once: the desktop app's "Use as Full Screen Experien
 - **From the WinForms Wrapper.** A v1.x Wrapper's updater downloads `playdex-wrapper-windows-v<version>.zip`, verifies it, and on "Restart to update" replaces `Wrapper.exe` with the setup and starts it with `--update-health`. The setup confirms at once (the Wrapper waits only 30 s), then installs the desktop app from the same release and starts it. The desktop app migrates the Wrapper's config (`%LOCALAPPDATA%\PlaydexWrapper\config.json` into `%LOCALAPPDATA%\Playdex\config.json`; the old file stays), keeps its storage folders and backup state, and regenerates every generated launcher from `Playdex.Run.exe`, so Steam shortcuts keep working. From then on `Wrapper.exe` just opens Playdex.
 - **Launcher.** Installing a newer MSIX over an older one updates it (Settings → This app → Install in the desktop app, or `tools/install-dev.ps1` for local builds).
 
+## The setup
+
+- **Window.** Run by hand it asks for the Playdex server and API key (checked with the server; with a key already saved, an empty field keeps it), offers "Also use Playdex as the Full Screen Experience home" when Developer Mode is on (checked when the package is installed, which is then updated), and shows the install's progress. `--quiet` installs without it, updating an installed FSE package when the setup carries one.
+- **Updating.** An older install is updated in place, keeping the config: a running Playdex 2.0 or later quits on `Playdex.exe --quit`; an older one is asked to quit by the user. The same or a newer install just starts.
+- **Uninstalling.** Settings → Apps → Playdex → Uninstall runs the copy in the app folder with `--uninstall` (`--quiet` for the quiet uninstall string). It continues from a copy in `%TEMP%`, closes Playdex, removes the app folder and, when they belong to that install, the FSE package, the start-with-Windows entry, the Start menu shortcut and the Settings → Apps entry, then asks whether to remove `%LOCALAPPDATA%\Playdex` too. The app adds the Settings → Apps entry itself when it is missing (installs made by older setups) and keeps its version current after self-updates.
+
 ## Testing a release before publishing
 
-The setup takes test flags: `--archive=<zip>` installs from a local `playdex-windows-v<version>.zip` instead of the release, `--install-dir=<path>` installs elsewhere, and `--no-shortcut` and `--no-start` skip the shortcut and starting Playdex. The Wrapper-to-desktop path is best checked once on a clean Windows user or VM with a v1.1.0 Wrapper installed, against a test release in a fork.
+Run `tools/package-windows.ps1 -Version <version> -Out <folder> [-Msix … -Cer …]` and try `<folder>\Playdex-Setup.exe`. The setup also takes test flags: `--archive=<zip>` installs from a local `playdex-windows-v<version>.zip`, `--install-dir=<path>` installs elsewhere, `--reinstall` installs over the same version, `--quiet` skips the window, and `--no-shortcut`, `--no-register` and `--no-start` skip the shortcut, the Settings → Apps entry and starting Playdex. The Wrapper-to-desktop path is best checked once on a clean Windows user or VM with a v1.1.0 Wrapper installed, against a test release in a fork.

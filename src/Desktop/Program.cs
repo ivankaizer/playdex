@@ -17,6 +17,7 @@ namespace Playdex.Desktop;
 /// Flags beyond <see cref="LaunchOptions"/>:
 /// --background                   start in the tray without a window (how it starts with Windows)
 /// --big-picture                  open in Big Picture whatever the saved mode (the Full Screen Experience entry)
+/// --quit                         quit the running Playdex (the setup, before it updates or uninstalls it)
 /// --update-health=PATH           started by the updater: confirm a healthy start by writing PATH
 /// --selftest-job                 run the Job Object exit-detection self-test and exit
 /// --selftest-quick-settings[=toggle]
@@ -27,6 +28,7 @@ namespace Playdex.Desktop;
 public static class Program
 {
     public const string BigPictureFlag = "--big-picture";
+    public const string QuitFlag = "--quit";
 
     [STAThread]
     private static int Main(string[] args)
@@ -55,6 +57,11 @@ public static class Program
             var redirect = Task.Run(() => instance.RedirectActivationToAsync(AppInstance.GetCurrent().GetActivatedEventArgs()).AsTask().Wait(TimeSpan.FromSeconds(3)));
             redirect.Wait(TimeSpan.FromSeconds(4));
             return 0;
+        }
+
+        if (args.Contains(QuitFlag))
+        {
+            return 0; // Nothing running to quit.
         }
 
         var options = LaunchOptions.Parse(args);
@@ -164,9 +171,32 @@ internal sealed partial class App : Application
         _host.Fse = _fse;
         _instance.Activated += (_, e) =>
         {
-            var (bigPicture, gameId) = Requested(e);
-            dispatcher.TryEnqueue(() => Open(bigPicture ? ShellMode.FullScreen : null, gameId));
+            var (bigPicture, gameId, quit) = Requested(e);
+            dispatcher.TryEnqueue(() =>
+            {
+                if (quit)
+                {
+                    Quit();
+                    return;
+                }
+                Open(bigPicture ? ShellMode.FullScreen : null, gameId);
+            });
         };
+        if (UpdateFeature.InstallDirectory is { } installed)
+        {
+            // Settings → Apps shows the version that runs, also after a self-update.
+            _ = Task.Run(() =>
+            {
+                try
+                {
+                    InstallRegistration.Refresh(installed, DesktopHost.Version);
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException)
+                {
+                    Log.Error("desktop: could not update the Installed apps entry", ex);
+                }
+            });
+        }
 
         if (_bigPicture)
         {
@@ -243,12 +273,15 @@ internal sealed partial class App : Application
         Open();
     }
 
-    /// <summary>What a second start asked for: Big Picture (the Full Screen Experience entry) and a game to launch.</summary>
-    private static (bool BigPicture, string? GameId) Requested(AppActivationArguments args)
+    /// <summary>
+    /// What a second start asked for: Big Picture (the Full Screen Experience entry), a game to launch, or to quit (the
+    /// setup).
+    /// </summary>
+    private static (bool BigPicture, string? GameId, bool Quit) Requested(AppActivationArguments args)
     {
         var line = args.Kind == ExtendedActivationKind.Launch && args.Data is ILaunchActivatedEventArgs launch ? launch.Arguments ?? "" : "";
         var parts = line.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Select(p => p.Trim('"')).ToArray();
-        return (parts.Contains(Program.BigPictureFlag), LaunchOptions.Parse(parts).LaunchGameId);
+        return (parts.Contains(Program.BigPictureFlag), LaunchOptions.Parse(parts).LaunchGameId, parts.Contains(Program.QuitFlag));
     }
 
     /// <summary>The Full Screen Experience package lives elsewhere and starts this exe; tell it where it is.</summary>
