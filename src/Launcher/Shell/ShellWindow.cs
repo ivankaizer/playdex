@@ -136,6 +136,7 @@ internal sealed partial class ShellWindow : Window
         }
         else
         {
+            // The size it restores to; it opens maximized (Show).
             var scale = Native.GetDpiForWindow(_hwnd) / 96.0;
             AppWindow.Resize(new SizeInt32((int)(1360 * scale), (int)(860 * scale)));
         }
@@ -147,6 +148,11 @@ internal sealed partial class ShellWindow : Window
 
     public void Show()
     {
+        if (_mode == ShellMode.Desktop && AppWindow.Presenter is OverlappedPresenter overlapped)
+        {
+            // Desktop mode opens using the whole screen, with its title bar and the taskbar still there.
+            overlapped.Maximize();
+        }
         Activate();
         if (_mode == ShellMode.FullScreen)
         {
