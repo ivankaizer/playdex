@@ -3,10 +3,12 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Playdex.Persistence;
 using Microsoft.Extensions.Options;
+using Api.Modules.Posters;
 
 namespace Api.Modules.Polling;
 
-public sealed class SteamClient(HttpClient httpClient, IOptions<SteamOptions> options) : IProviderClient
+public sealed class SteamClient(HttpClient httpClient, IOptions<SteamOptions> options, PosterUrls posterUrls)
+    : IProviderClient
 {
     public string PlatformKey => "steam";
 
@@ -50,7 +52,7 @@ public sealed class SteamClient(HttpClient httpClient, IOptions<SteamOptions> op
             Game: new CurrentlyPlayingResult(
                 Title: player.GameExtraInfo,
                 ExternalId: player.GameId,
-                CapsuleUrl: $"https://api-cdn.wemod.com/steam_apps/{player.GameId}/hero_capsule.webp",
+                CapsuleUrl: posterUrls.SteamCapsule(player.GameId),
                 Platform: "steam"
             ),
             RawPayload: rawJson

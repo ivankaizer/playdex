@@ -1,11 +1,13 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using Api.Infrastructure.Common;
 using Playdex.Persistence;
 using Api.Modules.ApiCapture;
 using Api.Modules.Games;
 using Api.Modules.Polling;
+using Api.Modules.Posters;
 using Xunit;
 
 namespace Api.Tests;
@@ -110,6 +112,7 @@ public sealed class PollingSessionTimeoutTests(PostgresFixture postgres)
                 db,
                 new UnusedGameResolver(),
                 eventBus,
+                new PosterUrls(Options.Create(new PostersOptions())),
                 NullLogger<ApiCaptureService>.Instance);
 
             var endedCount = await service.EndTimedOutSessions(CancellationToken.None);
