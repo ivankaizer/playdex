@@ -2,7 +2,7 @@
 # to main that passes the tests: CI builds the images on the macserv runner and pushes them to the
 # registry on that host; Dokploy runs this file without its build sections, with IMAGE_TAG,
 # DATABASE_URL, JWT_SECRET and CORS_ORIGINS in the stack's .env. Optional keys (IGDB, Telegram,
-# AI drafts, Sentry) are set in that .env by hand from Dokploy.
+# AI drafts, Sentry, R2 posters) are set in that .env by hand from Dokploy.
 #
 # Rules: plain ${VAR} for runtime settings (CI builds without them), mem_limit on every service, no
 # host ports. No seeder and no wiremock: the seeder truncates every table, and polling talks to the
@@ -42,6 +42,11 @@ services:
       Apprise__TelegramBotToken: ${TELEGRAM_BOT_TOKEN}
       Polling__Igdb__ClientId: ${IGDB_CLIENT_ID}
       Polling__Igdb__ClientSecret: ${IGDB_CLIENT_SECRET}
+      Posters__PublicBaseUrl: https://dash.playdex.dev
+      Posters__R2__AccountId: ${R2_ACCOUNT_ID}
+      Posters__R2__AccessKeyId: ${R2_ACCESS_KEY_ID}
+      Posters__R2__SecretAccessKey: ${R2_SECRET_ACCESS_KEY}
+      Posters__R2__Bucket: ${R2_POSTERS_BUCKET}
       AiDrafts__Enabled: ${AI_DRAFTS_ENABLED:-false}
       AiDrafts__ApiKey: ${AI_DRAFTS_API_KEY}
       AiDrafts__Model: ${AI_DRAFTS_MODEL}

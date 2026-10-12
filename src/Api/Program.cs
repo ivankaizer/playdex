@@ -15,6 +15,7 @@ using Api.Modules.Manual;
 using Api.Modules.Metrics;
 using Api.Modules.Notifications;
 using Api.Modules.Polling;
+using Api.Modules.Posters;
 using Api.Modules.Privacy;
 using Api.Modules.Providers;
 using Api.Modules.Recap;
@@ -81,6 +82,7 @@ builder.Services
     .AddProviders()
     .AddRecap()
     .AddPlaydexMetrics()
+    .AddPosters(builder.Configuration)
     .AddPolling(builder.Configuration)
     .AddNotifications(builder.Configuration)
     .AddAdmin();
@@ -142,6 +144,7 @@ api
     .MapProviders()
     .MapRecap()
     .MapMetrics()
+    .MapPosters()
     .MapAdmin();
 
 app.MapHealthChecks("/health/live", new HealthCheckOptions { Predicate = _ => false });

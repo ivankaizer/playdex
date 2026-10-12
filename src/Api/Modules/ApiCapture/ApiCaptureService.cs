@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging;
 using Api.Infrastructure.Common;
 using Playdex.Persistence;
 using Api.Modules.Games;
+using Api.Modules.Posters;
 
 namespace Api.Modules.ApiCapture;
 
@@ -16,6 +17,7 @@ public sealed partial class ApiCaptureService(
     PlaydexDbContext db,
     IGameResolver gameResolver,
     EventBus eventBus,
+    PosterUrls posterUrls,
     ILogger<ApiCaptureService> logger) : IApiSessionTimeoutCleaner
 {
     private const int PingTimeoutMinutes = 3;
@@ -228,15 +230,10 @@ public sealed partial class ApiCaptureService(
         return (resolution.GameId, platformId);
     }
 
-    private static string? GenerateCapsuleUrl(string gameProvider, string gameId)
-    {
-        if (string.Equals(gameProvider, "steam", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrEmpty(gameId))
-        {
-            return $"https://api-cdn.wemod.com/steam_apps/{gameId}/hero_capsule.webp";
-        }
-
-        return null;
-    }
+    private string? GenerateCapsuleUrl(string gameProvider, string gameId) =>
+        string.Equals(gameProvider, "steam", StringComparison.OrdinalIgnoreCase)
+            ? posterUrls.SteamCapsule(gameId)
+            : null;
 
     private async Task SafePublish<T>(T @event, CancellationToken ct)
     {

@@ -90,7 +90,7 @@ const sections: readonly PolicySection[] = [
             collection turned off.
           </li>
           <li>
-            <strong>Google Fonts and game artwork hosts (Steam, IGDB, WeMod):</strong> your browser loads fonts and cover art
+            <strong>Google Fonts and game artwork hosts (Steam, IGDB):</strong> your browser loads fonts and cover art
             from them, which shares your IP address with those providers.
           </li>
         </ul>
