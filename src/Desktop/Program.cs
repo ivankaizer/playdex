@@ -22,6 +22,8 @@ public static class Program
         Startup.MainEntered = Stopwatch.GetTimestamp();
         WinRT.ComWrappersSupport.InitializeComWrappers();
         Log.UseFile(Path.Combine(Paths.DataDirectory, "desktop.log"));
+        // A crash off the UI thread (input, watchers) lands in the log too, not only in the Windows event log.
+        AppDomain.CurrentDomain.UnhandledException += (_, e) => Log.Info($"ERROR unhandled exception, terminating: {e.ExceptionObject}");
 
         var instance = AppInstance.FindOrRegisterForKey("playdex-desktop");
         if (!instance.IsCurrent)

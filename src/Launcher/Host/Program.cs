@@ -29,6 +29,8 @@ public static class Program
         Startup.MainEntered = Stopwatch.GetTimestamp();
         GCSettings.LatencyMode = GCLatencyMode.SustainedLowLatency;
         WinRT.ComWrappersSupport.InitializeComWrappers();
+        // A crash on any thread (input, watchers) lands in launcher.log, not only in the Windows event log.
+        AppDomain.CurrentDomain.UnhandledException += (_, e) => Log.Info($"ERROR unhandled exception, terminating: {e.ExceptionObject}");
 
         if (args.Contains("--selftest-job"))
         {
@@ -90,6 +92,11 @@ internal sealed partial class App : Application
 
     protected override void OnLaunched(Microsoft.UI.Xaml.LaunchActivatedEventArgs args)
     {
+        UnhandledException += (_, e) =>
+        {
+            Log.Error("launcher: unhandled exception", e.Exception);
+            e.Handled = true;
+        };
         // Start WebView2 (browser process spawn) first; window creation runs while it starts.
         var environment = CoreWebView2Environment.CreateWithOptionsAsync(
             null,

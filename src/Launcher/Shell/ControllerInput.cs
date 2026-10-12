@@ -141,7 +141,8 @@ internal sealed unsafe class ControllerInput
                 {
                     connected |= bit;
                     buttons |= state.Gamepad.Buttons;
-                    if (Math.Abs(state.Gamepad.ThumbLX) + Math.Abs(state.Gamepad.ThumbLY) > Math.Abs(lx) + Math.Abs(ly))
+                    // As int: Math.Abs(short) throws on -32768, a stick held fully left or down.
+                    if (Math.Abs((int)state.Gamepad.ThumbLX) + Math.Abs((int)state.Gamepad.ThumbLY) > Math.Abs((int)lx) + Math.Abs((int)ly))
                     {
                         lx = state.Gamepad.ThumbLX;
                         ly = state.Gamepad.ThumbLY;
