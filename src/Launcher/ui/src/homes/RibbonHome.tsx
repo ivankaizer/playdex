@@ -74,24 +74,28 @@ export function RibbonHome() {
               </span>
             </span>
           </button>
-          {others.map((r) => (
-            <button
-              key={r.game.id}
-              className="jtile"
-              data-nav
-              data-game={r.game.id}
-              data-kind="game"
-              onClick={() => launch(r.game.id)}
-            >
-              <Cover game={r.game} kind="capsule" className="jtile-art" />
-              <span className="jtile-foot">
-                <span className="jtile-title">{r.game.title}</span>
-                <span className="jtile-sub">
-                  {lastPlayedText(r)} · {SOURCE_LABEL[r.game.source]}
+          {others.map((r) => {
+            // Total time from Playdex, as on the large tile; the source when Playdex has none for the game.
+            const total = playdexGame(summary, r.game)?.totalSeconds ?? 0;
+            return (
+              <button
+                key={r.game.id}
+                className="jtile"
+                data-nav
+                data-game={r.game.id}
+                data-kind="game"
+                onClick={() => launch(r.game.id)}
+              >
+                <Cover game={r.game} kind="capsule" className="jtile-art" />
+                <span className="jtile-foot">
+                  <span className="jtile-title">{r.game.title}</span>
+                  <span className="jtile-sub num">
+                    {lastPlayedText(r)} · {total > 0 ? <><b>{fmtMinutes(minutes(total))}</b> played</> : SOURCE_LABEL[r.game.source]}
+                  </span>
                 </span>
-              </span>
-            </button>
-          ))}
+              </button>
+            );
+          })}
         </div>
       </section>
 
@@ -169,16 +173,6 @@ function PlaydexRail({ summary }: { summary: PlaydexSummary }) {
         </div>
       )}
 
-      <div className="rail-block">
-        <span className="label">All time</span>
-        <div className="rail-row">
-          <span className="rail-mid num">{fmtMinutes(minutes(summary.allTime.totalSeconds))}</span>
-          <span className="rail-sub num">
-            {summary.games.length} {summary.games.length === 1 ? "game" : "games"} · {summary.allTime.sessionCount} sessions
-          </span>
-        </div>
-      </div>
-
       {isDemo && <p className="rail-note">Sample data</p>}
     </aside>
   );
@@ -191,7 +185,7 @@ function EmptyRail() {
       <p className="rail-sub">
         {playdexConnected
           ? "Your Playdex stats show up here once this PC reaches Playdex."
-          : "Add your Playdex API key in the Playdex desktop app (Settings) to see your stats here."}
+          : "Add your Playdex API key in Settings → Your Playdex account to see your stats here."}
       </p>
     </aside>
   );

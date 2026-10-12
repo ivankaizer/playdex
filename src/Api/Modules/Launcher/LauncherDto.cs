@@ -31,12 +31,14 @@ public sealed record LauncherDayDto(string Date, long TotalSeconds, int SessionC
 
 public sealed record LauncherTopGameDto(string GameId, string Title, long TotalSeconds, int SessionCount);
 
+/// <param name="PlatformName">The platform's display name from Playdex's catalog ("Steam Deck"), so clients don't keep their own.</param>
 /// <param name="EndedAt">Null while the session is running.</param>
 public sealed record LauncherSessionDto(
     string SessionId,
     string GameId,
     string Title,
     string PlatformKey,
+    string PlatformName,
     DateTimeOffset StartedAt,
     DateTimeOffset? EndedAt,
     long DurationSeconds);

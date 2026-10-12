@@ -3,7 +3,8 @@ using Api.Infrastructure.Common;
 
 namespace Api.Modules.Launcher;
 
-public sealed record LauncherSessionRow(long SessionId, long GameId, string PlatformKey, DateTimeOffset StartedAt, DateTimeOffset? EndedAt);
+public sealed record LauncherSessionRow(
+    long SessionId, long GameId, string PlatformKey, string PlatformName, DateTimeOffset StartedAt, DateTimeOffset? EndedAt);
 
 public sealed record LauncherGameRow(long Id, string Title, string? CapsuleUrl);
 
@@ -59,6 +60,7 @@ public static class LauncherSummaryBuilder
                 GameId.Encode(session.Row.GameId),
                 Title(session.Row.GameId),
                 session.Row.PlatformKey,
+                session.Row.PlatformName,
                 session.Row.StartedAt,
                 session.Row.EndedAt,
                 session.Seconds))

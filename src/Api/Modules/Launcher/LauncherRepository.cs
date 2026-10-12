@@ -9,7 +9,7 @@ public sealed class LauncherRepository(PlaydexDbContext db)
     public async Task<List<LauncherSessionRow>> ListSessions(long userId, CancellationToken ct)
     {
         var rows = await db.Database.SqlQuery<SessionDbRow>($"""
-            SELECT ps.id AS "SessionId", ps.game_id AS "GameId", p.key AS "PlatformKey",
+            SELECT ps.id AS "SessionId", ps.game_id AS "GameId", p.key AS "PlatformKey", p.name AS "PlatformName",
                    ps.started_at AS "StartedAt", ps.ended_at AS "EndedAt"
             FROM play_sessions ps
             JOIN platforms p ON p.id = ps.platform_id
@@ -19,7 +19,7 @@ public sealed class LauncherRepository(PlaydexDbContext db)
                   AND ps.ended_at IS NOT NULL
                   AND EXTRACT(EPOCH FROM (ps.ended_at - ps.started_at)) < COALESCE(us.ignore_short_sessions_minutes, 0) * 60)
             """).ToListAsync(ct);
-        return rows.Select(row => new LauncherSessionRow(row.SessionId, row.GameId, row.PlatformKey, row.StartedAt, row.EndedAt)).ToList();
+        return rows.Select(row => new LauncherSessionRow(row.SessionId, row.GameId, row.PlatformKey, row.PlatformName, row.StartedAt, row.EndedAt)).ToList();
     }
 
     public async Task<Dictionary<long, LauncherGameRow>> LoadGames(long[] gameIds, CancellationToken ct)
@@ -55,6 +55,7 @@ public sealed class LauncherRepository(PlaydexDbContext db)
         public long SessionId { get; set; }
         public long GameId { get; set; }
         public string PlatformKey { get; set; } = "";
+        public string PlatformName { get; set; } = "";
         public DateTimeOffset StartedAt { get; set; }
         public DateTimeOffset? EndedAt { get; set; }
     }

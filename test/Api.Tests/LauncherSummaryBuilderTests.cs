@@ -40,12 +40,14 @@ public sealed class LauncherSummaryBuilderTests
     [Fact]
     public void ARunningSessionCountsUpToNow()
     {
-        var running = new LauncherSessionRow(1, 1, "steam", Now.AddMinutes(-25), null);
+        var running = new LauncherSessionRow(1, 1, "steam-deck", "Steam Deck", Now.AddMinutes(-25), null);
 
         var summary = LauncherSummaryBuilder.Build([running], Games, [], Now, Prague);
 
         Assert.Equal(25 * 60, summary.Today.TotalSeconds);
         Assert.Null(summary.RecentSessions.Single().EndedAt);
+        Assert.Equal("steam-deck", summary.RecentSessions.Single().PlatformKey);
+        Assert.Equal("Steam Deck", summary.RecentSessions.Single().PlatformName);
         Assert.Equal(25 * 60, summary.RecentSessions.Single().DurationSeconds);
     }
 
@@ -144,5 +146,5 @@ public sealed class LauncherSummaryBuilderTests
     }
 
     private static LauncherSessionRow Session(long id, long gameId, DateTimeOffset startedAt, int minutes) =>
-        new(id, gameId, "steam", startedAt, startedAt.AddMinutes(minutes));
+        new(id, gameId, "pc", "PC", startedAt, startedAt.AddMinutes(minutes));
 }

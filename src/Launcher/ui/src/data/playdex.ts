@@ -6,7 +6,7 @@
  */
 import { inHost, onHostMessage } from "../host/bridge";
 import { createStore } from "../nav/store";
-import { gameById, games, isDemo, sessions, type Game } from "./games";
+import { gameById, games, isDemo, sessions, SOURCE_LABEL, type Game } from "./games";
 
 export type PlaydexPeriod = { totalSeconds: number; sessionCount: number };
 export type PlaydexDay = { date: string; totalSeconds: number; sessionCount: number };
@@ -16,6 +16,8 @@ export type PlaydexSession = {
   gameId: string;
   title: string;
   platformKey: string;
+  /** The platform's name from Playdex's catalog; absent from servers older than the field. */
+  platformName?: string;
   startedAt: string;
   endedAt: string | null;
   durationSeconds: number;
@@ -87,6 +89,27 @@ export function playdexGame(summary: PlaydexSummary | null, g: Game): PlaydexGam
   return key ? indexed.byKey.get(key) : undefined;
 }
 
+let reverse: { summary: PlaydexSummary | null; byPlaydexId: Map<string, Game> } = { summary: null, byPlaydexId: new Map() };
+
+/** The library game a Playdex game is, when it is on this PC (installed, or added to Playdex here). */
+export function libraryGame(summary: PlaydexSummary | null, playdexGameId: string): Game | undefined {
+  if (!summary) return undefined;
+  if (reverse.summary !== summary) {
+    const byKey = new Map<string, Game>();
+    for (const g of games) {
+      const key = captureKey(g);
+      if (key) byKey.set(key, g);
+    }
+    const byPlaydexId = new Map<string, Game>();
+    for (const pg of summary.games) {
+      const local = pg.identities.map((i) => byKey.get(identityKey(i.type, i.externalId))).find(Boolean);
+      if (local) byPlaydexId.set(pg.gameId, local);
+    }
+    reverse = { summary, byPlaydexId };
+  }
+  return reverse.byPlaydexId.get(playdexGameId);
+}
+
 /** Days since an ISO time, in local calendar days (0 = today). */
 export function daysAgo(iso: string): number {
   const midnight = (t: number) => new Date(t).setHours(0, 0, 0, 0);
@@ -111,6 +134,7 @@ function demoSummary(): PlaydexSummary {
       gameId: s.gameId,
       title: gameById(s.gameId).title,
       platformKey: gameById(s.gameId).source,
+      platformName: SOURCE_LABEL[gameById(s.gameId).source],
       startedAt: startedAt.toISOString(),
       endedAt: new Date(startedAt.getTime() + s.minutes * 60_000).toISOString(),
       durationSeconds: s.minutes * 60,
