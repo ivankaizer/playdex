@@ -67,6 +67,19 @@ public sealed class ConfigStoreTests : IDisposable
         Assert.Equal(ApiConfig.DefaultBaseUrl, Store().LoadOrCreate().Api.BaseUrl);
     }
 
+    [Theory]
+    [InlineData("https://playdex-api.ejwan.dev/api", "https://dash.playdex.dev/api")]
+    [InlineData("https://PLAYDEX-API.ejwan.dev/api/", "https://dash.playdex.dev/api")]
+    [InlineData("https://preview.test/api", "https://preview.test/api")]
+    public void ASavedRetiredDefaultMovesToTheCurrentOne(string saved, string expected)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(ConfigPath)!);
+        File.WriteAllText(ConfigPath, $$"""{ "api": { "baseUrl": "{{saved}}", "apiKey": "key" } }""");
+
+        Assert.Equal(expected, new ConfigStore(ConfigPath).LoadOrCreate().Api.BaseUrl);
+        Assert.Equal("https://dash.playdex.dev/api", new ConfigStore(Path.Combine(_directory, "new.json")).LoadOrCreate().Api.BaseUrl);
+    }
+
     [Fact]
     public void TakesTheLaunchersKeyAndUrlWhenThereIsNoWrapper()
     {

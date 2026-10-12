@@ -156,7 +156,7 @@ let demoState: DesktopState = {
     },
   ],
   settings: {
-    baseUrl: "https://playdex-api.ejwan.dev/api",
+    baseUrl: "https://dash.playdex.dev/api",
     apiKeySet: true,
     platform: "pc",
     steamGridDbKeySet: false,

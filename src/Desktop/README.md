@@ -61,7 +61,7 @@ The page talks to it with `{type:"desktop", id, method, params}` (see `DesktopHo
 
 ## Configuration
 
-- API key and URL: `PLAYDEX_API_KEY` and `PLAYDEX_API_URL`, or `api.apiKey` and `api.baseUrl` in the install's config, `%LOCALAPPDATA%\Playdex\config.json` (shared with the Full Screen Experience entry and `Playdex.Run.exe`). Default URL `https://playdex-api.ejwan.dev/api`.
+- API key and URL: `PLAYDEX_API_KEY` and `PLAYDEX_API_URL`, or `api.apiKey` and `api.baseUrl` in the install's config, `%LOCALAPPDATA%\Playdex\config.json` (shared with the Full Screen Experience entry and `Playdex.Run.exe`). Default URL `https://dash.playdex.dev/api`; a config that still has a retired default (`playdex-api.ejwan.dev`, the Wrapper's `playdex.ejwan.dev`) moves to it.
 - The config is created on first start from the Wrapper's `%LOCALAPPDATA%\PlaydexWrapper\config.json` and the launcher's old `%LOCALAPPDATA%\PlaydexLauncher\config.json`, which are left in place. The offline queue moves from `PlaydexLauncher` once.
 - The log (`desktop.log`), `metrics.jsonl` and the offline `queue.jsonl` live in `%LOCALAPPDATA%\Playdex`. Crashes on any thread are logged there before the process ends; Windows also keeps them in Event Viewer → Windows Logs → Application (events 1000 and 1026).
 - `PLAYDEX_INPUT_FORCE_POLL=1`: diagnostic that polls every XInput slot at the foreground rate, as if a pad were connected.

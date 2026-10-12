@@ -87,7 +87,7 @@ public sealed class ApiConfig
     public const int MaximumApiKeyLength = 4096;
     public const int MaximumPlatformKeyLength = 64;
     public const string DefaultPlatform = "pc";
-    public const string DefaultBaseUrl = "https://playdex-api.ejwan.dev/api";
+    public const string DefaultBaseUrl = "https://dash.playdex.dev/api";
 
     public string BaseUrl { get; set; } = DefaultBaseUrl;
     public string ApiKey { get; set; } = "";
