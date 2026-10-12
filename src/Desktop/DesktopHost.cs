@@ -175,6 +175,9 @@ internal sealed partial class DesktopHost : IDisposable
                 return Json(await BackupAsync(Text(parameters, "gameId")));
             case "settings.save":
                 return await SaveSettingsAsync(parameters);
+            case "settings.startWithWindows":
+                SetStartWithWindows(parameters.TryGetProperty("enabled", out var enabled) && enabled.ValueKind == JsonValueKind.True);
+                return StateJson();
             case "settings.browseLudusavi":
                 var ludusavi = FilePicker.PickFile(WindowHandle, "Select ludusavi.exe", ("Ludusavi (ludusavi.exe)", "ludusavi.exe"), ("Executables (*.exe)", "*.exe"));
                 return JsonSerializer.Serialize(new PathView(ludusavi), DesktopJson.Default.PathView);
@@ -324,10 +327,6 @@ internal sealed partial class DesktopHost : IDisposable
         }
         _config.Ludusavi.ExecutablePath = ludusavi;
         await _store.SaveAsync(_config);
-        if (parameters.TryGetProperty("startWithWindows", out var startup) && startup.ValueKind is JsonValueKind.True or JsonValueKind.False)
-        {
-            SetStartWithWindows(startup.ValueKind == JsonValueKind.True);
-        }
         Log.Info($"desktop: settings saved (API {_config.Api.BaseUrl}, key {(string.IsNullOrWhiteSpace(_config.Api.ApiKey) ? "missing" : "set")})");
         return StateJson();
     }

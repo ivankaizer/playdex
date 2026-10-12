@@ -1,4 +1,4 @@
-/* ---------- Desktop screens: Manage and Settings ----------
+/* ---------- Desktop screens: Manage and Settings (its own layout is in settings.css) ----------
  * The desktop app is a window at arm's length, so these screens are denser than the 10-foot ones, but they use the
  * same surfaces, pills and focus ring. */
 .desk {
@@ -225,52 +225,4 @@ select.text {
   width: 1rem;
   height: 1rem;
   accent-color: rgb(var(--bar));
-}
-
-/* Settings */
-.desk-sections {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(22rem, 1fr));
-  align-content: start;
-  gap: 0.9rem;
-  overflow-y: auto;
-  margin: -0.4rem;
-  padding: 0.4rem;
-  scrollbar-width: thin;
-}
-.desk-section {
-  display: grid;
-  align-content: start;
-  gap: 0.75rem;
-  padding: 1.1rem 1.2rem 1.2rem;
-}
-.desk-section-title {
-  margin: 0;
-  font-size: 0.92rem;
-  font-weight: 600;
-}
-.desk-note {
-  margin: -0.4rem 0 0;
-  font-size: 0.66rem;
-  line-height: 1.45;
-  color: rgb(var(--muted));
-}
-.desk-line {
-  display: flex;
-  align-items: center;
-  gap: 0.7rem;
-  padding-top: 0.7rem;
-  border-top: 1px solid rgb(var(--line) / 0.6);
-}
-.desk-line > svg {
-  flex: none;
-  width: 1rem;
-  height: 1rem;
-  color: rgb(var(--muted));
-}
-.desk-line-text {
-  flex: 1;
-  font-size: 0.7rem;
-  line-height: 1.4;
-  color: rgb(var(--ink-2));
 }

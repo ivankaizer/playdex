@@ -122,6 +122,11 @@ export function switchMode(mode: AppMode) {
   return rpc<DesktopState>("mode.set", { mode });
 }
 
+/** Start Playdex in the tray when Windows starts. Applies at once, apart from the settings form. */
+export function setStartWithWindows(enabled: boolean) {
+  return rpc<DesktopState>("settings.startWithWindows", { enabled });
+}
+
 /* ---------- Stand-in for a plain browser ---------- */
 
 let demoState: DesktopState = {
@@ -163,7 +168,10 @@ let demoState: DesktopState = {
     ludusaviPath: "",
     startWithWindows: true,
   },
-  update: { kind: "idle", message: "Playdex is up to date." },
+  // ?update shows an update that is ready to install.
+  update: new URLSearchParams(location.search).has("update")
+    ? { kind: "ready", message: "Playdex 2.1.0 is ready. Restart to update.", version: "2.1.0" }
+    : { kind: "idle", message: "Playdex is up to date." },
   fse: { state: "available", message: "Use Playdex in Big Picture as the Full Screen Experience home." },
 };
 
@@ -204,12 +212,20 @@ async function demo(method: string, params?: Record<string, unknown>): Promise<u
           baseUrl: String(params!.baseUrl ?? ""),
           platform: String(params!.platform ?? "pc"),
           ludusaviPath: String(params!.ludusaviPath ?? ""),
-          startWithWindows: !!params!.startWithWindows,
           apiKeySet: demoState.settings.apiKeySet || !!params!.apiKey,
           steamGridDbKeySet: demoState.settings.steamGridDbKeySet || !!params!.steamGridDbKey,
         },
       };
       return demoState;
+    case "settings.startWithWindows":
+      return (demoState = { ...demoState, settings: { ...demoState.settings, startWithWindows: !!params!.enabled } });
+    case "update.check":
+      // Pretend a new version comes down: checking, then ready to install.
+      window.setTimeout(() => {
+        demoState = { ...demoState, update: { kind: "ready", message: "Playdex 2.1.0 is ready. Restart to update.", version: "2.1.0" } };
+        desktopState.set(demoState);
+      }, 1600);
+      return (demoState = { ...demoState, update: { kind: "checking", message: "Checking for updates…" } });
     case "mode.set":
       // The browser stand-in for replacing the window: reload in the other layout.
       location.search = params?.mode === "desktop" ? "?mode=desktop" : "";

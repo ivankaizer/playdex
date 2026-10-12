@@ -25,12 +25,12 @@ import { focusEl, focusScreenDefault, forgetGroups } from "./nav/focus";
 import { onAction } from "./nav/input";
 import { focusedGame, focusedKind, useStore } from "./nav/store";
 import { inHost, onHostMessage, signalAfterFrame } from "./host/bridge";
-import { isDesktop, loadDesktopState } from "./host/desktop";
+import { desktopState, isDesktop, loadDesktopState } from "./host/desktop";
 import { GamePage } from "./screens/GamePage";
 import { Library } from "./screens/Library";
 import { PlaydexScreen } from "./screens/Playdex";
 
-// Desktop-only screens: the full-screen launcher never downloads them.
+// Loaded when first opened: Big Picture never downloads Manage (desktop only), nor Settings until its tab is opened.
 const Manage = lazy(() => import("./screens/Manage").then((m) => ({ default: m.Manage })));
 const Settings = lazy(() => import("./screens/Settings").then((m) => ({ default: m.Settings })));
 
@@ -47,10 +47,13 @@ const layout: LayoutId = (() => {
   return (LAYOUTS as readonly string[]).includes(v ?? "") ? (v as LayoutId) : "ribbon";
 })();
 
-/* The desktop app adds the management screens the WinForms Wrapper had: the games added to Playdex, and settings. */
+/*
+ * Desktop mode adds the games added to Playdex (the WinForms Wrapper's list). Settings are in both modes: all of them in
+ * desktop mode, the ones a controller can change in Big Picture.
+ */
 const ALL_TABS = ["Home", "Library", "Playdex", "Manage", "Settings"] as const;
 type Tab = (typeof ALL_TABS)[number];
-const TABS: readonly Tab[] = isDesktop ? ALL_TABS : ["Home", "Library", "Playdex"];
+const TABS: readonly Tab[] = isDesktop ? ALL_TABS : ["Home", "Library", "Playdex", "Settings"];
 
 /** The desktop app reloads the page after games change; the open tab survives that. */
 function initialTab(): Tab {
@@ -105,8 +108,10 @@ export function App() {
     }
   }, [tab]);
 
+  // Big Picture loads it off the start-up path: it only marks the Settings tab when an update is ready.
   useEffect(() => {
-    if (isDesktop) void loadDesktopState().catch(() => undefined);
+    const t = window.setTimeout(() => void loadDesktopState().catch(() => undefined), isDesktop ? 0 : 3000);
+    return () => window.clearTimeout(t);
   }, []);
 
   // New screen: forget per-group focus memory and land on the screen's default item. Closing a game page
@@ -201,6 +206,7 @@ export function App() {
                   }}
                 >
                   {t}
+                  {t === "Settings" && <UpdateDot />}
                 </button>
               ))}
             </div>
@@ -290,6 +296,12 @@ const PRIMARY: Record<string, string> = {
   playing: "Resume",
   steam: "Open",
 };
+
+/** On the Settings tab while an update waits for a restart. Its own component, so state pushes don't re-render App. */
+function UpdateDot() {
+  const ready = useStore(desktopState)?.update.kind === "ready";
+  return ready ? <span className="tab-dot" role="img" aria-label="Update ready" /> : null;
+}
 
 /** The running game in the top bar, however it was started; A switches to it. */
 function NowPlaying() {
