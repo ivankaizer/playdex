@@ -64,6 +64,7 @@ public sealed record LauncherSessionDto(
     DateTimeOffset? EndedAt,
     long DurationSeconds);
 
+/// <param name="Recent">The game's last 14 local days, for its page in the launcher; null when it wasn't played in them.</param>
 public sealed record LauncherGameDto(
     string GameId,
     string Title,
@@ -71,7 +72,13 @@ public sealed record LauncherGameDto(
     long TotalSeconds,
     int SessionCount,
     DateTimeOffset LastPlayedAt,
-    IReadOnlyList<LauncherGameIdentityDto> Identities);
+    IReadOnlyList<LauncherGameIdentityDto> Identities,
+    LauncherGameRecentDto? Recent = null);
+
+/// <param name="DaySeconds">Seconds played on each of the last 14 local days, oldest first; the last is today.</param>
+/// <param name="SessionCount">Sessions in those days.</param>
+/// <param name="Sessions">The newest of them, at most 5, newest first.</param>
+public sealed record LauncherGameRecentDto(IReadOnlyList<long> DaySeconds, int SessionCount, IReadOnlyList<LauncherSessionDto> Sessions);
 
 /// <param name="Type">steam, psn, xbox or igdb: what the capture routes call gameIdProvider.</param>
 /// <param name="ExternalId">The id the game was captured with (a Steam app id, or what a client sent).</param>

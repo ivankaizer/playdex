@@ -16,6 +16,8 @@ public static class LauncherSummaryBuilder
     public const int DayCount = 7;
     public const int TopGameCount = 5;
     public const int RecentSessionCount = 20;
+    public const int GameDayCount = 14;
+    public const int GameSessionCount = 5;
 
     public static LauncherSummaryDto Build(
         IReadOnlyCollection<LauncherSessionRow> sessions,
@@ -82,19 +84,33 @@ public static class LauncherSummaryBuilder
             .Take(TopGameCount)
             .ToList();
 
+        LauncherSessionDto SessionDto((LauncherSessionRow Row, DateOnly Day, long Seconds) session) => new(
+            session.Row.SessionId.ToString(CultureInfo.InvariantCulture),
+            GameId.Encode(session.Row.GameId),
+            Title(session.Row.GameId),
+            session.Row.PlatformKey,
+            session.Row.PlatformName,
+            session.Row.StartedAt,
+            session.Row.EndedAt,
+            session.Seconds);
+
         var recent = played
             .OrderByDescending(session => session.Row.StartedAt)
             .Take(RecentSessionCount)
-            .Select(session => new LauncherSessionDto(
-                session.Row.SessionId.ToString(CultureInfo.InvariantCulture),
-                GameId.Encode(session.Row.GameId),
-                Title(session.Row.GameId),
-                session.Row.PlatformKey,
-                session.Row.PlatformName,
-                session.Row.StartedAt,
-                session.Row.EndedAt,
-                session.Seconds))
+            .Select(SessionDto)
             .ToList();
+
+        // Each game's last 14 days, for its page: only games played in them, so the summary stays small.
+        var gameDaysStart = today.AddDays(-(GameDayCount - 1));
+        var recentByGame = played
+            .Where(session => session.Day >= gameDaysStart && session.Day <= today)
+            .GroupBy(session => session.Row.GameId)
+            .ToDictionary(group => group.Key, group => new LauncherGameRecentDto(
+                Enumerable.Range(0, GameDayCount)
+                    .Select(offset => group.Where(session => session.Day == gameDaysStart.AddDays(offset)).Sum(session => session.Seconds))
+                    .ToList(),
+                group.Count(),
+                group.OrderByDescending(session => session.Row.StartedAt).Take(GameSessionCount).Select(SessionDto).ToList()));
 
         var identitiesByGame = identities.ToLookup(identity => identity.GameId);
         var gameTotals = played
@@ -110,7 +126,8 @@ public static class LauncherSummaryBuilder
                     .Select(identity => new LauncherGameIdentityDto(identity.Type, identity.ExternalId))
                     .OrderBy(identity => identity.Type, StringComparer.Ordinal)
                     .ThenBy(identity => identity.ExternalId, StringComparer.Ordinal)
-                    .ToList()))
+                    .ToList(),
+                recentByGame.GetValueOrDefault(group.Key)))
             .OrderByDescending(game => game.LastPlayedAt)
             .ToList();
 
