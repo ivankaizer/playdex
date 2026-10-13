@@ -585,20 +585,15 @@ function BigPictureSettings({ state }: { state: DesktopState }) {
                 {paletteOption?.label ?? paletteId}
               </span>
             </button>
-            <StatusRow
-              icon={<MonitorPlay aria-hidden />}
-              label="Full Screen Experience home"
-              value={fse.state === "installed" ? "Installed. Choose Playdex in Settings → Gaming → Full screen experience" : "Set it up in desktop mode"}
-              on={fse.state === "installed"}
-            />
           </div>
         </section>
 
         <section className="bp-section" aria-labelledby="bp-connected">
           <h2 id="bp-connected" className="label">
-            Connected
+            Status
           </h2>
-          <div className="bp-rows">
+          {/* Set up in desktop mode: shown flat, never as a tile, so nothing here reads as something to press. */}
+          <div className="bp-rows bp-rows-static">
             <StatusRow
               icon={<UserRound aria-hidden />}
               label="Playdex account"
@@ -616,6 +611,12 @@ function BigPictureSettings({ state }: { state: DesktopState }) {
               label="Save backups"
               value={settings.ludusaviPath ? "Ludusavi is set up" : "Not set up"}
               on={!!settings.ludusaviPath}
+            />
+            <StatusRow
+              icon={<MonitorPlay aria-hidden />}
+              label="Full Screen Experience home"
+              value={fse.state === "installed" ? "Installed. Choose Playdex in Settings → Gaming → Full screen experience" : "Set it up in desktop mode"}
+              on={fse.state === "installed"}
             />
           </div>
         </section>

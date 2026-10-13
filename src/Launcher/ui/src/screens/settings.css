@@ -345,8 +345,18 @@
   height: 1.2rem;
   color: rgb(var(--muted));
 }
+/* Status rows are not controls: no tile and no border (tiles are what A presses), a hairline between them. */
+.bp-rows-static {
+  gap: 0;
+}
 .bp-row-static {
-  background: rgb(var(--tile) / 0.45);
+  min-height: 3.1rem;
+  background: none;
+  border: 0;
+  border-radius: 0;
+}
+.bp-row-static + .bp-row-static {
+  border-top: 1px solid rgb(var(--line));
 }
 .bp-row-text {
   display: grid;
