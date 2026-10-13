@@ -4,7 +4,6 @@ import { closeArmed, forceCloseGame, launch, nowPlaying, resumeGame, showToast }
 import { SaveGlyph, useSaves } from "../components/saves";
 import { Backdrop, Logo } from "../components/shared";
 import {
-  dailyFor,
   dayLabel,
   fmtHours,
   fmtMinutes,
@@ -12,13 +11,11 @@ import {
   isDemo,
   isInstalled,
   isOnPc,
-  lastPlayedDay,
   sessionEnd,
-  sessionsFor,
   SOURCE_LABEL,
-  statsFor,
   weekdayInitial,
 } from "../data/games";
+import { gameHistory, playdexConnected, playdexSummary } from "../data/playdex";
 import { rpc, type MessageView } from "../host/desktop";
 import { useStore } from "../nav/store";
 import "./game.css";
@@ -32,10 +29,10 @@ const favorites = new Set<string>(["hades2", "elden"]);
  */
 export function GamePage({ gameId }: { gameId: string }) {
   const game = gameById(gameId);
-  const st = statsFor(gameId);
-  const lastDay = st && lastPlayedDay(st);
-  const recent = sessionsFor(gameId);
-  const daily = dailyFor(gameId);
+  const history = gameHistory(useStore(playdexSummary), game);
+  const lastDay = history.lastPlayedDay;
+  const recent = history.sessions;
+  const daily = history.daily;
   const onPc = isOnPc(game);
   const installed = isInstalled(game);
   const [fav, setFav] = useState(favorites.has(gameId));
@@ -156,13 +153,13 @@ export function GamePage({ gameId }: { gameId: string }) {
           <h2 className="section-h">Your playtime</h2>
           <div className="gplay-top">
             <div className="gbig">
-              <b className="num">{fmtHours(game.totalMinutes)}</b>
+              <b className="num">{fmtHours(history.totalMinutes)}</b>
               <span>played in total</span>
             </div>
             <dl className="gfacts">
               <div>
                 <dt className="label">Last 7 days</dt>
-                <dd className="num">{st?.weekMinutes ? fmtMinutes(st.weekMinutes) : "—"}</dd>
+                <dd className="num">{history.last7Minutes ? fmtMinutes(history.last7Minutes) : "—"}</dd>
               </div>
               <div>
                 <dt className="label">Last played</dt>
@@ -170,7 +167,7 @@ export function GamePage({ gameId }: { gameId: string }) {
               </div>
               <div>
                 <dt className="label">Sessions, 14 days</dt>
-                <dd className="num">{recent.length}</dd>
+                <dd className="num">{history.sessionCount}</dd>
               </div>
             </dl>
           </div>
@@ -192,7 +189,7 @@ export function GamePage({ gameId }: { gameId: string }) {
           <h2 className="section-h">Recent sessions</h2>
           {recent.length ? (
             <ol>
-              {recent.slice(0, 5).map((s) => (
+              {recent.map((s) => (
                 <li key={`${s.dayOffset}-${s.start}`}>
                   <span className="gs-day">{dayLabel(s.dayOffset)}</span>
                   <span className="gs-time num">
@@ -204,9 +201,11 @@ export function GamePage({ gameId }: { gameId: string }) {
             </ol>
           ) : (
             <p className="gs-empty">
-              {isDemo
-                ? `No sessions in the last two weeks. Playdex holds ${fmtHours(game.totalMinutes)} of history for this game.`
-                : "No sessions recorded from this PC yet."}
+              {history.inPlaydex
+                ? `No sessions in the last two weeks. Playdex holds ${fmtHours(history.totalMinutes)} of history for this game.`
+                : isDemo || playdexConnected
+                  ? "No sessions in Playdex yet."
+                  : "Add your Playdex API key in Settings to see this game's history."}
             </p>
           )}
           <p className="gs-note">

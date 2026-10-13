@@ -128,6 +128,33 @@ public sealed class LauncherSummaryBuilderTests
     }
 
     [Fact]
+    public void GamesPlayedInTheLastFourteenDaysCarryThoseDaysAndTheirNewestFiveSessions()
+    {
+        var sessions = new[]
+        {
+            Session(1, 1, Now.AddHours(-2), minutes: 30), // today
+            Session(2, 1, Now.AddDays(-1), minutes: 20),
+            Session(3, 1, Now.AddDays(-1).AddHours(-3), minutes: 10),
+            Session(4, 1, Now.AddDays(-13), minutes: 40), // the first of the 14 days
+            Session(5, 1, Now.AddDays(-14), minutes: 50), // before them
+            Session(6, 1, Now.AddDays(-2), minutes: 5),
+            Session(7, 1, Now.AddDays(-3), minutes: 5),
+            Session(8, 2, Now.AddDays(-20), minutes: 60), // Hades II: not in the 14 days
+        };
+
+        var summary = LauncherSummaryBuilder.Build(sessions, Games, [], Now, Prague);
+
+        var control = summary.Games.Single(game => game.GameId == GameId.Encode(1)).Recent!;
+        Assert.Equal(14, control.DaySeconds.Count);
+        Assert.Equal(40 * 60, control.DaySeconds[0]);
+        Assert.Equal(30 * 60, control.DaySeconds[^1]);
+        Assert.Equal(30 * 60, control.DaySeconds[^2]);
+        Assert.Equal(6, control.SessionCount);
+        Assert.Equal(["1", "2", "3", "6", "7"], control.Sessions.Select(session => session.SessionId));
+        Assert.Null(summary.Games.Single(game => game.GameId == GameId.Encode(2)).Recent);
+    }
+
+    [Fact]
     public void RecentSessionsAreTheNewestTwenty()
     {
         var sessions = Enumerable.Range(1, 25).Select(i => Session(i, 1, Now.AddHours(-i), minutes: 10)).ToArray();

@@ -148,11 +148,58 @@
 .jtile[data-focused]::after {
   opacity: 1;
 }
-/* Steam's capsule art, wide (616 x 353), shown whole. */
+/* The card's art: data-art on .ribbon-home picks it (homeArt.ts). This PC's cached wide art is Steam's header
+ * (460 x 215), so Whole takes that shape and shows it all; capsule art (616 x 353, the CDN's when Steam has no header
+ * here) is letterboxed in it. */
 .jtile-art {
   border-radius: 1.1rem 1.1rem 0 0;
-  aspect-ratio: 616 / 353;
+  aspect-ratio: 460 / 215;
   font-size: 1.1rem;
+}
+.ribbon-home[data-art="whole"] .jtile-art img {
+  object-fit: contain;
+}
+/* Hero + logo: Steam's capsule shape, the hero art and logo stacked in it. */
+.ribbon-home[data-art="hero"] .jtile-art {
+  aspect-ratio: 616 / 353;
+}
+.jtile-frame {
+  position: relative;
+  display: block;
+  overflow: hidden;
+  background: rgb(var(--track));
+}
+/* Hero + logo: the game's hero art (made to be cropped, no text on it) with its logo, like the large card. */
+.jtile-hero > .jtile-hero-art {
+  position: absolute;
+  inset: 0;
+}
+.jtile-hero-scrim {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(20deg, rgb(var(--scrim) / 0.75) 0%, rgb(var(--scrim) / 0.25) 45%, transparent 70%);
+}
+.jtile-logo {
+  position: absolute;
+  left: 0.8rem;
+  bottom: 0.7rem;
+  max-width: 62%;
+  max-height: 46%;
+  object-fit: contain;
+  object-position: left bottom;
+  filter: drop-shadow(0 0.15rem 0.4rem rgba(0, 0, 0, 0.5));
+}
+.jtile-logo-title {
+  position: absolute;
+  left: 0.8rem;
+  right: 0.8rem;
+  bottom: 0.6rem;
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 600;
+  line-height: 1.1;
+  color: #fff;
+  text-shadow: 0 0.1rem 0.4rem rgba(0, 0, 0, 0.6);
 }
 .jtile-foot {
   display: grid;

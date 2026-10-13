@@ -196,7 +196,8 @@ img {
   white-space: nowrap;
 }
 .seg-btn[aria-selected="true"],
-.seg-btn[aria-pressed="true"] {
+.seg-btn[aria-pressed="true"],
+.seg-btn[aria-checked="true"] {
   background: rgb(var(--seg-on));
   color: rgb(var(--seg-on-ink));
 }
