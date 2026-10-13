@@ -3,11 +3,14 @@
  * the UI falls back to keyboard, browser Gamepad input and a simulated launch.
  */
 
+export type SessionState = "starting" | "steam" | "running" | "ended";
+
 export type HostMessage =
   | { type: "dir"; dir: "up" | "down" | "left" | "right"; id: number }
   | { type: "action"; action: "confirm" | "back" | "x" | "y" | "lb" | "rb" | "view" | "menu" | "guide"; id: number }
   | { type: "home" }
-  | { type: "session"; gameId: string; state: "starting" | "running" | "ended"; seconds: number }
+  /** "steam": waiting for the Steam client to start and log in; "starting" again once the game is being started. */
+  | { type: "session"; gameId: string; state: SessionState; seconds: number }
   /** Launch request from outside the UI: playdex-launcher://launch/<gameId> or the host's --launch flag. */
   | { type: "launch"; gameId: string }
   /** Quick settings state, sent after every quick settings request. `error` is set when a change failed. */

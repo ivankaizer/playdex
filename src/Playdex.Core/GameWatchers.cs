@@ -40,6 +40,13 @@ public sealed partial class SteamGameWatcher : IGameWatcher
     /// </summary>
     private static readonly TimeSpan _coldStartRetry = TimeSpan.FromSeconds(15);
 
+    /// <summary>
+    /// A client that has just logged in can still drop the URL while it settles (logged: sent 29 s after Steam started,
+    /// the game never ran). A launch this soon after Steam started, such as Play again after leaving a cold start that
+    /// was taking long, is treated as a cold start.
+    /// </summary>
+    private static readonly TimeSpan _clientSettleTime = TimeSpan.FromMinutes(2);
+
     private readonly int _appId;
     private readonly RegistryKey _key;
     private readonly AutoResetEvent _changed = new(false);
@@ -58,6 +65,12 @@ public sealed partial class SteamGameWatcher : IGameWatcher
 
     public event Action? Running;
     public event Action<long, long>? Exited;
+
+    /// <summary>
+    /// True while the launch waits for the Steam client to start and log in, false once it is in and the game is
+    /// being started. Only raised when Steam was not logged in at launch.
+    /// </summary>
+    public event Action<bool>? WaitingForSteam;
 
     private SteamGameWatcher(int appId, RegistryKey key)
     {
@@ -82,13 +95,19 @@ public sealed partial class SteamGameWatcher : IGameWatcher
         {
             Arm();
         }
-        if (SteamClient.IsLoggedIn())
+        var settled = SteamClient.RunningFor() is not { } age || age >= _clientSettleTime;
+        if (settled && SteamClient.IsLoggedIn())
         {
             RequestLaunch();
         }
         else if (SteamClient.StartIfNeeded())
         {
-            _ = Task.Factory.StartNew(LaunchAfterLogin, _cancel.Token, TaskCreationOptions.LongRunning, TaskScheduler.Default);
+            var waiting = !SteamClient.IsLoggedIn();
+            if (waiting)
+            {
+                WaitingForSteam?.Invoke(true);
+            }
+            _ = Task.Factory.StartNew(() => LaunchAfterLogin(waiting), _cancel.Token, TaskCreationOptions.LongRunning, TaskScheduler.Default);
         }
         else
         {
@@ -104,15 +123,19 @@ public sealed partial class SteamGameWatcher : IGameWatcher
         Log.Info($"steam: launch requested for {_appId}");
     }
 
-    /// <summary>Cold start: wait for Steam's login, then send the launch URL until the game runs.</summary>
-    private void LaunchAfterLogin()
+    /// <summary>Cold start (or Steam started moments ago): wait for Steam's login, then send the launch URL until the game runs.</summary>
+    private void LaunchAfterLogin(bool waiting)
     {
         var started = Stopwatch.GetTimestamp();
         if (!SteamClient.WaitForLogin(_startTimeout, _cancel.Token))
         {
             return; // Disposed, or the start timeout ends the session.
         }
-        Log.Info($"steam: logged in after {Stopwatch.GetElapsedTime(started).TotalSeconds:N1} s");
+        if (waiting)
+        {
+            Log.Info($"steam: logged in after {Stopwatch.GetElapsedTime(started).TotalSeconds:N1} s");
+            WaitingForSteam?.Invoke(false);
+        }
         while (!_cancel.IsCancellationRequested && !_running && !_exited)
         {
             RequestLaunch();

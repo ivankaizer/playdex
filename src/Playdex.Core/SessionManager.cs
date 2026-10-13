@@ -4,7 +4,8 @@ namespace Playdex.Core;
 
 /// <summary>
 /// Launches a game, follows it to exit, records the session to Playdex (<see cref="SessionRecorder"/>) and reports each
-/// state change (gameId, "starting" | "running" | "ended", seconds played) through <paramref name="report"/>, from any
+/// state change (gameId, "starting" | "steam" | "running" | "ended", seconds played; "steam": waiting for the Steam client
+/// to start and log in before the game can be started) through <paramref name="report"/>, from any
 /// thread. A Steam game is not recorded while <paramref name="steamPolling"/> says Playdex polls the user's Steam
 /// account: that records it already, and recording it here too would count the session twice.
 /// </summary>
@@ -54,7 +55,7 @@ public sealed class SessionManager(
             if (_active is not null)
             {
                 Log.Info($"session: {_active.GameId} is still active; ignoring launch of {gameId}");
-                Post(gameId, _active.GameId == gameId ? (_active.RunningSince is null ? "starting" : "running") : "ended", 0);
+                Post(gameId, _active.GameId == gameId ? _active.State : "ended", 0);
                 return;
             }
         }
@@ -92,6 +93,10 @@ public sealed class SessionManager(
             _active = session;
         }
         watcher.Running += () => OnRunning(session);
+        if (watcher is SteamGameWatcher steam)
+        {
+            steam.WaitingForSteam += waiting => OnWaitingForSteam(session, waiting);
+        }
         watcher.Exited += (detected, processExit) => OnExited(session, detected, processExit);
         Post(gameId, "starting", 0);
         try
@@ -140,6 +145,19 @@ public sealed class SessionManager(
             session.Recorder = new SessionRecorder(api, queue, capture, _pingInterval, seconds => Post(session.GameId, "running", seconds));
             session.Recorder.Start();
         }
+    }
+
+    private void OnWaitingForSteam(ActiveSession session, bool waiting)
+    {
+        lock (_gate)
+        {
+            if (_active != session || session.RunningSince is not null)
+            {
+                return;
+            }
+            session.WaitingForSteam = waiting;
+        }
+        Post(session.GameId, session.State, 0);
     }
 
     private void OnExited(ActiveSession session, long detected, long processExit)
@@ -191,6 +209,9 @@ public sealed class SessionManager(
         public CaptureGame? Capture { get; } = capture;
         public SessionRecorder? Recorder { get; set; }
         public long? RunningSince { get; set; }
+        public bool WaitingForSteam { get; set; }
+
+        public string State => RunningSince is not null ? "running" : WaitingForSteam ? "steam" : "starting";
 
         public int Seconds => RunningSince is { } since ? (int)Stopwatch.GetElapsedTime(since).TotalSeconds : 0;
     }

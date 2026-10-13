@@ -26,6 +26,21 @@ public static class SteamClient
         return key is not null && IsLoggedIn(key);
     }
 
+    /// <summary>How long the client process has been running; null if it isn't running or its start time is unknown.</summary>
+    public static TimeSpan? RunningFor()
+    {
+        using var key = Registry.CurrentUser.OpenSubKey(ActiveProcessKey, writable: false);
+        using var process = key is null ? null : ClientProcess(key);
+        try
+        {
+            return process is null ? null : DateTime.Now - process.StartTime;
+        }
+        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException)
+        {
+            return null;
+        }
+    }
+
     /// <summary>
     /// Start Steam if it isn't running, in the tray (-silent) so no Steam window covers the launcher. Not tested
     /// without a saved login. False if Steam is not installed or could not be started.
@@ -91,18 +106,29 @@ public static class SteamClient
     /// <summary>The pid value survives a Steam crash, so check that it is still a Steam process.</summary>
     private static bool IsClientAlive(RegistryKey key)
     {
+        using var process = ClientProcess(key);
+        return process is not null;
+    }
+
+    private static Process? ClientProcess(RegistryKey key)
+    {
         if (key.GetValue("pid") is not int pid || pid == 0)
         {
-            return false;
+            return null;
         }
         try
         {
-            using var process = Process.GetProcessById(pid);
-            return process.ProcessName.Equals("steam", StringComparison.OrdinalIgnoreCase);
+            var process = Process.GetProcessById(pid);
+            if (process.ProcessName.Equals("steam", StringComparison.OrdinalIgnoreCase))
+            {
+                return process;
+            }
+            process.Dispose();
+            return null;
         }
         catch (ArgumentException)
         {
-            return false;
+            return null;
         }
     }
 }
