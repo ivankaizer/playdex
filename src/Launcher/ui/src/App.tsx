@@ -1,4 +1,4 @@
-import { Moon, SlidersHorizontal, Sun } from "lucide-react";
+import { Moon, SlidersHorizontal, Sun, UserRound, UserRoundCheck, UserRoundX } from "lucide-react";
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import {
   closeGame,
@@ -237,9 +237,12 @@ export function App() {
               <SlidersHorizontal />
             </button>
             <Clock />
-            <span className="avatar" aria-label="Signed in to Playdex">
-              I
-            </span>
+            <Account
+              onOpen={() => {
+                closeGame();
+                setTab("Settings");
+              }}
+            />
           </div>
         </header>
 
@@ -295,9 +298,37 @@ const PRIMARY: Record<string, string> = {
   "daily-backup": "Daily backup",
   details: "Open",
   "now-playing": "Resume",
+  account: "Settings",
   playing: "Resume",
   steam: "Open",
 };
+
+/**
+ * The Playdex account in the top bar: connected (an API key is saved) or not, from the app's settings, which Big Picture
+ * loads a few seconds after start; until then it claims neither. Opens Settings. Its own component, like UpdateDot.
+ */
+function Account({ onOpen }: { onOpen: () => void }) {
+  const keySet = useStore(desktopState)?.settings.apiKeySet;
+  const [Icon, label] =
+    keySet === undefined
+      ? [UserRound, "Playdex account"]
+      : keySet
+        ? [UserRoundCheck, "Connected to Playdex"]
+        : [UserRoundX, "Not connected to Playdex: add an API key in Settings"];
+  return (
+    <button
+      className="avatar"
+      data-state={keySet === undefined ? undefined : keySet ? "on" : "off"}
+      data-nav
+      data-kind="account"
+      aria-label={label}
+      title={label}
+      onClick={onOpen}
+    >
+      <Icon aria-hidden />
+    </button>
+  );
+}
 
 /** On the Settings tab while an update waits for a restart. Its own component, so state pushes don't re-render App. */
 function UpdateDot() {

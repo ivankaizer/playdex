@@ -175,7 +175,8 @@ let demoState: DesktopState = {
   ],
   settings: {
     baseUrl: "https://dash.playdex.dev/api",
-    apiKeySet: true,
+    // ?nokey shows Playdex without an API key.
+    apiKeySet: !new URLSearchParams(location.search).has("nokey"),
     platform: "pc",
     steamGridDbKeySet: false,
     ludusaviPath: "C:\\Tools\\ludusavi.exe",
