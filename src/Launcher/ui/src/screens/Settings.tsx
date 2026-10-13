@@ -1,4 +1,4 @@
-import { AppWindow, Archive, Check, Download, Gamepad2, ImageIcon, MonitorPlay, Power, RotateCw, UserRound } from "lucide-react";
+import { AppWindow, Archive, Check, Download, Gamepad2, ImageIcon, LayoutGrid, MonitorPlay, Power, RotateCw, UserRound } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { focusScreenDefault } from "../nav/focus";
 import { showToast } from "../app-state";
@@ -16,6 +16,7 @@ import {
   type PlatformOption,
   type UpdateView,
 } from "../host/desktop";
+import { HOME_ART, homeArt, nextHomeArt, setHomeArt } from "../homes/homeArt";
 import { useStore } from "../nav/store";
 import "./desk.css";
 import "./settings.css";
@@ -159,6 +160,7 @@ function DesktopSettingsScreen({ state }: { state: DesktopState }) {
   const [platformError, setPlatformError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [startWithWindows, changeStartWithWindows] = useStartWithWindows(saved.startWithWindows);
+  const art = useStore(homeArt);
 
   useLandOnDefault();
 
@@ -325,6 +327,26 @@ function DesktopSettingsScreen({ state }: { state: DesktopState }) {
             </Row>
           </Section>
 
+          <Section id="look" icon={<LayoutGrid />} title="Appearance" note="How Home looks. Applies at once, on this screen.">
+            <Row label="Home game art" hint={HOME_ART.find((a) => a.id === art)!.note}>
+              <div className="seg" role="radiogroup" aria-label="Home game art">
+                {HOME_ART.map((a) => (
+                  <button
+                    key={a.id}
+                    className="seg-btn"
+                    role="radio"
+                    aria-checked={art === a.id}
+                    data-nav
+                    data-kind="setting"
+                    onClick={() => setHomeArt(a.id)}
+                  >
+                    {a.label}
+                  </button>
+                ))}
+              </div>
+            </Row>
+          </Section>
+
           <Section id="app" icon={<AppWindow />} title="This app" note="How Playdex opens, and what it does in the background.">
             <Row label="Big Picture" hint="Full screen and controller first, for the TV or a handheld. Playdex then opens that way; switch back from Quick settings.">
               <button className="btn btn-outline" data-nav data-kind="setting" onClick={() => switchMode("bigPicture").catch(failed)}>
@@ -414,6 +436,8 @@ function BigPictureSettings({ state }: { state: DesktopState }) {
   const { settings, update, fse } = state;
   const [startWithWindows, changeStartWithWindows] = useStartWithWindows(settings.startWithWindows);
   const ready = update.kind === "ready";
+  const artId = useStore(homeArt);
+  const art = HOME_ART.find((a) => a.id === artId)!;
 
   useLandOnDefault();
 
@@ -463,6 +487,14 @@ function BigPictureSettings({ state }: { state: DesktopState }) {
               <span className="switch" aria-hidden>
                 <i />
               </span>
+            </button>
+            <button className="bp-row" data-nav data-kind="setting" onClick={() => setHomeArt(nextHomeArt(art.id))}>
+              <LayoutGrid aria-hidden />
+              <span className="bp-row-text">
+                <span className="bp-row-name">Home game art</span>
+                <small>{art.note}</small>
+              </span>
+              <span className="bp-row-action">{art.label}</span>
             </button>
             <StatusRow
               icon={<MonitorPlay aria-hidden />}

@@ -12,10 +12,12 @@ import {
   sessionEnd,
   SOURCE_LABEL,
   useRecentGames,
+  type Game,
   type GameStats,
 } from "../data/games";
 import { daysAgo, playdexConnected, playdexGame, playdexSummary, type PlaydexSummary } from "../data/playdex";
 import { useStore } from "../nav/store";
+import { homeArt, type HomeArt } from "./homeArt";
 import "./ribbon.css";
 
 const minutes = (seconds: number) => Math.round(seconds / 60);
@@ -55,7 +57,7 @@ export function RibbonHome() {
   );
 
   return (
-    <main className="ribbon-home">
+    <main className="ribbon-home" data-art={useStore(homeArt)}>
       <Backdrop className="ribbon-backdrop" />
 
       <section className="jump" aria-labelledby="jump-h">
@@ -125,7 +127,7 @@ export function RibbonHome() {
                 data-kind="game"
                 onClick={() => launch(r.game.id)}
               >
-                <Cover game={r.game} kind="capsule" className="jtile-art" />
+                <CardArt game={r.game} />
                 <span className="jtile-foot">
                   <span className="jtile-title">{r.game.title}</span>
                   <span className="jtile-sub num">
@@ -141,6 +143,21 @@ export function RibbonHome() {
       {summary ? <PlaydexRail summary={summary} /> : <EmptyRail />}
     </main>
   );
+}
+
+/** A card's art, as Settings → Home game art has it (homeArt.ts); the shape and fit are in ribbon.css. */
+function CardArt({ game }: { game: Game }) {
+  const style: HomeArt = useStore(homeArt);
+  if (style === "hero") {
+    return (
+      <span className="jtile-art jtile-frame jtile-hero">
+        <Cover game={game} kind="hero" className="jtile-hero-art" />
+        <span className="jtile-hero-scrim" aria-hidden />
+        <Logo game={game} className="jtile-logo" titleClass="jtile-logo-title" />
+      </span>
+    );
+  }
+  return <Cover game={game} kind="capsule" className="jtile-art" />;
 }
 
 /** Only Playdex data: what the user's sessions in Playdex add up to, in this PC's time zone. */
