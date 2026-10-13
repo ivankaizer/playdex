@@ -342,6 +342,9 @@ internal sealed partial class ShellWindow : Window
                     Post("""{"type":"resume-failed"}""");
                 }
                 break;
+            case "close-game":
+                _ = CloseGameAsync(message.GetProperty("gameId").GetString()!);
+                break;
             case "fps-counter":
                 PostQuickSettings(NvidiaOverlay.ToggleStatistics, "show or hide the FPS counter");
                 break;
@@ -535,6 +538,36 @@ internal sealed partial class ShellWindow : Window
             _detecting = false;
         }
     }
+
+    /// <summary>
+    /// Force-close the running game (<see cref="GameCloser"/>). Only the game reported as running, so the page can't end
+    /// anything else. Its watcher reports the exit as usual; "close-failed" tells the page when nothing could be ended.
+    /// </summary>
+    private async Task CloseGameAsync(string gameId)
+    {
+        if (_nowPlaying is not { } running || running.GameId != gameId || _services.FindGame(gameId) is not { } game)
+        {
+            Log.Info($"close: {gameId} is not running");
+            PostCloseFailed("The game isn't running anymore.");
+            return;
+        }
+        var result = await Task.Run(() => GameCloser.Close(_services.Config, game, running.ProcessId));
+        Log.Info($"close: {gameId}: {result.Closed} ended, {result.Denied} denied");
+        if (result.Closed == 0)
+        {
+            PostCloseFailed(result.Denied > 0
+                ? "Windows didn't let Playdex close the game. Close it from the game or Task Manager."
+                : "Couldn't find the game's processes.");
+            return;
+        }
+        _gameWindow = 0;
+        // Watchers notice within moments; a game found running elsewhere is only seen by the next detection.
+        await Task.Delay(1500);
+        _ = RefreshNowPlayingAsync();
+    }
+
+    private void PostCloseFailed(string message) =>
+        Post($$"""{"type":"close-failed","message":{{JsonSerializer.Serialize(message, HostJson.Default.String)}}}""");
 
     /// <summary>While a game is in front the page is hidden and suspended, so it costs no CPU.</summary>
     private async Task SuspendWebViewAsync()

@@ -79,6 +79,8 @@ onHostMessage((m) => {
     if (m.gameId) markPlayed(m.gameId);
   } else if (m.type === "resume-failed") {
     showToast("Couldn't find the game's window");
+  } else if (m.type === "close-failed") {
+    showToast(m.message);
   } else if (m.type === "open-steam-failed") {
     showToast("Steam isn't installed on this PC");
   }
@@ -100,6 +102,34 @@ export function resumeGame() {
     return;
   }
   postToHost({ type: "resume-game" });
+}
+
+/** The running game armed for force close: a second request within {@link CLOSE_ARM_MS} closes it. */
+export const closeArmed = createStore<string | null>(null);
+const CLOSE_ARM_MS = 3000;
+let closeDisarm = 0;
+
+/**
+ * Force-close the running game, as Task Manager's End task would (no chance to save). The first request arms it and
+ * asks to confirm; a second within 3 s closes it. Its exit then shows as usual (the top bar and Home stop saying so).
+ */
+export function forceCloseGame(gameId: string) {
+  const title = gameById(gameId)?.title ?? "the game";
+  window.clearTimeout(closeDisarm);
+  if (closeArmed.get() !== gameId) {
+    closeArmed.set(gameId);
+    closeDisarm = window.setTimeout(() => closeArmed.set(null), CLOSE_ARM_MS);
+    showToast(`Press again to close ${title}. Unsaved progress is lost.`);
+    return;
+  }
+  closeArmed.set(null);
+  showToast(`Closing ${title}…`);
+  if (!inHost) {
+    // The browser stand-in: the game exits at once.
+    if (nowPlaying.get()?.gameId === gameId) nowPlaying.set(null);
+    return;
+  }
+  postToHost({ type: "close-game", gameId });
 }
 
 export function openGame(gameId: string) {

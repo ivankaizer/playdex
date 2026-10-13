@@ -73,6 +73,22 @@ public sealed class RunningGamesTests : IDisposable
     }
 
     [Fact]
+    public void CloseEndsTheGameWithItsChildren()
+    {
+        using var running = Start(_game);
+
+        var result = GameCloser.Close(Config(new MonitorConfig { Mode = MonitorMode.LaunchedProcess }), _library["playdex-test"], processId: null);
+
+        Assert.Equal(new CloseResult(1, 0), result);
+        Assert.True(running.WaitForExit(5000), "the game exited");
+        Assert.Null(RunningGames.Detect(Config(new MonitorConfig { Mode = MonitorMode.LaunchedProcess }), _library));
+    }
+
+    [Fact]
+    public void CloseWithNothingRunningEndsNothing() =>
+        Assert.Equal(new CloseResult(0, 0), GameCloser.Close(Config(new MonitorConfig { Mode = MonitorMode.LaunchedProcess }), _library["playdex-test"], processId: null));
+
+    [Fact]
     public void NothingRunningIsNull() =>
         Assert.Null(RunningGames.Detect(Config(new MonitorConfig { Mode = MonitorMode.LaunchedProcess }), _library));
 

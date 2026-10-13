@@ -1,6 +1,7 @@
 import { Download, ExternalLink, MonitorSmartphone } from "lucide-react";
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { openGame, openSteam } from "../app-state";
+import { SaveGlyph, useSaves } from "../components/saves";
 import { Cover } from "../components/shared";
 import { fmtHours, games, isInstalled, isOnPc, recentGames, SOURCE_LABEL, useRecentGames, type Game, type GameStats } from "../data/games";
 import { playdexGame, playdexSummary } from "../data/playdex";
@@ -163,6 +164,7 @@ const CoverItem = memo(function CoverItem({ game, isDefault }: { game: Game; isD
   const installed = isInstalled(game);
   // Hours played as Playdex has them; "—" for a game with no Playdex sessions.
   const played = playdexGame(useStore(playdexSummary), game);
+  const saves = useSaves(game.id)?.status;
   return (
     <button
       className="lcover"
@@ -179,6 +181,11 @@ const CoverItem = memo(function CoverItem({ game, isDefault }: { game: Game; isD
           <span className="lcover-badge">
             {onPc ? <Download /> : <MonitorSmartphone />}
             {onPc ? "Not installed" : SOURCE_LABEL[game.source]}
+          </span>
+        )}
+        {saves && (
+          <span className="lcover-save" title={saves.label}>
+            <SaveGlyph kind={saves.kind} />
           </span>
         )}
       </span>

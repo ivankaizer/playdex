@@ -1,7 +1,9 @@
-import { Moon, SlidersHorizontal, Sun } from "lucide-react";
+import { Moon, SlidersHorizontal, Sun, UserRound, UserRoundCheck, UserRoundX } from "lucide-react";
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import {
+  closeArmed,
   closeGame,
+  forceCloseGame,
   launch,
   launching,
   leaveLaunch,
@@ -173,6 +175,12 @@ export function App() {
           openGame(game);
           return true;
         }
+        // X on the running game (the top bar's Playing, Home's tile, its page) force-closes it, after a confirming X.
+        const running = nowPlaying.get()?.gameId;
+        if (a === "x" && running && ["now-playing", "playing", "close-game"].includes(kind)) {
+          forceCloseGame(running);
+          return true;
+        }
         if (a === "x" && game && kind === "cover" && isInstalled(gameById(game))) {
           launch(game);
           return true;
@@ -237,9 +245,12 @@ export function App() {
               <SlidersHorizontal />
             </button>
             <Clock />
-            <span className="avatar" aria-label="Signed in to Playdex">
-              I
-            </span>
+            <Account
+              onOpen={() => {
+                closeGame();
+                setTab("Settings");
+              }}
+            />
           </div>
         </header>
 
@@ -291,11 +302,42 @@ const PRIMARY: Record<string, string> = {
   "cover-off": "Open",
   install: "Install",
   favorite: "Favorite",
+  backup: "Back up",
+  "daily-backup": "Daily backup",
+  "close-game": "Close game",
   details: "Open",
   "now-playing": "Resume",
+  account: "Settings",
   playing: "Resume",
   steam: "Open",
 };
+
+/**
+ * The Playdex account in the top bar: connected (an API key is saved) or not, from the app's settings, which Big Picture
+ * loads a few seconds after start; until then it claims neither. Opens Settings. Its own component, like UpdateDot.
+ */
+function Account({ onOpen }: { onOpen: () => void }) {
+  const keySet = useStore(desktopState)?.settings.apiKeySet;
+  const [Icon, label] =
+    keySet === undefined
+      ? [UserRound, "Playdex account"]
+      : keySet
+        ? [UserRoundCheck, "Connected to Playdex"]
+        : [UserRoundX, "Not connected to Playdex: add an API key in Settings"];
+  return (
+    <button
+      className="avatar"
+      data-state={keySet === undefined ? undefined : keySet ? "on" : "off"}
+      data-nav
+      data-kind="account"
+      aria-label={label}
+      title={label}
+      onClick={onOpen}
+    >
+      <Icon aria-hidden />
+    </button>
+  );
+}
 
 /** On the Settings tab while an update waits for a restart. Its own component, so state pushes don't re-render App. */
 function UpdateDot() {
@@ -337,6 +379,7 @@ function HintBar({ onGamePage }: { onGamePage: boolean }) {
     <footer className="hints">
       <Hint glyph="A">{PRIMARY[kind] ?? "Select"}</Hint>
       {kind === "cover" && <Hint glyph="X">Play</Hint>}
+      {["now-playing", "playing"].includes(kind) && <Hint glyph="X">Close game</Hint>}
       {!onGamePage && ["game", "session", "continue", "playing", "cover", "cover-off"].includes(kind) && <Hint glyph="Y">Details</Hint>}
       {onGamePage && <Hint glyph="B">Back</Hint>}
       <Hint glyph="LB">Sections</Hint>
@@ -393,6 +436,12 @@ function LaunchOverlay({ gameId }: { gameId: string }) {
           resumeGame();
           return true;
         }
+        if (a === "x" && runningRef.current) {
+          forceCloseGame(gameId);
+          // The browser stand-in has no exit to report: leave once confirmed.
+          if (!inHost && closeArmed.get() === null) leaveLaunch();
+          return true;
+        }
         return true;
       }),
     [],
@@ -425,6 +474,7 @@ function LaunchOverlay({ gameId }: { gameId: string }) {
         )}
         <footer className="hints">
           {running && <Hint glyph="A">Resume game</Hint>}
+          {running && <Hint glyph="X">Close game</Hint>}
           <Hint glyph="B">Back to home</Hint>
           <span>The game window takes over here; the Xbox button brings this screen back.</span>
         </footer>

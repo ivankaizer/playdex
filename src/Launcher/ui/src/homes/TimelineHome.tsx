@@ -140,7 +140,7 @@ function SessionStage() {
         </span>
         <Logo game={game} className="stage-logo" titleClass="stage-title" />
         <p className="stage-meta num">
-          {fmtMinutes(st.weekMinutes)} this week
+          {fmtMinutes(st.weekMinutes)} in the last 7 days
           <span aria-hidden>·</span>
           {played} {played === 1 ? "session" : "sessions"} in two weeks
           <span aria-hidden>·</span>

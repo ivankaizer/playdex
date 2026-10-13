@@ -226,17 +226,31 @@ img {
   height: 1rem;
   color: rgb(var(--muted));
 }
+/* The Playdex account: mint while connected, a plain outline otherwise; the icon says which too (check or cross). */
 .avatar {
   width: 1.9rem;
   height: 1.9rem;
   border-radius: 99px;
   display: grid;
   place-items: center;
+  background: rgb(var(--surface));
+  color: rgb(var(--muted));
+  border: 1px solid rgb(var(--line));
+}
+.avatar[data-state="on"] {
   background: rgb(var(--mint));
   color: rgb(var(--accent));
-  border: 1px solid rgb(var(--mint-line));
-  font-size: 0.74rem;
-  font-weight: 700;
+  border-color: rgb(var(--mint-line));
+}
+.avatar[data-state="off"] {
+  color: rgb(var(--ink));
+  border-style: dashed;
+  border-color: rgb(var(--ink-2) / 0.7);
+}
+.status .avatar svg {
+  width: 0.95rem;
+  height: 0.95rem;
+  color: currentColor;
 }
 .icon-btn {
   width: 1.9rem;
@@ -566,6 +580,35 @@ html[data-mode="desktop"][data-input="pointer"] .hints .hint {
 @keyframes pulse {
   50% {
     opacity: 0.35;
+  }
+}
+
+/* ---------- Save backups (components/saves.tsx) ---------- */
+.save-glyph {
+  flex: none;
+  width: 1em;
+  height: 1em;
+  color: rgb(var(--muted));
+}
+.save-glyph[data-kind="success"] {
+  color: rgb(var(--accent));
+}
+.save-glyph[data-kind="due"],
+.save-glyph[data-kind="failed"] {
+  color: rgb(var(--chart-sand));
+}
+.save-glyph[data-kind="running"] {
+  color: rgb(var(--accent));
+  animation: spin 1s linear infinite;
+}
+.save-note {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+@keyframes spin {
+  to {
+    transform: rotate(1turn);
   }
 }
 

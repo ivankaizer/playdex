@@ -12,6 +12,13 @@ public static class SteamClient
 {
     private const string ActiveProcessKey = @"Software\Valve\Steam\ActiveProcess";
 
+    /// <summary>A client process is alive.</summary>
+    public static bool IsRunning()
+    {
+        using var key = Registry.CurrentUser.OpenSubKey(ActiveProcessKey, writable: false);
+        return key is not null && IsClientAlive(key);
+    }
+
     /// <summary>A client process is alive and a user is logged in.</summary>
     public static bool IsLoggedIn()
     {
