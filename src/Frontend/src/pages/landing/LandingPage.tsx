@@ -7,6 +7,7 @@ import { formatHoursShort } from "@/lib/format";
 import { platformColor } from "@/lib/platforms";
 import { dashUrl } from "./dashUrl";
 import { LandingHeader } from "./LandingHeader";
+import { PasteDemo, steamCover, SyncDemo, TimerDemo } from "./LandingDemos";
 
 export { dashUrl };
 
@@ -29,8 +30,6 @@ const previewPlatforms: ReadonlyArray<{ key: string; label: string; value: numbe
   { key: "switch-1", label: "Switch", value: 6, hours: "7.6h" },
 ];
 
-/** Steam library art for the sample games (portrait, 600px wide). */
-const steamCover = (appId: number) => `https://cdn.cloudflare.steamstatic.com/steam/apps/${appId}/library_600x900_2x.jpg`;
 
 const previewTopGames: ReadonlyArray<{ gameId: string; title: string; hours: number; cover: string }> = [
   { gameId: "hades-2", title: "Hades II", hours: 26.4, cover: steamCover(1145350) },
@@ -66,57 +65,10 @@ const topGameBars: readonly BarDatum[] = previewTopGames.map((game) => ({
   highlight: game.gameId === peakGame.gameId,
 }));
 
-const iconProps = {
-  "aria-hidden": true,
-  viewBox: "0 0 24 24",
-  className: "h-6 w-6",
-  fill: "none",
-  stroke: "currentColor",
-  strokeWidth: 1.8,
-  strokeLinecap: "round",
-  strokeLinejoin: "round",
-} as const;
-
-const features: ReadonlyArray<{ title: string; body: string; icon: ReactNode }> = [
-  {
-    title: "Steam, PlayStation and Xbox, synced for you",
-    body: "Connect once and every session shows up on its own. No timers to start, nothing to forget.",
-    icon: (
-      <svg {...iconProps}>
-        <path d="M21 12a9 9 0 1 1-2.64-6.36"></path>
-        <path d="M21 3v6h-6"></path>
-      </svg>
-    ),
-  },
-  {
-    title: "Log a whole weekend in one paste",
-    body: "Describe what you played or drop a screenshot. AI turns it into sessions you review and accept.",
-    icon: (
-      <svg {...iconProps}>
-        <path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"></path>
-        <path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"></path>
-      </svg>
-    ),
-  },
-  {
-    title: "Your year in games, on demand",
-    body: "Peak hours, longest streak, most-binged title and where the time really went, for any year or range.",
-    icon: (
-      <svg {...iconProps}>
-        <path d="M4 20V10M10 20V4M16 20v-7M22 20H2"></path>
-      </svg>
-    ),
-  },
-  {
-    title: "Switch, retro, anything else",
-    body: "Start a live timer or log past sessions for platforms that don't sync, and they count like the rest.",
-    icon: (
-      <svg {...iconProps}>
-        <circle cx="12" cy="13" r="8"></circle>
-        <path d="M12 9v4l2.5 1.5M10 2h4"></path>
-      </svg>
-    ),
-  },
+const demos: ReadonlyArray<{ title: string; body: string; demo: ReactNode }> = [
+  { title: "Syncs by itself", body: "Connect Steam, PlayStation or Xbox. Sessions just appear.", demo: <SyncDemo /> },
+  { title: "Paste your weekend", body: "Write what you played. AI drafts the sessions.", demo: <PasteDemo /> },
+  { title: "Time anything else", body: "Switch, retro, anything: start a timer.", demo: <TimerDemo /> },
 ];
 
 /** playdex.dev: the public landing, a static page served from Cloudflare Pages. */
@@ -128,38 +80,30 @@ export function LandingPage() {
 
         <section className="flex flex-col gap-7 px-2 pb-6 pt-6 sm:pt-10">
           <h1 className="m-0 max-w-[16em] text-[clamp(40px,9vw,68px)] font-semibold leading-[1.02] tracking-[-0.035em]">
-            Your cross-platform playtime, <span className="text-accent">perfectly organized.</span>
+            All your playtime, <span className="text-accent">one place.</span>
           </h1>
           <p className="m-0 max-w-[34em] text-pretty text-[17px] leading-[1.55] text-ink-2 sm:text-[19px]">
-            Connect your gaming accounts and keep a living history of your sessions, streaks, and favorite titles across
-            platforms.
+            Every session from every platform, in one history.
           </p>
           <PlatformChips />
           <div className="flex flex-wrap items-center gap-4">
             <a href={dashUrl} className="pdx-btn-primary !h-[52px] !px-7 !text-[15px] no-underline">
               Open Playdex →
             </a>
-            <span className="text-[13px] text-muted">Invite-only for now. Ask an admin for access.</span>
+            <span className="text-[13px] text-muted">Invite-only for now.</span>
           </div>
         </section>
 
-        <section className="flex flex-col gap-5">
-          <div className="px-2">
-            <p className="pdx-kicker">Features</p>
-            <h2 className="mb-1.5 mt-2 text-[32px] font-semibold tracking-[-0.01em]">Every hour you play, accounted for</h2>
-            <p className="m-0 text-[15px] text-muted">
-              Automatic where it can be, effortless where it can't. One history across every platform you own.
-            </p>
-          </div>
-          <div className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(min(260px,100%),1fr))]">
-            {features.map((feature) => (
-              <div key={feature.title} className="pdx-card flex flex-col gap-4 !rounded-[28px] !p-7">
-                <span className="grid h-[52px] w-[52px] place-items-center rounded-2xl bg-mint text-accent">{feature.icon}</span>
-                <h3 className="m-0 text-lg font-semibold leading-[1.3]">{feature.title}</h3>
-                <p className="m-0 text-sm leading-normal text-muted">{feature.body}</p>
+        <section aria-label="How it works" className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(min(300px,100%),1fr))]">
+          {demos.map((item) => (
+            <div key={item.title} className="pdx-card flex flex-col gap-5 !rounded-[28px] !p-5">
+              <div className="flex flex-col gap-1 px-2 pt-1">
+                <h2 className="m-0 text-lg font-semibold leading-[1.3]">{item.title}</h2>
+                <p className="m-0 text-sm leading-normal text-muted">{item.body}</p>
               </div>
-            ))}
-          </div>
+              <div className="pdx-tile flex-1 !p-3.5">{item.demo}</div>
+            </div>
+          ))}
         </section>
 
         <section aria-labelledby="launcher-teaser">
@@ -168,14 +112,11 @@ export function LandingPage() {
             className="pdx-card group grid items-center gap-7 text-inherit no-underline transition-[border-color,transform] duration-200 hover:-translate-y-0.5 hover:border-mint-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent motion-reduce:transition-none motion-reduce:hover:translate-y-0 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]"
           >
             <div className="flex flex-col gap-4">
-              <p className="pdx-kicker">New · Playdex Launcher</p>
+              <p className="pdx-kicker">New · Launcher</p>
               <h2 id="launcher-teaser" className="m-0 text-[32px] font-semibold leading-[1.1] tracking-[-0.01em]">
-                A console home screen for your Windows PC
+                Your Windows PC, as a console
               </h2>
-              <p className="m-0 text-[15px] leading-relaxed text-muted">
-                Boot into your library instead of the desktop. The launcher replaces Steam Big Picture in Windows Full Screen
-                Experience, opens on the game you were playing and records every session to Playdex on its own.
-              </p>
+              <p className="m-0 text-[15px] leading-relaxed text-muted">A controller-first home screen that tracks every session.</p>
               <span className="mt-1 inline-flex items-center gap-1.5 text-[15px] font-semibold text-accent">
                 See the launcher
                 <span aria-hidden="true" className="transition-transform duration-200 group-hover:translate-x-1 motion-reduce:transition-none">
@@ -197,8 +138,8 @@ export function LandingPage() {
 
         <section className="pdx-card flex flex-col gap-7">
           <CardHeading
-            kicker="Sessions recap · Preview"
-            title="A month at a glance"
+            kicker="Recap"
+            title="Your month at a glance"
             actions={
               <span className="rounded-full bg-tile px-3.5 py-1.5 text-xs font-semibold text-ink-2">Sample data</span>
             }
@@ -248,8 +189,8 @@ export function LandingPage() {
 
         <section className="pdx-card flex flex-col gap-6">
           <CardHeading
-            kicker="Most popular"
-            title="Top 5 games from recap"
+            kicker="Recap"
+            title="Your top 5 of the year"
             actions={<span className="text-xs font-semibold uppercase tracking-[0.2em] text-muted">Jan 1 – Dec 31</span>}
           />
           <ol className="m-0 grid list-none gap-4 p-0 [grid-template-columns:repeat(auto-fit,minmax(min(120px,100%),1fr))]">

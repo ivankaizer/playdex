@@ -481,11 +481,30 @@ textarea::placeholder {
     background: rgb(var(--brand));
     animation: pdx-pulse 1.8s ease-in-out infinite;
   }
+  /* A row arriving in a landing demo: it rises and fades in. */
+  @keyframes pdx-rise {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: none; }
+  }
+  .pdx-rise {
+    animation: pdx-rise 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  }
+  /* The launcher tour's active tab fills as it counts down to the next screen. */
+  @keyframes pdx-tour-progress {
+    from { transform: scaleX(0); }
+    to { transform: scaleX(1); }
+  }
+  .pdx-tour-progress {
+    animation: pdx-tour-progress linear both;
+  }
   /* Reduced motion keeps the "live" signal as a static ring instead of a pulse. */
   @media (prefers-reduced-motion: reduce) {
     .pdx-live-dot {
       animation: none;
       box-shadow: 0 0 0 4px rgb(var(--brand) / 0.18);
+    }
+    .pdx-rise {
+      animation: none;
     }
   }
 }

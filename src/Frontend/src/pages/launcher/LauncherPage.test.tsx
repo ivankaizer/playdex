@@ -26,7 +26,7 @@ describe("LauncherPage", () => {
     vi.spyOn(window, "scrollTo").mockImplementation(() => {});
     renderLanding("/");
 
-    await userEvent.click(screen.getByRole("link", { name: /A console home screen for your Windows PC/ }));
+    await userEvent.click(screen.getByRole("link", { name: /Your Windows PC, as a console/ }));
 
     expect(screen.getByRole("heading", { level: 1, name: /Your gaming PC, as a console/ })).toBeInTheDocument();
   });
