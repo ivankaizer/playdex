@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Diagnostics;
 
 namespace Playdex.Core.Tests;
@@ -117,10 +118,17 @@ public sealed class RunningGamesTests : IDisposable
         {
             using (process)
             {
-                if (string.Equals(process.MainModule?.FileName, executable, StringComparison.OrdinalIgnoreCase))
+                try
                 {
-                    process.Kill(entireProcessTree: true);
-                    process.WaitForExit();
+                    if (string.Equals(process.MainModule?.FileName, executable, StringComparison.OrdinalIgnoreCase))
+                    {
+                        process.Kill(entireProcessTree: true);
+                        process.WaitForExit();
+                    }
+                }
+                catch (Exception ex) when (ex is Win32Exception or InvalidOperationException)
+                {
+                    // Already exiting (a test closed it): its modules can't be read any more, or it is gone.
                 }
             }
         }
