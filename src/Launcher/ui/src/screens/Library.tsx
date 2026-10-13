@@ -40,11 +40,17 @@ const SORTS = [
 type ScopeId = (typeof SCOPES)[number]["id"];
 type SortId = (typeof SORTS)[number]["id"];
 
-/* Grid geometry in rem; the virtualizer converts with the live root font size. */
-const COL_W = 9.6;
-const GAP_X = 1.1;
-const ROW_H = 18.2;
 const OVERSCAN_ROWS = 2;
+
+/*
+ * Grid geometry comes from CSS (library.css: --lib-col-w, --lib-gap-x, --lib-row-h), so a theme can resize the covers
+ * and the virtualizer follows. They are registered lengths, so their computed values arrive in px.
+ */
+function geometry(el: HTMLElement) {
+  const s = getComputedStyle(el);
+  const px = (name: string) => parseFloat(s.getPropertyValue(name)) || 0;
+  return { w: el.clientWidth, h: el.clientHeight, col: px("--lib-col-w"), gap: px("--lib-gap-x"), row: px("--lib-row-h") };
+}
 
 export function Library() {
   const [scope, setScope] = useState<ScopeId>("all");
@@ -106,26 +112,26 @@ export function Library() {
 /** Row-virtualized grid: only the rows in view (plus overscan) are mounted, whatever the library size. */
 function CoverGrid({ list, empty }: { list: Game[]; empty: string }) {
   const ref = useRef<HTMLDivElement>(null);
-  const [box, setBox] = useState({ w: 0, h: 0, rem: 16 });
+  const [box, setBox] = useState({ w: 0, h: 0, col: 0, gap: 0, row: 0 });
   const [range, setRange] = useState({ first: 0, last: 3 });
 
   useLayoutEffect(() => {
     const el = ref.current!;
-    const measure = () =>
-      setBox({ w: el.clientWidth, h: el.clientHeight, rem: parseFloat(getComputedStyle(document.documentElement).fontSize) });
+    const measure = () => setBox(geometry(el));
     measure();
     const ro = new ResizeObserver(measure);
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
 
-  const cols = Math.max(1, Math.floor((box.w / box.rem + GAP_X) / (COL_W + GAP_X)));
+  const cols = box.col > 0 ? Math.max(1, Math.floor((box.w + box.gap) / (box.col + box.gap))) : 1;
   const rows = Math.ceil(list.length / cols);
-  const rowPx = ROW_H * box.rem;
+  const rowPx = box.row;
 
   useEffect(() => {
     const el = ref.current!;
     const update = () => {
+      if (!rowPx) return;
       const first = Math.max(0, Math.floor(el.scrollTop / rowPx) - OVERSCAN_ROWS);
       const last = Math.min(rows - 1, Math.ceil((el.scrollTop + el.clientHeight) / rowPx) + OVERSCAN_ROWS);
       setRange((r) => (r.first === first && r.last === last ? r : { first, last }));
@@ -138,7 +144,7 @@ function CoverGrid({ list, empty }: { list: Game[]; empty: string }) {
   const rowEls = [];
   for (let r = range.first; r <= range.last && r < rows; r++) {
     rowEls.push(
-      <div key={r} className="lib-row" style={{ transform: `translateY(${r * ROW_H}rem)`, gridTemplateColumns: `repeat(${cols}, ${COL_W}rem)` }}>
+      <div key={r} className="lib-row" style={{ transform: `translateY(${r * rowPx}px)`, gridTemplateColumns: `repeat(${cols}, var(--lib-col-w))` }}>
         {list.slice(r * cols, r * cols + cols).map((g, i) => (
           <CoverItem key={g.id} game={g} isDefault={r === 0 && i === 0} />
         ))}
@@ -151,7 +157,7 @@ function CoverGrid({ list, empty }: { list: Game[]; empty: string }) {
       {list.length === 0 ? (
         <p className="lib-empty">{empty}</p>
       ) : (
-        <div className="lib-canvas" style={{ height: `${rows * ROW_H}rem` }}>
+        <div className="lib-canvas" style={{ height: `${rows * rowPx}px` }}>
           {rowEls}
         </div>
       )}

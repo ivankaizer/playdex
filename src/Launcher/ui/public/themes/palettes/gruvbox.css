@@ -1,0 +1,81 @@
+/*
+ * Gruvbox: warm retro browns with yellow and orange. Dark and light.
+ * A palette only sets the colour tokens (src/styles/tokens.css: RGB channels, so `rgb(var(--x) / a)` works).
+ * Load it with ?palette=gruvbox.
+ */
+
+:root {
+  color-scheme: dark;
+
+  --ink: 235 219 178;
+  --ink-2: 200 187 153;
+  --muted: 173 162 134;
+  --faint: 134 126 106;
+  --page: 40 40 40;
+  --blob-mint: 66 51 38;
+  --blob-cyan: 51 55 53;
+  --blob-sand: 60 54 41;
+  --surface: 60 56 54;
+  --tile: 50 48 47;
+  --track: 60 56 54;
+  --line: 80 73 69;
+  --accent: 254 128 25;
+  --brand: 168 71 10;
+  --pill: 250 189 47;
+  --pill-ink: 65 49 12;
+  --bar: 220 166 41;
+  --bar-light: 157 122 41;
+  --chart-cyan: 131 165 152;
+  --chart-sand: 184 187 38;
+  --mint: 63 56 41;
+  --mint-line: 103 85 42;
+  --seg-on: 250 189 47;
+  --seg-on-ink: 65 49 12;
+  --scrim: 40 40 40;
+
+  --card-bg: rgba(50, 49, 47, 0.8);
+  --card-border: rgba(255, 255, 255, 0.07);
+  --tile-border: rgba(255, 255, 255, 0.06);
+  --live-bg: linear-gradient(110deg, rgba(99, 82, 42, 0.92), rgba(50, 49, 47, 0.82) 62%);
+  --card-shadow: 0 1px 2px rgba(0, 0, 0, 0.2), 0 16px 40px -20px rgba(0, 0, 0, 0.6);
+  --lift-shadow: 0 1.4rem 2.6rem -1rem rgba(0, 0, 0, 0.75);
+  --focus: var(--pill);
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+
+  --ink: 60 56 54;
+  --ink-2: 96 91 81;
+  --muted: 107 101 89;
+  --faint: 153 144 122;
+  --page: 242 229 188;
+  --blob-mint: 245 207 152;
+  --blob-cyan: 222 217 182;
+  --blob-sand: 243 222 163;
+  --surface: 251 241 199;
+  --tile: 249 240 203;
+  --track: 231 219 180;
+  --line: 224 212 175;
+  --accent: 168 71 10;
+  --brand: 168 71 10;
+  --pill: 250 189 47;
+  --pill-ink: 65 49 12;
+  --bar: 250 189 47;
+  --bar-light: 252 219 141;
+  --chart-cyan: 7 102 120;
+  --chart-sand: 121 116 14;
+  --mint: 251 232 172;
+  --mint-line: 251 223 147;
+  --seg-on: 251 241 199;
+  --seg-on-ink: 60 56 54;
+  --scrim: 242 229 188;
+
+  --card-bg: rgba(251, 241, 199, 0.74);
+  --card-border: rgba(255, 255, 255, 0.9);
+  --tile-border: rgba(255, 255, 255, 0.8);
+  --live-bg: linear-gradient(110deg, rgba(251, 230, 166, 0.95), rgba(251, 241, 199, 0.78) 62%);
+  --card-shadow: 0 1px 2px rgba(60, 56, 54, 0.04), 0 16px 40px -20px rgba(60, 56, 54, 0.18);
+  --lift-shadow: 0 1.4rem 2.6rem -1rem rgba(60, 56, 54, 0.4);
+  --focus: var(--brand);
+}

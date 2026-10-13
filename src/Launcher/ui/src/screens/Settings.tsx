@@ -1,4 +1,18 @@
-import { AppWindow, Archive, Check, Download, Gamepad2, ImageIcon, LayoutGrid, MonitorPlay, Power, RotateCw, UserRound } from "lucide-react";
+import {
+  AppWindow,
+  Archive,
+  Check,
+  Download,
+  Gamepad2,
+  ImageIcon,
+  LayoutGrid,
+  MonitorPlay,
+  Palette,
+  PanelsTopLeft,
+  Power,
+  RotateCw,
+  UserRound,
+} from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { focusScreenDefault } from "../nav/focus";
 import { showToast } from "../app-state";
@@ -18,6 +32,7 @@ import {
 } from "../host/desktop";
 import { HOME_ART, homeArt, nextHomeArt, setHomeArt } from "../homes/homeArt";
 import { useStore } from "../nav/store";
+import { nextTheme, palette, PALETTES, setTheme, skin, SKINS } from "../theme";
 import "./desk.css";
 import "./settings.css";
 
@@ -161,6 +176,8 @@ function DesktopSettingsScreen({ state }: { state: DesktopState }) {
   const [saving, setSaving] = useState(false);
   const [startWithWindows, changeStartWithWindows] = useStartWithWindows(saved.startWithWindows);
   const art = useStore(homeArt);
+  const skinId = useStore(skin);
+  const paletteId = useStore(palette);
 
   useLandOnDefault();
 
@@ -327,7 +344,7 @@ function DesktopSettingsScreen({ state }: { state: DesktopState }) {
             </Row>
           </Section>
 
-          <Section id="look" icon={<LayoutGrid />} title="Appearance" note="How Home looks. Applies at once, on this screen.">
+          <Section id="look" icon={<LayoutGrid />} title="Appearance" note="How Playdex looks. Applies at once, on this screen.">
             <Row label="Home game art" hint={HOME_ART.find((a) => a.id === art)!.note}>
               <div className="seg" role="radiogroup" aria-label="Home game art">
                 {HOME_ART.map((a) => (
@@ -341,6 +358,41 @@ function DesktopSettingsScreen({ state }: { state: DesktopState }) {
                     onClick={() => setHomeArt(a.id)}
                   >
                     {a.label}
+                  </button>
+                ))}
+              </div>
+            </Row>
+            <Row label="Layout" hint={SKINS.find((o) => o.id === skinId)?.note ?? FROM_URL}>
+              <div className="seg" role="radiogroup" aria-label="Layout">
+                {SKINS.map((o) => (
+                  <button
+                    key={o.id}
+                    className="seg-btn"
+                    role="radio"
+                    aria-checked={skinId === o.id}
+                    data-nav
+                    data-kind="setting"
+                    onClick={() => setTheme("skin", o.id)}
+                  >
+                    {o.label}
+                  </button>
+                ))}
+              </div>
+            </Row>
+            <Row label="Colours" hint={PALETTES.find((o) => o.id === paletteId)?.note ?? FROM_URL}>
+              <div className="swatches" role="radiogroup" aria-label="Colours">
+                {PALETTES.map((o) => (
+                  <button
+                    key={o.id}
+                    className="swatch-btn"
+                    role="radio"
+                    aria-checked={paletteId === o.id}
+                    data-nav
+                    data-kind="setting"
+                    onClick={() => setTheme("palette", o.id)}
+                  >
+                    <Swatch colors={o.swatch} />
+                    {o.label}
                   </button>
                 ))}
               </div>
@@ -394,6 +446,20 @@ function DesktopSettingsScreen({ state }: { state: DesktopState }) {
   );
 }
 
+/** Shown for a theme picked in the page URL that the lists here don't have. */
+const FROM_URL = "A theme from the page URL.";
+
+/** A palette at a glance: its page colour and two accents, overlapping. */
+function Swatch({ colors }: { colors: readonly string[] }) {
+  return (
+    <span className="swatch" aria-hidden>
+      {colors.map((c) => (
+        <i key={c} style={{ background: c }} />
+      ))}
+    </span>
+  );
+}
+
 function SavedMark({ children }: { children: ReactNode }) {
   return (
     <span className="set-saved">
@@ -438,6 +504,10 @@ function BigPictureSettings({ state }: { state: DesktopState }) {
   const ready = update.kind === "ready";
   const artId = useStore(homeArt);
   const art = HOME_ART.find((a) => a.id === artId)!;
+  const skinId = useStore(skin);
+  const paletteId = useStore(palette);
+  const skinOption = SKINS.find((o) => o.id === skinId);
+  const paletteOption = PALETTES.find((o) => o.id === paletteId);
 
   useLandOnDefault();
 
@@ -495,6 +565,25 @@ function BigPictureSettings({ state }: { state: DesktopState }) {
                 <small>{art.note}</small>
               </span>
               <span className="bp-row-action">{art.label}</span>
+            </button>
+            <button className="bp-row" data-nav data-kind="setting" onClick={() => setTheme("skin", nextTheme(SKINS, skinId).id)}>
+              <PanelsTopLeft aria-hidden />
+              <span className="bp-row-text">
+                <span className="bp-row-name">Layout</span>
+                <small>{skinOption?.note ?? FROM_URL}</small>
+              </span>
+              <span className="bp-row-action">{skinOption?.label ?? skinId}</span>
+            </button>
+            <button className="bp-row" data-nav data-kind="setting" onClick={() => setTheme("palette", nextTheme(PALETTES, paletteId).id)}>
+              <Palette aria-hidden />
+              <span className="bp-row-text">
+                <span className="bp-row-name">Colours</span>
+                <small>{paletteOption?.note ?? FROM_URL}</small>
+              </span>
+              <span className="bp-row-action">
+                {paletteOption && <Swatch colors={paletteOption.swatch} />}
+                {paletteOption?.label ?? paletteId}
+              </span>
             </button>
             <StatusRow
               icon={<MonitorPlay aria-hidden />}

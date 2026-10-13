@@ -1,0 +1,81 @@
+/*
+ * Rosé Pine: muted rose, gold and pine. Main for dark, Dawn for light.
+ * A palette only sets the colour tokens (src/styles/tokens.css: RGB channels, so `rgb(var(--x) / a)` works).
+ * Load it with ?palette=rose-pine.
+ */
+
+:root {
+  color-scheme: dark;
+
+  --ink: 224 222 244;
+  --ink-2: 188 186 207;
+  --muted: 152 150 169;
+  --faint: 121 119 136;
+  --page: 25 23 36;
+  --blob-mint: 52 34 50;
+  --blob-cyan: 28 35 50;
+  --blob-sand: 48 41 45;
+  --surface: 38 35 58;
+  --tile: 31 29 46;
+  --track: 38 35 58;
+  --line: 64 61 82;
+  --accent: 246 193 119;
+  --brand: 168 84 108;
+  --pill: 235 188 186;
+  --pill-ink: 61 49 48;
+  --bar: 207 165 164;
+  --bar-light: 143 115 119;
+  --chart-cyan: 156 207 216;
+  --chart-sand: 196 167 231;
+  --mint: 59 49 60;
+  --mint-line: 88 73 81;
+  --seg-on: 235 188 186;
+  --seg-on-ink: 61 49 48;
+  --scrim: 25 23 36;
+
+  --card-bg: rgba(35, 33, 46, 0.8);
+  --card-border: rgba(255, 255, 255, 0.07);
+  --tile-border: rgba(255, 255, 255, 0.06);
+  --live-bg: linear-gradient(110deg, rgba(84, 69, 78, 0.92), rgba(35, 33, 46, 0.82) 62%);
+  --card-shadow: 0 1px 2px rgba(0, 0, 0, 0.2), 0 16px 40px -20px rgba(0, 0, 0, 0.6);
+  --lift-shadow: 0 1.4rem 2.6rem -1rem rgba(0, 0, 0, 0.75);
+  --focus: var(--pill);
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+
+  --ink: 87 82 121;
+  --ink-2: 118 112 142;
+  --muted: 107 102 135;
+  --faint: 152 145 165;
+  --page: 242 233 225;
+  --blob-mint: 236 210 203;
+  --blob-cyan: 214 218 213;
+  --blob-sand: 241 219 194;
+  --surface: 255 250 243;
+  --tile: 250 244 237;
+  --track: 233 224 219;
+  --line: 227 218 215;
+  --accent: 152 72 98;
+  --brand: 168 84 108;
+  --pill: 235 188 186;
+  --pill-ink: 61 49 48;
+  --bar: 235 188 186;
+  --bar-light: 244 218 217;
+  --chart-cyan: 40 105 131;
+  --chart-sand: 144 122 169;
+  --mint: 251 239 233;
+  --mint-line: 248 229 224;
+  --seg-on: 255 250 243;
+  --seg-on-ink: 87 82 121;
+  --scrim: 242 233 225;
+
+  --card-bg: rgba(255, 250, 243, 0.74);
+  --card-border: rgba(255, 255, 255, 0.9);
+  --tile-border: rgba(255, 255, 255, 0.8);
+  --live-bg: linear-gradient(110deg, rgba(251, 236, 230, 0.95), rgba(255, 250, 243, 0.78) 62%);
+  --card-shadow: 0 1px 2px rgba(87, 82, 121, 0.04), 0 16px 40px -20px rgba(87, 82, 121, 0.18);
+  --lift-shadow: 0 1.4rem 2.6rem -1rem rgba(87, 82, 121, 0.4);
+  --focus: var(--brand);
+}

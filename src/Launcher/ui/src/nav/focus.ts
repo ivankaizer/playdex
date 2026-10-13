@@ -110,11 +110,28 @@ export function focusEl(el: HTMLElement | null | undefined) {
   reveal(el);
 }
 
+/**
+ * The axis a scroll container scrolls on, from its computed overflow, so a theme that turns a shelf into a column still
+ * scrolls it. When both axes may scroll, the one with content beyond the box; `data-scroll` decides a tie.
+ */
+function scrollAxis(sc: HTMLElement): "x" | "y" {
+  const s = getComputedStyle(sc);
+  const x = s.overflowX === "auto" || s.overflowX === "scroll";
+  const y = s.overflowY === "auto" || s.overflowY === "scroll";
+  if (x !== y) return x ? "x" : "y";
+  if (x) {
+    const overX = sc.scrollWidth > sc.clientWidth;
+    const overY = sc.scrollHeight > sc.clientHeight;
+    if (overX !== overY) return overX ? "x" : "y";
+  }
+  return sc.dataset.scroll === "x" ? "x" : "y";
+}
+
 /** Keep the focused item in view inside its scroll container (horizontal shelves, vertical lists). */
 function reveal(el: HTMLElement) {
   const sc = el.closest<HTMLElement>("[data-scroll]");
   if (!sc) return;
-  const axis = sc.dataset.scroll;
+  const axis = scrollAxis(sc);
   const r = el.getBoundingClientRect();
   const c = sc.getBoundingClientRect();
   const pad = parseFloat(getComputedStyle(sc).scrollPaddingInlineStart || "0") || 24;

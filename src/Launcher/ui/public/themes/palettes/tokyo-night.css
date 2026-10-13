@@ -1,0 +1,81 @@
+/*
+ * Tokyo Night: city-at-night blues and violets. Night for dark, Day for light.
+ * A palette only sets the colour tokens (src/styles/tokens.css: RGB channels, so `rgb(var(--x) / a)` works).
+ * Load it with ?palette=tokyo-night.
+ */
+
+:root {
+  color-scheme: dark;
+
+  --ink: 192 202 245;
+  --ink-2: 162 171 208;
+  --muted: 142 150 183;
+  --faint: 106 111 137;
+  --page: 26 27 38;
+  --blob-mint: 42 50 74;
+  --blob-cyan: 50 46 69;
+  --blob-sand: 38 49 64;
+  --surface: 41 46 66;
+  --tile: 31 35 53;
+  --track: 41 46 66;
+  --line: 59 66 97;
+  --accent: 187 154 247;
+  --brand: 61 89 161;
+  --pill: 122 162 247;
+  --pill-ink: 32 42 64;
+  --bar: 107 143 217;
+  --bar-light: 79 102 154;
+  --chart-cyan: 125 207 255;
+  --chart-sand: 224 175 104;
+  --mint: 41 49 71;
+  --mint-line: 55 68 101;
+  --seg-on: 122 162 247;
+  --seg-on-ink: 32 42 64;
+  --scrim: 26 27 38;
+
+  --card-bg: rgba(34, 36, 48, 0.8);
+  --card-border: rgba(255, 255, 255, 0.07);
+  --tile-border: rgba(255, 255, 255, 0.06);
+  --live-bg: linear-gradient(110deg, rgba(53, 65, 97, 0.92), rgba(34, 36, 48, 0.82) 62%);
+  --card-shadow: 0 1px 2px rgba(0, 0, 0, 0.2), 0 16px 40px -20px rgba(0, 0, 0, 0.6);
+  --lift-shadow: 0 1.4rem 2.6rem -1rem rgba(0, 0, 0, 0.75);
+  --focus: var(--pill);
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+
+  --ink: 52 59 88;
+  --ink-2: 87 92 117;
+  --muted: 94 99 122;
+  --faint: 137 141 158;
+  --page: 225 226 231;
+  --blob-mint: 202 212 235;
+  --blob-cyan: 212 200 233;
+  --blob-sand: 207 223 235;
+  --surface: 251 251 251;
+  --tile: 237 238 241;
+  --track: 215 216 222;
+  --line: 208 209 217;
+  --accent: 41 89 170;
+  --brand: 41 89 170;
+  --pill: 122 162 247;
+  --pill-ink: 32 42 64;
+  --bar: 122 162 247;
+  --bar-light: 182 204 251;
+  --chart-cyan: 0 113 151;
+  --chart-sand: 140 108 62;
+  --mint: 228 235 250;
+  --mint-line: 207 221 250;
+  --seg-on: 251 251 251;
+  --seg-on-ink: 52 59 88;
+  --scrim: 225 226 231;
+
+  --card-bg: rgba(251, 251, 251, 0.74);
+  --card-border: rgba(255, 255, 255, 0.9);
+  --tile-border: rgba(255, 255, 255, 0.8);
+  --live-bg: linear-gradient(110deg, rgba(223, 231, 250, 0.95), rgba(251, 251, 251, 0.78) 62%);
+  --card-shadow: 0 1px 2px rgba(52, 59, 88, 0.04), 0 16px 40px -20px rgba(52, 59, 88, 0.18);
+  --lift-shadow: 0 1.4rem 2.6rem -1rem rgba(52, 59, 88, 0.4);
+  --focus: var(--brand);
+}

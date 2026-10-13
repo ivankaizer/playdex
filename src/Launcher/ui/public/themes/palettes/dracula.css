@@ -1,0 +1,81 @@
+/*
+ * Dracula: purple and pink on a night grey. Dark, and Alucard for light.
+ * A palette only sets the colour tokens (src/styles/tokens.css: RGB channels, so `rgb(var(--x) / a)` works).
+ * Load it with ?palette=dracula.
+ */
+
+:root {
+  color-scheme: dark;
+
+  --ink: 248 248 242;
+  --ink-2: 211 211 208;
+  --muted: 173 174 174;
+  --faint: 140 141 144;
+  --page: 40 42 54;
+  --blob-mint: 65 60 87;
+  --blob-cyan: 72 54 76;
+  --blob-sand: 52 65 78;
+  --surface: 56 58 74;
+  --tile: 55 56 67;
+  --track: 69 71 80;
+  --line: 68 71 90;
+  --accent: 255 121 198;
+  --brand: 116 72 196;
+  --pill: 189 147 249;
+  --pill-ink: 49 38 65;
+  --bar: 166 129 219;
+  --bar-light: 122 99 161;
+  --chart-cyan: 139 233 253;
+  --chart-sand: 255 184 108;
+  --mint: 62 58 83;
+  --mint-line: 85 74 113;
+  --seg-on: 189 147 249;
+  --seg-on-ink: 49 38 65;
+  --scrim: 40 42 54;
+
+  --card-bg: rgba(50, 52, 63, 0.8);
+  --card-border: rgba(255, 255, 255, 0.07);
+  --tile-border: rgba(255, 255, 255, 0.06);
+  --live-bg: linear-gradient(110deg, rgba(82, 71, 109, 0.92), rgba(50, 52, 63, 0.82) 62%);
+  --card-shadow: 0 1px 2px rgba(0, 0, 0, 0.2), 0 16px 40px -20px rgba(0, 0, 0, 0.6);
+  --lift-shadow: 0 1.4rem 2.6rem -1rem rgba(0, 0, 0, 0.75);
+  --focus: var(--pill);
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+
+  --ink: 31 31 31;
+  --ink-2: 74 73 70;
+  --muted: 110 109 103;
+  --faint: 142 140 132;
+  --page: 245 241 225;
+  --blob-mint: 233 220 230;
+  --blob-cyan: 247 219 220;
+  --blob-sand: 226 240 230;
+  --surface: 254 253 251;
+  --tile: 249 247 237;
+  --track: 232 228 213;
+  --line: 224 220 206;
+  --accent: 100 74 201;
+  --brand: 100 74 201;
+  --pill: 189 147 249;
+  --pill-ink: 49 38 65;
+  --bar: 189 147 249;
+  --bar-light: 219 196 252;
+  --chart-cyan: 3 106 150;
+  --chart-sand: 163 77 20;
+  --mint: 242 234 251;
+  --mint-line: 232 217 250;
+  --seg-on: 254 253 251;
+  --seg-on-ink: 31 31 31;
+  --scrim: 245 241 225;
+
+  --card-bg: rgba(254, 253, 251, 0.74);
+  --card-border: rgba(255, 255, 255, 0.9);
+  --tile-border: rgba(255, 255, 255, 0.8);
+  --live-bg: linear-gradient(110deg, rgba(240, 230, 251, 0.95), rgba(254, 253, 251, 0.78) 62%);
+  --card-shadow: 0 1px 2px rgba(31, 31, 31, 0.04), 0 16px 40px -20px rgba(31, 31, 31, 0.18);
+  --lift-shadow: 0 1.4rem 2.6rem -1rem rgba(31, 31, 31, 0.4);
+  --focus: var(--brand);
+}

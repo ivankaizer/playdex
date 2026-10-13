@@ -1,0 +1,136 @@
+/*
+ * Sidebar: a spike theme, pure CSS over the app's own markup, to find what a CSS-only theme can and can't change.
+ * - The tabs leave the top bar for a column down the left.
+ * - Home's games are a vertical list beside the Playdex rail (the Ribbon) or a column of days (?layout=timeline).
+ * - Library covers are smaller, so more fit a row.
+ * The app's CSS is in the `app` cascade layer, so these plain rules win without !important or extra specificity.
+ * Load it with ?skin=sidebar.
+ */
+
+/* ---------- Shell: tabs in a left column ----------
+ * The top bar's box goes (display: contents), so its parts are placed in the screen's grid directly: the brand and
+ * tabs down the left, the rest of the bar across the top of the content. */
+.screen {
+  grid-template-columns: 11rem minmax(0, 1fr) auto auto auto;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-areas:
+    "brand .     now   proto status"
+    "tabs  main  main  main  main"
+    "tabs  hints hints hints hints";
+  column-gap: 1.6rem;
+}
+.topbar {
+  display: contents;
+}
+.topbar > .topbar-spacer {
+  display: none;
+}
+.brand {
+  grid-area: brand;
+}
+/* Now playing has no class of its own, only its nav group. */
+.topbar > [data-nav-group="now-playing"] {
+  grid-area: now;
+}
+.proto {
+  grid-area: proto;
+}
+.status {
+  grid-area: status;
+}
+.screen > main {
+  grid-area: main;
+}
+.screen > .hints {
+  grid-area: hints;
+}
+
+/* LB above the tabs and RB below: the bumpers now read as up and down. */
+.tabs {
+  grid-area: tabs;
+  flex-direction: column;
+  align-items: stretch;
+  align-self: start;
+  gap: 0.6rem;
+}
+.tabs > .glyph {
+  align-self: center;
+}
+.tabs .seg {
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.35rem;
+  border-radius: 1.3rem;
+}
+.tabs .seg-btn {
+  height: 2.6rem;
+  padding: 0 1.1rem;
+  border-radius: 1rem;
+  font-size: 0.84rem;
+  text-align: left;
+}
+
+/* ---------- Home (Ribbon): a list of games ----------
+ * The last played keeps its wide tile and takes the height the list leaves; the rest are rows, art then text. */
+.jump-grid {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  grid-auto-rows: auto;
+  gap: 0.6rem;
+}
+.jtile {
+  grid-template-columns: 10rem minmax(0, 1fr);
+  grid-template-rows: auto;
+  align-items: center;
+  align-self: stretch;
+  transition: transform 0.2s var(--ease-out);
+}
+.jtile[data-focused] {
+  transform: translateX(0.5rem);
+}
+.jtile-art {
+  border-radius: 1.1rem 0 0 1.1rem;
+  /* The title shown when a game has no art, sized to the smaller thumbnail. */
+  font-size: 0.72rem;
+}
+.jtile-foot {
+  padding: 0.5rem 1.2rem;
+}
+.jtile-title {
+  font-size: 0.95rem;
+}
+.jtile-sub {
+  font-size: 0.72rem;
+}
+
+/* ---------- Home (Timeline): days in a column on the right ----------
+ * The lanes scroll down instead of across; the focus engine reads that from the computed overflow. */
+.timeline-home {
+  grid-template-columns: minmax(0, 1fr) 17rem;
+  grid-template-rows: minmax(0, 1fr);
+}
+.lanes-wrap {
+  margin: 0;
+  min-height: 0;
+}
+.lanes {
+  flex-direction: column;
+  height: 100%;
+  padding: 0.5rem;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+.lane,
+.lane[data-empty] {
+  width: auto;
+  height: auto;
+}
+
+/* ---------- Library: smaller covers ---------- */
+:root {
+  --lib-col-w: 7.8rem;
+  --lib-gap-x: 0.9rem;
+}
+.lcover-title {
+  font-size: 0.72rem;
+}

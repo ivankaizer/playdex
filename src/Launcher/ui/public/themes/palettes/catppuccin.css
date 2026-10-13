@@ -1,0 +1,81 @@
+/*
+ * Catppuccin: soft pastels, mauve first. Mocha for dark, Latte for light.
+ * A palette only sets the colour tokens (src/styles/tokens.css: RGB channels, so `rgb(var(--x) / a)` works).
+ * Load it with ?palette=catppuccin.
+ */
+
+:root {
+  color-scheme: dark;
+
+  --ink: 205 214 244;
+  --ink-2: 174 181 208;
+  --muted: 149 155 181;
+  --faint: 114 118 141;
+  --page: 30 30 46;
+  --blob-mint: 59 53 80;
+  --blob-cyan: 46 53 77;
+  --blob-sand: 56 50 68;
+  --surface: 49 50 68;
+  --tile: 38 38 55;
+  --track: 49 50 68;
+  --line: 69 71 90;
+  --accent: 203 166 247;
+  --brand: 136 57 239;
+  --pill: 203 166 247;
+  --pill-ink: 53 43 64;
+  --bar: 179 146 217;
+  --bar-light: 127 105 157;
+  --chart-cyan: 137 220 235;
+  --chart-sand: 249 226 175;
+  --mint: 58 52 78;
+  --mint-line: 82 71 106;
+  --seg-on: 203 166 247;
+  --seg-on-ink: 53 43 64;
+  --scrim: 30 30 46;
+
+  --card-bg: rgba(39, 39, 56, 0.8);
+  --card-border: rgba(255, 255, 255, 0.07);
+  --tile-border: rgba(255, 255, 255, 0.06);
+  --live-bg: linear-gradient(110deg, rgba(78, 68, 102, 0.92), rgba(39, 39, 56, 0.82) 62%);
+  --card-shadow: 0 1px 2px rgba(0, 0, 0, 0.2), 0 16px 40px -20px rgba(0, 0, 0, 0.6);
+  --lift-shadow: 0 1.4rem 2.6rem -1rem rgba(0, 0, 0, 0.75);
+  --focus: var(--pill);
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+
+  --ink: 76 79 105;
+  --ink-2: 107 110 132;
+  --muted: 101 104 126;
+  --faint: 144 147 164;
+  --page: 230 233 239;
+  --blob-mint: 224 218 241;
+  --blob-cyan: 213 223 241;
+  --blob-sand: 233 226 238;
+  --surface: 251 252 253;
+  --tile: 240 242 245;
+  --track: 221 224 231;
+  --line: 215 218 226;
+  --accent: 116 40 217;
+  --brand: 136 57 239;
+  --pill: 203 166 247;
+  --pill-ink: 53 43 64;
+  --bar: 203 166 247;
+  --bar-light: 226 206 251;
+  --chart-cyan: 4 165 229;
+  --chart-sand: 223 142 29;
+  --mint: 242 237 252;
+  --mint-line: 235 223 251;
+  --seg-on: 251 252 253;
+  --seg-on-ink: 76 79 105;
+  --scrim: 230 233 239;
+
+  --card-bg: rgba(251, 252, 253, 0.74);
+  --card-border: rgba(255, 255, 255, 0.9);
+  --tile-border: rgba(255, 255, 255, 0.8);
+  --live-bg: linear-gradient(110deg, rgba(240, 233, 252, 0.95), rgba(251, 252, 253, 0.78) 62%);
+  --card-shadow: 0 1px 2px rgba(76, 79, 105, 0.04), 0 16px 40px -20px rgba(76, 79, 105, 0.18);
+  --lift-shadow: 0 1.4rem 2.6rem -1rem rgba(76, 79, 105, 0.4);
+  --focus: var(--brand);
+}

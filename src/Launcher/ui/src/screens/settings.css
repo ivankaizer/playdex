@@ -207,9 +207,50 @@
     grid-template-columns: minmax(0, 1fr);
     gap: 0.6rem;
   }
-  .set-row-control {
+  .set-row-control,
+  .swatches {
     justify-content: flex-start;
   }
+}
+
+/* ---------- Colours: a chip per palette, its swatch then its name ---------- */
+.swatches {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.4rem;
+}
+.swatch-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  height: 1.9rem;
+  padding: 0 0.85rem 0 0.4rem;
+  border-radius: 999px;
+  background: rgb(var(--tile) / 0.85);
+  border: 1px solid var(--tile-border);
+  color: rgb(var(--muted));
+  font-size: 0.7rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.swatch-btn[aria-checked="true"] {
+  background: rgb(var(--seg-on));
+  color: rgb(var(--seg-on-ink));
+}
+.swatch {
+  display: inline-flex;
+  flex: none;
+  vertical-align: middle;
+}
+.swatch i {
+  width: 0.95rem;
+  height: 0.95rem;
+  border-radius: 99px;
+  border: 1.5px solid rgb(var(--ink) / 0.3);
+}
+.swatch i + i {
+  margin-left: -0.35rem;
 }
 
 /* ---------- Big Picture ---------- */
@@ -326,6 +367,9 @@
   white-space: nowrap;
 }
 .bp-row-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
   flex: none;
   font-size: 0.7rem;
   font-weight: 600;

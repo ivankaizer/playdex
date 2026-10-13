@@ -1,0 +1,116 @@
+/*
+ * Cinema: the last played game fills the screen. Its hero art is the page's backdrop with its name and Continue over
+ * it, the other recent games are a row of cards along the bottom, and only today's playtime stays from the rail.
+ * Library covers are larger. Load it with ?skin=cinema.
+ */
+
+/* ---------- Home ----------
+ * The jump grid's box goes (display: contents), so the lead tile, the cards and the rail are all placed in Home's
+ * grid: the lead across the top, today's playtime top right, the cards in a row below. */
+.ribbon-home {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-rows: minmax(0, 1fr) auto;
+  gap: 1.2rem;
+}
+.jump-grid {
+  display: contents;
+}
+.jump > .section-h {
+  display: none;
+}
+
+/* The lead game's own art is the backdrop, not the art that follows focus, so it always matches the title over it. */
+.ribbon-backdrop {
+  display: none;
+}
+/* No entrance: Home's tile-in stays applied after it ends (fill-mode both), so its transform would make the tile the
+ * fixed art's containing block (and an animation beats any transform declared here). A kept opacity animation would
+ * make it a stacking context, lifting the art over the top bar. */
+.ribbon {
+  grid-column: 1 / 4;
+  grid-row: 1;
+  background: none;
+  border: 0;
+  box-shadow: none;
+  overflow: visible;
+  animation: none;
+}
+/* No lift or ring on the tile: a transform would pin the fixed art to the tile instead of the screen, and a ring
+ * around half the screen says little. Continue carries the focus instead. */
+.ribbon[data-focused] {
+  transform: none;
+  z-index: auto;
+  box-shadow: none;
+  outline: none;
+}
+.ribbon[data-focused] .ribbon-cta {
+  outline: 0.16rem solid rgb(var(--focus));
+  outline-offset: 0.22rem;
+  transform: scale(1.06);
+}
+.ribbon > .ribbon-art {
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  mask-image: linear-gradient(180deg, #000 50%, transparent 100%);
+}
+.ribbon > .ribbon-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background:
+    linear-gradient(0deg, rgb(var(--scrim)) 0%, rgb(var(--scrim) / 0.55) 32%, transparent 60%),
+    linear-gradient(90deg, rgb(var(--scrim) / 0.85) 0%, rgb(var(--scrim) / 0.35) 40%, transparent 65%);
+}
+.ribbon-body {
+  gap: 1rem;
+  padding: 0 0 0.4rem;
+}
+.ribbon-logo {
+  height: 7.5rem;
+  max-width: 34rem;
+}
+.ribbon-title {
+  font-size: 3.4rem;
+}
+.ribbon-meta {
+  font-size: 0.95rem;
+}
+
+.jtile {
+  grid-row: 2;
+}
+
+/* Today only, in a small card top right. */
+.rail {
+  grid-column: 4;
+  grid-row: 1;
+  align-self: start;
+  justify-self: end;
+  padding: 1rem 1.3rem;
+  border-radius: 1.2rem;
+  background: rgb(var(--scrim) / 0.72);
+  border: 0;
+  box-shadow: none;
+}
+.rail > .rail-block:not(:first-child),
+.rail-note {
+  display: none;
+}
+.rail-row {
+  gap: 1.4rem;
+}
+
+/* ---------- Library: larger covers ---------- */
+:root {
+  --lib-col-w: 11.6rem;
+  --lib-gap-x: 1.4rem;
+}
+
+/* ---------- Top bar over the art ---------- */
+/* The clock and account sit on whatever the art has there, so they get the scrim's colour behind them. */
+.status {
+  padding: 0.3rem 0.3rem 0.3rem 1rem;
+  border-radius: 99px;
+  background: rgb(var(--scrim) / 0.72);
+}

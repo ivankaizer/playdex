@@ -1,0 +1,49 @@
+/*
+ * Synthwave: neon pink and cyan on deep violet, a sunset glow at the bottom of the screen.
+ * A palette only sets the colour tokens (src/styles/tokens.css: RGB channels, so `rgb(var(--x) / a)` works).
+ * Load it with ?palette=synthwave.
+ */
+
+/* Dark only: it holds in light mode too, and the light/dark switch goes. */
+:root,
+:root[data-theme="light"] {
+  color-scheme: dark;
+
+  --ink: 244 238 252;
+  --ink-2: 205 198 215;
+  --muted: 166 158 179;
+  --faint: 131 123 146;
+  --page: 26 16 48;
+  --blob-mint: 86 32 92;
+  --blob-cyan: 33 77 99;
+  --blob-sand: 74 42 50;
+  --surface: 43 29 74;
+  --tile: 34 22 60;
+  --track: 51 36 90;
+  --line: 69 48 110;
+  --accent: 54 249 246;
+  --brand: 179 19 143;
+  --pill: 255 79 216;
+  --pill-ink: 66 21 56;
+  --bar: 224 70 190;
+  --bar-light: 155 51 140;
+  --chart-cyan: 54 249 246;
+  --chart-sand: 254 222 93;
+  --mint: 63 26 75;
+  --mint-line: 95 35 98;
+  --seg-on: 255 79 216;
+  --seg-on-ink: 66 21 56;
+  --scrim: 26 16 48;
+
+  --card-bg: rgba(37, 27, 58, 0.8);
+  --card-border: rgba(255, 79, 216, 0.18);
+  --tile-border: rgba(255, 79, 216, 0.14);
+  --live-bg: linear-gradient(110deg, rgba(90, 34, 95, 0.92), rgba(37, 27, 58, 0.82) 62%);
+  --card-shadow: 0 1px 2px rgba(0, 0, 0, 0.2), 0 16px 40px -20px rgba(0, 0, 0, 0.6);
+  --lift-shadow: 0 1.4rem 2.6rem -1rem rgba(0, 0, 0, 0.75);
+  --focus: var(--pill);
+}
+
+.proto [data-kind="theme"] {
+  display: none;
+}
