@@ -1,5 +1,6 @@
 import { Flame, Play } from "lucide-react";
 import { launch, nowPlaying, resumeGame } from "../app-state";
+import { SaveGlyph, useSaves } from "../components/saves";
 import { Backdrop, Cover, formatClock, Logo, useElapsed, WeekBars } from "../components/shared";
 import {
   fmtMinutes,
@@ -20,7 +21,7 @@ const minutes = (seconds: number) => Math.round(seconds / 60);
 /**
  * Home A: one grid of recent games, led by the last played as a large tile with its art, session and Continue, so
  * it reads as the first game of the list rather than a banner above it. While that game runs, the tile says so and
- * resumes it. The rail shows the user's Playdex stats.
+ * resumes it, and a game added to Playdex says where its save backups stand. The rail shows the user's Playdex stats.
  */
 export function RibbonHome() {
   const summary = useStore(playdexSummary);
@@ -32,6 +33,16 @@ export function RibbonHome() {
   const running = useStore(nowPlaying);
   const playing = running?.gameId === last.game.id;
   const elapsed = useElapsed(playing ? running.since : null);
+  const saves = useSaves(last.game.id)?.status;
+  const savesNote = saves && (
+    <>
+      <span aria-hidden>·</span>
+      <span className="save-note">
+        <SaveGlyph kind={saves.kind} />
+        {saves.label}
+      </span>
+    </>
+  );
 
   return (
     <main className="ribbon-home">
@@ -76,9 +87,15 @@ export function RibbonHome() {
                   {played.sessionCount} {played.sessionCount === 1 ? "session" : "sessions"}
                   <span aria-hidden>·</span>
                   {SOURCE_LABEL[last.game.source]}
+                  {savesNote}
                 </span>
               ) : (
-                <span className="ribbon-meta">{SOURCE_LABEL[last.game.source]} · Installed</span>
+                <span className="ribbon-meta">
+                  {SOURCE_LABEL[last.game.source]}
+                  <span aria-hidden>·</span>
+                  Installed
+                  {savesNote}
+                </span>
               )}
               {/* The whole tile is the button; this is its label. */}
               <span className="btn btn-primary btn-lg ribbon-cta" aria-hidden>

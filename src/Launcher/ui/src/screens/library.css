@@ -120,3 +120,16 @@
   font-size: 0.6rem;
   color: rgb(var(--muted));
 }
+/* Save backups of a game added to Playdex: a glyph in the cover's corner, its words in the tooltip. */
+.lcover-save {
+  position: absolute;
+  top: 0.45rem;
+  right: 0.45rem;
+  display: grid;
+  place-items: center;
+  width: 1.4rem;
+  height: 1.4rem;
+  border-radius: 99px;
+  background: rgba(15, 21, 27, 0.86);
+  font-size: 0.8rem;
+}

@@ -133,7 +133,7 @@ function GameRow({
   run: (key: string, work: () => Promise<unknown>) => Promise<void>;
 }) {
   const [armed, setArmed] = useState(false);
-  const libraryId = `playdex-${game.gameId}`;
+  const libraryId = game.libraryId;
   // Absent when the game's executable is missing (the library lists only games on this PC).
   const libraryGame: Game | undefined = gameById(libraryId);
 

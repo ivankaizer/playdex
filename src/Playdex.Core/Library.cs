@@ -92,6 +92,9 @@ public static class Library
     private static string? Url(string host, string? relativePath) =>
         relativePath is null ? null : $"https://{host}/{string.Join('/', relativePath.Split('/').Select(Uri.EscapeDataString))}";
 
+    /// <summary>The library id of a game added to Playdex.</summary>
+    public static string PlaydexId(string configGameId) => $"playdex-{configGameId}";
+
     public static string ToJson(IReadOnlyDictionary<string, LibraryGame> games) =>
         JsonSerializer.Serialize(games.Values.ToList(), LibraryJson.Default.ListLibraryGame);
 
@@ -114,7 +117,7 @@ public static class Library
             var launcher = LauncherManager.GetLauncherPath(config.Storage, game);
             var capture = CaptureGame.From(game, config.Api);
             games.Add(new LibraryGame(
-                $"playdex-{game.GameId}", title, "playdex", steamAppId, null, File.Exists(launcher) ? launcher : null, ConfigGameId: game.GameId,
+                PlaydexId(game.GameId), title, "playdex", steamAppId, null, File.Exists(launcher) ? launcher : null, ConfigGameId: game.GameId,
                 CaptureProvider: capture.GameIdProvider, CaptureId: capture.GameId));
         }
         return games;

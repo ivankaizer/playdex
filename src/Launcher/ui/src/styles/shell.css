@@ -569,6 +569,35 @@ html[data-mode="desktop"][data-input="pointer"] .hints .hint {
   }
 }
 
+/* ---------- Save backups (components/saves.tsx) ---------- */
+.save-glyph {
+  flex: none;
+  width: 1em;
+  height: 1em;
+  color: rgb(var(--muted));
+}
+.save-glyph[data-kind="success"] {
+  color: rgb(var(--accent));
+}
+.save-glyph[data-kind="due"],
+.save-glyph[data-kind="failed"] {
+  color: rgb(var(--chart-sand));
+}
+.save-glyph[data-kind="running"] {
+  color: rgb(var(--accent));
+  animation: spin 1s linear infinite;
+}
+.save-note {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+@keyframes spin {
+  to {
+    transform: rotate(1turn);
+  }
+}
+
 /* ---------- Toast ---------- */
 .toast {
   position: fixed;

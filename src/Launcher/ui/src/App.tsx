@@ -291,6 +291,8 @@ const PRIMARY: Record<string, string> = {
   "cover-off": "Open",
   install: "Install",
   favorite: "Favorite",
+  backup: "Back up",
+  "daily-backup": "Daily backup",
   details: "Open",
   "now-playing": "Resume",
   playing: "Resume",

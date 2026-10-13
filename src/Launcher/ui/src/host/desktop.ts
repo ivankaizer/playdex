@@ -20,8 +20,18 @@ export const isDesktop =
 
 export type BackupKind = "off" | "due" | "running" | "success" | "failed" | "unsupported";
 
+export interface BackupView {
+  kind: BackupKind;
+  /** Manage's wording, with the date and any error. */
+  text: string;
+  /** The last backup that went through, epoch ms. */
+  lastSuccessAt?: number;
+}
+
 export interface DesktopGame {
   gameId: string;
+  /** The game's id in the library ("playdex-<gameId>"). */
+  libraryId: string;
   displayName: string;
   apiGameId: string;
   gameProvider: string;
@@ -31,7 +41,7 @@ export interface DesktopGame {
   executablePath: string;
   executableExists: boolean;
   dailyBackup: boolean;
-  backup: { kind: BackupKind; text: string };
+  backup: BackupView;
 }
 
 export interface DesktopSettings {
@@ -134,27 +144,30 @@ let demoState: DesktopState = {
   mode: isDesktop ? "desktop" : "bigPicture",
   launcherDirectory: "C:\\Users\\you\\AppData\\Local\\Playdex\\launchers",
   runAvailable: true,
+  // The demo library's first games stand in for games added to Playdex, so their pages and tiles show save status.
   games: [
     {
-      gameId: "SplitFiction",
-      displayName: "Split Fiction",
-      apiGameId: "2001120",
+      gameId: "Hades2",
+      libraryId: "hades2",
+      displayName: "Hades II",
+      apiGameId: "1145350",
       gameProvider: "steam",
       platform: null,
       launchOptions: "",
-      executablePath: "D:\\Games\\Split Fiction\\SplitFiction.exe",
+      executablePath: "D:\\Games\\Hades II\\Hades2.exe",
       executableExists: true,
       dailyBackup: true,
-      backup: { kind: "success", text: "Backed up 10/10/2026 09:12." },
+      backup: { kind: "success", text: "Backed up today 09:12.", lastSuccessAt: new Date().setHours(9, 12, 0, 0) },
     },
     {
-      gameId: "Cronos",
-      displayName: "Cronos: The New Dawn",
-      apiGameId: "1850570",
+      gameId: "Balatro",
+      libraryId: "balatro",
+      displayName: "Balatro",
+      apiGameId: "2379780",
       gameProvider: "steam",
       platform: "gog",
       launchOptions: "-dx12",
-      executablePath: "E:\\GOG\\Cronos\\Cronos.exe",
+      executablePath: "E:\\GOG\\Balatro\\Balatro.exe",
       executableExists: true,
       dailyBackup: false,
       backup: { kind: "off", text: "No backups yet." },
@@ -165,7 +178,7 @@ let demoState: DesktopState = {
     apiKeySet: true,
     platform: "pc",
     steamGridDbKeySet: false,
-    ludusaviPath: "",
+    ludusaviPath: "C:\\Tools\\ludusavi.exe",
     startWithWindows: true,
   },
   // ?update shows an update that is ready to install.
@@ -200,6 +213,16 @@ async function demo(method: string, params?: Record<string, unknown>): Promise<u
         });
       }
       return (demoState = { ...demoState, games: [...demoState.games] });
+    case "game.dailyBackup":
+      if (game) {
+        game.dailyBackup = !!params!.enabled;
+        if (game.dailyBackup && game.backup.kind === "off") game.backup = { kind: "due", text: "Daily backup is due." };
+      }
+      return (demoState = { ...demoState, games: [...demoState.games] });
+    case "game.backup":
+      if (game) game.backup = { kind: "success", text: "Backed up just now.", lastSuccessAt: Date.now() };
+      desktopState.set((demoState = { ...demoState, games: [...demoState.games] }));
+      return { message: `${game?.displayName}'s saves were backed up.` };
     case "game.remove":
       return (demoState = { ...demoState, games: demoState.games.filter((g) => g !== game) });
     case "game.add":

@@ -7,10 +7,12 @@ using Microsoft.Win32;
 
 namespace Playdex.Desktop;
 
-internal sealed record BackupView(string Kind, string Text);
+/// <param name="LastSuccessAt">The last backup that went through, epoch ms.</param>
+internal sealed record BackupView(string Kind, string Text, long? LastSuccessAt = null);
 
 internal sealed record DesktopGame(
     string GameId,
+    string LibraryId,
     string DisplayName,
     string ApiGameId,
     string GameProvider,
@@ -173,6 +175,8 @@ internal sealed partial class DesktopHost : IDisposable
                 return Json(await AddToSteamAsync(Text(parameters, "gameId")));
             case "game.backup":
                 return Json(await BackupAsync(Text(parameters, "gameId")));
+            case "game.dailyBackup":
+                return await SetDailyBackupAsync(Text(parameters, "gameId"), parameters.TryGetProperty("enabled", out var on) && on.ValueKind == JsonValueKind.True);
             case "settings.save":
                 return await SaveSettingsAsync(parameters);
             case "settings.startWithWindows":
@@ -305,6 +309,15 @@ internal sealed partial class DesktopHost : IDisposable
             : new MessageView(state?.LastError ?? "The backup did not complete.", Warning: true);
     }
 
+    /// <summary>Daily backup on or off, from the game's page (Manage changes it with the rest of the game's settings).</summary>
+    private async Task<string> SetDailyBackupAsync(string gameId, bool enabled)
+    {
+        Game(gameId).Backup.DailyEnabled = enabled;
+        await _store.SaveAsync(_config);
+        Log.Info($"desktop: daily backup of {gameId} {(enabled ? "on" : "off")}");
+        return StateJson();
+    }
+
     private async Task<string> SaveSettingsAsync(JsonElement parameters)
     {
         var baseUrl = ApiConfig.NormalizeBaseUrl(OptionalText(parameters, "baseUrl"));
@@ -395,6 +408,7 @@ internal sealed partial class DesktopHost : IDisposable
             .OrderBy(g => g.DisplayName, StringComparer.CurrentCultureIgnoreCase)
             .Select(g => new DesktopGame(
                 g.GameId,
+                Library.PlaydexId(g.GameId),
                 g.DisplayName,
                 string.IsNullOrWhiteSpace(g.ApiGameId) ? g.GameId : g.ApiGameId,
                 g.GameProvider,
@@ -431,7 +445,7 @@ internal sealed partial class DesktopHost : IDisposable
     {
         var at = now ?? DateTimeOffset.Now;
         static string When(DateTimeOffset? t) => t is { } v ? $" {v.ToLocalTime():g}" : "";
-        return state?.Result switch
+        BackupView view = state?.Result switch
         {
             BackupResultKind.Running => new("running", "Backing up…"),
             BackupResultKind.Failed => new("failed", $"Last backup failed{When(state.LastAttemptAt)}.{(state.LastError is { } e ? $" {e}" : "")}"),
@@ -440,6 +454,7 @@ internal sealed partial class DesktopHost : IDisposable
             _ when state?.LastSuccessAt is not null => new("success", $"Backed up{When(state.LastSuccessAt)}."),
             _ => new(game.Backup.DailyEnabled ? "due" : "off", game.Backup.DailyEnabled ? "Daily backup is on." : "No backups yet."),
         };
+        return view with { LastSuccessAt = state?.LastSuccessAt?.ToUnixTimeMilliseconds() };
     }
 
     private static bool StartsWithWindows()

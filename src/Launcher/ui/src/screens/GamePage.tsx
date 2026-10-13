@@ -1,6 +1,7 @@
-import { Download, Heart, MonitorSmartphone, Play } from "lucide-react";
+import { Archive, CalendarCheck, CalendarX, Download, Heart, MonitorSmartphone, Play } from "lucide-react";
 import { useState } from "react";
 import { launch, showToast } from "../app-state";
+import { SaveGlyph, useSaves } from "../components/saves";
 import { Backdrop, Logo } from "../components/shared";
 import {
   dailyFor,
@@ -18,11 +19,15 @@ import {
   statsFor,
   weekdayInitial,
 } from "../data/games";
+import { rpc, type MessageView } from "../host/desktop";
 import "./game.css";
 
 const favorites = new Set<string>(["hades2", "elden"]);
 
-/** The game page: art and the primary action up top, the game's Playdex history below. */
+/**
+ * The game page: art and the primary action up top, the game's Playdex history below. A game added to Playdex also
+ * shows its save backups and can back them up now or daily.
+ */
 export function GamePage({ gameId }: { gameId: string }) {
   const game = gameById(gameId);
   const st = statsFor(gameId);
@@ -34,6 +39,7 @@ export function GamePage({ gameId }: { gameId: string }) {
   const [fav, setFav] = useState(favorites.has(gameId));
   const maxDay = Math.max(...daily, 1);
   const playedRecently = daily.some(Boolean);
+  const saves = useSaves(gameId);
 
   const toggleFav = () => {
     if (fav) favorites.delete(gameId);
@@ -54,6 +60,21 @@ export function GamePage({ gameId }: { gameId: string }) {
               {SOURCE_LABEL[game.source]}
               <span aria-hidden>·</span>
               {installed ? "Installed" : "Not installed"}
+              {saves?.status && (
+                <>
+                  <span aria-hidden>·</span>
+                  <span className="save-note">
+                    <SaveGlyph kind={saves.status.kind} />
+                    {saves.status.label}
+                  </span>
+                </>
+              )}
+              {saves && !saves.ready && (
+                <>
+                  <span aria-hidden>·</span>
+                  Set up Ludusavi in Settings to back up saves
+                </>
+              )}
             </>
           ) : (
             <>
@@ -98,6 +119,7 @@ export function GamePage({ gameId }: { gameId: string }) {
           >
             <Heart fill={fav ? "currentColor" : "none"} /> {fav ? "Favorite" : "Add to favorites"}
           </button>
+          {saves?.ready && <SaveActions gameId={gameId} configId={saves.game.gameId} daily={saves.game.dailyBackup} running={saves.game.backup.kind === "running"} />}
         </div>
       </section>
 
@@ -167,5 +189,43 @@ export function GamePage({ gameId }: { gameId: string }) {
         </div>
       </section>
     </main>
+  );
+}
+
+/** Back up now, and daily backup on or off. A backup runs in the desktop app; its status shows above as it goes. */
+function SaveActions({ gameId, configId, daily, running }: { gameId: string; configId: string; daily: boolean; running: boolean }) {
+  const [busy, setBusy] = useState(false);
+  const request = async (work: () => Promise<void>) => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      await work();
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  const backUp = () =>
+    request(async () => {
+      if (running) return;
+      const r = await rpc<MessageView>("game.backup", { gameId: configId });
+      showToast(r.message);
+    });
+  const toggleDaily = () =>
+    request(async () => {
+      await rpc("game.dailyBackup", { gameId: configId, enabled: !daily });
+      showToast(daily ? "Daily backup is off" : "Saves will be backed up daily");
+    });
+
+  return (
+    <>
+      <button className="btn btn-outline btn-lg" data-nav data-kind="backup" data-game={gameId} aria-busy={running} onClick={backUp}>
+        <Archive /> {running ? "Backing up…" : "Back up saves"}
+      </button>
+      <button className="btn btn-outline btn-lg" data-nav data-kind="daily-backup" data-game={gameId} aria-pressed={daily} onClick={toggleDaily}>
+        {daily ? <CalendarCheck /> : <CalendarX />} Daily backup {daily ? "on" : "off"}
+      </button>
+    </>
   );
 }
