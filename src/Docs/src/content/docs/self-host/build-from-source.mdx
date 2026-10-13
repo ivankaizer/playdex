@@ -1,0 +1,19 @@
+---
+title: Build from source
+description: Build the images yourself instead of pulling them.
+sidebar:
+  order: 6
+---
+
+The same compose file builds from a clone of the repository:
+
+```sh
+git clone https://github.com/ivankaizer/playdex.git
+cd playdex/selfhost
+cp .env.example .env    # fill in as in Install
+docker compose up -d --build
+```
+
+To update, `git pull` and run `docker compose up -d --build` again.
+
+Pulled images are `linux/amd64`. On an ARM server (Raspberry Pi, Ampere), build from source.

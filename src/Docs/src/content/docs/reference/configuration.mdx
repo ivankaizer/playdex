@@ -1,0 +1,43 @@
+---
+title: Configuration
+description: Every setting in .env.
+sidebar:
+  order: 1
+---
+
+Set these in `.env` next to `docker-compose.yml`, then run `docker compose up -d`.
+
+## Required
+
+| Setting | What it is |
+|---|---|
+| `PLAYDEX_DOMAIN` | The name the server answers on. Caddy gets its certificate. |
+| `POSTGRES_PASSWORD` | Database password. Use `openssl rand -hex 32`, so it's safe inside a URL. |
+| `JWT_SECRET` | Signs sign-ins. At least 32 random characters. |
+
+## Optional
+
+| Setting | Default | What it does |
+|---|---|---|
+| `PLAYDEX_VERSION` | `latest` | Image tag. `sha-<commit>` pins a version. |
+| `TELEGRAM_BOT_TOKEN` | | Turns on [Telegram notifications](/self-host/integrations/#telegram-notifications). |
+| `IGDB_CLIENT_ID`, `IGDB_CLIENT_SECRET` | | Turns on [game search](/self-host/integrations/#game-search-igdb). |
+| `AI_DRAFTS_ENABLED` | `false` | Turns on [AI drafts](/self-host/integrations/#ai-drafts). Needs a key and a model too. |
+| `AI_DRAFTS_PROVIDER` | `openai` | `openai` or `openrouter`. |
+| `AI_DRAFTS_BASE_URL` | OpenAI Responses API | The provider's endpoint. Set it for OpenRouter. |
+| `AI_DRAFTS_API_KEY` | | The provider's API key. |
+| `AI_DRAFTS_MODEL` | | The model ID. |
+| `SENTRY_DSN` | | Sends errors to [Sentry](https://sentry.io). |
+
+## Advanced
+
+The API reads any ASP.NET setting from the environment, with `__` between sections. Add these under `app.environment` in `docker-compose.yml`:
+
+| Setting | Default | What it does |
+|---|---|---|
+| `Polling__IntervalSeconds` | `60` | How often Steam, PlayStation and Xbox are checked. |
+| `Polling__PollResultRetentionDays` | `30` | How long raw platform responses are kept. `0` keeps them. |
+| `Auth__AccessTokenTtl` | `30m` | How long a sign-in lasts before it refreshes. |
+| `AiDrafts__RequestsPerHour` | `10` | AI draft requests per user per hour. |
+| `AiDrafts__HistoryRetentionDays` | `30` | How long AI inputs are kept. |
+| `CORS_ORIGINS` | | Comma-separated origins, only if the web app is on another domain than the API. |

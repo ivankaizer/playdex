@@ -1,0 +1,34 @@
+---
+title: Updates and backups
+description: Update to the latest version, pin a version, and back up the database.
+sidebar:
+  order: 5
+---
+
+## Update
+
+```sh
+docker compose pull && docker compose up -d
+```
+
+The API migrates the database on start. To stay on one version, set `PLAYDEX_VERSION=sha-<commit>` in `.env`.
+
+## Back up
+
+Everything is in Postgres. Dump it:
+
+```sh
+docker compose exec -T db pg_dump -U playdex -Fc playdex > playdex-$(date +%F).dump
+```
+
+Run that from cron and copy the dumps off the server.
+
+## Restore
+
+```sh
+docker compose stop app
+docker compose exec -T db pg_restore -U playdex -d playdex --clean --if-exists < playdex-2026-10-13.dump
+docker compose up -d
+```
+
+Keep `.env` with your backups. `JWT_SECRET` only signs sign-ins, so losing it just signs everyone out. `POSTGRES_PASSWORD` must match the database volume.

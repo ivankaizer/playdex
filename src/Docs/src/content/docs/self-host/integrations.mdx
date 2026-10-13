@@ -1,0 +1,57 @@
+---
+title: Platforms and extras
+description: Connect Steam, PlayStation and Xbox, and turn on game search, Telegram and AI drafts.
+sidebar:
+  order: 2
+---
+
+## Gaming platforms
+
+Each user connects their own accounts in **Settings → Connected services → Add integration**. Nothing to set on the server. Playdex checks every account once a minute.
+
+| Platform | What the user enters | Where to get it |
+|---|---|---|
+| Steam | Steam Web API key, Steam ID | [steamcommunity.com/dev/apikey](https://steamcommunity.com/dev/apikey). Set the profile's **Game details** to Public. |
+| PlayStation | NPSSO token | Sign in at playstation.com, then open [ca.account.sony.com/api/v1/ssocookie](https://ca.account.sony.com/api/v1/ssocookie). |
+| Xbox | OpenXBL API key | [xbl.io](https://xbl.io/dashboard) |
+
+Switch, retro and anything else: log sessions by hand or with a timer.
+
+## Game search (IGDB)
+
+Lets users find any game when they log a session by hand. Without it, search only shows games already in Playdex.
+
+Create an app in the [Twitch developer console](https://dev.twitch.tv/console), then set:
+
+```sh title=".env"
+IGDB_CLIENT_ID=...
+IGDB_CLIENT_SECRET=...
+```
+
+## Telegram notifications
+
+Messages when a session starts or ends, or when an account stops syncing.
+
+1. Create a bot with [@BotFather](https://t.me/BotFather) and set `TELEGRAM_BOT_TOKEN` in `.env`.
+2. Each user messages the bot once, then saves their chat ID in **Settings → Telegram notifications**.
+
+## AI drafts
+
+Users paste a note or a screenshot, and AI drafts the sessions for them to review.
+
+```sh title=".env"
+AI_DRAFTS_ENABLED=true
+AI_DRAFTS_API_KEY=sk-...
+AI_DRAFTS_MODEL=...
+```
+
+Pick a model that reads images and supports structured outputs. That setup uses OpenAI. For [OpenRouter](https://openrouter.ai), also set:
+
+```sh title=".env"
+AI_DRAFTS_PROVIDER=openrouter
+AI_DRAFTS_BASE_URL=https://openrouter.ai/api/v1/chat/completions
+```
+
+Each user can make 10 requests an hour. Inputs are kept for 30 days.
+
+After changing `.env`, apply it with `docker compose up -d`.

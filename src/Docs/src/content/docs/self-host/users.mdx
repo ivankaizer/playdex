@@ -1,0 +1,25 @@
+---
+title: Users
+description: Add people, reset passwords, make admins.
+sidebar:
+  order: 4
+---
+
+Every account is made from the command line on the server, with the same command:
+
+```sh
+docker compose exec app dotnet Api.dll create-user friend@example.com
+```
+
+| To | Run |
+|---|---|
+| Add a user | `create-user friend@example.com` |
+| Add an admin | `create-user friend@example.com --admin` |
+| Reset a password | `create-user` again with the same email |
+| Make someone an admin | `create-user` again with `--admin` |
+
+Without a piped password, it generates one and prints it once. `--admin` never removes admin rights.
+
+Emails are matched exactly, so `Me@example.com` and `me@example.com` are two different accounts.
+
+Users can export or delete their own data in **Settings → Export or delete your data**.

@@ -1,0 +1,78 @@
+---
+title: Install
+description: Run Playdex on a Linux server with Docker Compose and automatic HTTPS.
+sidebar:
+  order: 1
+---
+
+import { Steps, Aside } from '@astrojs/starlight/components';
+
+**You need:**
+- A Linux server with [Docker](https://docs.docker.com/engine/install/) and 2 GB of RAM.
+- A domain name, like `playdex.example.com`, whose DNS points at the server.
+- Ports 80 and 443 open.
+
+<Steps>
+
+1. **Get the files**
+
+   ```sh
+   mkdir playdex && cd playdex
+   base=https://raw.githubusercontent.com/ivankaizer/playdex/main/selfhost
+   curl -fsSLO $base/docker-compose.yml
+   curl -fsSLO $base/Caddyfile
+   curl -fsSL $base/.env.example -o .env
+   ```
+
+2. **Fill in `.env`**
+
+   Three values are required:
+
+   ```sh title=".env"
+   PLAYDEX_DOMAIN=playdex.example.com
+   POSTGRES_PASSWORD=   # openssl rand -hex 32
+   JWT_SECRET=          # openssl rand -hex 32
+   ```
+
+   Everything else is optional. See [Configuration](/reference/configuration/).
+
+3. **Start it**
+
+   ```sh
+   docker compose up -d
+   ```
+
+   Caddy gets a certificate on its own. The API sets up the database on first start.
+
+4. **Check it**
+
+   ```sh
+   curl https://playdex.example.com/api/
+   # {"data":"Ok","error":null}
+   ```
+
+5. **Create your account**
+
+   There is no public sign-up. Make yourself an admin:
+
+   ```sh
+   docker compose exec app dotnet Api.dll create-user you@example.com --admin
+   ```
+
+   It prints a generated password once. To choose your own, pipe it in:
+
+   ```sh
+   echo 'my password' | docker compose exec -T app dotnet Api.dll create-user you@example.com --admin
+   ```
+
+6. **Sign in**
+
+   Open `https://playdex.example.com`. The admin console is at `/admin`.
+
+</Steps>
+
+Next: [connect your platforms](/self-host/integrations/).
+
+<Aside type="caution">
+`.env` holds your database password and signing secret. Keep it out of Git and readable only by you: `chmod 600 .env`.
+</Aside>
