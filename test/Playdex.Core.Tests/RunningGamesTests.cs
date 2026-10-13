@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Diagnostics;
 
 namespace Playdex.Core.Tests;
@@ -117,10 +118,19 @@ public sealed class RunningGamesTests : IDisposable
         {
             using (process)
             {
-                if (string.Equals(process.MainModule?.FileName, executable, StringComparison.OrdinalIgnoreCase))
+                // The image path, not MainModule: reading modules fails while a process is still starting or exiting.
+                if (!ProcessMonitor.IsImage(process, executable))
+                {
+                    continue;
+                }
+                try
                 {
                     process.Kill(entireProcessTree: true);
                     process.WaitForExit();
+                }
+                catch (Exception ex) when (ex is Win32Exception or InvalidOperationException)
+                {
+                    // Already exiting (a test closed it), or gone.
                 }
             }
         }
