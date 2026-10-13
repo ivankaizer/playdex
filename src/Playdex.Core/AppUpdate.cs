@@ -205,6 +205,58 @@ public static class AppUpdate
     internal static readonly TimeSpan ParentExitTimeout = TimeSpan.FromSeconds(30);
     internal static readonly TimeSpan HealthTimeout = TimeSpan.FromSeconds(60);
 
+    /// <summary>
+    /// Held by the helper while it replaces the app folder. A Playdex.exe started from that folder meanwhile would lock
+    /// it and fail the update, and the Full Screen Experience starts its home app again as soon as Playdex exits.
+    /// </summary>
+    private const string ApplyingMutexName = @"Local\PlaydexUpdateApplying";
+
+    /// <summary>The helper's lock while it applies an update; held by the calling thread until released or disposed.</summary>
+    public static Mutex HoldApplyingLock()
+    {
+        var applying = new Mutex(initiallyOwned: true, ApplyingMutexName, out var createdNew);
+        if (!createdNew)
+        {
+            // Another helper is still at it: take the lock once it is done.
+            try
+            {
+                applying.WaitOne();
+            }
+            catch (AbandonedMutexException)
+            {
+            }
+        }
+        return applying;
+    }
+
+    /// <summary>
+    /// If an update is being applied, wait until the helper is done (the new or the restored version is running then).
+    /// False when no update was being applied.
+    /// </summary>
+    public static bool WaitWhileApplying(TimeSpan timeout)
+    {
+        if (!Mutex.TryOpenExisting(ApplyingMutexName, out var applying))
+        {
+            return false;
+        }
+        using (applying)
+        {
+            try
+            {
+                if (applying.WaitOne(timeout))
+                {
+                    applying.ReleaseMutex();
+                }
+            }
+            catch (AbandonedMutexException)
+            {
+                // The helper ended without releasing it; this thread owns it now.
+                applying.ReleaseMutex();
+            }
+        }
+        return true;
+    }
+
     /// <summary>%LOCALAPPDATA%\Playdex\updates.</summary>
     public static string UpdateRoot { get; } = Path.Combine(Paths.DataDirectory, "updates");
 

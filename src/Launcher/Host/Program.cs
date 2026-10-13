@@ -16,6 +16,12 @@ public static class Program
 {
     private const string AppExecutable = "Playdex.exe";
 
+    /// <summary>--fse: switching Playdex to desktop mode then leaves the Full Screen Experience.</summary>
+    private const string BigPicture = "--big-picture --fse";
+
+    /// <summary>Longest an update takes: Playdex exiting, the folder swap, and the new version's health check.</summary>
+    private static readonly TimeSpan _updateWait = TimeSpan.FromMinutes(3);
+
     [STAThread]
     private static int Main(string[] args)
     {
@@ -32,8 +38,13 @@ public static class Program
         using var resident = new Mutex(initiallyOwned: false, @"Local\PlaydexFullScreenEntry", out var first);
         // Started by the shell, this process may set the foreground; hand that on to Playdex.
         NativeEntry.AllowSetForegroundWindow(NativeEntry.AnyProcess);
-        // --fse: switching Playdex to desktop mode then leaves the Full Screen Experience.
-        var arguments = $"--big-picture --fse{(gameId is null ? "" : $" --launch={gameId}")}";
+        var arguments = $"{BigPicture}{(gameId is null ? "" : $" --launch={gameId}")}";
+        // FSE starts its home app again as soon as Playdex quits to update; Playdex.exe started now would lock the
+        // folder the update is replacing.
+        if (AppUpdate.WaitWhileApplying(_updateWait))
+        {
+            Log.Info("fse entry: waited for the update to finish");
+        }
         int processId;
         try
         {
@@ -50,17 +61,19 @@ public static class Program
         {
             return 0; // Another entry is already resident.
         }
-        StayWhilePlaydexRuns(processId, Path.GetFileNameWithoutExtension(app));
+        StayWhilePlaydexRuns(processId, app);
         Log.Info("fse entry: Playdex exited");
         return 0;
     }
 
     /// <summary>
     /// Wait for the process started here, then for the running Playdex: the one started may have only handed its request
-    /// to an instance that was already running.
+    /// to an instance that was already running. Playdex quitting to update is not an exit: stay through the update, then
+    /// hand the new version Big Picture again (the updater starts it without).
     /// </summary>
-    private static void StayWhilePlaydexRuns(int processId, string processName)
+    private static void StayWhilePlaydexRuns(int processId, string app)
     {
+        var processName = Path.GetFileNameWithoutExtension(app);
         try
         {
             using var started = System.Diagnostics.Process.GetProcessById(processId);
@@ -77,7 +90,12 @@ public static class Program
             {
                 if (running.Length == 0)
                 {
-                    return;
+                    if (!AppUpdate.WaitWhileApplying(_updateWait))
+                    {
+                        return;
+                    }
+                    StartAfterUpdate(app);
+                    continue;
                 }
                 running[0].WaitForExit();
             }
@@ -92,6 +110,19 @@ public static class Program
                     process.Dispose();
                 }
             }
+        }
+    }
+
+    private static void StartAfterUpdate(string app)
+    {
+        try
+        {
+            var processId = NativeEntry.StartOutsidePackage(app, BigPicture);
+            Log.Info($"fse entry: update finished; started {app} {BigPicture} (pid {processId})");
+        }
+        catch (System.ComponentModel.Win32Exception ex)
+        {
+            Log.Error($"fse entry: could not start {app} after the update", ex);
         }
     }
 

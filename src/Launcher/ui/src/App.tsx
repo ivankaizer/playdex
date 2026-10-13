@@ -466,7 +466,7 @@ function LaunchOverlay({ gameId }: { gameId: string }) {
           </div>
         ) : (
           <div className="launch-state">
-            Starting {game.title}
+            {hostSession?.state === "steam" ? "Starting Steam" : `Starting ${game.title}`}
             <span className="progress">
               <i />
             </span>

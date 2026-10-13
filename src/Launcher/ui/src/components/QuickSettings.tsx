@@ -41,10 +41,27 @@ function splitName(name: string): { name: string; detail?: string } {
   return open > 0 && name.endsWith(")") ? { name: name.slice(0, open), detail: name.slice(open + 2, -1) } : { name };
 }
 
-function OutputIcon({ output }: { output: AudioOutput }) {
+type OutputKind = "headphones" | "display" | "speaker";
+
+/** An audio output that is wireless gaming gear (Logitech LIGHTSPEED, SteelSeries Arctis, Razer…) is a headset. */
+function outputKind(output: AudioOutput): OutputKind {
   const n = output.name.toLowerCase();
-  if (/head(phone|set)|earbud|airpods|buds/.test(n)) return <Headphones aria-hidden />;
-  if (/hdmi|display|monitor|tv\b|nvidia|amd high definition|intel\(r\) display/.test(n)) return <Monitor aria-hidden />;
+  if (/head(phone|set)|earbud|airpods|buds|lightspeed|arctis|kraken|blackshark|barracuda|hyperx|astro a\d|virtuoso/.test(n)) {
+    return "headphones";
+  }
+  if (/hdmi|display|monitor|tv\b|nvidia|amd high definition|intel\(r\) display/.test(n)) return "display";
+  return "speaker";
+}
+
+/** Windows names many USB headsets "Speakers (PRO X 2 LIGHTSPEED)": a headset like that goes by its product name. */
+function outputLabel(output: AudioOutput, kind: OutputKind): { name: string; detail?: string } {
+  const split = splitName(output.name);
+  return kind === "headphones" && split.name === "Speakers" && split.detail ? { name: split.detail } : split;
+}
+
+function OutputIcon({ kind }: { kind: OutputKind }) {
+  if (kind === "headphones") return <Headphones aria-hidden />;
+  if (kind === "display") return <Monitor aria-hidden />;
   return <Speaker aria-hidden />;
 }
 
@@ -162,7 +179,7 @@ export function QuickSettings() {
   return (
     <div className="qs-layer" role="dialog" aria-modal="true" aria-label="Quick settings">
       <div className="qs-scrim" onClick={closeQuickSettings} />
-      <aside className="qs">
+      <aside className="qs" data-scroll="y">
         <span className="kicker">Quick settings</span>
 
         <section className="qs-section" aria-labelledby="qs-sound">
@@ -176,7 +193,8 @@ export function QuickSettings() {
               <p className="qs-empty">No sound outputs found.</p>
             ) : (
               state.outputs.map((o) => {
-                const { name, detail } = splitName(o.name);
+                const kind = outputKind(o);
+                const { name, detail } = outputLabel(o, kind);
                 return (
                   <button
                     key={o.id}
@@ -188,7 +206,7 @@ export function QuickSettings() {
                     data-nav-default={o.isDefault ? "" : undefined}
                     onClick={() => chooseOutput(o.id)}
                   >
-                    <OutputIcon output={o} />
+                    <OutputIcon kind={kind} />
                     <span className="qs-row-text">
                       <span className="qs-row-name">{name}</span>
                       {detail && <small>{detail}</small>}

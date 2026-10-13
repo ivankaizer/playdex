@@ -43,7 +43,7 @@ internal sealed class ShellServices : IDisposable
     /// <summary>The games on this PC, scanned off the UI thread. <see cref="RescanLibrary"/> replaces it.</summary>
     public Task<IReadOnlyDictionary<string, LibraryGame>> LibraryScan { get; private set; }
 
-    /// <summary>A game's session changed: (gameId, "starting" | "running" | "ended", seconds). Any thread.</summary>
+    /// <summary>A game's session changed: (gameId, "starting" | "steam" | "running" | "ended", seconds). Any thread.</summary>
     public event Action<string, string, int>? SessionChanged;
 
     /// <summary>A launched game exited (Stopwatch timestamp of detection). Any thread.</summary>

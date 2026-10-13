@@ -1,5 +1,5 @@
 import { gameById, markPlayed, recentGames } from "./data/games";
-import { inHost, onHostMessage, postToHost, signalAfterFrame } from "./host/bridge";
+import { inHost, onHostMessage, postToHost, signalAfterFrame, type SessionState } from "./host/bridge";
 import { current, focusDefault, focusEl } from "./nav/focus";
 import { createStore } from "./nav/store";
 
@@ -26,7 +26,7 @@ export function showToast(msg: string) {
 }
 
 /** Session state reported by the Windows host for the launching game. Null in a plain browser (simulated). */
-export const session = createStore<{ state: "starting" | "running" | "ended"; seconds: number } | null>(null);
+export const session = createStore<{ state: SessionState; seconds: number } | null>(null);
 
 export function launch(gameId: string) {
   launching.set(gameId);
@@ -38,7 +38,8 @@ export function launch(gameId: string) {
 /** Leave the launch overlay. A game that has not started yet is cancelled; a running one keeps being tracked. */
 export function leaveLaunch() {
   const gameId = launching.get();
-  if (gameId && inHost && session.get()?.state === "starting") postToHost({ type: "cancel", gameId });
+  const state = session.get()?.state;
+  if (gameId && inHost && (state === "starting" || state === "steam")) postToHost({ type: "cancel", gameId });
   launching.set(null);
   session.set(null);
 }

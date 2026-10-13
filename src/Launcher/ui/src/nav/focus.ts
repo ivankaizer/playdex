@@ -127,10 +127,17 @@ function scrollAxis(sc: HTMLElement): "x" | "y" {
   return sc.dataset.scroll === "x" ? "x" : "y";
 }
 
-/** Keep the focused item in view inside its scroll container (horizontal shelves, vertical lists). */
+/**
+ * Keep the focused item in view inside each scroll container around it (horizontal shelves, vertical lists): a row of
+ * pills scrolls sideways inside a panel that scrolls down.
+ */
 function reveal(el: HTMLElement) {
-  const sc = el.closest<HTMLElement>("[data-scroll]");
-  if (!sc) return;
+  for (let sc = el.closest<HTMLElement>("[data-scroll]"); sc; sc = sc.parentElement?.closest<HTMLElement>("[data-scroll]") ?? null) {
+    revealIn(sc, el);
+  }
+}
+
+function revealIn(sc: HTMLElement, el: HTMLElement) {
   const axis = scrollAxis(sc);
   const r = el.getBoundingClientRect();
   const c = sc.getBoundingClientRect();
