@@ -162,7 +162,7 @@ export function QuickSettings() {
   return (
     <div className="qs-layer" role="dialog" aria-modal="true" aria-label="Quick settings">
       <div className="qs-scrim" onClick={closeQuickSettings} />
-      <aside className="qs">
+      <aside className="qs" data-scroll="y">
         <span className="kicker">Quick settings</span>
 
         <section className="qs-section" aria-labelledby="qs-sound">
