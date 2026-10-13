@@ -123,6 +123,33 @@ public sealed class AppUpdateTests
     }
 
     [Fact]
+    public async Task StartingPlaydexWaitsWhileTheHelperAppliesAnUpdate()
+    {
+        Assert.False(AppUpdate.WaitWhileApplying(TimeSpan.Zero));
+
+        using var held = new ManualResetEventSlim();
+        using var done = new ManualResetEventSlim();
+        // The helper holds the lock on one thread for the whole swap, as Playdex.Run does.
+        var helper = new Thread(() =>
+        {
+            using var applying = AppUpdate.HoldApplyingLock();
+            held.Set();
+            done.Wait();
+            applying.ReleaseMutex();
+        });
+        helper.Start();
+        held.Wait();
+
+        var waiting = Task.Run(() => AppUpdate.WaitWhileApplying(TimeSpan.FromSeconds(10)));
+        Assert.NotSame(waiting, await Task.WhenAny(waiting, Task.Delay(300)));
+        done.Set();
+        Assert.True(await waiting.WaitAsync(TimeSpan.FromSeconds(10)));
+        helper.Join();
+
+        Assert.False(AppUpdate.WaitWhileApplying(TimeSpan.Zero));
+    }
+
+    [Fact]
     public async Task AVersionThatDoesNotStartIsRolledBack()
     {
         // Needs a real executable for the helper and the "apps": the published Playdex.Run.exe. Started with

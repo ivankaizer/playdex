@@ -22,7 +22,11 @@ internal static class Program
         {
             // In the update folder of the update being applied: apply.json sits one folder below it.
             Log.UseFile(Path.Combine(Path.GetDirectoryName(Path.GetDirectoryName(Path.GetFullPath(applyPath)))!, "update.log"));
-            return AppUpdate.ApplyAsync(Path.GetFullPath(applyPath), parentProcessId).GetAwaiter().GetResult() ? 0 : 1;
+            // Held on this thread for the whole swap, so the Full Screen Experience entry waits instead of starting Playdex.
+            using var applying = AppUpdate.HoldApplyingLock();
+            var installed = AppUpdate.ApplyAsync(Path.GetFullPath(applyPath), parentProcessId).GetAwaiter().GetResult();
+            applying.ReleaseMutex();
+            return installed ? 0 : 1;
         }
 
         LauncherManifest? manifest;
