@@ -1,3 +1,28 @@
+/*
+ * The cover grid's geometry, read by the virtualizer (Library.tsx). A row is the cover (2:3) plus its caption and the
+ * space to the next row. Registered so their computed values are absolute lengths; a theme overrides them on :root.
+ */
+@property --lib-col-w {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 0px;
+}
+@property --lib-gap-x {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 0px;
+}
+@property --lib-row-h {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 0px;
+}
+:root {
+  --lib-col-w: 9.6rem;
+  --lib-gap-x: 1.1rem;
+  --lib-row-h: calc(var(--lib-col-w) * 1.5 + 3.8rem);
+}
+
 .library {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
@@ -34,7 +59,7 @@
   position: absolute;
   inset: 0 0 auto 0;
   display: grid;
-  column-gap: 1.1rem;
+  column-gap: var(--lib-gap-x);
   justify-content: space-between;
   padding-top: 0.5rem;
 }
@@ -47,7 +72,7 @@
   display: grid;
   gap: 0.25rem;
   align-content: start;
-  width: 9.6rem;
+  width: var(--lib-col-w);
   border-radius: 0.9rem;
 }
 .lcover-art {
