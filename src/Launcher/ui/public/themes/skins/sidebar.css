@@ -4,7 +4,7 @@
  * - Home's games are a vertical list beside the Playdex rail (the Ribbon) or a column of days (?layout=timeline).
  * - Library covers are smaller, so more fit a row.
  * The app's CSS is in the `app` cascade layer, so these plain rules win without !important or extra specificity.
- * Load it with ?theme=sidebar.
+ * Load it with ?skin=sidebar.
  */
 
 /* ---------- Shell: tabs in a left column ----------
@@ -90,6 +90,8 @@
 }
 .jtile-art {
   border-radius: 1.1rem 0 0 1.1rem;
+  /* The title shown when a game has no art, sized to the smaller thumbnail. */
+  font-size: 0.72rem;
 }
 .jtile-foot {
   padding: 0.5rem 1.2rem;

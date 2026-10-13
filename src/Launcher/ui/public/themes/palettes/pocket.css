@@ -1,0 +1,81 @@
+/*
+ * Pocket: the four greens of a 1989 handheld's screen. Pea-green LCD for light, the backlit inverse for dark.
+ * A palette only sets the colour tokens (src/styles/tokens.css: RGB channels, so `rgb(var(--x) / a)` works).
+ * Load it with ?palette=pocket.
+ */
+
+:root {
+  color-scheme: dark;
+
+  --ink: 196 220 90;
+  --ink-2: 163 190 77;
+  --muted: 156 184 74;
+  --faint: 102 135 51;
+  --page: 15 56 15;
+  --blob-mint: 27 71 27;
+  --blob-cyan: 27 71 27;
+  --blob-sand: 50 88 15;
+  --surface: 29 74 29;
+  --tile: 23 65 23;
+  --track: 38 86 38;
+  --line: 48 98 48;
+  --accent: 155 188 15;
+  --brand: 48 98 48;
+  --pill: 155 188 15;
+  --pill-ink: 15 56 15;
+  --bar: 136 165 13;
+  --bar-light: 94 127 14;
+  --chart-cyan: 139 172 15;
+  --chart-sand: 196 220 90;
+  --mint: 36 76 15;
+  --mint-line: 57 96 15;
+  --seg-on: 155 188 15;
+  --seg-on-ink: 15 56 15;
+  --scrim: 15 56 15;
+
+  --card-bg: rgba(24, 64, 19, 0.8);
+  --card-border: rgba(155, 188, 15, 0.16);
+  --tile-border: rgba(155, 188, 15, 0.12);
+  --live-bg: linear-gradient(110deg, rgba(54, 93, 15, 0.92), rgba(24, 64, 19, 0.82) 62%);
+  --card-shadow: 0 1px 2px rgba(0, 0, 0, 0.2), 0 16px 40px -20px rgba(0, 0, 0, 0.6);
+  --lift-shadow: 0 1.4rem 2.6rem -1rem rgba(0, 0, 0, 0.75);
+  --focus: var(--pill);
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+
+  --ink: 15 56 15;
+  --ink-2: 15 56 15;
+  --muted: 31 74 31;
+  --faint: 48 98 48;
+  --page: 155 188 15;
+  --blob-mint: 176 204 53;
+  --blob-cyan: 147 180 15;
+  --blob-sand: 176 204 53;
+  --surface: 178 204 60;
+  --tile: 169 197 42;
+  --track: 139 172 15;
+  --line: 127 159 15;
+  --accent: 15 56 15;
+  --brand: 15 56 15;
+  --pill: 15 56 15;
+  --pill-ink: 196 220 90;
+  --bar: 48 98 48;
+  --bar-light: 141 169 141;
+  --chart-cyan: 48 98 48;
+  --chart-sand: 79 122 31;
+  --mint: 139 172 15;
+  --mint-line: 48 98 48;
+  --seg-on: 15 56 15;
+  --seg-on-ink: 196 220 90;
+  --scrim: 155 188 15;
+
+  --card-bg: rgba(178, 204, 60, 0.74);
+  --card-border: rgba(15, 56, 15, 0.22);
+  --tile-border: rgba(15, 56, 15, 0.16);
+  --live-bg: linear-gradient(110deg, rgba(142, 171, 50, 0.95), rgba(178, 204, 60, 0.78) 62%);
+  --card-shadow: 0 1px 2px rgba(15, 56, 15, 0.04), 0 16px 40px -20px rgba(15, 56, 15, 0.18);
+  --lift-shadow: 0 1.4rem 2.6rem -1rem rgba(15, 56, 15, 0.4);
+  --focus: var(--brand);
+}

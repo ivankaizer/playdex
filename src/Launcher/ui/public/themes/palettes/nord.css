@@ -1,0 +1,81 @@
+/*
+ * Nord: arctic blue-greys with frost accents. Dark (Polar Night) and light (Snow Storm).
+ * A palette only sets the colour tokens (src/styles/tokens.css: RGB channels, so `rgb(var(--x) / a)` works).
+ * Load it with ?palette=nord.
+ */
+
+:root {
+  color-scheme: dark;
+
+  --ink: 236 239 244;
+  --ink-2: 202 205 212;
+  --muted: 170 174 181;
+  --faint: 137 142 150;
+  --page: 46 52 64;
+  --blob-mint: 61 76 88;
+  --blob-cyan: 53 64 80;
+  --blob-sand: 60 69 73;
+  --surface: 59 66 82;
+  --tile: 53 59 73;
+  --track: 67 76 94;
+  --line: 76 86 106;
+  --accent: 136 192 208;
+  --brand: 76 106 148;
+  --pill: 136 192 208;
+  --pill-ink: 35 50 54;
+  --bar: 120 169 183;
+  --bar-light: 94 128 141;
+  --chart-cyan: 129 161 193;
+  --chart-sand: 235 203 139;
+  --mint: 60 74 87;
+  --mint-line: 73 94 107;
+  --seg-on: 136 192 208;
+  --seg-on-ink: 35 50 54;
+  --scrim: 46 52 64;
+
+  --card-bg: rgba(56, 61, 73, 0.8);
+  --card-border: rgba(255, 255, 255, 0.07);
+  --tile-border: rgba(255, 255, 255, 0.06);
+  --live-bg: linear-gradient(110deg, rgba(71, 91, 104, 0.92), rgba(56, 61, 73, 0.82) 62%);
+  --card-shadow: 0 1px 2px rgba(0, 0, 0, 0.2), 0 16px 40px -20px rgba(0, 0, 0, 0.6);
+  --lift-shadow: 0 1.4rem 2.6rem -1rem rgba(0, 0, 0, 0.75);
+  --focus: var(--pill);
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+
+  --ink: 46 52 64;
+  --ink-2: 83 88 99;
+  --muted: 99 104 115;
+  --faint: 141 146 156;
+  --page: 229 233 240;
+  --blob-mint: 209 224 233;
+  --blob-cyan: 211 220 232;
+  --blob-sand: 230 228 222;
+  --surface: 251 252 253;
+  --tile: 239 242 246;
+  --track: 218 222 229;
+  --line: 211 215 222;
+  --accent: 59 101 132;
+  --brand: 76 106 148;
+  --pill: 136 192 208;
+  --pill-ink: 35 50 54;
+  --bar: 136 192 208;
+  --bar-light: 190 220 229;
+  --chart-cyan: 94 129 172;
+  --chart-sand: 192 150 47;
+  --mint: 230 241 245;
+  --mint-line: 212 232 238;
+  --seg-on: 251 252 253;
+  --seg-on-ink: 46 52 64;
+  --scrim: 229 233 240;
+
+  --card-bg: rgba(251, 252, 253, 0.74);
+  --card-border: rgba(255, 255, 255, 0.9);
+  --tile-border: rgba(255, 255, 255, 0.8);
+  --live-bg: linear-gradient(110deg, rgba(226, 239, 243, 0.95), rgba(251, 252, 253, 0.78) 62%);
+  --card-shadow: 0 1px 2px rgba(46, 52, 64, 0.04), 0 16px 40px -20px rgba(46, 52, 64, 0.18);
+  --lift-shadow: 0 1.4rem 2.6rem -1rem rgba(46, 52, 64, 0.4);
+  --focus: var(--brand);
+}

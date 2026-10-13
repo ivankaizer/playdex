@@ -1,0 +1,54 @@
+/*
+ * OLED: true black everywhere a pixel can be off, cards drawn by their outlines, Playdex mint for focus.
+ * A palette only sets the colour tokens (src/styles/tokens.css: RGB channels, so `rgb(var(--x) / a)` works).
+ * Load it with ?palette=oled.
+ */
+
+/* Dark only: it holds in light mode too, and the light/dark switch goes. */
+:root,
+:root[data-theme="light"] {
+  color-scheme: dark;
+
+  --ink: 232 236 239;
+  --ink-2: 190 194 196;
+  --muted: 148 151 153;
+  --faint: 111 113 115;
+  --page: 0 0 0;
+  --blob-mint: 0 0 0;
+  --blob-cyan: 0 0 0;
+  --blob-sand: 0 0 0;
+  --surface: 18 20 20;
+  --tile: 0 0 0;
+  --track: 28 31 31;
+  --line: 42 46 46;
+  --accent: 111 227 181;
+  --brand: 8 128 90;
+  --pill: 111 227 181;
+  --pill-ink: 29 59 47;
+  --bar: 98 200 159;
+  --bar-light: 64 130 103;
+  --chart-cyan: 86 190 226;
+  --chart-sand: 222 182 102;
+  --mint: 6 36 26;
+  --mint-line: 21 92 67;
+  --seg-on: 111 227 181;
+  --seg-on-ink: 29 59 47;
+  --scrim: 0 0 0;
+
+  --card-bg: rgba(0, 0, 0, 1);
+  --card-border: rgba(255, 255, 255, 0.14);
+  --tile-border: rgba(255, 255, 255, 0.12);
+  --live-bg: linear-gradient(110deg, #06241a, #000 62%);
+  --card-shadow: none;
+  --lift-shadow: 0 1.4rem 2.6rem -1rem rgba(0, 0, 0, 0.75);
+  --focus: var(--pill);
+}
+
+.proto [data-kind="theme"] {
+  display: none;
+}
+
+/* No whole-screen art behind Home: what isn't a game or a card stays off. */
+.ribbon-backdrop {
+  display: none;
+}

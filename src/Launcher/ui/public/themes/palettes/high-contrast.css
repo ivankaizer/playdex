@@ -1,0 +1,86 @@
+/*
+ * High contrast: pure black and white, yellow focus, solid outlines on every card and a heavier focus ring. Dark and light.
+ * A palette only sets the colour tokens (src/styles/tokens.css: RGB channels, so `rgb(var(--x) / a)` works).
+ * Load it with ?palette=high-contrast.
+ */
+
+:root {
+  color-scheme: dark;
+
+  --ink: 255 255 255;
+  --ink-2: 255 255 255;
+  --muted: 214 214 214;
+  --faint: 171 171 171;
+  --page: 0 0 0;
+  --blob-mint: 0 0 0;
+  --blob-cyan: 0 0 0;
+  --blob-sand: 0 0 0;
+  --surface: 20 20 20;
+  --tile: 0 0 0;
+  --track: 51 51 51;
+  --line: 255 255 255;
+  --accent: 255 212 0;
+  --brand: 0 71 179;
+  --pill: 255 212 0;
+  --pill-ink: 66 55 0;
+  --bar: 224 187 0;
+  --bar-light: 146 122 0;
+  --chart-cyan: 79 195 255;
+  --chart-sand: 255 158 61;
+  --mint: 43 36 0;
+  --mint-line: 255 212 0;
+  --seg-on: 255 212 0;
+  --seg-on-ink: 66 55 0;
+  --scrim: 0 0 0;
+
+  --card-bg: rgba(0, 0, 0, 1);
+  --card-border: rgba(255, 255, 255, 0.85);
+  --tile-border: rgba(255, 255, 255, 0.7);
+  --live-bg: #000;
+  --card-shadow: none;
+  --lift-shadow: 0 1.4rem 2.6rem -1rem rgba(0, 0, 0, 0.75);
+  --focus: var(--pill);
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+
+  --ink: 0 0 0;
+  --ink-2: 0 0 0;
+  --muted: 61 61 61;
+  --faint: 92 92 92;
+  --page: 255 255 255;
+  --blob-mint: 255 255 255;
+  --blob-cyan: 255 255 255;
+  --blob-sand: 255 255 255;
+  --surface: 255 255 255;
+  --tile: 255 255 255;
+  --track: 217 217 217;
+  --line: 0 0 0;
+  --accent: 0 51 160;
+  --brand: 0 51 160;
+  --pill: 255 212 0;
+  --pill-ink: 66 55 0;
+  --bar: 255 212 0;
+  --bar-light: 255 231 115;
+  --chart-cyan: 0 103 184;
+  --chart-sand: 163 77 0;
+  --mint: 255 243 176;
+  --mint-line: 0 0 0;
+  --seg-on: 0 0 0;
+  --seg-on-ink: 255 255 255;
+  --scrim: 255 255 255;
+
+  --card-bg: rgba(255, 255, 255, 0.74);
+  --card-border: rgba(0, 0, 0, 0.85);
+  --tile-border: rgba(0, 0, 0, 0.7);
+  --live-bg: #fff;
+  --card-shadow: none;
+  --lift-shadow: 0 1.4rem 2.6rem -1rem rgba(0, 0, 0, 0.4);
+  --focus: var(--brand);
+}
+
+/* A heavier ring, so focus reads from across the room. */
+[data-nav][data-focused] {
+  outline-width: 0.26rem;
+}
