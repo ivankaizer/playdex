@@ -1,5 +1,5 @@
 /* ---------- Playdex tab ---------- */
-/* Overview (today, this week, this month) or Recap (a year), switched in the bar above, as on the web. */
+/* Overview (today, the last 7 days, this month) or Recap (a year), switched in the bar above, as on the web. */
 .pdx {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);

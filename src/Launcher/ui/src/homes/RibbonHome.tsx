@@ -172,7 +172,7 @@ function PlaydexRail({ summary }: { summary: PlaydexSummary }) {
 
       <div className="rail-block">
         <div className="rail-row">
-          <span className="label">This week</span>
+          <span className="label">Last 7 days</span>
           <span className="rail-val num">{fmtMinutes(minutes(summary.week.totalSeconds))}</span>
         </div>
         <WeekBars maxHeight="4.4rem" minutes={summary.days.map((d) => minutes(d.totalSeconds))} />
@@ -180,7 +180,7 @@ function PlaydexRail({ summary }: { summary: PlaydexSummary }) {
 
       {top.length > 0 && (
         <div className="rail-block rail-top">
-          <span className="label">Most played this week</span>
+          <span className="label">Most played, last 7 days</span>
           <ol>
             {top.map((t) => (
               <li key={t.gameId}>

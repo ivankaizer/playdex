@@ -53,7 +53,7 @@ export function DossierHome() {
         </ol>
         <footer className="recent-week">
           <div className="recent-week-head">
-            <span className="label">This week</span>
+            <span className="label">Last 7 days</span>
             <span className="rrow-val num">{fmtMinutes(weekMinutes)}</span>
           </div>
           <WeekBars maxHeight="2.6rem" />
@@ -82,7 +82,7 @@ function NowCard() {
         <Logo game={game} className="now-logo" titleClass="now-title" />
         <div className="now-stats">
           <div className="tile now-stat">
-            <span className="label">This week</span>
+            <span className="label">Last 7 days</span>
             <b className="num">{st.weekMinutes ? fmtMinutes(st.weekMinutes) : "—"}</b>
           </div>
           <div className="tile now-stat">

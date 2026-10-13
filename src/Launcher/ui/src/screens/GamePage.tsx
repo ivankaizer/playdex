@@ -133,7 +133,7 @@ export function GamePage({ gameId }: { gameId: string }) {
             </div>
             <dl className="gfacts">
               <div>
-                <dt className="label">This week</dt>
+                <dt className="label">Last 7 days</dt>
                 <dd className="num">{st?.weekMinutes ? fmtMinutes(st.weekMinutes) : "—"}</dd>
               </div>
               <div>

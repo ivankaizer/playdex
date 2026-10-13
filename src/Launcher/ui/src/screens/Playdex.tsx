@@ -134,7 +134,7 @@ function open(summary: PlaydexSummary | null, playdexGameId: string) {
   else showToast("This game isn't on this PC.");
 }
 
-/* ---------- Overview: today, this week, this month ---------- */
+/* ---------- Overview: today, the last 7 days, this month ---------- */
 
 function Overview({ summary }: { summary: PlaydexSummary }) {
   const periods = summary.periods;
@@ -160,7 +160,7 @@ function Overview({ summary }: { summary: PlaydexSummary }) {
       >
         {todaySessions.length > 0 && <Sessions sessions={todaySessions} summary={summary} />}
       </Period>
-      <Period title="This week" note="The last 7 days" detail={week} summary={summary}>
+      <Period title="Last 7 days" detail={week} summary={summary}>
         <WeekBars maxHeight="4.8rem" minutes={summary.days.map((d) => minutes(d.totalSeconds))} />
       </Period>
       {periods?.month && summary.monthDays ? (
