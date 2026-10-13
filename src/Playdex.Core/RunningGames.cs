@@ -15,7 +15,8 @@ public sealed record RunningGame(string GameId, DateTimeOffset? Since, int? Proc
 /// <item>Games added to Playdex: a process matching the game's monitor settings (the monitored executable's path or
 /// name, or for <see cref="MonitorMode.LaunchedProcess"/> the launch executable). Checked first, as in
 /// <see cref="Library.Scan"/>, where they win over the same Steam app.</item>
-/// <item>Steam games: Steam's running app, HKCU\Software\Valve\Steam\RunningAppID (0 when none).</item>
+/// <item>Steam games: Steam's running app, HKCU\Software\Valve\Steam\RunningAppID (0 when none), while the Steam
+/// client runs: a client that quits or crashes mid-game leaves the value behind.</item>
 /// </list>
 /// One process list snapshot per call; meant for polling every few seconds while a window shows the result.
 /// </summary>
@@ -83,7 +84,7 @@ public static class RunningGames
     private static RunningGame? DetectSteam(IReadOnlyDictionary<string, LibraryGame> library)
     {
         using var steam = Registry.CurrentUser.OpenSubKey(@"Software\Valve\Steam");
-        if (steam?.GetValue("RunningAppID") is not int appId || appId == 0)
+        if (steam?.GetValue("RunningAppID") is not int appId || appId == 0 || !SteamClient.IsRunning())
         {
             return null;
         }
