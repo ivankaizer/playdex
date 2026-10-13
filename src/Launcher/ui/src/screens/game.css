@@ -200,3 +200,9 @@
   margin-top: auto;
   color: rgb(var(--muted));
 }
+/* Close game asks again before it ends the game, as Remove does in Manage. */
+.gpage-close[data-armed] {
+  background: rgb(var(--pill));
+  border-color: rgb(var(--pill));
+  color: rgb(var(--pill-ink));
+}

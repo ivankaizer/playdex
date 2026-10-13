@@ -102,7 +102,8 @@ public sealed class ProcessMonitor(MonitorConfig config)
     public static bool IsImage(Process process, string executablePath) =>
         ImagePath(process) is { } path && string.Equals(path, Path.GetFullPath(executablePath), StringComparison.OrdinalIgnoreCase);
 
-    private static string? ImagePath(Process process)
+    /// <summary>The full path of the process's executable; null if it can't be opened.</summary>
+    internal static string? ImagePath(Process process)
     {
         var handle = Native.OpenProcess(Native.ProcessQueryLimitedInformation, false, (uint)process.Id);
         if (handle == 0)

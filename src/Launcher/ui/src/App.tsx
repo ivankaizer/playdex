@@ -1,7 +1,9 @@
 import { Moon, SlidersHorizontal, Sun, UserRound, UserRoundCheck, UserRoundX } from "lucide-react";
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import {
+  closeArmed,
   closeGame,
+  forceCloseGame,
   launch,
   launching,
   leaveLaunch,
@@ -173,6 +175,12 @@ export function App() {
           openGame(game);
           return true;
         }
+        // X on the running game (the top bar's Playing, Home's tile, its page) force-closes it, after a confirming X.
+        const running = nowPlaying.get()?.gameId;
+        if (a === "x" && running && ["now-playing", "playing", "close-game"].includes(kind)) {
+          forceCloseGame(running);
+          return true;
+        }
         if (a === "x" && game && kind === "cover" && isInstalled(gameById(game))) {
           launch(game);
           return true;
@@ -296,6 +304,7 @@ const PRIMARY: Record<string, string> = {
   favorite: "Favorite",
   backup: "Back up",
   "daily-backup": "Daily backup",
+  "close-game": "Close game",
   details: "Open",
   "now-playing": "Resume",
   account: "Settings",
@@ -370,6 +379,7 @@ function HintBar({ onGamePage }: { onGamePage: boolean }) {
     <footer className="hints">
       <Hint glyph="A">{PRIMARY[kind] ?? "Select"}</Hint>
       {kind === "cover" && <Hint glyph="X">Play</Hint>}
+      {["now-playing", "playing"].includes(kind) && <Hint glyph="X">Close game</Hint>}
       {!onGamePage && ["game", "session", "continue", "playing", "cover", "cover-off"].includes(kind) && <Hint glyph="Y">Details</Hint>}
       {onGamePage && <Hint glyph="B">Back</Hint>}
       <Hint glyph="LB">Sections</Hint>
@@ -426,6 +436,12 @@ function LaunchOverlay({ gameId }: { gameId: string }) {
           resumeGame();
           return true;
         }
+        if (a === "x" && runningRef.current) {
+          forceCloseGame(gameId);
+          // The browser stand-in has no exit to report: leave once confirmed.
+          if (!inHost && closeArmed.get() === null) leaveLaunch();
+          return true;
+        }
         return true;
       }),
     [],
@@ -458,6 +474,7 @@ function LaunchOverlay({ gameId }: { gameId: string }) {
         )}
         <footer className="hints">
           {running && <Hint glyph="A">Resume game</Hint>}
+          {running && <Hint glyph="X">Close game</Hint>}
           <Hint glyph="B">Back to home</Hint>
           <span>The game window takes over here; the Xbox button brings this screen back.</span>
         </footer>

@@ -59,7 +59,7 @@ public static class RunningGames
         }
     }
 
-    private static bool IsGameProcess(GameConfig game, Process process)
+    internal static bool IsGameProcess(GameConfig game, Process process)
     {
         if (game.Monitor.Mode != MonitorMode.LaunchedProcess)
         {

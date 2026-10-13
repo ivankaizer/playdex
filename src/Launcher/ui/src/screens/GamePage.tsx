@@ -1,6 +1,6 @@
-import { Archive, CalendarCheck, CalendarX, Download, Heart, MonitorSmartphone, Play } from "lucide-react";
+import { Archive, CalendarCheck, CalendarX, Download, Heart, MonitorSmartphone, Play, X } from "lucide-react";
 import { useState } from "react";
-import { launch, showToast } from "../app-state";
+import { closeArmed, forceCloseGame, launch, nowPlaying, resumeGame, showToast } from "../app-state";
 import { SaveGlyph, useSaves } from "../components/saves";
 import { Backdrop, Logo } from "../components/shared";
 import {
@@ -20,13 +20,15 @@ import {
   weekdayInitial,
 } from "../data/games";
 import { rpc, type MessageView } from "../host/desktop";
+import { useStore } from "../nav/store";
 import "./game.css";
 
 const favorites = new Set<string>(["hades2", "elden"]);
 
 /**
- * The game page: art and the primary action up top, the game's Playdex history below. A game added to Playdex also
- * shows its save backups and can back them up now or daily.
+ * The game page: art and the primary action up top, the game's Playdex history below. While the game runs, Play
+ * resumes it and Close game force-closes it. A game added to Playdex also shows its save backups and can back them up
+ * now or daily.
  */
 export function GamePage({ gameId }: { gameId: string }) {
   const game = gameById(gameId);
@@ -40,6 +42,8 @@ export function GamePage({ gameId }: { gameId: string }) {
   const maxDay = Math.max(...daily, 1);
   const playedRecently = daily.some(Boolean);
   const saves = useSaves(gameId);
+  const playing = useStore(nowPlaying)?.gameId === gameId;
+  const closeConfirm = useStore(closeArmed) === gameId;
 
   const toggleFav = () => {
     if (fav) favorites.delete(gameId);
@@ -84,7 +88,31 @@ export function GamePage({ gameId }: { gameId: string }) {
           )}
         </p>
         <div className="gpage-actions" data-nav-group="gpage-actions">
-          {onPc &&
+          {playing ? (
+            <>
+              <button
+                className="btn btn-primary btn-lg"
+                data-nav
+                data-nav-default
+                data-kind="playing"
+                data-game={gameId}
+                onClick={resumeGame}
+              >
+                <Play fill="currentColor" /> Resume
+              </button>
+              <button
+                className="btn btn-outline btn-lg gpage-close"
+                data-nav
+                data-kind="close-game"
+                data-game={gameId}
+                data-armed={closeConfirm ? "" : undefined}
+                aria-label={closeConfirm ? `Close ${game.title}? Press again to confirm` : `Close ${game.title}`}
+                onClick={() => forceCloseGame(gameId)}
+              >
+                <X /> {closeConfirm ? "Close game?" : "Close game"}
+              </button>
+            </>
+          ) : onPc &&
             (installed ? (
               <button
                 className="btn btn-primary btn-lg"

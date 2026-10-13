@@ -19,6 +19,8 @@ export type HostMessage =
   | { type: "now-playing"; gameId: string | null; since?: number | null }
   /** A {type:"resume-game"} found no game window to switch to. */
   | { type: "resume-failed" }
+  /** A {type:"close-game"} ended nothing; `message` says why. */
+  | { type: "close-failed"; message: string }
   /** A {type:"open-steam"} found no Steam to open. */
   | { type: "open-steam-failed" }
   /** A newer Playdex summary (data/playdex.ts); null when the API key was removed. */
@@ -61,6 +63,8 @@ export type UiMessage =
   | { type: "cancel"; gameId: string }
   /** Switch to the running game's window. */
   | { type: "resume-game" }
+  /** Force-close the running game (only that one; the host checks). */
+  | { type: "close-game"; gameId: string }
   /** Open Steam: Big Picture in Big Picture mode, the Steam window in desktop mode. */
   | { type: "open-steam" }
   /** Read the quick settings state; the host answers with a "quick-settings" message, as it does for the rest. */
