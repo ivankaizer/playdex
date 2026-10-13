@@ -118,17 +118,19 @@ public sealed class RunningGamesTests : IDisposable
         {
             using (process)
             {
+                // The image path, not MainModule: reading modules fails while a process is still starting or exiting.
+                if (!ProcessMonitor.IsImage(process, executable))
+                {
+                    continue;
+                }
                 try
                 {
-                    if (string.Equals(process.MainModule?.FileName, executable, StringComparison.OrdinalIgnoreCase))
-                    {
-                        process.Kill(entireProcessTree: true);
-                        process.WaitForExit();
-                    }
+                    process.Kill(entireProcessTree: true);
+                    process.WaitForExit();
                 }
                 catch (Exception ex) when (ex is Win32Exception or InvalidOperationException)
                 {
-                    // Already exiting (a test closed it): its modules can't be read any more, or it is gone.
+                    // Already exiting (a test closed it), or gone.
                 }
             }
         }
