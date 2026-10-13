@@ -4,6 +4,7 @@ import { SaveGlyph, useSaves } from "../components/saves";
 import { Backdrop, Cover, formatClock, Logo, useElapsed, WeekBars } from "../components/shared";
 import {
   fmtMinutes,
+  gameById,
   isDemo,
   lastPlayedDay,
   lastPlayedText,
@@ -11,6 +12,7 @@ import {
   sessionEnd,
   SOURCE_LABEL,
   useRecentGames,
+  type GameStats,
 } from "../data/games";
 import { daysAgo, playdexConnected, playdexGame, playdexSummary, type PlaydexSummary } from "../data/playdex";
 import { useStore } from "../nav/store";
@@ -18,19 +20,27 @@ import "./ribbon.css";
 
 const minutes = (seconds: number) => Math.round(seconds / 60);
 
+/** The running game first, then the rest in their order: a game started elsewhere may not be the last played yet. */
+function runningFirst(recent: GameStats[], gameId: string | undefined): GameStats[] {
+  if (!gameId || recent[0]?.game.id === gameId) return recent;
+  const lead = recent.find((r) => r.game.id === gameId) ?? { game: gameById(gameId), weekMinutes: 0, weekSessions: 0 };
+  return [lead, ...recent.filter((r) => r !== lead)];
+}
+
 /**
  * Home A: one grid of recent games, led by the last played as a large tile with its art, session and Continue, so
- * it reads as the first game of the list rather than a banner above it. While that game runs, the tile says so and
- * resumes it, and a game added to Playdex says where its save backups stand. The rail shows the user's Playdex stats.
+ * it reads as the first game of the list rather than a banner above it. While a game runs it leads instead, and the
+ * tile says so and resumes it, as the top bar does. A game added to Playdex says where its save backups stand. The
+ * rail shows the user's Playdex stats.
  */
 export function RibbonHome() {
   const summary = useStore(playdexSummary);
-  const [last, ...rest] = useRecentGames();
+  const running = useStore(nowPlaying);
+  const [last, ...rest] = runningFirst(useRecentGames(), running?.gameId);
   const others = rest.slice(0, 4);
   const s = last.lastSession;
   const lastDay = lastPlayedDay(last);
   const played = playdexGame(summary, last.game);
-  const running = useStore(nowPlaying);
   const playing = running?.gameId === last.game.id;
   const elapsed = useElapsed(playing ? running.since : null);
   const saves = useSaves(last.game.id)?.status;
