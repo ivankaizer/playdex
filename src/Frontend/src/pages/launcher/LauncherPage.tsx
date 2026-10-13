@@ -1,7 +1,8 @@
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Link } from "react-router";
 import { AppFooter } from "@/components/AppFooter";
 import { CardHeading } from "@/components/ui";
+import { cx } from "@/lib/cx";
 import { setupUrl } from "@/lib/downloads";
 import { dashUrl } from "@/pages/landing/dashUrl";
 import { LandingHeader } from "@/pages/landing/LandingHeader";
@@ -11,103 +12,114 @@ export { setupUrl };
 /* Screenshots of the real launcher at 3840×2160, downscaled to 1920 in landing/public/launcher. */
 const screenshot = (name: string) => `/launcher/${name}.webp`;
 
-const iconProps = {
-  "aria-hidden": true,
-  viewBox: "0 0 24 24",
-  className: "h-6 w-6",
-  fill: "none",
-  stroke: "currentColor",
-  strokeWidth: 1.8,
-  strokeLinecap: "round",
-  strokeLinejoin: "round",
-} as const;
-
-const features: ReadonlyArray<{ title: string; body: string; icon: ReactNode }> = [
+const tour: ReadonlyArray<{ key: string; label: string; body: string; alt: string }> = [
   {
-    title: "Jump back in",
-    body: "Home opens on the game you played last, with Continue one press away. Everything else you play follows in a row.",
-    icon: (
-      <svg {...iconProps}>
-        <path d="M7 4v16l13-8z"></path>
-      </svg>
-    ),
+    key: "home",
+    label: "Home",
+    body: "Opens on the game you played last. Continue is one press away.",
+    alt: "The Playdex Launcher home screen: CONTROL Resonant leads as the last played game, recent games follow, and today's playtime, the week and the streak from Playdex sit on the right",
   },
   {
-    title: "One library on this PC",
-    body: "Your installed Steam games and the local games you added to Playdex, side by side, with hours played from your history.",
-    icon: (
-      <svg {...iconProps}>
-        <rect x="3" y="4" width="7" height="7" rx="1.5"></rect>
-        <rect x="14" y="4" width="7" height="7" rx="1.5"></rect>
-        <rect x="3" y="15" width="7" height="5" rx="1.5"></rect>
-        <rect x="14" y="15" width="7" height="5" rx="1.5"></rect>
-      </svg>
-    ),
-  },
-  {
-    title: "Every session, recorded",
-    body: "Games started from the launcher are tracked and sent to Playdex on their own, and queued on disk while you're offline.",
-    icon: (
-      <svg {...iconProps}>
-        <circle cx="12" cy="13" r="8"></circle>
-        <path d="M12 9v4l2.5 1.5M10 2h4"></path>
-      </svg>
-    ),
-  },
-  {
-    title: "Settings without the desktop",
-    body: "Switch sound output, HDR and refresh rate, toggle the NVIDIA FPS counter, or sleep and shut down, all from the pad.",
-    icon: (
-      <svg {...iconProps}>
-        <path d="M4 7h10M18 7h2M4 17h4M12 17h8"></path>
-        <circle cx="16" cy="7" r="2"></circle>
-        <circle cx="10" cy="17" r="2"></circle>
-      </svg>
-    ),
-  },
-];
-
-const gallery: ReadonlyArray<{ src: string; title: string; body: string; alt: string }> = [
-  {
-    src: screenshot("now-playing"),
-    title: "Now playing",
-    body: "A game started anywhere shows in the top bar, and Resume takes you straight back to it.",
-    alt: "The launcher's top bar with a Playing pill for the running game and a Resume action",
-  },
-  {
-    src: screenshot("library"),
-    title: "Library",
-    body: "All, Steam and Local tabs, each tile with the hours you've played it.",
+    key: "library",
+    label: "Library",
+    body: "Steam and local games together, with your hours.",
     alt: "The launcher library grid with All, Steam and Local tabs and hours played on each tile",
   },
   {
-    src: screenshot("quick-settings"),
-    title: "Quick settings",
-    body: "Sound output, HDR, refresh rate, FPS counter and power in one panel.",
+    key: "quick-settings",
+    label: "Quick settings",
+    body: "Sound, HDR, refresh rate and power, from the pad.",
     alt: "The quick settings panel with sound output, HDR, refresh rate, FPS counter and power buttons",
   },
 ];
 
-const installSteps: ReadonlyArray<{ title: string; body: string }> = [
-  {
-    title: "Install Playdex for Windows",
-    body: "Download and run Playdex-Setup.exe. It installs Playdex for your user, keeps it up to date, and can be removed from Settings → Apps.",
-  },
-  {
-    title: "Connect it to your account",
-    body: "The setup asks for the Playdex server and your API key: both are on your dashboard under Settings → Integrations → Playdex app, with Copy buttons.",
-  },
-  {
-    title: "Make it your home screen",
-    body: "Tick “Also use Playdex as the Full Screen Experience home” in the setup, or choose it later in Playdex → Settings → This app. It trusts the launcher's certificate (one admin prompt) and installs it.",
-  },
+const tourIntervalMs = 5000;
+
+/** The launcher's screens as tabs over one screenshot. It steps on its own until someone picks a tab. */
+function LauncherTour() {
+  const [active, setActive] = useState(0);
+  const [auto, setAuto] = useState(() => !window.matchMedia?.("(prefers-reduced-motion: reduce)").matches);
+
+  useEffect(() => {
+    if (!auto) return;
+    const id = window.setInterval(() => setActive((index) => (index + 1) % tour.length), tourIntervalMs);
+    return () => window.clearInterval(id);
+  }, [auto]);
+
+  const pick = (index: number) => {
+    setAuto(false);
+    setActive(index);
+  };
+
+  return (
+    <section aria-label="A look at the launcher" className="flex flex-col gap-4">
+      <div role="tablist" aria-label="Launcher screens" className="flex flex-wrap gap-2 px-2">
+        {tour.map((screen, index) => (
+          <button
+            key={screen.key}
+            type="button"
+            role="tab"
+            id={`tour-${screen.key}`}
+            aria-selected={index === active}
+            aria-controls="tour-panel"
+            onClick={() => pick(index)}
+            className={cx(
+              "relative h-[38px] overflow-hidden rounded-full border px-[18px] text-[13px] font-semibold transition-colors",
+              index === active
+                ? "border-transparent bg-pill text-pill-ink"
+                : "border-[color:var(--card-border)] bg-surface/75 text-ink-2 hover:text-accent",
+            )}
+          >
+            {screen.label}
+            {auto && index === active && (
+              <span
+                key={active}
+                aria-hidden="true"
+                className="pdx-tour-progress absolute inset-x-0 bottom-0 h-[3px] origin-left bg-bar"
+                style={{ animationDuration: `${tourIntervalMs}ms` }}
+              ></span>
+            )}
+          </button>
+        ))}
+      </div>
+      <figure id="tour-panel" role="tabpanel" aria-labelledby={`tour-${tour[active].key}`} className="m-0 flex flex-col gap-3">
+        <figcaption className="px-2 text-[17px] text-ink-2">
+          {tour[active].body}
+        </figcaption>
+        <div className="relative aspect-video w-full overflow-hidden rounded-card bg-tile shadow-cover">
+          {tour.map((screen, index) => (
+            <img
+              key={screen.key}
+              src={screenshot(screen.key)}
+              alt={index === active ? screen.alt : ""}
+              aria-hidden={index === active ? undefined : true}
+              width={1920}
+              height={1080}
+              fetchPriority={index === 0 ? "high" : undefined}
+              decoding="async"
+              className={cx(
+                "absolute inset-0 h-full w-full object-cover transition-opacity duration-500 motion-reduce:transition-none",
+                index === active ? "opacity-100" : "opacity-0",
+              )}
+            />
+          ))}
+        </div>
+      </figure>
+    </section>
+  );
+}
+
+const installSteps: ReadonlyArray<{ title: string; body: ReactNode }> = [
+  { title: "Download and run Playdex-Setup.exe", body: "It installs for your user and keeps itself updated." },
+  { title: "Paste your server and API key", body: "Both are in Playdex under Settings → Integrations → Playdex app." },
+  { title: "Make it your home screen", body: "Tick “Also use Playdex as the Full Screen Experience home” in setup." },
 ];
 
 const requirements: readonly string[] = [
-  "Windows 11, build 10.0.26100.7019 or later",
-  "Full Screen Experience (handhelds such as the ROG Ally or Legion Go, or any PC that has it)",
-  "Developer Mode turned on, while the launcher is outside the Microsoft Store",
-  "A Playdex account (invite-only for now)",
+  "Windows 11, build 26100.7019 or later",
+  "Full Screen Experience (ROG Ally, Legion Go or any PC with it)",
+  "Developer Mode on, while it’s outside the Microsoft Store",
+  "A Playdex account",
 ];
 
 /** playdex.dev/launcher: the Playdex Launcher, a console-style home screen for Windows Full Screen Experience. */
@@ -135,8 +147,7 @@ export function LauncherPage() {
             Your gaming PC, <span className="text-accent">as a console.</span>
           </h1>
           <p className="m-0 max-w-[36em] text-pretty text-[17px] leading-[1.55] text-ink-2 sm:text-[19px]">
-            A controller-first home screen for Windows Full Screen Experience. It takes the place of Steam Big Picture, opens on
-            what you were playing and keeps your Playdex history on screen, across every platform you play on.
+            A controller-first home screen for Windows. Your games and your Playdex stats, no desktop.
           </p>
           <div className="flex flex-wrap items-center gap-4">
             <a href={setupUrl} className="pdx-btn-primary !h-[52px] !px-7 !text-[15px] no-underline">
@@ -148,61 +159,7 @@ export function LauncherPage() {
           </div>
         </section>
 
-        <figure className="m-0">
-          <img
-            src={screenshot("home")}
-            alt="The Playdex Launcher home screen: CONTROL Resonant leads as the last played game, recent games follow, and today's playtime, the week and the streak from Playdex sit on the right"
-            width={1920}
-            height={1080}
-            fetchPriority="high"
-            className="aspect-video w-full rounded-card bg-tile object-cover shadow-cover"
-          />
-          <figcaption className="mt-3 px-2 text-[13px] text-muted">
-            Home on a 4K TV: the last played game leads, and the rail on the right is your Playdex history.
-          </figcaption>
-        </figure>
-
-        <section className="flex flex-col gap-5">
-          <div className="px-2">
-            <p className="pdx-kicker">Why switch</p>
-            <h2 className="mb-1.5 mt-2 text-[32px] font-semibold tracking-[-0.01em]">Power on, pick up the pad, play</h2>
-            <p className="m-0 text-[15px] text-muted">
-              Your games, not a store. Built for the couch and the handheld, and just as happy with a mouse.
-            </p>
-          </div>
-          <div className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(min(260px,100%),1fr))]">
-            {features.map((feature) => (
-              <div key={feature.title} className="pdx-card flex flex-col gap-4 !rounded-[28px] !p-7">
-                <span className="grid h-[52px] w-[52px] place-items-center rounded-2xl bg-mint text-accent">{feature.icon}</span>
-                <h3 className="m-0 text-lg font-semibold leading-[1.3]">{feature.title}</h3>
-                <p className="m-0 text-sm leading-normal text-muted">{feature.body}</p>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        <section className="pdx-card flex flex-col gap-6">
-          <CardHeading kicker="A closer look" title="Made for ten feet away" />
-          <div className="grid gap-5 [grid-template-columns:repeat(auto-fit,minmax(min(300px,100%),1fr))]">
-            {gallery.map((shot) => (
-              <figure key={shot.title} className="m-0 flex flex-col gap-3">
-                <img
-                  src={shot.src}
-                  alt={shot.alt}
-                  width={1920}
-                  height={1080}
-                  loading="lazy"
-                  decoding="async"
-                  className="aspect-video w-full rounded-[22px] bg-tile object-cover shadow-cover"
-                />
-                <figcaption className="flex flex-col gap-1 px-1">
-                  <span className="text-[15px] font-semibold">{shot.title}</span>
-                  <span className="text-sm leading-normal text-muted">{shot.body}</span>
-                </figcaption>
-              </figure>
-            ))}
-          </div>
-        </section>
+        <LauncherTour />
 
         <section id="install" className="grid scroll-mt-6 gap-4 [grid-template-columns:repeat(auto-fit,minmax(min(340px,100%),1fr))]">
           <div className="pdx-card flex flex-col gap-6">
@@ -235,11 +192,11 @@ export function LauncherPage() {
               ))}
             </ul>
             <p className="m-0 rounded-tile bg-tile px-5 py-4 text-sm leading-normal text-muted">
-              The launcher is a preview. Playtime on PlayStation, Xbox and Switch still syncs through{" "}
+              PlayStation, Xbox and Switch keep syncing through{" "}
               <a href={dashUrl} className="font-medium text-accent">
                 Playdex
               </a>
-              , so the rail covers everything, not just this PC.
+              , so the stats cover everything.
             </p>
           </div>
         </section>
