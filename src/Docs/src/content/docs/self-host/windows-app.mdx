@@ -1,0 +1,24 @@
+---
+title: Windows app
+description: Point Playdex for Windows and the launcher at your own server.
+sidebar:
+  order: 3
+---
+
+import { Steps } from '@astrojs/starlight/components';
+
+Playdex for Windows records the PC games you play, backs up saves, and includes the console-style launcher. It works with any Playdex server.
+
+<Steps>
+
+1. In your Playdex, open **Settings → Connected services** and click **Create API key**.
+2. Download [Playdex-Setup.exe](https://download.playdex.dev/windows/Playdex-Setup.exe) and run it.
+3. Enter the two values from Settings:
+   - **Playdex server:** `https://playdex.example.com/api`
+   - **API key:** starts with `plx_`
+
+</Steps>
+
+To change the server later, open the app's **Settings → Playdex account**.
+
+The installer and app updates always come from `download.playdex.dev`. Your play data only goes to your server.

@@ -119,6 +119,12 @@ if (args.Contains("migrate", StringComparer.OrdinalIgnoreCase))
     return;
 }
 
+if (args.Contains(UserCommand.Name, StringComparer.OrdinalIgnoreCase))
+{
+    Environment.ExitCode = await UserCommand.Run(app.Services, args, Console.In, Console.IsInputRedirected, Console.Out);
+    return;
+}
+
 app.MapDefaultEndpoints();
 
 app.UseMiddleware<CorrelationIdMiddleware>();

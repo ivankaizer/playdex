@@ -239,4 +239,20 @@ describe("SettingsPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "Show all 7" }));
     expect(screen.getAllByRole("button", { name: "Manage" })).toHaveLength(7);
   });
+  it("creates the Playdex app key when there is none and then shows its setup values", async () => {
+    const app: ProviderStatus = { id: 2, platform: "api", accountId: null, status: "active", apiKey: "plx_new", apiKeyLocked: false };
+    let providers: ProviderStatus[] = [steam];
+    const post = vi.fn(() => {
+      providers = [steam, app];
+      return Promise.resolve({ apiKey: "plx_new" });
+    });
+    routeApi({ "GET /providers": () => Promise.resolve({ providers }), "POST /api/key": post });
+    renderPage();
+
+    fireEvent.click(await screen.findByRole("button", { name: "Create API key" }));
+
+    expect(await screen.findByLabelText("API key")).toHaveValue("plx_new");
+    expect(post).toHaveBeenCalledWith("/api/key", expect.objectContaining({ method: "POST" }));
+    expect(screen.queryByRole("button", { name: "Create API key" })).toBeNull();
+  });
 });

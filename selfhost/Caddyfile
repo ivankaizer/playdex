@@ -1,0 +1,10 @@
+# One origin for everything: the web app at /, the API at /api. Caddy gets the HTTPS certificate itself.
+{$PLAYDEX_DOMAIN} {
+	encode gzip
+	handle /api/* {
+		reverse_proxy app:3000
+	}
+	handle {
+		reverse_proxy ui:5056
+	}
+}

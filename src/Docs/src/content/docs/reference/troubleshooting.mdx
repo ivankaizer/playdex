@@ -1,0 +1,19 @@
+---
+title: Troubleshooting
+description: Fixes for common problems.
+sidebar:
+  order: 2
+---
+
+**Start here:** `docker compose ps` shows what's unhealthy, `docker compose logs app` shows why.
+
+| Problem | Fix |
+|---|---|
+| No certificate, or the browser warns | DNS must point at the server, and ports 80 and 443 must be open. Check `docker compose logs caddy`. |
+| `set POSTGRES_PASSWORD in .env` | A required setting is empty. Fill it in `.env`. |
+| `app` keeps restarting after you changed `POSTGRES_PASSWORD` | The database keeps the password it was created with. Put the old one back. |
+| Wrong email or password | Emails are case-sensitive. Reset with `create-user`. See [Users](/self-host/users/). |
+| Steam shows no sessions | The Steam profile's **Game details** must be Public. |
+| Saving a Telegram chat ID fails | `TELEGRAM_BOT_TOKEN` is missing or wrong. Run `docker compose up -d` after you fix it. |
+| AI drafts are missing from the app | All three are needed: `AI_DRAFTS_ENABLED=true`, a key and a model. |
+| The Windows app says the key is wrong | The server must end in `/api`: `https://playdex.example.com/api`. |

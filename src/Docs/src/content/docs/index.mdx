@@ -1,0 +1,41 @@
+---
+title: Playdex on your own server
+description: Run Playdex on your own server in about ten minutes.
+template: splash
+hero:
+  tagline: All your playtime in one place, on a server you control. One Docker Compose file, HTTPS included.
+  actions:
+    - text: Install
+      link: /self-host/install/
+      icon: right-arrow
+    - text: Configuration
+      link: /reference/configuration/
+      variant: minimal
+---
+
+import { Card, CardGrid } from '@astrojs/starlight/components';
+
+<CardGrid>
+  <Card title="Install" icon="rocket">
+    A Linux server, a domain, Docker. [Ten minutes →](/self-host/install/)
+  </Card>
+  <Card title="Connect platforms" icon="puzzle">
+    Steam, PlayStation, Xbox, Telegram, AI drafts. [Set up →](/self-host/integrations/)
+  </Card>
+  <Card title="Windows app" icon="laptop">
+    Track PC games and use the launcher with your server. [Connect →](/self-host/windows-app/)
+  </Card>
+  <Card title="Keep it running" icon="setting">
+    Updates, backups, users. [Operate →](/self-host/updates-backups/)
+  </Card>
+</CardGrid>
+
+## What runs
+
+| Service | What it is |
+|---|---|
+| `caddy` | HTTPS on ports 80 and 443. Sends `/api` to the API, the rest to the web app. |
+| `ui` | The web app and admin console. |
+| `app` | The API. Polls Steam, PlayStation and Xbox, and applies database migrations on start. |
+| `db` | Postgres 16. All your data lives here. |
+| `apprise` | Sends Telegram notifications. |

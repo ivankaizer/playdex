@@ -3,6 +3,7 @@ import { formatCount } from "@/lib/format";
 import { SectionHeading } from "../shared/SectionHeading";
 import { IntegrationCard } from "./IntegrationCard";
 import { IntegrationCreator } from "./IntegrationCreator";
+import { PlaydexAppKeyCreator } from "./PlaydexAppKeyCreator";
 import { visibleProviders } from "./providersState";
 import type { Integrations } from "./useIntegrations";
 
@@ -81,6 +82,10 @@ export function IntegrationsSection({ integrations }: IntegrationsSectionProps) 
             ) : null}
           </>
         )}
+
+        {!state.isProvidersLoading && !state.providersError && !visible.some((provider) => provider.platform === "api") ? (
+          <PlaydexAppKeyCreator onCreated={integrations.loadProviders} />
+        ) : null}
 
         {!state.isProvidersLoading ? <IntegrationCreator integrations={integrations} /> : null}
       </div>
