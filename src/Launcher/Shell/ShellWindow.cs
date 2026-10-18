@@ -54,7 +54,15 @@ internal sealed partial class ShellWindow : Window
     private readonly ShellMode _mode;
     private readonly Func<string, JsonElement, bool>? _onMessage;
     private string? _libraryScriptId;
+
+    // Library: the games the page was given. Checked against a fresh scan when the window comes back (activation), at
+    // most every 30 s; the page reloads when games were installed, uninstalled or added.
+    private static readonly TimeSpan _libraryMaxAge = TimeSpan.FromSeconds(30);
+    private IReadOnlyDictionary<string, LibraryGame>? _pageLibrary;
+    private bool _checkingLibrary;
+
     private long _returnStart;
+    private bool _active;
     private long _activateStart;
     private bool _ready;
     private bool _suspended;
@@ -69,8 +77,11 @@ internal sealed partial class ShellWindow : Window
     /// <summary>The window in front when the shell was called up over a game: what "Resume" returns to.</summary>
     private nint _gameWindow;
 
-    // Playdex summary: refreshed when the page loads, after sessions, and every few minutes while the window is active.
-    private static readonly TimeSpan _summaryInterval = TimeSpan.FromMinutes(5);
+    // Playdex summary: refreshed when the page loads, after sessions, when the window comes back, and every minute while
+    // it shows (Playdex polls the gaming providers every minute). Desktop mode keeps refreshing behind other windows;
+    // Big Picture stops while a game is in front.
+    private static readonly TimeSpan _summaryInterval = TimeSpan.FromMinutes(1);
+    private readonly Microsoft.UI.Dispatching.DispatcherQueueTimer _summaryTimer;
     private long _summaryRefreshedAt;
     private bool _refreshingSummary;
 
@@ -109,10 +120,17 @@ internal sealed partial class ShellWindow : Window
 
         _nowPlayingTimer = DispatcherQueue.CreateTimer();
         _nowPlayingTimer.Interval = _nowPlayingInterval;
-        _nowPlayingTimer.Tick += (_, _) =>
+        _nowPlayingTimer.Tick += (_, _) => _ = RefreshNowPlayingAsync();
+
+        // Ticks more often than the interval, so timer jitter never skips a refresh; RefreshSummary keeps the pace.
+        _summaryTimer = DispatcherQueue.CreateTimer();
+        _summaryTimer.Interval = TimeSpan.FromSeconds(15);
+        _summaryTimer.Tick += (_, _) =>
         {
-            _ = RefreshNowPlayingAsync();
-            RefreshSummary(force: false);
+            if (_active || (_mode == ShellMode.Desktop && !Native.IsIconic(_hwnd)))
+            {
+                RefreshSummary(force: false);
+            }
         };
 
         services.SessionChanged += PostSession;
@@ -122,6 +140,7 @@ internal sealed partial class ShellWindow : Window
         Closed += (_, _) =>
         {
             _nowPlayingTimer.Stop();
+            _summaryTimer.Stop();
             services.SessionChanged -= PostSession;
             services.GameExited -= OnGameExited;
             services.InputReceived -= OnInput;
@@ -160,6 +179,7 @@ internal sealed partial class ShellWindow : Window
             Native.ShowWindow(_hwnd, Native.SwMaximize);
         }
         Metrics.Record("startup.window_shown", Metrics.MsSince(Startup.MainEntered));
+        _summaryTimer.Start();
         _ = InitializeWebViewAsync();
     }
 
@@ -180,9 +200,10 @@ internal sealed partial class ShellWindow : Window
     }
 
     /// <summary>Show the library as it is now: rescan, replace the injected script and reload the page.</summary>
-    public async Task ReloadLibraryAsync()
+    public async Task ReloadLibraryAsync() => await ShowLibraryAsync(await _services.RescanLibrary());
+
+    private async Task ShowLibraryAsync(IReadOnlyDictionary<string, LibraryGame> library)
     {
-        var library = await _services.RescanLibrary();
         if (_webView.CoreWebView2 is not { } web)
         {
             return;
@@ -191,8 +212,40 @@ internal sealed partial class ShellWindow : Window
         {
             web.RemoveScriptToExecuteOnDocumentCreated(_libraryScriptId);
         }
+        _pageLibrary = library;
         _libraryScriptId = await web.AddScriptToExecuteOnDocumentCreatedAsync(PageScript(library));
         web.Reload();
+    }
+
+    /// <summary>
+    /// The window came back: show games installed or uninstalled since the page got its library. Not while a game
+    /// launched here is starting or running, so its launch screen stays; the next activation catches up.
+    /// </summary>
+    private async Task CatchUpLibraryAsync()
+    {
+        if (_pageLibrary is null || _checkingLibrary || _services.Sessions.HasSession)
+        {
+            return;
+        }
+        _checkingLibrary = true;
+        try
+        {
+            var library = await _services.FreshLibrary(_libraryMaxAge);
+            if (ReferenceEquals(library, _pageLibrary) || Library.SameGames(library, _pageLibrary) || _services.Sessions.HasSession)
+            {
+                return;
+            }
+            Log.Info($"library: changed ({_pageLibrary.Count} -> {library.Count} game(s)), reloading the page");
+            await ShowLibraryAsync(library);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Log.Error("library: rescan failed", ex);
+        }
+        finally
+        {
+            _checkingLibrary = false;
+        }
     }
 
     /// <summary>
@@ -230,7 +283,10 @@ internal sealed partial class ShellWindow : Window
             // The library is in place before the page's own scripts run, so the UI renders real games on first paint.
             // Not awaited: calls reach the browser process in order, so the script is registered before Navigate
             // below; awaiting the round trip cost ~90 ms of cold start.
-            var injected = web.AddScriptToExecuteOnDocumentCreatedAsync(PageScript(await _services.LibraryScan));
+            // The desktop app opens a window from the tray long after the last scan: that window gets a fresh one.
+            var library = await _services.FreshLibrary(_libraryMaxAge);
+            _pageLibrary = library;
+            var injected = web.AddScriptToExecuteOnDocumentCreatedAsync(PageScript(library));
 
             if (SteamLibrary.ArtCacheDirectory is { } artCache)
             {
@@ -491,12 +547,19 @@ internal sealed partial class ShellWindow : Window
     private void OnActivated(object sender, WindowActivatedEventArgs args)
     {
         var active = args.WindowActivationState != WindowActivationState.Deactivated;
+        _active = active;
         _services.Input.Foreground = active;
         if (active)
         {
             ResumeWebView();
             _ = RefreshNowPlayingAsync();
             _nowPlayingTimer.Start();
+            if (_ready)
+            {
+                // Not before the page is up: its "ready" fetches the summary itself.
+                RefreshSummary(force: false);
+            }
+            _ = CatchUpLibraryAsync();
         }
         else
         {

@@ -1,4 +1,5 @@
 using Playdex.Core;
+using System.Diagnostics;
 using Microsoft.UI.Dispatching;
 
 namespace Playdex.Shell;
@@ -24,8 +25,11 @@ internal sealed class ShellServices : IDisposable
             detected => GameExited?.Invoke(detected),
             () => Summary.SteamPolling);
         Input = new ControllerInput(new InputQueue(dispatcher, (code, timestamp) => InputReceived?.Invoke(code, timestamp)));
+        _libraryScannedAt = Stopwatch.GetTimestamp();
         LibraryScan = Task.Run(() => Library.Scan(Config));
     }
+
+    private long _libraryScannedAt;
 
     public AppConfig Config { get; }
 
@@ -62,7 +66,18 @@ internal sealed class ShellServices : IDisposable
         LibraryScan.IsCompletedSuccessfully ? LibraryScan.Result.GetValueOrDefault(id) : null;
 
     /// <summary>Scan again after games were added, removed or changed.</summary>
-    public Task<IReadOnlyDictionary<string, LibraryGame>> RescanLibrary() => LibraryScan = Task.Run(() => Library.Scan(Config));
+    public Task<IReadOnlyDictionary<string, LibraryGame>> RescanLibrary()
+    {
+        _libraryScannedAt = Stopwatch.GetTimestamp();
+        return LibraryScan = Task.Run(() => Library.Scan(Config));
+    }
+
+    /// <summary>
+    /// The library, scanned again when the last scan is older than <paramref name="maxAge"/>: Steam installs and
+    /// uninstalls games while the app waits in the tray or behind a game.
+    /// </summary>
+    public Task<IReadOnlyDictionary<string, LibraryGame>> FreshLibrary(TimeSpan maxAge) =>
+        Stopwatch.GetElapsedTime(_libraryScannedAt) < maxAge ? LibraryScan : RescanLibrary();
 
     public void Dispose()
     {
