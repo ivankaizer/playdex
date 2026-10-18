@@ -17,9 +17,9 @@ public static class GameCatalog
         CancellationToken cancellationToken = default)
     {
         var fullPath = Path.GetFullPath(executablePath);
-        if (!File.Exists(fullPath) || !string.Equals(Path.GetExtension(fullPath), ".exe", StringComparison.OrdinalIgnoreCase))
+        if (!File.Exists(fullPath) || !GameProcess.Extensions.Contains(Path.GetExtension(fullPath), StringComparer.OrdinalIgnoreCase))
         {
-            throw new InvalidOperationException("Select an existing .exe game executable.");
+            throw new InvalidOperationException("Select an existing game .exe or .bat file.");
         }
 
         var gameId = Path.GetFileNameWithoutExtension(fullPath).Trim();

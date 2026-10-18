@@ -259,7 +259,7 @@ internal sealed partial class DesktopHost : IDisposable
 
     private async Task<string> AddGameAsync()
     {
-        var path = FilePicker.PickFile(WindowHandle, "Add a game", ("Games (*.exe)", "*.exe"), ("All files (*.*)", "*.*"));
+        var path = FilePicker.PickFile(WindowHandle, "Add a game", ("Games (*.exe, *.bat)", "*.exe;*.bat;*.cmd"), ("All files (*.*)", "*.*"));
         if (path is null)
         {
             return StateJson();

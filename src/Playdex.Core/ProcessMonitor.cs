@@ -6,7 +6,8 @@ namespace Playdex.Core;
 /// <summary>
 /// Follows a game the Wrapper started to its exit, per <see cref="MonitorConfig.Mode"/>:
 /// <list type="bullet">
-/// <item><see cref="MonitorMode.LaunchedProcess"/>: the started process itself.</item>
+/// <item><see cref="MonitorMode.LaunchedProcess"/>: the started process itself; for a script, the script and everything
+/// it started (<see cref="ProcessTree"/>).</item>
 /// <item><see cref="MonitorMode.ExecutablePath"/> / <see cref="MonitorMode.ExecutableName"/>: any process running that
 /// executable, for games started through a launcher or that restart themselves. The game has exited once none has run
 /// for <see cref="MonitorConfig.ExitDebounceSeconds"/>.</item>
@@ -17,6 +18,12 @@ namespace Playdex.Core;
 public sealed class ProcessMonitor(MonitorConfig config)
 {
     private static readonly TimeSpan _scanInterval = TimeSpan.FromSeconds(1);
+
+    /// <summary>Waits until the game has exited and returns when its last process exited.</summary>
+    public Task<DateTimeOffset> WaitForExitAsync(StartedGame started, CancellationToken cancellationToken) =>
+        config.Mode == MonitorMode.LaunchedProcess && started.Tree is { } tree
+            ? tree.WaitForExitAsync(cancellationToken)
+            : WaitForExitAsync(started.Process, cancellationToken);
 
     /// <summary>Waits until the game has exited and returns when its last process exited.</summary>
     public async Task<DateTimeOffset> WaitForExitAsync(Process launched, CancellationToken cancellationToken)
