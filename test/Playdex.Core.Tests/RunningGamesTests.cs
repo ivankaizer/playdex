@@ -74,6 +74,22 @@ public sealed class RunningGamesTests : IDisposable
     }
 
     [Fact]
+    public void AGameFolderStartedWhenItsFirstProcessDid()
+    {
+        using var first = Start(_game);
+        Thread.Sleep(1100);
+        using var second = Start(_game);
+
+        var since = RunningGames.StartedFrom(Path.GetDirectoryName(_game) + Path.DirectorySeparatorChar);
+
+        Assert.Equal(new DateTimeOffset(first.StartTime), since);
+    }
+
+    [Fact]
+    public void AFolderWithNothingRunningHasNoStart() =>
+        Assert.Null(RunningGames.StartedFrom(Path.GetDirectoryName(_game) + Path.DirectorySeparatorChar));
+
+    [Fact]
     public void CloseEndsTheGameWithItsChildren()
     {
         using var running = Start(_game);
