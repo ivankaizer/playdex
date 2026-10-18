@@ -1,5 +1,6 @@
 import { inHost, onHostMessage, postToHost } from "../host/bridge";
 import { current, focusEl, move, type Dir } from "./focus";
+import { play } from "./sound";
 import { inputMode } from "./store";
 
 /*
@@ -20,12 +21,26 @@ export function onAction(fn: (a: Action) => boolean | void) {
   };
 }
 
+const ACTION_SOUND: Partial<Record<Action, "back" | "tab">> = { back: "back", lb: "tab", rb: "tab" };
+
 function dispatch(a: Action) {
+  const sound = ACTION_SOUND[a];
+  if (sound) play(sound);
   for (const fn of [...handlers].reverse()) if (fn(a)) return;
 }
 
 function confirm() {
-  current()?.click();
+  const el = current();
+  if (!el) return;
+  play("confirm");
+  el.click();
+}
+
+/** A move that lands somewhere ticks; one against the edge of the screen stays quiet. */
+function step(dir: Dir) {
+  const before = current();
+  move(dir);
+  if (current() !== before) play("move");
 }
 
 function setMode(m: "pad" | "pointer") {
@@ -52,7 +67,7 @@ window.addEventListener("keydown", (e) => {
   if (dir) {
     e.preventDefault();
     setMode("pad");
-    move(dir);
+    step(dir);
     return;
   }
   if (e.key === "Enter" || e.key === " ") {
@@ -132,12 +147,12 @@ function poll(t: number) {
       heldDir = dir;
       if (dir) {
         setMode("pad");
-        move(dir);
+        step(dir);
         nextRepeat = t + REPEAT_DELAY;
         repeatGap = REPEAT_START;
       }
     } else if (dir && t >= nextRepeat) {
-      move(dir);
+      step(dir);
       // Held directions accelerate the longer they are held.
       repeatGap = Math.max(REPEAT_MIN, repeatGap * 0.88);
       nextRepeat = t + repeatGap;
@@ -162,7 +177,7 @@ function poll(t: number) {
 onHostMessage((m) => {
   if (m.type === "dir") {
     setMode("pad");
-    move(m.dir);
+    step(m.dir);
   } else if (m.type === "action") {
     setMode("pad");
     if (m.action === "confirm") confirm();

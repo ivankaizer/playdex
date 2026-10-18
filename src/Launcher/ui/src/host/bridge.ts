@@ -52,8 +52,12 @@ export type DisplayState = {
 };
 /** The NVIDIA App's statistics overlay; `hotkey` as NVIDIA shows it ("Alt+R"). */
 export type FpsCounter = { hotkey: string };
+/** The default output's master volume, `level` 0–100. */
+export type AudioVolume = { level: number; muted: boolean };
 export type QuickSettingsState = {
   outputs: AudioOutput[];
+  /** Absent when there is no default sound output. */
+  volume?: AudioVolume;
   displays: DisplayState[];
   /** Absent when the NVIDIA overlay isn't running. */
   fpsCounter?: FpsCounter;
@@ -90,6 +94,9 @@ export type UiMessage =
   /** Read the quick settings state; the host answers with a "quick-settings" message, as it does for the rest. */
   | { type: "quick-settings" }
   | { type: "audio-output"; id: string }
+  /** Set the default output's volume (0–100), which also unmutes it. The host answers only when it fails. */
+  | { type: "volume"; level: number }
+  | { type: "mute"; muted: boolean }
   | { type: "hdr"; display: string; on: boolean }
   | { type: "refresh-rate"; display: string; hz: number }
   /** Press the NVIDIA statistics overlay's hotkey (it toggles; the overlay's state can't be read). */

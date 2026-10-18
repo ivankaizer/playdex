@@ -114,6 +114,52 @@
   min-height: 1rem;
 }
 
+/* Volume: the label and level over a bar; muted dims the fill. */
+.qs-volume-body {
+  display: grid;
+  gap: 0.2rem;
+  min-width: 0;
+  flex: 1;
+}
+.qs-volume-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+.qs-volume-value {
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: rgb(var(--ink-2));
+}
+.qs-volume-track {
+  display: block;
+  /* A taller hit area than the bar it holds. */
+  padding: 0.35rem 0;
+  cursor: pointer;
+  touch-action: none;
+}
+.qs-volume-bar {
+  display: block;
+  height: 0.38rem;
+  border-radius: 99px;
+  background: rgb(var(--track));
+  overflow: hidden;
+}
+.qs-volume-bar i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: rgb(var(--pill));
+  transition: width 0.12s var(--ease-out);
+}
+.qs-volume[data-muted] .qs-volume-bar i {
+  background: rgb(var(--muted));
+}
+.qs-volume[data-muted] .qs-volume-value {
+  color: rgb(var(--muted));
+}
+
 /* HDR switch: the knob slides with a transform; on is the brand pill colour. */
 .qs-switch {
   flex: none;

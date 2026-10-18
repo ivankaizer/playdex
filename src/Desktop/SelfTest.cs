@@ -47,7 +47,7 @@ internal static class SelfTest
 
     /// <summary>
     /// Logs what the quick settings panel would show. With <paramref name="toggle"/>: makes another sound output the
-    /// default, flips HDR on every display that supports it, switches each display to another refresh rate, reads each
+    /// default, changes the volume and mutes, flips HDR on every display that supports it, switches each display to another refresh rate, reads each
     /// change back, then restores all of them; then toggles the NVIDIA FPS counter twice, 3 s apart.
     /// </summary>
     public static int QuickSettingsState(bool toggle)
@@ -58,6 +58,8 @@ internal static class SelfTest
         {
             Log.Info($"selftest-quick-settings: output {(output.IsDefault ? "*" : " ")} {output.Name} [{output.Id}]");
         }
+        var volume = AudioOutputs.ReadVolume();
+        Log.Info($"selftest-quick-settings: volume {(volume is null ? "unavailable" : $"{volume.Level}{(volume.Muted ? " muted" : "")}")}");
         foreach (var display in displays)
         {
             Log.Info($"selftest-quick-settings: display {display.Name} [{display.Id}] hdr supported={display.HdrSupported} on={display.HdrOn} refresh={display.RefreshRate} Hz of [{string.Join(", ", display.RefreshRates)}]");
@@ -79,6 +81,19 @@ internal static class SelfTest
             var restored = AudioOutputs.List().Single(o => o.IsDefault).Id == original.Id;
             failures += switched && restored ? 0 : 1;
             Log.Info($"selftest-quick-settings: output switched={switched} restored={restored}");
+        }
+        if (volume is not null)
+        {
+            var otherLevel = volume.Level >= 50 ? volume.Level - 10 : volume.Level + 10;
+            AudioOutputs.SetVolume(otherLevel);
+            var changed = AudioOutputs.ReadVolume() == new AudioVolume(otherLevel, false);
+            AudioOutputs.SetMuted(true);
+            var muted = AudioOutputs.ReadVolume()?.Muted == true;
+            AudioOutputs.SetVolume(volume.Level);
+            AudioOutputs.SetMuted(volume.Muted);
+            var restored = AudioOutputs.ReadVolume() == volume;
+            failures += changed && muted && restored ? 0 : 1;
+            Log.Info($"selftest-quick-settings: volume {volume.Level} -> {otherLevel} changed={changed} muted={muted} restored={restored}");
         }
         foreach (var display in displays.Where(d => d.HdrSupported))
         {
