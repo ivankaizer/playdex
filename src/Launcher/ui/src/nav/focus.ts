@@ -12,6 +12,8 @@ import { focusedGame, focusedKind, inputMode } from "./store";
  * - `data-nav-default`: the item focused when nothing is focused.
  * - `data-game="id"`: publishes the focused game to the `focusedGame` store.
  * - `data-kind="..."`: publishes a hint context to `focusedKind`.
+ * - `data-nav-adjust`: left and right adjust the item (a slider) instead of moving focus; the item gets them as a
+ *   cancelable "nav-adjust" event with the direction as `detail`, and focus moves only if it isn't cancelled.
  */
 
 export type Dir = "up" | "down" | "left" | "right";
@@ -172,6 +174,13 @@ export function focusScreenDefault() {
 export function move(dir: Dir) {
   const cur = current();
   if (!cur) return focusDefault();
+  if (
+    (dir === "left" || dir === "right") &&
+    cur.hasAttribute("data-nav-adjust") &&
+    !cur.dispatchEvent(new CustomEvent<Dir>("nav-adjust", { detail: dir, cancelable: true }))
+  ) {
+    return;
+  }
   const from = layoutRect(cur);
   const curGroup = groupOf(cur);
   let best: HTMLElement | null = null;
