@@ -112,12 +112,13 @@ public sealed class AppShortcutsTests : IDisposable
             }
             """);
 
-        var apps = new ConfigStore(path).LoadOrCreate().Apps!;
+        var apps = new ConfigStore(path).LoadOrCreate().Apps;
 
         Assert.Equal(["x", "x-2"], apps.Select(a => a.Id));
         Assert.Equal(["Spotify", "browser"], apps.Select(a => a.Name));
         Assert.Equal(["executable", "browser"], apps.Select(a => a.Kind));
-        Assert.Null(new ConfigStore(Path.Combine(_directory, "new.json")).LoadOrCreate().Apps);
+        // A new install has no apps: the user adds them.
+        Assert.Empty(new ConfigStore(Path.Combine(_directory, "new.json")).LoadOrCreate().Apps);
     }
 
     [Theory]

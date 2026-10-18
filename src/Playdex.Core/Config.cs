@@ -16,11 +16,8 @@ public sealed class AppConfig
     public StorageConfig Storage { get; set; } = new();
     public ShellConfig Shell { get; set; } = new();
 
-    /// <summary>
-    /// Apps opened from Big Picture's quick settings (Discord, a browser). Null until the user changes the list: until
-    /// then it is the apps found on this PC (<see cref="AppShortcuts.List"/>).
-    /// </summary>
-    public List<AppShortcut>? Apps { get; set; }
+    /// <summary>Apps the user added for Big Picture's quick settings (Discord, a browser); none until they add one.</summary>
+    public List<AppShortcut> Apps { get; set; } = [];
 
     public GameConfig GetOrCreateGame(string gameId)
     {

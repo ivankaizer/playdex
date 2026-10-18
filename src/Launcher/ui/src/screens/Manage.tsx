@@ -338,7 +338,7 @@ function AppIcon({ kind }: { kind: string }) {
 
 /**
  * The apps Big Picture opens from quick settings, for the Full Screen Experience, which has no taskbar or Start menu.
- * Discord and the default browser are listed by themselves when they are on this PC; any .exe can be added.
+ * Only the apps the user adds: any .exe, or with one click Discord or the default browser when they are on this PC.
  */
 function AppsSection({
   apps,
@@ -361,8 +361,8 @@ function AppsSection({
             Apps
           </h2>
           <p className="desk-note">
-            Open Discord, a browser or any other app from quick settings (Menu), since the Full Screen Experience has no
-            taskbar. Apps aren't games: Playdex doesn't record them.
+            Apps you add here open from quick settings (Menu) in Big Picture, since the Full Screen Experience has no
+            taskbar: Discord, a browser, anything with an .exe. Apps aren't games: Playdex doesn't record them.
           </p>
         </div>
         <div className="desk-actions" data-nav-group="apps-actions">
@@ -391,7 +391,7 @@ function AppsSection({
         </div>
       </header>
       {apps.length === 0 ? (
-        <p className="desk-note">No apps yet. Add one from its .exe.</p>
+        <p className="desk-note">No apps yet. Quick settings shows only Steam until you add one.</p>
       ) : (
         <ul className="desk-list">
           {apps.map((a) => (
@@ -442,7 +442,7 @@ function AppRow({
   };
 
   const origin =
-    app.kind === "browser" ? "Your default browser" : app.kind === "executable" ? "Added from its .exe" : "Found on this PC";
+    app.kind === "browser" ? "Your default browser" : app.kind === "executable" ? "Added from its .exe" : "Started through Discord's updater";
 
   return (
     <article className="card desk-row" data-editing={editing ? "" : undefined}>

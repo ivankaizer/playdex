@@ -450,7 +450,7 @@ internal sealed partial class DesktopHost : IDisposable
                 g.Backup.DailyEnabled,
                 Backup(g, _backups.GetState(g.GameId))))
             .ToList();
-        var apps = AppShortcuts.List(_config).Select(App).ToList();
+        var apps = _config.Apps.Select(App).ToList();
         var suggested = AppShortcuts.Suggestions(_config).Select(App).ToList();
         var settings = new DesktopSettings(
             _config.Api.BaseUrl,

@@ -18,10 +18,8 @@ public sealed record ResolvedApp(
 
 /// <summary>
 /// The apps Big Picture opens from quick settings, for the Full Screen Experience, where there is no taskbar or Start
-/// menu: Discord (and its PTB and Canary builds) and the default browser when they are on this PC, plus any executable
-/// the user adds. Not games: nothing is recorded to Playdex. Until the user changes the list
-/// (<see cref="AppConfig.Apps"/> is null) it is the apps found here, so an app installed later shows up by itself; the
-/// first change saves the list as it is then.
+/// menu. Only apps the user added: any executable, or with one click in Manage, Discord (and its PTB and Canary builds)
+/// or the default browser when they are on this PC. Not games: nothing is recorded to Playdex.
 /// </summary>
 public static class AppShortcuts
 {
@@ -37,14 +35,11 @@ public static class AppShortcuts
         ("discord-canary", "Discord Canary", "DiscordCanary", "DiscordCanary.exe"),
     ];
 
-    /// <summary>The kinds Playdex finds by itself.</summary>
+    /// <summary>The kinds Playdex can find on this PC (<see cref="Suggestions"/>).</summary>
     public static IEnumerable<string> Kinds => _discord.Select(d => d.Kind).Append(BrowserKind);
 
-    /// <summary>The apps to show: the user's list, or until there is one, the apps found on this PC.</summary>
-    public static IReadOnlyList<AppShortcut> List(AppConfig config) => config.Apps ?? Detected();
-
-    /// <summary>The known apps installed on this PC, in the order a new list has them.</summary>
-    public static List<AppShortcut> Detected() => Detected(LocalAppData, DefaultBrowser);
+    /// <summary>The known apps installed on this PC.</summary>
+    private static List<AppShortcut> Detected() => Detected(LocalAppData, DefaultBrowser);
 
     internal static List<AppShortcut> Detected(string localAppData, Func<ResolvedApp?> browser)
     {
@@ -63,10 +58,10 @@ public static class AppShortcuts
         return apps;
     }
 
-    /// <summary>Known apps found here that aren't in the list: what Manage offers to add.</summary>
+    /// <summary>Known apps found here that the user hasn't added: what Manage offers to add.</summary>
     public static List<AppShortcut> Suggestions(AppConfig config)
     {
-        var listed = List(config).Select(a => a.Kind).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var listed = config.Apps.Select(a => a.Kind).ToHashSet(StringComparer.OrdinalIgnoreCase);
         return Detected().Where(a => !listed.Contains(a.Kind)).ToList();
     }
 
@@ -142,7 +137,7 @@ public static class AppShortcuts
         {
             throw new InvalidOperationException("Select an existing .exe file.");
         }
-        var apps = Editable(config);
+        var apps = config.Apps;
         if (apps.Any(a => string.Equals(a.ExecutablePath, fullPath, StringComparison.OrdinalIgnoreCase)))
         {
             throw new InvalidOperationException($"{Path.GetFileName(fullPath)} is already in your apps.");
@@ -165,7 +160,7 @@ public static class AppShortcuts
     /// <summary>Add a known app found on this PC (one of <see cref="Suggestions"/>).</summary>
     public static AppShortcut AddDetected(AppConfig config, string kind)
     {
-        var apps = Editable(config);
+        var apps = config.Apps;
         if (apps.Any(a => string.Equals(a.Kind, kind, StringComparison.OrdinalIgnoreCase)))
         {
             throw new InvalidOperationException("That app is already in your apps.");
@@ -179,14 +174,14 @@ public static class AppShortcuts
 
     public static void Change(AppConfig config, string id, string? name, string? launchOptions)
     {
-        var app = Find(Editable(config), id);
+        var app = Find(config.Apps, id);
         app.Name = NormalizeName(name);
         app.Arguments = LaunchOptionsCodec.Parse(launchOptions);
     }
 
     public static void Remove(AppConfig config, string id)
     {
-        var apps = Editable(config);
+        var apps = config.Apps;
         apps.Remove(Find(apps, id));
     }
 
@@ -229,9 +224,6 @@ public static class AppShortcuts
         }
         return result;
     }
-
-    /// <summary>The list to change: the first change saves the apps found here as the user's list.</summary>
-    private static List<AppShortcut> Editable(AppConfig config) => config.Apps ??= Detected();
 
     private static AppShortcut Find(List<AppShortcut> apps, string id) =>
         apps.FirstOrDefault(a => string.Equals(a.Id, id, StringComparison.OrdinalIgnoreCase))

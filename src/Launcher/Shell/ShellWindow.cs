@@ -407,19 +407,18 @@ internal sealed partial class ShellWindow : Window
         }
     }
 
-    /// <summary>The apps quick settings offers (<see cref="AppShortcuts"/>), with which are running.</summary>
+    /// <summary>The apps the user added for quick settings (<see cref="AppShortcuts"/>), with which are running.</summary>
     private async Task PostAppsAsync()
     {
         // A copy: the desktop app changes the list on the UI thread.
-        var saved = _services.Config.Apps?.ToList();
-        Post(await Task.Run(() => ShellApps.ListJson(saved ?? AppShortcuts.Detected())));
+        var apps = _services.Config.Apps.ToList();
+        Post(await Task.Run(() => ShellApps.ListJson(apps)));
     }
 
     /// <summary>Open one of the apps. Only apps in the config, by id; the page never supplies a path.</summary>
     private async Task OpenAppAsync(string appId)
     {
-        var saved = _services.Config.Apps?.ToList();
-        var app = (saved ?? await Task.Run(AppShortcuts.Detected)).FirstOrDefault(a => a.Id == appId);
+        var app = _services.Config.Apps.FirstOrDefault(a => a.Id == appId);
         var error = app is null
             ? "That app isn't in your apps anymore."
             : await ShellApps.OpenAsync(_hwnd, app);
