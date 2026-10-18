@@ -249,6 +249,7 @@ public sealed class ConfigStore
         };
         config.Shell ??= new ShellConfig();
         config.Shell.Mode = ShellConfig.NormalizeMode(config.Shell.Mode);
+        config.Apps = AppShortcuts.Normalize(config.Apps ?? []);
 
         foreach (var game in config.Games.Values)
         {

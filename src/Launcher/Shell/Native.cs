@@ -98,6 +98,9 @@ internal static unsafe partial class Native
     [return: MarshalAs(UnmanagedType.Bool)]
     public static partial bool AttachThreadInput(uint attach, uint attachTo, [MarshalAs(UnmanagedType.Bool)] bool doAttach);
 
+    /// <summary>For <see cref="AllowSetForegroundWindow"/>: any process may take the foreground (until the next input).</summary>
+    public const uint AsfwAny = unchecked((uint)-1);
+
     [LibraryImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     public static partial bool AllowSetForegroundWindow(uint processId);

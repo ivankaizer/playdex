@@ -1,3 +1,4 @@
+import { isDesktop } from "./host/desktop";
 import { createStore } from "./nav/store";
 
 /**
@@ -7,6 +8,9 @@ import { createStore } from "./nav/store";
  *
  * Settings → Appearance picks them, kept in this browser profile. ?skin=<name> and ?palette=<name> in the page URL
  * pick one too, including one not listed below (for writing a new theme); =none goes back to the default.
+ *
+ * Skins rearrange Big Picture's markup, so desktop mode, which has its own layout, keeps the choice but loads none.
+ * Palettes and the light or dark scheme apply in both modes.
  */
 export type ThemeKind = "skin" | "palette";
 
@@ -101,12 +105,43 @@ export function setTheme(kind: ThemeKind, id: string) {
   } catch {
     // Not remembered; still applies now.
   }
+  if (kind === "skin" && isDesktop) return;
   void apply(kind, id);
 }
 
 /** The chosen themes at startup. Resolves once their stylesheets have loaded (or failed), so the first render measures with them. */
 export function loadTheme(): Promise<void> {
-  return Promise.all([apply("skin", skin.get()), apply("palette", palette.get())]).then(() => undefined);
+  return Promise.all([apply("skin", isDesktop ? DEFAULT_THEME : skin.get()), apply("palette", palette.get())]).then(() => undefined);
+}
+
+/* ---------- Light or dark ---------- */
+
+export type Scheme = "dark" | "light";
+
+function initialScheme(): Scheme {
+  const fromUrl = new URLSearchParams(location.search).get("theme");
+  let saved: string | null = null;
+  try {
+    saved = localStorage.getItem("pdx.theme");
+  } catch {
+    // Storage blocked: the default for this session.
+  }
+  const v = fromUrl ?? saved;
+  return v === "light" ? "light" : "dark";
+}
+
+/** The light or dark variant of the palette (`data-theme` on the root), shared by both modes. */
+export const scheme = createStore<Scheme>(initialScheme());
+document.documentElement.dataset.theme = scheme.get();
+
+export function setScheme(next: Scheme) {
+  scheme.set(next);
+  document.documentElement.dataset.theme = next;
+  try {
+    localStorage.setItem("pdx.theme", next);
+  } catch {
+    // Not remembered; still applies now.
+  }
 }
 
 /** The next choice, for a single button that cycles through them (Big Picture). */

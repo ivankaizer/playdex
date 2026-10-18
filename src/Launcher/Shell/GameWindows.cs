@@ -10,7 +10,8 @@ namespace Playdex.Shell;
 /// <item>a window of the game's process, when it is known (games added to Playdex);</item>
 /// <item>the topmost app window below the shell (as Alt+Tab would pick), skipping Steam's own windows.</item>
 /// </list>
-/// Only top-level, visible, uncloaked, unowned app windows with a title count.
+/// Only top-level, visible, uncloaked, unowned app windows with a title count. Apps opened from quick settings are
+/// switched to the same way (<see cref="ActivateAny"/>).
 /// </summary>
 internal static unsafe class GameWindows
 {
@@ -21,16 +22,30 @@ internal static unsafe class GameWindows
 
     public static bool Activate(nint shell, nint remembered, int? processId)
     {
-        var target = IsAppWindow(remembered, shell) ? remembered : processId is { } pid ? Find(shell, pid) : 0;
+        var target = IsAppWindow(remembered, shell) ? remembered : processId is { } pid ? Find(shell, owner => owner == pid) : 0;
         if (target == 0)
         {
-            target = Find(shell, null);
+            target = Find(shell, owner => !IsLauncher((int)owner));
         }
         if (target == 0)
         {
             Log.Info("resume: no game window found");
             return false;
         }
+        var ok = BringToFront(target);
+        Log.Info($"resume: window {target:x} {(ok ? "in front" : "could not be brought to front")}");
+        return ok;
+    }
+
+    /// <summary>The topmost app window of any of <paramref name="processIds"/>, brought to the front; false when there is none.</summary>
+    public static bool ActivateAny(nint shell, IReadOnlyCollection<int> processIds)
+    {
+        var target = Find(shell, owner => processIds.Contains((int)owner));
+        return target != 0 && BringToFront(target);
+    }
+
+    private static bool BringToFront(nint target)
+    {
         if (Native.IsIconic(target))
         {
             Native.ShowWindow(target, Native.SwRestore);
@@ -45,13 +60,11 @@ internal static unsafe class GameWindows
             Native.SetForegroundWindow(target);
             Native.AttachThreadInput(thisThread, foregroundThread, false);
         }
-        var ok = Native.GetForegroundWindow() == target;
-        Log.Info($"resume: window {target:x} {(ok ? "in front" : "could not be brought to front")}");
-        return ok;
+        return Native.GetForegroundWindow() == target;
     }
 
-    /// <summary>The topmost app window of <paramref name="processId"/>, or of any process but the shell's and Steam's.</summary>
-    private static nint Find(nint shell, int? processId)
+    /// <summary>The topmost app window whose process <paramref name="isOwner"/> accepts.</summary>
+    private static nint Find(nint shell, Func<uint, bool> isOwner)
     {
         for (var window = Native.GetTopWindow(0); window != 0; window = Native.GetWindow(window, Native.GwHwndNext))
         {
@@ -60,7 +73,7 @@ internal static unsafe class GameWindows
                 continue;
             }
             Native.GetWindowThreadProcessId(window, out var owner);
-            if (processId is { } pid ? owner == pid : !IsLauncher((int)owner))
+            if (isOwner(owner))
             {
                 return window;
             }

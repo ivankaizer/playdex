@@ -114,6 +114,52 @@
   min-height: 1rem;
 }
 
+/* Volume: the label and level over a bar; muted dims the fill. */
+.qs-volume-body {
+  display: grid;
+  gap: 0.2rem;
+  min-width: 0;
+  flex: 1;
+}
+.qs-volume-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+.qs-volume-value {
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: rgb(var(--ink-2));
+}
+.qs-volume-track {
+  display: block;
+  /* A taller hit area than the bar it holds. */
+  padding: 0.35rem 0;
+  cursor: pointer;
+  touch-action: none;
+}
+.qs-volume-bar {
+  display: block;
+  height: 0.38rem;
+  border-radius: 99px;
+  background: rgb(var(--track));
+  overflow: hidden;
+}
+.qs-volume-bar i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: rgb(var(--pill));
+  transition: width 0.12s var(--ease-out);
+}
+.qs-volume[data-muted] .qs-volume-bar i {
+  background: rgb(var(--muted));
+}
+.qs-volume[data-muted] .qs-volume-value {
+  color: rgb(var(--muted));
+}
+
 /* HDR switch: the knob slides with a transform; on is the brand pill colour. */
 .qs-switch {
   flex: none;
@@ -137,6 +183,49 @@
 .qs-row[aria-checked="true"] .qs-switch i {
   background: rgb(var(--pill-ink));
   transform: translateX(1rem);
+}
+
+/* Apps: tiles like Power's; a running app has a live dot in its corner. */
+.qs-apps {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.5rem;
+}
+.qs-app {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: 0.45rem;
+  min-height: 4.6rem;
+  padding: 0.6rem 0.4rem;
+  border-radius: 1rem;
+  background: rgb(var(--tile));
+  border: 1px solid var(--tile-border);
+  color: rgb(var(--ink));
+  font-size: 0.74rem;
+  font-weight: 600;
+  text-align: center;
+  transition: transform 0.18s var(--ease-out);
+}
+.qs-app > svg {
+  width: 1.2rem;
+  height: 1.2rem;
+  color: rgb(var(--muted));
+}
+.qs-app[data-focused] {
+  transform: scale(1.04);
+}
+.qs-app-name {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.qs-app-dot {
+  position: absolute;
+  top: 0.6rem;
+  right: 0.6rem;
 }
 
 /* Power: three tiles; a first press arms one, the second confirms. */

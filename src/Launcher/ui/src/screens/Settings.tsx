@@ -12,6 +12,7 @@ import {
   Power,
   RotateCw,
   UserRound,
+  Volume2,
 } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { focusScreenDefault } from "../nav/focus";
@@ -31,8 +32,9 @@ import {
   type UpdateView,
 } from "../host/desktop";
 import { HOME_ART, homeArt, nextHomeArt, setHomeArt } from "../homes/homeArt";
+import { setSoundsOn, soundsOn } from "../nav/sound";
 import { useStore } from "../nav/store";
-import { nextTheme, palette, PALETTES, setTheme, skin, SKINS } from "../theme";
+import { nextTheme, palette, PALETTES, scheme, setScheme, setTheme, skin, SKINS } from "../theme";
 import "./desk.css";
 import "./settings.css";
 
@@ -178,6 +180,8 @@ function DesktopSettingsScreen({ state }: { state: DesktopState }) {
   const art = useStore(homeArt);
   const skinId = useStore(skin);
   const paletteId = useStore(palette);
+  const schemeId = useStore(scheme);
+  const sounds = useStore(soundsOn);
 
   useLandOnDefault();
 
@@ -344,37 +348,12 @@ function DesktopSettingsScreen({ state }: { state: DesktopState }) {
             </Row>
           </Section>
 
-          <Section id="look" icon={<LayoutGrid />} title="Appearance" note="How Playdex looks. Applies at once, on this screen.">
-            <Row label="Home game art" hint={HOME_ART.find((a) => a.id === art)!.note}>
-              <div className="seg" role="radiogroup" aria-label="Home game art">
-                {HOME_ART.map((a) => (
-                  <button
-                    key={a.id}
-                    className="seg-btn"
-                    role="radio"
-                    aria-checked={art === a.id}
-                    data-nav
-                    data-kind="setting"
-                    onClick={() => setHomeArt(a.id)}
-                  >
-                    {a.label}
-                  </button>
-                ))}
-              </div>
-            </Row>
-            <Row label="Layout" hint={SKINS.find((o) => o.id === skinId)?.note ?? FROM_URL}>
-              <div className="seg" role="radiogroup" aria-label="Layout">
-                {SKINS.map((o) => (
-                  <button
-                    key={o.id}
-                    className="seg-btn"
-                    role="radio"
-                    aria-checked={skinId === o.id}
-                    data-nav
-                    data-kind="setting"
-                    onClick={() => setTheme("skin", o.id)}
-                  >
-                    {o.label}
+          <Section id="look" icon={<LayoutGrid />} title="Appearance" note="How Playdex looks. Theme and colours apply at once in both modes; the home art and layout are Big Picture's.">
+            <Row label="Theme" hint="Light or dark, in both modes.">
+              <div className="seg" role="radiogroup" aria-label="Theme">
+                {(["dark", "light"] as const).map((v) => (
+                  <button key={v} className="seg-btn" role="radio" aria-checked={schemeId === v} data-nav data-kind="setting" onClick={() => setScheme(v)}>
+                    {v === "dark" ? "Dark" : "Light"}
                   </button>
                 ))}
               </div>
@@ -397,6 +376,40 @@ function DesktopSettingsScreen({ state }: { state: DesktopState }) {
                 ))}
               </div>
             </Row>
+            <Row label="Big Picture home art" hint={HOME_ART.find((a) => a.id === art)!.note}>
+              <div className="seg" role="radiogroup" aria-label="Home game art">
+                {HOME_ART.map((a) => (
+                  <button
+                    key={a.id}
+                    className="seg-btn"
+                    role="radio"
+                    aria-checked={art === a.id}
+                    data-nav
+                    data-kind="setting"
+                    onClick={() => setHomeArt(a.id)}
+                  >
+                    {a.label}
+                  </button>
+                ))}
+              </div>
+            </Row>
+            <Row label="Big Picture layout" hint={SKINS.find((o) => o.id === skinId)?.note ?? FROM_URL}>
+              <div className="seg" role="radiogroup" aria-label="Layout">
+                {SKINS.map((o) => (
+                  <button
+                    key={o.id}
+                    className="seg-btn"
+                    role="radio"
+                    aria-checked={skinId === o.id}
+                    data-nav
+                    data-kind="setting"
+                    onClick={() => setTheme("skin", o.id)}
+                  >
+                    {o.label}
+                  </button>
+                ))}
+              </div>
+            </Row>
           </Section>
 
           <Section id="app" icon={<AppWindow />} title="This app" note="How Playdex opens, and what it does in the background.">
@@ -407,6 +420,9 @@ function DesktopSettingsScreen({ state }: { state: DesktopState }) {
             </Row>
             <Row label="Start with Windows" hint="In the tray, so backups and game launchers stay up to date.">
               <Switch on={startWithWindows} label="Start with Windows" onChange={changeStartWithWindows} />
+            </Row>
+            <Row label="Navigation sounds" hint="Quiet clicks as you move around with a controller or the keyboard.">
+              <Switch on={sounds} label="Navigation sounds" onChange={setSoundsOn} />
             </Row>
             <Row label="Full Screen Experience" hint={state.fse.message}>
               {fseAction ? (
@@ -508,6 +524,7 @@ function BigPictureSettings({ state }: { state: DesktopState }) {
   const paletteId = useStore(palette);
   const skinOption = SKINS.find((o) => o.id === skinId);
   const paletteOption = PALETTES.find((o) => o.id === paletteId);
+  const sounds = useStore(soundsOn);
 
   useLandOnDefault();
 
@@ -553,6 +570,16 @@ function BigPictureSettings({ state }: { state: DesktopState }) {
               <span className="bp-row-text">
                 <span className="bp-row-name">Start with Windows</span>
                 <small>In the tray, so backups and game launchers stay up to date</small>
+              </span>
+              <span className="switch" aria-hidden>
+                <i />
+              </span>
+            </button>
+            <button className="bp-row" role="switch" aria-checked={sounds} data-nav data-kind="setting" onClick={() => setSoundsOn(!sounds)}>
+              <Volume2 aria-hidden />
+              <span className="bp-row-text">
+                <span className="bp-row-name">Navigation sounds</span>
+                <small>Quiet clicks as you move around</small>
               </span>
               <span className="switch" aria-hidden>
                 <i />

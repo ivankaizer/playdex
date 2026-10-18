@@ -16,6 +16,9 @@ public sealed class AppConfig
     public StorageConfig Storage { get; set; } = new();
     public ShellConfig Shell { get; set; } = new();
 
+    /// <summary>Apps the user added for Big Picture's quick settings (Discord, a browser); none until they add one.</summary>
+    public List<AppShortcut> Apps { get; set; } = [];
+
     public GameConfig GetOrCreateGame(string gameId)
     {
         if (Games.TryGetValue(gameId, out var existing))
@@ -49,6 +52,26 @@ public sealed class GameConfig
     public LaunchConfig Launch { get; set; } = new();
     public MonitorConfig Monitor { get; set; } = new();
     public BackupConfig Backup { get; set; } = new();
+}
+
+/// <summary>
+/// An app (not a game: no sessions are recorded) that Big Picture opens. Discord and the default browser are found on
+/// this PC each time they are opened, so updates and a new default browser need nothing here; an executable is
+/// started as saved.
+/// </summary>
+public sealed class AppShortcut
+{
+    public string Id { get; set; } = "";
+    public string Name { get; set; } = "";
+
+    /// <summary>One of <see cref="AppShortcuts.Kinds"/>, or <see cref="AppShortcuts.ExecutableKind"/>.</summary>
+    public string Kind { get; set; } = AppShortcuts.ExecutableKind;
+
+    /// <summary>The executable to start; only for <see cref="AppShortcuts.ExecutableKind"/>.</summary>
+    public string? ExecutablePath { get; set; }
+
+    /// <summary>Extra arguments, after the ones a found app needs (Discord's updater's).</summary>
+    public List<string> Arguments { get; set; } = [];
 }
 
 public sealed class BackupConfig

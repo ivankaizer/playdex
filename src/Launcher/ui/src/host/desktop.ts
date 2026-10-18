@@ -45,6 +45,18 @@ export interface DesktopGame {
   backup: BackupView;
 }
 
+/** An app Big Picture opens from quick settings. */
+export interface DesktopApp {
+  id: string;
+  name: string;
+  kind: string;
+  /** What starts it on this PC; empty when it isn't here. */
+  path: string;
+  launchOptions: string;
+  /** On this PC, so Big Picture lists it. */
+  available: boolean;
+}
+
 export interface DesktopSettings {
   baseUrl: string;
   /** Keys never reach the page; only whether one is saved. */
@@ -73,6 +85,9 @@ export interface DesktopState {
   version: string;
   mode: AppMode;
   games: DesktopGame[];
+  apps: DesktopApp[];
+  /** Apps found on this PC that aren't in the list (Discord, the default browser). */
+  suggestedApps: DesktopApp[];
   settings: DesktopSettings;
   update: UpdateView;
   fse: FseView;
@@ -214,6 +229,26 @@ let demoState: DesktopState = {
       backup: { kind: "off", text: "No backups yet." },
     },
   ],
+  apps: [
+    {
+      id: "discord",
+      name: "Discord",
+      kind: "discord",
+      path: "C:\\Users\\you\\AppData\\Local\\Discord\\Update.exe",
+      launchOptions: "",
+      available: true,
+    },
+  ],
+  suggestedApps: [
+    {
+      id: "browser",
+      name: "Microsoft Edge",
+      kind: "browser",
+      path: "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
+      launchOptions: "",
+      available: true,
+    },
+  ],
   settings: {
     baseUrl: "https://dash.playdex.dev/api",
     // ?nokey shows Playdex without an API key.
@@ -290,7 +325,32 @@ async function demo(method: string, params?: Record<string, unknown>): Promise<u
     case "game.remove":
       return (demoState = { ...demoState, games: demoState.games.filter((g) => g !== game) });
     case "game.add":
+    case "app.add":
       return demoState;
+    case "app.addFound": {
+      const found = demoState.suggestedApps.find((a) => a.kind === params?.kind);
+      if (!found) return demoState;
+      return (demoState = {
+        ...demoState,
+        apps: [...demoState.apps, found],
+        suggestedApps: demoState.suggestedApps.filter((a) => a !== found),
+      });
+    }
+    case "app.update":
+      return (demoState = {
+        ...demoState,
+        apps: demoState.apps.map((a) =>
+          a.id === params?.id ? { ...a, name: String(params!.name), launchOptions: String(params!.launchOptions ?? "") } : a,
+        ),
+      });
+    case "app.remove": {
+      const removed = demoState.apps.find((a) => a.id === params?.id);
+      return (demoState = {
+        ...demoState,
+        apps: demoState.apps.filter((a) => a !== removed),
+        suggestedApps: removed && removed.kind !== "executable" ? [...demoState.suggestedApps, removed] : demoState.suggestedApps,
+      });
+    }
     case "settings.save":
       demoState = {
         ...demoState,

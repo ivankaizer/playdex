@@ -399,6 +399,13 @@ internal sealed partial class ShellWindow : Window
                 var outputId = message.GetProperty("id").GetString()!;
                 PostQuickSettings(() => AudioOutputs.SetDefault(outputId), "switch the sound output");
                 break;
+            case "volume":
+                _ = SetVolumeAsync(message.GetProperty("level").GetInt32());
+                break;
+            case "mute":
+                var muted = message.GetProperty("muted").GetBoolean();
+                PostQuickSettings(() => AudioOutputs.SetMuted(muted), muted ? "mute the sound" : "unmute the sound");
+                break;
             case "hdr":
                 var displayId = message.GetProperty("display").GetString()!;
                 var on = message.GetProperty("on").GetBoolean();
@@ -414,6 +421,12 @@ internal sealed partial class ShellWindow : Window
                 break;
             case "open-steam":
                 OpenSteam();
+                break;
+            case "apps":
+                _ = PostAppsAsync();
+                break;
+            case "open-app":
+                _ = OpenAppAsync(message.GetProperty("id").GetString()!);
                 break;
             case "resume-game":
                 if (!GameWindows.Activate(_hwnd, _gameWindow, _nowPlaying?.ProcessId))
@@ -480,11 +493,41 @@ internal sealed partial class ShellWindow : Window
         }
     }
 
+    /// <summary>The apps the user added for quick settings (<see cref="AppShortcuts"/>), with which are running.</summary>
+    private async Task PostAppsAsync()
+    {
+        // A copy: the desktop app changes the list on the UI thread.
+        var apps = _services.Config.Apps.ToList();
+        Post(await Task.Run(() => ShellApps.ListJson(apps)));
+    }
+
+    /// <summary>Open one of the apps. Only apps in the config, by id; the page never supplies a path.</summary>
+    private async Task OpenAppAsync(string appId)
+    {
+        var app = _services.Config.Apps.FirstOrDefault(a => a.Id == appId);
+        var error = app is null
+            ? "That app isn't in your apps anymore."
+            : await ShellApps.OpenAsync(_hwnd, app);
+        if (error is not null)
+        {
+            Post($$"""{"type":"open-app-failed","message":{{JsonSerializer.Serialize(error, HostJson.Default.String)}}}""");
+        }
+    }
+
     /// <summary>Quick settings run off the UI thread; the page gets the fresh state (and any error) back.</summary>
     private void PostQuickSettings(Action? change, string description) => _ = PostQuickSettingsAsync(change, description);
 
     private async Task PostQuickSettingsAsync(Action? change, string description) =>
         PostFromAnyThread(await QuickSettings.ApplyAsync(change, description));
+
+    /// <summary>The page shows the new volume already; it hears back only when setting it failed.</summary>
+    private async Task SetVolumeAsync(int level)
+    {
+        if (await QuickSettings.SetVolumeAsync(level) is { } failed)
+        {
+            PostFromAnyThread(failed);
+        }
+    }
 
     private void OnUiReady()
     {

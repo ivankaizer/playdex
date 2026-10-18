@@ -31,12 +31,14 @@ import { focusedGame, focusedKind, useStore } from "./nav/store";
 import { inHost, onHostMessage, signalAfterFrame } from "./host/bridge";
 import { desktopState, isDesktop, loadDesktopState } from "./host/desktop";
 import { GamePage } from "./screens/GamePage";
+import { scheme, setScheme } from "./theme";
 import { Library } from "./screens/Library";
 import { PlaydexScreen } from "./screens/Playdex";
 
-// Loaded when first opened: Big Picture never downloads Manage (desktop only), nor Settings until its tab is opened.
-const Manage = lazy(() => import("./screens/Manage").then((m) => ({ default: m.Manage })));
+// Loaded when first opened: Big Picture never downloads Settings until its tab is opened.
 const Settings = lazy(() => import("./screens/Settings").then((m) => ({ default: m.Settings })));
+// Desktop mode has its own window layout (src/desktop); Big Picture never downloads it.
+const DesktopApp = lazy(() => import("./desktop/DesktopApp").then((m) => ({ default: m.DesktopApp })));
 
 let readySent = false;
 
@@ -51,71 +53,32 @@ const layout: LayoutId = (() => {
   return (LAYOUTS as readonly string[]).includes(v ?? "") ? (v as LayoutId) : "ribbon";
 })();
 
-/*
- * Desktop mode adds the games added to Playdex (the WinForms Wrapper's list). Settings are in both modes: all of them in
- * desktop mode, the ones a controller can change in Big Picture.
- */
-const ALL_TABS = ["Home", "Library", "Playdex", "Manage", "Settings"] as const;
-type Tab = (typeof ALL_TABS)[number];
-const TABS: readonly Tab[] = isDesktop ? ALL_TABS : ["Home", "Library", "Playdex", "Settings"];
-
-/** The desktop app reloads the page after games change; the open tab survives that. */
-function initialTab(): Tab {
-  if (!isDesktop) return "Home";
-  try {
-    const saved = sessionStorage.getItem("pdx.tab");
-    return TABS.includes(saved as Tab) ? (saved as Tab) : "Home";
-  } catch {
-    return "Home";
-  }
-}
-
-function read<T extends string>(key: string, allowed: readonly T[], fallback: T): T {
-  const fromUrl = new URLSearchParams(location.search).get(key);
-  let stored: string | null = null;
-  try {
-    stored = localStorage.getItem(`pdx.${key}`);
-  } catch {
-    /* storage unavailable */
-  }
-  const v = fromUrl ?? stored;
-  return (allowed as readonly string[]).includes(v ?? "") ? (v as T) : fallback;
-}
-
-function persist(key: string, value: string) {
-  try {
-    localStorage.setItem(`pdx.${key}`, value);
-  } catch {
-    /* storage unavailable */
-  }
-}
+/** Settings are the ones a controller can change; desktop mode (src/desktop) has all of them and Manage. */
+const TABS = ["Home", "Library", "Playdex", "Settings"] as const;
+type Tab = (typeof TABS)[number];
 
 export function App() {
-  const [theme, setTheme] = useState<"dark" | "light">(() => read("theme", ["dark", "light"], "dark"));
-  const [tab, setTab] = useState<Tab>(initialTab);
+  return isDesktop ? (
+    <Suspense fallback={null}>
+      <DesktopApp />
+    </Suspense>
+  ) : (
+    <BigPictureApp />
+  );
+}
+
+function BigPictureApp() {
+  const theme = useStore(scheme);
+  const [tab, setTab] = useState<Tab>("Home");
   const playing = useStore(launching);
   const gameOpen = useStore(openGameId);
   const settingsOpen = useStore(quickSettingsOpen);
   const artGame = useStore(artPickerGame);
   const toastMsg = useStore(toast);
 
+  // Loaded off the start-up path: it only marks the Settings tab when an update is ready.
   useEffect(() => {
-    document.documentElement.dataset.theme = theme;
-    persist("theme", theme);
-  }, [theme]);
-
-  useEffect(() => {
-    if (!isDesktop) return;
-    try {
-      sessionStorage.setItem("pdx.tab", tab);
-    } catch {
-      /* storage unavailable */
-    }
-  }, [tab]);
-
-  // Big Picture loads it off the start-up path: it only marks the Settings tab when an update is ready.
-  useEffect(() => {
-    const t = window.setTimeout(() => void loadDesktopState().catch(() => undefined), isDesktop ? 0 : 3000);
+    const t = window.setTimeout(() => void loadDesktopState().catch(() => undefined), 3000);
     return () => window.clearTimeout(t);
   }, []);
 
@@ -201,7 +164,7 @@ export function App() {
             PLAYDEX
           </span>
           <nav className="tabs" aria-label="Sections">
-            {!isDesktop && <Glyph name="LB" />}
+            <Glyph name="LB" />
             <div className="seg" role="tablist" data-nav-group="tabs">
               {TABS.map((t) => (
                 <button
@@ -221,7 +184,7 @@ export function App() {
                 </button>
               ))}
             </div>
-            {!isDesktop && <Glyph name="RB" />}
+            <Glyph name="RB" />
           </nav>
           <span className="topbar-spacer" />
           <NowPlaying />
@@ -231,7 +194,7 @@ export function App() {
               data-nav
               data-kind="theme"
               aria-label={theme === "dark" ? "Switch to light theme" : "Switch to dark theme"}
-              onClick={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}
+              onClick={() => setScheme(theme === "dark" ? "light" : "dark")}
             >
               {theme === "dark" ? <Sun /> : <Moon />}
             </button>
@@ -261,10 +224,6 @@ export function App() {
           <GamePage key={gameOpen} gameId={gameOpen} />
         ) : tab === "Library" ? (
           <Library />
-        ) : tab === "Manage" ? (
-          <Suspense fallback={<main />}>
-            <Manage />
-          </Suspense>
         ) : tab === "Settings" ? (
           <Suspense fallback={<main />}>
             <Settings />

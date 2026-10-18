@@ -84,6 +84,8 @@ onHostMessage((m) => {
     showToast(m.message);
   } else if (m.type === "open-steam-failed") {
     showToast("Steam isn't installed on this PC");
+  } else if (m.type === "open-app-failed") {
+    showToast(m.message);
   }
 });
 
@@ -94,6 +96,15 @@ export function openSteam() {
     return;
   }
   postToHost({ type: "open-steam" });
+}
+
+/** Open an app (Discord, a browser), or switch to it when it is running. */
+export function openApp(id: string, name: string) {
+  if (!inHost) {
+    showToast(`Opening ${name} works in the Playdex app on Windows`);
+    return;
+  }
+  postToHost({ type: "open-app", id });
 }
 
 /** Switch to the running game's window. */
