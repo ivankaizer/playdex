@@ -1,0 +1,1656 @@
+/*
+ * Desktop mode (DesktopApp.tsx): a window laid out like a desktop game library. Sizes are in px, as in a desktop app,
+ * and do not follow the window's size; the screens shared with Big Picture (Playdex, Settings) are in rem, so the root
+ * size is fixed here instead of following the window. Every colour is a token (styles/tokens.css), so the palettes and
+ * light or dark apply as in Big Picture.
+ */
+html[data-mode="desktop"] {
+  font-size: 18px;
+}
+
+.dk {
+  height: 100vh;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  font-size: 14px;
+  user-select: none;
+}
+.dk input,
+.dk select {
+  user-select: text;
+}
+
+/* Focus: the ring for the keyboard (arrows or Tab) and a controller; hover is enough for the mouse. */
+.dk :focus-visible {
+  outline: 2px solid rgb(var(--focus));
+  outline-offset: 2px;
+}
+html[data-input="pointer"] .dk :is([data-nav][data-focused], :focus-visible) {
+  outline: none;
+}
+.dk [data-nav][data-focused] {
+  outline-width: 2px;
+  outline-offset: 2px;
+}
+
+.dk-spacer {
+  flex: 1;
+}
+.dk-muted {
+  margin: 0;
+  color: rgb(var(--muted));
+}
+.dk-note {
+  margin: 0;
+  font-size: 12.5px;
+  color: rgb(var(--muted));
+}
+.dk-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: rgb(var(--muted));
+}
+.dk-kicker {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: rgb(var(--accent));
+}
+.dk-h1 {
+  margin: 4px 0 6px;
+  font-size: 28px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.dk-h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+.dk-h3 {
+  margin: 0 0 4px;
+  font-size: 14px;
+  font-weight: 600;
+}
+.dk-link {
+  font-size: 14px;
+  font-weight: 500;
+  color: rgb(var(--accent));
+  white-space: nowrap;
+}
+.dk-link:hover {
+  text-decoration: underline;
+}
+.dk-spin {
+  animation: spin 1s linear infinite;
+}
+
+/* ---------- Buttons ---------- */
+.dk-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 36px;
+  padding: 0 16px;
+  border-radius: 999px;
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+  transition:
+    background-color 0.15s,
+    border-color 0.15s,
+    transform 0.15s var(--ease-out);
+}
+.dk-btn svg {
+  width: 16px;
+  height: 16px;
+  flex: none;
+}
+.dk-btn:active:not(:disabled) {
+  transform: scale(0.97);
+}
+.dk-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.dk-btn-primary {
+  background: rgb(var(--pill));
+  color: rgb(var(--pill-ink));
+}
+.dk-btn-primary:hover:not(:disabled) {
+  background: rgb(var(--pill) / 0.85);
+}
+.dk-btn-outline {
+  background: rgb(var(--surface) / 0.6);
+  border: 1px solid rgb(var(--line));
+  color: rgb(var(--ink));
+}
+.dk-btn-outline:hover:not(:disabled) {
+  background: rgb(var(--surface));
+  border-color: rgb(var(--ink-2) / 0.5);
+}
+.dk-btn-outline[data-armed] {
+  background: rgb(var(--pill));
+  border-color: rgb(var(--pill));
+  color: rgb(var(--pill-ink));
+}
+.dk-btn-lg {
+  height: 48px;
+  padding: 0 28px 0 24px;
+  font-size: 16px;
+}
+.dk-btn-lg svg {
+  width: 18px;
+  height: 18px;
+}
+.dk-btn-primary.dk-btn-lg {
+  box-shadow: 0 10px 28px -14px rgb(var(--pill) / 0.9);
+}
+.dk-btn-sm {
+  height: 30px;
+  padding: 0 12px;
+  font-size: 13px;
+}
+.dk-btn-sm svg {
+  width: 14px;
+  height: 14px;
+}
+.dk-icon-btn {
+  flex: none;
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  border: 1px solid rgb(var(--line));
+  background: rgb(var(--surface) / 0.6);
+  color: rgb(var(--ink-2));
+  transition:
+    background-color 0.15s,
+    color 0.15s;
+}
+.dk-icon-btn:hover:not(:disabled) {
+  background: rgb(var(--surface));
+  color: rgb(var(--ink));
+}
+.dk-icon-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.dk-icon-btn svg {
+  width: 17px;
+  height: 17px;
+}
+.dk-icon-btn[aria-pressed="true"] {
+  color: rgb(var(--accent));
+  border-color: rgb(var(--mint-line));
+  background: rgb(var(--mint));
+}
+.dk-danger[data-armed] {
+  width: auto;
+  padding: 0 12px;
+  background: rgb(var(--pill));
+  border-color: rgb(var(--pill));
+  color: rgb(var(--pill-ink));
+}
+.dk-armed-text {
+  font-size: 13px;
+  font-weight: 600;
+}
+/* Icon-only play on a card. */
+.dk-round {
+  position: relative;
+  z-index: 1;
+  flex: none;
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: rgb(var(--pill));
+  color: rgb(var(--pill-ink));
+  transition: transform 0.15s var(--ease-out);
+}
+.dk-round:hover {
+  transform: scale(1.06);
+}
+.dk-round svg {
+  width: 15px;
+  height: 15px;
+}
+
+/* ---------- Top bar ---------- */
+.dk-top {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  height: 56px;
+  padding: 0 16px 0 20px;
+  background: rgb(var(--page) / 0.82);
+  border-bottom: 1px solid rgb(var(--line) / 0.6);
+}
+.dk-top .brand {
+  font-size: 12px;
+  letter-spacing: 0.32em;
+  gap: 8px;
+}
+.dk-top .brand-dot {
+  width: 8px;
+  height: 8px;
+  box-shadow: 0 0 0 3px rgb(var(--bar) / 0.2);
+}
+.dk-tabs {
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  margin-left: 8px;
+  border-radius: 999px;
+  background: rgb(var(--tile) / 0.85);
+  border: 1px solid var(--tile-border);
+}
+.dk-tabs button {
+  height: 32px;
+  padding: 0 16px;
+  border-radius: 999px;
+  font-size: 14px;
+  font-weight: 500;
+  color: rgb(var(--ink-2));
+  transition:
+    background-color 0.15s,
+    color 0.15s;
+}
+.dk-tabs button:hover {
+  color: rgb(var(--ink));
+  background: rgb(var(--surface) / 0.7);
+}
+.dk-tabs button[aria-current="page"] {
+  background: rgb(var(--seg-on));
+  color: rgb(var(--seg-on-ink));
+  font-weight: 600;
+}
+.dk-top-tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.dk-top .avatar {
+  width: 34px;
+  height: 34px;
+}
+.dk-top .avatar svg {
+  width: 16px;
+  height: 16px;
+}
+.dk-sync {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
+  color: rgb(var(--muted));
+  white-space: nowrap;
+}
+.dk-sync .sync-dot {
+  width: 7px;
+  height: 7px;
+}
+.dk-sync-off {
+  height: 30px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px dashed rgb(var(--ink-2) / 0.6);
+  color: rgb(var(--ink));
+  font-weight: 500;
+}
+.dk-sync-off:hover {
+  border-style: solid;
+}
+/* Starting a game, or the game running now. */
+.dk-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  height: 34px;
+  max-width: 340px;
+  padding: 0 14px 0 12px;
+  border-radius: 999px;
+  background: rgb(var(--mint));
+  border: 1px solid rgb(var(--mint-line));
+  color: rgb(var(--ink));
+  font-size: 13px;
+  white-space: nowrap;
+}
+.dk-live .live-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+}
+.dk-live-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgb(var(--accent));
+}
+.dk-live-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 600;
+}
+.dk-live-clock {
+  color: rgb(var(--ink-2));
+}
+.dk-live-x {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  margin-right: -6px;
+  border-radius: 999px;
+  color: rgb(var(--ink-2));
+}
+.dk-live-x:hover {
+  background: rgb(var(--surface));
+  color: rgb(var(--ink));
+}
+.dk-live-x svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* ---------- Body ---------- */
+.dk-body {
+  min-height: 0;
+  display: flex;
+}
+.dk-main {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+.dk-page {
+  padding: 28px 36px 40px;
+  display: grid;
+  align-content: start;
+  gap: 24px;
+  animation: view-in 0.28s var(--ease-out) both;
+}
+.dk-page-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.dk-page-head p {
+  max-width: 640px;
+  line-height: 1.5;
+}
+.dk-head-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.dk-section-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+.dk-empty {
+  min-height: 60vh;
+  place-items: center;
+  align-content: center;
+}
+.dk-empty .dk-card {
+  max-width: 460px;
+  padding: 28px 32px;
+  display: grid;
+  justify-items: start;
+  gap: 10px;
+}
+.dk-empty h2 {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 600;
+}
+
+/* Screens shared with Big Picture, in rem: they bring their own layout. */
+.dk-legacy {
+  height: 100%;
+  min-height: 0;
+  grid-template-rows: minmax(0, 1fr);
+}
+.dk-legacy > main {
+  min-height: 0;
+}
+
+/* ---------- Cards ---------- */
+.dk-card {
+  border-radius: 18px;
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  box-shadow: var(--card-shadow);
+  padding: 20px 22px;
+  min-width: 0;
+}
+.dk-card-head {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.dk-card-head h2 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+.dk-card-figure {
+  margin-left: auto;
+  font-size: 20px;
+  font-weight: 600;
+}
+.dk-card-head .dk-muted:last-child {
+  margin-left: auto;
+  font-size: 13px;
+}
+.dk-stat {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+.dk-stat-value {
+  font-size: 15px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* Art filling a card or panel; a missing image keeps the fallback's colours but not its text. */
+.dk-card-art {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.dk-card-art .cover-fallback {
+  font-size: 0;
+}
+
+/* ---------- Sidebar: the game list ---------- */
+.dk-side {
+  width: 300px;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  background: rgb(var(--page) / 0.72);
+  border-right: 1px solid rgb(var(--line) / 0.6);
+}
+.dk-side-head {
+  display: grid;
+  gap: 10px;
+  padding: 14px 14px 8px;
+}
+.dk-side-tools {
+  display: flex;
+  gap: 8px;
+}
+.dk-search {
+  flex: 1;
+  min-width: 0;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  border-radius: 10px;
+  background: rgb(var(--tile));
+  border: 1px solid rgb(var(--line) / 0.8);
+  color: rgb(var(--muted));
+  cursor: text;
+}
+.dk-search:focus-within {
+  border-color: rgb(var(--focus));
+}
+.dk-search svg {
+  flex: none;
+  width: 16px;
+  height: 16px;
+}
+.dk-search input {
+  flex: 1;
+  min-width: 0;
+  width: 100%;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  font: inherit;
+  font-size: 13.5px;
+  color: rgb(var(--ink));
+}
+.dk-search input::placeholder {
+  color: rgb(var(--muted));
+}
+.dk-views {
+  display: flex;
+  padding: 2px;
+  border-radius: 10px;
+  background: rgb(var(--tile));
+  border: 1px solid rgb(var(--line) / 0.8);
+}
+.dk-views button {
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  color: rgb(var(--muted));
+}
+.dk-views button:hover {
+  color: rgb(var(--ink));
+}
+.dk-views button[aria-checked="true"] {
+  background: rgb(var(--track));
+  color: rgb(var(--ink));
+}
+.dk-views svg {
+  width: 16px;
+  height: 16px;
+}
+.dk-seg {
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 999px;
+  background: rgb(var(--tile) / 0.85);
+  border: 1px solid var(--tile-border);
+}
+.dk-seg button {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 28px;
+  padding: 0 8px;
+  text-align: center;
+  border-radius: 999px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: rgb(var(--ink-2));
+  white-space: nowrap;
+}
+.dk-seg button span {
+  opacity: 0.75;
+}
+.dk-seg button:hover {
+  color: rgb(var(--ink));
+}
+.dk-seg button[aria-checked="true"] {
+  background: rgb(var(--seg-on));
+  color: rgb(var(--seg-on-ink));
+  font-weight: 600;
+}
+.dk-side-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  padding: 0 8px 12px;
+}
+.dk-side-empty {
+  margin: 16px 8px;
+  color: rgb(var(--muted));
+}
+.dk-group {
+  padding-top: 6px;
+}
+.dk-group-head {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: rgb(var(--muted));
+}
+.dk-group-head:hover {
+  color: rgb(var(--ink-2));
+}
+.dk-group-head svg {
+  width: 13px;
+  height: 13px;
+  transition: transform 0.18s var(--ease-out);
+}
+.dk-group-head[aria-expanded="false"] svg {
+  transform: rotate(-90deg);
+}
+.dk-group-head .num {
+  margin-left: auto;
+  letter-spacing: 0;
+  font-weight: 500;
+}
+.dk-row {
+  width: 100%;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 8px;
+  border-radius: 8px;
+  color: rgb(var(--ink-2));
+  content-visibility: auto;
+  contain-intrinsic-size: auto 36px;
+}
+.dk-row:hover {
+  background: rgb(var(--surface) / 0.55);
+  color: rgb(var(--ink));
+}
+.dk-row[aria-current="page"] {
+  background: rgb(var(--mint));
+  color: rgb(var(--ink));
+  font-weight: 600;
+}
+.dk-row-art {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 5px;
+}
+.dk-row-art img {
+  object-position: center 20%;
+}
+.dk-row-art .cover-initial {
+  font-size: 11px;
+}
+.dk-row-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 13.5px;
+}
+.dk-row-meta {
+  font-size: 12px;
+  font-weight: 400;
+  color: rgb(var(--muted));
+}
+.dk-row .live-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+}
+.dk-row[data-state="off"] {
+  color: rgb(var(--muted));
+}
+.dk-row[data-state="off"] .dk-row-art {
+  opacity: 0.5;
+}
+.dk-side-foot {
+  padding: 12px 14px 14px;
+  border-top: 1px solid rgb(var(--line) / 0.6);
+}
+.dk-add {
+  width: 100%;
+  height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border-radius: 10px;
+  border: 1px dashed rgb(var(--line));
+  color: rgb(var(--ink-2));
+  font-size: 13.5px;
+  font-weight: 500;
+}
+.dk-add:hover {
+  border-style: solid;
+  color: rgb(var(--ink));
+  background: rgb(var(--surface) / 0.5);
+}
+.dk-add svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* ---------- Game page ---------- */
+.dk-game {
+  animation: view-in 0.28s var(--ease-out) both;
+}
+.dk-hero {
+  position: relative;
+  height: clamp(220px, 36vh, 380px);
+  overflow: hidden;
+}
+.dk-hero-art {
+  position: absolute;
+  inset: 0;
+}
+.dk-hero-art img {
+  object-position: center 30%;
+}
+.dk-hero-art .cover-fallback {
+  font-size: 0;
+}
+.dk-hero-scrim {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgb(var(--scrim) / 0) 35%, rgb(var(--scrim) / 0.75) 78%, rgb(var(--page)) 100%);
+}
+.dk-hero-logo {
+  position: absolute;
+  left: 40px;
+  right: 40px;
+  bottom: 18px;
+}
+.dk-logo {
+  max-width: min(320px, 60%);
+  max-height: 130px;
+  object-fit: contain;
+  object-position: left bottom;
+  filter: drop-shadow(0 4px 14px rgba(0, 0, 0, 0.5));
+}
+:root[data-theme="light"] :is(.dk-logo, .dk-lead-logo, .dk-details-logo-img) {
+  filter: drop-shadow(0 0 1px rgba(0, 0, 0, 0.7)) drop-shadow(0 4px 14px rgba(0, 0, 0, 0.55));
+}
+.dk-hero-title {
+  margin: 0;
+  max-width: 720px;
+  font-size: 40px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.05;
+}
+.dk-playbar {
+  display: flex;
+  align-items: center;
+  gap: 32px;
+  flex-wrap: wrap;
+  padding: 14px 40px 22px;
+}
+.dk-playbar > .dk-btn + .dk-btn {
+  margin-left: -20px;
+}
+.dk-playbar > .dk-icon-btn + .dk-icon-btn {
+  margin-left: -24px;
+}
+.dk-playbar .dk-icon-btn {
+  width: 40px;
+  height: 40px;
+}
+.dk-game-body {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+  padding: 0 40px 40px;
+}
+.dk-game-main {
+  flex: 999 1 480px;
+  min-width: 0;
+  display: grid;
+  align-content: start;
+  gap: 20px;
+}
+.dk-game-side {
+  flex: 1 1 300px;
+  max-width: 380px;
+  display: grid;
+  align-content: start;
+  gap: 20px;
+}
+.dk-days {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: 5px;
+}
+.dk-day {
+  display: grid;
+  gap: 6px;
+  justify-items: center;
+}
+.dk-day-bar {
+  width: 100%;
+  height: 96px;
+  border-radius: 5px;
+  background: rgb(var(--track) / 0.7);
+  display: flex;
+  align-items: flex-end;
+  overflow: hidden;
+}
+.dk-day-bar i {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 5px;
+  background: rgb(var(--bar-light));
+  transform-origin: bottom;
+  transition: transform 0.5s var(--ease-out);
+}
+.dk-day[data-today] .dk-day-bar i {
+  background: rgb(var(--bar));
+}
+.dk-day span {
+  font-size: 11px;
+  color: rgb(var(--muted));
+}
+.dk-day[data-today] span {
+  color: rgb(var(--accent));
+  font-weight: 600;
+}
+.dk-sessions {
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0;
+}
+.dk-sessions li {
+  display: grid;
+  grid-template-columns: minmax(120px, 1fr) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  min-height: 44px;
+  border-top: 1px solid rgb(var(--line) / 0.6);
+}
+.dk-sessions-day {
+  font-weight: 500;
+}
+.dk-sessions-dur {
+  text-align: right;
+  font-weight: 600;
+}
+.dk-sessions-compact li {
+  grid-template-columns: minmax(0, 1fr) auto;
+  min-height: 38px;
+  font-size: 13.5px;
+  color: rgb(var(--ink-2));
+}
+.dk-saves {
+  display: grid;
+  gap: 14px;
+}
+.dk-saves-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.dk-saves-head h2 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+.dk-saves-head p {
+  font-size: 13px;
+}
+.dk-badge-icon {
+  flex: none;
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  background: rgb(var(--mint));
+  color: rgb(var(--accent));
+}
+.dk-badge-icon svg {
+  width: 17px;
+  height: 17px;
+}
+.dk-toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+/* The on/off switch (as settings.css has it, which loads only with Settings), at desktop size. */
+.dk .switch {
+  flex: none;
+  display: block;
+  width: 42px;
+  height: 24px;
+  padding: 3px;
+  border-radius: 99px;
+  background: rgb(var(--track));
+}
+.dk .switch i {
+  display: block;
+  width: 18px;
+  height: 18px;
+  border-radius: 99px;
+  background: rgb(var(--ink-2));
+  transition: transform 0.22s var(--ease-out);
+}
+.dk .switch[aria-checked="true"] {
+  background: rgb(var(--pill));
+}
+.dk .switch[aria-checked="true"] i {
+  background: rgb(var(--pill-ink));
+  transform: translateX(18px);
+}
+.dk .switch:disabled {
+  opacity: 0.5;
+}
+.dk-facts {
+  margin: 0;
+  display: grid;
+  gap: 10px;
+}
+.dk-facts div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+.dk-facts dt {
+  color: rgb(var(--muted));
+}
+.dk-facts dd {
+  margin: 0;
+  text-align: right;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dk-elsewhere {
+  display: flex;
+  gap: 10px;
+  line-height: 1.45;
+}
+.dk-elsewhere svg {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  color: rgb(var(--accent));
+}
+
+/* ---------- Home ---------- */
+.dk-jump {
+  display: grid;
+  gap: 12px;
+}
+.dk-jump-grid {
+  display: flex;
+  gap: 16px;
+  height: clamp(260px, 38vh, 380px);
+}
+.dk-lead,
+.dk-side-card {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--card-border);
+  background: rgb(var(--track));
+  isolation: isolate;
+}
+.dk-lead {
+  flex: 1.65 1 0;
+  min-width: 0;
+  border-radius: 20px;
+}
+.dk-lead .dk-card-art img,
+.dk-side-card .dk-card-art img {
+  object-position: center 30%;
+  transition: transform 0.6s var(--ease-out);
+}
+.dk-lead:hover .dk-card-art img,
+.dk-side-card:hover .dk-card-art img {
+  transform: scale(1.03);
+}
+.dk-lead-scrim {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, rgb(var(--scrim) / 0.92) 0%, rgb(var(--scrim) / 0.55) 45%, rgb(var(--scrim) / 0) 78%);
+}
+/* The whole card opens the game's page; its own controls sit above this. */
+.dk-stretch {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: inherit;
+}
+.dk-lead-body {
+  position: absolute;
+  left: 28px;
+  right: 28px;
+  bottom: 26px;
+  display: grid;
+  justify-items: start;
+  gap: 12px;
+  pointer-events: none;
+}
+.dk-lead-body > * {
+  pointer-events: auto;
+}
+.dk-lead-body .dk-kicker,
+.dk-lead-meta,
+.dk-lead-logo,
+.dk-lead-title {
+  pointer-events: none;
+}
+.dk-lead-logo {
+  max-width: min(260px, 70%);
+  max-height: 110px;
+  object-fit: contain;
+  object-position: left bottom;
+  filter: drop-shadow(0 4px 14px rgba(0, 0, 0, 0.5));
+}
+.dk-lead-title {
+  margin: 0;
+  font-size: 32px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.05;
+}
+.dk-lead-meta {
+  font-size: 14px;
+  color: rgb(var(--ink-2));
+}
+.dk-lead-meta b {
+  color: rgb(var(--ink));
+  font-weight: 600;
+}
+.dk-lead-actions {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  gap: 10px;
+}
+.dk-jump-side {
+  flex: 1 1 0;
+  min-width: 0;
+  display: grid;
+  grid-template-rows: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+.dk-side-card {
+  border-radius: 18px;
+}
+.dk-side-card-scrim {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(0deg, rgb(var(--scrim) / 0.9) 0%, rgb(var(--scrim) / 0) 72%);
+}
+.dk-side-card-body {
+  position: absolute;
+  left: 18px;
+  right: 18px;
+  bottom: 14px;
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  pointer-events: none;
+}
+.dk-side-card-body .dk-round {
+  pointer-events: auto;
+}
+.dk-side-card-text {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+.dk-side-card-text h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dk-side-card-text span {
+  font-size: 13px;
+  color: rgb(var(--ink-2));
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dk-week {
+  display: flex;
+  align-items: center;
+  gap: 32px;
+  flex-wrap: wrap;
+  padding: 18px 24px;
+}
+.dk-week-total {
+  font-size: 28px;
+  font-weight: 600;
+  line-height: 1.1;
+}
+.dk-week-bars {
+  width: 200px;
+}
+.dk-week-bars .week-day {
+  font-size: 11px;
+}
+.dk-streak {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.dk-streak svg {
+  width: 16px;
+  height: 16px;
+  color: rgb(var(--accent));
+}
+.dk-week-top {
+  max-width: 260px;
+}
+.dk-week-link {
+  margin-left: auto;
+}
+.dk-week-off {
+  justify-content: space-between;
+}
+.dk-week-off p {
+  margin: 0;
+  color: rgb(var(--ink-2));
+}
+.dk-shelf {
+  display: flex;
+  gap: 24px;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  padding-bottom: 6px;
+}
+.dk-shelf-col {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+}
+.dk-shelf-row {
+  display: flex;
+  gap: 14px;
+}
+.dk-shelf-item {
+  width: 128px;
+  display: grid;
+  gap: 8px;
+  font-size: 13.5px;
+  font-weight: 500;
+}
+.dk-shelf-item > span {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dk-shelf-art {
+  width: 128px;
+  aspect-ratio: 2 / 3;
+  border-radius: 12px;
+  border: 1px solid var(--tile-border);
+  transition: transform 0.2s var(--ease-out);
+}
+.dk-shelf-art .cover-fallback {
+  font-size: 13px;
+}
+.dk-shelf-item:hover .dk-shelf-art {
+  transform: translateY(-3px);
+}
+
+/* ---------- Library grid ---------- */
+.dk-grid-view {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  animation: view-in 0.28s var(--ease-out) both;
+}
+.dk-filters {
+  width: 240px;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 16px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  background: rgb(var(--page) / 0.72);
+  border-right: 1px solid rgb(var(--line) / 0.6);
+}
+.dk-filters .dk-search {
+  flex: none;
+}
+.dk-filters fieldset {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  display: grid;
+  gap: 2px;
+}
+.dk-filters legend {
+  padding: 0 0 6px;
+}
+.dk-filters .dk-link {
+  align-self: flex-start;
+}
+.dk-check {
+  height: 32px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 6px;
+  border-radius: 8px;
+  font-size: 13.5px;
+  color: rgb(var(--ink-2));
+  cursor: pointer;
+}
+.dk-check:hover {
+  background: rgb(var(--surface) / 0.55);
+  color: rgb(var(--ink));
+}
+.dk-check input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: rgb(var(--bar));
+}
+.dk-check span:nth-child(2) {
+  flex: 1;
+}
+.dk-check .dk-muted {
+  font-size: 12px;
+}
+.dk-grid-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.dk-grid-bar {
+  height: 60px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 24px;
+  border-bottom: 1px solid rgb(var(--line) / 0.5);
+}
+.dk-grid-bar h1 {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 600;
+}
+.dk-grid-bar .dk-muted {
+  font-size: 13px;
+}
+.dk-select {
+  height: 32px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 8px 0 12px;
+  border-radius: 999px;
+  background: rgb(var(--tile));
+  border: 1px solid rgb(var(--line) / 0.8);
+  font-size: 13px;
+  color: rgb(var(--muted));
+}
+.dk-select select {
+  border: 0;
+  outline: 0;
+  background: transparent;
+  font: inherit;
+  font-weight: 500;
+  color: rgb(var(--ink));
+}
+.dk-select option {
+  background: rgb(var(--surface));
+  color: rgb(var(--ink));
+}
+.dk-range {
+  width: 90px;
+  accent-color: rgb(var(--bar));
+}
+.dk-covers {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  padding: 22px 24px 32px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(var(--dk-cover, 148px), 1fr));
+  gap: 22px 18px;
+  align-content: start;
+}
+.dk-cover {
+  display: grid;
+  gap: 8px;
+  align-content: start;
+  min-width: 0;
+  text-align: left;
+  content-visibility: auto;
+  contain-intrinsic-size: auto 280px;
+}
+.dk-cover-art {
+  position: relative;
+  display: block;
+  aspect-ratio: 2 / 3;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 0 0 1px var(--tile-border);
+  transition:
+    transform 0.2s var(--ease-out),
+    box-shadow 0.15s;
+}
+.dk-cover-art .cover {
+  position: absolute;
+  inset: 0;
+}
+.dk-cover:hover .dk-cover-art {
+  transform: translateY(-3px);
+}
+.dk-cover[aria-pressed="true"] .dk-cover-art {
+  box-shadow:
+    0 0 0 2px rgb(var(--page)),
+    0 0 0 4px rgb(var(--pill));
+}
+.dk-cover[aria-pressed="true"] .dk-cover-title {
+  color: rgb(var(--accent));
+}
+.dk-cover[data-state="off"] .cover img {
+  filter: saturate(0.4);
+  opacity: 0.6;
+}
+.dk-cover-title {
+  font-size: 13.5px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dk-cover-sub {
+  margin-top: -6px;
+  font-size: 12px;
+  color: rgb(var(--muted));
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dk-cover-playing {
+  position: absolute;
+  left: 8px;
+  top: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 9px;
+  border-radius: 999px;
+  background: rgb(var(--pill));
+  color: rgb(var(--pill-ink));
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.dk-cover-playing .live-dot {
+  width: 6px;
+  height: 6px;
+  background: rgb(var(--pill-ink));
+}
+.dk-cover-badge,
+.dk-cover-save {
+  position: absolute;
+  bottom: 8px;
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: rgb(var(--scrim) / 0.85);
+  color: rgb(var(--ink));
+}
+.dk-cover-badge {
+  right: 8px;
+}
+.dk-cover-save {
+  left: 8px;
+}
+.dk-cover-badge svg,
+.dk-cover-save svg {
+  width: 14px;
+  height: 14px;
+}
+.dk-details {
+  width: 360px;
+  flex: none;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  background: rgb(var(--page) / 0.72);
+  border-left: 1px solid rgb(var(--line) / 0.6);
+  animation: view-in 0.24s var(--ease-out) both;
+}
+.dk-details-art {
+  position: relative;
+  height: 180px;
+  background: rgb(var(--track));
+}
+.dk-details-art .dk-card-art img {
+  object-position: 60% 30%;
+}
+.dk-details-scrim {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgb(var(--page) / 0) 30%, rgb(var(--page)) 100%);
+}
+.dk-details-logo {
+  position: absolute;
+  left: 18px;
+  bottom: 8px;
+  right: 18px;
+}
+.dk-details-logo-img {
+  max-width: 180px;
+  max-height: 72px;
+  object-fit: contain;
+  object-position: left bottom;
+  filter: drop-shadow(0 4px 14px rgba(0, 0, 0, 0.5));
+}
+.dk-details-body {
+  padding: 10px 22px 24px;
+  display: grid;
+  gap: 18px;
+}
+.dk-details-title {
+  margin: 0 0 4px;
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+.dk-details-body .dk-muted {
+  font-size: 13px;
+}
+.dk-details-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.dk-details-actions .dk-btn-lg {
+  flex: 1;
+  height: 46px;
+}
+.dk-details-actions .dk-icon-btn {
+  width: 46px;
+  height: 46px;
+}
+.dk-details-stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.dk-details-stats .dk-stat {
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: rgb(var(--tile));
+}
+.dk-details-stats .dk-stat-value {
+  font-size: 16px;
+  font-weight: 600;
+}
+.dk-details-saves {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: rgb(var(--mint));
+  font-size: 13px;
+  color: rgb(var(--ink-2));
+}
+
+/* ---------- Manage ---------- */
+.dk-manage-empty {
+  display: grid;
+  justify-items: start;
+  gap: 8px;
+  max-width: 520px;
+}
+.dk-manage-empty svg {
+  width: 26px;
+  height: 26px;
+  color: rgb(var(--accent));
+}
+.dk-manage-empty h2 {
+  margin: 0;
+  font-size: 18px;
+}
+.dk-manage-apps {
+  display: grid;
+  gap: 14px;
+  margin-top: 8px;
+}
+.dk-table-wrap {
+  padding: 0;
+  overflow-x: auto;
+}
+.dk-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.dk-table th {
+  height: 42px;
+  padding: 0 16px;
+  text-align: left;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgb(var(--muted));
+  border-bottom: 1px solid rgb(var(--line) / 0.7);
+  white-space: nowrap;
+}
+.dk-table td {
+  padding: 12px 16px;
+  border-bottom: 1px solid rgb(var(--line) / 0.45);
+  vertical-align: middle;
+}
+.dk-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+.dk-table tbody tr:hover:not(.dk-table-editor) {
+  background: rgb(var(--surface) / 0.35);
+}
+.dk-table tr[data-editing] td {
+  border-bottom-color: transparent;
+}
+.dk-table-editor td {
+  padding-top: 0;
+  background: rgb(var(--surface) / 0.35);
+}
+.dk-table-editor .desk-form .text {
+  height: 36px;
+  font-size: 14px;
+}
+.dk-table-editor .label,
+.dk-table-editor .field small,
+.dk-table-editor .field-check {
+  font-size: 12px;
+}
+.dk-table-note {
+  padding: 12px 16px 14px;
+  border-top: 1px solid rgb(var(--line) / 0.45);
+}
+.dk-cell-game {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 240px;
+}
+.dk-cell-art {
+  flex: none;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+}
+.dk-cell-art img {
+  object-position: center 20%;
+}
+.dk-cell-art .cover-initial {
+  font-size: 14px;
+}
+.dk-app-icon {
+  display: grid;
+  place-items: center;
+  background: rgb(var(--tile));
+  border: 1px solid var(--tile-border);
+  color: rgb(var(--muted));
+}
+.dk-app-icon svg {
+  width: 18px;
+  height: 18px;
+}
+.dk-cell-text {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.dk-cell-text .dk-muted {
+  font-size: 12.5px;
+}
+.dk-cell-title {
+  font-weight: 600;
+}
+.dk-cell-path {
+  display: block;
+  max-width: 420px;
+  font-size: 12px;
+  color: rgb(var(--muted));
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  user-select: text;
+}
+.dk-cell-path[data-missing] {
+  color: rgb(var(--chart-sand));
+}
+.dk-cell-backup {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  max-width: 260px;
+  font-size: 13px;
+  color: rgb(var(--ink-2));
+}
+.dk-cell-backup svg {
+  width: 15px;
+  height: 15px;
+}
+.dk-cell-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+}
+.dk-cell-actions .dk-icon-btn {
+  width: 32px;
+  height: 32px;
+}
+.dk-cell-actions .dk-icon-btn svg {
+  width: 15px;
+  height: 15px;
+}
