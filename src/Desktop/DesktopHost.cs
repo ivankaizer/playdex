@@ -47,11 +47,20 @@ internal sealed record MessageView(string Message, bool Warning = false);
 
 internal sealed record PathView(string? Path);
 
+/// <summary>SteamGridDB's games for a library game, best match first, and the kinds of art the user picked for it.</summary>
+internal sealed record ArtSearchView(IReadOnlyList<SteamGridDbGame> Games, IReadOnlyDictionary<string, long> Picked);
+
+/// <summary>A library game's artwork after a change, as the page's URLs (null: none on this PC).</summary>
+internal sealed record ArtView(SteamArt? Images, IReadOnlyDictionary<string, long> Picked);
+
 [JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase, DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull)]
 [JsonSerializable(typeof(DesktopState))]
 [JsonSerializable(typeof(PlatformsView))]
 [JsonSerializable(typeof(MessageView))]
 [JsonSerializable(typeof(PathView))]
+[JsonSerializable(typeof(ArtSearchView))]
+[JsonSerializable(typeof(ArtView))]
+[JsonSerializable(typeof(SteamGridDbImagePage))]
 [JsonSerializable(typeof(string))]
 internal sealed partial class DesktopJson : JsonSerializerContext;
 
@@ -177,6 +186,17 @@ internal sealed partial class DesktopHost : IDisposable
                 return Json(await BackupAsync(Text(parameters, "gameId")));
             case "game.dailyBackup":
                 return await SetDailyBackupAsync(Text(parameters, "gameId"), parameters.TryGetProperty("enabled", out var on) && on.ValueKind == JsonValueKind.True);
+            case "art.search":
+                return await SearchArtAsync(Text(parameters, "libraryId"), OptionalText(parameters, "query"));
+            case "art.list":
+                return JsonSerializer.Serialize(
+                    await new SteamGridDbClient().ListImagesAsync(
+                        _config.SteamGridDb.ApiKey, Number(parameters, "sgdbGameId"), Text(parameters, "kind"), (int)Number(parameters, "page")),
+                    DesktopJson.Default.SteamGridDbImagePage);
+            case "art.set":
+                return await SetArtAsync(Text(parameters, "libraryId"), Text(parameters, "kind"), Number(parameters, "imageId"), Text(parameters, "url"));
+            case "art.reset":
+                return await ResetArtAsync(Text(parameters, "libraryId"), Text(parameters, "kind"));
             case "settings.save":
                 return await SaveSettingsAsync(parameters);
             case "settings.startWithWindows":
@@ -268,6 +288,7 @@ internal sealed partial class DesktopHost : IDisposable
         await _store.SaveAsync(_config);
         await _backups.RemoveStateAsync(gameId);
         _launchers.RemoveLauncherArtifacts(_config.Storage, removed);
+        CustomArt.Remove(CustomArt.Root(_config.Storage), Library.PlaydexId(gameId));
         Log.Info($"desktop: removed {gameId}");
         ReloadLibrarySoon();
         return StateJson();
@@ -298,6 +319,61 @@ internal sealed partial class DesktopHost : IDisposable
             return new MessageView($"{game.DisplayName} is in Steam, but its artwork could not be downloaded: {ex.Message}", Warning: true);
         }
     }
+
+    /// <summary>
+    /// SteamGridDB's games to take a library game's art from: with no query, the game's Steam app first (when it has
+    /// one), then a search by its title.
+    /// </summary>
+    private async Task<string> SearchArtAsync(string libraryId, string? query)
+    {
+        var game = await LibraryGame(libraryId);
+        var client = new SteamGridDbClient();
+        var games = new List<SteamGridDbGame>();
+        if (string.IsNullOrWhiteSpace(query) && game.SteamAppId is { } appId && await client.FindSteamGameAsync(_config.SteamGridDb.ApiKey, appId) is { } steamGame)
+        {
+            games.Add(steamGame);
+        }
+        foreach (var found in await client.SearchGamesAsync(_config.SteamGridDb.ApiKey, string.IsNullOrWhiteSpace(query) ? game.Title : query))
+        {
+            if (games.All(g => g.Id != found.Id))
+            {
+                games.Add(found);
+            }
+        }
+        var view = new ArtSearchView(games, CustomArt.Picked(CustomArt.Root(_config.Storage), libraryId));
+        return JsonSerializer.Serialize(view, DesktopJson.Default.ArtSearchView);
+    }
+
+    private async Task<string> SetArtAsync(string libraryId, string kind, long imageId, string url)
+    {
+        await LibraryGame(libraryId);
+        await CustomArt.SetAsync(CustomArt.Root(_config.Storage), libraryId, kind, imageId, url, new SteamGridDbClient());
+        Log.Info($"desktop: {kind} art of {libraryId} picked from SteamGridDB");
+        return await ArtJsonAsync(libraryId);
+    }
+
+    private async Task<string> ResetArtAsync(string libraryId, string kind)
+    {
+        await LibraryGame(libraryId);
+        CustomArt.Reset(CustomArt.Root(_config.Storage), libraryId, kind);
+        Log.Info($"desktop: {kind} art of {libraryId} reset");
+        return await ArtJsonAsync(libraryId);
+    }
+
+    /// <summary>
+    /// The game's art after a change, from a fresh scan (the next art in line shows where none was picked). The page
+    /// applies it in place; the scan is what it gets the next time it loads.
+    /// </summary>
+    private async Task<string> ArtJsonAsync(string libraryId)
+    {
+        var library = _window() is { } window ? await window.KeepLibraryAsync() : await _services.RescanLibrary();
+        var view = new ArtView(library.GetValueOrDefault(libraryId)?.Images, CustomArt.Picked(CustomArt.Root(_config.Storage), libraryId));
+        return JsonSerializer.Serialize(view, DesktopJson.Default.ArtView);
+    }
+
+    private async Task<LibraryGame> LibraryGame(string libraryId) =>
+        (await _services.LibraryScan).GetValueOrDefault(libraryId)
+        ?? throw new InvalidOperationException("That game is not in the library on this PC.");
 
     private async Task<MessageView> BackupAsync(string gameId)
     {
@@ -498,6 +574,11 @@ internal sealed partial class DesktopHost : IDisposable
 
     private static string Text(JsonElement parameters, string name) =>
         OptionalText(parameters, name) ?? throw new InvalidOperationException($"'{name}' is required.");
+
+    private static long Number(JsonElement parameters, string name) =>
+        parameters.ValueKind == JsonValueKind.Object && parameters.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.Number && value.TryGetInt64(out var number)
+            ? number
+            : 0;
 
     private static string? OptionalText(JsonElement parameters, string name) =>
         parameters.ValueKind == JsonValueKind.Object && parameters.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String

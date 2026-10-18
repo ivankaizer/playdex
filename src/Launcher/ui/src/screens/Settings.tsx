@@ -297,7 +297,7 @@ function DesktopSettingsScreen({ state }: { state: DesktopState }) {
             id="art"
             icon={<ImageIcon />}
             title="Steam artwork"
-            note="With a SteamGridDB key, “Add to Steam” also downloads cover, hero, logo and icon art."
+            note="With a SteamGridDB key, a game’s Artwork button picks its poster, background and logo, and “Add to Steam” downloads its art."
           >
             <Row
               label="SteamGridDB API key"

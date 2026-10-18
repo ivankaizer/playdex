@@ -49,9 +49,10 @@ public static class Library
             games[game.Id] = game;
         }
         var withArt = 0;
+        var customArt = CustomArt.Root(config.Storage);
         foreach (var (id, game) in games.ToList())
         {
-            if (Images(game) is { } images)
+            if (Images(game, customArt) is { } images)
             {
                 games[id] = game with { Images = images };
                 withArt++;
@@ -67,18 +68,24 @@ public static class Library
     /// <summary>Parent of the per-user grid hosts: &lt;user id&gt;.steam-grid.playdex is that user's grid folder (<see cref="SteamGrid.GridFolders"/>).</summary>
     public const string GridHost = "steam-grid.playdex";
 
+    /// <summary>Virtual host for artwork picked in Playdex (<see cref="CustomArt.Root"/>).</summary>
+    public const string CustomArtHost = "custom-art.playdex";
+
     /// <summary>
-    /// Local artwork as page URLs, per image: the game's own Steam shortcut grid art (Wrapper games, from SteamGridDB),
-    /// then custom grid art on its Steam app, then Steam's artwork cache. Kinds still missing fall back to the CDN.
+    /// Local artwork as page URLs, per image: what the user picked in Playdex, then the game's own Steam shortcut grid art
+    /// (Wrapper games, from SteamGridDB), then custom grid art on its Steam app, then Steam's artwork cache. Kinds still
+    /// missing fall back to the CDN.
     /// </summary>
-    private static SteamArt? Images(LibraryGame game)
+    private static SteamArt? Images(LibraryGame game, string customArt)
     {
+        var picked = CustomArt.Find(customArt, game.Id);
         var shortcut = game.LauncherPath is { } launcher ? SteamGrid.ForShortcut(launcher) : null;
         var appGrid = game.SteamAppId is { } gridId ? SteamGrid.ForApp(gridId) : null;
         var cache = game.SteamAppId is { } cacheId ? SteamLibrary.FindArt(cacheId) : null;
 
         string? Pick(Func<SteamArt, string?> kind) =>
-            (shortcut is not null ? GridUrl(kind(shortcut)) : null)
+            (picked is not null ? Url(CustomArtHost, kind(picked)) : null)
+            ?? (shortcut is not null ? GridUrl(kind(shortcut)) : null)
             ?? (appGrid is not null ? GridUrl(kind(appGrid)) : null)
             ?? (cache is not null ? Url(ArtHost, kind(cache)) : null);
 

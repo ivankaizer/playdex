@@ -4,6 +4,7 @@
  * params} and come back as {type:"desktop-result", id, ok, result | error}; the host also pushes {type:"desktop-state"}
  * when backups or updates change. In a plain browser a stand-in state answers, so the screens can be worked on in Vite.
  */
+import { gameById, type GameImages } from "../data/games";
 import { createStore } from "../nav/store";
 import { inHost, onHostMessage, postToHost } from "./bridge";
 
@@ -87,6 +88,46 @@ export interface PlatformOption {
 export interface MessageView {
   message: string;
   warning?: boolean;
+}
+
+/** The artwork a game's page can change: poster, wide cover, background and logo. */
+export type ArtKind = "portrait" | "capsule" | "hero" | "logo";
+
+/** The kinds the user picked for a game, each with the SteamGridDB image it is. */
+export type PickedArt = Partial<Record<ArtKind, number>>;
+
+/** A SteamGridDB game to take artwork from. */
+export interface ArtSource {
+  id: number;
+  name: string;
+  year?: number;
+}
+
+export interface ArtImage {
+  id: number;
+  url: string;
+  thumb: string;
+  width: number;
+  height: number;
+  style?: string;
+}
+
+/** "art.search": SteamGridDB's games for a library game, best match first. */
+export interface ArtSearchView {
+  games: ArtSource[];
+  picked: PickedArt;
+}
+
+/** "art.list": a page of a SteamGridDB game's images of one kind. */
+export interface ArtPage {
+  images: ArtImage[];
+  more: boolean;
+}
+
+/** "art.set" and "art.reset": the library game's artwork afterwards (the next art in line where none is picked). */
+export interface ArtView {
+  images?: GameImages;
+  picked: PickedArt;
 }
 
 export const desktopState = createStore<DesktopState | null>(null);
@@ -189,6 +230,28 @@ let demoState: DesktopState = {
   fse: { state: "available", message: "Use Playdex in Big Picture as the Full Screen Experience home." },
 };
 
+const demoPicked = new Map<string, PickedArt>();
+
+/** The browser stand-in for SteamGridDB: the demo game's own Steam CDN art, a few of each kind. */
+function demoArt(libraryId: string, kind: ArtKind): ArtPage {
+  const appId = gameById(libraryId)?.art;
+  const files: Record<ArtKind, string[]> = {
+    portrait: ["library_600x900.jpg", "library_600x900_2x.jpg"],
+    capsule: ["header.jpg", "capsule_616x353.jpg", "capsule_467x181.jpg"],
+    hero: ["library_hero.jpg", "page_bg_generated_v6b.jpg"],
+    logo: ["logo.png"],
+  };
+  if (!appId) return { images: [], more: false };
+  const base = (Object.keys(files).indexOf(kind) + 1) * 100;
+  return {
+    images: files[kind].map((file, i) => {
+      const url = `https://cdn.cloudflare.steamstatic.com/steam/apps/${appId}/${file}`;
+      return { id: base + i, url, thumb: url, width: 0, height: 0, style: "official" };
+    }),
+    more: false,
+  };
+}
+
 async function demo(method: string, params?: Record<string, unknown>): Promise<unknown> {
   await new Promise((r) => setTimeout(r, 250));
   const game = demoState.games.find((g) => g.gameId === params?.gameId);
@@ -250,6 +313,31 @@ async function demo(method: string, params?: Record<string, unknown>): Promise<u
         desktopState.set(demoState);
       }, 1600);
       return (demoState = { ...demoState, update: { kind: "checking", message: "Checking for updates…" } });
+    case "art.search": {
+      const title = String(params?.query || gameById(String(params?.libraryId))?.title || "");
+      return {
+        games: title ? [{ id: 1, name: title, year: 2024 }, { id: 2, name: `${title}: Deluxe Edition` }] : [],
+        picked: demoPicked.get(String(params?.libraryId)) ?? {},
+      } satisfies ArtSearchView;
+    }
+    case "art.list":
+      return demoArt(String(params?.libraryId), params?.kind as ArtKind);
+    case "art.set":
+    case "art.reset": {
+      const libraryId = String(params?.libraryId);
+      const kind = params?.kind as ArtKind;
+      const images = { ...gameById(libraryId)?.images };
+      const picked = { ...demoPicked.get(libraryId) };
+      if (method === "art.set") {
+        images[kind] = String(params?.url);
+        picked[kind] = Number(params?.imageId);
+      } else {
+        delete images[kind];
+        delete picked[kind];
+      }
+      demoPicked.set(libraryId, picked);
+      return { images, picked } satisfies ArtView;
+    }
     case "mode.set":
       // The browser stand-in for replacing the window: reload in the other layout.
       location.search = params?.mode === "desktop" ? "?mode=desktop" : "";

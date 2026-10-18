@@ -204,9 +204,28 @@ internal sealed partial class ShellWindow : Window
 
     private async Task ShowLibraryAsync(IReadOnlyDictionary<string, LibraryGame> library)
     {
+        if (await InjectLibraryAsync(library) is { } web)
+        {
+            web.Reload();
+        }
+    }
+
+    /// <summary>
+    /// Rescan and give the page's next load the new library, without reloading now: the page already shows the change
+    /// (new artwork it applied itself).
+    /// </summary>
+    public async Task<IReadOnlyDictionary<string, LibraryGame>> KeepLibraryAsync()
+    {
+        var library = await _services.RescanLibrary();
+        await InjectLibraryAsync(library);
+        return library;
+    }
+
+    private async Task<CoreWebView2?> InjectLibraryAsync(IReadOnlyDictionary<string, LibraryGame> library)
+    {
         if (_webView.CoreWebView2 is not { } web)
         {
-            return;
+            return null;
         }
         if (_libraryScriptId is not null)
         {
@@ -214,7 +233,7 @@ internal sealed partial class ShellWindow : Window
         }
         _pageLibrary = library;
         _libraryScriptId = await web.AddScriptToExecuteOnDocumentCreatedAsync(PageScript(library));
-        web.Reload();
+        return web;
     }
 
     /// <summary>
@@ -299,6 +318,10 @@ internal sealed partial class ShellWindow : Window
                 // served, not the rest of userdata.
                 web.SetVirtualHostNameToFolderMapping($"{userId}.{Library.GridHost}", grid, CoreWebView2HostResourceAccessKind.Allow);
             }
+            // Artwork picked in Playdex (CustomArt), mapped even while empty: the first pick is shown without a new window.
+            var customArt = CustomArt.Root(_services.Config.Storage);
+            Directory.CreateDirectory(customArt);
+            web.SetVirtualHostNameToFolderMapping(Library.CustomArtHost, customArt, CoreWebView2HostResourceAccessKind.Allow);
 
             var dist = Path.Combine(AppContext.BaseDirectory, "ui");
             string url;
