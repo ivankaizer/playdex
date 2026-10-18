@@ -301,7 +301,7 @@ function DesktopSettingsScreen({ state }: { state: DesktopState }) {
             id="art"
             icon={<ImageIcon />}
             title="Steam artwork"
-            note="With a SteamGridDB key, “Add to Steam” also downloads cover, hero, logo and icon art."
+            note="With a SteamGridDB key, a game’s Artwork button picks its poster, background and logo, and “Add to Steam” downloads its art."
           >
             <Row
               label="SteamGridDB API key"
@@ -529,7 +529,7 @@ function BigPictureSettings({ state }: { state: DesktopState }) {
   useLandOnDefault();
 
   return (
-    <main className="bp-set">
+    <main className="bp-set" data-scroll="y">
       <section className={`card bp-update${ready ? " bp-update-ready" : ""}`} aria-labelledby="bp-update-title" data-nav-group="bp-update">
         <span className="kicker">Updates</span>
         <span className="bp-update-icon" aria-hidden>
@@ -544,7 +544,7 @@ function BigPictureSettings({ state }: { state: DesktopState }) {
         <UpdateButton update={update} className="btn-lg" isDefault />
       </section>
 
-      <div className="bp-list">
+      <div className="bp-list" data-scroll="y">
         <section className="bp-section" aria-labelledby="bp-app">
           <h2 id="bp-app" className="label">
             This app

@@ -19,10 +19,10 @@ public sealed class ConfiguredGameWatcher(AppConfig config, GameConfig game) : I
     public void Start()
     {
         _lock = GameLock.Acquire(config.Storage.StateDirectory, game.GameId);
-        Process process;
+        StartedGame started;
         try
         {
-            process = GameProcess.Start(game);
+            started = GameProcess.Start(game);
         }
         catch
         {
@@ -33,11 +33,11 @@ public sealed class ConfiguredGameWatcher(AppConfig config, GameConfig game) : I
         Running?.Invoke();
         _ = Task.Run(async () =>
         {
-            using (process)
+            using (started)
             {
                 try
                 {
-                    var exitedAt = await new ProcessMonitor(game.Monitor).WaitForExitAsync(process, _stop.Token);
+                    var exitedAt = await new ProcessMonitor(game.Monitor).WaitForExitAsync(started, _stop.Token);
                     Log.Info($"game: {game.DisplayName} exited");
                     Exited?.Invoke(Stopwatch.GetTimestamp(), exitedAt.ToFileTime());
                 }

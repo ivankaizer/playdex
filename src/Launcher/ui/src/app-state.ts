@@ -153,6 +153,25 @@ export function closeGame() {
   openGameId.set(null);
 }
 
+/** The game whose artwork picker is open, over its page. */
+export const artPickerGame = createStore<string | null>(null);
+let artPickerOpener: HTMLElement | null = null;
+
+export function openArtPicker(gameId: string) {
+  if (launching.get() || artPickerGame.get()) return;
+  artPickerOpener = current();
+  artPickerGame.set(gameId);
+}
+
+/** Close the picker and give focus back to the button that opened it. */
+export function closeArtPicker() {
+  if (!artPickerGame.get()) return;
+  artPickerGame.set(null);
+  const opener = artPickerOpener;
+  artPickerOpener = null;
+  window.setTimeout(() => (opener?.isConnected ? focusEl(opener) : focusDefault()));
+}
+
 /** The quick settings panel (sound output, HDR, power), over whatever screen is open. */
 export const quickSettingsOpen = createStore(false);
 let quickSettingsOpener: HTMLElement | null = null;

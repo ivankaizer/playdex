@@ -83,7 +83,7 @@ export function Manage() {
         <div>
           <span className="dk-kicker">Added to Playdex</span>
           <h1 className="dk-h1">Your games</h1>
-          <p className="dk-muted">Games Playdex starts and records from their .exe. Steam games installed on this PC are in the Library already.</p>
+          <p className="dk-muted">Games Playdex starts and records from their .exe or .bat. Steam games installed on this PC are in the Library already.</p>
         </div>
         <div className="dk-head-actions" data-nav-group="manage-actions">
           <button
@@ -110,7 +110,7 @@ export function Manage() {
           <Gamepad2 aria-hidden />
           <h2>No games added yet</h2>
           <p className="dk-muted">
-            Add a game's .exe to track its sessions, start it from here or from Steam, and back up its saves. Steam games
+            Add a game's .exe or .bat to track its sessions, start it from here or from Steam, and back up its saves. Steam games
             installed on this PC are in the Library already.
           </p>
         </div>

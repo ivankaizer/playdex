@@ -1,6 +1,7 @@
 import { Moon, SlidersHorizontal, Sun, UserRound, UserRoundCheck, UserRoundX } from "lucide-react";
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import {
+  artPickerGame,
   closeArmed,
   closeGame,
   forceCloseGame,
@@ -17,6 +18,7 @@ import {
   takeReturnFocus,
   toast,
 } from "./app-state";
+import { ArtPicker } from "./components/ArtPicker";
 import { QuickSettings } from "./components/QuickSettings";
 import { Backdrop, Clock, formatClock, Glyph, Hint, Logo, useElapsed } from "./components/shared";
 import { gameById, isInstalled, recentGames } from "./data/games";
@@ -71,6 +73,7 @@ function BigPictureApp() {
   const playing = useStore(launching);
   const gameOpen = useStore(openGameId);
   const settingsOpen = useStore(quickSettingsOpen);
+  const artGame = useStore(artPickerGame);
   const toastMsg = useStore(toast);
 
   // Loaded off the start-up path: it only marks the Settings tab when an update is ready.
@@ -154,7 +157,7 @@ function BigPictureApp() {
 
   return (
     <>
-      <div className="screen" inert={playing || settingsOpen ? true : undefined}>
+      <div className="screen" inert={playing || settingsOpen || artGame ? true : undefined}>
         <header className="topbar">
           <span className="brand">
             <span className="brand-dot" />
@@ -242,6 +245,7 @@ function BigPictureApp() {
         <HintBar onGamePage={!!gameOpen} />
       </div>
 
+      {artGame && !playing && !settingsOpen && <ArtPicker gameId={artGame} />}
       {settingsOpen && !playing && <QuickSettings />}
       {playing && <LaunchOverlay gameId={playing} />}
       {toastMsg && (
@@ -264,6 +268,7 @@ const PRIMARY: Record<string, string> = {
   backup: "Back up",
   "daily-backup": "Daily backup",
   "close-game": "Close game",
+  artwork: "Change artwork",
   details: "Open",
   "now-playing": "Resume",
   account: "Settings",

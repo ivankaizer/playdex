@@ -1,6 +1,6 @@
-import { Archive, CalendarCheck, CalendarX, Download, Heart, MonitorSmartphone, Play, X } from "lucide-react";
+import { Archive, CalendarCheck, CalendarX, Download, Heart, ImageIcon, MonitorSmartphone, Play, X } from "lucide-react";
 import { useState } from "react";
-import { closeArmed, forceCloseGame, launch, nowPlaying, resumeGame, showToast } from "../app-state";
+import { closeArmed, forceCloseGame, launch, nowPlaying, openArtPicker, resumeGame, showToast } from "../app-state";
 import { SaveGlyph, useSaves } from "../components/saves";
 import { Backdrop, Logo } from "../components/shared";
 import {
@@ -24,7 +24,7 @@ import "./game.css";
 /**
  * The game page: art and the primary action up top, the game's Playdex history below. While the game runs, Play
  * resumes it and Close game force-closes it. A game added to Playdex also shows its save backups and can back them up
- * now or daily.
+ * now or daily. Any game on this PC can have its artwork changed to images from SteamGridDB.
  */
 export function GamePage({ gameId }: { gameId: string }) {
   const game = gameById(gameId);
@@ -137,6 +137,11 @@ export function GamePage({ gameId }: { gameId: string }) {
           >
             <Heart fill={fav ? "currentColor" : "none"} /> {fav ? "Favorite" : "Add to favorites"}
           </button>
+          {onPc && (
+            <button className="btn btn-outline btn-lg" data-nav data-kind="artwork" data-game={gameId} onClick={() => openArtPicker(gameId)}>
+              <ImageIcon /> Artwork
+            </button>
+          )}
           {saves?.ready && <SaveActions gameId={gameId} configId={saves.game.gameId} daily={saves.game.dailyBackup} running={saves.game.backup.kind === "running"} />}
         </div>
       </section>

@@ -13,7 +13,7 @@ public sealed record RunningGame(string GameId, DateTimeOffset? Since, int? Proc
 /// Finds a library game running now, however it was started (the launcher's own sessions are known without this):
 /// <list type="bullet">
 /// <item>Games added to Playdex: a process matching the game's monitor settings (the monitored executable's path or
-/// name, or for <see cref="MonitorMode.LaunchedProcess"/> the launch executable). Checked first, as in
+/// name, or for <see cref="MonitorMode.LaunchedProcess"/> the launch executable, or what its script started here). Checked first, as in
 /// <see cref="Library.Scan"/>, where they win over the same Steam app.</item>
 /// <item>Steam games: Steam's running app, HKCU\Software\Valve\Steam\RunningAppID (0 when none), while the Steam
 /// client runs: a client that quits or crashes mid-game leaves the value behind. Steam doesn't say when it started, so
@@ -72,6 +72,11 @@ public static class RunningGames
         if (string.IsNullOrWhiteSpace(game.Launch.ExecutablePath))
         {
             return false;
+        }
+        if (GameProcess.IsScript(game.Launch.ExecutablePath))
+        {
+            // A script runs as cmd.exe: only the processes of one Playdex started are known to be the game.
+            return ProcessTree.ProcessesOf(game.GameId).Contains(process.Id);
         }
         try
         {

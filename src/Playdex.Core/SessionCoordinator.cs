@@ -45,11 +45,11 @@ public sealed partial class SessionCoordinator : IDisposable
             throw new InvalidOperationException("Game executable path is not configured. Open Playdex settings to configure it.");
         }
 
-        using var process = LaunchGame(game);
+        using var started = LaunchGame(game);
         if (api is null || queue is null)
         {
             LogApiTrackingDisabled(logger, game.GameId);
-            await new ProcessMonitor(game.Monitor).WaitForExitAsync(process, cancellationToken);
+            await new ProcessMonitor(game.Monitor).WaitForExitAsync(started, cancellationToken);
             return;
         }
 
@@ -60,7 +60,7 @@ public sealed partial class SessionCoordinator : IDisposable
         DateTimeOffset? exitedAt = null;
         try
         {
-            exitedAt = await new ProcessMonitor(game.Monitor).WaitForExitAsync(process, cancellationToken);
+            exitedAt = await new ProcessMonitor(game.Monitor).WaitForExitAsync(started, cancellationToken);
         }
         finally
         {
@@ -69,7 +69,7 @@ public sealed partial class SessionCoordinator : IDisposable
         }
     }
 
-    private Process LaunchGame(GameConfig selectedGame)
+    private StartedGame LaunchGame(GameConfig selectedGame)
     {
         LogGameLaunching(logger, selectedGame.GameId, selectedGame.Launch.ExecutablePath);
         return GameProcess.Start(selectedGame);

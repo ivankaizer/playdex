@@ -1,5 +1,5 @@
 import { memo, useEffect, useRef, useState } from "react";
-import { art, gameById, SOURCE_LABEL, weekByDay, weekdayInitial, type Game } from "../data/games";
+import { art, artVersion, gameById, SOURCE_LABEL, weekByDay, weekdayInitial, type Game } from "../data/games";
 import { focusedGame, useStore } from "../nav/store";
 
 /* ---------- Controller glyphs ---------- */
@@ -59,8 +59,11 @@ export const Cover = memo(function Cover({
   /** Small thumbnails fall back to an initial instead of the full title. */
   compact?: boolean;
 }) {
+  useStore(artVersion);
   const src = art[kind](game);
-  const [failed, setFailed] = useState(false);
+  // Keyed by image: newly picked art gets its own chance to load.
+  const [failedSrc, setFailedSrc] = useState<string>();
+  const failed = failedSrc === src;
   return (
     <div className={`cover ${className}`}>
       {src && !failed ? (
@@ -70,7 +73,7 @@ export const Cover = memo(function Cover({
           loading={eager ? "eager" : "lazy"}
           decoding="async"
           onLoad={(e) => e.currentTarget.setAttribute("data-loaded", "")}
-          onError={() => setFailed(true)}
+          onError={() => setFailedSrc(src)}
         />
       ) : compact ? (
         <div className="cover-initial" aria-hidden>
@@ -88,13 +91,14 @@ export const Cover = memo(function Cover({
 
 /** Game logo image, or the title set in type when no logo exists. */
 export function Logo({ game, className, titleClass }: { game: Game; className: string; titleClass: string }) {
+  useStore(artVersion);
   const src = art.logo(game);
-  const [failed, setFailed] = useState(false);
-  if (!src || failed) return <h1 className={titleClass}>{game.title}</h1>;
+  const [failedSrc, setFailedSrc] = useState<string>();
+  if (!src || failedSrc === src) return <h1 className={titleClass}>{game.title}</h1>;
   return (
     <>
       <h1 className="sr-only">{game.title}</h1>
-      <img className={className} src={src} alt="" decoding="async" onError={() => setFailed(true)} />
+      <img className={className} src={src} alt="" decoding="async" onError={() => setFailedSrc(src)} />
     </>
   );
 }
@@ -104,6 +108,7 @@ export function Logo({ game, className, titleClass }: { game: Game; className: s
 export function Backdrop({ gameId, className = "" }: { gameId?: string; className?: string }) {
   const focused = useStore(focusedGame);
   const id = gameId ?? focused;
+  const version = useStore(artVersion);
   const [layers, setLayers] = useState<{ a?: string; b?: string; on: "a" | "b" }>({ on: "a" });
   const pending = useRef(0);
 
@@ -132,7 +137,7 @@ export function Backdrop({ gameId, className = "" }: { gameId?: string; classNam
         });
     }, 90);
     return () => window.clearTimeout(t);
-  }, [id]);
+  }, [id, version]);
 
   return (
     <div className={`backdrop ${className}`} aria-hidden>

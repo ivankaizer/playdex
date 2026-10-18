@@ -172,6 +172,17 @@ export const sessions: Session[] = hostLibrary ? [] : demoSessions;
 const byId = new Map(games.map((g) => [g.id, g]));
 export const gameById = (id: string): Game => byId.get(id)!;
 
+/** Bumped when a game's artwork changes in place (picked on its page); the art components re-read it. */
+export const artVersion = createStore(0);
+
+/** A game's new local artwork, shown at once; the host has the library it loads next time hold it too. */
+export function setImages(id: string, images: GameImages | undefined) {
+  const game = byId.get(id);
+  if (!game) return;
+  game.images = images;
+  artVersion.set(artVersion.get() + 1);
+}
+
 const steam = (id: number, file: string) => `https://cdn.cloudflare.steamstatic.com/steam/apps/${id}/${file}`;
 export const art = {
   hero: (g: Game) => g.images?.hero ?? (g.art ? steam(g.art, "library_hero.jpg") : undefined),
