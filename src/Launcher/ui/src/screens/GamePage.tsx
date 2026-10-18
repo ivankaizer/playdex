@@ -15,12 +15,11 @@ import {
   SOURCE_LABEL,
   weekdayInitial,
 } from "../data/games";
+import { toggleFavorite, useFavorites } from "../data/favorites";
 import { gameHistory, playdexConnected, playdexSummary } from "../data/playdex";
 import { rpc, type MessageView } from "../host/desktop";
 import { useStore } from "../nav/store";
 import "./game.css";
-
-const favorites = new Set<string>(["hades2", "elden"]);
 
 /**
  * The game page: art and the primary action up top, the game's Playdex history below. While the game runs, Play
@@ -35,18 +34,12 @@ export function GamePage({ gameId }: { gameId: string }) {
   const daily = history.daily;
   const onPc = isOnPc(game);
   const installed = isInstalled(game);
-  const [fav, setFav] = useState(favorites.has(gameId));
+  const fav = useFavorites().has(gameId);
   const maxDay = Math.max(...daily, 1);
   const playedRecently = daily.some(Boolean);
   const saves = useSaves(gameId);
   const playing = useStore(nowPlaying)?.gameId === gameId;
   const closeConfirm = useStore(closeArmed) === gameId;
-
-  const toggleFav = () => {
-    if (fav) favorites.delete(gameId);
-    else favorites.add(gameId);
-    setFav(!fav);
-  };
 
   return (
     <main className="gpage">
@@ -140,7 +133,7 @@ export function GamePage({ gameId }: { gameId: string }) {
             data-kind="favorite"
             data-game={gameId}
             aria-pressed={fav}
-            onClick={toggleFav}
+            onClick={() => toggleFavorite(gameId)}
           >
             <Heart fill={fav ? "currentColor" : "none"} /> {fav ? "Favorite" : "Add to favorites"}
           </button>
