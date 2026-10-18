@@ -57,7 +57,7 @@ The page talks to it with `{type:"desktop", id, method, params}` (see `DesktopHo
 | `--no-suspend` | Keep the page running while a game is in front in Big Picture |
 | `--update-health=PATH` | Started by the updater: confirm a healthy start by writing PATH |
 | `--selftest-job` | Job Object exit-detection self-test |
-| `--selftest-quick-settings[=toggle]` | Log the sound outputs, HDR, refresh rates and the FPS counter; `=toggle` switches the sound output, HDR and refresh rate of each display, checks, and switches back, then toggles the FPS counter twice |
+| `--selftest-quick-settings[=toggle]` | Log the sound outputs, volume, HDR, refresh rates and the FPS counter; `=toggle` switches the sound output, changes the volume and mutes, switches HDR and refresh rate of each display, checks, and switches back, then toggles the FPS counter twice |
 
 ## Configuration
 
@@ -94,6 +94,7 @@ Resume (`{type:"resume-game"}`) brings back the window that was in front when th
 
 Menu on the controller (or the sliders button in the top bar, or `m`) opens a panel over the current screen. B or Menu closes it.
 
+- **Volume:** the default output's master volume, the level the taskbar's slider shows (Core Audio's `IAudioEndpointVolume`). Left / right step it by 5, a pointer clicks or drags along the bar, and A mutes and unmutes; changing the level unmutes, as the taskbar does. A held stick sends a stream of `{type:"volume"}` messages: the host collapses queued ones into the latest and answers only when one fails. Focused when the panel opens.
 - **Sound output:** the active playback devices; picking one makes it the default for every role (console, multimedia, communications), as Settings → Sound does. Listed with Core Audio's `IMMDeviceEnumerator`; set with `IPolicyConfig`, which is undocumented but stable since Windows 7 (EarTrumpet and similar tools use it).
 - **HDR:** one switch per active display that supports HDR, the same switch as Settings → Display → Use HDR (`DisplayConfigSetDeviceInfo` with `DISPLAYCONFIG_SET_HDR_STATE`, falling back to the pre-24H2 advanced color call).
 - **Refresh rate:** per display, the rates offered at its current resolution and colour depth (`EnumDisplaySettingsEx` on its GDI device); picking one keeps the resolution and is saved, as in Settings → Display → Advanced display (`ChangeDisplaySettingsEx` with `CDS_UPDATEREGISTRY`). Rates are whole Hz: this API reports 59.94 Hz as 59.

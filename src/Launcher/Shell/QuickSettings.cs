@@ -7,28 +7,38 @@ namespace Playdex.Shell;
 
 internal sealed record AudioOutput(string Id, string Name, bool IsDefault);
 
+/// <param name="Level">The default output's master volume, 0 to 100.</param>
+internal sealed record AudioVolume(int Level, bool Muted);
+
 /// <param name="RefreshRate">Current refresh rate in whole Hz (Windows reports 59.94 Hz as 59), 0 if unknown.</param>
 /// <param name="RefreshRates">Rates available at the current resolution and colour depth, ascending.</param>
 internal sealed record DisplayState(
     string Id, string Name, bool HdrSupported, bool HdrOn, int RefreshRate, IReadOnlyList<int> RefreshRates);
 
 /// <summary>What the quick settings panel shows; posted to the page with type "quick-settings".</summary>
+/// <param name="Volume">The default output's volume; null (left out) when there is no default output.</param>
 /// <param name="FpsCounter">The NVIDIA statistics overlay; null (left out) when it isn't available.</param>
 internal sealed record QuickSettingsState(
-    string Type, IReadOnlyList<AudioOutput> Outputs, IReadOnlyList<DisplayState> Displays, FpsCounter? FpsCounter, string? Error);
+    string Type,
+    IReadOnlyList<AudioOutput> Outputs,
+    AudioVolume? Volume,
+    IReadOnlyList<DisplayState> Displays,
+    FpsCounter? FpsCounter,
+    string? Error);
 
 [JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase, DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull)]
 [JsonSerializable(typeof(QuickSettingsState))]
 internal sealed partial class QuickSettingsJson : JsonSerializerContext;
 
 /// <summary>
-/// The quick settings panel's system controls: the default sound output, HDR and refresh rate per display, the NVIDIA
-/// FPS counter, and sleep, restart and shut down. Every call blocks briefly (COM, display configuration), so callers run it off the UI thread; calls are
+/// The quick settings panel's system controls: the default sound output and its volume, HDR and refresh rate per
+/// display, the NVIDIA FPS counter, and sleep, restart and shut down. Every call blocks briefly (COM, display configuration), so callers run it off the UI thread; calls are
 /// serialized so two toggles never overlap.
 /// </summary>
 internal static class QuickSettings
 {
     private static readonly SemaphoreSlim _gate = new(1, 1);
+    private static int _pendingVolume = -1;
 
     /// <summary>Run <paramref name="change"/> (null: just read), then return the state as JSON for the page.</summary>
     public static async Task<string> ApplyAsync(Action? change, string description)
@@ -53,8 +63,47 @@ internal static class QuickSettings
                     }
                 }
                 return JsonSerializer.Serialize(
-                    new QuickSettingsState("quick-settings", ReadOutputs(), ReadDisplays(), NvidiaOverlay.Read(), error),
+                    new QuickSettingsState("quick-settings", ReadOutputs(), ReadVolume(), ReadDisplays(), NvidiaOverlay.Read(), error),
                     QuickSettingsJson.Default.QuickSettingsState);
+            });
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    /// <summary>
+    /// Set the default output's volume. A held stick sends a stream of these, so requests that queue up collapse into
+    /// the latest one, and the page (which already shows the new level) only hears back when it fails.
+    /// </summary>
+    /// <returns>The state with an error for the page, or null when the volume was set.</returns>
+    public static async Task<string?> SetVolumeAsync(int level)
+    {
+        Interlocked.Exchange(ref _pendingVolume, Math.Clamp(level, 0, 100));
+        await _gate.WaitAsync();
+        try
+        {
+            var latest = Interlocked.Exchange(ref _pendingVolume, -1);
+            if (latest < 0)
+            {
+                return null; // An earlier request already set the latest level.
+            }
+            return await Task.Run(() =>
+            {
+                try
+                {
+                    AudioOutputs.SetVolume(latest);
+                    return null;
+                }
+                catch (Exception ex)
+                {
+                    Log.Error("quick settings: change the volume failed", ex);
+                    return JsonSerializer.Serialize(
+                        new QuickSettingsState(
+                            "quick-settings", ReadOutputs(), ReadVolume(), ReadDisplays(), NvidiaOverlay.Read(), "Couldn't change the volume."),
+                        QuickSettingsJson.Default.QuickSettingsState);
+                }
             });
         }
         finally
@@ -76,6 +125,19 @@ internal static class QuickSettings
         }
     }
 
+    private static AudioVolume? ReadVolume()
+    {
+        try
+        {
+            return AudioOutputs.ReadVolume();
+        }
+        catch (Exception ex)
+        {
+            Log.Error("quick settings: volume unreadable", ex);
+            return null;
+        }
+    }
+
     private static List<DisplayState> ReadDisplays()
     {
         try
@@ -91,9 +153,10 @@ internal static class QuickSettings
 }
 
 /// <summary>
-/// Sound outputs through Core Audio: IMMDeviceEnumerator lists active render endpoints, and IPolicyConfig (undocumented
-/// but stable since Windows 7; the Sound settings page and tools such as EarTrumpet use it) sets the default. COM is
-/// called through vtable slots, which works under Native AOT without generated interop.
+/// Sound outputs through Core Audio: IMMDeviceEnumerator lists active render endpoints, IPolicyConfig (undocumented
+/// but stable since Windows 7; the Sound settings page and tools such as EarTrumpet use it) sets the default, and the
+/// default's IAudioEndpointVolume is the volume the taskbar's slider shows. COM is called through vtable slots, which
+/// works under Native AOT without generated interop.
 /// </summary>
 internal static unsafe class AudioOutputs
 {
@@ -101,6 +164,7 @@ internal static unsafe class AudioOutputs
     private static readonly Guid _deviceEnumerator = new("A95664D2-9614-4F35-A746-DE8DB63617E6");
     private static readonly Guid _policyConfigClass = new("870AF99C-171D-4F9E-AF0D-E63DF40C2BC9");
     private static readonly Guid _policyConfig = new("F8679F50-850A-41CF-9C72-430F290290C8");
+    private static readonly Guid _endpointVolume = new("5CDF2C82-841E-4546-9722-0CF74078229A");
 
     private const int Render = 0; // eRender
     private const uint DeviceStateActive = 0x1;
@@ -115,17 +179,12 @@ internal static unsafe class AudioOutputs
         using var enumerator = Create(_deviceEnumeratorClass, _deviceEnumerator);
 
         string? defaultId = null;
-        nint defaultDevice;
-        // IMMDeviceEnumerator::GetDefaultAudioEndpoint(flow, role, device)
-        var hr = ((delegate* unmanaged[Stdcall]<nint, int, int, nint*, int>)Slot(enumerator, 4))(enumerator, Render, 1, &defaultDevice);
-        if (hr == 0)
+        using (var defaultDevice = DefaultDevice(enumerator))
         {
-            using var device = new ComPtr(defaultDevice);
-            defaultId = DeviceId(device);
-        }
-        else if (hr != ErrorNotFound)
-        {
-            Marshal.ThrowExceptionForHR(hr);
+            if (defaultDevice != 0)
+            {
+                defaultId = DeviceId(defaultDevice);
+            }
         }
 
         nint collection;
@@ -163,6 +222,80 @@ internal static unsafe class AudioOutputs
                 Check(((delegate* unmanaged[Stdcall]<nint, char*, int, int>)Slot(policy, 13))(policy, deviceId, role));
             }
         }
+    }
+
+    /// <summary>The default output's volume, or null when there is no default output.</summary>
+    public static AudioVolume? ReadVolume()
+    {
+        using var com = new ComScope();
+        using var volume = DefaultVolume();
+        if (volume == 0)
+        {
+            return null;
+        }
+        float level;
+        int muted;
+        // IAudioEndpointVolume::GetMasterVolumeLevelScalar(level), GetMute(muted)
+        Check(((delegate* unmanaged[Stdcall]<nint, float*, int>)Slot(volume, 9))(volume, &level));
+        Check(((delegate* unmanaged[Stdcall]<nint, int*, int>)Slot(volume, 15))(volume, &muted));
+        return new AudioVolume((int)MathF.Round(level * 100), muted != 0);
+    }
+
+    /// <summary>Set the default output's volume (0 to 100) and unmute it, as the taskbar's slider does.</summary>
+    public static void SetVolume(int level)
+    {
+        using var com = new ComScope();
+        using var volume = RequireDefaultVolume();
+        // IAudioEndpointVolume::SetMasterVolumeLevelScalar(level, eventContext)
+        Check(((delegate* unmanaged[Stdcall]<nint, float, Guid*, int>)Slot(volume, 7))(volume, Math.Clamp(level, 0, 100) / 100f, null));
+        SetMute(volume, false);
+    }
+
+    public static void SetMuted(bool muted)
+    {
+        using var com = new ComScope();
+        using var volume = RequireDefaultVolume();
+        SetMute(volume, muted);
+    }
+
+    // IAudioEndpointVolume::SetMute(muted, eventContext)
+    private static void SetMute(ComPtr volume, bool muted) =>
+        Check(((delegate* unmanaged[Stdcall]<nint, int, Guid*, int>)Slot(volume, 14))(volume, muted ? 1 : 0, null));
+
+    /// <summary>The default output for media (eMultimedia), or a null pointer when there is none.</summary>
+    private static ComPtr DefaultDevice(ComPtr enumerator)
+    {
+        nint device;
+        // IMMDeviceEnumerator::GetDefaultAudioEndpoint(flow, role, device)
+        var hr = ((delegate* unmanaged[Stdcall]<nint, int, int, nint*, int>)Slot(enumerator, 4))(enumerator, Render, 1, &device);
+        if (hr == ErrorNotFound)
+        {
+            return new ComPtr(0);
+        }
+        Check(hr);
+        return new ComPtr(device);
+    }
+
+    /// <summary>The default output's IAudioEndpointVolume, or a null pointer when there is no default output.</summary>
+    private static ComPtr DefaultVolume()
+    {
+        using var enumerator = Create(_deviceEnumeratorClass, _deviceEnumerator);
+        using var device = DefaultDevice(enumerator);
+        if (device == 0)
+        {
+            return new ComPtr(0);
+        }
+        var iid = _endpointVolume;
+        nint volume;
+        // IMMDevice::Activate(iid, context, activationParams, interface)
+        Check(((delegate* unmanaged[Stdcall]<nint, Guid*, uint, nint, nint*, int>)Slot(device, 3))(device, &iid, Native.ClsctxAll, 0, &volume));
+        return new ComPtr(volume);
+    }
+
+    private static ComPtr RequireDefaultVolume()
+    {
+        var volume = DefaultVolume();
+        return volume != 0 ? volume : throw new InvalidOperationException("There is no sound output.");
     }
 
     private static string DeviceId(ComPtr device)

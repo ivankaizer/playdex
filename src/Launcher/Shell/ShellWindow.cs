@@ -320,6 +320,13 @@ internal sealed partial class ShellWindow : Window
                 var outputId = message.GetProperty("id").GetString()!;
                 PostQuickSettings(() => AudioOutputs.SetDefault(outputId), "switch the sound output");
                 break;
+            case "volume":
+                _ = SetVolumeAsync(message.GetProperty("level").GetInt32());
+                break;
+            case "mute":
+                var muted = message.GetProperty("muted").GetBoolean();
+                PostQuickSettings(() => AudioOutputs.SetMuted(muted), muted ? "mute the sound" : "unmute the sound");
+                break;
             case "hdr":
                 var displayId = message.GetProperty("display").GetString()!;
                 var on = message.GetProperty("on").GetBoolean();
@@ -406,6 +413,15 @@ internal sealed partial class ShellWindow : Window
 
     private async Task PostQuickSettingsAsync(Action? change, string description) =>
         PostFromAnyThread(await QuickSettings.ApplyAsync(change, description));
+
+    /// <summary>The page shows the new volume already; it hears back only when setting it failed.</summary>
+    private async Task SetVolumeAsync(int level)
+    {
+        if (await QuickSettings.SetVolumeAsync(level) is { } failed)
+        {
+            PostFromAnyThread(failed);
+        }
+    }
 
     private void OnUiReady()
     {
