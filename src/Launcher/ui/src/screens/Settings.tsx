@@ -12,6 +12,7 @@ import {
   Power,
   RotateCw,
   UserRound,
+  Volume2,
 } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { focusScreenDefault } from "../nav/focus";
@@ -31,6 +32,7 @@ import {
   type UpdateView,
 } from "../host/desktop";
 import { HOME_ART, homeArt, nextHomeArt, setHomeArt } from "../homes/homeArt";
+import { setSoundsOn, soundsOn } from "../nav/sound";
 import { useStore } from "../nav/store";
 import { nextTheme, palette, PALETTES, setTheme, skin, SKINS } from "../theme";
 import "./desk.css";
@@ -178,6 +180,7 @@ function DesktopSettingsScreen({ state }: { state: DesktopState }) {
   const art = useStore(homeArt);
   const skinId = useStore(skin);
   const paletteId = useStore(palette);
+  const sounds = useStore(soundsOn);
 
   useLandOnDefault();
 
@@ -408,6 +411,9 @@ function DesktopSettingsScreen({ state }: { state: DesktopState }) {
             <Row label="Start with Windows" hint="In the tray, so backups and game launchers stay up to date.">
               <Switch on={startWithWindows} label="Start with Windows" onChange={changeStartWithWindows} />
             </Row>
+            <Row label="Navigation sounds" hint="Quiet clicks as you move around with a controller or the keyboard.">
+              <Switch on={sounds} label="Navigation sounds" onChange={setSoundsOn} />
+            </Row>
             <Row label="Full Screen Experience" hint={state.fse.message}>
               {fseAction ? (
                 <button
@@ -508,6 +514,7 @@ function BigPictureSettings({ state }: { state: DesktopState }) {
   const paletteId = useStore(palette);
   const skinOption = SKINS.find((o) => o.id === skinId);
   const paletteOption = PALETTES.find((o) => o.id === paletteId);
+  const sounds = useStore(soundsOn);
 
   useLandOnDefault();
 
@@ -553,6 +560,16 @@ function BigPictureSettings({ state }: { state: DesktopState }) {
               <span className="bp-row-text">
                 <span className="bp-row-name">Start with Windows</span>
                 <small>In the tray, so backups and game launchers stay up to date</small>
+              </span>
+              <span className="switch" aria-hidden>
+                <i />
+              </span>
+            </button>
+            <button className="bp-row" role="switch" aria-checked={sounds} data-nav data-kind="setting" onClick={() => setSoundsOn(!sounds)}>
+              <Volume2 aria-hidden />
+              <span className="bp-row-text">
+                <span className="bp-row-name">Navigation sounds</span>
+                <small>Quiet clicks as you move around</small>
               </span>
               <span className="switch" aria-hidden>
                 <i />

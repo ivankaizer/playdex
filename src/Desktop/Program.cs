@@ -155,10 +155,11 @@ internal sealed partial class App : Application
         // The app lives in the tray: closing the window releases it (and WebView2) but keeps running.
         DispatcherShutdownMode = DispatcherShutdownMode.OnExplicitShutdown;
         RecordExecutablePath(_store, _config);
+        // Autoplay without a gesture: navigation sounds play on controller input, which reaches the page as host messages.
         _environment = CoreWebView2Environment.CreateWithOptionsAsync(
             null,
             Path.Combine(Paths.DataDirectory, "WebView2-desktop"),
-            new CoreWebView2EnvironmentOptions { AdditionalBrowserArguments = "--disable-features=msSmartScreenProtection" }).AsTask();
+            new CoreWebView2EnvironmentOptions { AdditionalBrowserArguments = "--disable-features=msSmartScreenProtection --autoplay-policy=no-user-gesture-required" }).AsTask();
 
         var dispatcher = DispatcherQueue.GetForCurrentThread();
         _services = new ShellServices(_config, dispatcher);
