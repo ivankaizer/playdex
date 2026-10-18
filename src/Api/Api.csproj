@@ -17,6 +17,7 @@
     <PackageReference Include="Sentry.AspNetCore" />
     <PackageReference Include="SkiaSharp" />
     <PackageReference Include="SkiaSharp.NativeAssets.Linux" />
+    <PackageReference Include="System.Security.Cryptography.Pkcs" PrivateAssets="all" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\ServiceDefaults\ServiceDefaults.csproj" />
