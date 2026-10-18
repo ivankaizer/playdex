@@ -399,6 +399,12 @@ internal sealed partial class ShellWindow : Window
             case "open-steam":
                 OpenSteam();
                 break;
+            case "apps":
+                _ = PostAppsAsync();
+                break;
+            case "open-app":
+                _ = OpenAppAsync(message.GetProperty("id").GetString()!);
+                break;
             case "resume-game":
                 if (!GameWindows.Activate(_hwnd, _gameWindow, _nowPlaying?.ProcessId))
                 {
@@ -461,6 +467,27 @@ internal sealed partial class ShellWindow : Window
             // No handler for steam:// means Steam isn't installed.
             Log.Error($"could not open {uri}", ex);
             Post("""{"type":"open-steam-failed"}""");
+        }
+    }
+
+    /// <summary>The apps the user added for quick settings (<see cref="AppShortcuts"/>), with which are running.</summary>
+    private async Task PostAppsAsync()
+    {
+        // A copy: the desktop app changes the list on the UI thread.
+        var apps = _services.Config.Apps.ToList();
+        Post(await Task.Run(() => ShellApps.ListJson(apps)));
+    }
+
+    /// <summary>Open one of the apps. Only apps in the config, by id; the page never supplies a path.</summary>
+    private async Task OpenAppAsync(string appId)
+    {
+        var app = _services.Config.Apps.FirstOrDefault(a => a.Id == appId);
+        var error = app is null
+            ? "That app isn't in your apps anymore."
+            : await ShellApps.OpenAsync(_hwnd, app);
+        if (error is not null)
+        {
+            Post($$"""{"type":"open-app-failed","message":{{JsonSerializer.Serialize(error, HostJson.Default.String)}}}""");
         }
     }
 

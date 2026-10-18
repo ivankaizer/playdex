@@ -2,10 +2,12 @@ import {
   Activity,
   AppWindow,
   Check,
-  ExternalLink,
   Gamepad2,
   Gauge,
+  Globe,
   Headphones,
+  Joystick,
+  MessagesSquare,
   Monitor,
   Moon,
   Power,
@@ -18,11 +20,12 @@ import {
   VolumeX,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { closeQuickSettings, openSteam, showToast } from "../app-state";
+import { closeQuickSettings, openApp, openSteam, showToast } from "../app-state";
 import {
   inHost,
   onHostMessage,
   postToHost,
+  type AppView,
   type AudioOutput,
   type AudioVolume,
   type PowerAction,
@@ -46,6 +49,17 @@ const DEMO: QuickSettingsState = {
   displays: [{ id: "tv", name: "LG TV", hdrSupported: true, hdrOn: false, refreshRate: 60, refreshRates: [24, 30, 50, 60, 100, 120] }],
   fpsCounter: { hotkey: "Alt+R" },
 };
+
+const DEMO_APPS: AppView[] = [
+  { id: "discord", name: "Discord", kind: "discord", running: true },
+  { id: "browser", name: "Microsoft Edge", kind: "browser", running: false },
+];
+
+function AppIcon({ kind }: { kind: AppView["kind"] }) {
+  if (kind === "browser") return <Globe aria-hidden />;
+  if (kind.startsWith("discord")) return <MessagesSquare aria-hidden />;
+  return <AppWindow aria-hidden />;
+}
 
 const POWER: { action: PowerAction; label: string; armed: string; done: string; Icon: typeof Power }[] = [
   { action: "sleep", label: "Sleep", armed: "Sleep now?", done: "Going to sleep…", Icon: Moon },
@@ -189,12 +203,14 @@ function VolumeRow({
 }
 
 /**
- * Quick settings: the volume and the default sound output, HDR and refresh rate per display, the NVIDIA FPS counter,
- * switching between Big Picture and desktop mode, and sleep / restart / shut down. A panel over the current screen
- * (which is inert while it is open); B or Menu closes it. Power actions take a second press to confirm.
+ * Quick settings: apps to open (Steam, Discord, a browser: the Full Screen Experience has no taskbar to open them
+ * from), the volume and the default sound output, HDR and refresh rate per display, the NVIDIA FPS counter, switching
+ * between Big Picture and desktop mode, and sleep / restart / shut down. A panel over the current screen (which is
+ * inert while it is open); B or Menu closes it. Power actions take a second press to confirm.
  */
 export function QuickSettings() {
   const [state, setState] = useState<QuickSettingsState | null>(inHost ? null : DEMO);
+  const [apps, setApps] = useState<AppView[]>(inHost ? [] : DEMO_APPS);
   const [armed, setArmed] = useState<PowerAction | null>(null);
   const focused = useRef(false);
   const kind = useStore(focusedKind);
@@ -205,11 +221,16 @@ export function QuickSettings() {
         closeQuickSettings();
         return;
       }
+      if (m.type === "apps") {
+        setApps(m.apps);
+        return;
+      }
       if (m.type !== "quick-settings") return;
       setState({ outputs: m.outputs, volume: m.volume, displays: m.displays, fpsCounter: m.fpsCounter });
       if (m.error) showToast(m.error);
     });
     postToHost({ type: "quick-settings" });
+    postToHost({ type: "apps" });
     return off;
   }, []);
 
@@ -320,6 +341,45 @@ export function QuickSettings() {
       <div className="qs-scrim" onClick={closeQuickSettings} />
       <aside className="qs" data-scroll="y">
         <span className="kicker">Quick settings</span>
+
+        <section className="qs-section" aria-labelledby="qs-apps">
+          <h2 id="qs-apps" className="label">
+            Apps
+          </h2>
+          {/* Entering the row lands on its first app. A running app is switched to rather than opened again. */}
+          <div className="qs-apps" data-nav-group="qs-apps" data-nav-entry="first">
+            <button
+              className="qs-app"
+              data-nav
+              data-kind="qs-app"
+              aria-label={isDesktop ? "Open Steam" : "Open Steam Big Picture"}
+              onClick={() => {
+                closeQuickSettings();
+                openSteam();
+              }}
+            >
+              <Joystick aria-hidden />
+              <span className="qs-app-name">Steam</span>
+            </button>
+            {apps.map((a) => (
+              <button
+                key={a.id}
+                className="qs-app"
+                data-nav
+                data-kind="qs-app"
+                aria-label={a.running ? `${a.name}, running. Switch to it` : `Open ${a.name}`}
+                onClick={() => {
+                  closeQuickSettings();
+                  openApp(a.id, a.name);
+                }}
+              >
+                <AppIcon kind={a.kind} />
+                <span className="qs-app-name">{a.name}</span>
+                {a.running && <span className="live-dot qs-app-dot" aria-hidden />}
+              </button>
+            ))}
+          </div>
+        </section>
 
         <section className="qs-section" aria-labelledby="qs-sound">
           <h2 id="qs-sound" className="label">
@@ -474,22 +534,6 @@ export function QuickSettings() {
                 <small>{isDesktop ? "Full screen, controller first" : "A window and the tray, mouse first"}</small>
               </span>
               <span className="qs-row-action">Switch</span>
-            </button>
-            <button
-              className="qs-row"
-              data-nav
-              data-kind="qs-steam"
-              onClick={() => {
-                closeQuickSettings();
-                openSteam();
-              }}
-            >
-              <ExternalLink aria-hidden />
-              <span className="qs-row-text">
-                <span className="qs-row-name">Steam</span>
-                <small>{isDesktop ? "The Steam window" : "Steam Big Picture"}</small>
-              </span>
-              <span className="qs-row-action">Open</span>
             </button>
           </div>
         </section>

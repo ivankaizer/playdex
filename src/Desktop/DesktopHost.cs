@@ -23,6 +23,10 @@ internal sealed record DesktopGame(
     bool DailyBackup,
     BackupView Backup);
 
+/// <param name="Path">What starts it on this PC (Discord's updater, the default browser); empty when it isn't here.</param>
+/// <param name="Available">It is on this PC, so Big Picture lists it.</param>
+internal sealed record DesktopApp(string Id, string Name, string Kind, string Path, string LaunchOptions, bool Available);
+
 internal sealed record DesktopSettings(
     string BaseUrl, bool ApiKeySet, string Platform, bool SteamGridDbKeySet, string LudusaviPath, bool StartWithWindows);
 
@@ -34,6 +38,8 @@ internal sealed record FseView(string State, string Message);
 internal sealed record DesktopState(
     string Version,
     IReadOnlyList<DesktopGame> Games,
+    IReadOnlyList<DesktopApp> Apps,
+    IReadOnlyList<DesktopApp> SuggestedApps,
     DesktopSettings Settings,
     UpdateView Update,
     FseView Fse,
@@ -177,6 +183,15 @@ internal sealed partial class DesktopHost : IDisposable
                 return Json(await BackupAsync(Text(parameters, "gameId")));
             case "game.dailyBackup":
                 return await SetDailyBackupAsync(Text(parameters, "gameId"), parameters.TryGetProperty("enabled", out var on) && on.ValueKind == JsonValueKind.True);
+            case "app.add":
+                return await AddAppAsync();
+            case "app.addFound":
+                return await ChangeAppsAsync("added", Text(parameters, "kind"), kind => AppShortcuts.AddDetected(_config, kind));
+            case "app.update":
+                return await ChangeAppsAsync("saved", Text(parameters, "id"), id =>
+                    AppShortcuts.Change(_config, id, Text(parameters, "name"), OptionalText(parameters, "launchOptions")));
+            case "app.remove":
+                return await ChangeAppsAsync("removed", Text(parameters, "id"), id => AppShortcuts.Remove(_config, id));
             case "settings.save":
                 return await SaveSettingsAsync(parameters);
             case "settings.startWithWindows":
@@ -244,6 +259,22 @@ internal sealed partial class DesktopHost : IDisposable
             }
         }
         ReloadLibrarySoon();
+        return StateJson();
+    }
+
+    /// <summary>Add an app for Big Picture's quick settings from its .exe.</summary>
+    private async Task<string> AddAppAsync()
+    {
+        var path = FilePicker.PickFile(WindowHandle, "Add an app", ("Apps (*.exe)", "*.exe"));
+        return path is null ? StateJson() : await ChangeAppsAsync("added", path, p => AppShortcuts.AddExecutable(_config, p));
+    }
+
+    /// <summary>Change the apps list and save it. Big Picture reads it each time quick settings opens.</summary>
+    private async Task<string> ChangeAppsAsync(string verb, string subject, Action<string> change)
+    {
+        change(subject);
+        await _store.SaveAsync(_config);
+        Log.Info($"desktop: app {verb} ({subject})");
         return StateJson();
     }
 
@@ -419,6 +450,8 @@ internal sealed partial class DesktopHost : IDisposable
                 g.Backup.DailyEnabled,
                 Backup(g, _backups.GetState(g.GameId))))
             .ToList();
+        var apps = _config.Apps.Select(App).ToList();
+        var suggested = AppShortcuts.Suggestions(_config).Select(App).ToList();
         var settings = new DesktopSettings(
             _config.Api.BaseUrl,
             !string.IsNullOrWhiteSpace(_config.Api.ApiKey),
@@ -427,8 +460,15 @@ internal sealed partial class DesktopHost : IDisposable
             _config.Ludusavi.ExecutablePath,
             StartsWithWindows());
         return new DesktopState(
-            Version, games, settings, Updates?.View ?? new UpdateView("unavailable", "This build of Playdex doesn't update itself (installed builds do).", null),
+            Version, games, apps, suggested, settings, Updates?.View ?? new UpdateView("unavailable", "This build of Playdex doesn't update itself (installed builds do).", null),
             Fse?.View ?? new FseView("unavailable", "Not available in this build."), _config.Shell.Mode, _config.Storage.LauncherDirectory, _runExecutable is not null);
+    }
+
+    private static DesktopApp App(AppShortcut app)
+    {
+        var resolved = AppShortcuts.Resolve(app);
+        return new DesktopApp(
+            app.Id, app.Name, app.Kind, resolved?.ExecutablePath ?? app.ExecutablePath ?? "", LaunchOptionsCodec.Format(app.Arguments), resolved is not null);
     }
 
     /// <summary>The app's self-updater (set by the app; null when this build can't update itself).</summary>
