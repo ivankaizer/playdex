@@ -41,16 +41,45 @@
   animation: pulse 1.4s ease-in-out infinite;
 }
 
-/* Game list */
-.desk-list {
-  list-style: none;
+/* Games, then apps, in one scroll */
+.desk-body {
   margin: -0.4rem;
   padding: 0.4rem;
   display: grid;
   align-content: start;
-  gap: 0.7rem;
+  gap: 2rem;
   overflow-y: auto;
   scrollbar-width: thin;
+}
+.desk-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.7rem;
+}
+.desk-apps {
+  display: grid;
+  gap: 1rem;
+}
+.desk-note {
+  margin: 0.35rem 0 0;
+  max-width: 40rem;
+  font-size: 0.72rem;
+  line-height: 1.5;
+  color: rgb(var(--ink-2));
+}
+.desk-app-icon {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 1;
+  background: rgb(var(--tile));
+  border: 1px solid var(--tile-border);
+}
+.desk-app-icon svg {
+  width: 1.2rem;
+  height: 1.2rem;
+  color: rgb(var(--muted));
 }
 .desk-row {
   padding: 0.8rem 1rem;

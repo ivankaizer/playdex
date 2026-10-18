@@ -26,6 +26,10 @@ export type HostMessage =
   | { type: "close-failed"; message: string }
   /** A {type:"open-steam"} found no Steam to open. */
   | { type: "open-steam-failed" }
+  /** The apps quick settings offers, those on this PC; sent after every {type:"apps"}. */
+  | { type: "apps"; apps: AppView[] }
+  /** A {type:"open-app"} couldn't open the app; `message` says why. */
+  | { type: "open-app-failed"; message: string }
   /** A newer Playdex summary (data/playdex.ts); null when the API key was removed. */
   | { type: "playdex-summary"; summary: unknown }
   /** The answer to {type:"playdex-recap"} (data/recap.ts); null offline or without a key. */
@@ -57,6 +61,15 @@ export type QuickSettingsState = {
 };
 export type PowerAction = "sleep" | "restart" | "shutdown";
 
+/** An app Big Picture opens (Discord, the default browser, an .exe added in Manage). Not a game: no sessions. */
+export type AppView = {
+  id: string;
+  name: string;
+  kind: "discord" | "discord-ptb" | "discord-canary" | "browser" | "executable";
+  /** Running now: opening it switches to its window. */
+  running: boolean;
+};
+
 export type UiMessage =
   | { type: "ack"; id: number; presented?: boolean }
   | { type: "ready" }
@@ -70,6 +83,10 @@ export type UiMessage =
   | { type: "close-game"; gameId: string }
   /** Open Steam: Big Picture in Big Picture mode, the Steam window in desktop mode. */
   | { type: "open-steam" }
+  /** List the apps; the host answers with an "apps" message. */
+  | { type: "apps" }
+  /** Open an app from the list, by id (the host starts only apps in its config), or switch to it when it runs. */
+  | { type: "open-app"; id: string }
   /** Read the quick settings state; the host answers with a "quick-settings" message, as it does for the rest. */
   | { type: "quick-settings" }
   | { type: "audio-output"; id: string }

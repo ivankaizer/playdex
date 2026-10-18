@@ -1,11 +1,25 @@
-import { Archive, FolderOpen, Gamepad2, Play, Plus, RefreshCw, Settings2, Trash2 } from "lucide-react";
+import {
+  AppWindow,
+  Archive,
+  ExternalLink,
+  FolderOpen,
+  Gamepad2,
+  Globe,
+  MessagesSquare,
+  Play,
+  Plus,
+  RefreshCw,
+  Settings2,
+  Trash2,
+} from "lucide-react";
 import { useEffect, useState } from "react";
-import { launch, showToast } from "../app-state";
+import { launch, openApp, showToast } from "../app-state";
 import { Cover } from "../components/shared";
 import { gameById, type Game } from "../data/games";
 import {
   desktopState,
   rpc,
+  type DesktopApp,
   type DesktopGame,
   type MessageView,
   type PlatformOption,
@@ -27,7 +41,8 @@ function failed(error: unknown) {
 
 /**
  * The games added to Playdex (the WinForms Wrapper's list): play, edit their settings, add them to Steam with
- * SteamGridDB art, back up their saves with Ludusavi, remove them. Each game's settings open inline under it.
+ * SteamGridDB art, back up their saves with Ludusavi, remove them. Each game's settings open inline under it. Below
+ * them, the apps Big Picture opens from quick settings.
  */
 export function Manage() {
   const state = useStore(desktopState);
@@ -88,31 +103,34 @@ export function Manage() {
         </div>
       </header>
 
-      {state.games.length === 0 ? (
-        <div className="card desk-empty">
-          <Gamepad2 aria-hidden />
-          <h2>No games added yet</h2>
-          <p>
-            Add a game's .exe to track its sessions, start it from here or from Steam, and back up its saves. Steam games
-            installed on this PC are in the Library already.
-          </p>
-        </div>
-      ) : (
-        <ul className="desk-list" data-scroll="y">
-          {state.games.map((g) => (
-            <li key={g.gameId}>
-              <GameRow
-                game={g}
-                busy={busy}
-                editing={editing === g.gameId}
-                onEdit={() => setEditing(editing === g.gameId ? null : g.gameId)}
-                onClose={() => setEditing(null)}
-                run={run}
-              />
-            </li>
-          ))}
-        </ul>
-      )}
+      <div className="desk-body" data-scroll="y">
+        {state.games.length === 0 ? (
+          <div className="card desk-empty">
+            <Gamepad2 aria-hidden />
+            <h2>No games added yet</h2>
+            <p>
+              Add a game's .exe to track its sessions, start it from here or from Steam, and back up its saves. Steam
+              games installed on this PC are in the Library already.
+            </p>
+          </div>
+        ) : (
+          <ul className="desk-list">
+            {state.games.map((g) => (
+              <li key={g.gameId}>
+                <GameRow
+                  game={g}
+                  busy={busy}
+                  editing={editing === g.gameId}
+                  onEdit={() => setEditing(editing === g.gameId ? null : g.gameId)}
+                  onClose={() => setEditing(null)}
+                  run={run}
+                />
+              </li>
+            ))}
+          </ul>
+        )}
+        <AppsSection apps={state.apps} suggested={state.suggestedApps} busy={busy} run={run} />
+      </div>
     </main>
   );
 }
@@ -299,6 +317,227 @@ function GameEditor({ game, onClose }: { game: DesktopGame; onClose: () => void 
       <label className="field field-check">
         <input type="checkbox" checked={dailyBackup} onChange={(e) => setDailyBackup(e.target.checked)} data-nav data-kind="field" />
         <span>Back up saves daily with Ludusavi</span>
+      </label>
+      <div className="desk-form-actions">
+        <button type="submit" className="btn btn-primary" disabled={saving} data-nav data-kind="desk">
+          Save
+        </button>
+        <button type="button" className="btn btn-outline" onClick={onClose} data-nav data-kind="desk">
+          Cancel
+        </button>
+      </div>
+    </form>
+  );
+}
+
+function AppIcon({ kind }: { kind: string }) {
+  if (kind === "browser") return <Globe aria-hidden />;
+  if (kind.startsWith("discord")) return <MessagesSquare aria-hidden />;
+  return <AppWindow aria-hidden />;
+}
+
+/**
+ * The apps Big Picture opens from quick settings, for the Full Screen Experience, which has no taskbar or Start menu.
+ * Discord and the default browser are listed by themselves when they are on this PC; any .exe can be added.
+ */
+function AppsSection({
+  apps,
+  suggested,
+  busy,
+  run,
+}: {
+  apps: DesktopApp[];
+  suggested: DesktopApp[];
+  busy: string | null;
+  run: (key: string, work: () => Promise<unknown>) => Promise<void>;
+}) {
+  const [editing, setEditing] = useState<string | null>(null);
+  return (
+    <section className="desk-apps" aria-labelledby="desk-apps-title">
+      <header className="desk-head">
+        <div>
+          <span className="kicker">Quick settings in Big Picture</span>
+          <h2 id="desk-apps-title" className="desk-title">
+            Apps
+          </h2>
+          <p className="desk-note">
+            Open Discord, a browser or any other app from quick settings (Menu), since the Full Screen Experience has no
+            taskbar. Apps aren't games: Playdex doesn't record them.
+          </p>
+        </div>
+        <div className="desk-actions" data-nav-group="apps-actions">
+          {suggested.map((a) => (
+            <button
+              key={a.kind}
+              className="btn btn-outline"
+              data-nav
+              data-kind="desk"
+              disabled={busy === `app-found:${a.kind}`}
+              title={a.path}
+              onClick={() => run(`app-found:${a.kind}`, () => rpc("app.addFound", { kind: a.kind }))}
+            >
+              <Plus aria-hidden /> {a.name}
+            </button>
+          ))}
+          <button
+            className="btn btn-primary"
+            data-nav
+            data-kind="desk"
+            disabled={busy === "app-add"}
+            onClick={() => run("app-add", () => rpc("app.add"))}
+          >
+            <Plus aria-hidden /> Add an app
+          </button>
+        </div>
+      </header>
+      {apps.length === 0 ? (
+        <p className="desk-note">No apps yet. Add one from its .exe.</p>
+      ) : (
+        <ul className="desk-list">
+          {apps.map((a) => (
+            <li key={a.id}>
+              <AppRow
+                app={a}
+                editing={editing === a.id}
+                onEdit={() => setEditing(editing === a.id ? null : a.id)}
+                onClose={() => setEditing(null)}
+                run={run}
+              />
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+function AppRow({
+  app,
+  editing,
+  onEdit,
+  onClose,
+  run,
+}: {
+  app: DesktopApp;
+  editing: boolean;
+  onEdit: () => void;
+  onClose: () => void;
+  run: (key: string, work: () => Promise<unknown>) => Promise<void>;
+}) {
+  const [armed, setArmed] = useState(false);
+
+  useEffect(() => {
+    if (!armed) return;
+    const t = window.setTimeout(() => setArmed(false), ARM_MS);
+    return () => window.clearTimeout(t);
+  }, [armed]);
+
+  const remove = () => {
+    if (!armed) {
+      setArmed(true);
+      return;
+    }
+    setArmed(false);
+    void run(`app-remove:${app.id}`, () => rpc("app.remove", { id: app.id }));
+  };
+
+  const origin =
+    app.kind === "browser" ? "Your default browser" : app.kind === "executable" ? "Added from its .exe" : "Found on this PC";
+
+  return (
+    <article className="card desk-row" data-editing={editing ? "" : undefined}>
+      <div className="desk-row-main" data-nav-group={`app-${app.id}`} data-nav-entry="first">
+        <div className="desk-thumb desk-app-icon">
+          <AppIcon kind={app.kind} />
+        </div>
+        <div className="desk-row-text">
+          <h3 className="desk-row-title">{app.name}</h3>
+          <span className="desk-row-sub">
+            {origin}
+            {app.launchOptions ? ` · ${app.launchOptions}` : ""}
+          </span>
+          <span className="desk-row-path" title={app.path}>
+            {app.available ? app.path : app.path ? `Missing: ${app.path}` : "Not installed on this PC"}
+          </span>
+        </div>
+        <div className="desk-row-actions">
+          <button
+            className="btn btn-primary"
+            data-nav
+            data-kind="desk"
+            disabled={!app.available}
+            onClick={() => openApp(app.id, app.name)}
+          >
+            <ExternalLink aria-hidden /> Open
+          </button>
+          <button className="btn btn-outline" data-nav data-kind="desk" aria-expanded={editing} onClick={onEdit}>
+            <Settings2 aria-hidden /> Settings
+          </button>
+          <button
+            className="btn btn-outline desk-danger"
+            data-nav
+            data-kind="desk"
+            data-armed={armed ? "" : undefined}
+            aria-label={armed ? `Remove ${app.name}? Press again to confirm` : `Remove ${app.name}`}
+            onClick={remove}
+          >
+            <Trash2 aria-hidden /> {armed ? "Remove?" : "Remove"}
+          </button>
+        </div>
+      </div>
+      {editing && <AppEditor app={app} onClose={onClose} />}
+    </article>
+  );
+}
+
+function AppEditor({ app, onClose }: { app: DesktopApp; onClose: () => void }) {
+  const [name, setName] = useState(app.name);
+  const [launchOptions, setLaunchOptions] = useState(app.launchOptions);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    // Start typing in the first field.
+    const t = window.setTimeout(() => focusEl(document.getElementById(`app-name-${app.id}`)));
+    return () => window.clearTimeout(t);
+  }, [app.id]);
+
+  async function save() {
+    setSaving(true);
+    try {
+      await rpc("app.update", { id: app.id, name, launchOptions });
+      showToast(`Saved ${name}.`);
+      onClose();
+    } catch (error) {
+      failed(error);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <form
+      className="desk-form"
+      data-nav-group={`app-edit-${app.id}`}
+      onSubmit={(e) => {
+        e.preventDefault();
+        void save();
+      }}
+    >
+      <label className="field">
+        <span className="label">Name</span>
+        <input id={`app-name-${app.id}`} className="text" value={name} onChange={(e) => setName(e.target.value)} data-nav data-kind="field" />
+      </label>
+      <label className="field">
+        <span className="label">Launch options</span>
+        <input
+          className="text"
+          value={launchOptions}
+          placeholder="Optional"
+          onChange={(e) => setLaunchOptions(e.target.value)}
+          data-nav
+          data-kind="field"
+        />
+        <small>Used when the app starts. An app that is already running is switched to instead.</small>
       </label>
       <div className="desk-form-actions">
         <button type="submit" className="btn btn-primary" disabled={saving} data-nav data-kind="desk">
