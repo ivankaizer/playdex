@@ -148,6 +148,12 @@ function revealIn(sc: HTMLElement, el: HTMLElement) {
   } else if (sc.dataset.scrollCenter !== undefined) {
     // Grids keep the focused row centred, so the rows above and below stay in view.
     sc.scrollBy({ top: r.top + r.height / 2 - (c.top + c.height / 2), behavior: "smooth" });
+  } else if (el === sc.querySelector("[data-nav]")) {
+    // The first and last items take a list to its ends, so a heading above them, or rows below that are not controls
+    // (Big Picture's status), come into view.
+    sc.scrollTo({ top: 0, behavior: "smooth" });
+  } else if (el === Array.from(sc.querySelectorAll("[data-nav]")).at(-1)) {
+    sc.scrollTo({ top: sc.scrollHeight, behavior: "smooth" });
   } else {
     if (r.top < c.top + pad) sc.scrollBy({ top: r.top - c.top - pad, behavior: "smooth" });
     else if (r.bottom > c.bottom - pad) sc.scrollBy({ top: r.bottom - c.bottom + pad, behavior: "smooth" });
