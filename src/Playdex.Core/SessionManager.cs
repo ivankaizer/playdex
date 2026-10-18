@@ -33,6 +33,18 @@ public sealed class SessionManager(
         }
     }
 
+    /// <summary>A game launched here is starting or running.</summary>
+    public bool HasSession
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _active is not null;
+            }
+        }
+    }
+
     /// <summary>The game launched here, once it runs; null before that and after it exits.</summary>
     public RunningGame? Current
     {

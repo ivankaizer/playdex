@@ -28,7 +28,8 @@ public sealed partial class LibraryJson : JsonSerializerContext;
 
 /// <summary>
 /// The launcher's library: installed Steam games plus games added through the Playdex Wrapper (the install's config).
-/// Read from disk once at startup (a few small files), off the UI thread; the page gets it before its scripts run.
+/// Read from disk (a few small files) at startup and again when the window comes back, off the UI thread; the page gets
+/// it before its scripts run.
 /// </summary>
 public static class Library
 {
@@ -97,6 +98,13 @@ public static class Library
 
     public static string ToJson(IReadOnlyDictionary<string, LibraryGame> games) =>
         JsonSerializer.Serialize(games.Values.ToList(), LibraryJson.Default.ListLibraryGame);
+
+    /// <summary>
+    /// Whether two scans hold the same games. A newer last-played time alone is no change: the page follows play itself.
+    /// </summary>
+    public static bool SameGames(IReadOnlyDictionary<string, LibraryGame> a, IReadOnlyDictionary<string, LibraryGame> b) =>
+        a.Count == b.Count
+        && a.All(entry => b.TryGetValue(entry.Key, out var other) && other with { LastPlayed = entry.Value.LastPlayed } == entry.Value);
 
     /// <summary>
     /// The games added to Playdex whose executable is on this PC. Each is started directly; its generated launcher
