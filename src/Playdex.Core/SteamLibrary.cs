@@ -51,7 +51,7 @@ public static partial class SteamLibrary
                         || _tools.Contains(appId)
                         || !int.TryParse(values.GetValueOrDefault("StateFlags"), out var flags)
                         || (flags & FullyInstalled) == 0
-                        || values.GetValueOrDefault("name") is not { Length: > 0 } name
+                        || GameName(values) is not { } name
                         || !seen.Add(appId))
                     {
                         continue;
@@ -161,8 +161,22 @@ public static partial class SteamLibrary
         }
     }
 
+    /// <summary>
+    /// The manifest's name, or its install folder when the name is missing or the "appid_&lt;appid&gt;" placeholder
+    /// Steam writes before it has the app's info (copied-in installs, some family-shared apps).
+    /// </summary>
+    internal static string? GameName(IReadOnlyDictionary<string, string> manifest)
+    {
+        var name = manifest.GetValueOrDefault("name");
+        if (name is { Length: > 0 } && !PlaceholderName().IsMatch(name))
+        {
+            return name;
+        }
+        return manifest.GetValueOrDefault("installdir") is { Length: > 0 } installDir ? installDir : null;
+    }
+
     /// <summary>Top-level "key" "value" pairs of a Valve KeyValues file; the first occurrence wins.</summary>
-    private static Dictionary<string, string> KeyValues(string text)
+    internal static Dictionary<string, string> KeyValues(string text)
     {
         var values = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         foreach (Match m in Pair().Matches(text))
@@ -171,6 +185,9 @@ public static partial class SteamLibrary
         }
         return values;
     }
+
+    [GeneratedRegex("""^appid_\d+$""")]
+    private static partial Regex PlaceholderName();
 
     [GeneratedRegex("""^\s*"path"\s+"((?:[^"\\]|\\.)*)"\s*$""", RegexOptions.Multiline)]
     private static partial Regex PathEntry();
