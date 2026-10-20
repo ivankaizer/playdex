@@ -138,6 +138,81 @@ public sealed class PollingSessionTimeoutTests(PostgresFixture postgres)
         }
     }
 
+    [Fact]
+    public async Task StartSessionPublishesSessionStarted()
+    {
+        if (!postgres.IsConfigured) return;
+
+        await using var db = CreateDb();
+        var now = DateTimeOffset.UtcNow;
+        var suffix = Guid.NewGuid().ToString("n");
+        var user = new User
+        {
+            Email = $"session-start-{suffix}@example.test",
+            CreatedAt = now,
+            UpdatedAt = now,
+        };
+        var game = new Game
+        {
+            Title = "Start Test",
+            CreatedAt = now,
+            UpdatedAt = now,
+        };
+        db.AddRange(user, game);
+        await db.SaveChangesAsync();
+
+        var integration = new Integration
+        {
+            UserId = user.Id,
+            Type = IntegrationType.Api,
+            ApiKey = $"start-{suffix}",
+            Active = true,
+            CreatedAt = now,
+            UpdatedAt = now,
+        };
+        db.Integrations.Add(integration);
+        await db.SaveChangesAsync();
+
+        try
+        {
+            var recorder = new RecordingSessionStartedHandler();
+            await using var eventServices = new ServiceCollection()
+                .AddSingleton(recorder)
+                .AddScoped<IEventSubscriber<SessionStarted>>(services =>
+                    services.GetRequiredService<RecordingSessionStartedHandler>())
+                .BuildServiceProvider();
+            var eventBus = new EventBus(
+                eventServices.GetRequiredService<IServiceScopeFactory>(),
+                NullLogger<EventBus>.Instance);
+            var service = new ApiCaptureService(
+                new ApiCaptureRepository(db),
+                db,
+                new FixedGameResolver(game.Id),
+                eventBus,
+                new PosterUrls(Options.Create(new PostersOptions())),
+                NullLogger<ApiCaptureService>.Instance);
+
+            var response = await service.StartSession(
+                integration.ApiKey, "Start Test", "start-test", null, "steam", CancellationToken.None);
+
+            var startedEvent = Assert.Single(recorder.Events);
+            Assert.NotNull(response);
+            Assert.Equal(response.SessionId, startedEvent.SessionId);
+            Assert.Equal(integration.Id, startedEvent.CredentialId);
+            Assert.Equal(game.Id, startedEvent.GameId);
+        }
+        finally
+        {
+            db.ChangeTracker.Clear();
+            db.PlaySessions.RemoveRange(
+                await db.PlaySessions.Where(row => row.IntegrationId == integration.Id).ToListAsync());
+            db.Integrations.Remove(integration);
+            db.Users.Remove(user);
+            db.Games.Remove(game);
+            await db.SaveChangesAsync();
+        }
+    }
+
     private PlaydexDbContext CreateDb() => new(
         new DbContextOptionsBuilder<PlaydexDbContext>()
             .UseNpgsql(
@@ -170,6 +245,23 @@ public sealed class PollingSessionTimeoutTests(PostgresFixture postgres)
             Events.Add(domainEvent);
             return Task.CompletedTask;
         }
+    }
+
+    private sealed class RecordingSessionStartedHandler : IEventSubscriber<SessionStarted>
+    {
+        public List<SessionStarted> Events { get; } = [];
+
+        public Task Handle(SessionStarted domainEvent, CancellationToken ct)
+        {
+            Events.Add(domainEvent);
+            return Task.CompletedTask;
+        }
+    }
+
+    private sealed class FixedGameResolver(long gameId) : IGameResolver
+    {
+        public Task<GameResolution> Resolve(GameResolutionRequest request, CancellationToken ct) =>
+            Task.FromResult(new GameResolution(gameId, null, false));
     }
 
     private sealed class UnusedGameResolver : IGameResolver

@@ -75,6 +75,7 @@ public sealed partial class ApiCaptureService(
         var sessionId = await repository.InsertActivePlaySession(credential, insertedGameId, platformId, now, ct);
 
         await tx.CommitAsync(ct);
+        await SafePublish(new SessionStarted(sessionId, credential.Id, insertedGameId, now), ct);
         return new ApiSessionStartResponseDto(sessionId);
     }
 
