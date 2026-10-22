@@ -79,7 +79,7 @@ public static class ProvidersEndpoints
             await result.ExecuteAsync(http);
         });
 
-        api.MapPost("/api/key", GetApiKey).RequireAuthorization();
+        api.MapPost("/key", GetApiKey).RequireAuthorization();
     }
 
     private static async Task<IResult> ListProviders(

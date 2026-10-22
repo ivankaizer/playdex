@@ -246,13 +246,13 @@ describe("SettingsPage", () => {
       providers = [steam, app];
       return Promise.resolve({ apiKey: "plx_new" });
     });
-    routeApi({ "GET /providers": () => Promise.resolve({ providers }), "POST /api/key": post });
+    routeApi({ "GET /providers": () => Promise.resolve({ providers }), "POST /key": post });
     renderPage();
 
     fireEvent.click(await screen.findByRole("button", { name: "Create API key" }));
 
     expect(await screen.findByLabelText("API key")).toHaveValue("plx_new");
-    expect(post).toHaveBeenCalledWith("/api/key", expect.objectContaining({ method: "POST" }));
+    expect(post).toHaveBeenCalledWith("/key", expect.objectContaining({ method: "POST" }));
     expect(screen.queryByRole("button", { name: "Create API key" })).toBeNull();
   });
 });
