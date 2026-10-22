@@ -2,7 +2,6 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Text.Json;
 using Playdex.Persistence;
-using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Xunit;
 
@@ -17,7 +16,7 @@ public sealed class ApiCapturePlatformCatalogTests(PostgresFixture postgres)
         if (!postgres.IsConfigured) return;
 
         ConfigureHost();
-        await using var factory = new WebApplicationFactory<Program>();
+        await using var factory = new PlaydexApiFactory();
         using var client = factory.CreateClient();
         Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/api/capture/platforms")).StatusCode);
 
@@ -94,7 +93,6 @@ public sealed class ApiCapturePlatformCatalogTests(PostgresFixture postgres)
         Environment.SetEnvironmentVariable(
             "Auth__JwtSecret",
             "platform-catalog-integration-secret-at-least-thirty-two-bytes");
-        Environment.SetEnvironmentVariable("POLL_INTERVAL_SECONDS", "3600");
     }
 
     private PlaydexDbContext CreateDb() => new(
