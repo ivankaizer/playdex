@@ -1,29 +1,56 @@
 name: Build Windows apps
 
-# Builds and tests the Windows apps on every pull request and on main: Playdex.Core (with a real generated launcher
-# from the published Playdex.Run), the desktop app and the Full Screen Experience launcher. The WinUI projects can't
-# build on Linux, so they are not in Playdex.sln and build here instead of in test.yaml.
+# Builds and tests the Windows apps on pull requests and pushes to main that touch them: Playdex.Core (with a real
+# generated launcher from the published Playdex.Run), the desktop app and the Full Screen Experience launcher. The
+# WinUI projects can't build on Linux, so they are not in Playdex.sln and build here instead of in test.yaml.
+# Windows minutes count double against the GitHub Actions quota, hence the path filter.
 
 on:
   push:
     branches:
       - main
-    paths:
+    paths: &paths
       - "src/Playdex.Core/**"
       - "src/Playdex.Run/**"
       - "src/Playdex.Setup/**"
       - "src/Desktop/**"
       - "src/Launcher/**"
       - "test/Playdex.Core.Tests/**"
+      # Playdex.Core.Tests runs the API in process.
+      - "src/Api/**"
+      - "src/Persistence/**"
+      - "src/ServiceDefaults/**"
       - "Directory.Packages.props"
       - "Directory.Build.props"
+      - "global.json"
+      - ".github/workflows/build-windows.yaml"
+      - ".github/workflows/windows-runner.yaml"
   pull_request:
+    paths: *paths
   workflow_dispatch:
+    inputs:
+      runner:
+        description: Where to build (auto is the PC when its runner is online)
+        type: choice
+        options: [auto, pc, github]
+        default: auto
+
+concurrency:
+  group: windows-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
+  runner:
+    uses: ./.github/workflows/windows-runner.yaml
+    with:
+      choice: ${{ inputs.runner || 'auto' }}
+    secrets:
+      RUNNERS_TOKEN: ${{ secrets.RUNNERS_TOKEN }}
+
   build:
-    name: Build and test the Windows apps
-    runs-on: windows-latest
+    name: Build and test the Windows apps (${{ needs.runner.outputs.where }})
+    needs: runner
+    runs-on: ${{ fromJSON(needs.runner.outputs.runner) }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -32,6 +59,14 @@ jobs:
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'
+        env:
+          # The PC's runner service can't write to the default C:\Program Files\dotnet.
+          DOTNET_INSTALL_DIR: ${{ runner.environment == 'self-hosted' && format('{0}\dotnet', runner.tool_cache) || '' }}
+
+      # Native AOT links with MSVC, which it finds through vswhere; windows-latest has vswhere on PATH already.
+      - name: Put vswhere on PATH
+        if: runner.environment == 'self-hosted'
+        run: Add-Content $env:GITHUB_PATH "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer"
 
       - name: Set up Bun
         uses: oven-sh/setup-bun@v2

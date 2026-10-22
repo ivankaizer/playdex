@@ -5,10 +5,16 @@ on:
   push:
     branches: [main]
 
+# A new push to a pull request cancels the run for the previous one; pushes to main never cancel each other
+# (they deploy production).
+concurrency:
+  group: test-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: true
+
 jobs:
   test:
     name: .NET and frontend tests
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, macserv]
     services:
       db:
         image: postgres:16
@@ -17,7 +23,7 @@ jobs:
           POSTGRES_PASSWORD: playdex
           POSTGRES_DB: playdex_db_test
         ports:
-          - 5432:5432
+          - 5432   # a free host port: macserv runs other Postgres containers
         options: >-
           --health-cmd="pg_isready -U playdex"
           --health-interval=10s
@@ -31,6 +37,8 @@ jobs:
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'
+        env:
+          DOTNET_INSTALL_DIR: ${{ runner.tool_cache }}/dotnet   # the default /usr/share/dotnet isn't writable on macserv
 
       - name: Set up Bun
         uses: oven-sh/setup-bun@v2
@@ -63,14 +71,14 @@ jobs:
       - name: Apply database migrations
         run: dotnet run --no-build --project src/Api --configuration Release -- migrate
         env:
-          DATABASE_URL: postgresql://playdex:playdex@127.0.0.1:5432/playdex_db_test
+          DATABASE_URL: postgresql://playdex:playdex@127.0.0.1:${{ job.services.db.ports['5432'] }}/playdex_db_test
           Auth__JwtSecret: test-secret-for-ci
 
       - name: Run .NET tests
         run: |
           dotnet test test/Api.Tests/Api.Tests.csproj --configuration Release --no-build
         env:
-          PLAYDEX_INTEGRATION_DATABASE_URL: postgresql://playdex:playdex@127.0.0.1:5432/playdex_db_test
+          PLAYDEX_INTEGRATION_DATABASE_URL: postgresql://playdex:playdex@127.0.0.1:${{ job.services.db.ports['5432'] }}/playdex_db_test
 
   preview:
     name: Preview
@@ -79,6 +87,7 @@ jobs:
     if: github.event.pull_request.head.repo.full_name == github.repository
     uses: ivankaizer/preview-kit/.github/workflows/preview.yml@v1
     with:
+      runner: '["self-hosted","macserv"]'
       # One comment per deploy, so earlier demos stay in the PR thread.
       comment: new
     permissions:

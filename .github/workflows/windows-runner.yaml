@@ -1,0 +1,60 @@
+name: Windows runner
+
+# Reusable: picks where a Windows job runs (docs/windows-pc-runner.md).
+#   pc      the self-hosted runner labelled windows-pc
+#   github  windows-latest, which counts double against the GitHub-hosted minutes
+#   auto    the PC when its runner is online, GitHub otherwise
+# A job aimed at an offline self-hosted runner waits in the queue for up to a day instead of moving on, hence the
+# check, which runs on macserv so it costs no GitHub-hosted minutes.
+
+on:
+  workflow_call:
+    inputs:
+      choice:
+        type: string
+        default: auto
+    outputs:
+      runner:
+        description: The runs-on value, as JSON
+        value: ${{ jobs.pick.outputs.runner }}
+      where:
+        description: pc or github
+        value: ${{ jobs.pick.outputs.where }}
+    secrets:
+      RUNNERS_TOKEN:
+        description: Fine-grained token for this repository with Administration read, to see whether the PC is online
+        required: false
+
+jobs:
+  pick:
+    name: Pick the Windows runner
+    runs-on: [self-hosted, macserv]
+    outputs:
+      runner: ${{ steps.pick.outputs.runner }}
+      where: ${{ steps.pick.outputs.where }}
+    steps:
+      - id: pick
+        env:
+          CHOICE: ${{ inputs.choice }}
+          GH_TOKEN: ${{ secrets.RUNNERS_TOKEN }}
+        run: |
+          where=$CHOICE
+          if [ "$where" = auto ]; then
+            where=github
+            if [ -z "$GH_TOKEN" ]; then
+              echo "::warning::RUNNERS_TOKEN is not set, so auto can't see the PC's runner"
+            elif ! online=$(gh api "repos/$GITHUB_REPOSITORY/actions/runners" \
+                --jq '[.runners[] | select(.status == "online" and any(.labels[]; .name == "windows-pc"))] | length'); then
+              echo "::warning::Couldn't list the repository's runners"
+            elif [ "$online" -gt 0 ]; then
+              where=pc
+            fi
+          fi
+          case "$where" in
+            pc) runner='["self-hosted","windows-pc"]' ;;
+            github) runner='"windows-latest"' ;;
+            *) echo "::error::The runner must be auto, pc or github, not '$CHOICE'"; exit 1 ;;
+          esac
+          echo "::notice::The Windows job runs on $where ($CHOICE)"
+          echo "runner=$runner" >> "$GITHUB_OUTPUT"
+          echo "where=$where" >> "$GITHUB_OUTPUT"
