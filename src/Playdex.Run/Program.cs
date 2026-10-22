@@ -9,7 +9,8 @@ namespace Playdex.Run;
 /// follows it to exit and records the session (<see cref="SessionCoordinator"/>). No window.
 /// </summary>
 /// <remarks>
-/// Exit codes: 0 the game ran, 1 it could not run (see run-&lt;date&gt;.log in the config's log folder), 2 this exe was
+/// Exit codes: 0 the game ran, 1 it could not run (see run-&lt;date&gt;.log in the config's log folder, kept for two
+/// weeks), 2 this exe was
 /// started on its own rather than as a generated launcher.
 /// A copy of it is also the desktop app's update helper: <c>--apply-update &lt;apply.json&gt; &lt;pid&gt;</c> replaces
 /// the app's folder once that process exits (<see cref="AppUpdate.ApplyAsync"/>); 0 installed, 1 rolled back.
@@ -52,6 +53,7 @@ internal static class Program
             var store = ConfigStore.IsDefaultPath(manifest.ConfigPath) ? ConfigStore.Default() : new ConfigStore(manifest.ConfigPath);
             var config = store.LoadOrCreate();
             Log.UseFile(Path.Combine(config.Storage.LogDirectory, $"run-{DateTime.Now:yyyyMMdd}.log"));
+            Log.DeleteOlderThan(config.Storage.LogDirectory, "run-*.log", TimeSpan.FromDays(14));
             var game = config.GetGameForLaunch(manifest.GameId);
             Log.Info($"run: {game.DisplayName} ({manifest.GameId})");
             using var coordinator = SessionCoordinator.Create(config, game, LogLoggerFactory.Instance.CreateLogger<SessionCoordinator>());
