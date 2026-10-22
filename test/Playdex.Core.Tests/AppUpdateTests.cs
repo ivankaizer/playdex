@@ -9,6 +9,8 @@ namespace Playdex.Core.Tests;
 
 public sealed class AppUpdateTests
 {
+    private const string Feed = "https://download.playdex.dev/windows/v2.0.0";
+
     [Fact]
     public void VersionsParseFromStableTagsAndCompare()
     {
@@ -23,7 +25,7 @@ public sealed class AppUpdateTests
     }
 
     [Fact]
-    public void OnlyStableReleasesWithHttpsAssetsCount()
+    public void OnlyStableReleasesWithUniqueAssetsCount()
     {
         static ReleaseDto Dto(string tag, bool draft = false, bool prerelease = false) => new()
         {
@@ -32,10 +34,9 @@ public sealed class AppUpdateTests
             Prerelease = prerelease,
             Assets =
             [
-                new() { Name = "playdex-windows-v2.0.0.zip", BrowserDownloadUrl = "https://example.test/a.zip", Size = 10 },
-                new() { Name = "insecure.zip", BrowserDownloadUrl = "http://example.test/b.zip", Size = 10 },
-                new() { Name = "twice.zip", BrowserDownloadUrl = "https://example.test/c.zip" },
-                new() { Name = "twice.zip", BrowserDownloadUrl = "https://example.test/d.zip" },
+                new() { Name = "playdex-windows-v2.0.0.zip", BrowserDownloadUrl = $"{Feed}/a.zip", Size = 10 },
+                new() { Name = "twice.zip", BrowserDownloadUrl = $"{Feed}/c.zip" },
+                new() { Name = "twice.zip", BrowserDownloadUrl = $"{Feed}/d.zip" },
             ],
         };
 
@@ -44,6 +45,60 @@ public sealed class AppUpdateTests
         Assert.Null(ReleaseFeed.ToRelease(Dto("latest")));
         var release = ReleaseFeed.ToRelease(Dto("v2.0.0"))!;
         Assert.Equal(["playdex-windows-v2.0.0.zip"], release.Assets.Select(a => a.Name));
+    }
+
+    [Theory]
+    [InlineData("http://download.playdex.dev/windows/v2.0.0/b.zip")]
+    [InlineData("https://example.test/windows/v2.0.0/b.zip")]
+    [InlineData("https://download.playdex.dev.example.test/windows/v2.0.0/b.zip")]
+    [InlineData("https://download.playdex.dev./windows/v2.0.0/b.zip")]
+    [InlineData("https://download.playdex.dev@example.test/windows/v2.0.0/b.zip")]
+    [InlineData("https://user@download.playdex.dev/windows/v2.0.0/b.zip")]
+    [InlineData("https://download.playdex.dev:8443/windows/v2.0.0/b.zip")]
+    [InlineData("https://playdex.dev/windows/v2.0.0/b.zip")]
+    [InlineData("ftp://download.playdex.dev/windows/v2.0.0/b.zip")]
+    [InlineData("windows/v2.0.0/b.zip")]
+    [InlineData("")]
+    public void AReleaseWithAFileOffTheFeedIsRefused(string url)
+    {
+        var dto = new ReleaseDto
+        {
+            TagName = "v2.0.0",
+            Assets =
+            [
+                new() { Name = "playdex-windows-v2.0.0.zip", BrowserDownloadUrl = $"{Feed}/a.zip", Size = 10 },
+                new() { Name = "b.zip", BrowserDownloadUrl = url, Size = 10 },
+            ],
+        };
+
+        var refused = Assert.Throws<InvalidDataException>(() => ReleaseFeed.ToRelease(dto));
+        Assert.Contains("https://download.playdex.dev", refused.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void OnlyHttpsOnTheFeedHostIsAFeedUrl()
+    {
+        Assert.Equal("download.playdex.dev", ReleaseFeed.BaseUri.Host);
+        Assert.True(ReleaseFeed.IsFeedUri(new Uri($"{Feed}/playdex-windows-v2.0.0.zip")));
+        Assert.True(ReleaseFeed.IsFeedUri(new Uri("https://DOWNLOAD.playdex.dev:443/windows/v2.0.0/a.zip")));
+        Assert.False(ReleaseFeed.IsFeedUri(new Uri("http://download.playdex.dev/windows/v2.0.0/a.zip")));
+        Assert.False(ReleaseFeed.IsFeedUri(new Uri("https://evil.example/windows/v2.0.0/a.zip")));
+        Assert.False(ReleaseFeed.IsFeedUri(new Uri("windows/v2.0.0/a.zip", UriKind.Relative)));
+    }
+
+    [Fact]
+    public async Task DownloadsOffTheFeedAreRefusedBeforeAnyRequest()
+    {
+        var handler = new FeedHandler("{}");
+        using var feed = new ReleaseFeed(handler);
+        var destination = Path.Combine(NewTempDir(), "a.zip");
+
+        var refused = await Assert.ThrowsAsync<InvalidDataException>(() => feed.DownloadAsync(
+            new ReleaseAsset("a.zip", new Uri("https://evil.example/windows/v2.0.0/a.zip"), 10), destination, 1024));
+
+        Assert.Contains("https://download.playdex.dev", refused.Message, StringComparison.Ordinal);
+        Assert.Empty(handler.Requested);
+        Assert.False(File.Exists(destination));
     }
 
     [Fact]
@@ -102,8 +157,8 @@ public sealed class AppUpdateTests
         var goodHash = Convert.ToHexStringLower(SHA256.HashData(zipBytes));
         var release = new Release(new ReleaseVersion(2, 1, 0),
         [
-            new ReleaseAsset(name, new Uri("https://example.test/app.zip"), zipBytes.Length),
-            new ReleaseAsset(name + ".sha256", new Uri("https://example.test/app.sha256"), null),
+            new ReleaseAsset(name, new Uri($"{Feed}/{name}"), zipBytes.Length),
+            new ReleaseAsset(name + ".sha256", new Uri($"{Feed}/{name}.sha256"), null),
         ]);
         var install = Path.Combine(directory, "install");
         Directory.CreateDirectory(install);

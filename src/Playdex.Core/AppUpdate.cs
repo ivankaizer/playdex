@@ -97,6 +97,11 @@ internal sealed partial class UpdateJson : JsonSerializerContext;
 /// in GitHub's release JSON shape (tools/downloads/publish.mjs). The GitHub repository is private, so clients never
 /// read it.
 /// </summary>
+/// <remarks>
+/// The release JSON is only data from a bucket, so its download URLs are not trusted as they are: every file must come
+/// from https on the feed's own host (<see cref="IsFeedUri"/>), and redirects are not followed. A release that lists a
+/// file anywhere else is refused as a whole.
+/// </remarks>
 public sealed class ReleaseFeed(HttpMessageHandler? handler = null) : IDisposable
 {
     public static readonly Uri BaseUri = new("https://download.playdex.dev/windows/releases/");
@@ -104,9 +109,18 @@ public sealed class ReleaseFeed(HttpMessageHandler? handler = null) : IDisposabl
 
     private readonly HttpClient _http = CreateClient(handler);
 
+    /// <summary>True for an https URL on exactly the feed's host (download.playdex.dev, the default port, no user info).</summary>
+    public static bool IsFeedUri(Uri uri) =>
+        uri.IsAbsoluteUri
+        && uri.Scheme == Uri.UriSchemeHttps
+        && string.Equals(uri.Host, BaseUri.Host, StringComparison.OrdinalIgnoreCase)
+        && uri.IsDefaultPort
+        && uri.UserInfo.Length == 0;
+
     private static HttpClient CreateClient(HttpMessageHandler? handler)
     {
-        var http = handler is null ? new HttpClient() : new HttpClient(handler);
+        // No redirects: a file comes from the URL that passed IsFeedUri, not from wherever a response points.
+        var http = new HttpClient(handler ?? new HttpClientHandler { AllowAutoRedirect = false });
         http.Timeout = TimeSpan.FromMinutes(5);
         http.DefaultRequestHeaders.UserAgent.ParseAdd(Brand.UserAgent);
         http.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
@@ -144,8 +158,15 @@ public sealed class ReleaseFeed(HttpMessageHandler? handler = null) : IDisposabl
         {
             return null;
         }
+        foreach (var asset in dto.Assets)
+        {
+            if (!Uri.TryCreate(asset.BrowserDownloadUrl, UriKind.Absolute, out var uri) || !IsFeedUri(uri))
+            {
+                throw new InvalidDataException(
+                    $"The release lists {Shorten(asset.Name)} outside https://{BaseUri.Host}; Playdex only downloads release files from there.");
+            }
+        }
         var assets = dto.Assets
-            .Where(a => Uri.TryCreate(a.BrowserDownloadUrl, UriKind.Absolute, out var uri) && uri.Scheme == Uri.UriSchemeHttps)
             .GroupBy(a => a.Name, StringComparer.Ordinal)
             .Where(g => g.Count() == 1)
             .Select(g => new ReleaseAsset(g.Key, new Uri(g.Single().BrowserDownloadUrl), g.Single().Size))
@@ -153,12 +174,20 @@ public sealed class ReleaseFeed(HttpMessageHandler? handler = null) : IDisposabl
         return new Release(version, assets);
     }
 
-    /// <summary>Download an asset over HTTPS to a new file, refusing anything over <paramref name="maximumBytes"/>.</summary>
+    /// <summary>
+    /// Download an asset from the feed's host (<see cref="IsFeedUri"/>) to a new file, refusing anything over
+    /// <paramref name="maximumBytes"/>.
+    /// </summary>
     public async Task DownloadAsync(ReleaseAsset asset, string destination, long maximumBytes, CancellationToken cancellationToken = default)
     {
-        if (asset.DownloadUri.Scheme != Uri.UriSchemeHttps || asset.Size is < 0 || asset.Size > maximumBytes)
+        if (!IsFeedUri(asset.DownloadUri))
         {
-            throw new InvalidDataException($"{asset.Name} is not a valid release asset.");
+            throw new InvalidDataException(
+                $"{Shorten(asset.Name)} is not on https://{BaseUri.Host}; Playdex only downloads release files from there.");
+        }
+        if (asset.Size is < 0 || asset.Size > maximumBytes)
+        {
+            throw new InvalidDataException($"{Shorten(asset.Name)} is not a valid release asset.");
         }
         using var response = await _http.GetAsync(asset.DownloadUri, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
         response.EnsureSuccessStatusCode();
@@ -182,6 +211,9 @@ public sealed class ReleaseFeed(HttpMessageHandler? handler = null) : IDisposabl
             await destination.WriteAsync(buffer.AsMemory(0, read), cancellationToken);
         }
     }
+
+    /// <summary>A name from the feed, cut short for a message.</summary>
+    private static string Shorten(string name) => name.Length <= 80 ? name : $"{name[..80]}…";
 
     public void Dispose() => _http.Dispose();
 }

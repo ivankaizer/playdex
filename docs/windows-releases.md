@@ -22,7 +22,7 @@ The Windows apps release together from one `v<major>.<minor>.<patch>` tag (`.git
 | `windows/releases/latest.json` | The same for the highest version. The desktop app checks it for updates. Written last, and never moved back to an older tag. |
 | `windows/Playdex-Setup.exe` | The latest setup at a stable URL: the download button on playdex.dev/launcher. |
 
-`ReleaseFeed` (`src/Playdex.Core/AppUpdate.cs`) reads it. Set it up once with `bun tools/downloads/publish.mjs setup` (creates the bucket and attaches the domain); CI needs the `CLOUDFLARE_API_TOKEN` (Workers R2 Storage: Edit; setup also needs Zone: Read on playdex.dev) and `CLOUDFLARE_ACCOUNT_ID` secrets.
+`ReleaseFeed` (`src/Playdex.Core/AppUpdate.cs`) reads it. It only downloads files from https on `download.playdex.dev` itself and follows no redirects: a release JSON that points any file elsewhere is refused as a whole. Set it up once with `bun tools/downloads/publish.mjs setup` (creates the bucket and attaches the domain); CI needs the `CLOUDFLARE_API_TOKEN` (Workers R2 Storage: Edit; setup also needs Zone: Read on playdex.dev) and `CLOUDFLARE_ACCOUNT_ID` secrets.
 
 v1.x WinForms Wrappers still update from the GitHub release, so it keeps being created.
 
