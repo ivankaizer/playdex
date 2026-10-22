@@ -220,7 +220,7 @@ describe("SettingsPage", () => {
 
     expect(await screen.findByText("12 pairs")).toBeInTheDocument();
     expect(screen.getAllByRole("button", { name: /^Unlink / })).toHaveLength(10);
-    expect(screen.getByRole("button", { name: "Primary game 0" })).toHaveAttribute("title", "Primary game 0");
+    expect(screen.getByRole("link", { name: "Primary game 0" })).toHaveAttribute("title", "Primary game 0");
     fireEvent.click(screen.getByRole("button", { name: "Show all 12" }));
     expect(screen.getAllByRole("button", { name: /^Unlink / })).toHaveLength(12);
     fireEvent.click(screen.getByRole("button", { name: "Show fewer" }));

@@ -1,23 +1,20 @@
+import { AppLink } from "./AppLink";
+
 interface BreadcrumbsProps {
   parentLabel: string;
+  /** The parent page's path. */
+  parentTo: string;
   currentLabel: string;
-  onParent: () => void;
-  disabled?: boolean;
 }
 
-export function Breadcrumbs({ parentLabel, currentLabel, onParent, disabled = false }: BreadcrumbsProps) {
+export function Breadcrumbs({ parentLabel, parentTo, currentLabel }: BreadcrumbsProps) {
   return (
     <nav aria-label="Breadcrumb" className="text-[13px] font-medium">
       <ol className="flex flex-wrap items-center gap-2">
         <li>
-          <button
-            type="button"
-            disabled={disabled}
-            onClick={onParent}
-            className="text-muted transition hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
-          >
+          <AppLink to={parentTo} className="text-muted no-underline transition hover:text-accent">
             {parentLabel}
-          </button>
+          </AppLink>
         </li>
         <li aria-hidden="true" className="text-faint">
           ›

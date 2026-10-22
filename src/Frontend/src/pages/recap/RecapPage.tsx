@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useLocation } from "react-router";
 import { AppLayout } from "@/components/AppLayout";
+import { AppLink } from "@/components/AppLink";
 import { BarChart, CardHeading, Cover, Dot, ErrorNote, LoadingNote, Segmented, ShareBar, StackedBar } from "@/components/ui";
 import { apiRequest, errorMessage } from "@/lib/api";
 import { formatCount, formatCountNoun, formatDuration, formatHoursShort, formatPercent } from "@/lib/format";
@@ -184,7 +185,7 @@ export function RecapPage() {
     navigate(target);
   };
 
-  const navigateToGame = (gameId: string) => navigate(`/games/${encodeGameId(gameId)}`);
+  const gamePath = (gameId: string) => `/games/${encodeGameId(gameId)}`;
 
   const tabs = recapTabs(state);
   const activeLabel = tabs.find((tab) => tab.key === state.activeTab)?.label ?? "All time";
@@ -199,11 +200,7 @@ export function RecapPage() {
     return (
       <AppLayout title="Recap">
         {state.error.length > 0 && <ErrorNote>{state.error}</ErrorNote>}
-        <EmptyRecap
-          title="Nothing to recap yet"
-          onStart={() => navigate("/dashboard")}
-          onSessions={() => navigate("/sessions")}
-        />
+        <EmptyRecap title="Nothing to recap yet" />
       </AppLayout>
     );
   }
@@ -313,11 +310,10 @@ export function RecapPage() {
             ) : (
               <div className="grid gap-5 [grid-template-columns:repeat(auto-fit,minmax(min(160px,100%),1fr))] max-[600px]:grid-cols-2 max-[600px]:gap-4">
                 {top.map((game, index) => (
-                  <button
+                  <AppLink
                     key={`${game.gameId}-${index}`}
-                    type="button"
-                    onClick={() => navigateToGame(game.gameId)}
-                    className="group flex min-w-0 max-w-[260px] flex-col gap-3 text-left"
+                    to={gamePath(game.gameId)}
+                    className="group flex min-w-0 max-w-[260px] flex-col gap-3 no-underline"
                   >
                     <div className="relative w-full">
                       <Cover
@@ -337,7 +333,7 @@ export function RecapPage() {
                       </p>
                       <p className="pdx-num mt-0.5 text-sm font-semibold text-accent">{formatHoursShort(game.totalSeconds)}</p>
                     </div>
-                  </button>
+                  </AppLink>
                 ))}
               </div>
             )}
@@ -352,14 +348,14 @@ export function RecapPage() {
 
           <PlatformMixCard recap={recap} />
 
-          <LibraryCard recap={recap} onOpenGame={navigateToGame} />
+          <LibraryCard recap={recap} gamePath={gamePath} />
         </>
       )}
     </AppLayout>
   );
 }
 
-function EmptyRecap({ title, onStart, onSessions }: { title: string; onStart: () => void; onSessions: () => void }) {
+function EmptyRecap({ title }: { title: string }) {
   return (
     <section className="pdx-card flex flex-col items-start gap-3.5 !py-12">
       <p className="pdx-kicker">Recap</p>
@@ -368,12 +364,12 @@ function EmptyRecap({ title, onStart, onSessions }: { title: string; onStart: ()
         Play or log a session and your hours, top games and rhythm start filling in here.
       </p>
       <div className="mt-1.5 flex flex-wrap gap-2.5">
-        <button type="button" onClick={onStart} className="pdx-btn-primary">
+        <AppLink to="/dashboard" className="pdx-btn-primary no-underline">
           ▶ Start a session
-        </button>
-        <button type="button" onClick={onSessions} className="pdx-btn-outline">
+        </AppLink>
+        <AppLink to="/sessions" className="pdx-btn-outline no-underline">
           Go to sessions
-        </button>
+        </AppLink>
       </div>
     </section>
   );
@@ -629,7 +625,7 @@ function PlatformMixCard({ recap }: { recap: RecapResponse }) {
 
 const LibraryColumns = "grid grid-cols-[26px_44px_minmax(0,2.4fr)_90px_100px_minmax(0,1.4fr)] items-center gap-4";
 
-function LibraryCard({ recap, onOpenGame }: { recap: RecapResponse; onOpenGame: (gameId: string) => void }) {
+function LibraryCard({ recap, gamePath }: { recap: RecapResponse; gamePath: (gameId: string) => string }) {
   const [showAll, setShowAll] = useState(false);
   const binged = recap.mostBingedGame;
   const bySessions = recap.topGameBySessions;
@@ -687,14 +683,13 @@ function LibraryCard({ recap, onOpenGame }: { recap: RecapResponse; onOpenGame: 
                   <Cover title={game.title} src={game.capsuleUrl} className="h-11 w-11 rounded-xl" initialClassName="text-[15px]" />
                 </span>
                 <div role="cell" className="min-w-0">
-                  <button
-                    type="button"
-                    onClick={() => onOpenGame(game.gameId)}
+                  <AppLink
+                    to={gamePath(game.gameId)}
                     title={game.title}
-                    className="block w-full truncate text-left text-[15px] font-medium transition hover:text-accent"
+                    className="block w-full truncate text-[15px] font-medium no-underline transition hover:text-accent"
                   >
                     {game.title}
-                  </button>
+                  </AppLink>
                   {game.isAbandoned && <p className="text-xs text-muted">abandoned</p>}
                 </div>
                 <span role="cell" className="text-right text-sm text-ink-2">

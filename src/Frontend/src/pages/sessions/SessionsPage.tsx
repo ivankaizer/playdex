@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { useNavigate } from "react-router";
 import { AppLayout } from "@/components/AppLayout";
+import { AppLink } from "@/components/AppLink";
 import {
   BarChart,
   CardHeading,
@@ -19,7 +20,6 @@ import { cx } from "@/lib/cx";
 import { formatMonthLabel, monthLabelsSpanYears } from "@/lib/dates";
 import { formatCount, formatHoursShort, formatPercent } from "@/lib/format";
 import { encodeGameId } from "@/lib/gameHash";
-import { useAppNavigate } from "@/lib/navigation";
 import { platformColor } from "@/lib/platforms";
 import type {
   ManualActiveSessionResponse,
@@ -140,7 +140,6 @@ export function SessionsPage() {
   const [editState, getEditState, updateEditState] = useLatestState(() => emptySessionEditState);
   const [ui, , updateUi] = useLatestState(() => ({ isStoppingManualSession: false, manualActionError: "", showLive: false }));
   const navigate = useNavigate();
-  const appNavigate = useAppNavigate();
 
   const lifetime = useRef(new AbortController());
   const requestVersions = useRef(new SessionsRequestVersions());
@@ -412,10 +411,8 @@ export function SessionsPage() {
     }
   };
 
-  const navigateToGame = (gameId: string) => appNavigate(`/games/${encodeGameId(gameId)}`);
-
-  const openRecap = () =>
-    appNavigate(state.from.length > 0 && state.to.length > 0 ? `/recap?from=${state.from}&to=${state.to}` : "/recap");
+  const gamePath = (gameId: string) => `/games/${encodeGameId(gameId)}`;
+  const recapLink = state.from.length > 0 && state.to.length > 0 ? `/recap?from=${state.from}&to=${state.to}` : "/recap";
 
   const now = new Date();
   const rowViews = getRowViews(state, now);
@@ -618,9 +615,9 @@ export function SessionsPage() {
                   {selectedPlatformLabel} ×
                 </button>
               )}
-              <button type="button" onClick={openRecap} className="pdx-btn-outline" title="Open recap">
+              <AppLink to={recapLink} className="pdx-btn-outline no-underline" title="Open recap">
                 Open recap →
-              </button>
+              </AppLink>
             </>
           }
         />
@@ -685,18 +682,17 @@ export function SessionsPage() {
             <div className="pdx-tile flex min-w-0 flex-col gap-[18px] !p-7">
               <p className="pdx-label">Top games</p>
               {topGames.map((game, index) => (
-                <button
+                <AppLink
                   key={`${game.gameId}-${game.title}`}
-                  type="button"
+                  to={gamePath(game.gameId)}
                   title={game.title}
-                  onClick={() => navigateToGame(game.gameId)}
-                  className="group grid grid-cols-[26px_minmax(0,1fr)_auto] items-baseline gap-x-3 gap-y-1.5 text-left"
+                  className="group grid grid-cols-[26px_minmax(0,1fr)_auto] items-baseline gap-x-3 gap-y-1.5 no-underline"
                 >
                   <span className="pdx-num text-[13px] text-muted">{String(index + 1).padStart(2, "0")}</span>
                   <span className="truncate text-[15px] font-medium transition group-hover:text-accent">{game.title}</span>
                   <span className="pdx-num text-sm font-semibold text-accent">{formatHoursShort(game.totalSeconds)}</span>
                   <ShareBar pct={(game.totalSeconds / topGameMax) * 100} className="col-span-2 col-start-2" />
-                </button>
+                </AppLink>
               ))}
             </div>
           </div>
@@ -779,15 +775,14 @@ export function SessionsPage() {
                     />
                     <div className="min-w-0">
                       {/* Desktop keeps one line; at 600px and below the title gets two lines. The full name is in `title`. */}
-                      <button
-                        type="button"
+                      <AppLink
+                        to={gamePath(session.gameId)}
                         title={session.title}
                         data-row-index={rowIndex.get(session.sessionId)}
-                        onClick={() => navigateToGame(session.gameId)}
-                        className="block max-w-full truncate text-left text-[15px] font-medium transition [overflow-wrap:anywhere] hover:text-accent max-[600px]:line-clamp-2 max-[600px]:whitespace-normal"
+                        className="block max-w-full truncate text-[15px] font-medium no-underline transition [overflow-wrap:anywhere] hover:text-accent max-[600px]:line-clamp-2 max-[600px]:whitespace-normal"
                       >
                         {session.title}
-                      </button>
+                      </AppLink>
                       <p className="mt-[3px] flex min-w-0 items-center gap-1.5 text-[13px] text-muted">
                         <Dot color={platformColor(session.platformKey, session.platform)} size={7} />
                         <span className="truncate">

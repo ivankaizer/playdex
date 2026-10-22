@@ -140,7 +140,7 @@ describe("RecapPage", () => {
     expect(await screen.findByText("Nothing to recap yet")).toBeInTheDocument();
     expect(screen.queryByText("Summed playtime by game")).not.toBeInTheDocument();
     expect(screen.queryByText(/NaN/)).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Go to sessions" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Go to sessions" })).toBeInTheDocument();
   });
 
   it("formats worst-case figures and shows the first 20 library rows with a Show all toggle", async () => {

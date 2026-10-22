@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router";
 import { authSession } from "@/lib/auth";
@@ -37,7 +37,7 @@ describe("AppLayout admin entry", () => {
     renderLayout();
 
     await waitFor(() => expect(apiRequest).toHaveBeenCalledWith("/me", expect.anything()));
-    expect(screen.queryByRole("button", { name: "Admin" })).toBeNull();
+    expect(screen.queryByRole("link", { name: "Admin" })).toBeNull();
     expect(authSession.isAdmin()).toBe(false);
   });
 
@@ -45,8 +45,8 @@ describe("AppLayout admin entry", () => {
     apiRequest.mockResolvedValue({ userId: 1, email: "admin@example.test", isAdmin: true });
     renderLayout();
 
-    expect(await screen.findByRole("button", { name: "Admin" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Admin" })).toHaveAttribute("href", "/admin");
+    expect(await within(header()).findByRole("link", { name: "Admin" })).toHaveAttribute("href", "/admin");
+    expect(screen.getAllByRole("link", { name: "Admin" })).toHaveLength(2);
     expect(authSession.isAdmin()).toBe(true);
   });
 
@@ -55,8 +55,8 @@ describe("AppLayout admin entry", () => {
     apiRequest.mockResolvedValue({ userId: 1, email: "admin@example.test", isAdmin: false });
     renderLayout();
 
-    expect(screen.getByRole("button", { name: "Admin" })).toBeInTheDocument();
-    await waitFor(() => expect(screen.queryByRole("button", { name: "Admin" })).toBeNull());
+    expect(within(header()).getByRole("link", { name: "Admin" })).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByRole("link", { name: "Admin" })).toBeNull());
     expect(header()).toBeInTheDocument();
   });
 
@@ -66,6 +66,6 @@ describe("AppLayout admin entry", () => {
     renderLayout();
 
     await waitFor(() => expect(apiRequest).toHaveBeenCalled());
-    expect(screen.getByRole("button", { name: "Admin" })).toBeInTheDocument();
+    expect(within(header()).getByRole("link", { name: "Admin" })).toBeInTheDocument();
   });
 });

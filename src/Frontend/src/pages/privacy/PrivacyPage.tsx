@@ -1,8 +1,8 @@
 import { useState, type ReactNode } from "react";
 import { AppFooter } from "@/components/AppFooter";
+import { AppLink } from "@/components/AppLink";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { authSession } from "@/lib/auth";
-import { useAppNavigate } from "@/lib/navigation";
 import { useTheme } from "@/lib/theme";
 
 const LastUpdated = "October 5, 2026";
@@ -158,32 +158,20 @@ const sections: readonly PolicySection[] = [
 
 export function PrivacyPage() {
   const { theme, toggleTheme } = useTheme();
-  const navigate = useAppNavigate();
   const [isLoggedIn] = useState(() => authSession.isLoggedIn());
 
   return (
     <main className="pdx-page relative px-4 pb-10 pt-6 sm:px-8 sm:pt-8">
       <div className="relative mx-auto flex w-full max-w-[1180px] flex-col gap-7">
         <header className="flex flex-wrap items-center gap-4 rounded-[28px] border border-[color:var(--card-border)] bg-surface/60 py-3.5 pl-7 pr-4 sm:rounded-full">
-          <a
-            href="/"
-            onClick={(event) => {
-              event.preventDefault();
-              navigate("/");
-            }}
-            className="mr-auto flex items-center gap-2.5 no-underline"
-          >
+          <AppLink to="/" className="mr-auto flex items-center gap-2.5 no-underline">
             <span className="h-2.5 w-2.5 rounded-full bg-bar shadow-[0_0_0_4px_rgba(47,194,142,.18)]"></span>
             <span className="text-xs font-semibold uppercase tracking-[0.32em] text-accent">Playdex</span>
-          </a>
+          </AppLink>
           <ThemeToggle theme={theme} onToggle={toggleTheme} />
-          <button
-            type="button"
-            onClick={() => navigate(isLoggedIn ? "/dashboard" : "/")}
-            className="pdx-btn-primary !h-[38px] !px-[18px] !text-[13px]"
-          >
+          <AppLink to={isLoggedIn ? "/dashboard" : "/"} className="pdx-btn-primary !h-[38px] !px-[18px] !text-[13px] no-underline">
             {isLoggedIn ? "Open dashboard →" : "Sign in"}
-          </button>
+          </AppLink>
         </header>
 
         <section className="px-2 pt-4 sm:pt-8">

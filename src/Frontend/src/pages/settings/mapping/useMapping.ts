@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef } from "react";
 import { apiRequest, errorMessage, isAbortError } from "@/lib/api";
 import { encodeGameId } from "@/lib/gameHash";
-import { useAppNavigate } from "@/lib/navigation";
 import type { GameConnectionChangeResponse, GameConnectionsResponse, GameSearchResponse, GameSearchResult } from "@/models/games";
 import type { Submission } from "../models";
 import { LatestRequest } from "../shared/latestRequest";
@@ -16,7 +15,6 @@ const initialMappingState = () => mapping.beginGameConnectionsLoad(mapping.creat
 /** Game connections ("merge stats across editions") embedded in Settings. */
 export function useMapping() {
   const [state, update, get] = useStore(initialMappingState);
-  const navigate = useAppNavigate();
   const lifetime = useRef(new AbortController());
   const connectionsRequest = useRef(new LatestRequest());
   const searchRequests = useRef<Record<SearchSlot, LatestRequest>>({
@@ -129,7 +127,7 @@ export function useMapping() {
 
   const clearConnectionDraft = useCallback(() => update(mapping.clearConnectionDraft), [update]);
 
-  const navigateToGame = useCallback((gameId: string) => navigate(`/games/${encodeGameId(gameId)}`), [navigate]);
+  const gamePath = useCallback((gameId: string) => `/games/${encodeGameId(gameId)}`, []);
 
   return {
     state,
@@ -140,6 +138,6 @@ export function useMapping() {
     connectGames,
     disconnectGames,
     clearConnectionDraft,
-    navigateToGame,
+    gamePath,
   };
 }

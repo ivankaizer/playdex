@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { AppLink } from "@/components/AppLink";
 import { Cover } from "@/components/ui";
 import { cx } from "@/lib/cx";
 import { formatCount, formatCountNoun } from "@/lib/format";
@@ -236,7 +237,7 @@ function ConnectionRow({ connection, mapping }: { connection: GameConnection; ma
         capsuleUrl={connection.capsuleUrl}
         role="Primary"
         platform={connection.platform}
-        onOpen={() => mapping.navigateToGame(connection.gameId)}
+        to={mapping.gamePath(connection.gameId)}
         primary
       />
       <span
@@ -251,7 +252,7 @@ function ConnectionRow({ connection, mapping }: { connection: GameConnection; ma
           capsuleUrl={connection.connectedCapsuleUrl}
           role="Merged in"
           platform={connection.connectedPlatform}
-          onOpen={() => mapping.navigateToGame(connection.connectedGameId)}
+          to={mapping.gamePath(connection.connectedGameId)}
         />
       </div>
       <button
@@ -272,14 +273,15 @@ function ConnectionGame({
   capsuleUrl,
   role,
   platform,
-  onOpen,
+  to,
   primary = false,
 }: {
   title: string;
   capsuleUrl: string | null;
   role: string;
   platform: string;
-  onOpen: () => void;
+  /** The game's page. */
+  to: string;
   primary?: boolean;
 }) {
   return (
@@ -292,14 +294,13 @@ function ConnectionGame({
         style={primary ? undefined : secondaryCoverStyle}
       />
       <div className="min-w-0">
-        <button
-          type="button"
-          onClick={onOpen}
+        <AppLink
+          to={to}
           title={title}
-          className={cx("block max-w-full text-left text-[15px] font-medium leading-[1.3] transition-colors hover:text-accent", twoLineName)}
+          className={cx("block max-w-full text-[15px] font-medium leading-[1.3] no-underline transition-colors hover:text-accent", twoLineName)}
         >
           {title}
-        </button>
+        </AppLink>
         <p className={cx("truncate text-xs", primary ? "font-semibold text-accent" : "text-muted")}>
           {role}
           <span className="font-normal text-muted"> · {platformLabel(platform)}</span>
