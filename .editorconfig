@@ -7,17 +7,32 @@ insert_final_newline = true
 indent_style = space
 indent_size = 4
 
-csharp_style_namespace_declarations = file_scoped:suggestion
-csharp_prefer_braces = true:suggestion
+# Enforced in the build (EnforceCodeStyleInBuild in Directory.Build.props) and fixed by `dotnet format`.
+# The option's :severity is what the IDE shows; dotnet_diagnostic.<id>.severity is what the build reports.
+csharp_style_namespace_declarations = file_scoped:warning
+dotnet_diagnostic.IDE0161.severity = warning
+csharp_prefer_braces = true:warning
+dotnet_diagnostic.IDE0011.severity = warning
+dotnet_style_readonly_field = true:warning
+dotnet_diagnostic.IDE0044.severity = warning
+dotnet_style_require_accessibility_modifiers = for_non_interface_members:warning
+dotnet_diagnostic.IDE0040.severity = warning
 csharp_style_prefer_primary_constructors = true:suggestion
-dotnet_style_readonly_field = true:suggestion
-dotnet_style_require_accessibility_modifiers = always:suggestion
 
-dotnet_naming_rule.private_fields_should_be_underscore_camel_case.severity = suggestion
+# Private fields (static ones too) are _camelCase; private constants are PascalCase.
+dotnet_diagnostic.IDE1006.severity = warning
+dotnet_naming_rule.private_constants_should_be_pascal_case.severity = warning
+dotnet_naming_rule.private_constants_should_be_pascal_case.symbols = private_constants
+dotnet_naming_rule.private_constants_should_be_pascal_case.style = pascal_case
+dotnet_naming_rule.private_fields_should_be_underscore_camel_case.severity = warning
 dotnet_naming_rule.private_fields_should_be_underscore_camel_case.symbols = private_fields
 dotnet_naming_rule.private_fields_should_be_underscore_camel_case.style = underscore_camel_case
+dotnet_naming_symbols.private_constants.applicable_kinds = field
+dotnet_naming_symbols.private_constants.applicable_accessibilities = private
+dotnet_naming_symbols.private_constants.required_modifiers = const
 dotnet_naming_symbols.private_fields.applicable_kinds = field
 dotnet_naming_symbols.private_fields.applicable_accessibilities = private
+dotnet_naming_style.pascal_case.capitalization = pascal_case
 dotnet_naming_style.underscore_camel_case.required_prefix = _
 dotnet_naming_style.underscore_camel_case.capitalization = camel_case
 
