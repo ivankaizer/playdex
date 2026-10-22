@@ -48,10 +48,71 @@ public sealed partial class ApiCaptureService(
         var (insertedGameId, platformId) = await ResolveGame(gameTitle, gameId, gameProvider, platform, ct);
 
         var (start, end) = RecordedRange(DateTimeOffset.UtcNow, durationInSeconds, startedAt);
-        var sessionId = await repository.InsertCompletePlaySession(credential, insertedGameId, platformId, start, end, ct);
+        IReadOnlyList<(DateTimeOffset StartedAt, DateTimeOffset EndedAt)> pieces = [(start, end)];
+        if (startedAt is not null)
+        {
+            // A session with its real start can be one the server partly has already: play a client sends after an
+            // outage longer than the ping timeout (the server closed its session 3 minutes after the last ping it got),
+            // or a send repeated because its answer was lost. Only the time the server doesn't have yet is recorded.
+            // One recording per API key at a time, so two sends of the same session can't both miss each other.
+            await repository.LockRecordings(credential.Id, ct);
+            var recorded = await repository.ListSessionRanges(credential.Id, insertedGameId, platformId, start, end, ct);
+            pieces = Uncovered(start, end, recorded);
+        }
+
+        long? sessionId = null;
+        var recordedSeconds = 0;
+        foreach (var (from, to) in pieces)
+        {
+            var id = await repository.InsertCompletePlaySession(credential, insertedGameId, platformId, from, to, ct);
+            sessionId ??= id;
+            recordedSeconds += (int)(to - from).TotalSeconds;
+        }
 
         await tx.CommitAsync(ct);
-        return new ApiSessionResponseDto(sessionId);
+        return new ApiSessionResponseDto(sessionId, recordedSeconds);
+    }
+
+    /// <summary>
+    /// The parts of <paramref name="start"/>..<paramref name="end"/> that none of <paramref name="recorded"/> (sessions
+    /// the server has, an ongoing one with no end) overlap, in order; parts under a second are left out.
+    /// </summary>
+    public static IReadOnlyList<(DateTimeOffset StartedAt, DateTimeOffset EndedAt)> Uncovered(
+        DateTimeOffset start, DateTimeOffset end, IEnumerable<(DateTimeOffset StartedAt, DateTimeOffset? EndedAt)> recorded)
+    {
+        var pieces = new List<(DateTimeOffset, DateTimeOffset)>();
+        void Add(DateTimeOffset from, DateTimeOffset to)
+        {
+            if (to - from >= TimeSpan.FromSeconds(1))
+            {
+                pieces.Add((from, to));
+            }
+        }
+
+        var cursor = start;
+        foreach (var (from, to) in recorded.OrderBy(session => session.StartedAt))
+        {
+            if (from >= end)
+            {
+                break;
+            }
+            var until = to ?? DateTimeOffset.MaxValue;
+            if (until <= cursor)
+            {
+                continue;
+            }
+            if (from > cursor)
+            {
+                Add(cursor, from);
+            }
+            cursor = until;
+            if (cursor >= end)
+            {
+                return pieces;
+            }
+        }
+        Add(cursor, end);
+        return pieces;
     }
 
     /// <summary>
