@@ -190,7 +190,8 @@ html[data-input="pointer"] .dk :is([data-nav][data-focused], :focus-visible) {
   border-color: rgb(var(--mint-line));
   background: rgb(var(--mint));
 }
-.dk-danger[data-armed] {
+/* Doubled class so it outranks the fixed sizes that contexts like .dk-cell-actions give icon buttons. */
+.dk-icon-btn.dk-danger[data-armed] {
   width: auto;
   padding: 0 12px;
   background: rgb(var(--pill));
