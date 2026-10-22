@@ -40,7 +40,9 @@ The launcher MSIX is signed with a self-signed code-signing certificate whose su
 
 `src/Launcher/Host/tools/export-signing-secret.ps1` prepares both from the dev certificate that `tools/package.ps1` creates and prints the `gh secret set` commands to run. Using that certificate keeps released packages in the same package family as locally built ones (`Playdex.Launcher_bmt4bex73v8a8`), so they update each other.
 
-Users trust the certificate once: the desktop app's "Use as Full Screen Experience home" imports the release's `playdex-launcher.cer` into Trusted People (one admin prompt) before it installs the package. Developer Mode must be on, because the gamingHome capability is only granted with the developer-mode SCCD.
+Users trust the certificate once: the desktop app's "Use as Full Screen Experience home" (and the setup's option) imports the release's `playdex-launcher.cer` into Trusted People (one admin prompt) before it installs the package. Developer Mode must be on, because the gamingHome capability is only granted with the developer-mode SCCD.
+
+The certificate is pinned: `FsePackage.SigningCertificateSha256` (`src/Playdex.Core/FsePackage.cs`) holds its SHA-256 thumbprint, and the app and the setup refuse a `.cer` with any other thumbprint and a package Windows doesn't report as signed with it, before the admin prompt. The release workflow fails when `LAUNCHER_SIGNING_PFX` holds a different certificate. **Rotating the signing certificate** therefore needs a new app release: change the secrets and the thumbprint in `FsePackage.cs` together. Each app and setup installs the package of its own release, so older installs keep using the packages signed with the old certificate. A package built on another machine with its own dev certificate (`tools/package.ps1`) can only be installed with `tools/install-dev.ps1`.
 
 ## Updates
 

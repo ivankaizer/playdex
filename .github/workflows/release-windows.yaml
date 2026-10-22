@@ -116,9 +116,18 @@ jobs:
           if ($LASTEXITCODE) { throw "Launcher packaging failed." }
           $msix = Get-ChildItem src/Launcher/Host/AppPackages -Recurse -Filter *.msix | Select-Object -First 1
           # Signed by our self-signed certificate, which the runner doesn't trust: check the signer, not the status.
-          if (-not (Get-AuthenticodeSignature $msix.FullName).SignerCertificate) { throw "The launcher package is not signed." }
+          $signer = (Get-AuthenticodeSignature $msix.FullName).SignerCertificate
+          if (-not $signer) { throw "The launcher package is not signed." }
           Copy-Item $msix.FullName "artifacts/playdex-launcher-v$version.msix"
           $cert = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2($pfx, $env:SIGNING_PASSWORD)
+          # Apps and setups only trust the certificate pinned in FsePackage.cs (docs/windows-releases.md, "Signing the launcher").
+          $sha256 = [System.Security.Cryptography.HashAlgorithmName]::SHA256
+          $pinned = [regex]::Match((Get-Content -Raw src/Playdex.Core/FsePackage.cs), 'SigningCertificateSha256 = "([0-9A-F]{64})"').Groups[1].Value
+          foreach ($used in $cert, $signer) {
+            if (-not $pinned -or $used.GetCertHashString($sha256) -ne $pinned) {
+              throw "The launcher signing certificate ($($used.GetCertHashString($sha256))) is not the one pinned in FsePackage.SigningCertificateSha256 ('$pinned'); release the new thumbprint with the new certificate."
+            }
+          }
           [IO.File]::WriteAllBytes('artifacts/playdex-launcher.cer', $cert.Export('Cert'))
           Remove-Item $pfx
           "built=true" >> $env:GITHUB_OUTPUT
