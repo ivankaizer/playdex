@@ -50,6 +50,14 @@ jobs:
         with:
           bun-version: 1.3.14
 
+      # Biome formats and lints src/Frontend, src/Launcher/ui, src/Docs and tools/downloads (biome.json).
+      # `bun run format` at the root fixes what this reports.
+      - name: Install root dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Check TypeScript formatting and lint
+        run: bun run biome ci .   # the local Biome; `bunx biome` could fetch the unrelated npm package "biome"
+
       - name: Install frontend dependencies
         run: bun install --frozen-lockfile
         working-directory: src/Frontend
@@ -74,8 +82,32 @@ jobs:
         run: bun run check:csp   # the inline script/style hashes in the CSPs still match the built pages
         working-directory: src/Frontend
 
+      - name: Install Launcher UI dependencies
+        run: bun install --frozen-lockfile
+        working-directory: src/Launcher/ui
+
+      - name: Typecheck Launcher UI
+        run: bun run typecheck   # built for the Windows apps by build-windows.yaml
+        working-directory: src/Launcher/ui
+
+      - name: Install Docs dependencies
+        run: bun install --frozen-lockfile
+        working-directory: src/Docs
+
+      - name: Check Docs
+        run: bun run check   # astro check; deployed by docs.yml
+        working-directory: src/Docs
+
       - name: Strict Release build
         run: dotnet build Playdex.sln --configuration Release --warnaserror
+
+      # The build already fails on code style (EnforceCodeStyleInBuild); this also catches whitespace.
+      # `dotnet format Playdex.sln` fixes it. The Windows-only projects can't be loaded here, so only
+      # their whitespace is checked, by folder.
+      - name: Check C# formatting
+        run: |
+          dotnet format Playdex.sln --verify-no-changes
+          dotnet format whitespace --folder --verify-no-changes --include src/Desktop/ src/Launcher/
 
       - name: Apply database migrations
         run: dotnet run --no-build --project src/Api --configuration Release -- migrate
