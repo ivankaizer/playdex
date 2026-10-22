@@ -304,7 +304,7 @@ describe("sessions state", () => {
   });
 
   it("this-month handles February in a leap year", () => {
-    const now = new Date("2028-02-10T12:00:00Z");
+    const now = new Date(2028, 1, 10, 12);
     const state = applyPreset(createSessionsState(now), "this-month", now);
     expect([state.from, state.to]).toEqual(["2028-02-01", "2028-02-29"]);
   });
@@ -394,7 +394,7 @@ describe("sessions state", () => {
   });
 
   it("requests per-day stats only for week-sized ranges", () => {
-    const now = new Date("2026-10-03T12:00:00Z");
+    const now = new Date(2026, 9, 3, 12);
     const week = createSessionsState(now);
     expect(rangeDays(week)).toBe(7);
     expect(buildDailyRequest(week)).toBe(`/stats/daily?from=2026-09-28&to=2026-10-04&${tz}`);
@@ -406,7 +406,7 @@ describe("sessions state", () => {
   });
 
   it("daily bars cover every day of the range and mark future days as upcoming", () => {
-    const now = new Date("2026-10-03T12:00:00Z");
+    const now = new Date(2026, 9, 3, 12);
     const state = completeStatsLoad(createSessionsState(now), { accountId: 1, stats: emptyStats() }, [
       { date: "2026-09-28", totalSeconds: 3600, sessionCount: 1, platforms: [] },
       { date: "2026-10-03", totalSeconds: 600, sessionCount: 1, platforms: [] },
@@ -461,7 +461,7 @@ describe("sessions state", () => {
   });
 
   it("row views use platform name, capsule, ignored flag, hash and short duration", () => {
-    const now = new Date("2026-07-13T12:00:00Z");
+    const now = new Date(2026, 6, 13, 12);
     const row = session({
       startedAt: new Date(now.getTime() - 65 * 60_000).toISOString(),
       endedAt: now.toISOString(),
@@ -555,7 +555,7 @@ describe("sessions list presentation", () => {
   });
 
   it("labels the selected range like the design", () => {
-    const now = new Date("2026-10-03T12:00:00Z");
+    const now = new Date(2026, 9, 3, 12);
     const base = createSessionsState(now);
     expect(rangeLabel(base)).toBe("Sep 28 – Oct 4, 2026");
     expect(rangeLabel(applyPreset(base, "today", now))).toBe("Today · Oct 3, 2026");
@@ -569,7 +569,7 @@ describe("sessions list presentation", () => {
   });
 
   it("switching to a custom range keeps the bounds", () => {
-    const state = selectCustomRange(createSessionsState(new Date("2026-10-03T12:00:00Z")));
+    const state = selectCustomRange(createSessionsState(new Date(2026, 9, 3, 12)));
     expect(state.preset).toBe("custom");
     expect([state.from, state.to]).toEqual(["2026-09-28", "2026-10-04"]);
   });

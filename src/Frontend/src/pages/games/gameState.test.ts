@@ -68,7 +68,7 @@ describe("gameState", () => {
   });
 
   it("starts loading for a valid hash", () => {
-    const state = beginGame("3H4h3", new Date("2026-07-18T00:00:00Z"));
+    const state = beginGame("3H4h3", new Date(2026, 6, 18));
 
     expect(state.requests?.gameHash).toBe("3H4h3");
     expect(state.isLoading).toBe(true);
@@ -80,7 +80,7 @@ describe("gameState", () => {
   });
 
   it("keeps the recent page total and page independent of charts", () => {
-    let state = beginGame("3H4h3", new Date("2026-07-18T00:00:00Z"));
+    let state = beginGame("3H4h3", new Date(2026, 6, 18));
     state = completeFirstSessions(
       state,
       page([session(1, "2026-07-18T08:00:00Z", "2026-07-18T10:00:00Z", "recent.jpg")], 11, 0),
@@ -102,14 +102,14 @@ describe("gameState", () => {
   });
 
   it("builds chart buckets from server stats", () => {
-    let state = beginGame("3H4h3", new Date("2026-07-18T00:00:00Z"));
+    let state = beginGame("3H4h3", new Date(2026, 6, 18));
     expect(yearlyStats(state)).toEqual([]);
     expect(activeYear(state)).toBe(2026);
 
     state = completeStats(state, {
       totalSeconds: 7200,
       sessionCount: 3,
-      lastPlayedAt: "2026-07-18T08:00:00Z",
+      lastPlayedAt: new Date(2026, 6, 18, 8).toISOString(),
       years: [
         { year: 2025, seconds: 1800 },
         { year: 2026, seconds: 5400 },

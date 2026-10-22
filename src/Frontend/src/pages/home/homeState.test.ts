@@ -62,7 +62,7 @@ describe("homeState", () => {
   });
 
   describe("homeMiniStats", () => {
-    const now = new Date("2026-10-07T12:00:00Z"); // Wednesday
+    const now = new Date(2026, 9, 7, 12); // Wednesday noon where the tests run
     const day = (date: string, totalSeconds: number) => ({ date, totalSeconds, sessionCount: 1, platforms: [] });
 
     it("asks for a 365-day window ending today", () => {

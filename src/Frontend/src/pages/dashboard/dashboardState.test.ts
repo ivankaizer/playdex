@@ -30,7 +30,8 @@ import {
   type DashboardSnapshot,
 } from "./dashboardState";
 
-const now = new Date("2026-07-13T12:00:00Z");
+// Noon on Monday Jul 13 in the zone the tests run in, so "today" is that date in every zone.
+const now = new Date(2026, 6, 13, 12, 0, 0);
 const tz = `tz=${encodeURIComponent(clientTimeZone())}`;
 const offset = (seconds: number) => new Date(now.getTime() + seconds * 1000).toISOString();
 
@@ -268,10 +269,10 @@ describe("waitAllOrCancel", () => {
 
 describe("dashboard redesign views", () => {
   it("requests one daily breakdown from the earlier of Monday and the 1st through today", () => {
-    const requests = dashboardActivityRequests(new Date("2026-10-04T12:00:00Z"));
+    const requests = dashboardActivityRequests(new Date(2026, 9, 4, 12));
     expect(requests.daily).toBe(`/stats/daily?from=2026-09-28&to=2026-10-04&${tz}`);
 
-    const midMonth = dashboardActivityRequests(new Date("2026-10-20T12:00:00Z"));
+    const midMonth = dashboardActivityRequests(new Date(2026, 9, 20, 12));
     expect(midMonth.daily).toBe(`/stats/daily?from=2026-10-01&to=2026-10-20&${tz}`);
   });
 
@@ -357,7 +358,7 @@ describe("dashboard redesign views", () => {
 
   it("formats recent sessions with today and short dates", () => {
     const data = snapshot();
-    const older = { ...data.todaySessions[0], sessionId: 9, startedAt: "2026-06-30T10:00:00Z", endedAt: "2026-06-30T11:55:00Z" };
+    const older = { ...data.todaySessions[0], sessionId: 9, startedAt: new Date(2026, 5, 30, 10).toISOString(), endedAt: new Date(2026, 5, 30, 11, 55).toISOString() };
     const state = completeRefresh(initialDashboardState, { ...data, recentSessions: [older] }, now);
     expect(getRecentSessions(state, now)[0]).toMatchObject({ date: "Jun 30", duration: "1h 55m" });
     expect(formatShortDuration(600)).toBe("10m");
@@ -433,7 +434,7 @@ describe("dashboard redesign views", () => {
     const late = { ...data.todaySessions[0], sessionId: 10, startedAt: yesterday.toISOString(), endedAt: now.toISOString() };
     const state = completeRefresh(initialDashboardState, { ...data, recentSessions: [late] }, now);
     expect(getRecentSessions(state, now)[0].date).toBe("Yesterday, 23:58");
-    expect(getWeekView(null, new Date("2026-01-01T12:00:00Z")).rangeLabel).toBe("Dec 29, 2025 – Jan 4, 2026");
+    expect(getWeekView(null, new Date(2026, 0, 1, 12)).rangeLabel).toBe("Dec 29, 2025 – Jan 4, 2026");
   });
 
   it("greets by the local hour", () => {
