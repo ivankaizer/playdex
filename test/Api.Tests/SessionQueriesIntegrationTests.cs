@@ -85,6 +85,28 @@ public sealed class SessionQueriesIntegrationTests(PostgresFixture postgres)
         Assert.False(await db.PlaySessions.AnyAsync(row => row.Id == data.Short.Id));
     }
 
+    [Fact]
+    public async Task AnOversizedIgnoreSettingCapsAtADayInsteadOfOverflowing()
+    {
+        if (!postgres.IsConfigured) return;
+
+        await using var db = CreateDb();
+        await using var transaction = await db.Database.BeginTransactionAsync();
+        var data = await Seed(db);
+        // Stored before the setting was clamped: minutes * 60 overflows a 32-bit integer.
+        await db.UserSettings
+            .Where(settings => settings.UserId == data.UserId)
+            .ExecuteUpdateAsync(set => set.SetProperty(settings => settings.IgnoreShortSessionsMinutes, int.MaxValue));
+
+        var launcher = await new Api.Modules.Launcher.LauncherRepository(db).ListSessions(data.UserId, CancellationToken.None);
+        Assert.Equal([data.Open.Id], launcher.Select(row => row.SessionId));
+
+        var listed = await new AccountsRepository(db, new GamesService(new GamesRepository(db))).ListSessions(
+            data.UserId, null, null, null, null, null, null, "date", "asc", 10, 0, 0, CancellationToken.None);
+        Assert.Equal(4, listed.Total);
+        Assert.Equal([true, true, true, false], listed.Sessions.Select(row => row.Ignored));
+    }
+
     private static async Task<SeedData> Seed(PlaydexDbContext db)
     {
         var suffix = Guid.NewGuid().ToString("n");

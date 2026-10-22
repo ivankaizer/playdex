@@ -15,6 +15,21 @@ public sealed class SettingsValidationTests
         Assert.Equal(expected, SettingsService.ValidateTelegramChatId(value));
 
     [Theory]
+    [InlineData(0, 0)]
+    [InlineData(15, 15)]
+    [InlineData(1440, 1440)]
+    [InlineData(1441, 1440)]
+    [InlineData(int.MaxValue, 1440)]
+    public void IgnoreShortSessionsMinutesIsClampedToADay(int value, int expected) =>
+        Assert.Equal(expected, SettingsService.ValidateIgnoreShortSessionsMinutes(value));
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData(-1)]
+    public void NegativeOrMissingIgnoreShortSessionsMinutesIsRejected(int? value) =>
+        Assert.Throws<AppProblemException>(() => SettingsService.ValidateIgnoreShortSessionsMinutes(value));
+
+    [Theory]
     [InlineData("0")]
     [InlineData("@username")]
     [InlineData("12.5")]

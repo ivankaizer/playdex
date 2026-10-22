@@ -1,3 +1,4 @@
+using Api.Infrastructure.Common;
 using Api.Infrastructure.Http;
 using Api.Modules.Notifications;
 
@@ -37,9 +38,13 @@ public sealed class SettingsService(
         return new TestNotificationResponseDto(true);
     }
 
+    /// <summary>
+    /// Clamped to a day: no session is longer (<see cref="SessionLimits.MaxDurationMinutes"/>), and a huge value
+    /// overflowed the minutes-to-seconds arithmetic in the stats queries.
+    /// </summary>
     internal static int ValidateIgnoreShortSessionsMinutes(int? value) =>
         value is >= 0
-            ? value.Value
+            ? Math.Min(value.Value, SessionLimits.MaxDurationMinutes)
             : throw AppProblemException.Validation(
                 "ignoreShortSessionsMinutes must be a non-negative integer.");
 
