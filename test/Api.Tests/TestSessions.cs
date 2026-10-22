@@ -1,14 +1,19 @@
 using Api.Infrastructure.Common;
+using Api.Modules.Polling;
 using Api.Modules.Sessions;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using Playdex.Persistence;
 
 namespace Api.Tests;
 
 internal static class TestSessions
 {
-    public static SessionLifecycle Lifecycle(PlaydexDbContext db, SessionEventRecorder? recorder = null)
+    public static SessionLifecycle Lifecycle(
+        PlaydexDbContext db,
+        SessionEventRecorder? recorder = null,
+        int pollingIntervalSeconds = 60)
     {
         var services = new ServiceCollection();
         if (recorder is not null)
@@ -20,7 +25,11 @@ internal static class TestSessions
         var eventBus = new EventBus(
             services.BuildServiceProvider().GetRequiredService<IServiceScopeFactory>(),
             NullLogger<EventBus>.Instance);
-        return new SessionLifecycle(db, eventBus, NullLogger<SessionLifecycle>.Instance);
+        return new SessionLifecycle(
+            db,
+            eventBus,
+            Options.Create(new PollingOptions { IntervalSeconds = pollingIntervalSeconds }),
+            NullLogger<SessionLifecycle>.Instance);
     }
 }
 

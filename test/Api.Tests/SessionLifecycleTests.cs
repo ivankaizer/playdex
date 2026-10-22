@@ -4,6 +4,7 @@ using Api.Modules.Games;
 using Api.Modules.Notifications;
 using Api.Modules.Polling;
 using Api.Modules.Posters;
+using Api.Modules.Providers;
 using Api.Modules.Sessions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
@@ -15,6 +16,36 @@ namespace Api.Tests;
 [Collection(PostgresCollectionDefinition.Name)]
 public sealed class SessionLifecycleTests(PostgresFixture postgres)
 {
+    private static readonly TimeSpan PollingInterval = TimeSpan.FromMinutes(1);
+
+    [Fact]
+    public async Task PollAfterAGapEndsTheSessionOneIntervalAfterItWasLastSeen()
+    {
+        if (!postgres.IsConfigured) return;
+
+        await using var world = await World.Create(CreateDb());
+        var lastSeen = Now().AddHours(-6);
+        var stale = await world.AddOpenSession(world.Steam, world.GameA, lastSeen.AddHours(-1), lastSeen);
+        var recorder = new SessionEventRecorder();
+        var lifecycle = TestSessions.Lifecycle(world.Db, recorder);
+        var polledAt = Now();
+
+        await world.Poll(lifecycle, world.GameA, polledAt);
+        await lifecycle.PublishPending(default);
+
+        Assert.Equal(lastSeen + PollingInterval, (await world.Session(stale.Id)).EndedAt);
+        var current = Assert.Single(await world.OpenSessions(world.Steam));
+        Assert.Equal(polledAt, current.StartedAt);
+        Assert.Collection(
+            recorder.Events,
+            ended => Assert.Equal(
+                new SessionEnded(stale.Id, world.Steam.Id, world.GameA.Id, stale.StartedAt, lastSeen + PollingInterval),
+                ended),
+            started => Assert.Equal(
+                new SessionStarted(current.Id, world.Steam.Id, world.GameA.Id, polledAt),
+                started));
+    }
+
     [Fact]
     public async Task PollOfTheSameGameWithinTheGapContinuesTheSession()
     {
@@ -64,12 +95,31 @@ public sealed class SessionLifecycleTests(PostgresFixture postgres)
     }
 
     [Fact]
+    public async Task PausingAnIntegrationEndsItsSessionAtTheLastSighting()
+    {
+        if (!postgres.IsConfigured) return;
+
+        await using var world = await World.Create(CreateDb());
+        var lastSeen = Now().AddMinutes(-30);
+        var open = await world.AddOpenSession(world.Steam, world.GameA, lastSeen.AddHours(-1), lastSeen);
+        var recorder = new SessionEventRecorder();
+
+        var status = await new ProvidersRepository(world.Db, TestSessions.Lifecycle(world.Db, recorder))
+            .UpdateProviderStatus(world.User.Id, world.Steam.Id, "paused", default);
+
+        Assert.Equal("paused", status!.Status);
+        Assert.Equal(lastSeen + PollingInterval, (await world.Session(open.Id)).EndedAt);
+        Assert.Equal(open.Id, Assert.Single(recorder.Ended).SessionId);
+    }
+
+    [Fact]
     public async Task SweepEndsStaleSessionsOnceAndAnnouncesIntegrationSessions()
     {
         if (!postgres.IsConfigured) return;
 
         await using var world = await World.Create(CreateDb());
         var now = Now();
+        var polling = await world.AddOpenSession(world.Steam, world.GameA, now.AddHours(-3), now.AddHours(-2));
         var timedOut = await world.AddOpenSession(world.Api, world.GameA, now.AddMinutes(-30), now.AddMinutes(-10));
         var pinged = await world.AddOpenSession(world.Api, world.GameB, now.AddMinutes(-30), now.AddMinutes(-1));
         var recorder = new SessionEventRecorder();
@@ -78,10 +128,11 @@ public sealed class SessionLifecycleTests(PostgresFixture postgres)
         await lifecycle.SweepStaleSessions(default);
         await lifecycle.SweepStaleSessions(default);
 
+        Assert.Equal(now.AddHours(-2) + PollingInterval, (await world.Session(polling.Id)).EndedAt);
         Assert.Equal(now.AddMinutes(-10) + SessionLifecycle.CaptureTimeout, (await world.Session(timedOut.Id)).EndedAt);
         Assert.Null((await world.Session(pinged.Id)).EndedAt);
         Assert.Equal(
-            [timedOut.Id],
+            [polling.Id, timedOut.Id],
             recorder.Ended.Where(row => world.OwnsSession(row.SessionId)).Select(row => row.SessionId).Order());
         Assert.Empty(recorder.Started);
     }

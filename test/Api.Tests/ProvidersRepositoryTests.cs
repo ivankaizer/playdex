@@ -80,7 +80,7 @@ public sealed class ProvidersRepositoryTests(PostgresFixture postgres)
 
         try
         {
-            var repository = new ProvidersRepository(db);
+            var repository = new ProvidersRepository(db, TestSessions.Lifecycle(db));
             var futureOnly = await repository.UpdateSessionPlatform(
                 user.Id, integration.Id, "ps5", rewriteExistingSessions: false, default);
 
@@ -173,7 +173,7 @@ public sealed class ProvidersRepositoryTests(PostgresFixture postgres)
                 $"SELECT pg_advisory_xact_lock({integration.Id})");
 
             await using var updateDb = CreateDb();
-            var updateTask = new ProvidersRepository(updateDb).UpdateSessionPlatform(
+            var updateTask = new ProvidersRepository(updateDb, TestSessions.Lifecycle(updateDb)).UpdateSessionPlatform(
                 user.Id,
                 integration.Id,
                 "ps5",
@@ -219,7 +219,7 @@ public sealed class ProvidersRepositoryTests(PostgresFixture postgres)
 
         try
         {
-            var repository = new ProvidersRepository(db);
+            var repository = new ProvidersRepository(db, TestSessions.Lifecycle(db));
             var steam1 = await repository.CreateProvider(
                 user.Id, "steam", IntegrationType.Steam, "steam-key-1", "steam-id-1", default);
             var steam2 = await repository.CreateProvider(

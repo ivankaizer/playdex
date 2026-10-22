@@ -1,7 +1,9 @@
 using System.Linq.Expressions;
 using Api.Infrastructure.Common;
+using Api.Modules.Polling;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Playdex.Persistence;
 
 namespace Api.Modules.Sessions;
@@ -16,15 +18,35 @@ namespace Api.Modules.Sessions;
 public sealed partial class SessionLifecycle(
     PlaydexDbContext db,
     EventBus eventBus,
+    IOptions<PollingOptions> pollingOptions,
     ILogger<SessionLifecycle> logger)
 {
     /// <summary>Capture clients ping every 30 s; a session not pinged for this long ends this long after its last ping.</summary>
     public static readonly TimeSpan CaptureTimeout = TimeSpan.FromMinutes(3);
 
+    private const int PollingGapIntervals = 5;
+    private static readonly TimeSpan MinimumPollingGap = TimeSpan.FromMinutes(5);
+
     private readonly List<object> _pending = [];
 
     [LoggerMessage(Level = LogLevel.Error, Message = "Session event handler failed for {EventType}")]
     private partial void LogEventHandlerFailed(Exception exception, string eventType);
+
+    private TimeSpan PollingInterval => TimeSpan.FromSeconds(Math.Max(1, pollingOptions.Value.IntervalSeconds));
+
+    /// <summary>
+    /// A polling session unseen for longer than this (an outage, an expired token, a paused integration) ended one
+    /// interval after it was last seen: the gap is not counted as play. A slow poll cycle or a brief provider error
+    /// stays below it.
+    /// </summary>
+    private TimeSpan PollingGap
+    {
+        get
+        {
+            var gap = PollingInterval * PollingGapIntervals;
+            return gap > MinimumPollingGap ? gap : MinimumPollingGap;
+        }
+    }
 
     /// <summary>Serializes the session changes of one integration. Polling and provider settings take the same lock.</summary>
     public Task LockIntegration(long integrationId, CancellationToken ct) =>
@@ -41,7 +63,8 @@ public sealed partial class SessionLifecycle(
     /// <summary>
     /// A poll of a polling integration saw <paramref name="gameId"/> (null: no game, or an ignored one). A provider
     /// reports one game, so the integration has one session: it goes on while that game is seen and ends at the poll
-    /// that sees another game or none.
+    /// that sees another game or none. After a gap it ended one interval after it was last seen, and a game still
+    /// running starts a new session.
     /// </summary>
     public async Task ApplyPoll(
         long integrationId,
@@ -54,13 +77,14 @@ public sealed partial class SessionLifecycle(
         long? continuing = null;
         foreach (var session in await OpenSessions(row => row.IntegrationId == integrationId, ct))
         {
-            if (continuing is null && session.GameId == gameId)
+            var unseen = polledAt - session.UpdatedAt > PollingGap;
+            if (!unseen && continuing is null && session.GameId == gameId)
             {
                 continuing = session.Id;
                 continue;
             }
 
-            await End([session.Id], polledAt, null, ct);
+            await End([session.Id], polledAt, unseen ? PollingInterval : null, ct);
         }
 
         if (continuing is { } sessionId && await Touch(sessionId, polledAt, ct)) return;
@@ -182,14 +206,27 @@ public sealed partial class SessionLifecycle(
         EndWhere(row => row.UserId == userId && row.CaptureMethod == CaptureMethod.Manual, endedAt, null, ct);
 
     /// <summary>
-    /// Ends the sessions nobody else will: capture sessions not pinged for <see cref="CaptureTimeout"/>. Runs before
-    /// every poll cycle and announces what it ended.
+    /// The integration was paused, so nothing will see its sessions end: they end now, or a poll interval (capture
+    /// timeout) after they were last seen if that is earlier.
+    /// </summary>
+    public Task<int> EndForPausedIntegration(long integrationId, IntegrationType type, CancellationToken ct) =>
+        EndWhere(
+            row => row.IntegrationId == integrationId,
+            DateTimeOffset.UtcNow,
+            type == IntegrationType.Api ? CaptureTimeout : PollingInterval,
+            ct);
+
+    /// <summary>
+    /// Ends the sessions nobody else will: capture sessions not pinged for <see cref="CaptureTimeout"/> and polling
+    /// sessions unseen for longer than the polling gap (a failing or paused integration). Runs before every poll cycle
+    /// and announces what it ended.
     /// </summary>
     public async Task<int> SweepStaleSessions(CancellationToken ct)
     {
         var now = DateTimeOffset.UtcNow;
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
         var ended = await EndUnseen("api", now - CaptureTimeout, CaptureTimeout, now, ct);
+        ended.AddRange(await EndUnseen("polling", now - PollingGap, PollingInterval, now, ct));
         await transaction.CommitAsync(ct);
         Announce(ended);
         await PublishPending(ct);
