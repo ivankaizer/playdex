@@ -78,7 +78,7 @@ public sealed class AccountsService(AccountsRepository repository)
             gameIds = await repository.ResolveConnectedGameIds(userId, parsedGameId, ct);
         }
         var range = AccountDateRange.ParseOptional(from, to, zone);
-        return await repository.ListSessions(userId, accountId, title, gameIds, platform, range.From, range.ToExclusive,
+        return await repository.ListSessions(userId, accountId, SearchText.OptionalFilter(title, "title"), gameIds, platform, range.From, range.ToExclusive,
             sort, direction, limit, offset, ignoreShortMinutes, ct);
     }
 
@@ -137,7 +137,7 @@ public sealed class AccountsService(AccountsRepository repository)
     {
         var range = AccountDateRange.ParseRequired(from, to, zone);
         return repository.ComputeStats(
-            userId, accountId, range.From!.Value, range.ToExclusive!.Value, platform, title, ignoreShortMinutes, zone, ct);
+            userId, accountId, range.From!.Value, range.ToExclusive!.Value, platform, SearchText.OptionalFilter(title, "title"), ignoreShortMinutes, zone, ct);
     }
 
     /// <summary>Longest range the daily breakdown serves, so one request stays small.</summary>
@@ -154,7 +154,7 @@ public sealed class AccountsService(AccountsRepository repository)
             throw AppProblemException.Validation($"Daily stats cover at most {MaxDailyStatsDays} days.");
 
         return repository.ComputeDailyStats(
-            userId, accountId, range.From.Value, range.ToExclusive.Value, platform, title, ignoreShortMinutes, zone, ct);
+            userId, accountId, range.From.Value, range.ToExclusive.Value, platform, SearchText.OptionalFilter(title, "title"), ignoreShortMinutes, zone, ct);
     }
 
     public async Task<AccountStatsResponseDto> ComputeAccountStats(

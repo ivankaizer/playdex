@@ -107,7 +107,7 @@ public sealed class ManualService(
     public async Task<ManualMappingSearchResponseDto> SearchMapping(
         string query, CancellationToken ct)
     {
-        var trimmed = query.Trim();
+        var trimmed = SearchText.Bounded(query);
         if (trimmed.Length == 0)
             throw AppProblemException.Validation("query is required.");
 

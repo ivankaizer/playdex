@@ -15,7 +15,7 @@ public sealed class GamesService(GamesRepository repository) : IGames
 
     public async Task<GameSearchResponseDto> Search(string query, int limit, CancellationToken ct)
     {
-        var trimmed = query.Trim();
+        var trimmed = SearchText.Bounded(query);
         if (trimmed.Length == 0)
         {
             throw AppProblemException.Validation("query is required.");

@@ -104,12 +104,16 @@ public sealed class DraftService(DraftRepository repository, PlaydexDbContext db
         return new(results);
     }
 
+    /// <summary>
+    /// Games a draft title may mean. Extracted titles can run to 500 characters; past the search limit they get no
+    /// candidates, and the reviewer searches with a shorter title instead.
+    /// </summary>
     public async Task<IReadOnlyList<ManualMappingSearchResultDto>> SearchCandidates(
         long userId,
         string title,
         CancellationToken ct)
     {
-        if (string.IsNullOrWhiteSpace(title)) return [];
+        if (string.IsNullOrWhiteSpace(title) || title.Trim().Length > SearchText.MaxLength) return [];
         var previouslyPlayed = await manualRepository.SearchRecentlyPlayedGames(userId, title, 5, ct);
         var response = await manual.SearchMapping(title, ct);
         var results = previouslyPlayed.Select(PreviouslyPlayed).ToList();

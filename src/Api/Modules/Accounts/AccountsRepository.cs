@@ -260,8 +260,8 @@ public sealed class AccountsRepository(PlaydexDbContext db, IGames games)
 
         if (!string.IsNullOrWhiteSpace(title))
         {
-            var pattern = $"%{title}%";
-            query = query.Where(row => EF.Functions.ILike(row.Game.Title, pattern));
+            var pattern = SearchText.ContainsPattern(title);
+            query = query.Where(row => EF.Functions.ILike(row.Game.Title, pattern, SearchText.EscapeCharacter));
         }
 
         if (gameIds is { Count: > 0 })
