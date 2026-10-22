@@ -19,11 +19,13 @@ public sealed record SessionEnded(
     long GameId,
     DateTimeOffset StartedAt,
     DateTimeOffset EndedAt);
+/// <param name="FailingSince">When the outage began: one outage is announced once.</param>
 public sealed record PollFailed(
     long CredentialId,
     string Platform,
     string Message,
-    TimeSpan RetryDelay);
+    TimeSpan RetryDelay,
+    DateTimeOffset FailingSince);
 
 /// <summary>Polling paused itself because the provider kept rejecting the credential.</summary>
 public sealed record IntegrationPaused(

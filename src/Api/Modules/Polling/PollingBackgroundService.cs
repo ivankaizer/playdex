@@ -251,7 +251,8 @@ public sealed partial class PollingBackgroundService(
                     active.Credential.Id,
                     active.PlatformKey,
                     exception.Message,
-                    failure.Delay),
+                    failure.Delay,
+                    failure.FailingSince),
                 ct);
         }
     }

@@ -5,7 +5,8 @@ namespace Api.Modules.Notifications;
 
 /// <summary>
 /// Delivers notifications for domain events. It renders cards and calls Apprise (seconds to minutes), so it runs on
-/// <see cref="NotificationDispatcher"/>, never inline in the request or poll that raised the event.
+/// <see cref="NotificationDispatcher"/>, never inline in the request or poll that raised the event. A delivery that
+/// fails throws, and the dispatcher retries it; a card that cannot be rendered falls back to text first.
 /// </summary>
 public sealed partial class NotificationSender(
     NotificationsRepository repository,
@@ -13,14 +14,8 @@ public sealed partial class NotificationSender(
     NotificationRenderer renderer,
     ILogger<NotificationSender> logger)
 {
-    [LoggerMessage(Level = LogLevel.Error, Message = "Poll-failure notification failed for credential {CredentialId}")]
-    private partial void LogPollFailureNotificationFailed(Exception exception, long credentialId);
-
     [LoggerMessage(Level = LogLevel.Warning, Message = "Notification card rendering or attachment delivery failed; using text fallback")]
     private partial void LogCardRenderingFailed(Exception exception);
-
-    [LoggerMessage(Level = LogLevel.Error, Message = "Notification text fallback failed")]
-    private partial void LogTextFallbackFailed(Exception exception);
 
     public Task Send(object notification, CancellationToken ct) => notification switch
     {
@@ -63,19 +58,12 @@ public sealed partial class NotificationSender(
         if (!client.IsEnabled) return;
         var target = await repository.GetCredentialTarget(@event.CredentialId, ct);
         if (target is null || string.IsNullOrWhiteSpace(target.TelegramChatId)) return;
-        try
-        {
-            await client.SendMessageAsync(
-                target.TelegramChatId,
-                $"Polling failed for {@event.Platform}. Error: {@event.Message}. " +
-                $"Retrying in {Math.Round(@event.RetryDelay.TotalSeconds)}s; " +
-                "no further failure messages until polling works again.",
-                ct);
-        }
-        catch (Exception ex)
-        {
-            LogPollFailureNotificationFailed(ex, @event.CredentialId);
-        }
+        await client.SendMessageAsync(
+            target.TelegramChatId,
+            $"Polling failed for {@event.Platform}. Error: {@event.Message}. " +
+            $"Retrying in {Math.Round(@event.RetryDelay.TotalSeconds)}s; " +
+            "no further failure messages until polling works again.",
+            ct);
     }
 
     public async Task Send(IntegrationPaused @event, CancellationToken ct)
@@ -83,19 +71,12 @@ public sealed partial class NotificationSender(
         if (!client.IsEnabled) return;
         var target = await repository.GetCredentialTarget(@event.CredentialId, ct);
         if (target is null || string.IsNullOrWhiteSpace(target.TelegramChatId)) return;
-        try
-        {
-            await client.SendMessageAsync(
-                target.TelegramChatId,
-                $"Polling for {target.Platform} is paused: {@event.Reason} " +
-                $"It was rejected {@event.AuthFailures} times in a row. " +
-                "Update the credential in Playdex settings, then resume the integration.",
-                ct);
-        }
-        catch (Exception ex)
-        {
-            LogPollFailureNotificationFailed(ex, @event.CredentialId);
-        }
+        await client.SendMessageAsync(
+            target.TelegramChatId,
+            $"Polling for {target.Platform} is paused: {@event.Reason} " +
+            $"It was rejected {@event.AuthFailures} times in a row. " +
+            "Update the credential in Playdex settings, then resume the integration.",
+            ct);
     }
 
     private async Task SendSessionCard(
@@ -119,14 +100,7 @@ public sealed partial class NotificationSender(
             }
         }
 
-        try
-        {
-            await client.SendMessageAsync(telegramChatId, fallbackText, ct);
-        }
-        catch (Exception ex)
-        {
-            LogTextFallbackFailed(ex);
-        }
+        await client.SendMessageAsync(telegramChatId, fallbackText, ct);
     }
 
     private static string FormatDuration(TimeSpan duration)

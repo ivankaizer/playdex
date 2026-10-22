@@ -1,4 +1,5 @@
 using Api.Infrastructure.Common;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Api.Modules.Notifications;
 
@@ -23,7 +24,9 @@ public static class NotificationsModule
         services.AddHttpClient<NotificationRenderer>(client =>
             client.Timeout = TimeSpan.FromSeconds(15));
         services.AddScoped<NotificationSender>();
-        services.AddSingleton<PendingNotifications>();
+        services.AddScoped<NotificationOutbox>();
+        services.AddSingleton<NotificationSignal>();
+        services.TryAddSingleton(TimeProvider.System);
         services.AddHostedService<NotificationDispatcher>();
         services.AddScoped<NotificationEventHandlers>();
         services.AddScoped<IEventSubscriber<SessionStarted>>(

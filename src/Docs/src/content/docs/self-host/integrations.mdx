@@ -32,7 +32,7 @@ IGDB_CLIENT_SECRET=...
 
 ## Telegram notifications
 
-Messages when a session starts or ends, when an account stops syncing, and when one is paused.
+Messages when a session starts or ends, when an account stops syncing, and when one is paused. Messages not sent yet are kept in the database and sent after a restart.
 
 1. Create a bot with [@BotFather](https://t.me/BotFather) and set `TELEGRAM_BOT_TOKEN` in `.env`.
 2. Each user messages the bot once, then saves their chat ID in **Settings → Telegram notifications**.

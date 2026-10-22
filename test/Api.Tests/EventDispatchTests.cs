@@ -1,7 +1,9 @@
 using Api.Infrastructure.Common;
 using Api.Modules.Notifications;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
+using Playdex.Persistence;
 using Xunit;
 
 namespace Api.Tests;
@@ -39,45 +41,32 @@ public sealed class EventDispatchTests
     }
 
     [Fact]
-    public async Task NotificationsAreQueuedNotSentInline()
-    {
-        var apprise = new CountingHandler();
-        var pending = new PendingNotifications(NullLogger<PendingNotifications>.Instance);
-        var handlers = new NotificationEventHandlers(
-            new AppriseClient(new HttpClient(apprise) { BaseAddress = new Uri("https://apprise.test/") }),
-            pending);
-
-        await handlers.Handle(Started, CancellationToken.None);
-
-        Assert.Equal(0, apprise.Calls);
-        Assert.True(pending.Reader.TryRead(out var queued));
-        Assert.Equal(Started, queued);
-    }
-
-    [Fact]
     public async Task NothingIsQueuedWhenAppriseIsNotConfigured()
     {
-        var pending = new PendingNotifications(NullLogger<PendingNotifications>.Instance);
-        var handlers = new NotificationEventHandlers(new AppriseClient(new HttpClient()), pending);
+        // The outbox would fail on first use: there is no database behind it.
+        await using var db = new PlaydexDbContext(
+            new DbContextOptionsBuilder<PlaydexDbContext>().UseNpgsql("Host=unused.invalid").Options);
+        using var signal = new NotificationSignal();
+        var handlers = new NotificationEventHandlers(
+            new AppriseClient(new HttpClient()),
+            new NotificationOutbox(db, TimeProvider.System),
+            signal);
 
         await handlers.Handle(Started, CancellationToken.None);
 
-        Assert.False(pending.Reader.TryRead(out _));
+        Assert.False(await signal.WaitAsync(TimeSpan.Zero, CancellationToken.None));
     }
 
     [Fact]
-    public void AFullQueueDropsInsteadOfBlocking()
+    public async Task ASignalWakesOneWaitAndRepeatedSignalsCollapse()
     {
-        var pending = new PendingNotifications(NullLogger<PendingNotifications>.Instance);
+        using var signal = new NotificationSignal();
 
-        for (var index = 0; index <= PendingNotifications.Capacity; index++)
-        {
-            pending.Enqueue(Started);
-        }
+        signal.Notify();
+        signal.Notify();
 
-        var count = 0;
-        while (pending.Reader.TryRead(out _)) count++;
-        Assert.Equal(PendingNotifications.Capacity, count);
+        Assert.True(await signal.WaitAsync(TimeSpan.Zero, CancellationToken.None));
+        Assert.False(await signal.WaitAsync(TimeSpan.Zero, CancellationToken.None));
     }
 
     private sealed class FailingHandler : IEventSubscriber<SessionStarted>
@@ -103,19 +92,6 @@ public sealed class EventDispatchTests
         {
             Events.Add(domainEvent);
             return Task.CompletedTask;
-        }
-    }
-
-    private sealed class CountingHandler : HttpMessageHandler
-    {
-        public int Calls { get; private set; }
-
-        protected override Task<HttpResponseMessage> SendAsync(
-            HttpRequestMessage request,
-            CancellationToken cancellationToken)
-        {
-            Calls++;
-            return Task.FromResult(new HttpResponseMessage(System.Net.HttpStatusCode.OK));
         }
     }
 }

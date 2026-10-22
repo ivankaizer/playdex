@@ -189,7 +189,7 @@ public sealed class AppriseNotificationTests(PostgresFixture postgres)
     }
 
     [Fact]
-    public async Task SessionEventsSendPhotoFallbackToTextSkipUnlinkedAndIsolateDeliveryFailure()
+    public async Task SessionEventsSendPhotoFallbackToTextSkipUnlinkedAndReportDeliveryFailure()
     {
         if (!postgres.IsConfigured) return;
 
@@ -268,9 +268,10 @@ public sealed class AppriseNotificationTests(PostgresFixture postgres)
                 CancellationToken.None);
             Assert.EndsWith("/notify/telegram_4242", appriseHandler.Requests[1]);
 
-            await handler.Send(
-                new PollFailed(integration.Id, "steam", "rate limited", TimeSpan.FromMinutes(1)),
-                CancellationToken.None);
+            // A failed delivery throws, so that the dispatcher retries it.
+            await Assert.ThrowsAsync<AppriseApiException>(() => handler.Send(
+                new PollFailed(integration.Id, "steam", "rate limited", TimeSpan.FromMinutes(1), now),
+                CancellationToken.None));
 
             db.NotificationChannels.Remove(notificationChannel);
             await db.SaveChangesAsync();
