@@ -15,6 +15,11 @@ public sealed class ManualService(
     IGameResolver gameResolver)
 {
     private const int MaxLocalSearchResults = 5;
+
+    /// <summary>
+    /// Playnite sessions come only from the Playnite integration, so the manual catalog and AI drafts leave it out.
+    /// </summary>
+    internal const string PlaynitePlatformKey = "playnite";
     /// <summary>
     /// Start a new manual tracking session for a saved game or verified IGDB selection.
     /// Ends any active manual sessions first, then creates a new one.
@@ -194,7 +199,7 @@ public sealed class ManualService(
     internal static ManualPlatformsResponseDto BuildPlatformCatalog(
         IEnumerable<Playdex.Persistence.Platform> platforms) =>
         new(platforms
-            .Where(platform => platform.Key != "playnite")
+            .Where(platform => platform.Key != PlaynitePlatformKey)
             .OrderBy(platform => platform.Name)
             .ThenBy(platform => platform.Key)
             .Select(platform => new ManualPlatformDto(platform.Key, platform.Name))

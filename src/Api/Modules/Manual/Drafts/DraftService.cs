@@ -24,7 +24,8 @@ public sealed class DraftService(DraftRepository repository, PlaydexDbContext db
         if (title.Length > 500) throw AppProblemException.Validation("Game title must be at most 500 characters.");
         if (request.Date?.Length > 10) throw AppProblemException.Validation("Use a calendar date in yyyy-MM-dd format.");
         var platform = request.PlatformKey?.Trim().ToLowerInvariant() ?? "unknown";
-        if (await manualRepository.GetPlatformIdByKey(platform, ct) is null)
+        // The catalog the review offers excludes Playnite, as extraction does; an edit cannot bring it back.
+        if (platform == ManualService.PlaynitePlatformKey || await manualRepository.GetPlatformIdByKey(platform, ct) is null)
             throw AppProblemException.Validation("Select a platform from the catalog.");
         ManualMappingSearchResultDto? selected = null;
         // A changed query invalidates the prior selection, even when a client sends its stale ID.
