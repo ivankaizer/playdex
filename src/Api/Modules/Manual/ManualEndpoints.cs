@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using Api.Infrastructure.Auth;
+using Api.Infrastructure.Http;
 
 namespace Api.Modules.Manual;
 
@@ -11,7 +12,7 @@ public static class ManualEndpoints
 
         manual.MapPost("/sessions/start", async (HttpContext http) =>
         {
-            var request = await http.Request.ReadFromJsonAsync<ManualSessionStartRequest>();
+            var request = await http.Request.ReadJsonBodyAsync<ManualSessionStartRequest>();
             var service = http.RequestServices.GetRequiredService<ManualService>();
             IResult result = request is null
                 ? TypedResults.Problem("Request body is required.", statusCode: 400)
@@ -26,7 +27,7 @@ public static class ManualEndpoints
 
         manual.MapPost("/entries", async (HttpContext http) =>
         {
-            var request = await http.Request.ReadFromJsonAsync<ManualEntryCreateRequest>();
+            var request = await http.Request.ReadJsonBodyAsync<ManualEntryCreateRequest>();
             var service = http.RequestServices.GetRequiredService<ManualService>();
             IResult result = request is null
                 ? TypedResults.Problem("Request body is required.", statusCode: 400)

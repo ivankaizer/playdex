@@ -26,6 +26,12 @@ public sealed class ApiEnvelopeMiddleware(RequestDelegate next)
             context.Response.Body = originalBody;
         }
 
+        if (context.RequestAborted.IsCancellationRequested)
+        {
+            // The client has gone; there is nobody to send an envelope to.
+            return;
+        }
+
         bufferedBody.Position = 0;
         if (context.Response.StatusCode == StatusCodes.Status204NoContent)
         {
@@ -34,9 +40,13 @@ public sealed class ApiEnvelopeMiddleware(RequestDelegate next)
             return;
         }
 
-        if (context.Response.StatusCode is >= 200 and < 300 && IsBinary(context.Response.ContentType))
+        var success = context.Response.StatusCode is >= 200 and < 300;
+        using var data = success ? await TryParseJsonBodyAsync(bufferedBody, context) : null;
+        if (success && data is null && bufferedBody.Length > 0)
         {
-            // Files (e.g. admin screenshots) are streamed as-is; only JSON payloads are enveloped.
+            // Files (e.g. admin screenshots), text and anything else that is not JSON pass through as written; only
+            // JSON payloads are enveloped.
+            bufferedBody.Position = 0;
             context.Response.ContentLength = bufferedBody.Length;
             await bufferedBody.CopyToAsync(originalBody, context.RequestAborted);
             return;
@@ -45,12 +55,20 @@ public sealed class ApiEnvelopeMiddleware(RequestDelegate next)
         context.Response.ContentLength = null;
         context.Response.ContentType = "application/json";
 
-        var writer = new Utf8JsonWriter(originalBody);
+        await using var writer = new Utf8JsonWriter(originalBody);
         writer.WriteStartObject();
-        if (context.Response.StatusCode is >= 200 and < 300)
+        if (success)
         {
             writer.WritePropertyName("data");
-            await WriteBodyAsync(bufferedBody, writer, context.RequestAborted);
+            if (data is null)
+            {
+                writer.WriteNullValue();
+            }
+            else
+            {
+                data.RootElement.WriteTo(writer);
+            }
+
             writer.WriteNull("error");
         }
         else
@@ -61,6 +79,7 @@ public sealed class ApiEnvelopeMiddleware(RequestDelegate next)
                 bufferedBody,
                 context.Response.StatusCode,
                 context.RequestAborted));
+            writer.WriteString("correlationId", context.TraceIdentifier);
             writer.WriteEndObject();
         }
 
@@ -68,24 +87,37 @@ public sealed class ApiEnvelopeMiddleware(RequestDelegate next)
         await writer.FlushAsync(context.RequestAborted);
     }
 
-    private static bool IsBinary(string? contentType) =>
-        contentType is not null && (
-            contentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase) ||
-            contentType.StartsWith("application/octet-stream", StringComparison.OrdinalIgnoreCase));
-
-    private static async Task WriteBodyAsync(
-        Stream body,
-        Utf8JsonWriter writer,
-        CancellationToken cancellationToken)
+    /// <summary>
+    /// The body as JSON, or null when it is empty, not declared as JSON, or not valid JSON. Parsed before anything
+    /// is written, so a body that fails to parse can still be passed through instead of breaking the response.
+    /// </summary>
+    private static async Task<JsonDocument?> TryParseJsonBodyAsync(MemoryStream body, HttpContext context)
     {
-        if (body.Length == 0)
+        if (body.Length == 0 || !IsJson(context.Response.ContentType))
         {
-            writer.WriteNullValue();
-            return;
+            return null;
         }
 
-        using var document = await JsonDocument.ParseAsync(body, cancellationToken: cancellationToken);
-        document.RootElement.WriteTo(writer);
+        try
+        {
+            return await JsonDocument.ParseAsync(body, cancellationToken: context.RequestAborted);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    private static bool IsJson(string? contentType)
+    {
+        if (contentType is null)
+        {
+            return true;
+        }
+
+        var mediaType = contentType.Split(';', 2)[0].Trim();
+        return mediaType.Equals("application/json", StringComparison.OrdinalIgnoreCase) ||
+               mediaType.EndsWith("+json", StringComparison.OrdinalIgnoreCase);
     }
 
     private static async Task<string> ReadErrorAsync(

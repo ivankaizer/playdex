@@ -86,6 +86,11 @@ public sealed class GamesService(GamesRepository repository) : IGames
     public async Task<GameIgnoreResponseDto> SetIgnore(long userId, GameIgnoreRequest request, bool ignored, CancellationToken ct)
     {
         var gameId = GameId.Parse(request.GameId);
+        if (ignored)
+        {
+            await RequireGame(gameId, ct);
+        }
+
         await repository.SetIgnored(userId, gameId, ignored, ct);
         return new GameIgnoreResponseDto(request.GameId, ignored);
     }
@@ -106,8 +111,18 @@ public sealed class GamesService(GamesRepository repository) : IGames
         {
             throw AppProblemException.Validation("Rating must be between 1 and 5.");
         }
+        await RequireGame(gameId, ct);
         await repository.SetRating(userId, gameId, rating.Value, ct);
         return new GameRatingResponseDto(request.GameId, rating);
+    }
+
+    // An unknown id used to reach the insert and fail on the foreign key, answering 500 instead of 404.
+    private async Task RequireGame(long gameId, CancellationToken ct)
+    {
+        if (await repository.GetGameEntity(gameId, ct) is null)
+        {
+            throw AppProblemException.NotFound("Game not found.");
+        }
     }
 
     public async Task<GameRatingResponseDto> DeleteRating(long userId, GameRatingRequest request, CancellationToken ct)
