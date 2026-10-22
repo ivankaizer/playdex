@@ -10,15 +10,33 @@ public sealed class SettingsService(
     public Task<UserSettingsResponseDto> GetSettings(long userId, CancellationToken ct) =>
         repository.LoadUserSettings(userId, ct);
 
+    /// <summary>
+    /// Saves first, then registers the chat with Apprise. If Apprise fails, the saved chat ID is still the source of
+    /// truth: sending re-registers a chat Apprise does not know (see <see cref="AppriseClient.SendMessageAsync"/>), so
+    /// the two can only diverge in the direction that heals itself.
+    /// </summary>
     public async Task<UserSettingsResponseDto> UpdateSettings(
         long userId, UpdateSettingsRequest request, CancellationToken ct)
     {
         var minutes = ValidateIgnoreShortSessionsMinutes(request.IgnoreShortSessionsMinutes);
         var telegramChatId = ValidateTelegramChatId(request.TelegramChatId);
+        var saved = await repository.UpsertSettings(userId, minutes, telegramChatId, ct);
         if (telegramChatId is not null)
-            await appriseClient.ConfigureTelegramAsync(telegramChatId, ct);
+        {
+            try
+            {
+                await appriseClient.ConfigureTelegramAsync(telegramChatId, ct);
+            }
+            catch (AppriseApiException)
+            {
+                throw new AppProblemException(
+                    StatusCodes.Status502BadGateway,
+                    "Settings were saved, but Telegram notifications could not be set up. " +
+                    "Check the Telegram chat ID and send a test notification.");
+            }
+        }
 
-        return await repository.UpsertSettings(userId, minutes, telegramChatId, ct);
+        return saved;
     }
 
     public async Task<TestNotificationResponseDto> SendTestNotification(
@@ -30,10 +48,20 @@ public sealed class SettingsService(
             throw AppProblemException.Validation(
                 "Configure a Telegram chat ID before sending a test notification.");
 
-        await appriseClient.SendMessageAsync(
-            settings.TelegramChatId,
-            "Playdex test notification. Notifications are configured correctly.",
-            ct);
+        try
+        {
+            await appriseClient.SendMessageAsync(
+                settings.TelegramChatId,
+                "Playdex test notification. Notifications are configured correctly.",
+                ct);
+        }
+        catch (AppriseApiException)
+        {
+            throw new AppProblemException(
+                StatusCodes.Status502BadGateway,
+                "Notification delivery failed. Check the Telegram chat ID and try again.");
+        }
+
         return new TestNotificationResponseDto(true);
     }
 
