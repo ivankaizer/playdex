@@ -5,7 +5,7 @@ namespace Playdex.Core;
 
 /// <summary>
 /// Budget measurements from docs/launcher/performance.md, appended to metrics.jsonl and the log.
-/// tools/measure.ps1 aggregates them into the numbers in docs/launcher/spike-results.md.
+/// tools/measure.ps1 aggregates them.
 /// </summary>
 public static class Metrics
 {

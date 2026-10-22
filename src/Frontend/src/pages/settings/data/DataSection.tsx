@@ -2,7 +2,6 @@ import { useState, type FormEvent } from "react";
 import { apiBlob, apiRequest, errorMessage } from "@/lib/api";
 import { authSession } from "@/lib/auth";
 import { formatUtcDateInput } from "@/lib/format";
-import { logout } from "@/lib/navigation";
 import { SectionHeading } from "../shared/SectionHeading";
 
 type ExportStatus = "idle" | "working" | "done" | "error";
@@ -32,7 +31,7 @@ export function DataSection() {
     setExportStatus("working");
     setExportError("");
     try {
-      const blob = await apiBlob("/me/export", { onAuthFailure: logout });
+      const blob = await apiBlob("/me/export");
       saveBlob(blob, `playdex-export-${formatUtcDateInput(new Date())}.json`);
       setExportStatus("done");
     } catch (error) {
@@ -53,7 +52,7 @@ export function DataSection() {
     setIsDeleting(true);
     setDeleteError("");
     try {
-      await apiRequest<void>("/me", { method: "DELETE", body: { password }, onAuthFailure: logout });
+      await apiRequest<void>("/me", { method: "DELETE", body: { password } });
       authSession.logout();
       window.location.assign("/");
     } catch (error) {

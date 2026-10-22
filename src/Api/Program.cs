@@ -68,6 +68,7 @@ builder.Services.AddSingleton(new MigrationCatalog([
     new AiPlaySessionDraftsMigration(),
     new AiGenerationHistoryMigration(),
     new UserTokenVersionMigration(),
+    new RefreshTokensMigration(),
     new OpenSessionGuardMigration(),
 ]));
 builder.Services.AddSingleton<MigrationRunner>();

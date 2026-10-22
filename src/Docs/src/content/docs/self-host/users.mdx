@@ -18,8 +18,8 @@ docker compose exec app dotnet Api.dll create-user friend@example.com
 | Reset a password | `create-user` again with the same email |
 | Make someone an admin | `create-user` again with `--admin` |
 
-Without a piped password, it generates one and prints it once. `--admin` never removes admin rights.
+Without a piped password, it generates one and prints it once. `--admin` never removes admin rights. A new password signs that user out on every device.
 
-Emails are matched exactly, so `Me@example.com` and `me@example.com` are two different accounts.
+Case doesn't matter in emails: `Me@example.com` and `me@example.com` are the same account.
 
 Users can export or delete their own data in **Settings → Export or delete your data**.

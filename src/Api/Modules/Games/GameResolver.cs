@@ -46,6 +46,13 @@ public static class GameExternalIdentityTypes
 
 public sealed class GameResolver(PlaydexDbContext db) : IGameResolver
 {
+    // Without an external id a game is found by title, ignoring case, spacing, ASCII punctuation and ©/®/™, so
+    // "Half-Life 2" finds "HALF LIFE 2™". Other letters are kept: "Ведьмак 3" and "ペルソナ3" must not both become "3".
+    // games_title_key_idx (migration 016) indexes the same expression.
+    private static readonly string GamesByTitleSql = $"SELECT * FROM games WHERE {TitleKey("title")} = {TitleKey("{0}")}";
+    private static readonly string LockTitleSql =
+        $"SELECT pg_advisory_xact_lock(hashtextextended('title:' || {TitleKey("{0}")}, 0))";
+
     public async Task<GameResolution> Resolve(GameResolutionRequest request, CancellationToken ct)
     {
         var title = request.Title.Trim();
@@ -58,10 +65,14 @@ public sealed class GameResolver(PlaydexDbContext db) : IGameResolver
             ? null
             : request.ExternalId.Trim();
         var identityType = externalId is null ? null : request.Provider;
-        var identityKey = identityType?.ToKey();
-        var lockKey = identityType is null
-            ? $"new:{Guid.NewGuid():N}"
-            : $"identity:{identityKey}:{externalId}";
+
+        // Most calls name a game that exists and is up to date. They neither write nor take the lock, so players of
+        // the same game don't queue behind each other.
+        var (known, knownIdentity) = await Find(identityType, externalId, title, tracked: false, ct);
+        if (known is not null && !Update(known, knownIdentity, request, title, DateTimeOffset.UtcNow))
+        {
+            return Resolution(known, knownIdentity);
+        }
 
         IDbContextTransaction? ownedTransaction = null;
         if (db.Database.CurrentTransaction is null)
@@ -71,24 +82,19 @@ public sealed class GameResolver(PlaydexDbContext db) : IGameResolver
 
         try
         {
-            await db.Database.ExecuteSqlInterpolatedAsync(
-                $"SELECT pg_advisory_xact_lock(hashtextextended({lockKey}, 0))",
-                ct);
-
-            GameExternalIdentity? identity = null;
-            Game? game = null;
-            if (identityType is not null)
+            if (identityType is null)
             {
-                identity = await db.GameExternalIdentities
-                    .FirstOrDefaultAsync(
-                        row => row.Type == identityType.Value && row.ExternalId == externalId,
-                        ct);
-                if (identity is not null)
-                {
-                    game = await db.Games.SingleAsync(row => row.Id == identity.GameId, ct);
-                }
+                await db.Database.ExecuteSqlRawAsync(LockTitleSql, [title], ct);
+            }
+            else
+            {
+                var lockKey = $"identity:{identityType.Value.ToKey()}:{externalId}";
+                await db.Database.ExecuteSqlInterpolatedAsync(
+                    $"SELECT pg_advisory_xact_lock(hashtextextended({lockKey}, 0))",
+                    ct);
             }
 
+            var (game, identity) = await Find(identityType, externalId, title, tracked: true, ct);
             var now = DateTimeOffset.UtcNow;
             if (game is null)
             {
@@ -100,42 +106,25 @@ public sealed class GameResolver(PlaydexDbContext db) : IGameResolver
                     UpdatedAt = now,
                 };
                 db.Games.Add(game);
+                await db.SaveChangesAsync(ct);
             }
             else
             {
-                if (!game.TitleLocked && request.TitleIsAuthoritative)
-                {
-                    game.Title = title;
-                }
-                if (!game.CapsuleUrlLocked && request.CapsuleUrl is not null)
-                {
-                    game.CapsuleUrl = request.CapsuleUrl;
-                }
-                game.UpdatedAt = now;
+                Update(game, identity, request, title, now);
             }
 
-            await db.SaveChangesAsync(ct);
-
-            if (identityType is not null)
+            if (identityType is not null && identity is null)
             {
-                if (identity is null)
+                identity = new GameExternalIdentity
                 {
-                    identity = new GameExternalIdentity
-                    {
-                        GameId = game.Id,
-                        Type = identityType.Value,
-                        ExternalId = externalId!,
-                        Title = title,
-                        CreatedAt = now,
-                        UpdatedAt = now,
-                    };
-                    db.GameExternalIdentities.Add(identity);
-                }
-                else if (request.TitleIsAuthoritative)
-                {
-                    identity.Title = title;
-                    identity.UpdatedAt = now;
-                }
+                    GameId = game.Id,
+                    Type = identityType.Value,
+                    ExternalId = externalId!,
+                    Title = title,
+                    CreatedAt = now,
+                    UpdatedAt = now,
+                };
+                db.GameExternalIdentities.Add(identity);
             }
 
             await db.SaveChangesAsync(ct);
@@ -143,7 +132,7 @@ public sealed class GameResolver(PlaydexDbContext db) : IGameResolver
             {
                 await ownedTransaction.CommitAsync(ct);
             }
-            return new GameResolution(game.Id, identity?.Id, game.CapsuleUrl is null);
+            return Resolution(game, identity);
         }
         catch
         {
@@ -161,4 +150,81 @@ public sealed class GameResolver(PlaydexDbContext db) : IGameResolver
             }
         }
     }
+
+    /// <summary>
+    /// The game an external id points to, with that identity; without an external id, the game with this title. An
+    /// external id nobody has sent before finds nothing and gets a game of its own.
+    /// </summary>
+    private async Task<(Game? Game, GameExternalIdentity? Identity)> Find(
+        GameExternalIdentityType? identityType,
+        string? externalId,
+        string title,
+        bool tracked,
+        CancellationToken ct)
+    {
+        if (identityType is null)
+        {
+            var byTitle = db.Games.FromSqlRaw(GamesByTitleSql, title);
+            var game = await (tracked ? byTitle : byTitle.AsNoTracking())
+                .OrderByDescending(row => row.Title == title)
+                .ThenBy(row => row.Id)
+                .FirstOrDefaultAsync(ct);
+            return (game, null);
+        }
+
+        var byIdentity =
+            from identity in db.GameExternalIdentities
+            where identity.Type == identityType.Value && identity.ExternalId == externalId
+            join game in db.Games on identity.GameId equals game.Id
+            select new { Game = game, Identity = identity };
+        var match = await (tracked ? byIdentity : byIdentity.AsNoTracking()).FirstOrDefaultAsync(ct);
+        return (match?.Game, match?.Identity);
+    }
+
+    /// <summary>
+    /// Brings an existing game in line with the request and tells whether anything changed. On an untracked copy it
+    /// only tells whether a write is needed.
+    /// </summary>
+    private static bool Update(
+        Game game,
+        GameExternalIdentity? identity,
+        GameResolutionRequest request,
+        string title,
+        DateTimeOffset now)
+    {
+        // A game found by title already has that title up to case and punctuation, and several sources may name it:
+        // renaming it or swapping its poster would only make them take turns.
+        var foundByTitle = identity is null;
+        var renamesGame = !foundByTitle && request.TitleIsAuthoritative && !game.TitleLocked && game.Title != title;
+        var renamesIdentity = !foundByTitle && request.TitleIsAuthoritative && identity!.Title != title;
+        var setsCapsule = request.CapsuleUrl is not null
+            && !game.CapsuleUrlLocked
+            && game.CapsuleUrl != request.CapsuleUrl
+            && (!foundByTitle || game.CapsuleUrl is null);
+
+        if (renamesGame)
+        {
+            game.Title = title;
+        }
+        if (setsCapsule)
+        {
+            game.CapsuleUrl = request.CapsuleUrl;
+        }
+        if (renamesGame || setsCapsule)
+        {
+            game.UpdatedAt = now;
+        }
+        if (renamesIdentity)
+        {
+            identity!.Title = title;
+            identity.UpdatedAt = now;
+        }
+        return renamesGame || setsCapsule || renamesIdentity;
+    }
+
+    private static GameResolution Resolution(Game game, GameExternalIdentity? identity) =>
+        new(game.Id, identity?.Id, game.CapsuleUrl is null);
+
+    private static string TitleKey(string operand) =>
+        $"""btrim(regexp_replace(lower({operand}), '([^a-z0-9\u0080-\U0010ffff]|[©®™])+', ' ', 'g'))""";
 }

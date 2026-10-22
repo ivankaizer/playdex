@@ -1,5 +1,6 @@
 import { useCallback } from "react";
 import { useNavigate } from "react-router";
+import { revokeRefreshToken } from "./api";
 import { authSession } from "./auth";
 import { encodeGameId, decodeGameHash } from "./gameHash";
 
@@ -55,8 +56,9 @@ export function useAppNavigate(): (target: string) => void {
   );
 }
 
-/** Clears the stored session and reloads the app at the home page. */
+/** Signs out: revokes the session on the server, clears it here and reloads the app at the home page. */
 export function logout(): void {
+  revokeRefreshToken();
   authSession.logout();
   window.location.assign("/");
 }

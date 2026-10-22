@@ -6,6 +6,8 @@ name: Windows runner
 #   auto    the PC when its runner is online, GitHub otherwise
 # A job aimed at an offline self-hosted runner waits in the queue for up to a day instead of moving on, hence the
 # check, which runs on macserv so it costs no GitHub-hosted minutes.
+# Once the repository is public, pull requests always build on GitHub (free there) and the check itself runs on
+# GitHub too, so code from a pull request never reaches the PC or macserv.
 
 on:
   workflow_call:
@@ -28,7 +30,7 @@ on:
 jobs:
   pick:
     name: Pick the Windows runner
-    runs-on: [self-hosted, macserv]
+    runs-on: ${{ github.event.repository.private && fromJSON('["self-hosted","macserv"]') || 'ubuntu-latest' }}
     outputs:
       runner: ${{ steps.pick.outputs.runner }}
       where: ${{ steps.pick.outputs.where }}
@@ -37,11 +39,15 @@ jobs:
         env:
           CHOICE: ${{ inputs.choice }}
           GH_TOKEN: ${{ secrets.RUNNERS_TOKEN }}
+          EVENT: ${{ github.event_name }}
+          PRIVATE: ${{ github.event.repository.private }}
         run: |
           where=$CHOICE
           if [ "$where" = auto ]; then
             where=github
-            if [ -z "$GH_TOKEN" ]; then
+            if [ "$EVENT" = pull_request ] && [ "$PRIVATE" != true ]; then
+              echo "::notice::Pull requests to a public repository build on GitHub, never on the PC"
+            elif [ -z "$GH_TOKEN" ]; then
               echo "::warning::RUNNERS_TOKEN is not set, so auto can't see the PC's runner"
             elif ! online=$(gh api "repos/$GITHUB_REPOSITORY/actions/runners" \
                 --jq '[.runners[] | select(.status == "online" and any(.labels[]; .name == "windows-pc"))] | length'); then

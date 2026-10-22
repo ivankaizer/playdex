@@ -12,6 +12,21 @@ public sealed class User : IHasTimestamps
     public int TokenVersion { get; set; }
 }
 
+/// <summary>
+/// A refresh token the server issued, kept as the SHA-256 of its <c>jti</c>. Each refresh swaps it for a new token
+/// in the same family (one sign-in); a token presented again after its swap was copied, so its family is revoked.
+/// </summary>
+public sealed class RefreshToken
+{
+    public long Id { get; set; }
+    public long UserId { get; set; }
+    public Guid FamilyId { get; set; }
+    public required byte[] TokenHash { get; set; }
+    public DateTimeOffset CreatedAt { get; set; }
+    public DateTimeOffset ExpiresAt { get; set; }
+    public DateTimeOffset? RotatedAt { get; set; }
+}
+
 public sealed class NotificationChannel : IHasTimestamps
 {
     public const string Telegram = "telegram";
