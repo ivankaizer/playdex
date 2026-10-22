@@ -638,7 +638,7 @@ function LibraryCard({ recap, onOpenGame }: { recap: RecapResponse; onOpenGame: 
     { label: "New games tried", value: formatCount(recap.newGamesTried) },
     { label: "Abandoned", value: formatCount(recap.abandonedGames) },
     { label: "Return rate games", value: formatCount(recap.returnRateGames) },
-    { label: "Top 3 share", value: formatPercent(recap.timeOnTop3Percent, 100) },
+    { label: "Top 3 share", value: formatPercent(recap.topThreeGamesSharePercent, 100) },
     { label: "Most binged", value: binged ? `${binged.title} · ${formatCount(binged.sessionCount)}` : "—" },
     { label: "Top by sessions", value: bySessions ? `${bySessions.title} · ${formatCount(bySessions.sessionCount)}` : "—" },
   ];

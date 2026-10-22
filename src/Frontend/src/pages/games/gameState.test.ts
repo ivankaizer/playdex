@@ -30,8 +30,6 @@ function session(id: number, startedAt: string, endedAt: string, capsuleUrl: str
     game: "Game",
     capsuleUrl,
     ignored: false,
-    mappedPlatform: null,
-    mappedSource: null,
   };
 }
 

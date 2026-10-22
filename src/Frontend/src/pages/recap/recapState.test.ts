@@ -76,7 +76,7 @@ function recap(totalSessions: number): RecapResponse {
     newGamesTried: 1,
     abandonedGames: 0,
     returnRateGames: 0,
-    timeOnTop3Percent: 100,
+    topThreeGamesSharePercent: 100,
     mostBingedGame: null,
     platformTotals: [],
     mostUsedPlatform: null,

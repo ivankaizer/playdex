@@ -9,8 +9,6 @@ export interface AccountSession {
   game: string;
   capsuleUrl: string | null;
   ignored: boolean;
-  mappedPlatform: string | null;
-  mappedSource: string | null;
 }
 
 export interface AccountSessionsResponse {

@@ -488,7 +488,6 @@ export function getWeekView(activity: DashboardActivity | null, now: Date): Week
         platformKey: item.platformKey,
         platformName: item.platformName,
         totalSeconds: (current?.totalSeconds ?? 0) + item.totalSeconds,
-        source: null,
       });
     }
   }

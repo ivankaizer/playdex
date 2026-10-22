@@ -173,7 +173,7 @@ public sealed class AccountsRepository(PlaydexDbContext db, IGames games)
         var platforms = allSessions
             .GroupBy(session => session.PlatformKey)
             .Select(g => new AccountPlatformStatDto(
-                g.Key, g.First().PlatformName, g.Sum(MapDuration), null))
+                g.Key, g.First().PlatformName, g.Sum(MapDuration)))
             .OrderBy(platform => platform.PlatformKey)
             .ToList();
 
@@ -302,9 +302,7 @@ public sealed class AccountsRepository(PlaydexDbContext db, IGames games)
             row.PlatformName,
             row.GameTitle,
             row.CapsuleUrl,
-            row.Ignored,
-            null,
-            null);
+            row.Ignored);
     }
 
     private static double MapDuration(AccountSessionDto s) =>

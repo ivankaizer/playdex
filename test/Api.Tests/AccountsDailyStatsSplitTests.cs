@@ -53,5 +53,5 @@ public sealed class AccountsDailyStatsSplitTests
 
     private static AccountSessionDto Session(
         DateTimeOffset startedAt, DateTimeOffset? endedAt, string platformKey = "steam", string platformName = "Steam") =>
-        new(1, startedAt, endedAt, "g", platformKey, platformName, "Game", null, false, null, null);
+        new(1, startedAt, endedAt, "g", platformKey, platformName, "Game", null, false);
 }

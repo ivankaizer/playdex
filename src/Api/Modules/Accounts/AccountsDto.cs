@@ -11,9 +11,7 @@ public sealed record AccountSessionDto(
     string PlatformName,
     string Game,
     string? CapsuleUrl,
-    bool Ignored,
-    string? MappedPlatform,
-    string? MappedSource);
+    bool Ignored);
 
 public sealed record AccountSessionsResponseDto(
     long? AccountId,
@@ -52,8 +50,7 @@ public sealed record AccountStatsPeriodDto(
 public sealed record AccountPlatformStatDto(
     string PlatformKey,
     string PlatformName,
-    double TotalSeconds,
-    string? Source);
+    double TotalSeconds);
 
 public sealed record AccountTopGameDto(string GameId, string Title, double TotalSeconds);
 
