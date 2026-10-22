@@ -281,7 +281,7 @@ public sealed class ProvidersRepositoryTests(PostgresFixture postgres)
         var user = new User { Email = $"provider-update-{suffix}@example.test" };
         db.Users.Add(user);
         await db.SaveChangesAsync();
-        var repository = new ProvidersRepository(db);
+        var repository = new ProvidersRepository(db, TestSessions.Lifecycle(db));
         var service = new ProvidersService(repository);
         var steam = (await repository.CreateProvider(
             user.Id, "steam", IntegrationType.Steam, "steam-key", "76561198000000000", default)).Provider!;
@@ -316,7 +316,7 @@ public sealed class ProvidersRepositoryTests(PostgresFixture postgres)
         var otherUser = new User { Email = $"provider-openxbl-other-{suffix}@example.test" };
         db.Users.AddRange(user, otherUser);
         await db.SaveChangesAsync();
-        var repository = new ProvidersRepository(db);
+        var repository = new ProvidersRepository(db, TestSessions.Lifecycle(db));
         var service = new ProvidersService(repository);
 
         // Without an Xbox integration, connecting creates one.

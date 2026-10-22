@@ -49,7 +49,10 @@ public sealed class SessionQueriesIntegrationTests(PostgresFixture postgres)
         await using var db = CreateDb();
         await using var transaction = await db.Database.BeginTransactionAsync();
         var data = await Seed(db);
-        // Running for 5 minutes under a 10-minute setting; data.Open has run for 90.
+        // A user runs one manual timer at a time: data.Open stops after its 90 minutes before the next one starts.
+        data.Open.EndedAt = DateTimeOffset.UtcNow;
+        await db.SaveChangesAsync();
+        // Running for 5 minutes under a 10-minute setting.
         var fresh = new PlaySession
         {
             UserId = data.UserId,

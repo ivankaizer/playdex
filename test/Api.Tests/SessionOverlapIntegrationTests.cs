@@ -203,7 +203,8 @@ public sealed class SessionOverlapIntegrationTests(PostgresFixture postgres)
         new ManualRepository(db),
         new IgdbClient(new HttpClient(), Options.Create(new IgdbOptions())),
         Options.Create(new IgdbOptions()),
-        new GameResolver(db));
+        new GameResolver(db),
+        TestSessions.Lifecycle(db));
 
     private PlaydexDbContext CreateDb() => new(
         new DbContextOptionsBuilder<PlaydexDbContext>()
