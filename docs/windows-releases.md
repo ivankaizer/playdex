@@ -29,7 +29,7 @@ v1.x WinForms Wrappers still update from the GitHub release, so it keeps being c
 ## Publishing
 
 1. Make sure `build-windows.yaml` passes on the commit (Core tests with the published Playdex.Run, the desktop app, the launcher and the setup build).
-2. Push a tag `v<major>.<minor>.<patch>` higher than the last release. The workflow builds everything with that version, checks the product versions, the archives' contents and their checksums, and creates the release. It builds on the Windows PC when its runner is online and on GitHub otherwise ([windows-pc-runner.md](windows-pc-runner.md)).
+2. Push a tag `v<major>.<minor>.<patch>` higher than the last release, on a commit that is on `main`: the workflow refuses a tag anywhere else before it builds or signs anything. It builds everything with that version, checks the product versions, the archives' contents and their checksums, and creates the release. It builds on the Windows PC when its runner is online and on GitHub otherwise ([windows-pc-runner.md](windows-pc-runner.md)).
 3. Drafts and prereleases are not offered as updates.
 
 To withdraw a faulty release, remove it from the latest release and publish the fix under a higher patch version: installs never downgrade, and assets under a published tag should not be replaced.
