@@ -30,10 +30,14 @@ Once, in an elevated PowerShell.
    Tools with C++, whose MSVC and Windows SDK Native AOT and the MSIX need. The workflows install .NET and Bun.
 
    ```powershell
-   winget install -e --id Microsoft.PowerShell
+   winget install -e --id Microsoft.PowerShell --source winget --scope machine
    winget install -e --id Git.Git
    winget install -e --id Microsoft.VisualStudio.2022.BuildTools --override "--quiet --wait --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended"
    ```
+
+   The runner service only sees machine-wide installs: PowerShell 7 from the Microsoft Store doesn't count, and
+   without `C:\Program Files\PowerShell\7\pwsh.exe` steps fall back to Windows PowerShell, whose execution policy
+   blocks them ("running scripts is disabled on this system").
 
 2. The runner, as a service. It runs as NETWORK SERVICE, so jobs don't touch your profile. The token is on
    Settings → Actions → Runners → New self-hosted runner (Windows) and is valid for an hour.
@@ -45,7 +49,7 @@ Once, in an elevated PowerShell.
    .\config.cmd --unattended --url https://github.com/ivankaizer/playdex --token <token> --name windows-pc --labels windows-pc --runasservice
    ```
 
-   The service reads PATH when it starts: after installing tools later, run `Restart-Service actions.runner.*`.
+   After installing tools later, reboot the PC: a service only sees a changed PATH after a reboot.
 
 3. The token `auto` uses to see the runner: a [fine-grained personal access
    token](https://github.com/settings/personal-access-tokens/new) for the playdex repository only, with Repository
