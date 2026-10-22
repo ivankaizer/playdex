@@ -1,13 +1,15 @@
 import { StrictMode } from "react";
-import { createRoot } from "react-dom/client";
+import { createRoot, type RootOptions } from "react-dom/client";
 import { BrowserRouter } from "react-router";
 import { App } from "./App";
+import { AppErrorBoundary } from "./components/ErrorBoundary";
 import { loadConfig } from "./lib/config";
 import { ThemeProvider } from "./lib/theme";
 import "./styles/app.css";
 
 async function start() {
   const config = await loadConfig();
+  let rootOptions: RootOptions | undefined;
   if (config.sentry?.dsn) {
     // Loaded only when configured, so deployments without Sentry never download it.
     const Sentry = await import("@sentry/react");
@@ -22,13 +24,19 @@ async function start() {
       initialScope: { tags: { component: "web" } },
       ignoreErrors: ["AbortError"],
     });
+    // Errors the error boundary catches never reach window.onerror, so they are reported from here.
+    rootOptions = {
+      onCaughtError: Sentry.reactErrorHandler((error, errorInfo) => console.error(error, errorInfo.componentStack)),
+    };
   }
 
-  createRoot(document.getElementById("app")!).render(
+  createRoot(document.getElementById("app")!, rootOptions).render(
     <StrictMode>
       <BrowserRouter>
         <ThemeProvider>
-          <App />
+          <AppErrorBoundary>
+            <App />
+          </AppErrorBoundary>
         </ThemeProvider>
       </BrowserRouter>
     </StrictMode>,
