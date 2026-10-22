@@ -14,11 +14,14 @@ public sealed partial class PollingBackgroundService(
     IOptions<PollingOptions> pollingOptions,
     MetricsCollector metrics,
     PollingLease lease,
+    CapsuleLookupBackoff capsuleLookups,
     ILogger<PollingBackgroundService> logger) : BackgroundService
 {
     internal const string ActivitySourceName = "Playdex.Api.Polling";
     private static readonly ActivitySource ActivitySource = new(ActivitySourceName);
     private readonly CredentialBackoffTracker _backoff = new();
+
+    internal CredentialBackoffTracker Backoff => _backoff;
 
     [LoggerMessage(Level = LogLevel.Information, Message = "PollingBackgroundService will start after {Delay} ms")]
     private partial void LogWillStartAfter(int delay);
@@ -159,8 +162,12 @@ public sealed partial class PollingBackgroundService(
             using var credentialScope = serviceProvider
                 .GetRequiredService<IServiceScopeFactory>()
                 .CreateScope();
-            await ProcessCredential(active, credentialScope.ServiceProvider, stoppingToken);
+            var deferUntil = await ProcessCredential(active, credentialScope.ServiceProvider, stoppingToken);
             _backoff.Reset(active.Credential.Id);
+            if (deferUntil is { } until)
+            {
+                _backoff.Defer(active.Credential.Id, until);
+            }
         }
         catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
         {
@@ -205,7 +212,8 @@ public sealed partial class PollingBackgroundService(
             .EndTimedOutSessions(ct);
     }
 
-    private async Task ProcessCredential(
+    /// <returns>When the provider asked to be left alone (a rate-limited metadata lookup), until when.</returns>
+    private async Task<DateTimeOffset?> ProcessCredential(
         ActiveCredential active,
         IServiceProvider services,
         CancellationToken ct)
@@ -218,7 +226,7 @@ public sealed partial class PollingBackgroundService(
         if (!providerClients.TryGetValue(platformKey, out var client))
         {
             LogNoProviderClient(platformKey);
-            return;
+            return null;
         }
 
         var pollResult = await client.GetCurrentlyPlaying(credential, ct);
@@ -238,7 +246,7 @@ public sealed partial class PollingBackgroundService(
             polledAt,
             pollResult.RawPayload,
             ct);
-        await EnrichGameIfNeeded(client, credential, pollResult.Game, outcome, pollingRepo, ct);
+        var deferUntil = await EnrichGameIfNeeded(client, credential, pollResult.Game, outcome, pollingRepo, ct);
         foreach (var transition in outcome.Transitions.Where(row => row.Notify))
         {
             if (transition.Kind == SessionTransitionKind.Started)
@@ -261,9 +269,10 @@ public sealed partial class PollingBackgroundService(
         }
         metrics.RecordPollSuccess(platformKey, polledAt);
         LogSuccessfulPoll(credential.Id, outcome.GameId);
+        return deferUntil;
     }
 
-    private async Task EnrichGameIfNeeded(
+    private async Task<DateTimeOffset?> EnrichGameIfNeeded(
         IProviderClient client,
         IntegrationCredentials credential,
         CurrentlyPlayingResult? detectedGame,
@@ -277,7 +286,14 @@ public sealed partial class PollingBackgroundService(
             string.IsNullOrWhiteSpace(detectedGame?.ExternalId) ||
             client is not IProviderGameMetadataClient metadataClient)
         {
-            return;
+            return null;
+        }
+
+        // A game without a capsule used to be looked up again on every poll for as long as it was played.
+        var now = DateTimeOffset.UtcNow;
+        if (!capsuleLookups.IsDue(gameId, now))
+        {
+            return null;
         }
 
         try
@@ -286,12 +302,23 @@ public sealed partial class PollingBackgroundService(
                 credential,
                 detectedGame.ExternalId,
                 ct);
-            if (!string.IsNullOrWhiteSpace(capsuleUrl))
-                await repository.UpdateGameCapsule(gameId, capsuleUrl, ct);
+            if (string.IsNullOrWhiteSpace(capsuleUrl))
+            {
+                capsuleLookups.RecordMiss(gameId, now);
+                return null;
+            }
+
+            await repository.UpdateGameCapsule(gameId, capsuleUrl, ct);
+            capsuleLookups.Forget(gameId);
+            return null;
         }
         catch (Exception ex) when (ex is not OperationCanceledException || !ct.IsCancellationRequested)
         {
             LogMetadataEnrichmentFailed(ex, credential.Id, gameId);
+            var retryAfter = (ex as ProviderPollException)?.RetryAfter;
+            capsuleLookups.RecordFailure(gameId, now, retryAfter);
+            // The metadata endpoint shares the account's quota with presence: honour its Retry-After there too.
+            return retryAfter is { } delay ? now + delay : null;
         }
     }
 
@@ -354,6 +381,19 @@ public sealed class CredentialBackoffTracker
                 retryAfter?.TotalMilliseconds ?? 0));
             _states[credentialId] = new CredentialBackoffState(failures, now + delay);
             return new CredentialFailure(delay, IsFirst: failures == 1);
+        }
+    }
+
+    /// <summary>Skips a working credential until <paramref name="until"/> without counting a failure.</summary>
+    public void Defer(long credentialId, DateTimeOffset until)
+    {
+        lock (_gate)
+        {
+            var current = _states.GetValueOrDefault(credentialId);
+            if (current is null || current.NextEligibleAt < until)
+            {
+                _states[credentialId] = new CredentialBackoffState(current?.Failures ?? 0, until);
+            }
         }
     }
 

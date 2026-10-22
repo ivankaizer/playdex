@@ -60,6 +60,18 @@ public sealed class PosterServiceTests
     }
 
     [Fact]
+    public async Task AMissingPosterIsNotRequestedFromWeModAgainRightAway()
+    {
+        var weMod = new FakeWeMod(_ => new HttpResponseMessage(HttpStatusCode.NotFound));
+        var service = CreateService(new MemoryPosterStore(), weMod);
+
+        Assert.Null(await service.GetSteamCapsule(404, CancellationToken.None));
+        Assert.Null(await service.GetSteamCapsule(404, CancellationToken.None));
+
+        Assert.Single(weMod.Requests);
+    }
+
+    [Fact]
     public async Task StillServesThePosterWhenStoringItFails()
     {
         var store = new MemoryPosterStore { FailSaves = true };

@@ -26,6 +26,7 @@ public static class PollingModule
         services.AddOpenTelemetry()
             .WithTracing(tracing => tracing.AddSource(PollingBackgroundService.ActivitySourceName));
         services.AddSingleton<PollingLease>();
+        services.AddSingleton<CapsuleLookupBackoff>();
         services.AddHostedService<PollingBackgroundService>();
         services.TryAddSingleton(TimeProvider.System);
         services.AddSingleton<PollResultRetention>();

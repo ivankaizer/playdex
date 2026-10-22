@@ -28,6 +28,20 @@ public sealed class CredentialBackoffTrackerTests
     }
 
     [Fact]
+    public void DeferringSkipsACredentialWithoutCountingAFailure()
+    {
+        var tracker = new CredentialBackoffTracker();
+        var now = DateTimeOffset.Parse("2026-08-06T12:00:00Z", CultureInfo.InvariantCulture);
+
+        tracker.Defer(10, now.AddMinutes(5));
+
+        Assert.False(tracker.IsEligible(10, now.AddMinutes(4), out var nextEligibleAt));
+        Assert.Equal(now.AddMinutes(5), nextEligibleAt);
+        Assert.True(tracker.IsEligible(10, now.AddMinutes(5), out _));
+        Assert.True(tracker.RecordFailure(10, now.AddMinutes(6)).IsFirst);
+    }
+
+    [Fact]
     public void OnlyTheFailureThatEndsAHealthyStreakIsFirst()
     {
         var tracker = new CredentialBackoffTracker();

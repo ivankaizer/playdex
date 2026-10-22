@@ -97,6 +97,7 @@ public sealed class PollingBackgroundServiceTests
         Options.Create(new PollingOptions { MaxConcurrentPolls = maxConcurrentPolls }),
         metrics,
         new PollingLease(NpgsqlDataSource.Create("Host=unused")),
+        new CapsuleLookupBackoff(),
         NullLogger<PollingBackgroundService>.Instance);
 
     private sealed class ThrowingClient(Exception exception) : IProviderClient
