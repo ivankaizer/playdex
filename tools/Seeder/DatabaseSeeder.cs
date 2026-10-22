@@ -1,5 +1,4 @@
 using System.Globalization;
-using System.Text.RegularExpressions;
 using Playdex.Persistence;
 using Microsoft.EntityFrameworkCore;
 
@@ -31,20 +30,13 @@ public class DatabaseSeeder(PlaydexDbContext db)
             await db.AddAsync(MakeUserSettings(entity.Entity));
         }
 
-        // platforms
-        var platformCustom = MakePlatform("Custom");
-        var platformPlaystation = MakePlatform("PlayStation", 167, key: "psn");
-        var platformXbox = MakePlatform("Xbox", 169);
-        var platformPc = MakePlatform("PC", 6);
-        await db.AddAsync(platformPc);
-        await db.SaveChangesAsync();
-        var platformSteam = MakePlatform("Steam", parentId: platformPc.Id);
-
-        await db.AddAsync(platformCustom);
-        await db.AddAsync(platformPlaystation);
-        await db.AddAsync(platformXbox);
-        await db.AddAsync(platformSteam);
-        await db.SaveChangesAsync();
+        // platforms: the migrations seed the reference platforms (unknown, ps5, gog, xbox-series-xs, ...) and the
+        // draft and manual flows rely on them, so they are reused; only the demo's "custom" platform is added.
+        var platformPc = await EnsurePlatform("pc", "PC", 6);
+        var platformSteam = await EnsurePlatform("steam", "Steam", parent: platformPc);
+        var platformPlaystation = await EnsurePlatform("psn", "PSN");
+        var platformXbox = await EnsurePlatform("xbox", "Xbox");
+        var platformCustom = await EnsurePlatform("custom", "Custom");
 
         // games
         _games =
@@ -179,7 +171,9 @@ public class DatabaseSeeder(PlaydexDbContext db)
 
     private async Task Truncate()
     {
+        // Platforms are reference data owned by the migrations, not demo data.
         var tables = db.Model.GetEntityTypes()
+            .Where(e => e.ClrType != typeof(Platform))
             .Select(e => e.GetTableName())
             .Where(e => e is not null)
             .ToList();
@@ -220,16 +214,19 @@ public class DatabaseSeeder(PlaydexDbContext db)
         };
     }
 
-    /// <summary>Display name as the migrations seed it; the key is derived from it unless given.</summary>
-    private static Platform MakePlatform(string name, int? igdbPlatformId = null, long? parentId = null, string? key = null)
+    /// <summary>The platform with this key as the migrations seeded it, or a new one when it is missing.</summary>
+    private async Task<Platform> EnsurePlatform(string key, string name, int? igdbPlatformId = null, Platform? parent = null)
     {
-        return new Platform
+        var existing = await db.Platforms.SingleOrDefaultAsync(platform => platform.Key == key);
+        if (existing is not null)
         {
-            Name = name,
-            Key = key ?? Regex.Replace(name, "([a-z0-9])([A-Z])", "$1-$2").ToLowerInvariant(),
-            IgdbPlatformId = igdbPlatformId,
-            ParentId = parentId,
-        };
+            return existing;
+        }
+
+        var platform = new Platform { Key = key, Name = name, IgdbPlatformId = igdbPlatformId, ParentId = parent?.Id };
+        await db.AddAsync(platform);
+        await db.SaveChangesAsync();
+        return platform;
     }
 
     private Game MakeGame(string title, string imageUrl, Platform platform)
