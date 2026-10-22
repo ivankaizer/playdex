@@ -17,9 +17,9 @@ export type HostMessage =
   | ({ type: "quick-settings" } & QuickSettingsState)
   /**
    * The game running now (null: none), however it was started; sent when it changes. `since` is epoch ms, null when
-   * unknown (Steam games started elsewhere).
+   * unknown (Steam games started elsewhere). `games`: every running game, `gameId` among them.
    */
-  | { type: "now-playing"; gameId: string | null; since?: number | null }
+  | { type: "now-playing"; gameId: string | null; since?: number | null; games?: string[] }
   /** A {type:"resume-game"} found no game window to switch to. */
   | { type: "resume-failed" }
   /** A {type:"close-game"} ended nothing; `message` says why. */
@@ -81,8 +81,8 @@ export type UiMessage =
   /** The host launches only games from its own library, by id. */
   | { type: "launch"; gameId: string }
   | { type: "cancel"; gameId: string }
-  /** Switch to the running game's window. */
-  | { type: "resume-game" }
+  /** Switch to a running game's window: `gameId`'s, or the one now playing. */
+  | { type: "resume-game"; gameId?: string }
   /** Force-close the running game (only that one; the host checks). */
   | { type: "close-game"; gameId: string }
   /** Open Steam: Big Picture in Big Picture mode, the Steam window in desktop mode. */

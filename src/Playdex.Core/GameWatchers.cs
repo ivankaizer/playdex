@@ -15,6 +15,9 @@ public interface IGameWatcher : IDisposable
     /// <summary>Exit detected. Argument: Stopwatch timestamp of detection, and the last game process' exit
     /// time (FILETIME, 0 if unknown) so exit-detection latency can be measured.</summary>
     event Action<long, long>? Exited;
+
+    /// <summary>The game's processes seen so far (some may have exited), to find its window; empty when not known.</summary>
+    IReadOnlyCollection<int> ProcessIds => [];
 }
 
 /// <summary>
@@ -27,18 +30,24 @@ public interface IGameWatcher : IDisposable
 /// on: when the last one exits, one snapshot confirms nothing else from the install folder is alive and the exit is
 /// reported. During the first 30 s (launcher to game hand-offs such as REDprelauncher to witcher3.exe) the folder is
 /// rescanned every 2 s and only the registry may end the session. The registry remains the fallback throughout.
+/// Until the game runs it is also looked for every 2 s (<see cref="FollowStart"/>): a game Steam started without the
+/// registry saying so was otherwise never seen running, and a cold start kept sending its launch URL.
 /// </remarks>
 public sealed partial class SteamGameWatcher : IGameWatcher
 {
     private static readonly TimeSpan _startTimeout = TimeSpan.FromMinutes(5);
     private static readonly TimeSpan _bootWindow = TimeSpan.FromSeconds(30);
 
+    /// <summary>How often a launch that hasn't been seen running yet looks for the game.</summary>
+    private static readonly TimeSpan _startPoll = TimeSpan.FromSeconds(2);
+
     /// <summary>
-    /// The launch URL sent right after login worked in testing (running 4.6 s later). In case Steam is still busy
-    /// (a client update, a slow login), a cold start re-sends it this often until the game runs. Steam ignores a
-    /// repeated URL for a game that is already running.
+    /// The launch URL sent right after login worked in testing (running 4.6 s later), but a client that is still busy
+    /// (a client update, a slow login) drops it. A cold start sends it again after each of these delays, only while
+    /// nothing of the game runs yet (<see cref="FindStarted"/>), so a game that is starting is never started twice.
+    /// After the last one it waits for the start timeout.
     /// </summary>
-    private static readonly TimeSpan _coldStartRetry = TimeSpan.FromSeconds(15);
+    private static readonly TimeSpan[] _coldStartRetries = [TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(15)];
 
     /// <summary>
     /// A client that has just logged in can still drop the URL while it settles (logged: sent 29 s after Steam started,
@@ -48,17 +57,19 @@ public sealed partial class SteamGameWatcher : IGameWatcher
     private static readonly TimeSpan _clientSettleTime = TimeSpan.FromMinutes(2);
 
     private readonly int _appId;
-    private readonly RegistryKey _key;
+    private readonly string _keyPath;
     private readonly AutoResetEvent _changed = new(false);
     private readonly Lock _gate = new();
     private readonly List<RegisteredWaitHandle> _processWaits = [];
     private readonly CancellationTokenSource _cancel = new();
     private readonly HashSet<uint> _tracked = [];
+    private RegistryKey _key;
     private RegisteredWaitHandle? _wait;
     private string? _installDir;
     private long _runningSince;
     private int _alive;
     private bool _running;
+    private bool _registryRunning;
     private bool _exited;
     private bool _disposed;
     private long _lastProcessExit;
@@ -72,21 +83,34 @@ public sealed partial class SteamGameWatcher : IGameWatcher
     /// </summary>
     public event Action<bool>? WaitingForSteam;
 
-    private SteamGameWatcher(int appId, RegistryKey key)
+    private SteamGameWatcher(int appId, string keyPath, RegistryKey key)
     {
         _appId = appId;
+        _keyPath = keyPath;
         _key = key;
+    }
+
+    public IReadOnlyCollection<int> ProcessIds
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return [.. _tracked.Select(pid => (int)pid)];
+            }
+        }
     }
 
     public static SteamGameWatcher? Create(int appId)
     {
-        var key = Registry.CurrentUser.OpenSubKey($@"Software\Valve\Steam\Apps\{appId}", writable: false);
+        var keyPath = $@"Software\Valve\Steam\Apps\{appId}";
+        var key = Registry.CurrentUser.OpenSubKey(keyPath, writable: false);
         if (key is null)
         {
             Log.Info($"steam: no registry key for app {appId}; is it installed?");
             return null;
         }
-        return new SteamGameWatcher(appId, key);
+        return new SteamGameWatcher(appId, keyPath, key);
     }
 
     public void Start()
@@ -96,59 +120,125 @@ public sealed partial class SteamGameWatcher : IGameWatcher
             Arm();
         }
         var settled = SteamClient.RunningFor() is not { } age || age >= _clientSettleTime;
-        if (settled && SteamClient.IsLoggedIn())
+        var coldStart = !settled || !SteamClient.IsLoggedIn();
+        if (!coldStart)
         {
             RequestLaunch();
         }
-        else if (SteamClient.StartIfNeeded())
-        {
-            var waiting = !SteamClient.IsLoggedIn();
-            if (waiting)
-            {
-                WaitingForSteam?.Invoke(true);
-            }
-            _ = Task.Factory.StartNew(() => LaunchAfterLogin(waiting), _cancel.Token, TaskCreationOptions.LongRunning, TaskScheduler.Default);
-        }
-        else
+        else if (!SteamClient.StartIfNeeded())
         {
             throw new InvalidOperationException("Steam is not installed.");
         }
+        var waiting = coldStart && !SteamClient.IsLoggedIn();
+        if (waiting)
+        {
+            WaitingForSteam?.Invoke(true);
+        }
+        _ = Task.Factory.StartNew(() => FollowStart(coldStart, waiting), _cancel.Token, TaskCreationOptions.LongRunning, TaskScheduler.Default);
         // Already running (launched outside Playdex): report it straight away.
         Check();
     }
 
     private void RequestLaunch()
     {
+        // Steam starts the game, not Playdex: let it take the foreground from Playdex's launch screen. A game left
+        // behind Playdex would have the controller read by both.
+        Native.AllowSetForegroundWindow(Native.AsfwAny);
         Process.Start(new ProcessStartInfo($"steam://rungameid/{_appId}") { UseShellExecute = true })?.Dispose();
         Log.Info($"steam: launch requested for {_appId}");
     }
 
-    /// <summary>Cold start (or Steam started moments ago): wait for Steam's login, then send the launch URL until the game runs.</summary>
-    private void LaunchAfterLogin(bool waiting)
+    /// <summary>
+    /// Until the game runs: on a cold start (or Steam started moments ago), wait for Steam's login, send the launch URL
+    /// and send it again while nothing of the game shows up. Throughout, look for the game every
+    /// <see cref="_startPoll"/>, in case the registry notification never comes.
+    /// </summary>
+    private void FollowStart(bool coldStart, bool waiting)
     {
-        var started = Stopwatch.GetTimestamp();
-        if (!SteamClient.WaitForLogin(_startTimeout, _cancel.Token))
+        var retries = 0;
+        var nextRetry = long.MaxValue;
+        if (coldStart)
         {
-            return; // Disposed, or the start timeout ends the session.
-        }
-        if (waiting)
-        {
-            Log.Info($"steam: logged in after {Stopwatch.GetElapsedTime(started).TotalSeconds:N1} s");
-            WaitingForSteam?.Invoke(false);
-        }
-        while (!_cancel.IsCancellationRequested && !_running && !_exited)
-        {
+            var started = Stopwatch.GetTimestamp();
+            if (!SteamClient.WaitForLogin(_startTimeout, _cancel.Token))
+            {
+                return; // Disposed, or the start timeout ends the session.
+            }
+            if (waiting)
+            {
+                Log.Info($"steam: logged in after {Stopwatch.GetElapsedTime(started).TotalSeconds:N1} s");
+                WaitingForSteam?.Invoke(false);
+            }
+            if (!IsStarting())
+            {
+                return;
+            }
             RequestLaunch();
-            _cancel.Token.WaitHandle.WaitOne(_coldStartRetry);
+            nextRetry = Stopwatch.GetTimestamp() + Ticks(_coldStartRetries[0]);
         }
+        while (!_cancel.Token.WaitHandle.WaitOne(_startPoll))
+        {
+            Check();
+            if (!IsStarting())
+            {
+                return;
+            }
+            if (FindStarted() is { } found)
+            {
+                MarkRunning(found);
+                return;
+            }
+            if (Stopwatch.GetTimestamp() < nextRetry)
+            {
+                continue;
+            }
+            retries++;
+            Log.Info($"steam: app {_appId} not started yet; launch requested again ({retries}/{_coldStartRetries.Length})");
+            RequestLaunch();
+            nextRetry = retries < _coldStartRetries.Length ? Stopwatch.GetTimestamp() + Ticks(_coldStartRetries[retries]) : long.MaxValue;
+        }
+    }
+
+    private bool IsStarting()
+    {
+        lock (_gate)
+        {
+            return !_running && !_exited && !_disposed;
+        }
+    }
+
+    /// <summary>
+    /// What shows that the game started when the registry didn't say so: Steam's running app, or a process running from
+    /// its install folder. Null when there is neither.
+    /// </summary>
+    private string? FindStarted()
+    {
+        if (SteamRunningApp() == _appId)
+        {
+            return "RunningAppID";
+        }
+        _installDir ??= SteamLibrary.FindInstallDirectory(_appId);
+        return _installDir is { } folder && ProcessMonitor.ProcessesIn(folder).Count > 0 ? "process in its install folder" : null;
+    }
+
+    private static int SteamRunningApp()
+    {
+        using var steam = Registry.CurrentUser.OpenSubKey(@"Software\Valve\Steam", writable: false);
+        return steam?.GetValue("RunningAppID") is int appId ? appId : 0;
     }
 
     private void Arm()
     {
         // Re-arm before reading so a change between read and arm is never missed. Thread-agnostic: the
         // registration survives the thread-pool thread that made it.
-        var status = Native.RegNotifyChangeKeyValue(
-            _key.Handle, false, Native.RegNotifyChangeLastSet | Native.RegNotifyThreadAgnostic, _changed.SafeWaitHandle, true);
+        var status = Notify();
+        if (status != 0 && Registry.CurrentUser.OpenSubKey(_keyPath, writable: false) is { } current)
+        {
+            // The key the handle points at is gone (Steam rewrites its keys as it starts): watch the one there now.
+            _key.Dispose();
+            _key = current;
+            status = Notify();
+        }
         if (status != 0)
         {
             Log.Info($"steam: RegNotifyChangeKeyValue failed {status}");
@@ -156,6 +246,9 @@ public sealed partial class SteamGameWatcher : IGameWatcher
         _wait = ThreadPool.RegisterWaitForSingleObject(
             _changed, (_, timedOut) => OnSignal(timedOut), null, _running ? Timeout.InfiniteTimeSpan : _startTimeout, executeOnlyOnce: true);
     }
+
+    private int Notify() => Native.RegNotifyChangeKeyValue(
+        _key.Handle, false, Native.RegNotifyChangeLastSet | Native.RegNotifyThreadAgnostic, _changed.SafeWaitHandle, true);
 
     private void OnSignal(bool timedOut)
     {
@@ -177,31 +270,65 @@ public sealed partial class SteamGameWatcher : IGameWatcher
         Check(detected);
     }
 
+    /// <summary>
+    /// Follow the registry's Running. It ends the session only after it said the game runs: a game found running by
+    /// <see cref="FindStarted"/> may never get Running=1.
+    /// </summary>
     private void Check(long detected = 0)
     {
         var running = ReadRunning();
+        bool started;
         lock (_gate)
         {
-            if (_disposed || _exited || running == _running)
+            if (_disposed || _exited || running == _registryRunning)
             {
                 return;
             }
-            _running = running;
-            _runningSince = Stopwatch.GetTimestamp();
+            _registryRunning = running;
+            started = running && !_running;
+            if (started)
+            {
+                _running = true;
+                _runningSince = Stopwatch.GetTimestamp();
+            }
         }
-        if (running)
+        if (started)
         {
-            Log.Info($"steam: app {_appId} running");
-            Running?.Invoke();
-            _ = Task.Run(TrackBootAsync);
+            OnStarted("registry Running=1");
         }
-        else
+        else if (!running)
         {
             ReportExit(detected == 0 ? Stopwatch.GetTimestamp() : detected, "registry Running=0");
         }
     }
 
-    private bool ReadRunning() => _key.GetValue("Running") is int value && value != 0;
+    private void MarkRunning(string source)
+    {
+        lock (_gate)
+        {
+            if (_disposed || _exited || _running)
+            {
+                return;
+            }
+            _running = true;
+            _runningSince = Stopwatch.GetTimestamp();
+        }
+        OnStarted(source);
+    }
+
+    private void OnStarted(string source)
+    {
+        Log.Info($"steam: app {_appId} running ({source})");
+        Running?.Invoke();
+        _ = Task.Run(TrackBootAsync);
+    }
+
+    /// <summary>Read through a fresh handle: the one the notification is armed on may be to a key Steam has replaced.</summary>
+    private bool ReadRunning()
+    {
+        using var key = Registry.CurrentUser.OpenSubKey(_keyPath, writable: false);
+        return key?.GetValue("Running") is int value && value != 0;
+    }
 
     private void ReportExit(long detected, string source)
     {
@@ -230,6 +357,19 @@ public sealed partial class SteamGameWatcher : IGameWatcher
         {
             TrackNewProcesses();
             await Task.Delay(2000);
+        }
+        // Everything from the folder exited while the game booted (a crash at start), so no process exit ends the
+        // session. Steam ends it when it still reports the game; otherwise nothing would.
+        lock (_gate)
+        {
+            if (_alive > 0 || _exited || _disposed)
+            {
+                return;
+            }
+        }
+        if (!ReadRunning() && SteamRunningApp() != _appId && TrackNewProcesses() == 0)
+        {
+            ReportExit(Stopwatch.GetTimestamp(), "no game process after boot");
         }
     }
 
@@ -322,10 +462,12 @@ public sealed partial class SteamGameWatcher : IGameWatcher
             {
                 wait.Unregister(null);
             }
+            _key.Dispose();
         }
-        _key.Dispose();
         _changed.Dispose();
     }
+
+    private static long Ticks(TimeSpan span) => (long)(span.TotalSeconds * Stopwatch.Frequency);
 }
 
 /// <summary>

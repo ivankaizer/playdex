@@ -4,7 +4,7 @@ import { focusedGame, useStore } from "../nav/store";
 
 /* ---------- Controller glyphs ---------- */
 
-type GlyphName = "A" | "B" | "X" | "Y" | "LB" | "RB" | "VIEW" | "MENU";
+type GlyphName = "A" | "B" | "X" | "Y" | "LB" | "RB" | "VIEW" | "MENU" | "UP";
 
 export function Glyph({ name }: { name: GlyphName }) {
   if (name === "LB" || name === "RB") return <span className="glyph glyph-bumper" aria-hidden>{name}</span>;
@@ -22,6 +22,15 @@ export function Glyph({ name }: { name: GlyphName }) {
       <span className="glyph" aria-hidden>
         <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
           <path d="M3 4.5h10M3 8h10M3 11.5h10" />
+        </svg>
+      </span>
+    );
+  // D-pad up.
+  if (name === "UP")
+    return (
+      <span className="glyph" aria-hidden>
+        <svg viewBox="0 0 16 16" fill="currentColor">
+          <path d="M8 3 13 11H3z" />
         </svg>
       </span>
     );

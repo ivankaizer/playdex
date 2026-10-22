@@ -567,6 +567,15 @@ html[data-mode="desktop"][data-input="pointer"] .hints .hint {
   position: relative;
   margin-top: 1.4rem;
 }
+/* Asking before a second game starts (components/LaunchGuard.tsx). Its buttons are for the mouse only: a controller
+   confirms with RB + Up, never with A on a button. */
+.launch-guard-actions {
+  display: flex;
+  gap: 0.8rem;
+}
+html[data-input="pad"] .launch-guard-actions {
+  display: none;
+}
 
 @keyframes launch-in {
   from {

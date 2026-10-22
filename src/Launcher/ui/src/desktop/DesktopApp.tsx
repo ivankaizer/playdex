@@ -2,6 +2,7 @@ import { Gamepad2, Moon, SlidersHorizontal, Sun, UserRound, UserRoundCheck, User
 import { lazy, Suspense, useEffect } from "react";
 import {
   closeGame,
+  launchGuard,
   launching,
   leaveLaunch,
   nowPlaying,
@@ -13,6 +14,7 @@ import {
   showToast,
   toast,
 } from "../app-state";
+import { LaunchGuard } from "../components/LaunchGuard";
 import { QuickSettings } from "../components/QuickSettings";
 import { formatClock, useElapsed } from "../components/shared";
 import { gameById, markPlayed } from "../data/games";
@@ -49,6 +51,7 @@ export function DesktopApp() {
   const tab = useStore(deskTab);
   const view = useStore(libraryView);
   const settingsOpen = useStore(quickSettingsOpen);
+  const guard = useStore(launchGuard);
   const toastMsg = useStore(toast);
 
   useEffect(() => void loadDesktopState().catch(() => undefined), []);
@@ -126,7 +129,7 @@ export function DesktopApp() {
 
   return (
     <>
-      <div className="dk" inert={settingsOpen ? true : undefined}>
+      <div className="dk" inert={settingsOpen || guard ? true : undefined}>
         <TopBar tab={tab} />
         <div className="dk-body">
           {withList && <Sidebar />}
@@ -140,6 +143,7 @@ export function DesktopApp() {
         </div>
       </div>
       {settingsOpen && <QuickSettings />}
+      <LaunchGuard />
       {toastMsg && (
         <div className="toast" role="status">
           {toastMsg}
@@ -282,7 +286,7 @@ function Playing({ gameId, since }: { gameId: string; since: number | null }) {
   const elapsed = useElapsed(since);
   return (
     <div className="dk-live-wrap" data-nav-group="now-playing">
-      <button className="dk-live" data-nav data-kind="now-playing" aria-label={`Now playing ${game.title}. Switch to the game`} onClick={resumeGame}>
+      <button className="dk-live" data-nav data-kind="now-playing" aria-label={`Now playing ${game.title}. Switch to the game`} onClick={() => resumeGame(gameId)}>
         <span className="live-dot" aria-hidden />
         <span className="dk-live-label">Playing</span>
         <span className="dk-live-text">{game.title}</span>

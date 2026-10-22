@@ -11,10 +11,28 @@ public sealed class ConfiguredGameWatcher(AppConfig config, GameConfig game) : I
 {
     private readonly CancellationTokenSource _stop = new();
     private GameLock? _lock;
+    private int _processId;
 
     public event Action? Running;
 
     public event Action<long, long>? Exited;
+
+    /// <summary>
+    /// What Playdex started, what a script started, and what runs from the game's folder: a launcher's game (Unreal's
+    /// Game.exe starts Binaries\Win64\Game-Win64-Shipping.exe), which has the window.
+    /// </summary>
+    public IReadOnlyCollection<int> ProcessIds
+    {
+        get
+        {
+            if (Volatile.Read(ref _processId) is var started && started == 0)
+            {
+                return [];
+            }
+            var folder = Path.GetDirectoryName(game.Launch.ExecutablePath);
+            return [started, .. ProcessTree.ProcessesOf(game.GameId), .. folder is null ? [] : ProcessMonitor.ProcessesIn(folder)];
+        }
+    }
 
     public void Start()
     {
@@ -29,6 +47,7 @@ public sealed class ConfiguredGameWatcher(AppConfig config, GameConfig game) : I
             _lock.Dispose();
             throw;
         }
+        Volatile.Write(ref _processId, started.Process.Id);
         Log.Info($"game: started {game.DisplayName} ({game.Launch.ExecutablePath})");
         Running?.Invoke();
         _ = Task.Run(async () =>

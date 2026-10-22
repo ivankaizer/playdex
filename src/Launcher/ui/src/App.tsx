@@ -5,7 +5,9 @@ import {
   closeArmed,
   closeGame,
   forceCloseGame,
+  isRunning,
   launch,
+  launchGuard,
   launching,
   leaveLaunch,
   nowPlaying,
@@ -19,6 +21,7 @@ import {
   toast,
 } from "./app-state";
 import { ArtPicker } from "./components/ArtPicker";
+import { LaunchGuard } from "./components/LaunchGuard";
 import { QuickSettings } from "./components/QuickSettings";
 import { Backdrop, Clock, formatClock, Glyph, Hint, Logo, useElapsed } from "./components/shared";
 import { gameById, isInstalled, recentGames } from "./data/games";
@@ -74,6 +77,7 @@ function BigPictureApp() {
   const gameOpen = useStore(openGameId);
   const settingsOpen = useStore(quickSettingsOpen);
   const artGame = useStore(artPickerGame);
+  const guard = useStore(launchGuard);
   const toastMsg = useStore(toast);
 
   // Loaded off the start-up path: it only marks the Settings tab when an update is ready.
@@ -141,9 +145,9 @@ function BigPictureApp() {
           openGame(game);
           return true;
         }
-        // X on the running game (the top bar's Playing, Home's tile, its page) force-closes it, after a confirming X.
-        const running = nowPlaying.get()?.gameId;
-        if (a === "x" && running && ["now-playing", "playing", "close-game"].includes(kind)) {
+        // X on a running game (the top bar's Playing, Home's tile, its page) force-closes it, after a confirming X.
+        const running = kind === "now-playing" ? nowPlaying.get()?.gameId : game;
+        if (a === "x" && running && isRunning(running) && ["now-playing", "playing", "close-game"].includes(kind)) {
           forceCloseGame(running);
           return true;
         }
@@ -157,7 +161,7 @@ function BigPictureApp() {
 
   return (
     <>
-      <div className="screen" inert={playing || settingsOpen || artGame ? true : undefined}>
+      <div className="screen" inert={playing || settingsOpen || artGame || guard ? true : undefined}>
         <header className="topbar">
           <span className="brand">
             <span className="brand-dot" />
@@ -248,6 +252,7 @@ function BigPictureApp() {
       {artGame && !playing && !settingsOpen && <ArtPicker gameId={artGame} />}
       {settingsOpen && !playing && <QuickSettings />}
       {playing && <LaunchOverlay gameId={playing} />}
+      {!playing && <LaunchGuard />}
       {toastMsg && (
         <div className="toast" role="status">
           {toastMsg}
@@ -326,7 +331,7 @@ function NowPlayingPill({ gameId, since }: { gameId: string; since: number | nul
         data-nav
         data-kind="now-playing"
         aria-label={`Now playing ${game.title}. Resume`}
-        onClick={resumeGame}
+        onClick={() => resumeGame(gameId)}
       >
         <span className="live-dot" aria-hidden />
         <span className="now-playing-label">Playing</span>
@@ -397,7 +402,7 @@ function LaunchOverlay({ gameId }: { gameId: string }) {
           return true;
         }
         if (a === "confirm" && runningRef.current) {
-          resumeGame();
+          resumeGame(gameId);
           return true;
         }
         if (a === "x" && runningRef.current) {

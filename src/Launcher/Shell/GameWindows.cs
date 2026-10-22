@@ -6,8 +6,10 @@ namespace Playdex.Shell;
 /// <summary>
 /// Finds the running game's window and brings it to the front ("Resume"). In order:
 /// <list type="number">
-/// <item>the window that was in front when the shell was called up over the game (Guide button, Game Bar "Home");</item>
-/// <item>a window of the game's process, when it is known (games added to Playdex);</item>
+/// <item>the window that was in front when the shell was called up over the game (Guide button, Game Bar "Home"), if it
+/// is one of the game's processes or those aren't known;</item>
+/// <item>a window of the game's processes, when they are known (games added to Playdex, games launched here);</item>
+/// <item>the window that was in front, whatever it is;</item>
 /// <item>the topmost app window below the shell (as Alt+Tab would pick), skipping Steam's own windows.</item>
 /// </list>
 /// Only top-level, visible, uncloaked, unowned app windows with a title count. Apps opened from quick settings are
@@ -20,9 +22,19 @@ internal static unsafe class GameWindows
     // The desktop and the taskbars: visible, titled, unowned, but not apps.
     private static readonly string[] _shellClasses = ["Progman", "WorkerW", "Shell_TrayWnd", "Shell_SecondaryTrayWnd"];
 
-    public static bool Activate(nint shell, nint remembered, int? processId)
+    public static bool Activate(nint shell, nint remembered, IReadOnlyCollection<int> processIds)
     {
-        var target = IsAppWindow(remembered, shell) ? remembered : processId is { } pid ? Find(shell, owner => owner == pid) : 0;
+        // The window in front at the Guide press may be another app's (a chat beside the game), not the game's.
+        var rememberedIsApp = IsAppWindow(remembered, shell);
+        var target = rememberedIsApp && (processIds.Count == 0 || processIds.Contains(OwnerOf(remembered))) ? remembered : 0;
+        if (target == 0 && processIds.Count > 0)
+        {
+            target = Find(shell, owner => processIds.Contains((int)owner));
+        }
+        if (target == 0 && rememberedIsApp)
+        {
+            target = remembered;
+        }
         if (target == 0)
         {
             target = Find(shell, owner => !IsLauncher((int)owner));
@@ -98,6 +110,12 @@ internal static unsafe class GameWindows
         }
         // Cloaked: suspended UWP windows, windows on other virtual desktops.
         return Native.DwmGetWindowAttribute(window, Native.DwmwaCloaked, out var cloaked, sizeof(int)) != 0 || cloaked == 0;
+    }
+
+    private static int OwnerOf(nint window)
+    {
+        Native.GetWindowThreadProcessId(window, out var owner);
+        return (int)owner;
     }
 
     private static string ClassName(nint window)

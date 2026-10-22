@@ -21,6 +21,16 @@ export function onAction(fn: (a: Action) => boolean | void) {
   };
 }
 
+const dirHandlers = new Set<(d: Dir) => boolean | void>();
+
+/** Subscribe to directions before they move focus. Latest subscriber runs first; return true to keep focus where it is. */
+export function onDir(fn: (d: Dir) => boolean | void) {
+  dirHandlers.add(fn);
+  return () => {
+    dirHandlers.delete(fn);
+  };
+}
+
 const ACTION_SOUND: Partial<Record<Action, "back" | "tab">> = { back: "back", lb: "tab", rb: "tab" };
 
 function dispatch(a: Action) {
@@ -29,15 +39,23 @@ function dispatch(a: Action) {
   for (const fn of [...handlers].reverse()) if (fn(a)) return;
 }
 
+/**
+ * A presses the focused item. Behind a dialog (the launch screen) the item is inert and stays unpressed: the dialog's
+ * action handlers get "confirm" instead.
+ */
 function confirm() {
   const el = current();
-  if (!el) return;
+  if (!el || el.closest("[inert]")) {
+    dispatch("confirm");
+    return;
+  }
   play("confirm");
   el.click();
 }
 
 /** A move that lands somewhere ticks; one against the edge of the screen stays quiet. */
 function step(dir: Dir) {
+  for (const fn of [...dirHandlers].reverse()) if (fn(dir)) return;
   const before = current();
   move(dir);
   if (current() !== before) play("move");

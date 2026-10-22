@@ -109,6 +109,24 @@ public sealed class ProcessMonitor(MonitorConfig config)
     public static bool IsImage(Process process, string executablePath) =>
         ImagePath(process) is { } path && string.Equals(path, Path.GetFullPath(executablePath), StringComparison.OrdinalIgnoreCase);
 
+    /// <summary>The processes running from <paramref name="folder"/> or below it.</summary>
+    internal static List<int> ProcessesIn(string folder)
+    {
+        folder = Path.TrimEndingDirectorySeparator(folder) + Path.DirectorySeparatorChar;
+        var found = new List<int>();
+        foreach (var process in Process.GetProcesses())
+        {
+            using (process)
+            {
+                if (ImagePath(process) is { } path && path.StartsWith(folder, StringComparison.OrdinalIgnoreCase))
+                {
+                    found.Add(process.Id);
+                }
+            }
+        }
+        return found;
+    }
+
     /// <summary>The full path of the process's executable; null if it can't be opened.</summary>
     internal static string? ImagePath(Process process)
     {

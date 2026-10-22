@@ -1,6 +1,6 @@
 import { ArrowUpRight, Download, MonitorSmartphone, Search } from "lucide-react";
 import { memo, useMemo, useState } from "react";
-import { nowPlaying } from "../app-state";
+import { useIsRunning } from "../app-state";
 import { SaveGlyph, useSaves } from "../components/saves";
 import { Cover, Logo } from "../components/shared";
 import { useFavorites } from "../data/favorites";
@@ -204,7 +204,7 @@ function Check({ label, count, checked, onChange }: { label: string; count?: num
 }
 
 const CoverItem = memo(function CoverItem({ game, selected }: { game: Game; selected: boolean }) {
-  const playing = useStore(nowPlaying)?.gameId === game.id;
+  const playing = useIsRunning(game.id);
   const minutes = totalMinutes(useStore(playdexSummary), game);
   const saves = useSaves(game.id)?.status;
   const status = statusOf(game);

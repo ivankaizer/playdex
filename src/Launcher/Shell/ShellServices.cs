@@ -50,7 +50,9 @@ internal sealed class ShellServices : IDisposable
     /// <summary>A game's session changed: (gameId, "starting" | "steam" | "running" | "ended", seconds). Any thread.</summary>
     public event Action<string, string, int>? SessionChanged;
 
-    /// <summary>A launched game exited (Stopwatch timestamp of detection). Any thread.</summary>
+    /// <summary>
+    /// A launched game exited and no game launched after it still runs (Stopwatch timestamp of detection). Any thread.
+    /// </summary>
     public event Action<long>? GameExited;
 
     /// <summary>Controller input, on the UI thread.</summary>

@@ -1,6 +1,6 @@
 import { ChevronDown, LayoutGrid, List, Plus, Search } from "lucide-react";
 import { memo, useMemo, useState } from "react";
-import { nowPlaying, showToast } from "../app-state";
+import { showToast, useIsRunning } from "../app-state";
 import { Cover } from "../components/shared";
 import { useFavorites } from "../data/favorites";
 import { fmtHours, games, isInstalled, lastPlayedDay, useRecentGames, type Game } from "../data/games";
@@ -143,7 +143,7 @@ const Row = memo(function Row({ game }: { game: Game }) {
   const selectedId = useStore(selectedGame);
   const tab = useStore(deskTab);
   const selected = selectedId === game.id && tab === "Library";
-  const playing = useStore(nowPlaying)?.gameId === game.id;
+  const playing = useIsRunning(game.id);
   const minutes = totalMinutes(useStore(playdexSummary), game);
   return (
     <button

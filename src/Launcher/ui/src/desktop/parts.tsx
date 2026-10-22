@@ -1,6 +1,6 @@
 import { Download, LoaderCircle, Play, X } from "lucide-react";
 import type { ReactNode } from "react";
-import { closeArmed, forceCloseGame, launch, launching, nowPlaying, resumeGame, showToast } from "../app-state";
+import { closeArmed, forceCloseGame, launch, launching, resumeGame, showToast, useIsRunning } from "../app-state";
 import { fmtMinutes, gameById, isInstalled, isOnPc, SOURCE_LABEL, weekdayInitial, type Game } from "../data/games";
 import { useStore } from "../nav/store";
 
@@ -10,7 +10,7 @@ import { useStore } from "../nav/store";
  * button on a card.
  */
 export function PlayButton({ game, label = "Play", round = false }: { game: Game; label?: string; round?: boolean }) {
-  const playing = useStore(nowPlaying)?.gameId === game.id;
+  const playing = useIsRunning(game.id);
   const starting = useStore(launching);
   const armed = useStore(closeArmed) === game.id;
   if (!isOnPc(game)) return null;
@@ -18,14 +18,14 @@ export function PlayButton({ game, label = "Play", round = false }: { game: Game
   if (playing) {
     if (round) {
       return (
-        <button className="dk-round" data-nav data-kind="playing" data-game={game.id} aria-label={`Resume ${game.title}`} onClick={resumeGame}>
+        <button className="dk-round" data-nav data-kind="playing" data-game={game.id} aria-label={`Resume ${game.title}`} onClick={() => resumeGame(game.id)}>
           <Play fill="currentColor" aria-hidden />
         </button>
       );
     }
     return (
       <>
-        <button className="dk-btn dk-btn-primary dk-btn-lg" data-nav data-nav-default data-kind="playing" data-game={game.id} onClick={resumeGame}>
+        <button className="dk-btn dk-btn-primary dk-btn-lg" data-nav data-nav-default data-kind="playing" data-game={game.id} onClick={() => resumeGame(game.id)}>
           <Play fill="currentColor" aria-hidden /> Resume
         </button>
         <button

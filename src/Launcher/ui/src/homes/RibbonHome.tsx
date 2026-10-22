@@ -71,7 +71,7 @@ export function RibbonHome() {
             data-nav-default
             data-game={last.game.id}
             data-kind={playing ? "playing" : "continue"}
-            onClick={() => (playing ? resumeGame() : launch(last.game.id))}
+            onClick={() => (playing ? resumeGame(last.game.id) : launch(last.game.id))}
           >
             <Backdrop gameId={last.game.id} className="ribbon-art" />
             <span className="ribbon-scrim" aria-hidden />

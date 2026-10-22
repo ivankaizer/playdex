@@ -115,6 +115,15 @@ internal static unsafe partial class Native
     [return: MarshalAs(UnmanagedType.Bool)]
     public static partial bool QueryFullProcessImageName(nint process, uint flags, char* buffer, ref uint size);
 
+    // ---- Windows ----
+
+    /// <summary>For <see cref="AllowSetForegroundWindow"/>: any process may take the foreground (until the next input).</summary>
+    public const uint AsfwAny = unchecked((uint)-1);
+
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool AllowSetForegroundWindow(uint processId);
+
     /// <summary>Wall-clock now as a FILETIME (100 ns ticks), comparable with GetProcessTimes.</summary>
     public static long PreciseNow()
     {
