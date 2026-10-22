@@ -234,6 +234,11 @@ public static class AppUpdate
     public const string AppExecutable = "Playdex.exe";
     public const string HelperExecutable = "Playdex.Run.exe";
     internal const long MaximumArchiveBytes = 512L * 1024 * 1024;
+
+    /// <summary>Extraction limits, far above the app (v2.1.4: about 140 MB in about 320 files), far below a zip bomb.</summary>
+    internal const long MaximumExtractedBytes = 2L * 1024 * 1024 * 1024;
+
+    internal const int MaximumArchiveEntries = 10_000;
     internal static readonly TimeSpan ParentExitTimeout = TimeSpan.FromSeconds(30);
     internal static readonly TimeSpan HealthTimeout = TimeSpan.FromSeconds(60);
 
@@ -350,18 +355,55 @@ public static class AppUpdate
         return Convert.ToHexStringLower(await SHA256.HashDataAsync(stream, cancellationToken));
     }
 
-    /// <summary>Extract every entry under <paramref name="destination"/> (no path may leave it); the app must be at the root.</summary>
+    /// <summary>
+    /// Extract every entry under <paramref name="destination"/> (<see cref="ExtractSafely"/>, within
+    /// <see cref="MaximumExtractedBytes"/> and <see cref="MaximumArchiveEntries"/>); the app must be at the root.
+    /// </summary>
     public static void Extract(string archivePath, string destination)
     {
+        ExtractSafely(archivePath, destination, MaximumExtractedBytes, MaximumArchiveEntries, "The update");
+        foreach (var required in new[] { AppExecutable, HelperExecutable })
+        {
+            if (!File.Exists(Path.Combine(destination, required)))
+            {
+                throw new InvalidDataException($"The update has no {required}.");
+            }
+        }
+    }
+
+    /// <summary>
+    /// Extract every entry of a zip under <paramref name="destination"/>: no path may leave it (zip slip), and the zip
+    /// may hold at most <paramref name="maximumEntries"/> entries and <paramref name="maximumBytes"/> bytes once
+    /// extracted. The sizes the zip declares are checked before anything is written, and the bytes actually written
+    /// count too, as declared sizes can lie. <paramref name="what"/> starts the error messages ("The update").
+    /// </summary>
+    internal static void ExtractSafely(string archivePath, string destination, long maximumBytes, int maximumEntries, string what)
+    {
         Directory.CreateDirectory(destination);
-        var root = Path.GetFullPath(destination) + Path.DirectorySeparatorChar;
+        var root = Path.GetFullPath(destination).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
         using var zip = ZipFile.OpenRead(archivePath);
+        if (zip.Entries.Count > maximumEntries)
+        {
+            throw new InvalidDataException($"{what} has more than {maximumEntries} files.");
+        }
+        long declared = 0;
+        foreach (var entry in zip.Entries)
+        {
+            if (entry.Length < 0 || entry.Length > maximumBytes - declared)
+            {
+                throw new InvalidDataException($"{what} is larger than allowed once extracted.");
+            }
+            declared += entry.Length;
+        }
+
+        var buffer = new byte[81920];
+        long written = 0;
         foreach (var entry in zip.Entries)
         {
             var path = Path.GetFullPath(Path.Combine(destination, entry.FullName));
             if (!path.StartsWith(root, StringComparison.OrdinalIgnoreCase))
             {
-                throw new InvalidDataException("The update contains a path outside its folder.");
+                throw new InvalidDataException($"{what} contains a path outside its folder.");
             }
             if (entry.FullName.EndsWith('/') || entry.FullName.EndsWith('\\'))
             {
@@ -369,13 +411,17 @@ public static class AppUpdate
                 continue;
             }
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-            entry.ExtractToFile(path);
-        }
-        foreach (var required in new[] { AppExecutable, HelperExecutable })
-        {
-            if (!File.Exists(Path.Combine(destination, required)))
+            using var source = entry.Open();
+            using var target = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None);
+            int read;
+            while ((read = source.Read(buffer)) > 0)
             {
-                throw new InvalidDataException($"The update has no {required}.");
+                written += read;
+                if (written > maximumBytes)
+                {
+                    throw new InvalidDataException($"{what} is larger than allowed once extracted.");
+                }
+                target.Write(buffer, 0, read);
             }
         }
     }

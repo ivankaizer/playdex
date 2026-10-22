@@ -148,6 +148,25 @@ public sealed class AppUpdateTests
     }
 
     [Fact]
+    public void ExtractionIsCappedInEntriesAndSizeBeforeAnythingIsWritten()
+    {
+        var directory = NewTempDir();
+        var four = Zip(directory, "four.zip", ("Playdex.exe", "x"), ("Playdex.Run.exe", "x"), ("a.txt", "x"), ("b.txt", "x"));
+        var tooMany = Assert.Throws<InvalidDataException>(() => AppUpdate.ExtractSafely(four, Path.Combine(directory, "a"), 1024, 3, "The update"));
+        Assert.Contains("more than 3 files", tooMany.Message, StringComparison.Ordinal);
+        Assert.Empty(Directory.EnumerateFileSystemEntries(Path.Combine(directory, "a")));
+        AppUpdate.ExtractSafely(four, Path.Combine(directory, "b"), 1024, 4, "The update");
+        Assert.Equal(4, Directory.GetFiles(Path.Combine(directory, "b")).Length);
+
+        var big = Zip(directory, "big.zip", ("Playdex.exe", new string('x', 600)), ("Playdex.Run.exe", new string('x', 600)));
+        var tooBig = Assert.Throws<InvalidDataException>(() => AppUpdate.ExtractSafely(big, Path.Combine(directory, "c"), 1000, 10, "The update"));
+        Assert.Contains("larger than allowed", tooBig.Message, StringComparison.Ordinal);
+        Assert.Empty(Directory.EnumerateFileSystemEntries(Path.Combine(directory, "c")));
+        AppUpdate.ExtractSafely(big, Path.Combine(directory, "d"), 2000, 10, "The update");
+        Assert.Equal(new string('x', 600), File.ReadAllText(Path.Combine(directory, "d", "Playdex.Run.exe")));
+    }
+
+    [Fact]
     public async Task StagingVerifiesTheChecksumAndWritesAManifest()
     {
         var directory = NewTempDir();
