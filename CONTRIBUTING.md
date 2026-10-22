@@ -45,6 +45,18 @@ cd src/Frontend && bun run typecheck && bun run test
 Without `PLAYDEX_INTEGRATION_DATABASE_URL` the integration tests don't run. CI runs all of the above on every pull
 request.
 
+## Formatting
+
+CI checks it, so set it up once:
+
+```sh
+bun install       # at the root: Biome for the TypeScript projects
+lefthook install  # formats staged files on commit, and runs gitleaks if you have it
+```
+
+`bun run format` fixes TypeScript, JSON and CSS; `dotnet format Playdex.sln` fixes C#. The C# style rules in
+`.editorconfig` are warnings, and the Release build treats warnings as errors.
+
 ## Conventions
 
 - One feature per module under `src/Api/Modules/<Feature>`: endpoints, service, repository, DTOs and a

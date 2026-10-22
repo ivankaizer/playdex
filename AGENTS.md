@@ -30,6 +30,7 @@ dotnet build Playdex.sln -c Release --warnaserror        # must stay warning-fre
 dotnet test test/Api.Tests -c Release                     # see CONTRIBUTING.md for the test database
 cd src/Frontend && bun run typecheck && bun run test && bun run build
 cd src/Launcher/ui && bun run typecheck
+bun run format && dotnet format Playdex.sln              # formatting; CI fails without it
 ```
 
 ## Rules
