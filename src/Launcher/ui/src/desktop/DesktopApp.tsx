@@ -285,7 +285,7 @@ function Playing({ gameId, since }: { gameId: string; since: number | null }) {
   const elapsed = useElapsed(since);
   return (
     <div data-nav-group="now-playing">
-      <button className="dk-live" data-nav data-kind="now-playing" aria-label={`Now playing ${game.title}. Switch to the game`} onClick={resumeGame}>
+      <button className="dk-live" data-nav data-kind="now-playing" aria-label={`Now playing ${game.title}. Switch to the game`} onClick={() => resumeGame(gameId)}>
         <span className="live-dot" aria-hidden />
         <span className="dk-live-label">Playing</span>
         <span className="dk-live-text">{game.title}</span>

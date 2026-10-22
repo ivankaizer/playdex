@@ -1,6 +1,6 @@
 import { Archive, CalendarCheck, CalendarX, Download, Heart, ImageIcon, MonitorSmartphone, Play, X } from "lucide-react";
 import { useState } from "react";
-import { closeArmed, forceCloseGame, launch, nowPlaying, openArtPicker, resumeGame, showToast } from "../app-state";
+import { closeArmed, forceCloseGame, launch, openArtPicker, resumeGame, showToast, useIsRunning } from "../app-state";
 import { SaveGlyph, useSaves } from "../components/saves";
 import { Backdrop, Logo } from "../components/shared";
 import {
@@ -38,7 +38,7 @@ export function GamePage({ gameId }: { gameId: string }) {
   const maxDay = Math.max(...daily, 1);
   const playedRecently = daily.some(Boolean);
   const saves = useSaves(gameId);
-  const playing = useStore(nowPlaying)?.gameId === gameId;
+  const playing = useIsRunning(gameId);
   const closeConfirm = useStore(closeArmed) === gameId;
 
   return (
@@ -86,7 +86,7 @@ export function GamePage({ gameId }: { gameId: string }) {
                 data-nav-default
                 data-kind="playing"
                 data-game={gameId}
-                onClick={resumeGame}
+                onClick={() => resumeGame(gameId)}
               >
                 <Play fill="currentColor" /> Resume
               </button>

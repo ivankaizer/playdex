@@ -105,12 +105,6 @@ internal static unsafe partial class Native
     [return: MarshalAs(UnmanagedType.Bool)]
     public static partial bool AllowSetForegroundWindow(uint processId);
 
-    public const byte VkMenu = 0x12;
-    public const uint KeyEventKeyUp = 0x2;
-
-    [LibraryImport("user32.dll", EntryPoint = "keybd_event")]
-    public static partial void KeybdEvent(byte key, byte scan, uint flags, nuint extraInfo);
-
     [LibraryImport("user32.dll")]
     public static partial uint GetDpiForWindow(nint hwnd);
 

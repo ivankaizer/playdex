@@ -1,7 +1,7 @@
 import { gameById, markPlayed, recentGames } from "./data/games";
 import { inHost, onHostMessage, postToHost, signalAfterFrame, type SessionState } from "./host/bridge";
 import { current, focusDefault, focusEl } from "./nav/focus";
-import { createStore } from "./nav/store";
+import { createStore, useStore } from "./nav/store";
 
 /** Game currently being launched / played (drives the launch overlay). */
 export const launching = createStore<string | null>(null);
@@ -29,15 +29,15 @@ export function showToast(msg: string) {
 export const session = createStore<{ state: SessionState; seconds: number } | null>(null);
 
 /**
- * Start a game. The game running now is resumed instead of started again. While another game runs the launch waits
+ * Start a game. A game running now is resumed instead of started again. While another game runs the launch waits
  * in {@link launchGuard} to be confirmed: both then run, and both are recorded.
  */
 export function launch(gameId: string) {
-  const running = nowPlaying.get()?.gameId;
-  if (running === gameId) {
-    resumeGame();
+  if (isRunning(gameId)) {
+    resumeGame(gameId);
     return;
   }
+  const running = nowPlaying.get()?.gameId;
   if (running) {
     launchGuard.set({ gameId, runningId: running });
     return;
@@ -107,9 +107,24 @@ export const nowPlaying = createStore<{ gameId: string; since: number | null } |
     : null,
 );
 
+/** Every game running now (the one {@link nowPlaying} shows among them): starting one of them resumes it. */
+export const runningGames = createStore<string[]>([]);
+
+export function isRunning(gameId: string) {
+  return nowPlaying.get()?.gameId === gameId || runningGames.get().includes(gameId);
+}
+
+/** {@link isRunning}, re-rendering when it changes. */
+export function useIsRunning(gameId: string) {
+  const playing = useStore(nowPlaying)?.gameId === gameId;
+  const running = useStore(runningGames).includes(gameId);
+  return playing || running;
+}
+
 onHostMessage((m) => {
   if (m.type === "now-playing") {
     nowPlaying.set(m.gameId && gameById(m.gameId) ? { gameId: m.gameId, since: m.since ?? null } : null);
+    runningGames.set(m.games ?? (m.gameId ? [m.gameId] : []));
     // A game started elsewhere (Steam, a shortcut) is the last played too.
     if (m.gameId) markPlayed(m.gameId);
   } else if (m.type === "resume-failed") {
@@ -141,13 +156,13 @@ export function openApp(id: string, name: string) {
   postToHost({ type: "open-app", id });
 }
 
-/** Switch to the running game's window. */
-export function resumeGame() {
+/** Switch to a running game's window: `gameId`'s, else the one now playing. */
+export function resumeGame(gameId?: string) {
   if (!inHost) {
     showToast("Resume works in the Playdex app on Windows");
     return;
   }
-  postToHost({ type: "resume-game" });
+  postToHost({ type: "resume-game", gameId: gameId ?? nowPlaying.get()?.gameId });
 }
 
 /** The running game armed for force close: a second request within {@link CLOSE_ARM_MS} closes it. */

@@ -73,6 +73,9 @@ internal sealed partial class ShellWindow : Window
     private int _raises;
     private nint _raisedOver;
 
+    private static readonly TimeSpan _guideGap = TimeSpan.FromMilliseconds(500);
+    private long _guideAt;
+
     private bool _ready;
     private bool _suspended;
 
@@ -80,6 +83,7 @@ internal sealed partial class ShellWindow : Window
     private static readonly TimeSpan _nowPlayingInterval = TimeSpan.FromSeconds(3);
     private readonly Microsoft.UI.Dispatching.DispatcherQueueTimer _nowPlayingTimer;
     private RunningGame? _nowPlaying;
+    private string _nowPlayingGames = "";
     private bool _nowPlayingPosted;
     private bool _detecting;
 
@@ -443,7 +447,9 @@ internal sealed partial class ShellWindow : Window
                 _ = OpenAppAsync(message.GetProperty("id").GetString()!);
                 break;
             case "resume-game":
-                if (!GameWindows.Activate(_hwnd, _gameWindow, GameProcessIds()))
+                // The game the page resumes; the one now playing when it doesn't say.
+                var resumed = message.TryGetProperty("gameId", out var resumeId) ? resumeId.GetString() : _nowPlaying?.GameId;
+                if (!GameWindows.Activate(_hwnd, _gameWindow, GameProcessIds(resumed)))
                 {
                     Post("""{"type":"resume-failed"}""");
                 }
@@ -588,7 +594,13 @@ internal sealed partial class ShellWindow : Window
         }
         else if (code == InputCode.Guide && _mode == ShellMode.FullScreen)
         {
-            // A game is in front: the Guide button brings Big Picture back. Desktop mode leaves it to Windows.
+            // A game is in front: the Guide button brings Big Picture back. Desktop mode leaves it to Windows. Once per
+            // _guideGap: with a game keeping the foreground, a failed bring to front was logged every 10-15 ms for 20 s.
+            if (Stopwatch.GetElapsedTime(_guideAt) < _guideGap)
+            {
+                return;
+            }
+            _guideAt = Stopwatch.GetTimestamp();
             OnRedirectedActivation(null);
         }
         // Anything else pressed while another window is in front is that window's: the input thread reads the pad at
@@ -637,8 +649,9 @@ internal sealed partial class ShellWindow : Window
     }
 
     /// <summary>
-    /// Tell the page which game is running, if any: the one launched here, else one started elsewhere
-    /// (<see cref="RunningGames"/>). Posted when it changes; "since" is epoch ms, or null when unknown.
+    /// Tell the page which game is running, if any: the one launched here most recently, else one started elsewhere
+    /// (<see cref="RunningGames"/>), and in "games" every running one (those launched here, else the one found), which
+    /// the page resumes instead of starting again. Posted when it changes; "since" is epoch ms, or null when unknown.
     /// </summary>
     private async Task RefreshNowPlayingAsync()
     {
@@ -649,17 +662,22 @@ internal sealed partial class ShellWindow : Window
         _detecting = true;
         try
         {
-            var game = _services.Sessions.Current;
+            var running = _services.Sessions.Running;
+            var game = running.Count > 0 ? running[^1] : null;
             if (game is null && _services.LibraryScan.IsCompletedSuccessfully)
             {
                 var library = _services.LibraryScan.Result;
                 game = await Task.Run(() => RunningGames.Detect(_services.Config, library));
             }
+            var games = string.Join(",", (running.Count > 0 ? running : game is null ? [] : [game])
+                .Select(g => JsonSerializer.Serialize(g.GameId, HostJson.Default.String)));
             var changed = !_nowPlayingPosted
                 || game?.GameId != _nowPlaying?.GameId
+                || games != _nowPlayingGames
                 || game?.Since is null != _nowPlaying?.Since is null
                 || (game?.Since is { } since && _nowPlaying?.Since is { } before && Math.Abs((since - before).TotalSeconds) > 2);
             _nowPlaying = game;
+            _nowPlayingGames = games;
             if (game is null)
             {
                 _gameWindow = 0;
@@ -670,8 +688,8 @@ internal sealed partial class ShellWindow : Window
             }
             _nowPlayingPosted = true;
             Post(game is null
-                ? """{"type":"now-playing","gameId":null}"""
-                : $$"""{"type":"now-playing","gameId":{{JsonSerializer.Serialize(game.GameId, HostJson.Default.String)}},"since":{{(game.Since is { } at ? at.ToUnixTimeMilliseconds().ToString(System.Globalization.CultureInfo.InvariantCulture) : "null")}}}""");
+                ? """{"type":"now-playing","gameId":null,"games":[]}"""
+                : $$"""{"type":"now-playing","gameId":{{JsonSerializer.Serialize(game.GameId, HostJson.Default.String)}},"since":{{(game.Since is { } at ? at.ToUnixTimeMilliseconds().ToString(System.Globalization.CultureInfo.InvariantCulture) : "null")}},"games":[{{games}}]}""");
         }
         catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception or IOException)
         {
@@ -684,12 +702,13 @@ internal sealed partial class ShellWindow : Window
     }
 
     /// <summary>
-    /// Force-close the running game (<see cref="GameCloser"/>). Only the game reported as running, so the page can't end
+    /// Force-close a running game (<see cref="GameCloser"/>). Only a game reported as running, so the page can't end
     /// anything else. Its watcher reports the exit as usual; "close-failed" tells the page when nothing could be ended.
     /// </summary>
     private async Task CloseGameAsync(string gameId)
     {
-        if (_nowPlaying is not { } running || running.GameId != gameId || _services.FindGame(gameId) is not { } game)
+        var running = _nowPlaying?.GameId == gameId ? _nowPlaying : _services.Sessions.Running.FirstOrDefault(g => g.GameId == gameId);
+        if (running is null || _services.FindGame(gameId) is not { } game)
         {
             Log.Info($"close: {gameId} is not running");
             PostCloseFailed("The game isn't running anymore.");
@@ -710,13 +729,11 @@ internal sealed partial class ShellWindow : Window
         _ = RefreshNowPlayingAsync();
     }
 
-    /// <summary>The running game's processes, when known: its detected process, or those its watcher here follows.</summary>
-    private IReadOnlyCollection<int> GameProcessIds() => _nowPlaying switch
-    {
-        null => [],
-        { ProcessId: { } pid } => [pid],
-        var game => _services.Sessions.ProcessIds(game.GameId),
-    };
+    /// <summary>A running game's processes, when known: its detected process, or those its watcher here follows.</summary>
+    private IReadOnlyCollection<int> GameProcessIds(string? gameId) =>
+        gameId is null ? []
+        : _nowPlaying is { ProcessId: { } pid } playing && playing.GameId == gameId ? [pid]
+        : _services.Sessions.ProcessIds(gameId);
 
     private void PostCloseFailed(string message) =>
         Post($$"""{"type":"close-failed","message":{{JsonSerializer.Serialize(message, HostJson.Default.String)}}}""");
@@ -749,7 +766,7 @@ internal sealed partial class ShellWindow : Window
 
     private bool IsForeground() => Native.GetForegroundWindow() == _hwnd;
 
-    public void BringToFront()
+    public void BringToFront([System.Runtime.CompilerServices.CallerMemberName] string caller = "")
     {
         ResumeWebView();
         if (Native.IsIconic(_hwnd))
@@ -760,7 +777,7 @@ internal sealed partial class ShellWindow : Window
         {
             AppWindow.SetPresenter(AppWindowPresenterKind.FullScreen);
         }
-        TakeForeground();
+        TakeForeground(caller);
         if (_mode == ShellMode.FullScreen)
         {
             _keepOnTopUntil = Stopwatch.GetTimestamp() + (long)(_keepOnTopFor.TotalSeconds * Stopwatch.Frequency);
@@ -768,7 +785,7 @@ internal sealed partial class ShellWindow : Window
         }
     }
 
-    private void TakeForeground()
+    private void TakeForeground(string caller)
     {
         if (Native.SetForegroundWindow(_hwnd) && IsForeground())
         {
@@ -781,17 +798,7 @@ internal sealed partial class ShellWindow : Window
         Native.BringWindowToTop(_hwnd);
         Native.SetForegroundWindow(_hwnd);
         Native.AttachThreadInput(thisThread, foregroundThread, false);
-        Log.Info($"bring to front via AttachThreadInput: {(IsForeground() ? "ok" : "failed")}");
-        if (IsForeground())
-        {
-            return;
-        }
-        // Still locked: a controller press is no input to Windows, so the game in front keeps the foreground. An Alt
-        // press lifts the lock, as it does for Alt+Tab; released once Playdex is in front, so the game sees no Alt up.
-        Native.KeybdEvent(Native.VkMenu, 0, 0, 0);
-        Native.SetForegroundWindow(_hwnd);
-        Native.KeybdEvent(Native.VkMenu, 0, Native.KeyEventKeyUp, 0);
-        Log.Info($"bring to front via Alt: {(IsForeground() ? "ok" : "failed")}");
+        Log.Info($"bring to front via AttachThreadInput: {(IsForeground() ? "ok" : "failed")} ({caller})");
     }
 
     /// <summary>After <see cref="BringToFront"/>, while Playdex stays in front: raise it over a game that took the top back.</summary>

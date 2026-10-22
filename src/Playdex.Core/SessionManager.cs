@@ -50,15 +50,18 @@ public sealed class SessionManager(
     }
 
     /// <summary>The running game launched here most recently; null while none runs.</summary>
-    public RunningGame? Current
+    public RunningGame? Current => Running is { Count: > 0 } running ? running[^1] : null;
+
+    /// <summary>The running games launched here, oldest launch first.</summary>
+    public IReadOnlyList<RunningGame> Running
     {
         get
         {
             lock (_gate)
             {
-                return _sessions.FindLast(session => session.RunningSince is not null) is { RunningSince: { } since } session
-                    ? new RunningGame(session.GameId, DateTimeOffset.Now - Stopwatch.GetElapsedTime(since), null)
-                    : null;
+                return [.. _sessions
+                    .Where(session => session.RunningSince is not null)
+                    .Select(session => new RunningGame(session.GameId, DateTimeOffset.Now - Stopwatch.GetElapsedTime(session.RunningSince!.Value), null))];
             }
         }
     }

@@ -218,27 +218,13 @@ public sealed partial class SteamGameWatcher : IGameWatcher
             return "RunningAppID";
         }
         _installDir ??= SteamLibrary.FindInstallDirectory(_appId);
-        return _installDir is { } folder && AnyProcessIn(folder) ? "process in its install folder" : null;
+        return _installDir is { } folder && ProcessMonitor.ProcessesIn(folder).Count > 0 ? "process in its install folder" : null;
     }
 
     private static int SteamRunningApp()
     {
         using var steam = Registry.CurrentUser.OpenSubKey(@"Software\Valve\Steam", writable: false);
         return steam?.GetValue("RunningAppID") is int appId ? appId : 0;
-    }
-
-    private static bool AnyProcessIn(string folder)
-    {
-        folder = Path.TrimEndingDirectorySeparator(folder) + Path.DirectorySeparatorChar;
-        var found = false;
-        foreach (var process in Process.GetProcesses())
-        {
-            using (process)
-            {
-                found = found || (ProcessMonitor.ImagePath(process) is { } path && path.StartsWith(folder, StringComparison.OrdinalIgnoreCase));
-            }
-        }
-        return found;
     }
 
     private void Arm()
