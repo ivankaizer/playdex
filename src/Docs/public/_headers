@@ -1,6 +1,11 @@
 /_astro/*
   Cache-Control: public, max-age=31536000, immutable
 
+# The baseline from the app's src/Frontend/security-headers.conf, without a CSP: Starlight inlines
+# several scripts and styles that would each need a hash kept in step with every Starlight upgrade.
 /*
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin
+  X-Frame-Options: DENY
+  Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=()
+  Cross-Origin-Opener-Policy: same-origin
