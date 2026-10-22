@@ -202,6 +202,11 @@ public sealed class SessionRecorder(
         {
             // Let go of without finishing (the process is ending): the queue is sent at the next start.
         }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // The lost play stays queued for the next flush; the session goes on (and ends) either way.
+            Log.Error($"session: could not send the queue for {game.GameTitle}", ex);
+        }
     }
 
     /// <summary>
