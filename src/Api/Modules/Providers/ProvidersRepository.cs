@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 using Playdex.Persistence;
 
 namespace Api.Modules.Providers;
@@ -59,6 +60,11 @@ public sealed class ProvidersRepository(PlaydexDbContext db)
         string? accountId,
         CancellationToken ct)
     {
+        // Count and insert under one lock per user and type, or parallel requests could all pass the limit check.
+        await using var transaction = await db.Database.BeginTransactionAsync(ct);
+        var lockKey = $"integration-limit:{userId}:{type}";
+        await db.Database.ExecuteSqlInterpolatedAsync(
+            $"SELECT pg_advisory_xact_lock(hashtextextended({lockKey}, 0))", ct);
         var existingCount = await db.Integrations.AsNoTracking()
             .CountAsync(item => item.UserId == userId && item.Type == type, ct);
         if (existingCount >= MaxIntegrationsPerType)
@@ -87,10 +93,33 @@ public sealed class ProvidersRepository(PlaydexDbContext db)
             UpdatedAt = now,
         };
         db.Integrations.Add(integration);
-        await db.SaveChangesAsync(ct);
+        if (!await TrySaveAccount(integration, ct))
+        {
+            return new ProviderCreateResult(null, LimitReached: false, DuplicateAccount: true);
+        }
 
+        await transaction.CommitAsync(ct);
         var platforms = await db.Platforms.AsNoTracking().ToListAsync(ct);
         return new ProviderCreateResult(ToStatus(integration, platforms), LimitReached: false);
+    }
+
+    /// <returns>False when another integration of the user already polls this account.</returns>
+    private async Task<bool> TrySaveAccount(Integration integration, CancellationToken ct)
+    {
+        try
+        {
+            await db.SaveChangesAsync(ct);
+            return true;
+        }
+        catch (DbUpdateException exception) when (exception.InnerException is PostgresException
+                                                  {
+                                                      SqlState: PostgresErrorCodes.UniqueViolation,
+                                                      ConstraintName: PlaydexDbContext.UniqueAccountIndex,
+                                                  })
+        {
+            db.Entry(integration).State = EntityState.Detached;
+            return false;
+        }
     }
 
     public async Task<ProviderStatusDto?> UpdateProviderStatus(long userId, long providerId, string status, CancellationToken ct)
@@ -108,6 +137,7 @@ public sealed class ProvidersRepository(PlaydexDbContext db)
         return ToStatus(credential, platforms);
     }
 
+    /// <exception cref="DuplicateIntegrationAccountException">The new account is already connected.</exception>
     public async Task<ProviderStatusDto?> UpdateCredential(
         long userId,
         long providerId,
@@ -126,7 +156,8 @@ public sealed class ProvidersRepository(PlaydexDbContext db)
         if (apiKeyChanged) credential.ApiKey = apiKey;
         if (accountIdChanged) credential.AccountId = accountId;
         credential.UpdatedAt = DateTimeOffset.UtcNow;
-        await db.SaveChangesAsync(ct);
+        if (!await TrySaveAccount(credential, ct))
+            throw new DuplicateIntegrationAccountException();
         var platforms = await db.Platforms.AsNoTracking().ToListAsync(ct);
         return ToStatus(credential, platforms);
     }
@@ -239,7 +270,8 @@ public sealed class ProvidersRepository(PlaydexDbContext db)
         credential.AccountId = xuid;
         credential.Active = true;
         credential.UpdatedAt = now;
-        await db.SaveChangesAsync(ct);
+        if (!await TrySaveAccount(credential, ct))
+            throw new DuplicateIntegrationAccountException();
 
         var platforms = await db.Platforms.AsNoTracking().ToListAsync(ct);
         return ToStatus(credential, platforms);
@@ -309,3 +341,6 @@ public sealed class ProvidersRepository(PlaydexDbContext db)
             options);
     }
 }
+
+/// <summary>Another integration of the same user and type already uses this account.</summary>
+public sealed class DuplicateIntegrationAccountException() : Exception("This account is already connected.");

@@ -270,6 +270,83 @@ public sealed class ProvidersRepositoryTests(PostgresFixture postgres)
         }
     }
 
+    [Fact]
+    public async Task ParallelCreationsStayWithinTheLimit()
+    {
+        if (!postgres.IsConfigured) return;
+
+        var userId = await CreateUser("provider-limit");
+        try
+        {
+            var results = await Task.WhenAll(Enumerable.Range(1, 6).Select(async index =>
+            {
+                await using var db = CreateDb();
+                return await new ProvidersRepository(db).CreateProvider(
+                    userId, "steam", IntegrationType.Steam, $"key-{index}", $"steam-id-{index}", default);
+            }));
+
+            Assert.Equal(3, results.Count(result => result.Provider is not null));
+            Assert.Equal(3, results.Count(result => result.LimitReached));
+            await using var verify = CreateDb();
+            Assert.Equal(3, await verify.Integrations.CountAsync(item => item.UserId == userId));
+        }
+        finally
+        {
+            await DeleteUser(userId);
+        }
+    }
+
+    [Fact]
+    public async Task AnAccountCanBeConnectedOncePerType()
+    {
+        if (!postgres.IsConfigured) return;
+
+        var userId = await CreateUser("provider-duplicate");
+        try
+        {
+            await using var db = CreateDb();
+            var repository = new ProvidersRepository(db);
+            var first = await repository.CreateProvider(
+                userId, "steam", IntegrationType.Steam, "key-1", "76561190000000003", default);
+            var duplicate = await repository.CreateProvider(
+                userId, "steam", IntegrationType.Steam, "key-2", "76561190000000003", default);
+            var second = await repository.CreateProvider(
+                userId, "steam", IntegrationType.Steam, "key-3", "76561190000000004", default);
+
+            Assert.NotNull(first.Provider);
+            Assert.True(duplicate.DuplicateAccount);
+            Assert.Null(duplicate.Provider);
+            await Assert.ThrowsAsync<DuplicateIntegrationAccountException>(() => repository.UpdateCredential(
+                userId, second.Provider!.Id, false, null, true, "76561190000000003", default));
+
+            var service = new ProvidersService(new ProvidersRepository(CreateDb()));
+            var conflict = await Assert.ThrowsAsync<Api.Infrastructure.Http.AppProblemException>(() =>
+                service.CreateProvider(userId, new CreateProviderRequest("steam", "key-4", "76561190000000004"), default));
+            Assert.Equal(409, conflict.StatusCode);
+            Assert.Equal("This Steam account is already connected.", conflict.Message);
+        }
+        finally
+        {
+            await DeleteUser(userId);
+        }
+    }
+
+    private async Task<long> CreateUser(string prefix)
+    {
+        await using var db = CreateDb();
+        var user = new User { Email = $"{prefix}-{Guid.NewGuid():n}@example.test" };
+        db.Users.Add(user);
+        await db.SaveChangesAsync();
+        return user.Id;
+    }
+
+    private async Task DeleteUser(long userId)
+    {
+        await using var db = CreateDb();
+        await db.Integrations.Where(item => item.UserId == userId).ExecuteDeleteAsync();
+        await db.Users.Where(user => user.Id == userId).ExecuteDeleteAsync();
+    }
+
     private PlaydexDbContext CreateDb() => new(
         new DbContextOptionsBuilder<PlaydexDbContext>()
             .UseNpgsql(

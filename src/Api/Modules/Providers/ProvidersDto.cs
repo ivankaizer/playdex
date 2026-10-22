@@ -36,7 +36,7 @@ internal sealed record ValidatedProviderCreation(
     Playdex.Persistence.IntegrationType Type,
     string ApiKey,
     string? AccountId);
-public sealed record ProviderCreateResult(ProviderStatusDto? Provider, bool LimitReached);
+public sealed record ProviderCreateResult(ProviderStatusDto? Provider, bool LimitReached, bool DuplicateAccount = false);
 public sealed record ProviderSessionPlatformUpdateResult(
     ProviderStatusDto? Provider,
     bool InvalidPlatform,

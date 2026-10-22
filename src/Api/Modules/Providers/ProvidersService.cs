@@ -28,6 +28,8 @@ public sealed class ProvidersService(ProvidersRepository repository)
         if (result.LimitReached)
             throw AppProblemException.Conflict(
                 $"{PlatformName(creation.Platform)} supports up to {ProvidersRepository.MaxIntegrationsPerType} integrations.");
+        if (result.DuplicateAccount)
+            throw DuplicateAccount(creation.Platform);
         if (result.Provider is null)
             throw AppProblemException.NotFound($"{PlatformName(creation.Platform)} platform is not installed.");
 
@@ -73,14 +75,23 @@ public sealed class ProvidersService(ProvidersRepository repository)
             throw AppProblemException.Validation("API key is managed by an administrator.");
         }
 
-        var provider = await repository.UpdateCredential(
-            userId,
-            providerId,
-            changes.ApiKeyChanged,
-            changes.ApiKey,
-            changes.AccountIdChanged,
-            changes.AccountId,
-            ct);
+        ProviderStatusDto? provider;
+        try
+        {
+            provider = await repository.UpdateCredential(
+                userId,
+                providerId,
+                changes.ApiKeyChanged,
+                changes.ApiKey,
+                changes.AccountIdChanged,
+                changes.AccountId,
+                ct);
+        }
+        catch (DuplicateIntegrationAccountException)
+        {
+            throw AppProblemException.Conflict("Another integration of yours already uses this account.");
+        }
+
         if (provider is null)
         {
             throw AppProblemException.NotFound("Provider not found.");
@@ -133,11 +144,20 @@ public sealed class ProvidersService(ProvidersRepository repository)
         if (await repository.IsPlatformApiKeyLocked(userId, "xbox", ct))
             throw AppProblemException.Validation("OpenXBL API key is managed by an administrator.");
 
-        var provider = await repository.ConnectOpenXbl(
-            userId,
-            apiKey,
-            string.IsNullOrEmpty(xuid) ? null : xuid,
-            ct);
+        ProviderStatusDto? provider;
+        try
+        {
+            provider = await repository.ConnectOpenXbl(
+                userId,
+                apiKey,
+                string.IsNullOrEmpty(xuid) ? null : xuid,
+                ct);
+        }
+        catch (DuplicateIntegrationAccountException)
+        {
+            throw DuplicateAccount("xbox");
+        }
+
         if (provider is null)
             throw AppProblemException.NotFound("Xbox provider is not installed.");
 
@@ -197,6 +217,9 @@ public sealed class ProvidersService(ProvidersRepository repository)
         {
             ApiKey = provider.ApiKeyLocked && provider.Platform != "api" ? null : provider.ApiKey,
         };
+
+    private static AppProblemException DuplicateAccount(string platform) =>
+        AppProblemException.Conflict($"This {PlatformName(platform)} account is already connected.");
 
     private static string PlatformName(string platform) => platform switch
     {
