@@ -190,7 +190,7 @@ function GameSearchField({ slot, title, emptyHint, search, mapping }: GameSearch
           {search.isLoading ? "Searching..." : "Search"}
         </button>
       </div>
-      {search.error.length > 0 ? <p className="px-1 text-xs text-danger">{search.error}</p> : null}
+      {search.error.length > 0 ? <p role="alert" className="px-1 text-xs text-danger">{search.error}</p> : null}
       {search.results.length > 0 ? (
         <ul className="flex max-h-72 flex-col gap-0.5 overflow-y-auto rounded-[18px] border border-line bg-surface p-1.5 shadow-pop">
           {search.results.map((result) => (

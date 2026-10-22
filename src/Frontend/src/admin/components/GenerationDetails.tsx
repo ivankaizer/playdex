@@ -83,7 +83,7 @@ export function GenerationDetails({ detail, actions }: { detail: GenerationDetai
                   />
                 </>
               ) : screenshot.failed ? (
-                <p className="text-sm text-danger">The screenshot could not be loaded.</p>
+                <p role="alert" className="text-sm text-danger">The screenshot could not be loaded.</p>
               ) : (
                 <p className="text-sm text-muted">Loading screenshot…</p>
               )}

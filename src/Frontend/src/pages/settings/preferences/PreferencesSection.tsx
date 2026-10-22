@@ -44,7 +44,7 @@ export function PreferencesSection({ preferences }: PreferencesSectionProps) {
         : `Sessions under ${minutes} min are ignored.`;
 
   const saveNote = state.settingsError ? (
-    <span className="text-danger">{state.settingsError}</span>
+    <span role="alert" className="text-danger">{state.settingsError}</span>
   ) : dirty && (minutes === null || !chatValid) ? (
     <span className="text-warn">{minutes === null ? "Fix the minimum minutes to save" : "Fix the chat ID to save"}</span>
   ) : dirty && !discardable ? (
@@ -203,7 +203,7 @@ export function PreferencesSection({ preferences }: PreferencesSectionProps) {
                 {state.testNotificationMessage}
               </span>
             ) : state.testNotificationError ? (
-              <span className="text-danger">{state.testNotificationError}</span>
+              <span role="alert" className="text-danger">{state.testNotificationError}</span>
             ) : state.savedTelegramChatId.length === 0 || state.telegramChatId.trim() !== state.savedTelegramChatId ? (
               <span className="text-muted">Save a chat ID to send a test message.</span>
             ) : (
