@@ -4,6 +4,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Playdex.Persistence;
 using Xunit;
@@ -13,6 +14,7 @@ namespace Api.Tests;
 public sealed class AuthHardeningTests
 {
     private const string StrongSecret = "auth-hardening-test-secret-at-least-thirty-two-bytes";
+    private static readonly AuthTokenService Tokens = new(Options.Create(new AuthOptions { JwtSecret = StrongSecret }));
 
     [Theory]
     [InlineData("")]
@@ -46,12 +48,11 @@ public sealed class AuthHardeningTests
     [Fact]
     public async Task RefreshTokensFromAnOlderTokenVersionAreRevoked()
     {
-        var tokens = new AuthTokenService(Options.Create(new AuthOptions { JwtSecret = StrongSecret }));
         var repository = new FakeAuthRepository(new User { Id = 7, Email = "a@example.com", TokenVersion = 1 });
-        var service = new AuthService(repository, tokens);
-        var oldPair = tokens.IssueTokenPair(7, "a@example.com", tokenVersion: 0);
+        var oldPair = Tokens.IssueTokenPair(7, "a@example.com", tokenVersion: 0);
+        repository.Remember(oldPair);
 
-        var error = await Assert.ThrowsAsync<AppProblemException>(() => service.Refresh(oldPair.RefreshToken));
+        var error = await Assert.ThrowsAsync<AppProblemException>(() => Service(repository).Refresh(oldPair.RefreshToken));
 
         Assert.Equal(401, error.StatusCode);
     }
@@ -59,29 +60,103 @@ public sealed class AuthHardeningTests
     [Fact]
     public async Task RefreshReissuesWithTheCurrentEmailAndVersion()
     {
-        var tokens = new AuthTokenService(Options.Create(new AuthOptions { JwtSecret = StrongSecret }));
         var repository = new FakeAuthRepository(new User { Id = 7, Email = "new@example.com", TokenVersion = 2 });
-        var service = new AuthService(repository, tokens);
-        var pair = tokens.IssueTokenPair(7, "old@example.com", tokenVersion: 2);
+        var pair = Tokens.IssueTokenPair(7, "old@example.com", tokenVersion: 2);
+        repository.Remember(pair);
 
-        var refreshed = await service.Refresh(pair.RefreshToken);
+        var refreshed = await Service(repository).Refresh(pair.RefreshToken);
 
-        var principal = tokens.Validate(refreshed.AccessToken, "access");
+        var principal = Tokens.Validate(refreshed.AccessToken, "access");
         Assert.Equal("new@example.com", principal.FindFirst("email")?.Value);
         Assert.Equal("2", principal.FindFirst(AuthTokenService.TokenVersionClaim)?.Value);
     }
 
     [Fact]
+    public async Task ARefreshTokenTheServerNeverStoredIsRejected()
+    {
+        var repository = new FakeAuthRepository(new User { Id = 7, Email = "a@example.com" });
+        var unknown = Tokens.IssueTokenPair(7, "a@example.com", tokenVersion: 0);
+
+        var error = await Assert.ThrowsAsync<AppProblemException>(() => Service(repository).Refresh(unknown.RefreshToken));
+
+        Assert.Equal(401, error.StatusCode);
+    }
+
+    [Fact]
+    public async Task ARefreshTokenWorksOnceAndReusingItRevokesTheWholeSignIn()
+    {
+        var repository = new FakeAuthRepository(new User { Id = 7, Email = "a@example.com" });
+        var service = Service(repository);
+        var first = Tokens.IssueTokenPair(7, "a@example.com", tokenVersion: 0);
+        repository.Remember(first);
+        var second = await service.Refresh(first.RefreshToken);
+
+        var reuse = await Assert.ThrowsAsync<AppProblemException>(() => service.Refresh(first.RefreshToken));
+        var successor = await Assert.ThrowsAsync<AppProblemException>(() => service.Refresh(second.RefreshToken));
+
+        Assert.Equal(401, reuse.StatusCode);
+        Assert.Equal(401, successor.StatusCode);
+        Assert.Empty(repository.Stored);
+    }
+
+    [Fact]
+    public async Task ReusingATokenLeavesTheUsersOtherSignInsAlone()
+    {
+        var repository = new FakeAuthRepository(new User { Id = 7, Email = "a@example.com" });
+        var service = Service(repository);
+        var laptop = Tokens.IssueTokenPair(7, "a@example.com", tokenVersion: 0);
+        var phone = Tokens.IssueTokenPair(7, "a@example.com", tokenVersion: 0);
+        repository.Remember(laptop);
+        repository.Remember(phone);
+        await service.Refresh(laptop.RefreshToken);
+
+        await Assert.ThrowsAsync<AppProblemException>(() => service.Refresh(laptop.RefreshToken));
+
+        Assert.NotNull(await service.Refresh(phone.RefreshToken));
+    }
+
+    [Fact]
+    public async Task LogoutRevokesTheSignInAndIgnoresGarbage()
+    {
+        var repository = new FakeAuthRepository(new User { Id = 7, Email = "a@example.com" });
+        var service = Service(repository);
+        var pair = Tokens.IssueTokenPair(7, "a@example.com", tokenVersion: 0);
+        repository.Remember(pair);
+        var refreshed = await service.Refresh(pair.RefreshToken);
+
+        await service.Logout("not-a-token");
+        await service.Logout(refreshed.RefreshToken);
+
+        Assert.Empty(repository.Stored);
+        var error = await Assert.ThrowsAsync<AppProblemException>(() => service.Refresh(refreshed.RefreshToken));
+        Assert.Equal(401, error.StatusCode);
+    }
+
+    [Fact]
+    public void RefreshTokensCarryAnIdTheServerStoresOnlyAsAHash()
+    {
+        var pair = Tokens.IssueTokenPair(7, "a@example.com", tokenVersion: 0);
+
+        var principal = Tokens.Validate(pair.RefreshToken, "refresh");
+
+        Assert.Equal(pair.RefreshTokenId, principal.FindFirst(AuthTokenService.TokenIdClaim)?.Value);
+        Assert.Equal(32, AuthTokenService.HashTokenId(pair.RefreshTokenId).Length);
+        Assert.NotEqual(pair.RefreshTokenId, Tokens.IssueTokenPair(7, "a@example.com", tokenVersion: 0).RefreshTokenId);
+    }
+
+    [Fact]
     public async Task UnknownEmailFailsLikeAWrongPassword()
     {
-        var tokens = new AuthTokenService(Options.Create(new AuthOptions { JwtSecret = StrongSecret }));
-        var service = new AuthService(new FakeAuthRepository(user: null), tokens);
+        var service = Service(new FakeAuthRepository(user: null));
 
         var error = await Assert.ThrowsAsync<AppProblemException>(() => service.Login("nobody@example.com", "secret"));
 
         Assert.Equal(401, error.StatusCode);
         Assert.Equal("Invalid credentials.", error.Message);
     }
+
+    private static AuthService Service(AuthRepository repository) =>
+        new(repository, Tokens, NullLogger<AuthService>.Instance);
 
     private static IOptions<AuthOptions> AuthOptionsFor(string secret, string environment)
     {
@@ -96,11 +171,58 @@ public sealed class AuthHardeningTests
 
     private sealed class FakeAuthRepository(User? user) : AuthRepository(null!)
     {
+        private long _nextId;
+
+        public List<RefreshToken> Stored { get; } = [];
+
+        public void Remember(AuthTokenPair pair) => Add(new RefreshToken
+        {
+            UserId = user!.Id,
+            FamilyId = Guid.NewGuid(),
+            TokenHash = AuthTokenService.HashTokenId(pair.RefreshTokenId),
+            CreatedAt = DateTimeOffset.UtcNow,
+            ExpiresAt = pair.RefreshTokenExpiresAt,
+        });
+
         public override Task<User?> FindByEmail(string email, CancellationToken cancellationToken = default) =>
             Task.FromResult(user);
 
         public override Task<User?> FindById(long userId, CancellationToken cancellationToken = default) =>
             Task.FromResult(user?.Id == userId ? user : null);
+
+        public override Task<RefreshToken?> FindRefreshToken(byte[] tokenHash, CancellationToken cancellationToken = default) =>
+            Task.FromResult(Stored.SingleOrDefault(token => token.TokenHash.SequenceEqual(tokenHash)));
+
+        public override Task AddRefreshToken(RefreshToken token, CancellationToken cancellationToken = default)
+        {
+            Add(token);
+            return Task.CompletedTask;
+        }
+
+        public override Task<bool> RotateRefreshToken(long tokenId, RefreshToken successor, CancellationToken cancellationToken = default)
+        {
+            var current = Stored.Single(token => token.Id == tokenId);
+            if (current.RotatedAt is not null)
+            {
+                return Task.FromResult(false);
+            }
+
+            current.RotatedAt = successor.CreatedAt;
+            Add(successor);
+            return Task.FromResult(true);
+        }
+
+        public override Task RevokeRefreshTokenFamily(Guid familyId, CancellationToken cancellationToken = default)
+        {
+            Stored.RemoveAll(token => token.FamilyId == familyId);
+            return Task.CompletedTask;
+        }
+
+        private void Add(RefreshToken token)
+        {
+            token.Id = ++_nextId;
+            Stored.Add(token);
+        }
     }
 
     private sealed class TestEnvironment(string name) : IHostEnvironment

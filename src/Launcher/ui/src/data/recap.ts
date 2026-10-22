@@ -1,7 +1,7 @@
 /*
- * A year's Playdex recap: the web's Recap page numbers for one calendar year (GET /api/launcher/recap?year=, which runs
- * the same RecapService), fetched by the host with the install's API key when the Playdex tab shows it. In a plain
- * browser a recap is made from the demo sessions.
+ * A year's Playdex recap: the web's Recap page numbers for one calendar year (GET /api/launcher/recap?year=&tz=, which
+ * runs the same RecapService in this page's time zone), fetched by the host with the install's API key when the Playdex
+ * tab shows it. In a plain browser a recap is made from the demo sessions.
  */
 import { inHost, onHostMessage, postToHost } from "../host/bridge";
 import { createStore } from "../nav/store";
@@ -47,11 +47,23 @@ function put(year: number, state: RecapState) {
   recaps.set({ ...recaps.get(), [year]: state });
 }
 
+/**
+ * This page's IANA time zone (e.g. "Europe/Warsaw"), as the web app sends it: the API counts the recap's year, days and
+ * hours in it, so they match the calendar shown here. UTC when the browser cannot tell.
+ */
+export function clientTimeZone(): string {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+  } catch {
+    return "UTC";
+  }
+}
+
 /** Fetch a year's recap (again); the store says when it is in. */
 export function loadRecap(year: number) {
   if (recaps.get()[year]?.status !== "ready") put(year, { status: "loading" });
   if (inHost) {
-    postToHost({ type: "playdex-recap", year });
+    postToHost({ type: "playdex-recap", year, timeZone: clientTimeZone() });
   } else {
     window.setTimeout(() => put(year, { status: "ready", recap: demoRecap(year) }), 250);
   }

@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Api.Infrastructure.Common;
 using Api.Infrastructure.Http;
 
 namespace Api.Modules.ApiCapture;
@@ -45,15 +46,10 @@ public static class ApiCaptureEndpoints
 
             var payload = ValidateGamePayload(request);
 
-            var durationInSeconds = request!.DurationInSeconds;
-            if (durationInSeconds is null or <= 0)
-            {
-                await TypedResults.Problem("durationInSeconds must be a positive number.", statusCode: 400).ExecuteAsync(http);
-                return;
-            }
+            var durationInSeconds = ValidateDuration(request!.DurationInSeconds);
 
             var result = await service.RecordSession(
-                apiKey, durationInSeconds.Value, request.GameTitle, payload.GameId, payload.Provider, payload.Platform, http.RequestAborted);
+                apiKey, durationInSeconds, request.GameTitle, payload.GameId, payload.Provider, payload.Platform, http.RequestAborted);
 
             if (result is null)
             {
@@ -173,6 +169,18 @@ public static class ApiCaptureEndpoints
             throw AppProblemException.Validation("Invalid JSON body.");
         }
     }
+
+    /// <summary>
+    /// A recorded session ends now, so its length decides its start: up to 24 hours, like every other session
+    /// (2e9 seconds would start it in 1963).
+    /// </summary>
+    internal static int ValidateDuration(int? durationInSeconds) => durationInSeconds switch
+    {
+        null or <= 0 => throw AppProblemException.Validation("durationInSeconds must be a positive number."),
+        > SessionLimits.MaxDurationSeconds => throw AppProblemException.Validation(
+            $"durationInSeconds must be at most {SessionLimits.MaxDurationSeconds} (24 hours)."),
+        { } seconds => seconds,
+    };
 
     private static ValidatedGamePayload ValidateGamePayload(ApiSessionRequest? request)
     {

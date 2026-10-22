@@ -468,7 +468,11 @@ internal sealed partial class ShellWindow : Window
                 PostQuickSettings(() => Displays.SetRefreshRate(rateDisplay, hz), $"switch to {hz} Hz");
                 break;
             case "playdex-recap":
-                _ = PostRecapAsync(message.GetProperty("year").GetInt32());
+                // The page's IANA time zone, so the recap counts the days it shows; older pages send none.
+                var recapZone = message.TryGetProperty("timeZone", out var timeZone) && timeZone.ValueKind == JsonValueKind.String
+                    ? timeZone.GetString()
+                    : null;
+                _ = PostRecapAsync(message.GetProperty("year").GetInt32(), recapZone);
                 break;
             case "open-steam":
                 OpenSteam();
@@ -517,12 +521,12 @@ internal sealed partial class ShellWindow : Window
     }
 
     /// <summary>
-    /// A year's Playdex recap for the Playdex tab, asked for when the page shows it; "recap" is null offline or without
-    /// a key.
+    /// A year's Playdex recap for the Playdex tab, asked for when the page shows it, in the page's time zone (this PC's
+    /// without one); "recap" is null offline or without a key.
     /// </summary>
-    private async Task PostRecapAsync(int year)
+    private async Task PostRecapAsync(int year, string? timeZone)
     {
-        var recap = await Task.Run(() => _services.Api.GetLauncherRecapAsync(year));
+        var recap = await Task.Run(() => _services.Api.GetLauncherRecapAsync(year, timeZone));
         Post($$"""{"type":"playdex-recap","year":{{year.ToString(System.Globalization.CultureInfo.InvariantCulture)}},"recap":{{recap ?? "null"}}}""");
     }
 

@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using Api.Infrastructure.Auth;
+using Api.Infrastructure.Common;
 using Api.Infrastructure.Http;
 
 namespace Api.Modules.Accounts;
@@ -35,28 +36,32 @@ public static class AccountsEndpoints
         return TypedResults.Ok(await service.ListAccounts(principal.GetUserId(), ct));
     }
 
+    /// <param name="tz">
+    /// The client's time zone (IANA or Windows id): date-only bounds and days are its calendar's. UTC when missing.
+    /// </param>
     private static async Task<IResult> ListSessions(
         ClaimsPrincipal principal,
         AccountsService service,
         int? limit, int? offset, string? sort, string? direction,
-        string? title, string? gameId, string? platform, string? from, string? to,
+        string? title, string? gameId, string? platform, string? from, string? to, string? tz,
         CancellationToken ct)
     {
         var result = await service.ListSessions(
             principal.GetUserId(), null, title, gameId, platform, from, to,
             sort ?? "date", direction ?? "desc",
             ValidateLimit(limit), ValidateOffset(offset),
-            0, ct);
+            0, LocalCalendar.ResolveTimeZone(tz), ct);
         return TypedResults.Ok(new AccountSessionsResponseDto(null, result.Sessions, result.Total, result.Limit, result.Offset));
     }
 
     private static async Task<IResult> ListSessionsToday(
         ClaimsPrincipal principal,
         AccountsService service,
+        string? tz,
         CancellationToken ct)
     {
-        var sessions = await service.ListSessionsToday(principal.GetUserId(), null, 0, ct);
-        return TypedResults.Ok(new AccountTodaySessionsResponseDto(null, sessions));
+        var today = await service.ListSessionsToday(principal.GetUserId(), null, 0, LocalCalendar.ResolveTimeZone(tz), ct);
+        return TypedResults.Ok(new AccountTodaySessionsResponseDto(null, today.Sessions, today.Total));
     }
 
     private static async Task<IResult> ListCurrentSession(
@@ -71,20 +76,22 @@ public static class AccountsEndpoints
     private static async Task<IResult> ListStatsForRange(
         ClaimsPrincipal principal,
         AccountsService service,
-        string? from, string? to, string? platform,
+        string? from, string? to, string? platform, string? title, string? tz,
         CancellationToken ct)
     {
-        var stats = await service.ComputeStatsForRange(principal.GetUserId(), null, from, to, platform, 0, ct);
+        var stats = await service.ComputeStatsForRange(
+            principal.GetUserId(), null, from, to, platform, title, 0, LocalCalendar.ResolveTimeZone(tz), ct);
         return TypedResults.Ok(new AccountStatsRangeResponseDto(null, stats));
     }
 
     private static async Task<IResult> ListDailyStats(
         ClaimsPrincipal principal,
         AccountsService service,
-        string? from, string? to, string? platform,
+        string? from, string? to, string? platform, string? title, string? tz,
         CancellationToken ct)
     {
-        var days = await service.ComputeDailyStats(principal.GetUserId(), null, from, to, platform, 0, ct);
+        var days = await service.ComputeDailyStats(
+            principal.GetUserId(), null, from, to, platform, title, 0, LocalCalendar.ResolveTimeZone(tz), ct);
         return TypedResults.Ok(new AccountDailyStatsResponseDto(null, days));
     }
 
@@ -93,7 +100,7 @@ public static class AccountsEndpoints
         ClaimsPrincipal principal,
         AccountsService service,
         int? limit, int? offset, string? sort, string? direction,
-        string? title, string? gameId, string? platform, string? from, string? to,
+        string? title, string? gameId, string? platform, string? from, string? to, string? tz,
         CancellationToken ct)
     {
         var parsedAccountId = RouteIds.Parse(accountId, "accountId");
@@ -101,7 +108,7 @@ public static class AccountsEndpoints
             principal.GetUserId(), parsedAccountId, title, gameId, platform, from, to,
             sort ?? "date", direction ?? "desc",
             ValidateLimit(limit), ValidateOffset(offset),
-            0, ct);
+            0, LocalCalendar.ResolveTimeZone(tz), ct);
         return TypedResults.Ok(new AccountSessionsResponseDto(parsedAccountId, result.Sessions, result.Total, result.Limit, result.Offset));
     }
 
@@ -109,11 +116,13 @@ public static class AccountsEndpoints
         string accountId,
         ClaimsPrincipal principal,
         AccountsService service,
+        string? tz,
         CancellationToken ct)
     {
         var parsedAccountId = RouteIds.Parse(accountId, "accountId");
-        var sessions = await service.ListSessionsToday(principal.GetUserId(), parsedAccountId, 0, ct);
-        return TypedResults.Ok(new AccountTodaySessionsResponseDto(parsedAccountId, sessions));
+        var today = await service.ListSessionsToday(
+            principal.GetUserId(), parsedAccountId, 0, LocalCalendar.ResolveTimeZone(tz), ct);
+        return TypedResults.Ok(new AccountTodaySessionsResponseDto(parsedAccountId, today.Sessions, today.Total));
     }
 
     private static async Task<IResult> ListAccountCurrentSession(
@@ -131,10 +140,11 @@ public static class AccountsEndpoints
         string accountId,
         ClaimsPrincipal principal,
         AccountsService service,
+        string? tz,
         CancellationToken ct)
     {
         return TypedResults.Ok(await service.ComputeAccountStats(
-            principal.GetUserId(), RouteIds.Parse(accountId, "accountId"), 0, ct));
+            principal.GetUserId(), RouteIds.Parse(accountId, "accountId"), 0, LocalCalendar.ResolveTimeZone(tz), ct));
     }
 
     private static async Task<IResult> DeleteSession(

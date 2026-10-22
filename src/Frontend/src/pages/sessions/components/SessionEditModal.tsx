@@ -1,5 +1,4 @@
 import { useEffect, useId, useRef } from "react";
-import { cx } from "@/lib/cx";
 import type { DurationCheck } from "../sessionsState";
 
 interface SessionEditModalProps {
@@ -18,7 +17,7 @@ interface SessionEditModalProps {
 }
 
 const fieldLabel = "flex flex-col gap-1.5 text-xs font-medium text-muted";
-const validDuration: DurationCheck = { minutes: null, ok: true, warn: false, message: "" };
+const validDuration: DurationCheck = { minutes: null, ok: true, message: "" };
 
 export function SessionEditModal({
   gameTitle,
@@ -129,8 +128,8 @@ export function SessionEditModal({
             <span
               id={durationHintId}
               aria-live="polite"
-              data-duration-hint={durationCheck.warn ? "warn" : durationInvalid ? "error" : undefined}
-              className={cx("min-h-4 text-xs", durationCheck.warn ? "text-warn" : "text-danger")}
+              data-duration-hint={durationInvalid ? "error" : undefined}
+              className="min-h-4 text-xs text-danger"
             >
               {durationMessage}
             </span>
@@ -147,7 +146,7 @@ export function SessionEditModal({
               Cancel
             </button>
             <button type="submit" data-action="save" disabled={!canSave} className="pdx-btn-primary !h-11 !px-[22px]">
-              {isSaving ? "Saving…" : durationCheck.warn ? "Save anyway" : "Save session"}
+              {isSaving ? "Saving…" : "Save session"}
             </button>
           </div>
         </form>

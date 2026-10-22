@@ -9,11 +9,12 @@ namespace Api.Tests;
 public sealed class RecapRangeTests
 {
     [Fact]
-    public void ExplicitEndIsCutToTheStartOfItsUtcDay()
+    public void AnEndBeforeTodayIsKept()
     {
         var end = RecapRange.ResolveEndExclusive(
             new DateTimeOffset(2026, 10, 22, 15, 0, 0, TimeSpan.Zero),
-            new DateTimeOffset(2026, 3, 11, 5, 30, 0, TimeSpan.Zero));
+            new DateTimeOffset(2026, 3, 11, 0, 0, 0, TimeSpan.Zero),
+            TimeZoneInfo.Utc);
 
         Assert.Equal(new DateTimeOffset(2026, 3, 11, 0, 0, 0, TimeSpan.Zero), end);
     }
@@ -21,7 +22,8 @@ public sealed class RecapRangeTests
     [Fact]
     public void WithoutAnEndTheRangeRunsThroughToday()
     {
-        var end = RecapRange.ResolveEndExclusive(new DateTimeOffset(2026, 10, 22, 23, 59, 0, TimeSpan.Zero), null);
+        var end = RecapRange.ResolveEndExclusive(
+            new DateTimeOffset(2026, 10, 22, 23, 59, 0, TimeSpan.Zero), null, TimeZoneInfo.Utc);
 
         Assert.Equal(new DateTimeOffset(2026, 10, 23, 0, 0, 0, TimeSpan.Zero), end);
     }
@@ -44,7 +46,7 @@ public sealed class RecapServiceTests(PostgresFixture postgres)
         var service = new RecapService(new RecapRepository(db));
 
         var recap = await service.GetRecap(
-            scenario.User.Id, "2026-03-01", "2026-03-10", RangeStart, RangeEndExclusive, CancellationToken.None);
+            scenario.User.Id, "2026-03-01", "2026-03-10", RangeStart, RangeEndExclusive, TimeZoneInfo.Utc, CancellationToken.None);
 
         // Six counted sessions: the 5-minute one falls under the user's 10-minute threshold, two are outside.
         Assert.Equal(new RecapRangeDto("2026-03-01", "2026-03-10"), recap.Range);
@@ -110,13 +112,13 @@ public sealed class RecapServiceTests(PostgresFixture postgres)
         var scenario = await SeedAsync(db);
         var service = new RecapService(new RecapRepository(db));
 
-        var recap = await service.GetRecap(scenario.User.Id, null, null, null, null, CancellationToken.None);
+        var recap = await service.GetRecap(scenario.User.Id, null, null, null, null, TimeZoneInfo.Utc, CancellationToken.None);
 
         Assert.Equal(new RecapRangeDto(null, null), recap.Range);
         Assert.Equal(8, recap.TotalSessions);
         Assert.Equal(1, recap.ReturnRateGames); // A: February and March
         Assert.Equal(3, recap.NewGamesTried);
-        Assert.Equal([2026], (await service.GetYears(scenario.User.Id, CancellationToken.None)).Years);
+        Assert.Equal([2026], (await service.GetYears(scenario.User.Id, TimeZoneInfo.Utc, CancellationToken.None)).Years);
     }
 
     [Fact]
@@ -133,6 +135,7 @@ public sealed class RecapServiceTests(PostgresFixture postgres)
             scenario.User.Id, "2025-06-01", "2025-06-30",
             new DateTimeOffset(2025, 6, 1, 0, 0, 0, TimeSpan.Zero),
             new DateTimeOffset(2025, 7, 1, 0, 0, 0, TimeSpan.Zero),
+            TimeZoneInfo.Utc,
             CancellationToken.None);
 
         Assert.Equal(0, recap.TotalSessions);

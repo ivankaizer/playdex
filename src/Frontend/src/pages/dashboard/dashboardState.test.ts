@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { clientTimeZone } from "@/lib/dates";
 import type { AccountSession } from "@/models/sessions";
 import type { AccountStatsPeriod } from "@/models/stats";
 import {
@@ -29,7 +30,9 @@ import {
   type DashboardSnapshot,
 } from "./dashboardState";
 
-const now = new Date("2026-07-13T12:00:00Z");
+// Noon on Monday Jul 13 in the zone the tests run in, so "today" is that date in every zone.
+const now = new Date(2026, 6, 13, 12, 0, 0);
+const tz = `tz=${encodeURIComponent(clientTimeZone())}`;
 const offset = (seconds: number) => new Date(now.getTime() + seconds * 1000).toISOString();
 
 function snapshot(): DashboardSnapshot {
@@ -85,6 +88,7 @@ function snapshot(): DashboardSnapshot {
 
   return {
     todaySessions: [completed],
+    todaySessionCount: todayStats.sessionCount,
     todayPlatformTotals: todayStats.platforms,
     currentSession: current,
     activeManualSession: {
@@ -104,16 +108,16 @@ function snapshot(): DashboardSnapshot {
 describe("dashboardRequests", () => {
   it("includes the manual live session alongside dashboard data", () => {
     expect(Object.values(dashboardRequests(now))).toEqual([
-      "/sessions?limit=10&offset=0&from=2026-07-13&to=2026-07-13&sort=date&direction=desc",
-      "/stats?from=2026-07-13&to=2026-07-13",
-      "/stats?from=2026-07-01&to=2026-07-13",
-      "/stats?from=2026-01-01&to=2026-07-13",
+      `/sessions?limit=10&offset=0&from=2026-07-13&to=2026-07-13&sort=date&direction=desc&${tz}`,
+      `/stats?from=2026-07-13&to=2026-07-13&${tz}`,
+      `/stats?from=2026-07-01&to=2026-07-13&${tz}`,
+      `/stats?from=2026-01-01&to=2026-07-13&${tz}`,
       "/sessions/current",
       "/manual/sessions/current",
     ]);
   });
 
-  it("builds recap paths from UTC dates", () => {
+  it("builds recap page paths from the viewer's dates", () => {
     expect(recapPath("today", now)).toBe("/recap?from=2026-07-13&to=2026-07-13");
     expect(recapPath("month", now)).toBe("/recap?from=2026-07-01&to=2026-07-13");
     expect(recapPath("year", now)).toBe("/recap?from=2026-01-01&to=2026-07-13");
@@ -260,11 +264,11 @@ describe("waitAllOrCancel", () => {
 
 describe("dashboard redesign views", () => {
   it("requests one daily breakdown from the earlier of Monday and the 1st through today", () => {
-    const requests = dashboardActivityRequests(new Date("2026-10-04T12:00:00Z"));
-    expect(requests.daily).toBe("/stats/daily?from=2026-09-28&to=2026-10-04");
+    const requests = dashboardActivityRequests(new Date(2026, 9, 4, 12));
+    expect(requests.daily).toBe(`/stats/daily?from=2026-09-28&to=2026-10-04&${tz}`);
 
-    const midMonth = dashboardActivityRequests(new Date("2026-10-20T12:00:00Z"));
-    expect(midMonth.daily).toBe("/stats/daily?from=2026-10-01&to=2026-10-20");
+    const midMonth = dashboardActivityRequests(new Date(2026, 9, 20, 12));
+    expect(midMonth.daily).toBe(`/stats/daily?from=2026-10-01&to=2026-10-20&${tz}`);
   });
 
   it("indexes daily totals by date", () => {
@@ -322,6 +326,16 @@ describe("dashboard redesign views", () => {
     expect(getTodayView(state, null, now)).toEqual({ seconds: todaySeconds(state), sessions: state.todaySessionCount });
   });
 
+  it("counts every session today, not only the ten listed", () => {
+    const data = snapshot();
+    const listed = Array.from({ length: 10 }, (_, i) => ({ ...data.todaySessions[0], sessionId: 100 + i }));
+    const state = completeRefresh(initialDashboardState, { ...data, todaySessions: listed, todaySessionCount: 14 }, now);
+    expect(state.todaySessionCards).toHaveLength(10);
+    expect(getTodayView(state, null, now).sessions).toBe(14);
+    expect(getTodayView(state, { days: { "2026-07-13": 600 } }, now).sessions).toBe(14);
+    expect(getTodayView(state, { days: { "2026-07-13": 600 }, sessionCounts: { "2026-07-13": 15 } }, now).sessions).toBe(15);
+  });
+
   it("indexes daily session counts by date", () => {
     expect(dailySessionCounts([{ date: "2026-07-13", totalSeconds: 60, sessionCount: 3, platforms: [] }])).toEqual({ "2026-07-13": 3 });
   });
@@ -349,7 +363,7 @@ describe("dashboard redesign views", () => {
 
   it("formats recent sessions with today and short dates", () => {
     const data = snapshot();
-    const older = { ...data.todaySessions[0], sessionId: 9, startedAt: "2026-06-30T10:00:00Z", endedAt: "2026-06-30T11:55:00Z" };
+    const older = { ...data.todaySessions[0], sessionId: 9, startedAt: new Date(2026, 5, 30, 10).toISOString(), endedAt: new Date(2026, 5, 30, 11, 55).toISOString() };
     const state = completeRefresh(initialDashboardState, { ...data, recentSessions: [older] }, now);
     expect(getRecentSessions(state, now)[0]).toMatchObject({ date: "Jun 30", duration: "1h 55m" });
     expect(formatShortDuration(600)).toBe("10m");
@@ -425,7 +439,7 @@ describe("dashboard redesign views", () => {
     const late = { ...data.todaySessions[0], sessionId: 10, startedAt: yesterday.toISOString(), endedAt: now.toISOString() };
     const state = completeRefresh(initialDashboardState, { ...data, recentSessions: [late] }, now);
     expect(getRecentSessions(state, now)[0].date).toBe("Yesterday, 23:58");
-    expect(getWeekView(null, new Date("2026-01-01T12:00:00Z")).rangeLabel).toBe("Dec 29, 2025 – Jan 4, 2026");
+    expect(getWeekView(null, new Date(2026, 0, 1, 12)).rangeLabel).toBe("Dec 29, 2025 – Jan 4, 2026");
   });
 
   it("greets by the local hour", () => {

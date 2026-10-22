@@ -5,7 +5,7 @@ import { BarChart, CardHeading, Cover, Dot, ErrorNote, LoadingNote, Segmented, S
 import { apiRequest, errorMessage } from "@/lib/api";
 import { formatCount, formatCountNoun, formatDuration, formatHoursShort, formatPercent } from "@/lib/format";
 import { encodeGameId } from "@/lib/gameHash";
-import { logout, useAppNavigate } from "@/lib/navigation";
+import { useAppNavigate } from "@/lib/navigation";
 import { platformColor } from "@/lib/platforms";
 import type { RecapResponse, RecapYearsResponse } from "./recapModels";
 import {
@@ -19,7 +19,7 @@ import {
   failYears,
   initialRecapState,
   recapTabs,
-  recapYearsPath,
+  recapYearsRequest,
   runInitialCustomFlow,
   selectTab,
   setCustomFrom,
@@ -74,10 +74,7 @@ export function RecapPage() {
     async (lifetime: AbortController) => {
       apply(beginYearsLoad);
       try {
-        const response = await apiRequest<RecapYearsResponse>(recapYearsPath, {
-          onAuthFailure: logout,
-          signal: lifetime.signal,
-        });
+        const response = await apiRequest<RecapYearsResponse>(recapYearsRequest(), { signal: lifetime.signal });
         if (!lifetime.signal.aborted) apply((current) => completeYears(current, response));
       } catch (error) {
         if (!lifetime.signal.aborted) apply((current) => failYears(current, errorMessage(error)));
@@ -98,7 +95,7 @@ export function RecapPage() {
       apply(beginLoad);
 
       try {
-        const response = await apiRequest<RecapResponse>(path, { onAuthFailure: logout, signal: request.signal });
+        const response = await apiRequest<RecapResponse>(path, { signal: request.signal });
         if (version === recapVersionRef.current) apply((current) => completeLoad(current, response));
       } catch (error) {
         if (request.signal.aborted) return;

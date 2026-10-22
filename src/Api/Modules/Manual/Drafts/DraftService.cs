@@ -24,7 +24,8 @@ public sealed class DraftService(DraftRepository repository, PlaydexDbContext db
         if (title.Length > 500) throw AppProblemException.Validation("Game title must be at most 500 characters.");
         if (request.Date?.Length > 10) throw AppProblemException.Validation("Use a calendar date in yyyy-MM-dd format.");
         var platform = request.PlatformKey?.Trim().ToLowerInvariant() ?? "unknown";
-        if (await manualRepository.GetPlatformIdByKey(platform, ct) is null)
+        // The catalog the review offers excludes Playnite, as extraction does; an edit cannot bring it back.
+        if (platform == ManualService.PlaynitePlatformKey || await manualRepository.GetPlatformIdByKey(platform, ct) is null)
             throw AppProblemException.Validation("Select a platform from the catalog.");
         ManualMappingSearchResultDto? selected = null;
         // A changed query invalidates the prior selection, even when a client sends its stale ID.
@@ -42,7 +43,7 @@ public sealed class DraftService(DraftRepository repository, PlaydexDbContext db
             row.SelectionJson = selected is null ? null : JsonSerializer.Serialize(selected);
             row.Warnings = [];
             row.Revision++;
-            return Task.FromResult(ToDto(row));
+            return Task.FromResult(ToDto(row, Zone(batch), DateTimeOffset.UtcNow));
         }, ct);
     }
 
@@ -73,8 +74,11 @@ public sealed class DraftService(DraftRepository repository, PlaydexDbContext db
                     continue;
                 }
                 RequirePending(snapshot, requested.Revision);
-                if (!DraftRules.TryGetTimes(snapshot.Date, snapshot.DurationMinutes, out var start, out var end))
+                var zone = Zone(batch);
+                if (!DraftRules.TryGetTimes(
+                        snapshot.Date, snapshot.DurationMinutes, zone, DateTimeOffset.UtcNow, out var start, out var end))
                     throw AppProblemException.Validation("Correct the date and duration before accepting.");
+                var entry = ManualEntryDay.Of(LocalCalendar.DateOf(start, zone ?? TimeZoneInfo.Utc), zone, end - start);
                 var selection = ManualService.ValidateGameSelection(snapshot.GameId, snapshot.IgdbId);
                 // IGDB fetches happen before a database transaction, then revision is checked under lock.
                 var authoritative = await manual.ResolveAuthoritativeSelection(selection, ct);
@@ -87,7 +91,9 @@ public sealed class DraftService(DraftRepository repository, PlaydexDbContext db
                     var platformId = await manualRepository.GetPlatformIdByKey(row.PlatformKey, ct)
                         ?? throw AppProblemException.Validation("Platform not found.");
                     var gameId = await manual.ResolveGame(authoritative, ct);
-                    var id = await manualRepository.CreatePlaySession(userId, gameId, platformId, start, end, ct);
+                    // Rows of one date follow each other instead of all starting at midnight (ManualService.PlaceEntry).
+                    var (placedStart, placedEnd) = await manual.PlaceEntry(userId, platformId, entry, ct);
+                    var id = await manualRepository.CreatePlaySession(userId, gameId, platformId, placedStart, placedEnd, ct);
                     row.Status = "accepted";
                     row.AcceptedSessionId = id;
                     row.Revision++;
@@ -102,12 +108,16 @@ public sealed class DraftService(DraftRepository repository, PlaydexDbContext db
         return new(results);
     }
 
+    /// <summary>
+    /// Games a draft title may mean. Extracted titles can run to 500 characters; past the search limit they get no
+    /// candidates, and the reviewer searches with a shorter title instead.
+    /// </summary>
     public async Task<IReadOnlyList<ManualMappingSearchResultDto>> SearchCandidates(
         long userId,
         string title,
         CancellationToken ct)
     {
-        if (string.IsNullOrWhiteSpace(title)) return [];
+        if (string.IsNullOrWhiteSpace(title) || title.Trim().Length > SearchText.MaxLength) return [];
         var previouslyPlayed = await manualRepository.SearchRecentlyPlayedGames(userId, title, 5, ct);
         var response = await manual.SearchMapping(title, ct);
         var results = previouslyPlayed.Select(PreviouslyPlayed).ToList();
@@ -152,17 +162,27 @@ public sealed class DraftService(DraftRepository repository, PlaydexDbContext db
         if (row.Status != "pending") throw AppProblemException.Conflict("This draft is no longer pending.");
         if (row.Revision != revision) throw AppProblemException.Conflict("This draft changed. Reload it before continuing.");
     }
-    public static DraftBatchDto ToDto(SessionDraftBatch batch) => new(batch.Id, batch.CreatedAt,
-        batch.Rows.Where(r => r.Status != "deleted").OrderBy(r => r.Position).Select(ToDto).ToArray());
-    public static DraftRowDto ToDto(SessionDraftRow row)
+    /// <summary>The time zone the batch was drafted in: its dates are days there.</summary>
+    private static TimeZoneInfo? Zone(SessionDraftBatch batch) => LocalCalendar.FindTimeZone(batch.Timezone);
+
+    public static DraftBatchDto ToDto(SessionDraftBatch batch)
+    {
+        var zone = Zone(batch);
+        var now = DateTimeOffset.UtcNow;
+        return new(batch.Id, batch.CreatedAt,
+            batch.Rows.Where(r => r.Status != "deleted").OrderBy(r => r.Position).Select(row => ToDto(row, zone, now)).ToArray());
+    }
+
+    public static DraftRowDto ToDto(SessionDraftRow row, TimeZoneInfo? zone, DateTimeOffset now)
     {
         var selected = row.SelectionJson is null ? null : JsonSerializer.Deserialize<ManualMappingSearchResultDto>(row.SelectionJson);
         var warnings = row.Warnings.ToList();
         if (selected is null) warnings.Add("Select a game.");
-        if (!DraftRules.TryGetTimes(row.Date, row.DurationMinutes, out _, out _)) warnings.Add("Provide a valid date and positive duration.");
+        var timesProblem = DraftRules.Problem(row.Date, row.DurationMinutes, zone, now, out _, out _);
+        if (timesProblem is not null) warnings.Add(timesProblem);
         if (row.PlatformKey == "unknown") warnings.Add("Platform is Unknown. You can choose a platform or accept Unknown.");
         return new(row.Id, row.Revision, row.Status, row.Title, row.Date, row.DurationMinutes, row.PlatformKey,
-            selected, warnings.Distinct().ToArray(), row.Status == "pending" && selected is not null &&
-            DraftRules.TryGetTimes(row.Date, row.DurationMinutes, out _, out _), row.AcceptedSessionId);
+            selected, warnings.Distinct().ToArray(), row.Status == "pending" && selected is not null && timesProblem is null,
+            row.AcceptedSessionId);
     }
 }

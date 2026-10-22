@@ -58,7 +58,7 @@ describe("HomePage", () => {
 
   it("fills the Today / This week / Streak tiles from the daily breakdown", async () => {
     vi.useFakeTimers({ toFake: ["Date"] });
-    vi.setSystemTime(new Date("2026-10-07T12:00:00Z")); // a Wednesday
+    vi.setSystemTime(new Date(2026, 9, 7, 12)); // a Wednesday, noon where the tests run
     localStorage.setItem("playdex.token", "token");
     localStorage.setItem("playdex.email", "jo@example.com");
     const day = (date: string, totalSeconds: number) => ({ date, totalSeconds, sessionCount: 1, platforms: [] });

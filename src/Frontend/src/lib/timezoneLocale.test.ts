@@ -81,6 +81,16 @@ describe("local labels follow the browser's time zone", () => {
     expect(f.formatTimeLabel("2026-10-25T01:30:00Z")).toBe("2:30 AM");
     expect(f.formatDateLabel("2026-03-28T23:30:00Z")).toBe("Mar 29, 2026");
   });
+
+  it("takes the week from the viewer's date, Monday to Sunday", async () => {
+    const f = await inZone("America/Los_Angeles");
+
+    // Sunday 4 October 23:30 in Los Angeles is already Monday 5 October in UTC, but still the viewer's Sunday.
+    expect(f.localDateOnly(new Date("2026-10-05T06:30:00Z"))).toBe("2026-10-04");
+    expect(f.currentLocalWeek(new Date("2026-10-05T06:30:00Z"))).toEqual({ from: "2026-09-28", to: "2026-10-04" });
+    // An hour later it is Monday in Los Angeles too, and a new week.
+    expect(f.currentLocalWeek(new Date("2026-10-05T07:30:00Z"))).toEqual({ from: "2026-10-05", to: "2026-10-11" });
+  });
 });
 
 describe("UTC helpers ignore the browser's time zone", () => {
@@ -100,15 +110,6 @@ describe("UTC helpers ignore the browser's time zone", () => {
     expect(f.addDays("2026-03-08", 1)).toBe("2026-03-09");
     expect(f.addDays("2026-11-01", -1)).toBe("2026-10-31");
     expect(f.addDays("2026-10-31", 2)).toBe("2026-11-02");
-  });
-
-  it("takes the week from the UTC date, Monday to Sunday", async () => {
-    const f = await inZone("America/Los_Angeles");
-
-    // Sunday 4 October 23:30 in Los Angeles is already Monday 5 October in UTC.
-    expect(f.currentUtcWeek(new Date("2026-10-05T06:30:00Z"))).toEqual({ from: "2026-10-05", to: "2026-10-11" });
-    // A Sunday in UTC belongs to the week that started the Monday before.
-    expect(f.currentUtcWeek(new Date("2026-10-11T12:00:00Z"))).toEqual({ from: "2026-10-05", to: "2026-10-11" });
   });
 
   it("measures durations from instants, whatever the zone", async () => {

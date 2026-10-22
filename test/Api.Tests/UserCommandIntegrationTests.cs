@@ -1,5 +1,7 @@
 using Api.Infrastructure.Auth;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using Playdex.Persistence;
 using Xunit;
 
@@ -47,6 +49,27 @@ public sealed class UserCommandIntegrationTests(PostgresFixture postgres)
         Assert.True(BCrypt.Net.BCrypt.Verify("second", user.Password));
         Assert.Equal(Now, user.CreatedAt);
         Assert.Equal(1, user.TokenVersion);  // the reset revokes the sessions signed in with the old password
+    }
+
+    [Fact]
+    public async Task EmailsMatchWhateverTheirCase()
+    {
+        if (!postgres.IsConfigured) return;
+
+        await using var db = CreateContext();
+        await using var transaction = await db.Database.BeginTransactionAsync();
+        var email = $"Owner-{Guid.NewGuid():N}@Example.com";
+        await UserCommand.Upsert(db, email, isAdmin: false, password: "first", Now, CancellationToken.None);
+
+        var reset = await UserCommand.Upsert(db, email.ToLowerInvariant(), isAdmin: false, password: "second", Now, CancellationToken.None);
+        var signedIn = await new AuthService(
+                new AuthRepository(db),
+                new AuthTokenService(Options.Create(new AuthOptions { JwtSecret = "user-command-test-secret-at-least-thirty-two-bytes" })),
+                NullLogger<AuthService>.Instance)
+            .Login(email.ToUpperInvariant(), "second");
+
+        Assert.False(reset.Created);
+        Assert.Equal(email, signedIn.Email);
     }
 
     private PlaydexDbContext CreateContext() =>

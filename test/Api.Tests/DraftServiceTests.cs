@@ -77,10 +77,45 @@ public sealed class DraftServiceTests(PostgresFixture postgres)
         Assert.Empty(await db.PlaySessions.Where(s=>s.UserId==user.Id).ToListAsync());
     }
 
+    [Fact]
+    public async Task EditsCannotPickThePlaynitePlatform()
+    {
+        if (!postgres.IsConfigured) return;
+        await using var db = CreateDb();
+        var (user, game, batch) = await Seed(db);
+        // The platform exists wherever Playnite is connected; the edit must be refused although it is in the table.
+        Platform? added = null;
+        if (!await db.Platforms.AnyAsync(platform => platform.Key == "playnite"))
+        {
+            added = new Platform { Key = "playnite", Name = "Playnite" };
+            db.Platforms.Add(added);
+            await db.SaveChangesAsync();
+        }
+        try
+        {
+            var row = batch.Rows[0];
+            foreach (var key in new[] { "playnite", " PLAYNITE " })
+            {
+                var refused = await Assert.ThrowsAsync<AppProblemException>(() => Service(db).Update(
+                    user.Id, batch.Id, row.Id, new DraftUpdateRequest(1, game.Title, "2026-09-09", 90, key, null, null), default));
+                Assert.Equal("Select a platform from the catalog.", refused.Message);
+            }
+            Assert.Equal("unknown", (await db.SessionDraftRows.AsNoTracking().SingleAsync(r => r.Id == row.Id)).PlatformKey);
+        }
+        finally
+        {
+            if (added is not null)
+            {
+                db.Platforms.Remove(added);
+                await db.SaveChangesAsync();
+            }
+        }
+    }
+
     private static DraftService Service(PlaydexDbContext db)
     {
         var opts=Options.Create(new IgdbOptions());
-        var manual=new ManualService(new(db),new IgdbClient(new HttpClient(),opts),opts,new GameResolver(db));
+        var manual=new ManualService(new(db),new IgdbClient(new HttpClient(),opts),opts,new GameResolver(db),TestSessions.Lifecycle(db));
         return new DraftService(new(db),db,manual,new(db));
     }
     private static async Task<(User,Game,SessionDraftBatch)> Seed(PlaydexDbContext db)

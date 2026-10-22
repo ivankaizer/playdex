@@ -58,6 +58,30 @@ public sealed class ProvidersServiceTests
         Assert.Equal(message, exception.Message);
     }
 
+    [Theory]
+    [InlineData(IntegrationType.Steam, " ", "76561198000000000", "Steam Web API key is required.")]
+    [InlineData(IntegrationType.Steam, "steam-key", null, "Steam ID is required.")]
+    [InlineData(IntegrationType.Psn, null, null, "PlayStation NPSSO token is required.")]
+    [InlineData(IntegrationType.Xbox, null, "2533274817903789", "OpenXBL API key is required.")]
+    [InlineData(IntegrationType.Xbox, "openxbl-key", "not-a-xuid", "Xbox XUID must contain digits only.")]
+    public void MergedCredentialsFollowTheCreationRules(
+        IntegrationType type, string? apiKey, string? accountId, string message)
+    {
+        var exception = Assert.Throws<AppProblemException>(() =>
+            ProvidersService.ValidateCredential(type, apiKey, accountId));
+
+        Assert.Equal(message, exception.Message);
+    }
+
+    [Fact]
+    public void CompleteCredentialsAndApiIntegrationsPass()
+    {
+        ProvidersService.ValidateCredential(IntegrationType.Steam, "steam-key", "76561198000000000");
+        ProvidersService.ValidateCredential(IntegrationType.Psn, "npsso", null);
+        ProvidersService.ValidateCredential(IntegrationType.Xbox, "openxbl-key", null);
+        ProvidersService.ValidateCredential(IntegrationType.Api, null, null);
+    }
+
     [Fact]
     public void ToResponseIncludesReadOnlyLocalApiKey()
     {

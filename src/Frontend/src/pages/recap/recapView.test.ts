@@ -1,5 +1,5 @@
 import type { RecapGameStat, RecapResponse } from "./recapModels";
-import { formatSessionsAverage, heroFacts, titleSizeClass, topGames, topGamesTitle } from "./recapView";
+import { formatRecapDate, formatSessionsAverage, heroFacts, rangeLabel, titleSizeClass, topGames, topGamesTitle } from "./recapView";
 
 const game = (title: string, totalSeconds: number): RecapGameStat => ({
   gameId: title,
@@ -40,6 +40,14 @@ describe("recap view helpers", () => {
       { label: "Longest streak", value: "1,284 days" },
     ]);
     expect(heroFacts(recap, false)[2]).toEqual({ label: "Avg. session", value: "1h 1m" });
+  });
+
+  it("shows range and most-active dates as the days they name, west of UTC too", () => {
+    expect(formatRecapDate("2026-07-01")).toBe("Jul 1, 2026");
+    expect(rangeLabel({ range: { from: "2026-01-01", to: "2026-12-31" } } as RecapResponse)).toBe(
+      "Jan 1, 2026 — Dec 31, 2026",
+    );
+    expect(rangeLabel(null)).toBe("All time");
   });
 
   it("groups session averages with one decimal", () => {
