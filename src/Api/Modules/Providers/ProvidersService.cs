@@ -73,6 +73,7 @@ public sealed class ProvidersService(ProvidersRepository repository)
             throw AppProblemException.Validation("API key is managed by an administrator.");
         }
 
+        // The merged credential must pass the same rules as a new one, or polling would fail on every run.
         var provider = await repository.UpdateCredential(
             userId,
             providerId,
@@ -80,6 +81,7 @@ public sealed class ProvidersService(ProvidersRepository repository)
             changes.ApiKey,
             changes.AccountIdChanged,
             changes.AccountId,
+            ValidateCredential,
             ct);
         if (provider is null)
         {
@@ -172,24 +174,36 @@ public sealed class ProvidersService(ProvidersRepository repository)
         var accountId = request.AccountId?.Trim();
         accountId = string.IsNullOrEmpty(accountId) ? null : accountId;
 
-        if (string.IsNullOrEmpty(apiKey))
+        ValidateCredential(type, apiKey, accountId);
+        return new ValidatedProviderCreation(platform, type, apiKey!, accountId);
+    }
+
+    /// <summary>
+    /// What a polled integration needs to poll at all, checked when it is created and again after every edit:
+    /// an API key (Steam key, NPSSO or OpenXBL key), a Steam ID for Steam and a numeric XUID, if any, for Xbox.
+    /// API integrations hold a generated key and are not polled.
+    /// </summary>
+    internal static void ValidateCredential(IntegrationType type, string? apiKey, string? accountId)
+    {
+        if (type == IntegrationType.Api)
+            return;
+
+        if (string.IsNullOrWhiteSpace(apiKey))
         {
-            throw AppProblemException.Validation(platform switch
+            throw AppProblemException.Validation(type switch
             {
-                "steam" => "Steam Web API key is required.",
-                "psn" => "PlayStation NPSSO token is required.",
+                IntegrationType.Steam => "Steam Web API key is required.",
+                IntegrationType.Psn => "PlayStation NPSSO token is required.",
                 _ => "OpenXBL API key is required.",
             });
         }
-        if (platform == "steam" && accountId is null)
+        if (type == IntegrationType.Steam && string.IsNullOrWhiteSpace(accountId))
             throw AppProblemException.Validation("Steam ID is required.");
-        if (platform == "xbox" && accountId is not null &&
+        if (type == IntegrationType.Xbox && accountId is not null &&
             accountId.Any(character => !char.IsAsciiDigit(character)))
         {
             throw AppProblemException.Validation("Xbox XUID must contain digits only.");
         }
-
-        return new ValidatedProviderCreation(platform, type, apiKey, accountId);
     }
 
     internal static ProviderStatusDto ToResponse(ProviderStatusDto provider) =>

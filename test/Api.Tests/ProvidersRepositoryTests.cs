@@ -270,6 +270,40 @@ public sealed class ProvidersRepositoryTests(PostgresFixture postgres)
         }
     }
 
+    [Fact]
+    public async Task CredentialUpdatesMustLeaveAPollableCredential()
+    {
+        if (!postgres.IsConfigured) return;
+
+        await using var db = CreateDb();
+        await using var transaction = await db.Database.BeginTransactionAsync();
+        var suffix = Guid.NewGuid().ToString("n");
+        var user = new User { Email = $"provider-update-{suffix}@example.test" };
+        db.Users.Add(user);
+        await db.SaveChangesAsync();
+        var repository = new ProvidersRepository(db);
+        var service = new ProvidersService(repository);
+        var steam = (await repository.CreateProvider(
+            user.Id, "steam", IntegrationType.Steam, "steam-key", "76561198000000000", default)).Provider!;
+        var xbox = (await repository.CreateProvider(
+            user.Id, "xbox", IntegrationType.Xbox, "openxbl-key", null, default)).Provider!;
+
+        async Task<string> Refused(long providerId, ProviderCredentialChanges changes) =>
+            (await Assert.ThrowsAsync<Api.Infrastructure.Http.AppProblemException>(() =>
+                service.UpdateCredential(user.Id, providerId, changes, default))).Message;
+
+        Assert.Equal("Steam Web API key is required.", await Refused(steam.Id, new(true, null, false, null)));
+        Assert.Equal("Steam ID is required.", await Refused(steam.Id, new(false, null, true, null)));
+        Assert.Equal("Xbox XUID must contain digits only.", await Refused(xbox.Id, new(false, null, true, "gamertag")));
+
+        db.ChangeTracker.Clear();
+        var stored = await db.Integrations.AsNoTracking().SingleAsync(item => item.Id == steam.Id);
+        Assert.Equal(("steam-key", "76561198000000000"), (stored.ApiKey, stored.AccountId));
+
+        var updated = await service.UpdateCredential(user.Id, xbox.Id, new(false, null, true, "2533274817903789"), default);
+        Assert.Equal("2533274817903789", updated.Provider.AccountId);
+    }
+
     private PlaydexDbContext CreateDb() => new(
         new DbContextOptionsBuilder<PlaydexDbContext>()
             .UseNpgsql(

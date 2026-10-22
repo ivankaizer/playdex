@@ -108,6 +108,10 @@ public sealed class ProvidersRepository(PlaydexDbContext db)
         return ToStatus(credential, platforms);
     }
 
+    /// <summary>
+    /// Applies the changed fields, then lets <paramref name="validate"/> check the merged credential (its type, API
+    /// key and account id) before anything is saved; it throws to refuse the update.
+    /// </summary>
     public async Task<ProviderStatusDto?> UpdateCredential(
         long userId,
         long providerId,
@@ -115,6 +119,7 @@ public sealed class ProvidersRepository(PlaydexDbContext db)
         string? apiKey,
         bool accountIdChanged,
         string? accountId,
+        Action<IntegrationType, string?, string?> validate,
         CancellationToken ct)
     {
         var credential = await db.Integrations
@@ -123,8 +128,12 @@ public sealed class ProvidersRepository(PlaydexDbContext db)
                 ct);
         if (credential is null) return null;
 
-        if (apiKeyChanged) credential.ApiKey = apiKey;
-        if (accountIdChanged) credential.AccountId = accountId;
+        var mergedApiKey = apiKeyChanged ? apiKey : credential.ApiKey;
+        var mergedAccountId = accountIdChanged ? accountId : credential.AccountId;
+        validate(credential.Type, mergedApiKey, mergedAccountId);
+
+        credential.ApiKey = mergedApiKey;
+        credential.AccountId = mergedAccountId;
         credential.UpdatedAt = DateTimeOffset.UtcNow;
         await db.SaveChangesAsync(ct);
         var platforms = await db.Platforms.AsNoTracking().ToListAsync(ct);
