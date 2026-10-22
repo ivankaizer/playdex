@@ -304,6 +304,14 @@ export function presentProvider(provider: ProviderStatus): ProviderPresentation 
   return { label, name: formatProviderName(provider.platform), subtitle };
 }
 
+/** Why Playdex paused this integration itself, with what to do about it; null when it did not. */
+export function pauseNotice(provider: ProviderStatus): string | null {
+  const reason = provider.pausedReason?.trim();
+  if (provider.status !== "paused" || !reason) return null;
+  const sentence = /[.!?]$/.test(reason) ? reason : `${reason}.`;
+  return `Paused automatically: ${sentence} Update the credential under Manage, then resume.`;
+}
+
 /** Keeps both ends of a long account ID ("name … (7656…)") instead of cutting the tail off. */
 export function truncateMiddle(value: string, max = 34): string {
   const chars = Array.from(value);

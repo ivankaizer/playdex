@@ -14,6 +14,9 @@ export interface ProviderStatus {
   apiKeyLocked: boolean;
   sessionPlatform?: ProviderPlatform | null;
   sessionPlatformOptions?: ProviderPlatform[] | null;
+  /** Why Playdex paused polling itself (the provider kept rejecting the credential); null otherwise. */
+  pausedReason?: string | null;
+  pausedAt?: string | null;
 }
 
 export interface ProvidersResponse {
