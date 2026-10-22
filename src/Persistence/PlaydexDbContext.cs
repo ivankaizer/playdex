@@ -117,6 +117,7 @@ public sealed class PlaydexDbContext(DbContextOptions<PlaydexDbContext> options)
         entity.Property(row => row.CreatedAt).HasColumnName("created_at");
         entity.Property(row => row.UpdatedAt).HasColumnName("updated_at");
         entity.Property(row => row.IsAdmin).HasColumnName("is_admin");
+        entity.Property(row => row.TokenVersion).HasColumnName("token_version");
         entity.HasIndex(row => row.Email).IsUnique();
     }
 

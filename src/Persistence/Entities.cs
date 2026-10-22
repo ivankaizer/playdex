@@ -8,6 +8,8 @@ public sealed class User : IHasTimestamps
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }
     public bool IsAdmin { get; set; }
+    /// <summary>Bumped to revoke every token issued so far (see AuthTokenService.TokenVersionClaim).</summary>
+    public int TokenVersion { get; set; }
 }
 
 public sealed class NotificationChannel : IHasTimestamps

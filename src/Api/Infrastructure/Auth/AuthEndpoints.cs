@@ -25,7 +25,7 @@ public static class AuthEndpoints
                 : TypedResults.Ok(await service.Login(email, password, http.RequestAborted));
 
             await result.ExecuteAsync(http);
-        });
+        }).RequireRateLimiting(RateLimiting.SignIn);
 
         api.MapPost("/refresh", async (HttpContext http) =>
         {
@@ -38,7 +38,7 @@ public static class AuthEndpoints
                 : TypedResults.Ok(await service.Refresh(refreshToken, http.RequestAborted));
 
             await result.ExecuteAsync(http);
-        });
+        }).RequireRateLimiting(RateLimiting.Refresh);
 
         api.MapGet("/me", Me).RequireAuthorization();
     }

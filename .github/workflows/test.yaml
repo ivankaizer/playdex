@@ -72,7 +72,7 @@ jobs:
         run: dotnet run --no-build --project src/Api --configuration Release -- migrate
         env:
           DATABASE_URL: postgresql://playdex:playdex@127.0.0.1:${{ job.services.db.ports['5432'] }}/playdex_db_test
-          Auth__JwtSecret: test-secret-for-ci
+          Auth__JwtSecret: ci-only-jwt-secret-at-least-thirty-two-bytes
 
       - name: Run .NET tests
         run: |
