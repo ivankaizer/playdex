@@ -9,7 +9,8 @@ services:
     volumes:
       - db_data:/var/lib/postgresql/data
     ports:
-      - "5432:5432"
+      # Local only: the dev database uses well-known credentials.
+      - "127.0.0.1:5432:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U playdex -d playdex"]
       interval: 5s
@@ -55,7 +56,7 @@ services:
       DATABASE_URL: postgresql://playdex:playdex@db:5432/playdex
       CORS_ORIGINS: "http://ui.playdex.orb.local,https://ui.playdex.orb.local,http://localhost:5173"
       Polling__IntervalSeconds: 10
-      Auth__JwtSecret: dev-only-jwt-secret-do-not-use-in-production
+      Auth__JwtSecret: ${JWT_SECRET:-dev-only-jwt-secret-do-not-use-in-production}
       Auth__AccessTokenTtl: 30m
       Polling__UseWiremock: "true"
       Apprise__BaseUrl: http://apprise:8000
