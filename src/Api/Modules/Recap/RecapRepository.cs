@@ -71,8 +71,12 @@ public sealed class RecapRepository(PlaydexDbContext db)
             .ToListAsync(ct);
     }
 
+    /// <summary>
+    /// The sessions a recap counts: not those the ignore-short setting hides, including a running session that has
+    /// not yet lasted that long (the recap counts a running session up to now).
+    /// </summary>
     private IQueryable<PlaySession> CountedSessions(long userId) =>
-        db.ClassifiedPlaySessions()
+        db.ClassifiedPlaySessions(runningUntil: DateTimeOffset.UtcNow)
             .Where(row => row.Session.UserId == userId && !row.Ignored)
             .Select(row => row.Session);
 

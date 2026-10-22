@@ -42,6 +42,41 @@ public sealed class SessionQueriesIntegrationTests(PostgresFixture postgres)
     }
 
     [Fact]
+    public async Task RecapSkipsARunningSessionThatHasNotYetLastedTheIgnoreSetting()
+    {
+        if (!postgres.IsConfigured) return;
+
+        await using var db = CreateDb();
+        await using var transaction = await db.Database.BeginTransactionAsync();
+        var data = await Seed(db);
+        // Running for 5 minutes under a 10-minute setting; data.Open has run for 90.
+        var fresh = new PlaySession
+        {
+            UserId = data.UserId,
+            GameId = data.Alpha.Id,
+            PlatformId = data.Open.PlatformId,
+            CaptureMethod = CaptureMethod.Manual,
+            StartedAt = DateTimeOffset.UtcNow.AddMinutes(-5),
+        };
+        db.PlaySessions.Add(fresh);
+        await db.SaveChangesAsync();
+        var repository = new RecapRepository(db);
+
+        Assert.Equal(
+            [data.Long.Id, data.Medium.Id, data.Open.Id],
+            (await repository.ListRecapSessions(data.UserId, null, null, CancellationToken.None)).Select(row => row.Id));
+
+        var recap = await new RecapService(repository).GetRecap(
+            data.UserId, null, null, null, null, TimeZoneInfo.Utc, CancellationToken.None);
+        Assert.Equal(3, recap.TotalSessions);
+
+        // The session list still shows it, not flagged: only the recap waits for it to reach the setting.
+        var listed = await new AccountsRepository(db, new GamesService(new GamesRepository(db))).ListSessions(
+            data.UserId, null, null, null, null, null, null, "date", "desc", 10, 0, 0, CancellationToken.None);
+        Assert.False(listed.Sessions.Single(row => row.SessionId == fresh.Id).Ignored);
+    }
+
+    [Fact]
     public async Task AccountSessionQueriesFilterSortAndPage()
     {
         if (!postgres.IsConfigured) return;
