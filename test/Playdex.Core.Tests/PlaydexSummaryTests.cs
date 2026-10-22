@@ -103,15 +103,21 @@ public sealed class PlaydexSummaryTests : IDisposable
     }
 
     [Fact]
-    public async Task FetchesAYearsRecapWithTheKey()
+    public async Task FetchesAYearsRecapWithTheKeyInThePagesTimeZone()
     {
         var handler = new SummaryHandler(Envelope("""{"totalSessions":12}"""));
         using var api = new CaptureClient("plx_key", "https://playdex.test/api", handler);
 
-        Assert.Equal("""{"totalSessions":12}""", await api.GetLauncherRecapAsync(2025));
+        Assert.Equal("""{"totalSessions":12}""", await api.GetLauncherRecapAsync(2025, "Europe/Warsaw"));
         var request = Assert.Single(handler.Requests);
-        Assert.Equal("https://playdex.test/api/launcher/recap?year=2025", request.Uri);
+        Assert.Equal("https://playdex.test/api/launcher/recap?year=2025&tz=Europe/Warsaw", Uri.UnescapeDataString(request.Uri));
         Assert.Equal("Bearer plx_key", request.Authorization);
+
+        // A page that sends no zone gets this PC's.
+        await api.GetLauncherRecapAsync(2025);
+        Assert.Equal(
+            $"https://playdex.test/api/launcher/recap?year=2025&tz={TimeZoneInfo.Local.Id}",
+            Uri.UnescapeDataString(handler.Requests[1].Uri));
 
         handler.Body = "";
         using var offline = new CaptureClient("plx_key", "https://playdex.test/api", new SummaryHandler("") { Throw = true });

@@ -127,6 +127,73 @@ public sealed class LauncherSummaryEndpointTests(PostgresFixture postgres)
         }
     }
 
+    [Fact]
+    public async Task RecapCountsTheYearInTheLaunchersTimeZone()
+    {
+        if (!postgres.IsConfigured) return;
+
+        ConfigureHost();
+        await using var factory = new WebApplicationFactory<Program>();
+        using var client = factory.CreateClient();
+        await using var db = CreateDb();
+        var suffix = Guid.NewGuid().ToString("n");
+        var now = DateTimeOffset.UtcNow;
+        var steam = await db.Platforms.SingleAsync(platform => platform.Key == "steam");
+        var user = new User { Email = $"launcher-recap-{suffix}@example.test", CreatedAt = now, UpdatedAt = now };
+        var game = new Game { Title = $"Launcher Recap {suffix}", CreatedAt = now, UpdatedAt = now };
+        db.AddRange(user, game);
+        await db.SaveChangesAsync();
+        var integration = new Integration
+        {
+            UserId = user.Id, Type = IntegrationType.Api, ApiKey = $"key-{suffix}", Active = true, CreatedAt = now, UpdatedAt = now,
+        };
+        db.Add(integration);
+        await db.SaveChangesAsync();
+        PlaySession Session(DateTimeOffset startedAt) => new()
+        {
+            GameId = game.Id, UserId = user.Id, PlatformId = steam.Id, CaptureMethod = CaptureMethod.Api,
+            IntegrationId = integration.Id, StartedAt = startedAt, EndedAt = startedAt.AddMinutes(30),
+            CreatedAt = now, UpdatedAt = now,
+        };
+        var sessions = new[]
+        {
+            // 20:00 UTC on Dec 31, 2025 is 05:00 on Jan 1, 2026 in Tokyo.
+            Session(new DateTimeOffset(2025, 12, 31, 20, 0, 0, TimeSpan.Zero)),
+            Session(new DateTimeOffset(2025, 6, 1, 12, 0, 0, TimeSpan.Zero)),
+        };
+        db.PlaySessions.AddRange(sessions);
+        await db.SaveChangesAsync();
+
+        try
+        {
+            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", integration.ApiKey);
+            async Task<JsonElement> Recap(string query)
+            {
+                var response = await client.GetAsync($"/api/launcher/recap?{query}");
+                Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+                using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+                return json.RootElement.GetProperty("data").Clone();
+            }
+
+            Assert.Equal(1, (await Recap("year=2026&tz=Asia/Tokyo")).GetProperty("totalSessions").GetInt32());
+            Assert.Equal(1, (await Recap("year=2025&tz=Asia%2FTokyo")).GetProperty("totalSessions").GetInt32());
+            var tokyo2026 = await Recap("year=2026&tz=Asia/Tokyo");
+            Assert.Equal(1, tokyo2026.GetProperty("sessionsByHour")[5].GetProperty("sessionCount").GetInt32());
+
+            // Without a zone the year is UTC's, as before.
+            Assert.Equal(0, (await Recap("year=2026")).GetProperty("totalSessions").GetInt32());
+            Assert.Equal(2, (await Recap("year=2025")).GetProperty("totalSessions").GetInt32());
+        }
+        finally
+        {
+            db.PlaySessions.RemoveRange(sessions);
+            db.Integrations.Remove(integration);
+            db.Games.Remove(game);
+            db.Users.Remove(user);
+            await db.SaveChangesAsync();
+        }
+    }
+
     private static void ConfigureHost()
     {
         var databaseUrl = Environment.GetEnvironmentVariable("PLAYDEX_INTEGRATION_DATABASE_URL")!;

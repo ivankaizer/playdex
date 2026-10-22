@@ -102,8 +102,11 @@ export type UiMessage =
   /** Press the NVIDIA statistics overlay's hotkey (it toggles; the overlay's state can't be read). */
   | { type: "fps-counter" }
   | { type: "power"; action: PowerAction }
-  /** A year's Playdex recap for the Playdex tab; the host answers with a "playdex-recap" message. */
-  | { type: "playdex-recap"; year: number }
+  /**
+   * A year's Playdex recap for the Playdex tab, counted in `timeZone` (the page's IANA zone, as the web sends it); the
+   * host answers with a "playdex-recap" message.
+   */
+  | { type: "playdex-recap"; year: number; timeZone: string }
   /** A desktop app request (see host/desktop.ts). */
   | { type: "desktop"; id: number; method: string; params?: object };
 
