@@ -164,6 +164,18 @@ internal static unsafe partial class Native
     [LibraryImport("dwmapi.dll")]
     public static partial int DwmGetWindowAttribute(nint hwnd, uint attribute, out int value, uint size);
 
+    // ---- Window icon ----
+
+    public const uint WmSetIcon = 0x80;
+    public const nint IconSmall = 0;
+    public const nint IconBig = 1;
+
+    [LibraryImport("shell32.dll", EntryPoint = "ExtractIconExW", StringMarshalling = StringMarshalling.Utf16)]
+    public static partial uint ExtractIconEx(string file, int index, nint* largeIcons, nint* smallIcons, uint icons);
+
+    [LibraryImport("user32.dll", EntryPoint = "SendMessageW")]
+    public static partial nint SendMessage(nint hwnd, uint message, nint wParam, nint lParam);
+
     /// <summary>Wall-clock now as a FILETIME (100 ns ticks), comparable with GetProcessTimes.</summary>
     public static long PreciseNow()
     {
