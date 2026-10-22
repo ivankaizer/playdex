@@ -6,9 +6,13 @@ namespace Playdex.Core;
 /// <summary>A running session as <see cref="SessionJournal"/> keeps it on disk.</summary>
 /// <param name="LastSeenAt">The last time the game was seen running: the session's start, then every ping interval.</param>
 /// <param name="Online">Whether the start reached Playdex: the server then has the session and closes it itself.</param>
+/// <param name="AnsweredAt">
+/// Online, the last time Playdex answered for it (start or ping): the server closes the session
+/// <see cref="SessionRecorder.DefaultServerTimeout"/> after that, so play seen later than that is not on the server.
+/// </param>
 internal sealed record JournalEntry(
     string GameTitle, string GameId, string GameIdProvider, string Platform,
-    DateTimeOffset StartedAt, DateTimeOffset LastSeenAt, bool Online);
+    DateTimeOffset StartedAt, DateTimeOffset LastSeenAt, bool Online, DateTimeOffset? AnsweredAt = null);
 
 [JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
 [JsonSerializable(typeof(JournalEntry))]
@@ -20,7 +24,8 @@ internal sealed partial class JournalJson : JsonSerializerContext;
 /// belongs to a process that ended first: a crash, Windows shutting down, Playdex quit while a game ran.
 /// <see cref="Recover"/> turns such a session that never reached Playdex into a queued one, from its real start to the
 /// last time the game was seen running, so nothing played offline is lost. One that reached Playdex is left to the
-/// server, which closes it from its last ping.
+/// server, which closes it from its last ping, except for play seen after the server had closed it (its pings had not
+/// got through for longer than the server's timeout): that part is queued (<see cref="SessionRecorder.Lost"/>).
 /// </summary>
 /// <remarks>
 /// While its process runs, a session's file is held open without sharing; that is how another process (the app, a
@@ -55,8 +60,9 @@ internal sealed class SessionJournal(string directory)
 
     /// <summary>
     /// Hands every session left behind by a process that has ended to <paramref name="recovered"/>, then deletes it:
-    /// one that never reached Playdex as a queued session (start to last seen running), one under a second or that
-    /// reached Playdex not at all. Sessions of running processes are left alone.
+    /// one that never reached Playdex as a queued session (start to last seen running), one that reached Playdex as the
+    /// play seen after the server closed it, if any; one under a second not at all. Sessions of running processes are
+    /// left alone.
     /// </summary>
     public void Recover(Action<QueuedSession> recovered)
     {
@@ -99,6 +105,14 @@ internal sealed class SessionJournal(string directory)
                         entry.GameTitle, entry.GameId, entry.GameIdProvider, entry.Platform, seconds, entry.StartedAt, entry.LastSeenAt));
                     Log.Info($"journal: recovered {entry.GameTitle} ({seconds}s from {entry.StartedAt:O}) left running by an ended process");
                 }
+                else if (entry is { Online: true, AnsweredAt: { } answered }
+                    && SessionRecorder.Lost(
+                        new CaptureGame(entry.GameTitle, entry.GameId, entry.GameIdProvider, entry.Platform),
+                        answered, entry.LastSeenAt, SessionRecorder.DefaultServerTimeout) is { } lost)
+                {
+                    recovered(lost);
+                    Log.Info($"journal: recovered {lost.DurationInSeconds}s of {entry.GameTitle} from {lost.StartedAt:O}, after Playdex closed it, left running by an ended process");
+                }
                 // Deleted while still held, so no other process can recover it a second time.
                 TryDelete(path);
             }
@@ -125,8 +139,11 @@ internal sealed class RunningSession(FileStream stream, string path, JournalEntr
     private JournalEntry _entry = entry;
     private bool _closed;
 
-    /// <summary>The game is still running at <paramref name="now"/>; <paramref name="online"/> once its start reached Playdex.</summary>
-    public void Seen(DateTimeOffset now, bool? online = null)
+    /// <summary>
+    /// The game is still running at <paramref name="now"/>; <paramref name="online"/> once its start reached Playdex,
+    /// <paramref name="answeredAt"/> the last time Playdex answered for it.
+    /// </summary>
+    public void Seen(DateTimeOffset now, bool? online = null, DateTimeOffset? answeredAt = null)
     {
         lock (_gate)
         {
@@ -134,7 +151,7 @@ internal sealed class RunningSession(FileStream stream, string path, JournalEntr
             {
                 return;
             }
-            _entry = _entry with { LastSeenAt = now, Online = online ?? _entry.Online };
+            _entry = _entry with { LastSeenAt = now, Online = online ?? _entry.Online, AnsweredAt = answeredAt ?? _entry.AnsweredAt };
             try
             {
                 var bytes = JsonSerializer.SerializeToUtf8Bytes(_entry, JournalJson.Default.JournalEntry);

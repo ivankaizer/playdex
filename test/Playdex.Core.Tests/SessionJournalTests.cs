@@ -67,6 +67,50 @@ public sealed class SessionJournalTests
     }
 
     [Fact]
+    public void AnOnlineSessionLeftRunningGivesBackThePlayAfterTheServerClosedIt()
+    {
+        // Pings had not got through for 10 minutes when the process ended: the server closed the session 3 minutes
+        // after its last answer and has nothing of the 7 minutes after that.
+        var answeredAt = DateTimeOffset.Now.AddMinutes(-30);
+        LeaveBehind(new JournalEntry(
+            "Hades", "1145360", "steam", "pc", answeredAt.AddHours(-1), answeredAt.AddMinutes(10), Online: true, AnsweredAt: answeredAt));
+        var recovered = new List<QueuedSession>();
+
+        new SessionJournal(Path.ChangeExtension(_queueFile, ".running")).Recover(recovered.Add);
+
+        var lost = Assert.Single(recovered);
+        Assert.Equal(answeredAt.AddMinutes(3), lost.StartedAt);
+        Assert.Equal(7 * 60, lost.DurationInSeconds);
+        Assert.Empty(Directory.GetFiles(Path.ChangeExtension(_queueFile, ".running")));
+    }
+
+    [Theory]
+    [InlineData(2.0)]
+    [InlineData(null)]
+    public void AnOnlineSessionThatPlayedNoLongerThanTheServerHadIsLeftToIt(double? lastAnsweredMinutesBeforeLastSeen)
+    {
+        // Answered 2 minutes before it was last seen (within the server's timeout), or journaled before the last answer
+        // was kept: the server has all of it.
+        var lastSeen = DateTimeOffset.Now.AddMinutes(-30);
+        LeaveBehind(new JournalEntry(
+            "Hades", "1145360", "steam", "pc", lastSeen.AddHours(-1), lastSeen, Online: true,
+            AnsweredAt: lastAnsweredMinutesBeforeLastSeen is { } minutes ? lastSeen.AddMinutes(-minutes) : null));
+        var recovered = new List<QueuedSession>();
+
+        new SessionJournal(Path.ChangeExtension(_queueFile, ".running")).Recover(recovered.Add);
+
+        Assert.Empty(recovered);
+        Assert.Empty(Directory.GetFiles(Path.ChangeExtension(_queueFile, ".running")));
+    }
+
+    /// <summary>A session file no process holds, as one that ended leaves it.</summary>
+    private void LeaveBehind(JournalEntry entry)
+    {
+        var folder = Directory.CreateDirectory(Path.ChangeExtension(_queueFile, ".running")).FullName;
+        File.WriteAllText(Path.Combine(folder, $"{Guid.NewGuid():N}.json"), JsonSerializer.Serialize(entry, JournalJson.Default.JournalEntry));
+    }
+
+    [Fact]
     public async Task ASessionStillRunningIsNotRecoveredAndIsQueuedOnceWhenItEnds()
     {
         var offline = new Handler(_ => HttpStatusCode.ServiceUnavailable);
