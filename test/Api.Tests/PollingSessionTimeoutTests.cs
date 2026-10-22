@@ -53,7 +53,14 @@ public sealed class PollingSessionTimeoutTests(PostgresFixture postgres)
             CreatedAt = now,
             UpdatedAt = now,
         };
-        db.AddRange(user, game);
+        // An API integration has one open session per game.
+        var otherGame = new Game
+        {
+            Title = "Timeout Test (other)",
+            CreatedAt = now,
+            UpdatedAt = now,
+        };
+        db.AddRange(user, game, otherGame);
         await db.SaveChangesAsync();
 
         var integration = new Integration
@@ -83,7 +90,7 @@ public sealed class PollingSessionTimeoutTests(PostgresFixture postgres)
         var current = new PlaySession
         {
             UserId = user.Id,
-            GameId = game.Id,
+            GameId = otherGame.Id,
             PlatformId = platform.Id,
             CaptureMethod = CaptureMethod.Api,
             IntegrationId = integration.Id,
@@ -133,7 +140,7 @@ public sealed class PollingSessionTimeoutTests(PostgresFixture postgres)
                 await db.PlaySessions.Where(row => row.IntegrationId == integration.Id).ToListAsync());
             db.Integrations.Remove(integration);
             db.Users.Remove(user);
-            db.Games.Remove(game);
+            db.Games.RemoveRange(game, otherGame);
             await db.SaveChangesAsync();
         }
     }
