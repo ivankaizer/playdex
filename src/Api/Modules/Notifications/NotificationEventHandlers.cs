@@ -26,11 +26,12 @@ public sealed partial class NotificationEventHandlers(
         if (!client.IsEnabled) return;
         var target = await repository.GetSessionStartedTarget(@event.SessionId, ct);
         if (target is null || string.IsNullOrWhiteSpace(target.TelegramChatId)) return;
+        var (title, platform) = CleanNames(target);
         await SendSessionCard(
             target.TelegramChatId,
             target,
-            new NotificationCard(target.GameTitle, target.Platform, false, null),
-            $"Session started: {target.GameTitle} on {target.Platform}",
+            new NotificationCard(title, platform, false, null),
+            $"Session started: {title} on {platform}",
             ct);
     }
 
@@ -40,11 +41,12 @@ public sealed partial class NotificationEventHandlers(
         var target = await repository.GetSessionEndedTarget(@event.SessionId, ct);
         if (target is null || string.IsNullOrWhiteSpace(target.TelegramChatId)) return;
         var duration = FormatDuration(@event.EndedAt - @event.StartedAt);
+        var (title, platform) = CleanNames(target);
         await SendSessionCard(
             target.TelegramChatId,
             target,
-            new NotificationCard(target.GameTitle, target.Platform, true, duration),
-            $"Session ended: {target.GameTitle} on {target.Platform}\nDuration: {duration}",
+            new NotificationCard(title, platform, true, duration),
+            $"Session ended: {title} on {platform}\nDuration: {duration}",
             ct);
     }
 
@@ -53,12 +55,16 @@ public sealed partial class NotificationEventHandlers(
         if (!client.IsEnabled) return;
         var target = await repository.GetCredentialTarget(@event.CredentialId, ct);
         if (target is null || string.IsNullOrWhiteSpace(target.TelegramChatId)) return;
+        // The provider's error text stays in the server log, where the poller already records it with the
+        // credential: it can be long, carries provider internals, and is nothing the user can act on.
+        var platform = NotificationText.Clean(target.Platform, NotificationText.MaxPlatformLength);
         try
         {
             await client.SendMessageAsync(
                 target.TelegramChatId,
-                $"Polling failed for {@event.Platform}. Error: {@event.Message}. " +
-                $"Retrying in {Math.Round(@event.RetryDelay.TotalSeconds)}s.",
+                $"Playdex could not check your {platform} activity. " +
+                $"Retrying in {FormatDuration(@event.RetryDelay)}. " +
+                "If this keeps happening, check the connection in Settings.",
                 ct);
         }
         catch (Exception ex)
@@ -97,6 +103,10 @@ public sealed partial class NotificationEventHandlers(
             LogTextFallbackFailed(ex);
         }
     }
+
+    private static (string Title, string Platform) CleanNames(NotificationTarget target) => (
+        NotificationText.Clean(target.GameTitle, NotificationText.MaxTitleLength),
+        NotificationText.Clean(target.Platform, NotificationText.MaxPlatformLength));
 
     private static string FormatDuration(TimeSpan duration)
     {

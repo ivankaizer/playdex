@@ -269,8 +269,11 @@ public sealed class AppriseNotificationTests(PostgresFixture postgres)
             Assert.EndsWith("/notify/telegram_4242", appriseHandler.Requests[1]);
 
             await handler.Handle(
-                new PollFailed(integration.Id, "steam", "rate limited", TimeSpan.FromMinutes(1)),
+                new PollFailed(integration.Id, "steam", "rate limited <provider detail>", TimeSpan.FromMinutes(1)),
                 CancellationToken.None);
+            Assert.DoesNotContain("provider detail", appriseHandler.Bodies[2], StringComparison.Ordinal);
+            Assert.Contains("could not check your Steam activity", appriseHandler.Bodies[2], StringComparison.Ordinal);
+            Assert.Contains("Retrying in 1m 0s", appriseHandler.Bodies[2], StringComparison.Ordinal);
 
             db.NotificationChannels.Remove(notificationChannel);
             await db.SaveChangesAsync();
