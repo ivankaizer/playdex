@@ -32,5 +32,27 @@ public sealed class RefreshTokensMigration : IPlaydexMigration
 
         create index if not exists refresh_tokens_user_id_idx on refresh_tokens (user_id);
         create index if not exists refresh_tokens_family_id_idx on refresh_tokens (family_id);
+
+        do $$
+        declare
+            duplicates text;
+        begin
+            select string_agg(address, ', ' order by address)
+            into duplicates
+            from (
+                select lower(email) as address
+                from users
+                group by lower(email)
+                having count(*) > 1
+            ) shared;
+
+            if duplicates is not null then
+                raise exception 'Several accounts share an email address that differs only in case: %. Sign-in now ignores case, so merge or rename these accounts, then start Playdex again.', duplicates
+                    using errcode = 'unique_violation';
+            end if;
+        end
+        $$;
+
+        create unique index if not exists users_email_lower_unique on users (lower(email));
         """;
 }
