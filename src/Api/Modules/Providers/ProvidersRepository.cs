@@ -1,9 +1,10 @@
 using Microsoft.EntityFrameworkCore;
 using Playdex.Persistence;
+using Api.Modules.Sessions;
 
 namespace Api.Modules.Providers;
 
-public sealed class ProvidersRepository(PlaydexDbContext db)
+public sealed class ProvidersRepository(PlaydexDbContext db, SessionLifecycle sessions)
 {
     public const int MaxIntegrationsPerType = 3;
 
@@ -95,6 +96,8 @@ public sealed class ProvidersRepository(PlaydexDbContext db)
 
     public async Task<ProviderStatusDto?> UpdateProviderStatus(long userId, long providerId, string status, CancellationToken ct)
     {
+        await using var transaction = await db.Database.BeginTransactionAsync(ct);
+        await sessions.LockIntegration(providerId, ct);
         var credential = await db.Integrations
             .FirstOrDefaultAsync(
                 item => item.Id == providerId && item.UserId == userId,
@@ -104,6 +107,13 @@ public sealed class ProvidersRepository(PlaydexDbContext db)
         credential.Active = status == "active";
         credential.UpdatedAt = DateTimeOffset.UtcNow;
         await db.SaveChangesAsync(ct);
+        if (!credential.Active)
+        {
+            await sessions.EndForPausedIntegration(credential.Id, credential.Type, ct);
+        }
+
+        await transaction.CommitAsync(ct);
+        await sessions.PublishPending(ct);
         var platforms = await db.Platforms.AsNoTracking().ToListAsync(ct);
         return ToStatus(credential, platforms);
     }

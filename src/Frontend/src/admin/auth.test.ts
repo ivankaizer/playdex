@@ -76,4 +76,14 @@ describe("checkAdminSession", () => {
     await expect(checkAdminSession()).resolves.toEqual({ status: "anonymous" });
     expect(authSession.isLoggedIn()).toBe(false);
   });
+
+  it("keeps the session when the refresh can't reach the API", async () => {
+    authSession.storeTokens("access", "refresh");
+    fetchMock.mockImplementation(async (input) => {
+      if (String(input).endsWith("/refresh")) throw new TypeError("Failed to fetch");
+      return json(401, { data: null, error: { error: "Invalid token." } });
+    });
+    await expect(checkAdminSession()).rejects.toThrow("Failed to fetch");
+    expect(authSession.getRefreshToken()).toBe("refresh");
+  });
 });

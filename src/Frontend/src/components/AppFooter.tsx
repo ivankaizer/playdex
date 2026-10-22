@@ -34,7 +34,12 @@ export function AppFooter({ items = navItems }: { items?: ReadonlyArray<{ label:
         )}
       </div>
       <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3 border-t border-[#2a3540] pt-[18px] text-[13px] text-[#8a96a3]">
-        <span>© {new Date().getFullYear()} Playdex</span>
+        <span>
+          © {new Date().getFullYear()} Playdex · Game data from{" "}
+          <a href="https://www.igdb.com" target="_blank" rel="noreferrer" className="pdx-hit text-[#b5c0cb] no-underline transition hover:text-[#6fe3b5]">
+            IGDB
+          </a>
+        </span>
         <div className="flex flex-wrap gap-5">
           <a
             href="/privacy"

@@ -62,7 +62,7 @@ public sealed class PollingRepositoryPlatformTests(PostgresFixture postgres)
 
         try
         {
-            var repository = new PollingRepository(db, new FixedGameResolver(game.Id));
+            var repository = new PollingRepository(db, new FixedGameResolver(game.Id), TestSessions.Lifecycle(db));
             var active = (await repository.LoadActiveCredentials(default))
                 .Single(item => item.Credential.Id == integration.Id);
 

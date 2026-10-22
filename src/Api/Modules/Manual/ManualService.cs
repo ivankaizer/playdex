@@ -3,6 +3,7 @@ using Api.Infrastructure.Common;
 using Api.Modules.Games;
 using Api.Infrastructure.Http;
 using Api.Modules.Polling;
+using Api.Modules.Sessions;
 using Microsoft.Extensions.Options;
 using Playdex.Persistence;
 
@@ -12,7 +13,8 @@ public sealed class ManualService(
     ManualRepository repository,
     IgdbClient igdbClient,
     IOptions<IgdbOptions> igdbOptions,
-    IGameResolver gameResolver)
+    IGameResolver gameResolver,
+    SessionLifecycle sessions)
 {
     private const int MaxLocalSearchResults = 5;
 
@@ -37,17 +39,15 @@ public sealed class ManualService(
         {
             var startedAt = DateTimeOffset.UtcNow;
 
-            await repository.AcquireUserStartLock(userId, ct);
+            await sessions.LockManualTimer(userId, ct);
             if (resolvedSelection.GameId.HasValue)
             {
                 RequireExistingGame(await repository.GetGameEntity(resolvedSelection.GameId.Value, ct));
             }
-            await repository.EndActiveSessions(userId, ct);
             var gameId = await ResolveGame(resolvedSelection, ct);
             var platformId = await repository.GetPlatformIdByKey(platformKey, ct)
                 ?? throw AppProblemException.Validation("Platform not found.");
-            var sessionId = await repository.CreatePlaySession(
-                userId, gameId, platformId, startedAt, null, ct);
+            var sessionId = await sessions.StartManualTimer(userId, gameId, platformId, startedAt, ct);
 
             return new ManualSessionStartResponseDto(sessionId);
         }, ct);
@@ -59,9 +59,9 @@ public sealed class ManualService(
     public Task<ManualSessionStopResponseDto> StopSession(long userId, CancellationToken ct) =>
         repository.ExecuteInTransaction(async () =>
         {
-            await repository.AcquireUserStartLock(userId, ct);
+            await sessions.LockManualTimer(userId, ct);
             return new ManualSessionStopResponseDto(
-                await repository.EndActiveSessions(userId, ct));
+                await sessions.StopManualTimers(userId, DateTimeOffset.UtcNow, ct));
         }, ct);
 
     public async Task<ManualPlatformsResponseDto> ListPlatforms(CancellationToken ct) =>

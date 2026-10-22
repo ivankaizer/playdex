@@ -115,7 +115,7 @@ public sealed class DraftServiceTests(PostgresFixture postgres)
     private static DraftService Service(PlaydexDbContext db)
     {
         var opts=Options.Create(new IgdbOptions());
-        var manual=new ManualService(new(db),new IgdbClient(new HttpClient(),opts),opts,new GameResolver(db));
+        var manual=new ManualService(new(db),new IgdbClient(new HttpClient(),opts),opts,new GameResolver(db),TestSessions.Lifecycle(db));
         return new DraftService(new(db),db,manual,new(db));
     }
     private static async Task<(User,Game,SessionDraftBatch)> Seed(PlaydexDbContext db)

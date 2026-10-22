@@ -5,7 +5,6 @@ import { apiRequest, errorMessage } from "@/lib/api";
 import { getDurationSeconds } from "@/lib/dates";
 import { formatCount, formatDateLabel, formatDuration, formatHoursShort, formatTimeLabel } from "@/lib/format";
 import { cx } from "@/lib/cx";
-import { logout } from "@/lib/navigation";
 import { platformColor } from "@/lib/platforms";
 import type { GameIgnoreResponse, GameRatingResponse, GameResponse, GameStatsResponse } from "@/models/games";
 import type { AccountSessionsResponse } from "@/models/sessions";
@@ -72,7 +71,7 @@ export function GamePage({ hash }: { hash: string | null }) {
 
     const loadDetails = async () => {
       try {
-        const response = await apiRequest<GameResponse>(requests.details, { onAuthFailure: logout, signal });
+        const response = await apiRequest<GameResponse>(requests.details, { signal });
         update((current) => completeDetails(current, response));
       } catch (error) {
         update((current) => failDetails(current, errorMessage(error)));
@@ -82,7 +81,7 @@ export function GamePage({ hash }: { hash: string | null }) {
     const loadStats = async () => {
       setState(beginStatsLoad);
       try {
-        const response = await apiRequest<GameStatsResponse>(requests.stats, { onAuthFailure: logout, signal });
+        const response = await apiRequest<GameStatsResponse>(requests.stats, { signal });
         update((current) => completeStats(current, response));
       } catch (error) {
         update((current) => failStats(current, errorMessage(error)));
@@ -91,7 +90,7 @@ export function GamePage({ hash }: { hash: string | null }) {
 
     const loadIgnore = async (target: GameRequests) => {
       try {
-        const response = await apiRequest<GameIgnoreResponse>(target.ignoreStatus, { onAuthFailure: logout, signal });
+        const response = await apiRequest<GameIgnoreResponse>(target.ignoreStatus, { signal });
         update((current) => completeIgnore(current, response));
       } catch (error) {
         update((current) => failIgnore(current, errorMessage(error)));
@@ -100,7 +99,7 @@ export function GamePage({ hash }: { hash: string | null }) {
 
     const loadRating = async (target: GameRequests) => {
       try {
-        const response = await apiRequest<GameRatingResponse>(target.rating, { onAuthFailure: logout, signal });
+        const response = await apiRequest<GameRatingResponse>(target.rating, { signal });
         update((current) => completeRating(current, response));
       } catch (error) {
         update((current) => failRating(current, errorMessage(error)));
@@ -110,10 +109,7 @@ export function GamePage({ hash }: { hash: string | null }) {
     const loadFirstSessions = async () => {
       setState(beginFirstSessionsLoad);
       try {
-        const response = await apiRequest<AccountSessionsResponse>(sessionsPagePath(requests, 1), {
-          onAuthFailure: logout,
-          signal,
-        });
+        const response = await apiRequest<AccountSessionsResponse>(sessionsPagePath(requests, 1), { signal });
         if (!isCurrent()) return;
         setState((current) => completeFirstSessions(current, response));
       } catch (error) {
@@ -139,10 +135,7 @@ export function GamePage({ hash }: { hash: string | null }) {
     const isCurrent = () => signal?.aborted !== true;
     setState(beginRecentPageLoad);
     try {
-      const response = await apiRequest<AccountSessionsResponse>(sessionsPagePath(requests, page), {
-        onAuthFailure: logout,
-        signal,
-      });
+      const response = await apiRequest<AccountSessionsResponse>(sessionsPagePath(requests, page), { signal });
       if (isCurrent()) setState((current) => completeSessionsPage(current, page, response));
     } catch (error) {
       if (isCurrent()) setState((current) => failSessions(current, errorMessage(error)));
@@ -163,7 +156,6 @@ export function GamePage({ hash }: { hash: string | null }) {
       const response = await apiRequest<GameIgnoreResponse>(submission.path, {
         method: submission.method,
         body: submission.body,
-        onAuthFailure: logout,
         signal,
       });
       if (isCurrent()) setState((current) => completeIgnore(current, response));
@@ -188,7 +180,6 @@ export function GamePage({ hash }: { hash: string | null }) {
       const response = await apiRequest<GameRatingResponse>(submission.path, {
         method: submission.method,
         body: submission.body,
-        onAuthFailure: logout,
         signal,
       });
       if (isCurrent()) setState((current) => completeRating(current, response));

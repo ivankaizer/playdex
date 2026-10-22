@@ -102,7 +102,8 @@ poll_results
 - Polling copies `Integration.platform_id` to the resulting `PlaySession.platform_id`; therefore a PSN observation produces `psn`, not an inferred `ps4` or `ps5`.
 - An API Integration has no fixed Platform. API events and manual entries select Platform explicitly and may use a more specific value such as `ps5`.
 - One API key may send sequential events for different Platforms.
-- One Integration owns at most one active session at a time; for an API Integration, changing the event-selected Platform ends or switches that session through the normal lifecycle.
+- A polling Integration owns at most one open session. An API Integration owns at most one open session per Game, since a client may run several games at once; an event for that Game on another Platform ends the session and starts a new one. A user has at most one running manual timer. Partial unique indexes on `play_sessions` enforce all three (`017_open_session_guard`).
+- `SessionLifecycle` starts, keeps alive and ends every session under the Integration's (or, for a manual timer, the user's) advisory lock and announces each start and end of an Integration session once (`SessionStarted`, `SessionEnded`). A session nobody ends is ended by the sweep before each poll cycle: a polling session unseen for five poll intervals (at least five minutes) one interval after it was last seen, an API session not pinged for three minutes three minutes after its last ping, a manual timer twelve hours after it started. Pausing an Integration ends its session at once.
 - Integrations are disabled through `active = false` so historical provenance remains valid.
 - A Game is never matched by title alone.
 - Exact `(type, external_id)` and exact shared catalog identities may resolve automatically.

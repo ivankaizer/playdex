@@ -51,7 +51,7 @@ public static class UserCommand
     {
         password ??= GeneratePassword();
         var hash = BCrypt.Net.BCrypt.HashPassword(password, PasswordWorkFactor);
-        var user = await db.Users.SingleOrDefaultAsync(row => row.Email == email, ct);
+        var user = await db.Users.WithEmail(email).SingleOrDefaultAsync(ct);
         var created = user is null;
         if (user is null)
         {
@@ -68,6 +68,10 @@ public static class UserCommand
         user.IsAdmin |= isAdmin;
         user.UpdatedAt = now;
         await db.SaveChangesAsync(ct);
+        if (!created)
+        {
+            await db.RefreshTokens.Where(token => token.UserId == user.Id).ExecuteDeleteAsync(ct);
+        }
         return new Result(created, password);
     }
 

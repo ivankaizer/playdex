@@ -14,7 +14,7 @@ import {
 import { apiRequest, errorMessage, isAbortError } from "@/lib/api";
 import { formatCountNoun } from "@/lib/format";
 import { encodeGameId } from "@/lib/gameHash";
-import { logout, useAppNavigate } from "@/lib/navigation";
+import { useAppNavigate } from "@/lib/navigation";
 import { platformColor } from "@/lib/platforms";
 import type {
   ManualActiveSession,
@@ -131,7 +131,7 @@ export function DashboardPage() {
     const version = ++activityVersion.current;
     const requests = dashboardActivityRequests(new Date());
     try {
-      const daily = await apiRequest<AccountDailyStatsResponse>(requests.daily, { onAuthFailure: logout, signal });
+      const daily = await apiRequest<AccountDailyStatsResponse>(requests.daily, { signal });
       if (signal.aborted || version !== activityVersion.current) return;
       setActivity({
         days: dailyTotals(daily.days),
@@ -154,7 +154,7 @@ export function DashboardPage() {
       lifetimeController.signal.addEventListener("abort", linkAbort);
       try {
         const requests = dashboardRequests(new Date());
-        const options = { onAuthFailure: logout, signal: siblingCancellation.signal };
+        const options = { signal: siblingCancellation.signal };
         const [todaySessions, todayStats, monthlyStats, yearlyStats, currentSession, activeManualSession, recentSessions] =
           await waitAllOrCancel<
             [
@@ -210,7 +210,7 @@ export function DashboardPage() {
     const controller = new AbortController();
     lifetime.current = controller;
     void refreshDashboard(false);
-    apiRequest<ManualPlatformsResponse>("/manual/platforms", { onAuthFailure: logout, signal: controller.signal })
+    apiRequest<ManualPlatformsResponse>("/manual/platforms", { signal: controller.signal })
       .then((response) => {
         if (!controller.signal.aborted) setPlatforms(response.platforms);
       })
@@ -246,7 +246,7 @@ export function DashboardPage() {
     );
 
   const searchLiveGames = useCallback(
-    (path: string, signal: AbortSignal) => apiRequest<ManualMappingSearchResponse>(path, { onAuthFailure: logout, signal }),
+    (path: string, signal: AbortSignal) => apiRequest<ManualMappingSearchResponse>(path, { signal }),
     [],
   );
 
