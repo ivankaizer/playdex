@@ -33,6 +33,13 @@ public sealed partial class EventBus(IServiceScopeFactory scopeFactory, ILogger<
     [LoggerMessage(Level = LogLevel.Debug, Message = "Handler {HandlerType} handling {EventType}")]
     private partial void LogHandlerHandling(string handlerType, string eventType);
 
+    [LoggerMessage(Level = LogLevel.Error, Message = "Handler {HandlerType} failed for {EventType}")]
+    private partial void LogHandlerFailed(Exception exception, string handlerType, string eventType);
+
+    /// <summary>
+    /// Runs every subscriber, each isolated: one that throws is logged and does not stop the others. Only
+    /// cancellation of <paramref name="ct"/> propagates.
+    /// </summary>
     public async Task Publish<T>(T domainEvent, CancellationToken ct = default)
     {
         LogPublish(typeof(T).Name);
@@ -43,7 +50,18 @@ public sealed partial class EventBus(IServiceScopeFactory scopeFactory, ILogger<
         foreach (var handler in handlers)
         {
             LogHandlerHandling(handler.GetType().Name, typeof(T).Name);
-            await handler.Handle(domainEvent, ct);
+            try
+            {
+                await handler.Handle(domainEvent, ct);
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception exception)
+            {
+                LogHandlerFailed(exception, handler.GetType().Name, typeof(T).Name);
+            }
         }
     }
 }

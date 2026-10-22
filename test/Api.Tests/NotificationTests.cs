@@ -248,14 +248,14 @@ public sealed class AppriseNotificationTests(PostgresFixture postgres)
                 {
                     Content = new ByteArrayContent(CreateCover()),
                 })));
-            var handler = new NotificationEventHandlers(
+            var handler = new NotificationSender(
                 new NotificationsRepository(db),
                 client,
                 renderer,
-                NullLogger<NotificationEventHandlers>.Instance);
+                NullLogger<NotificationSender>.Instance);
             var now = DateTimeOffset.UtcNow;
 
-            await handler.Handle(
+            await handler.Send(
                 new SessionStarted(session.Id, integration.Id, game.Id, now),
                 CancellationToken.None);
             Assert.EndsWith("/notify/telegram_4242", appriseHandler.Requests[0]);
@@ -263,18 +263,18 @@ public sealed class AppriseNotificationTests(PostgresFixture postgres)
             game.CapsuleUrl = null;
             session.EndedAt = now.AddMinutes(65);
             await db.SaveChangesAsync();
-            await handler.Handle(
+            await handler.Send(
                 new SessionEnded(session.Id, integration.Id, game.Id, now, session.EndedAt.Value),
                 CancellationToken.None);
             Assert.EndsWith("/notify/telegram_4242", appriseHandler.Requests[1]);
 
-            await handler.Handle(
+            await handler.Send(
                 new PollFailed(integration.Id, "steam", "rate limited", TimeSpan.FromMinutes(1)),
                 CancellationToken.None);
 
             db.NotificationChannels.Remove(notificationChannel);
             await db.SaveChangesAsync();
-            await handler.Handle(
+            await handler.Send(
                 new SessionStarted(session.Id, integration.Id, game.Id, now),
                 CancellationToken.None);
             Assert.Equal(3, appriseHandler.Requests.Count);
@@ -350,14 +350,14 @@ public sealed class AppriseNotificationTests(PostgresFixture postgres)
         try
         {
             var appriseHandler = new RecordingHandler(Json("{}"), Json("{}"), Json("{}"), Json("{}"));
-            var handler = new NotificationEventHandlers(
+            var handler = new NotificationSender(
                 new NotificationsRepository(db),
                 new AppriseClient(
                     new HttpClient(appriseHandler) { BaseAddress = new Uri("https://apprise.test/") }),
                 new NotificationRenderer(new HttpClient()),
-                NullLogger<NotificationEventHandlers>.Instance);
+                NullLogger<NotificationSender>.Instance);
 
-            await handler.Handle(
+            await handler.Send(
                 new SessionStarted(
                     firstSession.Id,
                     firstIntegration.Id,
@@ -378,7 +378,7 @@ public sealed class AppriseNotificationTests(PostgresFixture postgres)
             db.PlaySessions.Add(secondSession);
             await db.SaveChangesAsync();
 
-            await handler.Handle(
+            await handler.Send(
                 new SessionStarted(
                     secondSession.Id,
                     secondIntegration.Id,
@@ -389,7 +389,7 @@ public sealed class AppriseNotificationTests(PostgresFixture postgres)
 
             firstSession.EndedAt = startedAt.AddMinutes(10);
             await db.SaveChangesAsync();
-            await handler.Handle(
+            await handler.Send(
                 new SessionEnded(
                     firstSession.Id,
                     firstIntegration.Id,
@@ -401,7 +401,7 @@ public sealed class AppriseNotificationTests(PostgresFixture postgres)
 
             secondSession.EndedAt = startedAt.AddMinutes(11);
             await db.SaveChangesAsync();
-            await handler.Handle(
+            await handler.Send(
                 new SessionEnded(
                     secondSession.Id,
                     secondIntegration.Id,

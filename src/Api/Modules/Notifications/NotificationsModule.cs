@@ -22,6 +22,9 @@ public static class NotificationsModule
         });
         services.AddHttpClient<NotificationRenderer>(client =>
             client.Timeout = TimeSpan.FromSeconds(15));
+        services.AddScoped<NotificationSender>();
+        services.AddSingleton<PendingNotifications>();
+        services.AddHostedService<NotificationDispatcher>();
         services.AddScoped<NotificationEventHandlers>();
         services.AddScoped<IEventSubscriber<SessionStarted>>(
             provider => provider.GetRequiredService<NotificationEventHandlers>());
