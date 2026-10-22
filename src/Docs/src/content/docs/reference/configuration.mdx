@@ -40,6 +40,7 @@ The API reads any ASP.NET setting from the environment, with `__` between sectio
 | `Polling__PollResultRetentionDays` | `30` | How long poll history is kept (the raw platform response only when the game changed). `0` keeps it. |
 | `Auth__AccessTokenTtl` | `30m` | How long a sign-in lasts before it refreshes. |
 | `AiDrafts__RequestsPerHour` | `10` | AI draft requests per user per hour. |
+| `AiDrafts__SearchTimeoutSeconds` | `20` | Time for matching extracted titles against IGDB. Titles not matched in time are left for you to pick. |
 | `AiDrafts__HistoryRetentionDays` | `30` | How long AI inputs are kept. |
 | `CORS_ORIGINS` | | Comma-separated origins, only if the web app is on another domain than the API. |
 

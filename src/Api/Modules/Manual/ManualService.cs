@@ -118,36 +118,48 @@ public sealed class ManualService(
         if (trimmed.Length == 0)
             throw AppProblemException.Validation("query is required.");
 
-        var opts = igdbOptions.Value;
-        var igdbConfigured = !string.IsNullOrWhiteSpace(opts.ClientId) &&
-            !string.IsNullOrWhiteSpace(opts.ClientSecret);
-        var localTask = repository.SearchLocalGames(trimmed, MaxLocalSearchResults, ct);
-        var igdbTask = igdbConfigured
-            ? SearchIgdbSafely(() => igdbClient.SearchGames(trimmed, ct), ct)
-            : Task.FromResult(new IgdbSearchAttempt(false, []));
+        var localTask = SearchLocal(trimmed, ct);
+        var igdbTask = SearchIgdb(trimmed, ct);
         await Task.WhenAll(localTask, igdbTask);
         var igdb = igdbTask.Result;
 
-        var results = localTask.Result.Select(r => new ManualMappingSearchResultDto(
+        var results = localTask.Result.Concat(igdb.Results.Select(IgdbResult)).ToList();
+
+        return new ManualMappingSearchResponseDto(trimmed, igdb.Available, results);
+    }
+
+    internal async Task<IReadOnlyList<ManualMappingSearchResultDto>> SearchLocal(string query, CancellationToken ct) =>
+        (await repository.SearchLocalGames(query, MaxLocalSearchResults, ct)).Select(r => new ManualMappingSearchResultDto(
             Source: "local",
             GameId: GameId.Encode(r.Id),
             IgdbId: null,
             Title: r.Title,
             Platform: r.Platform,
             PlatformId: null,
-            CapsuleUrl: r.CapsuleUrl
-        )).Concat(igdb.Results.Select(result => new ManualMappingSearchResultDto(
-            Source: "igdb",
-            GameId: null,
-            IgdbId: result.Id,
-            Title: result.Title,
-            Platform: result.Platform,
-            PlatformId: result.PlatformId,
-            CapsuleUrl: result.CoverUrl
-        ))).ToList();
+            CapsuleUrl: r.CapsuleUrl)).ToList();
 
-        return new ManualMappingSearchResponseDto(trimmed, igdb.Available, results);
+    /// <summary>
+    /// IGDB only, no database access, so it may run in parallel with other searches. Failures report IGDB as
+    /// unavailable; cancellation of <paramref name="ct"/> propagates.
+    /// </summary>
+    internal Task<IgdbSearchAttempt> SearchIgdb(string query, CancellationToken ct)
+    {
+        var opts = igdbOptions.Value;
+        var igdbConfigured = !string.IsNullOrWhiteSpace(opts.ClientId) &&
+            !string.IsNullOrWhiteSpace(opts.ClientSecret);
+        return igdbConfigured
+            ? SearchIgdbSafely(() => igdbClient.SearchGames(query, ct), ct)
+            : Task.FromResult(new IgdbSearchAttempt(false, []));
     }
+
+    internal static ManualMappingSearchResultDto IgdbResult(IgdbSearchResult result) => new(
+        Source: "igdb",
+        GameId: null,
+        IgdbId: result.Id,
+        Title: result.Title,
+        Platform: result.Platform,
+        PlatformId: result.PlatformId,
+        CapsuleUrl: result.CoverUrl);
 
     internal static ValidatedManualGameSelection ValidateGameSelection(
         string? gameId,
