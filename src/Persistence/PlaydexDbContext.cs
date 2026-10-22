@@ -4,6 +4,9 @@ namespace Playdex.Persistence;
 
 public sealed class PlaydexDbContext(DbContextOptions<PlaydexDbContext> options) : DbContext(options)
 {
+    /// <summary>Unique (user_id, type, account_id) of polling integrations; see IndexesAndConstraintsMigration.</summary>
+    public const string UniqueAccountIndex = "integrations_user_type_account_unique";
+
     public DbSet<User> Users => Set<User>();
     public DbSet<Platform> Platforms => Set<Platform>();
     public DbSet<Integration> Integrations => Set<Integration>();
@@ -61,6 +64,7 @@ public sealed class PlaydexDbContext(DbContextOptions<PlaydexDbContext> options)
         entity.Property(row => row.ResultJson).HasColumnName("result_json").HasColumnType("jsonb");
         entity.Property(row => row.ResponsesJson).HasColumnName("responses_json").HasColumnType("jsonb");
         entity.HasIndex(row => row.CreatedAt);
+        entity.HasIndex(row => row.UserId);
         entity.HasOne<User>().WithMany().HasForeignKey(row => row.UserId).OnDelete(DeleteBehavior.Cascade);
     }
 
@@ -188,7 +192,11 @@ public sealed class PlaydexDbContext(DbContextOptions<PlaydexDbContext> options)
         entity.HasIndex(row => row.PlatformId);
         entity.HasIndex(row => row.SessionPlatformId);
         entity.HasOne<User>().WithMany().HasForeignKey(row => row.UserId).OnDelete(DeleteBehavior.Cascade);
-        entity.HasOne<Platform>().WithMany().HasForeignKey(row => row.PlatformId).OnDelete(DeleteBehavior.NoAction);
+        entity.HasIndex(row => new { row.UserId, row.Type, row.AccountId })
+            .HasDatabaseName(UniqueAccountIndex)
+            .IsUnique()
+            .HasFilter("type <> 'api'");
+        entity.HasOne<Platform>().WithMany().HasForeignKey(row => row.PlatformId).OnDelete(DeleteBehavior.Restrict);
         entity.HasOne<Platform>().WithMany().HasForeignKey(row => row.SessionPlatformId).OnDelete(DeleteBehavior.NoAction);
     }
 
@@ -228,7 +236,9 @@ public sealed class PlaydexDbContext(DbContextOptions<PlaydexDbContext> options)
         entity.Property(row => row.EndedAt).HasColumnName("ended_at");
         entity.Property(row => row.CreatedAt).HasColumnName("created_at");
         entity.Property(row => row.UpdatedAt).HasColumnName("updated_at");
-        entity.HasOne<Game>().WithMany().HasForeignKey(row => row.GameId).OnDelete(DeleteBehavior.Cascade);
+        entity.HasIndex(row => row.GameId);
+        entity.HasIndex(row => row.StartedAt);
+        entity.HasOne<Game>().WithMany().HasForeignKey(row => row.GameId).OnDelete(DeleteBehavior.Restrict);
         entity.HasOne<User>().WithMany().HasForeignKey(row => row.UserId).OnDelete(DeleteBehavior.Restrict);
         entity.HasOne<Platform>().WithMany().HasForeignKey(row => row.PlatformId).OnDelete(DeleteBehavior.Restrict);
         entity.HasOne<Integration>().WithMany().HasForeignKey(row => row.IntegrationId).OnDelete(DeleteBehavior.Restrict);
@@ -245,6 +255,7 @@ public sealed class PlaydexDbContext(DbContextOptions<PlaydexDbContext> options)
         entity.Property(row => row.PolledAt).HasColumnName("polled_at");
         entity.Property(row => row.RawPayload).HasColumnName("raw_payload").HasColumnType("jsonb");
         entity.Property(row => row.CreatedAt).HasColumnName("created_at");
+        entity.HasIndex(row => new { row.IntegrationId, row.PolledAt }).IsDescending(false, true);
         entity.HasOne<Integration>().WithMany().HasForeignKey(row => row.IntegrationId).OnDelete(DeleteBehavior.Restrict);
         entity.HasOne<GameExternalIdentity>().WithMany().HasForeignKey(row => row.GameExternalIdentityId).OnDelete(DeleteBehavior.SetNull);
     }

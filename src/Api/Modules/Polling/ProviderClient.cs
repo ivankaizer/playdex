@@ -1,6 +1,20 @@
-using Playdex.Persistence;
-
 namespace Api.Modules.Polling;
+
+/// <summary>
+/// The fields of a polling <see cref="Playdex.Persistence.Integration"/> a provider client needs. Not an entity:
+/// <see cref="PollingRepository.LoadActiveCredentials"/> projects it from <c>integrations</c>.
+/// </summary>
+public sealed class IntegrationCredentials
+{
+    public long Id { get; set; }
+    public long UserId { get; set; }
+    public string? ApiKey { get; set; }
+    public string? AccountId { get; set; }
+    public DateTimeOffset CreatedAt { get; set; }
+    public DateTimeOffset UpdatedAt { get; set; }
+    public bool Active { get; set; }
+    public long PlatformId { get; set; }
+}
 
 /// <summary>
 /// Result from a provider's "currently playing" API call.

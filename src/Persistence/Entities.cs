@@ -34,19 +34,6 @@ public sealed class Platform : IHasTimestamps
     public DateTimeOffset UpdatedAt { get; set; }
 }
 
-public sealed class IntegrationCredentials : IHasTimestamps
-{
-    public long Id { get; set; }
-    public long UserId { get; set; }
-    public string? ApiKey { get; set; }
-    public string? AccountId { get; set; }
-    public bool ApiKeyLocked { get; set; }
-    public DateTimeOffset CreatedAt { get; set; }
-    public DateTimeOffset UpdatedAt { get; set; }
-    public bool Active { get; set; }
-    public long PlatformId { get; set; }
-}
-
 public enum IntegrationType
 {
     Steam,
@@ -124,7 +111,7 @@ public sealed class PlaySession : IHasTimestamps
 public sealed class PollResult
 {
     public long Id { get; set; }
-    public long? IntegrationId { get; set; }
+    public long IntegrationId { get; set; }
     public long? GameExternalIdentityId { get; set; }
     public DateTimeOffset PolledAt { get; set; }
     public string? RawPayload { get; set; }
