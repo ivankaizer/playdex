@@ -26,7 +26,9 @@ public sealed class DraftExtractionService(DraftRepository repository, DraftServ
         var day = ReferenceDate(timezone, clock.GetUtcNow());
         var platforms = await manual.ListPlatforms(ct);
         var input = new ExtractionInput(text, image, contentType, day, platforms.Where(p => p.Key != "playnite").Select(p => p.Key).ToArray());
-        ExtractionInputValidator.Validate(input, opts);
+        // Only cheap checks before the lock: decoding a screenshot is the expensive part, and parallel uploads
+        // must not get to do it without taking the lock and spending quota.
+        ExtractionInputValidator.ValidateRequest(input, opts);
 
         // A dedicated session advisory lock spans the external request without holding a transaction.
         await using var connection = await dataSource.OpenConnectionAsync(ct);
@@ -41,6 +43,7 @@ public sealed class DraftExtractionService(DraftRepository repository, DraftServ
             existing = await repository.FindRequest(userId, requestId, ct);
             if (existing is not null) return DraftService.ToDto(existing);
             await CheckQuota(connection, userId, opts.RequestsPerHour, ct);
+            ExtractionInputValidator.ValidateImage(input, opts);
             generationId = await history.Begin(userId, requestId, timezone, input);
             input = input with { ObserveResponse = response => history.RecordResponse(generationId, response) };
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);

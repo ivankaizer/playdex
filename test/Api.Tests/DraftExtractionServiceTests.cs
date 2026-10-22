@@ -6,6 +6,7 @@ using Api.Infrastructure.Http;
 using Api.Modules.Polling;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using Npgsql;
 using Playdex.Persistence;
 using Xunit;
 
@@ -103,6 +104,106 @@ public sealed class DraftExtractionServiceTests(PostgresFixture postgres)
         Assert.True(await db.AiGenerations.AnyAsync(generation => generation.UserId == user.Id && generation.Status == "timeout"));
     }
 
+    [Fact]
+    public async Task ScreenshotIsNotDecodedWhileAnotherExtractionHoldsTheUsersLock()
+    {
+        if (!postgres.IsConfigured) return;
+
+        await using var db = CreateDb();
+        var user = await CreateUser(db, "draft-lock");
+        var stub = new StubExtractor([]);
+        var service = CreateService(db, stub);
+
+        await using var connection = await postgres.DataSource!.OpenConnectionAsync();
+        await using (var acquire = new NpgsqlCommand("select pg_advisory_lock(hashtextextended(@key,0))", connection))
+        {
+            acquire.Parameters.AddWithValue("key", $"draft-extraction-user:{user.Id}");
+            await acquire.ExecuteScalarAsync();
+        }
+
+        // Undecodable bytes that pass the cheap checks: the lock is refused before anything is decoded.
+        var error = await Assert.ThrowsAsync<AppProblemException>(() => service.Create(
+            user.Id, Guid.NewGuid(), "UTC", null, [1, 2, 3], "image/png", CancellationToken.None));
+        Assert.Equal(409, error.StatusCode);
+        Assert.False(stub.Called);
+
+        await using (var release = new NpgsqlCommand("select pg_advisory_unlock(hashtextextended(@key,0))", connection))
+        {
+            release.Parameters.AddWithValue("key", $"draft-extraction-user:{user.Id}");
+            await release.ExecuteScalarAsync();
+        }
+
+        error = await Assert.ThrowsAsync<AppProblemException>(() => service.Create(
+            user.Id, Guid.NewGuid(), "UTC", null, [1, 2, 3], "image/png", CancellationToken.None));
+        Assert.Equal(400, error.StatusCode);
+        Assert.Equal("Screenshot content does not match a valid supported image.", error.Message);
+        Assert.False(stub.Called);
+    }
+
+    [Fact]
+    public async Task ScreenshotIsNotDecodedOnceTheHourlyQuotaIsSpent()
+    {
+        if (!postgres.IsConfigured) return;
+
+        await using var db = CreateDb();
+        var user = await CreateUser(db, "draft-quota");
+        await using (var command = postgres.DataSource!.CreateCommand(
+            "insert into draft_extraction_attempts(user_id,window_started_at,attempt_count) values (@user,now(),@limit)"))
+        {
+            command.Parameters.AddWithValue("user", user.Id);
+            command.Parameters.AddWithValue("limit", new AiDraftOptions().RequestsPerHour);
+            await command.ExecuteNonQueryAsync();
+        }
+
+        var error = await Assert.ThrowsAsync<AppProblemException>(() => CreateService(db, new StubExtractor([])).Create(
+            user.Id, Guid.NewGuid(), "UTC", null, [1, 2, 3], "image/png", CancellationToken.None));
+        Assert.Equal(429, error.StatusCode);
+    }
+
+    [Fact]
+    public async Task UnsupportedScreenshotTypeIsRejectedBeforeTakingTheLock()
+    {
+        if (!postgres.IsConfigured) return;
+
+        await using var db = CreateDb();
+        var user = await CreateUser(db, "draft-type");
+
+        var error = await Assert.ThrowsAsync<AppProblemException>(() => CreateService(db, new StubExtractor([])).Create(
+            user.Id, Guid.NewGuid(), "UTC", null, [1, 2, 3], "image/gif", CancellationToken.None));
+        Assert.Equal(400, error.StatusCode);
+        await using var attempts = postgres.DataSource!.CreateCommand(
+            "select count(*) from draft_extraction_attempts where user_id = @user");
+        attempts.Parameters.AddWithValue("user", user.Id);
+        Assert.Equal(0L, await attempts.ExecuteScalarAsync());
+    }
+
+    private static async Task<User> CreateUser(PlaydexDbContext db, string prefix)
+    {
+        var now = DateTimeOffset.UtcNow;
+        var user = new User { Email = $"{prefix}-{Guid.NewGuid():N}@test.local", CreatedAt = now, UpdatedAt = now };
+        db.Users.Add(user);
+        await db.SaveChangesAsync();
+        return user;
+    }
+
+    private DraftExtractionService CreateService(PlaydexDbContext db, IPlaySessionExtractor extractor)
+    {
+        var igdbOptions = Options.Create(new IgdbOptions());
+        var manualRepository = new ManualRepository(db);
+        var draftRepository = new DraftRepository(db);
+        var manual = new ManualService(manualRepository, new IgdbClient(new HttpClient(), igdbOptions), igdbOptions, new GameResolver(db));
+        return new DraftExtractionService(
+            draftRepository,
+            new DraftService(draftRepository, db, manual, manualRepository),
+            manualRepository,
+            extractor,
+            Options.Create(new AiDraftOptions { Enabled = true, ApiKey = "test", Model = "test" }),
+            postgres.DataSource!,
+            TimeProvider.System,
+            new GenerationHistoryRecorder(postgres.DataSource!, Options.Create(new AiDraftOptions { Provider = "test", Model = "test" }),
+                TimeProvider.System, Microsoft.Extensions.Logging.Abstractions.NullLogger<GenerationHistoryRecorder>.Instance));
+    }
+
     private static PlaySession Session(long userId, long gameId, long platformId, DateTimeOffset startedAt) => new()
     {
         UserId = userId,
@@ -118,9 +219,14 @@ public sealed class DraftExtractionServiceTests(PostgresFixture postgres)
     private sealed class StubExtractor(IReadOnlyList<ExtractedSession> rows) : IPlaySessionExtractor
     {
         public AppProblemException? Error { get; set; }
+        public bool Called { get; private set; }
         public Task<IReadOnlyList<ExtractedSession>> Extract(
             ExtractionInput input,
-            CancellationToken cancellationToken) => Error is null ? Task.FromResult(rows) : Task.FromException<IReadOnlyList<ExtractedSession>>(Error);
+            CancellationToken cancellationToken)
+        {
+            Called = true;
+            return Error is null ? Task.FromResult(rows) : Task.FromException<IReadOnlyList<ExtractedSession>>(Error);
+        }
     }
 
     private PlaydexDbContext CreateDb() => new(new DbContextOptionsBuilder<PlaydexDbContext>()
