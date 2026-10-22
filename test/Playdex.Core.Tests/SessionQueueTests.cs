@@ -1,4 +1,5 @@
 using System.Net;
+using System.Text;
 using System.Text.Json;
 
 namespace Playdex.Core.Tests;
@@ -152,6 +153,28 @@ public sealed class SessionQueueTests : IDisposable
         Assert.Equal(expected, Delivery.ErrorMessage(body));
 
     [Fact]
+    public async Task EveryCaptureRequestCarriesAContentLength()
+    {
+        // Playdex APIs from before the chunked-body fix read a body without a Content-Length as none.
+        var handler = new HeaderHandler();
+        using var api = new CaptureClient("key", "https://playdex.test/api", handler);
+        var game = new CaptureGame("Hades", "1145360", "steam", "pc");
+
+        Assert.True(await api.StartAsync(game));
+        Assert.True(await api.PingAsync(game));
+        Assert.True(await api.EndAsync(game));
+        Assert.Equal(DeliveryStatus.Sent, (await api.RecordAsync(new RecordedSession("Hades", "1145360", "steam", "pc", 600, DateTimeOffset.Now))).Outcome);
+
+        Assert.Equal(4, handler.Requests.Count);
+        Assert.All(handler.Requests, request =>
+        {
+            Assert.Equal(Encoding.UTF8.GetByteCount(request.Body), request.ContentLength);
+            Assert.Equal("application/json", request.MediaType);
+            Assert.Contains("\"gameTitle\":\"Hades\"", request.Body, StringComparison.Ordinal);
+        });
+    }
+
+    [Fact]
     public async Task WithoutAnApiKeyNothingIsSent()
     {
         var handler = new RecordingHandler(HttpStatusCode.OK);
@@ -179,6 +202,21 @@ public sealed class SessionQueueTests : IDisposable
 
     private static QueuedSession Session(string title, int seconds) =>
         new(title, "1", "steam", "pc", seconds, DateTimeOffset.Now.AddSeconds(-seconds), DateTimeOffset.Now);
+
+    /// <summary>Records each request's Content-Length and media type as the client set them, before anything buffers it.</summary>
+    private sealed class HeaderHandler : HttpMessageHandler
+    {
+        public List<(long? ContentLength, string? MediaType, string Body)> Requests { get; } = [];
+
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            var length = request.Content?.Headers.ContentLength;
+            var mediaType = request.Content?.Headers.ContentType?.MediaType;
+            var body = request.Content is null ? "" : await request.Content.ReadAsStringAsync(cancellationToken);
+            Requests.Add((length, mediaType, body));
+            return new HttpResponseMessage(HttpStatusCode.OK);
+        }
+    }
 
     /// <summary>Answers each request with the next of <paramref name="answers"/>, the last one from then on.</summary>
     private sealed class RecordingHandler(params (HttpStatusCode Status, string Body)[] answers) : HttpMessageHandler

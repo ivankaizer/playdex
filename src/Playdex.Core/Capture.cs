@@ -1,6 +1,5 @@
 using System.Diagnostics;
 using System.Net.Http.Headers;
-using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -301,9 +300,15 @@ public sealed class CaptureClient : IDisposable
         }
     }
 
+    /// <summary>
+    /// A POST with the JSON body serialized up front, so it carries a Content-Length: JsonContent streams it chunked,
+    /// which Playdex APIs from before the chunked-body fix read as no body at all (self-hosted servers update separately).
+    /// </summary>
     private HttpRequestMessage Post<T>(string path, T body, System.Text.Json.Serialization.Metadata.JsonTypeInfo<T> type)
     {
-        var request = new HttpRequestMessage(HttpMethod.Post, new Uri(BaseAddress, path)) { Content = JsonContent.Create(body, type) };
+        var content = new ByteArrayContent(JsonSerializer.SerializeToUtf8Bytes(body, type));
+        content.Headers.ContentType = new MediaTypeHeaderValue("application/json") { CharSet = "utf-8" };
+        var request = new HttpRequestMessage(HttpMethod.Post, new Uri(BaseAddress, path)) { Content = content };
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _apiKey()!.Trim());
         request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
         return request;
