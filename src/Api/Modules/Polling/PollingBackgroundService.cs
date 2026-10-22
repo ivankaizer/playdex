@@ -13,6 +13,7 @@ public sealed partial class PollingBackgroundService(
     IServiceProvider serviceProvider,
     IOptions<PollingOptions> pollingOptions,
     MetricsCollector metrics,
+    PollingLease lease,
     ILogger<PollingBackgroundService> logger) : BackgroundService
 {
     internal const string ActivitySourceName = "Playdex.Api.Polling";
@@ -24,6 +25,9 @@ public sealed partial class PollingBackgroundService(
 
     [LoggerMessage(Level = LogLevel.Debug, Message = "Starting poll cycle")]
     private partial void LogStartingPollCycle();
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Skipping poll cycle: another instance is polling")]
+    private partial void LogLeaseHeldElsewhere();
 
     [LoggerMessage(Level = LogLevel.Debug, Message = "Loaded {Count} active credentials")]
     private partial void LogLoadedCredentials(int count);
@@ -64,30 +68,15 @@ public sealed partial class PollingBackgroundService(
 
                 try
                 {
-                    await EndTimedOutApiSessions(serviceProvider, stoppingToken);
-
-                    List<ActiveCredential> credentials;
-                    using (var scope = serviceProvider.GetRequiredService<IServiceScopeFactory>().CreateScope())
+                    await using var heldLease = await lease.TryAcquire(stoppingToken);
+                    if (heldLease is null)
                     {
-                        credentials = await scope.ServiceProvider
-                            .GetRequiredService<PollingRepository>()
-                            .LoadActiveCredentials(stoppingToken);
+                        activity?.SetTag("polling.skipped", true);
+                        LogLeaseHeldElsewhere();
                     }
-                    activity?.SetTag("polling.credentials.count", credentials.Count);
-                    LogLoadedCredentials(credentials.Count);
-                    _backoff.Prune(credentials.Select(row => row.Credential.Id));
-
-                    foreach (var active in credentials)
+                    else
                     {
-                        if (stoppingToken.IsCancellationRequested) break;
-                        var now = DateTimeOffset.UtcNow;
-                        if (!_backoff.IsEligible(active.Credential.Id, now, out var nextEligibleAt))
-                        {
-                            LogSkippingCredential(active.Credential.Id, nextEligibleAt);
-                            continue;
-                        }
-
-                        await PollCredential(active, stoppingToken);
+                        await RunCycle(activity, stoppingToken);
                     }
                 }
                 catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
@@ -112,6 +101,54 @@ public sealed partial class PollingBackgroundService(
             var delayMs = Math.Max(0, (pollingOptions.Value.IntervalSeconds * 1000L) - elapsed);
             await Task.Delay((int)delayMs, stoppingToken);
         }
+    }
+
+    private async Task RunCycle(Activity? activity, CancellationToken stoppingToken)
+    {
+        await EndTimedOutApiSessions(serviceProvider, stoppingToken);
+
+        List<ActiveCredential> credentials;
+        using (var scope = serviceProvider.GetRequiredService<IServiceScopeFactory>().CreateScope())
+        {
+            credentials = await scope.ServiceProvider
+                .GetRequiredService<PollingRepository>()
+                .LoadActiveCredentials(stoppingToken);
+        }
+        activity?.SetTag("polling.credentials.count", credentials.Count);
+        LogLoadedCredentials(credentials.Count);
+        _backoff.Prune(credentials.Select(row => row.Credential.Id));
+
+        var now = DateTimeOffset.UtcNow;
+        var due = new List<ActiveCredential>(credentials.Count);
+        foreach (var active in credentials)
+        {
+            if (_backoff.IsEligible(active.Credential.Id, now, out var nextEligibleAt))
+            {
+                due.Add(active);
+            }
+            else
+            {
+                LogSkippingCredential(active.Credential.Id, nextEligibleAt);
+            }
+        }
+
+        await PollAll(due, stoppingToken);
+    }
+
+    /// <summary>
+    /// Bounded parallelism: one provider taking its full HTTP timeout used to delay every credential behind it.
+    /// Each credential has its own scope, and its database work is serialized by its own advisory lock.
+    /// </summary>
+    internal async Task PollAll(IReadOnlyList<ActiveCredential> due, CancellationToken stoppingToken)
+    {
+        await Parallel.ForEachAsync(
+            due,
+            new ParallelOptions
+            {
+                MaxDegreeOfParallelism = Math.Max(1, pollingOptions.Value.MaxConcurrentPolls),
+                CancellationToken = stoppingToken,
+            },
+            async (active, ct) => await PollCredential(active, ct));
     }
 
     /// <summary>Polls one credential; a failure is recorded and never escapes, except shutdown cancellation.</summary>
@@ -275,19 +312,25 @@ public sealed partial class PollingBackgroundService(
 /// <param name="IsFirst">The credential was healthy until this failure.</param>
 public sealed record CredentialFailure(TimeSpan Delay, bool IsFirst);
 
+/// <summary>Per-credential failure backoff. Thread-safe: credentials are polled in parallel.</summary>
 public sealed class CredentialBackoffTracker
 {
     private static readonly TimeSpan BaseDelay = TimeSpan.FromSeconds(5);
     private static readonly TimeSpan MaximumDelay = TimeSpan.FromMinutes(10);
     private readonly Dictionary<long, CredentialBackoffState> _states = [];
+    private readonly Lock _gate = new();
 
     public bool IsEligible(long credentialId, DateTimeOffset now, out DateTimeOffset nextEligibleAt)
     {
-        if (_states.TryGetValue(credentialId, out var state) && state.NextEligibleAt > now)
+        lock (_gate)
         {
-            nextEligibleAt = state.NextEligibleAt;
-            return false;
+            if (_states.TryGetValue(credentialId, out var state) && state.NextEligibleAt > now)
+            {
+                nextEligibleAt = state.NextEligibleAt;
+                return false;
+            }
         }
+
         nextEligibleAt = now;
         return true;
     }
@@ -297,28 +340,40 @@ public sealed class CredentialBackoffTracker
         DateTimeOffset now,
         TimeSpan? retryAfter = null)
     {
-        var failures = _states.TryGetValue(credentialId, out var current)
-            ? current.Failures + 1
-            : 1;
-        var exponent = Math.Min(failures - 1, 20);
-        var exponentialMs = Math.Min(
-            BaseDelay.TotalMilliseconds * Math.Pow(2, exponent),
-            MaximumDelay.TotalMilliseconds);
-        var delay = TimeSpan.FromMilliseconds(Math.Max(
-            exponentialMs,
-            retryAfter?.TotalMilliseconds ?? 0));
-        _states[credentialId] = new CredentialBackoffState(failures, now + delay);
-        return new CredentialFailure(delay, IsFirst: failures == 1);
+        lock (_gate)
+        {
+            var failures = _states.TryGetValue(credentialId, out var current)
+                ? current.Failures + 1
+                : 1;
+            var exponent = Math.Min(failures - 1, 20);
+            var exponentialMs = Math.Min(
+                BaseDelay.TotalMilliseconds * Math.Pow(2, exponent),
+                MaximumDelay.TotalMilliseconds);
+            var delay = TimeSpan.FromMilliseconds(Math.Max(
+                exponentialMs,
+                retryAfter?.TotalMilliseconds ?? 0));
+            _states[credentialId] = new CredentialBackoffState(failures, now + delay);
+            return new CredentialFailure(delay, IsFirst: failures == 1);
+        }
     }
 
-    public void Reset(long credentialId) => _states.Remove(credentialId);
+    public void Reset(long credentialId)
+    {
+        lock (_gate)
+        {
+            _states.Remove(credentialId);
+        }
+    }
 
     public void Prune(IEnumerable<long> activeCredentialIds)
     {
         var active = activeCredentialIds.ToHashSet();
-        foreach (var credentialId in _states.Keys.Where(id => !active.Contains(id)).ToArray())
+        lock (_gate)
         {
-            _states.Remove(credentialId);
+            foreach (var credentialId in _states.Keys.Where(id => !active.Contains(id)).ToArray())
+            {
+                _states.Remove(credentialId);
+            }
         }
     }
 }

@@ -4,6 +4,9 @@ public class PollingOptions
 {
     public int IntervalSeconds { get; set; } = 60;
 
+    /// <summary>How many credentials one poll cycle polls at the same time.</summary>
+    public int MaxConcurrentPolls { get; set; } = 4;
+
     /// <summary>
     /// Days to keep poll_results (one row per successful poll; the raw provider response only when the detected game
     /// changed) before the hourly cleanup deletes them; 0 or less keeps them forever.

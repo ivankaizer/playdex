@@ -25,6 +25,7 @@ public static class PollingModule
         services.AddHttpClient<IgdbClient>(c => c.Timeout = TimeSpan.FromSeconds(15));
         services.AddOpenTelemetry()
             .WithTracing(tracing => tracing.AddSource(PollingBackgroundService.ActivitySourceName));
+        services.AddSingleton<PollingLease>();
         services.AddHostedService<PollingBackgroundService>();
         services.TryAddSingleton(TimeProvider.System);
         services.AddSingleton<PollResultRetention>();

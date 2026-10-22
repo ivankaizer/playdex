@@ -36,7 +36,8 @@ The API reads any ASP.NET setting from the environment, with `__` between sectio
 | Setting | Default | What it does |
 |---|---|---|
 | `Polling__IntervalSeconds` | `60` | How often Steam, PlayStation and Xbox are checked. |
-| `Polling__PollResultRetentionDays` | `30` | How long raw platform responses are kept. `0` keeps them. |
+| `Polling__MaxConcurrentPolls` | `4` | How many accounts are checked at the same time. With several API instances, one at a time runs a check. |
+| `Polling__PollResultRetentionDays` | `30` | How long poll history is kept (the raw platform response only when the game changed). `0` keeps it. |
 | `Auth__AccessTokenTtl` | `30m` | How long a sign-in lasts before it refreshes. |
 | `AiDrafts__RequestsPerHour` | `10` | AI draft requests per user per hour. |
 | `AiDrafts__HistoryRetentionDays` | `30` | How long AI inputs are kept. |
