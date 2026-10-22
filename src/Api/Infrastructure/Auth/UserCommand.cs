@@ -68,6 +68,10 @@ public static class UserCommand
         user.IsAdmin |= isAdmin;
         user.UpdatedAt = now;
         await db.SaveChangesAsync(ct);
+        if (!created)
+        {
+            await db.RefreshTokens.Where(token => token.UserId == user.Id).ExecuteDeleteAsync(ct);
+        }
         return new Result(created, password);
     }
 
