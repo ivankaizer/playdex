@@ -60,8 +60,8 @@ public sealed record AccountTopGameDto(string GameId, string Title, double Total
 public sealed record AccountMonthStatDto(int Year, int Month, double TotalSeconds);
 
 /// <summary>
-/// Play time within one UTC calendar day ("yyyy-MM-dd"), with sessions split at midnight;
-/// <paramref name="SessionCount"/> counts sessions that overlap the day.
+/// Play time within one calendar day ("yyyy-MM-dd") of the client's time zone (UTC when it sent none), with
+/// sessions split at midnight; <paramref name="SessionCount"/> counts sessions that overlap the day.
 /// </summary>
 public sealed record AccountDayStatDto(
     string Date, double TotalSeconds, int SessionCount, IReadOnlyList<AccountDayPlatformDto> Platforms);

@@ -1,14 +1,18 @@
 using System.Globalization;
+using Api.Infrastructure.Common;
 using Api.Infrastructure.Http;
 
 namespace Api.Modules.Accounts;
 
+/// <summary>
+/// A <c>from</c>/<c>to</c> query range. A date-only bound is a calendar day in the client's time zone; <c>to</c> is
+/// inclusive, so the range ends where the day after it begins.
+/// </summary>
 internal readonly record struct AccountDateRange(DateTimeOffset? From, DateTimeOffset? ToExclusive)
 {
     private const string InvalidDatesMessage = "from and to must be valid dates.";
     private static readonly string[] IsoFormats =
     [
-        "yyyy-MM-dd",
         "yyyy-MM-dd'T'HH:mm",
         "yyyy-MM-dd'T'HH:mm'Z'",
         "yyyy-MM-dd'T'HH:mmzzz",
@@ -19,35 +23,50 @@ internal readonly record struct AccountDateRange(DateTimeOffset? From, DateTimeO
         "yyyy-MM-dd'T'HH:mm:ss.FFFFFFFzzz",
     ];
 
-    public static AccountDateRange ParseOptional(string? from, string? to) => Parse(from, to, required: false);
+    public static AccountDateRange ParseOptional(string? from, string? to, TimeZoneInfo zone) =>
+        Parse(from, to, required: false, zone);
 
-    public static AccountDateRange ParseRequired(string? from, string? to) => Parse(from, to, required: true);
+    public static AccountDateRange ParseRequired(string? from, string? to, TimeZoneInfo zone) =>
+        Parse(from, to, required: true, zone);
 
-    private static AccountDateRange Parse(string? from, string? to, bool required)
+    private static AccountDateRange Parse(string? from, string? to, bool required, TimeZoneInfo zone)
     {
         if (required && (string.IsNullOrEmpty(from) || string.IsNullOrEmpty(to)))
             throw AppProblemException.Validation("from and to are required.");
 
-        var parsedFrom = ParseBound(from);
-        var parsedTo = ParseBound(to);
+        var parsedFrom = ParseBound(from, zone);
+        var parsedTo = ParseBound(to, zone);
 
         if (parsedFrom.HasValue && parsedTo.HasValue && parsedFrom > parsedTo)
             throw AppProblemException.Validation("from must be before to.");
 
-        if (parsedTo.HasValue && parsedTo.Value.UtcDateTime.Date == DateTime.MaxValue.Date)
+        try
+        {
+            var toExclusive = parsedTo.HasValue
+                ? LocalCalendar.StartOfNextDay(parsedTo.Value, zone)
+                : (DateTimeOffset?)null;
+            return new AccountDateRange(parsedFrom, toExclusive);
+        }
+        catch (ArgumentOutOfRangeException)
+        {
             throw AppProblemException.Validation(InvalidDatesMessage);
-
-        var toExclusive = parsedTo.HasValue
-            ? new DateTimeOffset(parsedTo.Value.UtcDateTime.Date, TimeSpan.Zero).AddDays(1)
-            : (DateTimeOffset?)null;
-
-        return new AccountDateRange(parsedFrom, toExclusive);
+        }
     }
 
-    private static DateTimeOffset? ParseBound(string? value)
+    private static DateTimeOffset? ParseBound(string? value, TimeZoneInfo zone)
     {
         if (string.IsNullOrEmpty(value))
             return null;
+
+        try
+        {
+            if (DateOnly.TryParseExact(value, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var day))
+                return LocalCalendar.StartOf(day, zone);
+        }
+        catch (ArgumentOutOfRangeException)
+        {
+            throw AppProblemException.Validation(InvalidDatesMessage);
+        }
 
         if (!DateTimeOffset.TryParseExact(
                 value,

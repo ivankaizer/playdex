@@ -32,6 +32,7 @@ public static class LauncherEndpoints
             from.AddYears(1).AddDays(-1).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
             from,
             from.AddYears(1),
+            TimeZoneInfo.Utc,
             ct));
     }
 

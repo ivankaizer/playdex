@@ -58,7 +58,7 @@ public sealed class AccountsService(AccountsRepository repository)
     public async Task<SessionQueryResult> ListSessions(
         long userId, long? accountId, string? title, string? gameId,
         string? platform, string? from, string? to, string sort, string direction,
-        int limit, int offset, int ignoreShortMinutes, CancellationToken ct)
+        int limit, int offset, int ignoreShortMinutes, TimeZoneInfo zone, CancellationToken ct)
     {
         IReadOnlyCollection<long>? gameIds = null;
         if (gameId is not null)
@@ -66,7 +66,7 @@ public sealed class AccountsService(AccountsRepository repository)
             var parsedGameId = GameId.Parse(gameId);
             gameIds = await repository.ResolveConnectedGameIds(userId, parsedGameId, ct);
         }
-        var range = AccountDateRange.ParseOptional(from, to);
+        var range = AccountDateRange.ParseOptional(from, to, zone);
         return await repository.ListSessions(userId, accountId, title, gameIds, platform, range.From, range.ToExclusive,
             sort, direction, limit, offset, ignoreShortMinutes, ct);
     }
@@ -84,8 +84,8 @@ public sealed class AccountsService(AccountsRepository repository)
     }
 
     public Task<List<AccountSessionDto>> ListSessionsToday(
-        long userId, long? accountId, int ignoreShortMinutes, CancellationToken ct) =>
-        repository.ListSessionsToday(userId, accountId, ignoreShortMinutes, ct);
+        long userId, long? accountId, int ignoreShortMinutes, TimeZoneInfo zone, CancellationToken ct) =>
+        repository.ListSessionsToday(userId, accountId, ignoreShortMinutes, zone, ct);
 
     public Task<AccountSessionDto?> LoadCurrentSession(
         long userId, long? accountId, CancellationToken ct) =>
@@ -103,61 +103,65 @@ public sealed class AccountsService(AccountsRepository repository)
     }
 
     public Task<AccountStatsPeriodDto> ComputeMonthlyStats(
-        long userId, long? accountId, int ignoreShortMinutes, CancellationToken ct)
+        long userId, long? accountId, int ignoreShortMinutes, TimeZoneInfo zone, CancellationToken ct)
     {
         var now = DateTimeOffset.UtcNow;
-        var from = new DateTimeOffset(now.Year, now.Month, 1, 0, 0, 0, TimeSpan.Zero);
-        return repository.ComputeStats(userId, accountId, from, now, null, ignoreShortMinutes, ct);
+        var today = LocalCalendar.DateOf(now, zone);
+        var from = LocalCalendar.StartOf(new DateOnly(today.Year, today.Month, 1), zone);
+        return repository.ComputeStats(userId, accountId, from, now, null, null, ignoreShortMinutes, zone, ct);
     }
 
     public Task<AccountStatsPeriodDto> ComputeYearlyStats(
-        long userId, long? accountId, int ignoreShortMinutes, CancellationToken ct)
+        long userId, long? accountId, int ignoreShortMinutes, TimeZoneInfo zone, CancellationToken ct)
     {
         var now = DateTimeOffset.UtcNow;
-        var from = new DateTimeOffset(now.Year, 1, 1, 0, 0, 0, TimeSpan.Zero);
-        return repository.ComputeStats(userId, accountId, from, now, null, ignoreShortMinutes, ct);
+        var from = LocalCalendar.StartOf(new DateOnly(LocalCalendar.DateOf(now, zone).Year, 1, 1), zone);
+        return repository.ComputeStats(userId, accountId, from, now, null, null, ignoreShortMinutes, zone, ct);
     }
 
+    /// <summary>Stats of the sessions started in the range; <paramref name="title"/> filters like the session list.</summary>
     public Task<AccountStatsPeriodDto> ComputeStatsForRange(
-        long userId, long? accountId, string? from, string? to, string? platform,
-        int ignoreShortMinutes, CancellationToken ct)
+        long userId, long? accountId, string? from, string? to, string? platform, string? title,
+        int ignoreShortMinutes, TimeZoneInfo zone, CancellationToken ct)
     {
-        var range = AccountDateRange.ParseRequired(from, to);
+        var range = AccountDateRange.ParseRequired(from, to, zone);
         return repository.ComputeStats(
-            userId, accountId, range.From!.Value, range.ToExclusive!.Value, platform, ignoreShortMinutes, ct);
+            userId, accountId, range.From!.Value, range.ToExclusive!.Value, platform, title, ignoreShortMinutes, zone, ct);
     }
 
     /// <summary>Longest range the daily breakdown serves, so one request stays small.</summary>
     public const int MaxDailyStatsDays = 366;
 
     public Task<List<AccountDayStatDto>> ComputeDailyStats(
-        long userId, long? accountId, string? from, string? to, string? platform,
-        int ignoreShortMinutes, CancellationToken ct)
+        long userId, long? accountId, string? from, string? to, string? platform, string? title,
+        int ignoreShortMinutes, TimeZoneInfo zone, CancellationToken ct)
     {
-        var range = AccountDateRange.ParseRequired(from, to);
-        var dayCount = (range.ToExclusive!.Value.UtcDateTime.Date - range.From!.Value.UtcDateTime.Date).TotalDays;
+        var range = AccountDateRange.ParseRequired(from, to, zone);
+        var dayCount = LocalCalendar.DateOf(range.ToExclusive!.Value, zone).DayNumber
+            - LocalCalendar.DateOf(range.From!.Value, zone).DayNumber;
         if (dayCount > MaxDailyStatsDays)
             throw AppProblemException.Validation($"Daily stats cover at most {MaxDailyStatsDays} days.");
 
         return repository.ComputeDailyStats(
-            userId, accountId, range.From.Value, range.ToExclusive.Value, platform, ignoreShortMinutes, ct);
+            userId, accountId, range.From.Value, range.ToExclusive.Value, platform, title, ignoreShortMinutes, zone, ct);
     }
 
     public async Task<AccountStatsResponseDto> ComputeAccountStats(
-        long userId, long? accountId, int ignoreShortMinutes, CancellationToken ct)
+        long userId, long? accountId, int ignoreShortMinutes, TimeZoneInfo zone, CancellationToken ct)
     {
-        var monthly = await ComputeMonthlyStats(userId, accountId, ignoreShortMinutes, ct);
-        var yearly = await ComputeYearlyStats(userId, accountId, ignoreShortMinutes, ct);
+        var monthly = await ComputeMonthlyStats(userId, accountId, ignoreShortMinutes, zone, ct);
+        var yearly = await ComputeYearlyStats(userId, accountId, ignoreShortMinutes, zone, ct);
         return new AccountStatsResponseDto(accountId, monthly, yearly);
     }
 
     public async Task<GameStatsResponseDto> ComputeGameStats(
         long userId,
         string gameId,
+        TimeZoneInfo zone,
         CancellationToken ct)
     {
         var parsedGameId = GameId.Parse(gameId);
         var gameIds = await repository.ResolveConnectedGameIds(userId, parsedGameId, ct);
-        return await repository.ComputeGameStats(userId, gameIds, ct);
+        return await repository.ComputeGameStats(userId, gameIds, zone, ct);
     }
 }

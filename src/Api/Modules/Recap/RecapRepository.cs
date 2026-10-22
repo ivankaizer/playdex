@@ -34,13 +34,20 @@ public sealed class RecapRepository(PlaydexDbContext db)
             .ToListAsync(ct);
     }
 
-    public async Task<List<int>> ListRecapYears(long userId, CancellationToken ct)
+    /// <summary>The calendar years of <paramref name="zone"/> with at least one counted session, latest first.</summary>
+    public async Task<List<int>> ListRecapYears(long userId, TimeZoneInfo zone, CancellationToken ct)
     {
-        return await CountedSessions(userId)
-            .Select(ps => ps.StartedAt.UtcDateTime.Year)
-            .Distinct()
-            .OrderByDescending(year => year)
+        // A UTC year spans at most two local years (offsets stay under a day), and local time only moves forward, so
+        // the local years of its first and last session are exactly the local years it holds.
+        var bounds = await CountedSessions(userId)
+            .GroupBy(ps => ps.StartedAt.UtcDateTime.Year)
+            .Select(year => new { First = year.Min(ps => ps.StartedAt), Last = year.Max(ps => ps.StartedAt) })
             .ToListAsync(ct);
+        return bounds
+            .SelectMany(year => new[] { LocalCalendar.DateOf(year.First, zone).Year, LocalCalendar.DateOf(year.Last, zone).Year })
+            .Distinct()
+            .OrderDescending()
+            .ToList();
     }
 
     public async Task<List<RecapFirstSessionRow>> ListFirstSessionsByGame(

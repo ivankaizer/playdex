@@ -63,18 +63,20 @@ public sealed class AccountsRepository(PlaydexDbContext db, IGames games)
         return new SessionQueryResult(total, limit, offset, sessions.Select(MapSession).ToList());
     }
 
+    /// <summary>
+    /// Sessions that overlap the client's current day: one that crossed midnight or is still running counts too.
+    /// </summary>
     public async Task<List<AccountSessionDto>> ListSessionsToday(
-        long userId, long? accountId, int ignoreShortMinutes, CancellationToken ct)
+        long userId, long? accountId, int ignoreShortMinutes, TimeZoneInfo zone, CancellationToken ct)
     {
         var now = DateTimeOffset.UtcNow;
-        var todayStart = new DateTimeOffset(now.Year, now.Month, now.Day, 0, 0, 0, TimeSpan.Zero);
-        var todayEnd = todayStart.AddDays(1);
+        var today = LocalCalendar.DateOf(now, zone);
+        var todayStart = LocalCalendar.StartOf(today, zone);
+        var todayEnd = LocalCalendar.StartOf(today.AddDays(1), zone);
 
         var sessions = await BuildSessionQuery(
                 userId, accountId, null, null, null, null, null, excludeIgnored: false)
-            .Where(row =>
-                (row.Session.StartedAt >= todayStart && row.Session.StartedAt < todayEnd) ||
-                (row.Session.EndedAt != null && row.Session.EndedAt >= todayStart && row.Session.EndedAt < todayEnd))
+            .Where(row => row.Session.StartedAt < todayEnd && (row.Session.EndedAt ?? now) > todayStart)
             .OrderByDescending(row => row.Session.StartedAt)
             .Take(10)
             .Select(ToSessionDbRow)
@@ -112,18 +114,25 @@ public sealed class AccountsRepository(PlaydexDbContext db, IGames games)
         long userId, long? accountId, DateTimeOffset? from, DateTimeOffset? to,
         int ignoreShortMinutes, CancellationToken ct)
     {
-        var sessions = await BuildSessionQuery(
-                userId, accountId, null, null, null, from, to, excludeIgnored: true)
+        var sessions = await LoadStatsRows(userId, accountId, null, from, to, ct);
+        return sessions.Select(MapSession).ToList();
+    }
+
+    private Task<List<SessionDbRow>> LoadStatsRows(
+        long userId, long? accountId, string? title, DateTimeOffset? from, DateTimeOffset? to, CancellationToken ct) =>
+        BuildSessionQuery(userId, accountId, title, null, null, from, to, excludeIgnored: true)
             .OrderBy(row => row.Session.StartedAt)
             .Select(ToSessionDbRow)
             .ToListAsync(ct);
 
-        return sessions.Select(MapSession).ToList();
-    }
-
+    /// <summary>
+    /// Totals per year and month of the client's calendar, from the year of the first session (not a fixed start)
+    /// through the current year.
+    /// </summary>
     public async Task<GameStatsResponseDto> ComputeGameStats(
         long userId,
         IReadOnlyCollection<long> gameIds,
+        TimeZoneInfo zone,
         CancellationToken ct)
     {
         var sessions = await BuildSessionQuery(
@@ -131,49 +140,47 @@ public sealed class AccountsRepository(PlaydexDbContext db, IGames games)
             .OrderBy(row => row.Session.StartedAt)
             .Select(ToSessionDbRow)
             .ToListAsync(ct);
-        var mapped = sessions.Select(MapSession).ToList();
-        if (mapped.Count == 0)
+        if (sessions.Count == 0)
         {
             return new GameStatsResponseDto(0, 0, null, [], []);
         }
 
         var now = DateTimeOffset.UtcNow;
-        var totalSeconds = mapped.Sum(MapDuration);
-        var lastPlayed = mapped
-            .OrderByDescending(session => session.StartedAt)
-            .Select(session => (DateTimeOffset?)session.StartedAt)
-            .First();
+        var played = sessions
+            .Select(session => (Day: LocalCalendar.DateOf(session.StartedAt, zone), Seconds: Seconds(session, now)))
+            .ToList();
+        var totalSeconds = played.Sum(session => session.Seconds);
+        var lastPlayed = sessions.Max(session => session.StartedAt);
 
-        var endYear = Math.Max(AllTimeStartYear, now.UtcDateTime.Year);
-        var years = Enumerable.Range(AllTimeStartYear, endYear - AllTimeStartYear + 1)
+        var startYear = played.Min(session => session.Day.Year);
+        var endYear = Math.Max(LocalCalendar.DateOf(now, zone).Year, played.Max(session => session.Day.Year));
+        var years = Enumerable.Range(startYear, endYear - startYear + 1)
             .Select(year => new GameYearStatDto(
                 year,
-                mapped.Where(session => session.StartedAt.UtcDateTime.Year == year).Sum(MapDuration)))
+                played.Where(session => session.Day.Year == year).Sum(session => session.Seconds)))
             .ToArray();
-        var months = Enumerable.Range(AllTimeStartYear, endYear - AllTimeStartYear + 1)
+        var months = Enumerable.Range(startYear, endYear - startYear + 1)
             .SelectMany(year => Enumerable.Range(1, 12).Select(month => (year, month)))
             .Select(pair => new GameMonthStatDto(
                 pair.year,
                 pair.month,
-                mapped.Where(session =>
-                    session.StartedAt.UtcDateTime.Year == pair.year &&
-                    session.StartedAt.UtcDateTime.Month == pair.month).Sum(MapDuration)))
+                played.Where(session => session.Day.Year == pair.year && session.Day.Month == pair.month)
+                    .Sum(session => session.Seconds)))
             .ToArray();
 
-        return new GameStatsResponseDto(totalSeconds, mapped.Count, lastPlayed, years, months);
+        return new GameStatsResponseDto(totalSeconds, sessions.Count, lastPlayed, years, months);
     }
-
-    private const int AllTimeStartYear = 2025;
 
     public async Task<AccountStatsPeriodDto> ComputeStats(
         long userId, long? accountId, DateTimeOffset from, DateTimeOffset to,
-        string? platform, int ignoreShortMinutes, CancellationToken ct)
+        string? platform, string? title, int ignoreShortMinutes, TimeZoneInfo zone, CancellationToken ct)
     {
-        var allSessions = await ListSessionsForStats(userId, accountId, from, to, ignoreShortMinutes, ct);
+        var now = DateTimeOffset.UtcNow;
+        var allSessions = await LoadStatsRows(userId, accountId, title, from, to, ct);
         var platforms = allSessions
             .GroupBy(session => session.PlatformKey)
             .Select(g => new AccountPlatformStatDto(
-                g.Key, g.First().PlatformName, g.Sum(MapDuration), null))
+                g.Key, g.First().PlatformName, g.Sum(session => Seconds(session, now)), null))
             .OrderBy(platform => platform.PlatformKey)
             .ToList();
 
@@ -183,18 +190,19 @@ public sealed class AccountsRepository(PlaydexDbContext db, IGames games)
         var sessions = normalizedPlatform is null
             ? allSessions
             : allSessions.Where(session => session.PlatformKey == normalizedPlatform).ToList();
-        var months = BuildMonthStats(from, to, sessions);
+        var months = BuildMonthStats(from, to, sessions, now, zone);
         if (sessions.Count == 0)
             return new AccountStatsPeriodDto(0, 0, null, platforms, [], months);
 
-        var totalSeconds = sessions.Sum(MapDuration);
+        var totalSeconds = sessions.Sum(session => Seconds(session, now));
 
+        // Group on the raw id: re-parsing an encoded id could read an all-digit hash as a raw id.
         var totals = sessions
-            .GroupBy(session => GameId.Parse(session.GameId))
-            .ToDictionary(group => group.Key, group => group.Sum(MapDuration));
+            .GroupBy(session => session.GameId)
+            .ToDictionary(group => group.Key, group => group.Sum(session => Seconds(session, now)));
         var titles = sessions
-            .GroupBy(session => GameId.Parse(session.GameId))
-            .ToDictionary(group => group.Key, group => group.First().Game);
+            .GroupBy(session => session.GameId)
+            .ToDictionary(group => group.Key, group => group.First().GameTitle);
         var edgeRows = await db.GameConnections
             .AsNoTracking()
             .Where(edge => edge.UserId == userId)
@@ -218,22 +226,22 @@ public sealed class AccountsRepository(PlaydexDbContext db, IGames games)
     }
 
     /// <summary>
-    /// Play time per UTC day in [from, to). Unlike the period stats, a session is split across every day it
-    /// overlaps, and a running session counts up to now, so no day can exceed 24 hours.
+    /// Play time per day of the client's calendar in [from, to). Unlike the period stats, a session is split across
+    /// every day it overlaps, and a running session counts up to now, so no day can hold more than its own length.
     /// </summary>
     public async Task<List<AccountDayStatDto>> ComputeDailyStats(
         long userId, long? accountId, DateTimeOffset from, DateTimeOffset to,
-        string? platform, int ignoreShortMinutes, CancellationToken ct)
+        string? platform, string? title, int ignoreShortMinutes, TimeZoneInfo zone, CancellationToken ct)
     {
         var now = DateTimeOffset.UtcNow;
         var rows = await BuildSessionQuery(
-                userId, accountId, null, null, platform, null, null, excludeIgnored: true)
+                userId, accountId, title, null, platform, null, null, excludeIgnored: true)
             .Where(row => row.Session.StartedAt < to && (row.Session.EndedAt ?? now) > from)
             .OrderBy(row => row.Session.StartedAt)
             .Select(ToSessionDbRow)
             .ToListAsync(ct);
 
-        return BuildDayStats(from, to, rows.Select(MapSession).ToList(), now);
+        return BuildDayStats(from, to, rows.Select(MapSession).ToList(), now, zone);
     }
 
     private IQueryable<SessionQueryRow> BuildSessionQuery(
@@ -307,31 +315,32 @@ public sealed class AccountsRepository(PlaydexDbContext db, IGames games)
             null);
     }
 
-    private static double MapDuration(AccountSessionDto s) =>
-        s.EndedAt.HasValue
-            ? (s.EndedAt.Value - s.StartedAt).TotalSeconds
-            : (DateTimeOffset.UtcNow - s.StartedAt).TotalSeconds;
+    /// <summary>A running session counts up to now.</summary>
+    private static double Seconds(SessionDbRow session, DateTimeOffset now) =>
+        ((session.EndedAt ?? now) - session.StartedAt).TotalSeconds;
 
     internal static List<AccountDayStatDto> BuildDayStats(
         DateTimeOffset from,
         DateTimeOffset to,
         IReadOnlyList<AccountSessionDto> sessions,
-        DateTimeOffset now)
+        DateTimeOffset now,
+        TimeZoneInfo zone)
     {
-        var firstDay = from.UtcDateTime.Date;
-        var seconds = new Dictionary<DateTime, double>();
-        var counts = new Dictionary<DateTime, int>();
-        var platforms = new Dictionary<DateTime, Dictionary<string, (string Name, double Seconds)>>();
+        var seconds = new Dictionary<DateOnly, double>();
+        var counts = new Dictionary<DateOnly, int>();
+        var platforms = new Dictionary<DateOnly, Dictionary<string, (string Name, double Seconds)>>();
         foreach (var session in sessions)
         {
             var start = session.StartedAt > from ? session.StartedAt : from;
             var end = session.EndedAt ?? now;
             if (end > to) end = to;
-            for (var day = start.UtcDateTime.Date; day < end.UtcDateTime; day = day.AddDays(1))
+            for (var day = LocalCalendar.DateOf(start, zone); ; day = day.AddDays(1))
             {
-                var dayStart = new DateTimeOffset(day, TimeSpan.Zero);
+                var dayStart = LocalCalendar.StartOf(day, zone);
+                if (dayStart >= end) break;
+                var dayEnd = LocalCalendar.StartOf(day.AddDays(1), zone);
                 var sliceStart = start > dayStart ? start : dayStart;
-                var sliceEnd = end < dayStart.AddDays(1) ? end : dayStart.AddDays(1);
+                var sliceEnd = end < dayEnd ? end : dayEnd;
                 if (sliceEnd <= sliceStart) continue;
                 var slice = (sliceEnd - sliceStart).TotalSeconds;
                 seconds[day] = seconds.GetValueOrDefault(day) + slice;
@@ -344,7 +353,7 @@ public sealed class AccountsRepository(PlaydexDbContext db, IGames games)
         }
 
         var days = new List<AccountDayStatDto>();
-        for (var cursor = firstDay; cursor < to.UtcDateTime; cursor = cursor.AddDays(1))
+        for (var cursor = LocalCalendar.DateOf(from, zone); LocalCalendar.StartOf(cursor, zone) < to; cursor = cursor.AddDays(1))
         {
             days.Add(new AccountDayStatDto(
                 cursor.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
@@ -363,20 +372,27 @@ public sealed class AccountsRepository(PlaydexDbContext db, IGames games)
     private static List<AccountMonthStatDto> BuildMonthStats(
         DateTimeOffset from,
         DateTimeOffset to,
-        IReadOnlyList<AccountSessionDto> sessions)
+        IReadOnlyList<SessionDbRow> sessions,
+        DateTimeOffset now,
+        TimeZoneInfo zone)
     {
         var totals = sessions
-            .GroupBy(session => (session.StartedAt.UtcDateTime.Year, session.StartedAt.UtcDateTime.Month))
-            .ToDictionary(group => group.Key, group => group.Sum(MapDuration));
-        var cursor = new DateTimeOffset(from.Year, from.Month, 1, 0, 0, 0, TimeSpan.Zero);
+            .GroupBy(session =>
+            {
+                var day = LocalCalendar.DateOf(session.StartedAt, zone);
+                return (day.Year, day.Month);
+            })
+            .ToDictionary(group => group.Key, group => group.Sum(session => Seconds(session, now)));
+        var first = LocalCalendar.DateOf(from, zone);
         var months = new List<AccountMonthStatDto>();
-        while (cursor < to)
+        for (var cursor = new DateOnly(first.Year, first.Month, 1);
+             LocalCalendar.StartOf(cursor, zone) < to;
+             cursor = cursor.AddMonths(1))
         {
             months.Add(new AccountMonthStatDto(
                 cursor.Year,
                 cursor.Month,
                 totals.GetValueOrDefault((cursor.Year, cursor.Month))));
-            cursor = cursor.AddMonths(1);
         }
         return months;
     }

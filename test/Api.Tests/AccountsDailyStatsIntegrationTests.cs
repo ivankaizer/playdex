@@ -21,16 +21,36 @@ public sealed class AccountsDailyStatsIntegrationTests(PostgresFixture postgres)
 
         var service = CreateService(db);
         var days = await service.ComputeDailyStats(
-            user.Id, null, "2026-09-28", "2026-10-01", null, 0, CancellationToken.None);
+            user.Id, null, "2026-09-28", "2026-10-01", null, null, 0, TimeZoneInfo.Utc, CancellationToken.None);
 
         Assert.Equal(["2026-09-28", "2026-09-29", "2026-09-30", "2026-10-01"], days.Select(day => day.Date));
         Assert.Equal([5400d, 0d, 1800d, 0d], days.Select(day => day.TotalSeconds));
         Assert.Equal([2, 0, 1, 0], days.Select(day => day.SessionCount));
 
         var steamOnly = await service.ComputeDailyStats(
-            user.Id, null, "2026-09-28", "2026-10-01", steam.Key.ToUpperInvariant(), 0, CancellationToken.None);
+            user.Id, null, "2026-09-28", "2026-10-01", steam.Key.ToUpperInvariant(), null, 0, TimeZoneInfo.Utc,
+            CancellationToken.None);
         Assert.Equal([3600d, 0d, 1800d, 0d], steamOnly.Select(day => day.TotalSeconds));
         Assert.NotEqual(steam.Key, psn.Key);
+    }
+
+    [Fact]
+    public async Task DailyStatsBucketSessionsByTheClientsDays()
+    {
+        if (!postgres.IsConfigured) return;
+
+        await using var db = CreateContext();
+        await using var transaction = await db.Database.BeginTransactionAsync();
+        var (user, _, _) = await SeedAsync(db);
+
+        // Tokyo is UTC+9: its Sep 28 runs from 15:00 UTC on Sep 27, and its Oct 1 ends at 15:00 UTC.
+        var tokyo = TimeZoneInfo.FindSystemTimeZoneById("Asia/Tokyo");
+        var days = await CreateService(db).ComputeDailyStats(
+            user.Id, null, "2026-09-28", "2026-10-01", null, null, 0, tokyo, CancellationToken.None);
+
+        Assert.Equal(["2026-09-28", "2026-09-29", "2026-09-30", "2026-10-01"], days.Select(day => day.Date));
+        Assert.Equal([4200d, 1800d, 1800d, 0d], days.Select(day => day.TotalSeconds));
+        Assert.Equal([2, 1, 1, 0], days.Select(day => day.SessionCount));
     }
 
     [Fact]
@@ -42,7 +62,7 @@ public sealed class AccountsDailyStatsIntegrationTests(PostgresFixture postgres)
         var service = CreateService(db);
 
         await Assert.ThrowsAsync<AppProblemException>(() => service.ComputeDailyStats(
-            1, null, "2025-01-01", "2026-01-02", null, 0, CancellationToken.None));
+            1, null, "2025-01-01", "2026-01-02", null, null, 0, TimeZoneInfo.Utc, CancellationToken.None));
     }
 
     private PlaydexDbContext CreateContext() =>

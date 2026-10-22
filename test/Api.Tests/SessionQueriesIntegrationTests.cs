@@ -22,7 +22,7 @@ public sealed class SessionQueriesIntegrationTests(PostgresFixture postgres)
 
         Assert.Equal(
             new[] { 2025, 2026, data.Open.StartedAt.UtcDateTime.Year }.Distinct().OrderDescending(),
-            await repository.ListRecapYears(data.UserId, CancellationToken.None));
+            await repository.ListRecapYears(data.UserId, TimeZoneInfo.Utc, CancellationToken.None));
 
         Assert.Equal(
             [data.Long.Id, data.Medium.Id, data.Open.Id],
@@ -76,9 +76,9 @@ public sealed class SessionQueriesIntegrationTests(PostgresFixture postgres)
 
         Assert.Equal(data.Open.Id, (await repository.LoadCurrentSession(data.UserId, null, CancellationToken.None))?.SessionId);
 
-        var today = await repository.ListSessionsToday(data.UserId, null, 0, CancellationToken.None);
-        var todayStart = DateTimeOffset.UtcNow.UtcDateTime.Date;
-        Assert.Equal(data.Open.StartedAt >= todayStart ? [data.Open.Id] : [], today.Select(row => row.SessionId));
+        // The open session started 90 minutes ago: it runs into today even when it began yesterday.
+        var today = await repository.ListSessionsToday(data.UserId, null, 0, TimeZoneInfo.Utc, CancellationToken.None);
+        Assert.Equal([data.Open.Id], today.Select(row => row.SessionId));
 
         Assert.Equal(0, await repository.DeleteSession(data.Short.Id, data.UserId + 1, CancellationToken.None));
         Assert.Equal(data.Short.Id, await repository.DeleteSession(data.Short.Id, data.UserId, CancellationToken.None));
