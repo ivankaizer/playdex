@@ -267,6 +267,62 @@ public sealed class AppUpdateTests
         Assert.Empty(Directory.GetDirectories(Path.GetDirectoryName(install)!, "Playdex.old-*"));
     }
 
+    [Fact]
+    public async Task ARollBackStopsTheNewVersionAndPutsThePreviousOneBack()
+    {
+        var (install, backup, manifest) = await RollBackSetupAsync();
+        await File.WriteAllTextAsync(Path.Combine(install, "version.txt"), "new");
+        // The new version still running: a process that would otherwise outlive the rollback (ping, about 2 s).
+        using var running = OperatingSystem.IsWindows() ? TestProcess.Start() : null;
+
+        var outcome = await AppUpdate.RollBackAsync(manifest, backup, running, new InvalidOperationException("The new version did not start properly."));
+
+        Assert.Equal(UpdateOutcome.RolledBack, outcome);
+        Assert.True(running?.HasExited ?? true, "the new version was not stopped before the restore");
+        Assert.Equal("old", await File.ReadAllTextAsync(Path.Combine(install, "version.txt")));
+        Assert.False(Directory.Exists(backup));
+        Assert.Equal(
+            "The update to 9.9.9 could not be installed: The new version did not start properly.",
+            await File.ReadAllTextAsync(manifest.FailurePath!));
+    }
+
+    [Fact]
+    public async Task ARollBackThatCannotPutThePreviousVersionBackIsAFailure()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return; // Only Windows refuses to delete a file that is open.
+        }
+        var (install, backup, manifest) = await RollBackSetupAsync();
+
+        UpdateOutcome outcome;
+        using (new FileStream(Path.Combine(install, "Playdex.exe"), FileMode.Create, FileAccess.ReadWrite, FileShare.None))
+        {
+            outcome = await AppUpdate.RollBackAsync(
+                manifest, backup, updated: null, new InvalidOperationException("The new version did not start properly."), restoreAttempts: 2);
+        }
+
+        Assert.Equal(UpdateOutcome.RestoreFailed, outcome);
+        Assert.Equal("old", await File.ReadAllTextAsync(Path.Combine(backup, "version.txt")));
+        var failure = await File.ReadAllTextAsync(manifest.FailurePath!);
+        Assert.Contains("could not be put back", failure, StringComparison.Ordinal);
+        Assert.Contains(backup, failure, StringComparison.Ordinal);
+    }
+
+    /// <summary>An install folder holding the new version and the previous one moved aside, as the helper leaves them.</summary>
+    private static async Task<(string Install, string Backup, StagedUpdate Manifest)> RollBackSetupAsync()
+    {
+        var directory = NewTempDir();
+        var install = Directory.CreateDirectory(Path.Combine(directory, "Programs", "Playdex")).FullName;
+        var backup = Directory.CreateDirectory(install + ".old-test").FullName;
+        await File.WriteAllTextAsync(Path.Combine(backup, "version.txt"), "old");
+        var updates = Path.Combine(directory, "updates");
+        var manifest = new StagedUpdate(
+            "9.9.9", new string('a', 64), Path.Combine(updates, "v9.9.9", "app"), install, updates,
+            FailurePath: Path.Combine(updates, "last-failure.txt"));
+        return (install, backup, manifest);
+    }
+
     private static string Zip(string directory, string name, params (string Path, string Content)[] entries)
     {
         var path = Path.Combine(directory, name);

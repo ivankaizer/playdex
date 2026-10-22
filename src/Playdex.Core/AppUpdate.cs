@@ -86,6 +86,19 @@ public sealed record StagedUpdate(
     string? HealthSignalPath = null,
     string? FailurePath = null);
 
+/// <summary>How the update helper's <see cref="AppUpdate.ApplyAsync"/> ended.</summary>
+public enum UpdateOutcome
+{
+    /// <summary>The new version started and confirmed it is healthy.</summary>
+    Installed,
+
+    /// <summary>Not installed; the previous version is in place (and started again when it had been moved aside).</summary>
+    RolledBack,
+
+    /// <summary>Not installed, and the previous version could not be put back: the app folder is not usable.</summary>
+    RestoreFailed,
+}
+
 [JsonSourceGenerationOptions(WriteIndented = true, PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
 [JsonSerializable(typeof(ReleaseDto))]
 [JsonSerializable(typeof(StagedUpdate))]
@@ -225,7 +238,8 @@ public sealed class ReleaseFeed(HttpMessageHandler? handler = null) : IDisposabl
 /// check the hash, extract it safely into the update folder.</item>
 /// <item>The app copies Playdex.Run.exe out of its own folder, starts it with --apply-update and exits.</item>
 /// <item><see cref="ApplyAsync"/> (in that helper): wait for the app to exit, move its folder aside, move the new one
-/// in, start it and wait for it to confirm a healthy start; otherwise put the old folder back and start it again.</item>
+/// in, start it and wait for it to confirm a healthy start; otherwise stop it, wait for it to exit, put the old folder
+/// back and start it again.</item>
 /// </list>
 /// </summary>
 public static class AppUpdate
@@ -241,6 +255,12 @@ public static class AppUpdate
     internal const int MaximumArchiveEntries = 10_000;
     internal static readonly TimeSpan ParentExitTimeout = TimeSpan.FromSeconds(30);
     internal static readonly TimeSpan HealthTimeout = TimeSpan.FromSeconds(60);
+
+    /// <summary>How long a rollback waits for the stopped new version to exit before it puts the previous one back.</summary>
+    internal static readonly TimeSpan StopTimeout = TimeSpan.FromSeconds(15);
+
+    /// <summary>Tries at putting the previous version back, half a second apart.</summary>
+    internal const int RestoreAttempts = 10;
 
     /// <summary>
     /// Held by the helper while it replaces the app folder. A Playdex.exe started from that folder meanwhile would lock
@@ -451,12 +471,13 @@ public static class AppUpdate
         return start;
     }
 
-    /// <summary>The helper's side. True when the new version started and confirmed it is healthy.</summary>
-    public static async Task<bool> ApplyAsync(string applyPath, int parentProcessId, CancellationToken cancellationToken = default)
+    /// <summary>The helper's side: install the staged update, or put the previous version back (<see cref="RollBackAsync"/>).</summary>
+    public static async Task<UpdateOutcome> ApplyAsync(string applyPath, int parentProcessId, CancellationToken cancellationToken = default)
     {
         StagedUpdate? manifest = null;
         string? backup = null;
         var swapped = false;
+        Process? updated = null;
         try
         {
             manifest = Load(applyPath);
@@ -470,42 +491,124 @@ public static class AppUpdate
 
             var start = new ProcessStartInfo(Path.Combine(manifest.TargetDirectory, AppExecutable)) { UseShellExecute = false };
             start.ArgumentList.Add($"--update-health={manifest.HealthSignalPath}");
-            using var updated = Process.Start(start) ?? throw new InvalidOperationException("The new version did not start.");
+            updated = Process.Start(start) ?? throw new InvalidOperationException("The new version did not start.");
             if (!await WaitForHealthAsync(updated, manifest.HealthSignalPath!, HealthTimeout, cancellationToken))
             {
-                if (!updated.HasExited)
-                {
-                    updated.Kill(entireProcessTree: true);
-                }
                 throw new InvalidOperationException("The new version did not start properly.");
             }
             TryDeleteDirectory(backup);
             TryDelete(manifest.FailurePath!);
             Log.Info($"update: {manifest.Version} is running");
-            return true;
+            return UpdateOutcome.Installed;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException or InvalidOperationException or System.ComponentModel.Win32Exception)
         {
             Log.Error("update: install failed", ex);
-            if (manifest is not null && swapped && backup is not null)
+            return await RollBackAsync(manifest, swapped ? backup : null, updated, ex);
+        }
+        finally
+        {
+            updated?.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// After a failed install: stop the new version if it runs and wait for it to exit (its files must be free), put
+    /// <paramref name="backup"/> (the previous version, when it was moved aside) back and start it, and leave the reason
+    /// for the app's next start. A restore that does not finish is <see cref="UpdateOutcome.RestoreFailed"/>, never
+    /// reported as rolled back.
+    /// </summary>
+    internal static async Task<UpdateOutcome> RollBackAsync(
+        StagedUpdate? manifest, string? backup, Process? updated, Exception error, int restoreAttempts = RestoreAttempts)
+    {
+        if (updated is not null)
+        {
+            await StopAsync(updated, StopTimeout);
+        }
+        var outcome = UpdateOutcome.RolledBack;
+        var message = $"The update to {manifest?.Version} could not be installed: {error.Message}";
+        if (manifest is not null && backup is not null)
+        {
+            if (await RestoreAsync(backup, manifest.TargetDirectory, restoreAttempts) is { } restoreError)
             {
-                TryDeleteDirectory(manifest.TargetDirectory);
-                try
-                {
-                    Directory.Move(backup, manifest.TargetDirectory);
-                    Process.Start(new ProcessStartInfo(Path.Combine(manifest.TargetDirectory, AppExecutable)) { UseShellExecute = false })?.Dispose();
-                    Log.Info("update: the previous version is back");
-                }
-                catch (Exception restore) when (restore is IOException or UnauthorizedAccessException or System.ComponentModel.Win32Exception)
-                {
-                    Log.Error($"update: could not restore {backup}", restore);
-                }
+                outcome = UpdateOutcome.RestoreFailed;
+                message = $"The update to {manifest.Version} could not be installed ({error.Message}), and the previous version "
+                    + $"could not be put back ({restoreError.Message}). It is in {backup}; run Playdex Setup to install Playdex again.";
             }
-            if (manifest?.FailurePath is { } failure)
+            else
             {
-                TryWrite(failure, $"The update to {manifest.Version} could not be installed: {ex.Message}");
+                Log.Info("update: the previous version is back");
+                TryStart(Path.Combine(manifest.TargetDirectory, AppExecutable));
             }
-            return false;
+        }
+        if (manifest?.FailurePath is { } failure)
+        {
+            TryWrite(failure, message);
+        }
+        return outcome;
+    }
+
+    /// <summary>Kill <paramref name="process"/> (and what it started) and wait up to <paramref name="timeout"/> for it to exit.</summary>
+    private static async Task StopAsync(Process process, TimeSpan timeout)
+    {
+        try
+        {
+            if (!process.HasExited)
+            {
+                process.Kill(entireProcessTree: true);
+            }
+            using var limit = new CancellationTokenSource(timeout);
+            await process.WaitForExitAsync(limit.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            Log.Info($"update: the new version had not exited {timeout.TotalSeconds:0} s after it was stopped");
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception)
+        {
+            Log.Error("update: could not stop the new version", ex);
+        }
+    }
+
+    /// <summary>
+    /// Remove what was installed and move <paramref name="backup"/> back to <paramref name="target"/>, retrying while
+    /// files of a just-stopped process are still being freed. The last error when it could not, else null.
+    /// </summary>
+    private static async Task<Exception?> RestoreAsync(string backup, string target, int attempts)
+    {
+        for (var attempt = 1; ; attempt++)
+        {
+            try
+            {
+                if (Directory.Exists(target))
+                {
+                    Directory.Delete(target, recursive: true);
+                }
+                Directory.Move(backup, target);
+                return null;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                if (attempt >= attempts)
+                {
+                    Log.Error($"update: could not restore {backup}", ex);
+                    return ex;
+                }
+                Log.Info($"update: could not restore {backup} yet ({ex.Message}); retrying");
+                await Task.Delay(500);
+            }
+        }
+    }
+
+    private static void TryStart(string executable)
+    {
+        try
+        {
+            Process.Start(new ProcessStartInfo(executable) { UseShellExecute = false })?.Dispose();
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception)
+        {
+            Log.Error($"update: could not start {executable}", ex);
         }
     }
 

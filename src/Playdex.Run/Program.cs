@@ -12,7 +12,8 @@ namespace Playdex.Run;
 /// Exit codes: 0 the game ran, 1 it could not run (see run-&lt;date&gt;.log in the config's log folder), 2 this exe was
 /// started on its own rather than as a generated launcher.
 /// A copy of it is also the desktop app's update helper: <c>--apply-update &lt;apply.json&gt; &lt;pid&gt;</c> replaces
-/// the app's folder once that process exits (<see cref="AppUpdate.ApplyAsync"/>); 0 installed, 1 rolled back.
+/// the app's folder once that process exits (<see cref="AppUpdate.ApplyAsync"/>); 0 installed, 1 rolled back, 3 not
+/// installed and the previous version could not be put back.
 /// </remarks>
 internal static class Program
 {
@@ -24,9 +25,14 @@ internal static class Program
             Log.UseFile(Path.Combine(Path.GetDirectoryName(Path.GetDirectoryName(Path.GetFullPath(applyPath)))!, "update.log"));
             // Held on this thread for the whole swap, so the Full Screen Experience entry waits instead of starting Playdex.
             using var applying = AppUpdate.HoldApplyingLock();
-            var installed = AppUpdate.ApplyAsync(Path.GetFullPath(applyPath), parentProcessId).GetAwaiter().GetResult();
+            var outcome = AppUpdate.ApplyAsync(Path.GetFullPath(applyPath), parentProcessId).GetAwaiter().GetResult();
             applying.ReleaseMutex();
-            return installed ? 0 : 1;
+            return outcome switch
+            {
+                UpdateOutcome.Installed => 0,
+                UpdateOutcome.RolledBack => 1,
+                _ => 3,
+            };
         }
 
         LauncherManifest? manifest;
