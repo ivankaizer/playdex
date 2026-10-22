@@ -74,19 +74,7 @@ public sealed class ManualService(
     public async Task<ManualEntryCreateResponseDto> CreateEntry(
         long userId, ManualEntryCreateRequest request, CancellationToken ct)
     {
-        if (!DateTime.TryParseExact(
-                request.Date?.Trim(),
-                "yyyy-MM-dd",
-                CultureInfo.InvariantCulture,
-                DateTimeStyles.None,
-                out var parsedDate))
-            throw AppProblemException.Validation("date is required.");
-        var startTime = new DateTimeOffset(DateTime.SpecifyKind(parsedDate, DateTimeKind.Utc));
-
-        if (request.DurationMinutes <= 0)
-            throw AppProblemException.Validation("durationMinutes must be a positive integer.");
-
-        var endTime = startTime.AddMinutes(request.DurationMinutes);
+        var (startTime, endTime) = ValidateEntryTimes(request, DateTimeOffset.UtcNow);
         var selection = ValidateGameSelection(
             request.GameId,
             request.IgdbId);
@@ -147,6 +135,42 @@ public sealed class ManualService(
         ))).ToList();
 
         return new ManualMappingSearchResponseDto(trimmed, igdb.Available, results);
+    }
+
+    /// <summary>
+    /// A historical entry starts when its date begins in the client's time zone (UTC when it sent none), lasts at
+    /// most 24 hours and cannot be on a day that has not begun yet.
+    /// </summary>
+    internal static (DateTimeOffset Start, DateTimeOffset End) ValidateEntryTimes(
+        ManualEntryCreateRequest request, DateTimeOffset now)
+    {
+        if (!DateOnly.TryParseExact(
+                request.Date?.Trim(),
+                "yyyy-MM-dd",
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.None,
+                out var day))
+            throw AppProblemException.Validation("date is required.");
+
+        if (request.DurationMinutes <= 0)
+            throw AppProblemException.Validation("durationMinutes must be a positive integer.");
+        if (request.DurationMinutes > SessionLimits.MaxDurationMinutes)
+            throw AppProblemException.Validation(
+                $"durationMinutes must be at most {SessionLimits.MaxDurationMinutes} (24 hours).");
+
+        var zone = LocalCalendar.FindTimeZone(request.TimeZone);
+        if (day > SessionLimits.LatestDate(now, zone))
+            throw AppProblemException.Validation("date cannot be in the future.");
+
+        try
+        {
+            var start = LocalCalendar.StartOf(day, zone ?? TimeZoneInfo.Utc);
+            return (start, start.AddMinutes(request.DurationMinutes));
+        }
+        catch (ArgumentOutOfRangeException)
+        {
+            throw AppProblemException.Validation("date is required.");
+        }
     }
 
     internal static ValidatedManualGameSelection ValidateGameSelection(

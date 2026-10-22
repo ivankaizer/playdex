@@ -10,7 +10,8 @@ public sealed class AccountsService(AccountsRepository repository)
     internal static AccountSessionUpdateRequest ValidateSessionUpdate(
         PlaySession? session,
         long userId,
-        AccountSessionUpdateRequest request)
+        AccountSessionUpdateRequest request,
+        DateTimeOffset? now = null)
     {
         if (session is null || session.UserId != userId)
         {
@@ -32,6 +33,16 @@ public sealed class AccountsService(AccountsRepository repository)
             throw AppProblemException.Validation("End time must be later than start time.");
         }
 
+        if (request.EndedAt - request.StartedAt > SessionLimits.MaxDuration)
+        {
+            throw AppProblemException.Validation("A session can last at most 24 hours.");
+        }
+
+        if (request.EndedAt > (now ?? DateTimeOffset.UtcNow) + SessionLimits.ClockSkew)
+        {
+            throw AppProblemException.Validation("A session cannot end in the future.");
+        }
+
         return request;
     }
 
@@ -41,7 +52,7 @@ public sealed class AccountsService(AccountsRepository repository)
         AccountSessionUpdateRequest request,
         DateTimeOffset updatedAt)
     {
-        var validated = ValidateSessionUpdate(session, userId, request);
+        var validated = ValidateSessionUpdate(session, userId, request, updatedAt);
         var editableSession = session!;
         editableSession.StartedAt = validated.StartedAt.ToUniversalTime();
         editableSession.EndedAt = validated.EndedAt.ToUniversalTime();

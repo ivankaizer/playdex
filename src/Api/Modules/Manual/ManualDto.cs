@@ -9,6 +9,8 @@ public sealed record ManualSessionStartRequest(
     string? IgdbId = null,
     string? CapsuleUrl = null);
 
+/// <param name="Date">The day played, "yyyy-MM-dd", in <paramref name="TimeZone"/>.</param>
+/// <param name="TimeZone">The client's IANA or Windows time zone id; the entry starts when its date begins there.</param>
 public sealed record ManualEntryCreateRequest(
     string Date,
     int DurationMinutes,
@@ -16,7 +18,8 @@ public sealed record ManualEntryCreateRequest(
     string? IgdbId,
     string? Title,
     string? PlatformKey,
-    string? CapsuleUrl);
+    string? CapsuleUrl,
+    string? TimeZone = null);
 
 // ── Response DTOs ─────────────────────────────────────────────
 

@@ -132,22 +132,21 @@ describe("session edit state", () => {
   });
 
   it.each([
-    ["", false, false, "Enter how long you played, e.g. 1h 30m."],
-    ["0m", false, false, "A session needs at least 1 minute."],
-    ["0h 0m", false, false, "A session needs at least 1 minute."],
-    ["90", false, false, "Use hours and minutes, e.g. 1h 30m."],
-    ["1.5h", false, false, "Use hours and minutes, e.g. 1h 30m."],
-    ["75m", false, false, "Minutes go up to 59. Write 1h 15m instead."],
-    ["1h 75m", false, false, "Minutes go up to 59. Write 2h 15m instead."],
-    ["45m", true, false, ""],
-    ["1H30M", true, false, ""],
-    ["24h", true, false, ""],
-    ["24h 1m", true, true, "Longer than a day. Double-check before saving."],
-    ["26h 05m", true, true, "Longer than a day. Double-check before saving."],
-  ])("duration %j: ok=%s warn=%s", (value, ok, warn, message) => {
+    ["", false, "Enter how long you played, e.g. 1h 30m."],
+    ["0m", false, "A session needs at least 1 minute."],
+    ["0h 0m", false, "A session needs at least 1 minute."],
+    ["90", false, "Use hours and minutes, e.g. 1h 30m."],
+    ["1.5h", false, "Use hours and minutes, e.g. 1h 30m."],
+    ["75m", false, "Minutes go up to 59. Write 1h 15m instead."],
+    ["1h 75m", false, "Minutes go up to 59. Write 2h 15m instead."],
+    ["45m", true, ""],
+    ["1H30M", true, ""],
+    ["24h", true, ""],
+    ["24h 1m", false, "A session can be at most 24 hours."],
+    ["26h 05m", false, "A session can be at most 24 hours."],
+  ])("duration %j: ok=%s", (value, ok, message) => {
     const check = checkDuration(value);
     expect(check.ok).toBe(ok);
-    expect(check.warn).toBe(warn);
     expect(check.message).toBe(message);
   });
 
@@ -164,10 +163,15 @@ describe("session edit state", () => {
     expect(result.state.error).toContain("Minutes go up to 59");
   });
 
-  it("allows a duration over 24h but flags it for confirmation", () => {
+  it("refuses a duration over 24h, typed or kept from an older session", () => {
     const state = setEditDuration(tryOpenEdit(emptySessionEditState, session())!, "26h 5m");
-    expect(editDurationCheck(state)).toMatchObject({ ok: true, warn: true, minutes: 1565 });
-    expect(tryBuildEditSubmission(state).submission).not.toBeNull();
+    expect(editDurationCheck(state)).toMatchObject({ ok: false, minutes: 1565, message: "A session can be at most 24 hours." });
+    expect(tryBuildEditSubmission(state).submission).toBeNull();
+
+    const startedAt = new Date(Date.now() - 30 * 3_600_000);
+    const long = tryOpenEdit(emptySessionEditState, session({ startedAt: startedAt.toISOString(), endedAt: new Date().toISOString() }))!;
+    expect(editDurationCheck(long).ok).toBe(false);
+    expect(tryBuildEditSubmission(long).state.error).toBe("A session can be at most 24 hours.");
   });
 
   it("formats the duration field in hours and minutes", () => {

@@ -1,3 +1,4 @@
+import { localDateOnly } from "@/lib/dates";
 import type { DraftRowDto } from "@/models/drafts";
 import {
   acceptance,
@@ -8,8 +9,10 @@ import {
   createDraftRowEdit,
   draftDuration,
   durationCheck,
+  hasValidDate,
   isReady,
   isDirty,
+  isFutureDate,
   isValidDate,
   markAccepted,
   needsPlatformReview,
@@ -73,18 +76,28 @@ describe("draft row edit", () => {
     expect(canAccept(edit)).toBe(false);
   });
 
-  it("rejects zero, minutes over 59 and hours over 99, and holds back drafts over 24 hours", () => {
+  it("rejects zero, minutes over 59 and drafts over 24 hours", () => {
     const edit = createDraftRowEdit(row());
     expect(durationCheck({ hours: "0", minutes: "0" }).note).toBe("Add how long you played.");
     expect(draftDuration({ hours: "0", minutes: "75" })).toBeNull();
     expect(corrections({ ...edit, hours: "0", minutes: "75" })).toContain("Minutes must be between 0 and 59.");
-    expect(durationCheck({ hours: "100", minutes: "0" }).note).toBe("Hours must be 99 or less.");
 
     const long = { ...edit, hours: "26", minutes: "0" };
-    expect(durationCheck(long)).toMatchObject({ minutes: 1560, long: true });
-    expect(canAccept(long)).toBe(true);
+    expect(durationCheck(long)).toEqual({ minutes: null, note: "A session can be at most 24 hours." });
+    expect(canAccept(long)).toBe(false);
     expect(isReady(long)).toBe(false);
     expect(isReady({ ...edit, hours: "24", minutes: "0" })).toBe(true);
+  });
+
+  it("holds back a draft dated in the future", () => {
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const edit = { ...createDraftRowEdit(row()), date: localDateOnly(tomorrow) };
+    expect(isFutureDate(edit.date)).toBe(true);
+    expect(hasValidDate(edit)).toBe(false);
+    expect(corrections(edit)).toContain("The date cannot be in the future.");
+    expect(canAccept(edit)).toBe(false);
+    expect(hasValidDate({ ...edit, date: localDateOnly(new Date()) })).toBe(true);
   });
 
   it("splits the server duration into hours and minutes", () => {

@@ -57,6 +57,46 @@ public sealed class AccountsSessionUpdateTests
     }
 
     [Fact]
+    public void EditedSessionsLastAtMostADay()
+    {
+        var now = new DateTimeOffset(2026, 9, 10, 12, 0, 0, TimeSpan.Zero);
+        var startedAt = now.AddDays(-3);
+
+        Assert.Equal(
+            startedAt.AddHours(24),
+            AccountsService.ValidateSessionUpdate(
+                Session(userId: 7, ended: true), 7, new AccountSessionUpdateRequest(startedAt, startedAt.AddHours(24)), now).EndedAt);
+        var exception = Assert.Throws<AppProblemException>(() =>
+            AccountsService.ValidateSessionUpdate(
+                Session(userId: 7, ended: true),
+                userId: 7,
+                new AccountSessionUpdateRequest(startedAt, startedAt.AddHours(24).AddMinutes(1)),
+                now));
+
+        Assert.Equal(400, exception.StatusCode);
+        Assert.Equal("A session can last at most 24 hours.", exception.Message);
+    }
+
+    [Fact]
+    public void EditedSessionsCannotEndInTheFuture()
+    {
+        var now = new DateTimeOffset(2026, 9, 10, 12, 0, 0, TimeSpan.Zero);
+
+        var exception = Assert.Throws<AppProblemException>(() =>
+            AccountsService.ValidateSessionUpdate(
+                Session(userId: 7, ended: true),
+                userId: 7,
+                new AccountSessionUpdateRequest(now.AddMinutes(-30), now.AddHours(1)),
+                now));
+
+        Assert.Equal(400, exception.StatusCode);
+        Assert.Equal("A session cannot end in the future.", exception.Message);
+        // A client clock a little ahead is fine.
+        AccountsService.ValidateSessionUpdate(
+            Session(userId: 7, ended: true), 7, new AccountSessionUpdateRequest(now.AddMinutes(-30), now.AddMinutes(2)), now);
+    }
+
+    [Fact]
     public void ActiveSessionCannotBeEdited()
     {
         var startedAt = DateTimeOffset.UtcNow.AddHours(-1);

@@ -150,32 +150,35 @@ export interface DurationCheck {
   /** Whole minutes, or null when the text is not a valid duration. */
   minutes: number | null;
   ok: boolean;
-  /** Valid but longer than a day: saving needs an explicit confirmation. */
-  warn: boolean;
   message: string;
 }
 
+/** The longest session the API records. */
 const DayMinutes = 24 * 60;
+const TooLongMessage = "A session can be at most 24 hours.";
 
-/** Duration rules from the design: empty and zero are rejected, minutes stay under 60, over 24h warns. */
+/** Duration rules: empty and zero are rejected, minutes stay under 60, and a session lasts at most 24 hours. */
 export function checkDuration(value: string): DurationCheck {
   const text = value.trim();
-  if (text.length === 0) return { minutes: null, ok: false, warn: false, message: "Enter how long you played, e.g. 1h 30m." };
+  if (text.length === 0) return { minutes: null, ok: false, message: "Enter how long you played, e.g. 1h 30m." };
   const match = /^(?:(\d+)\s*h)?\s*(?:(\d+)\s*m)?$/i.exec(text);
-  if (!match) return { minutes: null, ok: false, warn: false, message: "Use hours and minutes, e.g. 1h 30m." };
+  if (!match) return { minutes: null, ok: false, message: "Use hours and minutes, e.g. 1h 30m." };
   const hours = Number(match[1] ?? 0);
   const minutes = Number(match[2] ?? 0);
-  if (minutes > 59) return { minutes: null, ok: false, warn: false, message: `Minutes go up to 59. Write ${Math.floor(minutes / 60) + hours}h ${pad(minutes % 60)}m instead.` };
+  if (minutes > 59) return { minutes: null, ok: false, message: `Minutes go up to 59. Write ${Math.floor(minutes / 60) + hours}h ${pad(minutes % 60)}m instead.` };
   const total = hours * 60 + minutes;
-  if (total === 0) return { minutes: 0, ok: false, warn: false, message: "A session needs at least 1 minute." };
-  if (total > DayMinutes) return { minutes: total, ok: true, warn: true, message: "Longer than a day. Double-check before saving." };
-  return { minutes: total, ok: true, warn: false, message: "" };
+  if (total === 0) return { minutes: 0, ok: false, message: "A session needs at least 1 minute." };
+  if (total > DayMinutes) return { minutes: total, ok: false, message: TooLongMessage };
+  return { minutes: total, ok: true, message: "" };
 }
 
-/** The duration check for the dialog; an untouched duration is always accepted as-is. */
+/** The duration check for the dialog; an untouched duration keeps its exact length, unless it is over 24 hours. */
 export function editDurationCheck(state: SessionEditState): DurationCheck {
   if (state.session !== null && state.duration.trim() === state.initialDuration) {
-    return { minutes: Math.floor(state.initialSeconds / 60), ok: true, warn: false, message: "" };
+    const minutes = Math.floor(state.initialSeconds / 60);
+    return state.initialSeconds > DayMinutes * 60
+      ? { minutes, ok: false, message: TooLongMessage }
+      : { minutes, ok: true, message: "" };
   }
   return checkDuration(state.duration);
 }

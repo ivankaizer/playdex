@@ -42,7 +42,7 @@ public sealed class DraftService(DraftRepository repository, PlaydexDbContext db
             row.SelectionJson = selected is null ? null : JsonSerializer.Serialize(selected);
             row.Warnings = [];
             row.Revision++;
-            return Task.FromResult(ToDto(row));
+            return Task.FromResult(ToDto(row, Zone(batch), DateTimeOffset.UtcNow));
         }, ct);
     }
 
@@ -73,7 +73,8 @@ public sealed class DraftService(DraftRepository repository, PlaydexDbContext db
                     continue;
                 }
                 RequirePending(snapshot, requested.Revision);
-                if (!DraftRules.TryGetTimes(snapshot.Date, snapshot.DurationMinutes, out var start, out var end))
+                if (!DraftRules.TryGetTimes(
+                        snapshot.Date, snapshot.DurationMinutes, Zone(batch), DateTimeOffset.UtcNow, out var start, out var end))
                     throw AppProblemException.Validation("Correct the date and duration before accepting.");
                 var selection = ManualService.ValidateGameSelection(snapshot.GameId, snapshot.IgdbId);
                 // IGDB fetches happen before a database transaction, then revision is checked under lock.
@@ -152,17 +153,27 @@ public sealed class DraftService(DraftRepository repository, PlaydexDbContext db
         if (row.Status != "pending") throw AppProblemException.Conflict("This draft is no longer pending.");
         if (row.Revision != revision) throw AppProblemException.Conflict("This draft changed. Reload it before continuing.");
     }
-    public static DraftBatchDto ToDto(SessionDraftBatch batch) => new(batch.Id, batch.CreatedAt,
-        batch.Rows.Where(r => r.Status != "deleted").OrderBy(r => r.Position).Select(ToDto).ToArray());
-    public static DraftRowDto ToDto(SessionDraftRow row)
+    /// <summary>The time zone the batch was drafted in: its dates are days there.</summary>
+    private static TimeZoneInfo? Zone(SessionDraftBatch batch) => LocalCalendar.FindTimeZone(batch.Timezone);
+
+    public static DraftBatchDto ToDto(SessionDraftBatch batch)
+    {
+        var zone = Zone(batch);
+        var now = DateTimeOffset.UtcNow;
+        return new(batch.Id, batch.CreatedAt,
+            batch.Rows.Where(r => r.Status != "deleted").OrderBy(r => r.Position).Select(row => ToDto(row, zone, now)).ToArray());
+    }
+
+    public static DraftRowDto ToDto(SessionDraftRow row, TimeZoneInfo? zone, DateTimeOffset now)
     {
         var selected = row.SelectionJson is null ? null : JsonSerializer.Deserialize<ManualMappingSearchResultDto>(row.SelectionJson);
         var warnings = row.Warnings.ToList();
         if (selected is null) warnings.Add("Select a game.");
-        if (!DraftRules.TryGetTimes(row.Date, row.DurationMinutes, out _, out _)) warnings.Add("Provide a valid date and positive duration.");
+        var timesProblem = DraftRules.Problem(row.Date, row.DurationMinutes, zone, now, out _, out _);
+        if (timesProblem is not null) warnings.Add(timesProblem);
         if (row.PlatformKey == "unknown") warnings.Add("Platform is Unknown. You can choose a platform or accept Unknown.");
         return new(row.Id, row.Revision, row.Status, row.Title, row.Date, row.DurationMinutes, row.PlatformKey,
-            selected, warnings.Distinct().ToArray(), row.Status == "pending" && selected is not null &&
-            DraftRules.TryGetTimes(row.Date, row.DurationMinutes, out _, out _), row.AcceptedSessionId);
+            selected, warnings.Distinct().ToArray(), row.Status == "pending" && selected is not null && timesProblem is null,
+            row.AcceptedSessionId);
     }
 }

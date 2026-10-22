@@ -11,7 +11,7 @@ public static class LocalCalendar
     /// </summary>
     public static TimeZoneInfo ResolveTimeZone(string? timeZone, int? utcOffsetMinutes = null)
     {
-        if (!string.IsNullOrWhiteSpace(timeZone) && TimeZoneInfo.TryFindSystemTimeZoneById(timeZone.Trim(), out var zone))
+        if (FindTimeZone(timeZone) is { } zone)
         {
             return zone;
         }
@@ -23,6 +23,12 @@ public static class LocalCalendar
         }
         return TimeZoneInfo.Utc;
     }
+
+    /// <summary>The time zone with this IANA or Windows id, or null when the id is missing or unknown here.</summary>
+    public static TimeZoneInfo? FindTimeZone(string? timeZone) =>
+        !string.IsNullOrWhiteSpace(timeZone) && TimeZoneInfo.TryFindSystemTimeZoneById(timeZone.Trim(), out var zone)
+            ? zone
+            : null;
 
     /// <summary>The calendar day <paramref name="instant"/> falls on in <paramref name="zone"/>.</summary>
     public static DateOnly DateOf(DateTimeOffset instant, TimeZoneInfo zone) =>
