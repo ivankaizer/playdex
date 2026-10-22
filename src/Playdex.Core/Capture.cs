@@ -28,11 +28,87 @@ public sealed record QueuedSession(
     string GameTitle, string GameId, string GameIdProvider, string Platform, int DurationInSeconds,
     DateTimeOffset StartedAt, DateTimeOffset EndedAt);
 
+/// <summary>
+/// A queued session Playdex refused for good, kept in queue.rejected.jsonl so the rest of the queue goes on: the session
+/// (or the <paramref name="Line"/> that could not be read as one) and why.
+/// </summary>
+/// <param name="Status">The HTTP status of the refusal; null for a line that could not be read.</param>
+public sealed record RejectedSession(DateTimeOffset RejectedAt, int? Status, string Reason, QueuedSession? Session, string? Line = null);
+
 [JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
 [JsonSerializable(typeof(CaptureGame))]
 [JsonSerializable(typeof(RecordedSession))]
 [JsonSerializable(typeof(QueuedSession))]
+[JsonSerializable(typeof(RejectedSession))]
 public sealed partial class CaptureJson : JsonSerializerContext;
+
+public enum DeliveryStatus
+{
+    /// <summary>Playdex took it.</summary>
+    Sent,
+
+    /// <summary>
+    /// Try again later: no answer (offline, a timeout), a server error, 429 or 408, and the answers that are about the
+    /// API key or URL rather than the session (401, 403, 404, 405). No key configured is also this.
+    /// </summary>
+    Unavailable,
+
+    /// <summary>Any other 4xx: Playdex will never take this session as it is (a bad game id, an unknown platform).</summary>
+    Rejected,
+}
+
+/// <param name="Status">The HTTP status; null without an answer.</param>
+/// <param name="Reason">Why it was not sent: the server's error message, "HTTP 503", or the connection error.</param>
+public sealed record Delivery(DeliveryStatus Outcome, int? Status = null, string? Reason = null)
+{
+    public static Delivery Sent { get; } = new(DeliveryStatus.Sent);
+
+    /// <summary>What an HTTP answer means for a sent session; <paramref name="body"/> gives a refusal its reason.</summary>
+    public static Delivery FromResponse(int status, string? body)
+    {
+        if (status is >= 200 and < 300)
+        {
+            return Sent;
+        }
+        var reason = ErrorMessage(body) is { } message ? $"HTTP {status}: {message}" : $"HTTP {status}";
+        var retry = status is < 400 or >= 500 or 401 or 403 or 404 or 405 or 408 or 429;
+        return new Delivery(retry ? DeliveryStatus.Unavailable : DeliveryStatus.Rejected, status, reason);
+    }
+
+    /// <summary>
+    /// The message of a Playdex error ({"error":{"error":"…"}}) or a problem ({"detail":"…"}), else the body itself
+    /// (shortened); null for an empty body.
+    /// </summary>
+    internal static string? ErrorMessage(string? body)
+    {
+        if (string.IsNullOrWhiteSpace(body))
+        {
+            return null;
+        }
+        try
+        {
+            using var json = JsonDocument.Parse(body);
+            var root = json.RootElement;
+            if (root.ValueKind == JsonValueKind.Object)
+            {
+                if (root.TryGetProperty("error", out var error) && error.ValueKind == JsonValueKind.Object
+                    && error.TryGetProperty("error", out var text) && text.ValueKind == JsonValueKind.String)
+                {
+                    return text.GetString();
+                }
+                if (root.TryGetProperty("detail", out var detail) && detail.ValueKind == JsonValueKind.String)
+                {
+                    return detail.GetString();
+                }
+            }
+        }
+        catch (JsonException)
+        {
+        }
+        var trimmed = body.Trim();
+        return trimmed.Length <= 300 ? trimmed : trimmed[..300] + "…";
+    }
+}
 
 public enum ApiKeyStatus
 {
@@ -99,8 +175,29 @@ public sealed class CaptureClient : IDisposable
 
     public Task<bool> EndAsync(CaptureGame game) => PostAsync("capture/sessions/end", game, CaptureJson.Default.CaptureGame);
 
-    public Task<bool> RecordAsync(RecordedSession session) =>
-        PostAsync("capture/sessions", session, CaptureJson.Default.RecordedSession);
+    /// <summary>Sends a finished session (POST /capture/sessions): sent, to try again later, or refused for good.</summary>
+    public async Task<Delivery> RecordAsync(RecordedSession session)
+    {
+        const string path = "capture/sessions";
+        if (!IsConfigured)
+        {
+            return new Delivery(DeliveryStatus.Unavailable, Reason: "no API key");
+        }
+        var started = Stopwatch.GetTimestamp();
+        try
+        {
+            using var request = Post(path, session, CaptureJson.Default.RecordedSession);
+            using var response = await _http.SendAsync(request);
+            var status = (int)response.StatusCode;
+            Log.Info($"capture: {path} -> {status} in {Metrics.MsSince(started):F0} ms");
+            return Delivery.FromResponse(status, response.IsSuccessStatusCode ? null : await response.Content.ReadAsStringAsync());
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or UriFormatException)
+        {
+            Log.Info($"capture: {path} failed after {Metrics.MsSince(started):F0} ms: {ex.Message}");
+            return new Delivery(DeliveryStatus.Unavailable, Reason: ex is TaskCanceledException ? "no answer in time" : ex.Message);
+        }
+    }
 
     /// <summary>
     /// The user's Playdex data for the launcher (GET launcher/summary, API key only), in this PC's time zone: the
@@ -192,10 +289,7 @@ public sealed class CaptureClient : IDisposable
         var started = Stopwatch.GetTimestamp();
         try
         {
-            using var request = new HttpRequestMessage(HttpMethod.Post, new Uri(BaseAddress, path));
-            request.Content = JsonContent.Create(body, type);
-            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _apiKey()!.Trim());
-            request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+            using var request = Post(path, body, type);
             using var response = await _http.SendAsync(request);
             Log.Info($"capture: {path} -> {(int)response.StatusCode} in {Metrics.MsSince(started):F0} ms");
             return response.IsSuccessStatusCode;
@@ -207,6 +301,14 @@ public sealed class CaptureClient : IDisposable
         }
     }
 
+    private HttpRequestMessage Post<T>(string path, T body, System.Text.Json.Serialization.Metadata.JsonTypeInfo<T> type)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Post, new Uri(BaseAddress, path)) { Content = JsonContent.Create(body, type) };
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _apiKey()!.Trim());
+        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+        return request;
+    }
+
     public void Dispose() => _http.Dispose();
 }
 
@@ -214,7 +316,9 @@ public sealed class CaptureClient : IDisposable
 /// Offline queue. A session is either online (start succeeded; pings keep it alive and end closes it) or offline
 /// (start failed): offline sessions are appended here whole and sent later with POST /capture/sessions, with their
 /// real start time. A session still running is kept in <see cref="Journal"/> (queue.running next to queue.jsonl), so
-/// one cut short by a crash or a shutdown comes back here at the next flush instead of being lost.
+/// one cut short by a crash or a shutdown comes back here at the next flush instead of being lost. A flush stops at the
+/// first session Playdex can't take now (offline, 5xx, 429) and keeps it and the rest; one it refuses for good (a 4xx
+/// about the session) goes to <see cref="RejectedFile"/> with the reason, and the flush goes on.
 /// </summary>
 /// <remarks>
 /// The app and the per-game launchers share the file, so every change to it holds an exclusive lock on
@@ -227,6 +331,12 @@ public sealed class SessionQueue(CaptureClient api, string? file = null) : IDisp
 
     private readonly SemaphoreSlim _gate = new(1, 1);
     private readonly string _file = file ?? Paths.QueueFile;
+
+    /// <summary>
+    /// The sessions Playdex refused for good (a 4xx that isn't about the key or the URL), one <see cref="RejectedSession"/>
+    /// per line next to the queue (queue.rejected.jsonl), so they don't hold up the rest. Nothing sends them again.
+    /// </summary>
+    public string RejectedFile => Path.ChangeExtension(_file, ".rejected.jsonl");
 
     /// <summary>The sessions running now, for <see cref="SessionRecorder"/>; recovered into the queue by <see cref="FlushAsync"/>.</summary>
     internal SessionJournal Journal { get; } = new(Path.ChangeExtension(file ?? Paths.QueueFile, ".running"));
@@ -267,6 +377,7 @@ public sealed class SessionQueue(CaptureClient api, string? file = null) : IDisp
                 return;
             }
             var remaining = new List<string>();
+            var unavailable = false;
             foreach (var line in await File.ReadAllLinesAsync(_file))
             {
                 if (string.IsNullOrWhiteSpace(line))
@@ -280,19 +391,37 @@ public sealed class SessionQueue(CaptureClient api, string? file = null) : IDisp
                 }
                 catch (JsonException)
                 {
-                    Log.Info("queue: dropping unreadable line");
-                    continue;
+                    session = null;
                 }
                 if (session is null)
                 {
+                    if (!SetAside(new RejectedSession(DateTimeOffset.Now, null, "not a queued session", null, line)))
+                    {
+                        remaining.Add(line);
+                    }
                     continue;
                 }
-                // Once one send fails, keep the rest without trying: the API is unreachable.
-                var sent = remaining.Count == 0 && await api.RecordAsync(new RecordedSession(
-                    session.GameTitle, session.GameId, session.GameIdProvider, session.Platform, session.DurationInSeconds, session.StartedAt));
-                if (!sent)
+                // Once Playdex can't be reached, keep the rest without trying.
+                if (unavailable)
                 {
                     remaining.Add(line);
+                    continue;
+                }
+                var delivery = await api.RecordAsync(new RecordedSession(
+                    session.GameTitle, session.GameId, session.GameIdProvider, session.Platform, session.DurationInSeconds, session.StartedAt));
+                switch (delivery.Outcome)
+                {
+                    case DeliveryStatus.Unavailable:
+                        unavailable = true;
+                        remaining.Add(line);
+                        break;
+                    case DeliveryStatus.Rejected:
+                        // Refused for good: set aside so the sessions behind it still go, never retried as it is.
+                        if (!SetAside(new RejectedSession(DateTimeOffset.Now, delivery.Status, delivery.Reason ?? "rejected", session)))
+                        {
+                            remaining.Add(line);
+                        }
+                        break;
                 }
             }
             if (remaining.Count == 0)
@@ -308,6 +437,28 @@ public sealed class SessionQueue(CaptureClient api, string? file = null) : IDisp
         finally
         {
             _gate.Release();
+        }
+    }
+
+    /// <summary>
+    /// Under the file lock: a session Playdex refused, or a line that isn't one, goes to <see cref="RejectedFile"/> with
+    /// the reason, and the log says so. False when it could not be written; it then stays in the queue.
+    /// </summary>
+    private bool SetAside(RejectedSession rejected)
+    {
+        var what = rejected.Session is { } session
+            ? $"{session.GameTitle} ({session.DurationInSeconds}s from {session.StartedAt:O})"
+            : "an unreadable line";
+        try
+        {
+            File.AppendAllText(RejectedFile, JsonSerializer.Serialize(rejected, CaptureJson.Default.RejectedSession) + "\n");
+            Log.Info($"ERROR queue: Playdex will not take {what}: {rejected.Reason}; moved to {Path.GetFileName(RejectedFile)}");
+            return true;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Log.Error($"queue: could not set aside {what} ({rejected.Reason}); it stays queued", ex);
+            return false;
         }
     }
 
