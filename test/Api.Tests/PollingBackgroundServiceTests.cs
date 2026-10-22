@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using Api.Infrastructure.Common;
 using Api.Modules.Metrics;
 using Api.Modules.Polling;
@@ -64,21 +65,23 @@ public sealed class PollingBackgroundServiceTests
     }
 
     [Fact]
-    public void BackoffTrackerIsSafeToUseFromParallelPolls()
+    public async Task AFailureWhileRecordingTheBackoffDoesNotEscape()
     {
-        var tracker = new CredentialBackoffTracker();
-        var now = DateTimeOffset.UnixEpoch;
+        var recorder = new RecordingPollFailedHandler();
+        await using var services = new ServiceCollection()
+            .AddLogging()
+            .AddScoped<EventBus>()
+            .AddSingleton<IProviderClient>(new ThrowingClient(new ProviderPollException("down")))
+            .AddSingleton<ICredentialBackoff>(new UnavailableBackoff())
+            .AddSingleton<IEventSubscriber<PollFailed>>(recorder)
+            .BuildServiceProvider();
+        var metrics = new MetricsCollector();
 
-        Parallel.For(0, 2_000, index =>
-        {
-            var id = index % 50;
-            tracker.RecordFailure(id, now);
-            tracker.IsEligible(id, now, out _);
-            if (index % 7 == 0) tracker.Reset(id);
-        });
+        await CreatePolling(services, metrics).PollCredential(
+            new ActiveCredential(new IntegrationCredentials { Id = 3 }, "steam"), CancellationToken.None);
 
-        tracker.Prune([]);
-        Assert.True(tracker.IsEligible(1, now, out _));
+        Assert.Empty(recorder.Events);
+        Assert.Equal(1, metrics.Snapshot().PollFailureTotal);
     }
 
     private static ServiceProvider CreateServices(IProviderClient client, RecordingPollFailedHandler recorder) =>
@@ -86,6 +89,7 @@ public sealed class PollingBackgroundServiceTests
             .AddLogging()
             .AddScoped<EventBus>()
             .AddSingleton(client)
+            .AddSingleton<ICredentialBackoff>(new InMemoryBackoff())
             .AddSingleton<IEventSubscriber<PollFailed>>(recorder)
             .BuildServiceProvider();
 
@@ -155,5 +159,45 @@ public sealed class PollingBackgroundServiceTests
             Events.Add(domainEvent);
             return Task.CompletedTask;
         }
+    }
+
+    /// <summary>Counts failures like the database does; CredentialBackoffTests covers the real one.</summary>
+    private sealed class InMemoryBackoff : ICredentialBackoff
+    {
+        private readonly ConcurrentDictionary<long, int> _failures = new();
+
+        public Task<CredentialFailure> RecordFailure(
+            long credentialId,
+            DateTimeOffset now,
+            TimeSpan? retryAfter,
+            bool authenticationFailure,
+            CancellationToken ct)
+        {
+            var failures = _failures.AddOrUpdate(credentialId, 1, (_, count) => count + 1);
+            return Task.FromResult(new CredentialFailure(TimeSpan.FromSeconds(5), failures, 0, now));
+        }
+
+        public Task Defer(long credentialId, DateTimeOffset until, CancellationToken ct) => Task.CompletedTask;
+
+        public Task Reset(long credentialId, CancellationToken ct)
+        {
+            _failures.TryRemove(credentialId, out _);
+            return Task.CompletedTask;
+        }
+    }
+
+    private sealed class UnavailableBackoff : ICredentialBackoff
+    {
+        public Task<CredentialFailure> RecordFailure(
+            long credentialId,
+            DateTimeOffset now,
+            TimeSpan? retryAfter,
+            bool authenticationFailure,
+            CancellationToken ct) =>
+            Task.FromException<CredentialFailure>(new NpgsqlException("database is down"));
+
+        public Task Defer(long credentialId, DateTimeOffset until, CancellationToken ct) => Task.CompletedTask;
+
+        public Task Reset(long credentialId, CancellationToken ct) => Task.CompletedTask;
     }
 }

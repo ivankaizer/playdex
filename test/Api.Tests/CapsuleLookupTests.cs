@@ -62,9 +62,10 @@ public sealed class CapsuleLookupTests(PostgresFixture postgres)
 
         await scope.Polling.PollCredential(scope.Credential, CancellationToken.None);
 
-        Assert.False(scope.Polling.Backoff.IsEligible(scope.Credential.Credential.Id, before.AddMinutes(9), out _));
-        Assert.True(scope.Polling.Backoff.IsEligible(scope.Credential.Credential.Id, before.AddMinutes(11), out _));
-        Assert.True(scope.Polling.Backoff.RecordFailure(scope.Credential.Credential.Id, before).IsFirst);
+        var backoff = await scope.LoadBackoff();
+        Assert.Equal(0, backoff.Failures);
+        Assert.InRange(backoff.NextPollAt, before.AddMinutes(9), before.AddMinutes(11));
+        Assert.True((await scope.RecordFailure(before)).IsFirst);
     }
 
     private sealed class Scope : IAsyncDisposable
@@ -95,6 +96,20 @@ public sealed class CapsuleLookupTests(PostgresFixture postgres)
 
         public PollingBackgroundService Polling { get; }
         public ActiveCredential Credential { get; }
+        public async Task<IntegrationPollBackoff> LoadBackoff()
+        {
+            using var scope = _services.CreateScope();
+            return await scope.ServiceProvider.GetRequiredService<PlaydexDbContext>().IntegrationPollBackoffs
+                .AsNoTracking()
+                .SingleAsync(row => row.IntegrationId == _integrationId);
+        }
+
+        public async Task<CredentialFailure> RecordFailure(DateTimeOffset now)
+        {
+            using var scope = _services.CreateScope();
+            return await scope.ServiceProvider.GetRequiredService<ICredentialBackoff>().RecordFailure(
+                _integrationId, now, retryAfter: null, authenticationFailure: false, CancellationToken.None);
+        }
 
         public static async Task<Scope> Create(PostgresFixture postgres, XboxClient client)
         {
@@ -122,6 +137,7 @@ public sealed class CapsuleLookupTests(PostgresFixture postgres)
                 }))
                 .AddScoped<IGameResolver, GameResolver>()
                 .AddScoped<PollingRepository>()
+                .AddScoped<ICredentialBackoff, CredentialBackoff>()
                 .AddScoped<EventBus>()
                 .AddSingleton<IProviderClient>(client)
                 .BuildServiceProvider();

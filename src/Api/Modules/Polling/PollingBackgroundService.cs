@@ -19,9 +19,6 @@ public sealed partial class PollingBackgroundService(
 {
     internal const string ActivitySourceName = "Playdex.Api.Polling";
     private static readonly ActivitySource ActivitySource = new(ActivitySourceName);
-    private readonly CredentialBackoffTracker _backoff = new();
-
-    internal CredentialBackoffTracker Backoff => _backoff;
 
     [LoggerMessage(Level = LogLevel.Information, Message = "PollingBackgroundService will start after {Delay} ms")]
     private partial void LogWillStartAfter(int delay);
@@ -55,6 +52,9 @@ public sealed partial class PollingBackgroundService(
 
     [LoggerMessage(Level = LogLevel.Error, Message = "Event handler failed for {EventType}")]
     private partial void LogEventHandlerFailed(Exception exception, string eventType);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Could not update the backoff of credential {CredentialId}")]
+    private partial void LogBackoffUpdateFailed(Exception exception, long credentialId);
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -119,19 +119,18 @@ public sealed partial class PollingBackgroundService(
         }
         activity?.SetTag("polling.credentials.count", credentials.Count);
         LogLoadedCredentials(credentials.Count);
-        _backoff.Prune(credentials.Select(row => row.Credential.Id));
 
         var now = DateTimeOffset.UtcNow;
         var due = new List<ActiveCredential>(credentials.Count);
         foreach (var active in credentials)
         {
-            if (_backoff.IsEligible(active.Credential.Id, now, out var nextEligibleAt))
+            if (active.NextPollAt is { } nextPollAt && nextPollAt > now)
             {
-                due.Add(active);
+                LogSkippingCredential(active.Credential.Id, nextPollAt);
             }
             else
             {
-                LogSkippingCredential(active.Credential.Id, nextEligibleAt);
+                due.Add(active);
             }
         }
 
@@ -157,17 +156,13 @@ public sealed partial class PollingBackgroundService(
     /// <summary>Polls one credential; a failure is recorded and never escapes, except shutdown cancellation.</summary>
     internal async Task PollCredential(ActiveCredential active, CancellationToken stoppingToken)
     {
+        DateTimeOffset? deferUntil;
         try
         {
             using var credentialScope = serviceProvider
                 .GetRequiredService<IServiceScopeFactory>()
                 .CreateScope();
-            var deferUntil = await ProcessCredential(active, credentialScope.ServiceProvider, stoppingToken);
-            _backoff.Reset(active.Credential.Id);
-            if (deferUntil is { } until)
-            {
-                _backoff.Defer(active.Credential.Id, until);
-            }
+            deferUntil = await ProcessCredential(active, credentialScope.ServiceProvider, stoppingToken);
         }
         catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
         {
@@ -176,29 +171,76 @@ public sealed partial class PollingBackgroundService(
         }
         catch (Exception ex)
         {
-            var retryAfter = ex is ProviderPollException providerFailure
-                ? providerFailure.RetryAfter
-                : null;
-            var failure = _backoff.RecordFailure(
-                active.Credential.Id, DateTimeOffset.UtcNow, retryAfter);
-            LogCredentialFailed(ex, active.Credential.Id, active.PlatformKey, failure.Delay, ex.Message);
-            metrics.RecordPollFailure(active.PlatformKey, DateTimeOffset.UtcNow);
-            if (failure.IsFirst)
+            await RecordFailure(active, ex, stoppingToken);
+            return;
+        }
+
+        await RecordSuccess(active, deferUntil, stoppingToken);
+    }
+
+    private async Task RecordSuccess(ActiveCredential active, DateTimeOffset? deferUntil, CancellationToken ct)
+    {
+        if (deferUntil is null && active.NextPollAt is null)
+        {
+            // Healthy before and after: nothing to write.
+            return;
+        }
+
+        try
+        {
+            using var scope = serviceProvider.GetRequiredService<IServiceScopeFactory>().CreateScope();
+            var backoff = scope.ServiceProvider.GetRequiredService<ICredentialBackoff>();
+            if (deferUntil is { } until)
             {
-                // Notify when a working integration starts failing, not on every retry: an expired token would
-                // otherwise send a message every backoff interval (~144 a day).
-                using var notificationScope = serviceProvider
-                    .GetRequiredService<IServiceScopeFactory>()
-                    .CreateScope();
-                await SafePublish(
-                    notificationScope.ServiceProvider.GetRequiredService<EventBus>(),
-                    new PollFailed(
-                        active.Credential.Id,
-                        active.PlatformKey,
-                        ex.Message,
-                        failure.Delay),
-                    stoppingToken);
+                await backoff.Defer(active.Credential.Id, until, ct);
             }
+            else
+            {
+                await backoff.Reset(active.Credential.Id, ct);
+            }
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException || !ct.IsCancellationRequested)
+        {
+            LogBackoffUpdateFailed(ex, active.Credential.Id);
+        }
+    }
+
+    private async Task RecordFailure(ActiveCredential active, Exception exception, CancellationToken ct)
+    {
+        metrics.RecordPollFailure(active.PlatformKey, DateTimeOffset.UtcNow);
+        var providerFailure = exception as ProviderPollException;
+        using var scope = serviceProvider.GetRequiredService<IServiceScopeFactory>().CreateScope();
+        CredentialFailure failure;
+        try
+        {
+            failure = await scope.ServiceProvider.GetRequiredService<ICredentialBackoff>().RecordFailure(
+                active.Credential.Id,
+                DateTimeOffset.UtcNow,
+                providerFailure?.RetryAfter,
+                providerFailure?.IsAuthenticationFailure == true,
+                ct);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException || !ct.IsCancellationRequested)
+        {
+            LogBackoffUpdateFailed(ex, active.Credential.Id);
+            LogCredentialFailed(exception, active.Credential.Id, active.PlatformKey, TimeSpan.Zero, exception.Message);
+            return;
+        }
+
+        LogCredentialFailed(exception, active.Credential.Id, active.PlatformKey, failure.Delay, exception.Message);
+        if (failure.IsFirst)
+        {
+            // Notify when a working integration starts failing, not on every retry: an expired token would
+            // otherwise send a message every backoff interval (~144 a day). The count is shared by every instance,
+            // so only one of them sees the first failure.
+            await SafePublish(
+                scope.ServiceProvider.GetRequiredService<EventBus>(),
+                new PollFailed(
+                    active.Credential.Id,
+                    active.PlatformKey,
+                    exception.Message,
+                    failure.Delay),
+                ct);
         }
     }
 
@@ -334,88 +376,3 @@ public sealed partial class PollingBackgroundService(
         }
     }
 }
-
-/// <param name="Delay">How long the credential is skipped.</param>
-/// <param name="IsFirst">The credential was healthy until this failure.</param>
-public sealed record CredentialFailure(TimeSpan Delay, bool IsFirst);
-
-/// <summary>Per-credential failure backoff. Thread-safe: credentials are polled in parallel.</summary>
-public sealed class CredentialBackoffTracker
-{
-    private static readonly TimeSpan BaseDelay = TimeSpan.FromSeconds(5);
-    private static readonly TimeSpan MaximumDelay = TimeSpan.FromMinutes(10);
-    private readonly Dictionary<long, CredentialBackoffState> _states = [];
-    private readonly Lock _gate = new();
-
-    public bool IsEligible(long credentialId, DateTimeOffset now, out DateTimeOffset nextEligibleAt)
-    {
-        lock (_gate)
-        {
-            if (_states.TryGetValue(credentialId, out var state) && state.NextEligibleAt > now)
-            {
-                nextEligibleAt = state.NextEligibleAt;
-                return false;
-            }
-        }
-
-        nextEligibleAt = now;
-        return true;
-    }
-
-    public CredentialFailure RecordFailure(
-        long credentialId,
-        DateTimeOffset now,
-        TimeSpan? retryAfter = null)
-    {
-        lock (_gate)
-        {
-            var failures = _states.TryGetValue(credentialId, out var current)
-                ? current.Failures + 1
-                : 1;
-            var exponent = Math.Min(failures - 1, 20);
-            var exponentialMs = Math.Min(
-                BaseDelay.TotalMilliseconds * Math.Pow(2, exponent),
-                MaximumDelay.TotalMilliseconds);
-            var delay = TimeSpan.FromMilliseconds(Math.Max(
-                exponentialMs,
-                retryAfter?.TotalMilliseconds ?? 0));
-            _states[credentialId] = new CredentialBackoffState(failures, now + delay);
-            return new CredentialFailure(delay, IsFirst: failures == 1);
-        }
-    }
-
-    /// <summary>Skips a working credential until <paramref name="until"/> without counting a failure.</summary>
-    public void Defer(long credentialId, DateTimeOffset until)
-    {
-        lock (_gate)
-        {
-            var current = _states.GetValueOrDefault(credentialId);
-            if (current is null || current.NextEligibleAt < until)
-            {
-                _states[credentialId] = new CredentialBackoffState(current?.Failures ?? 0, until);
-            }
-        }
-    }
-
-    public void Reset(long credentialId)
-    {
-        lock (_gate)
-        {
-            _states.Remove(credentialId);
-        }
-    }
-
-    public void Prune(IEnumerable<long> activeCredentialIds)
-    {
-        var active = activeCredentialIds.ToHashSet();
-        lock (_gate)
-        {
-            foreach (var credentialId in _states.Keys.Where(id => !active.Contains(id)).ToArray())
-            {
-                _states.Remove(credentialId);
-            }
-        }
-    }
-}
-
-public sealed record CredentialBackoffState(int Failures, DateTimeOffset NextEligibleAt);

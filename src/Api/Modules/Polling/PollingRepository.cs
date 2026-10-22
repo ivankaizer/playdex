@@ -115,10 +115,13 @@ public sealed class PollingRepository(PlaydexDbContext db, IGameResolver gameRes
 
     public async Task<List<ActiveCredential>> LoadActiveCredentials(CancellationToken ct)
     {
-        var rows = await db.Integrations
-            .AsNoTracking()
-            .Where(pc => pc.Active && pc.Type != IntegrationType.Api)
-            .Select(pc => new ActiveCredentialRow
+        var rows = await (
+            from pc in db.Integrations.AsNoTracking()
+            where pc.Active && pc.Type != IntegrationType.Api
+            join backoff in db.IntegrationPollBackoffs.AsNoTracking()
+                on pc.Id equals backoff.IntegrationId into backoffs
+            from backoff in backoffs.DefaultIfEmpty()
+            select new ActiveCredentialRow
             {
                 Id = pc.Id,
                 UserId = pc.UserId,
@@ -129,6 +132,7 @@ public sealed class PollingRepository(PlaydexDbContext db, IGameResolver gameRes
                 Active = pc.Active,
                 PlatformId = pc.PlatformId!.Value,
                 Type = pc.Type,
+                NextPollAt = backoff == null ? null : backoff.NextPollAt,
             })
             .ToListAsync(ct);
 
@@ -144,7 +148,8 @@ public sealed class PollingRepository(PlaydexDbContext db, IGameResolver gameRes
                 Active = r.Active,
                 PlatformId = r.PlatformId,
             },
-            GetProviderKey(r.Type)
+            GetProviderKey(r.Type),
+            r.NextPollAt
         )).ToList();
     }
 
@@ -173,6 +178,7 @@ public sealed class PollingRepository(PlaydexDbContext db, IGameResolver gameRes
         public bool Active { get; set; }
         public long PlatformId { get; set; }
         public IntegrationType Type { get; set; }
+        public DateTimeOffset? NextPollAt { get; set; }
     }
 
     internal static long GetEffectiveSessionPlatformId(Integration integration) =>
@@ -192,9 +198,14 @@ public sealed class PollingRepository(PlaydexDbContext db, IGameResolver gameRes
 /// A platform credential enriched with its platform key for routing
 /// to the correct <see cref="IProviderClient"/>.
 /// </summary>
+/// <param name="NextPollAt">
+/// Set when the credential has backoff state (it is failing, or its provider asked to be left alone): it is not
+/// polled before then.
+/// </param>
 public sealed record ActiveCredential(
     IntegrationCredentials Credential,
-    string PlatformKey
+    string PlatformKey,
+    DateTimeOffset? NextPollAt = null
 );
 
 public enum SessionTransitionKind

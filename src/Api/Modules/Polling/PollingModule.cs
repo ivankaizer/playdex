@@ -14,6 +14,7 @@ public static class PollingModule
         services.Configure<IgdbOptions>(configuration.GetSection("Polling:Igdb"));
 
         services.AddScoped<PollingRepository>();
+        services.AddScoped<ICredentialBackoff, CredentialBackoff>();
         services.AddSingleton<PsnTokenCache>();
         services.AddSingleton<IgdbTokenCache>();
         services.AddHttpClient<IProviderClient, SteamClient>(c => c.Timeout = TimeSpan.FromSeconds(15));

@@ -75,7 +75,11 @@ public interface IProviderGameMetadataClient
 public sealed class ProviderPollException(
     string message,
     TimeSpan? retryAfter = null,
-    Exception? innerException = null) : Exception(message, innerException)
+    Exception? innerException = null,
+    bool authenticationFailure = false) : Exception(message, innerException)
 {
     public TimeSpan? RetryAfter { get; } = retryAfter;
+
+    /// <summary>The provider rejected the credential (an expired token, a revoked key): retrying will not help.</summary>
+    public bool IsAuthenticationFailure { get; } = authenticationFailure;
 }
