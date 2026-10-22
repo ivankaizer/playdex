@@ -218,7 +218,7 @@ function TopBar({ tab }: { tab: (typeof DESK_TABS)[number] }) {
     <header className="dk-top">
       <span className="brand">
         <span className="brand-dot" />
-        PLAYDEX
+        <span className="dk-top-label">PLAYDEX</span>
       </span>
       <nav className="dk-tabs" aria-label="Sections" data-nav-group="tabs">
         {DESK_TABS.map((t) => (
@@ -249,9 +249,10 @@ function TopBar({ tab }: { tab: (typeof DESK_TABS)[number] }) {
           className="dk-btn dk-btn-outline dk-btn-sm"
           data-nav
           data-kind="desk"
+          title="Big Picture"
           onClick={() => switchMode("bigPicture").catch((e: unknown) => showToast(e instanceof Error ? e.message : String(e)))}
         >
-          <Gamepad2 aria-hidden /> Big Picture
+          <Gamepad2 aria-hidden /> <span className="dk-top-label">Big Picture</span>
         </button>
         <Account />
       </div>
@@ -284,7 +285,7 @@ function Playing({ gameId, since }: { gameId: string; since: number | null }) {
   const game = gameById(gameId);
   const elapsed = useElapsed(since);
   return (
-    <div data-nav-group="now-playing">
+    <div className="dk-live-wrap" data-nav-group="now-playing">
       <button className="dk-live" data-nav data-kind="now-playing" aria-label={`Now playing ${game.title}. Switch to the game`} onClick={() => resumeGame(gameId)}>
         <span className="live-dot" aria-hidden />
         <span className="dk-live-label">Playing</span>
@@ -306,9 +307,9 @@ function SyncStatus() {
     );
   }
   return (
-    <span className="dk-sync" title={summary ? `Updated ${new Date(summary.generatedAt).toLocaleTimeString()}` : undefined}>
+    <span className="dk-sync" title={summary ? `Synced, updated ${new Date(summary.generatedAt).toLocaleTimeString()}` : "Syncing…"}>
       <span className="sync-dot" aria-hidden />
-      {summary ? "Synced" : "Syncing…"}
+      <span className="dk-top-label">{summary ? "Synced" : "Syncing…"}</span>
     </span>
   );
 }
