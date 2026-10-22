@@ -19,6 +19,7 @@ using Api.Modules.Posters;
 using Api.Modules.Privacy;
 using Api.Modules.Providers;
 using Api.Modules.Recap;
+using Api.Modules.Sessions;
 using Api.Modules.Settings;
 using Api.Observability;
 
@@ -78,6 +79,7 @@ builder.Services
     .AddSettings()
     .AddPrivacy()
     .AddGames()
+    .AddSessions()
     .AddManual()
     .AddApiCapture()
     .AddLauncher()

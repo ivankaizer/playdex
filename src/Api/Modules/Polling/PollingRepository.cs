@@ -1,10 +1,11 @@
 using Microsoft.EntityFrameworkCore;
 using Playdex.Persistence;
 using Api.Modules.Games;
+using Api.Modules.Sessions;
 
 namespace Api.Modules.Polling;
 
-public sealed class PollingRepository(PlaydexDbContext db, IGameResolver gameResolver)
+public sealed class PollingRepository(PlaydexDbContext db, IGameResolver gameResolver, SessionLifecycle sessions)
 {
     public async Task<SuccessfulPollOutcome> ApplySuccessfulPoll(
         long credentialId,
@@ -14,8 +15,7 @@ public sealed class PollingRepository(PlaydexDbContext db, IGameResolver gameRes
         CancellationToken ct)
     {
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
-        await db.Database.ExecuteSqlInterpolatedAsync(
-            $"SELECT pg_advisory_xact_lock({credentialId})", ct);
+        await sessions.LockIntegration(credentialId, ct);
 
         var integration = await db.Integrations.SingleAsync(row => row.Id == credentialId, ct);
         var platformId = GetEffectiveSessionPlatformId(integration);
@@ -53,51 +53,12 @@ public sealed class PollingRepository(PlaydexDbContext db, IGameResolver gameRes
             RawPayload = rawPayload,
             CreatedAt = DateTimeOffset.UtcNow,
         });
-
-        var active = await db.PlaySessions
-            .Where(row => row.IntegrationId == credentialId && row.EndedAt == null)
-            .OrderByDescending(row => row.StartedAt)
-            .FirstOrDefaultAsync(ct);
-        var transitions = new List<SessionTransition>();
-        PlaySession? startedSession = null;
-        var sessionGameId = ignored ? null : gameId;
-
-        if (active is not null && active.GameId != sessionGameId)
-        {
-            active.EndedAt = polledAt;
-            active.UpdatedAt = DateTimeOffset.UtcNow;
-            transitions.Add(SessionTransition.Ended(active, polledAt, notify: !ignored));
-            active = null;
-        }
-
-        if (active is not null)
-        {
-            active.UpdatedAt = polledAt;
-        }
-        else if (sessionGameId is not null)
-        {
-            var session = new PlaySession
-            {
-                GameId = sessionGameId.Value,
-                UserId = integration.UserId,
-                PlatformId = platformId,
-                CaptureMethod = CaptureMethod.Polling,
-                IntegrationId = credentialId,
-                StartedAt = polledAt,
-                CreatedAt = DateTimeOffset.UtcNow,
-                UpdatedAt = polledAt,
-            };
-            db.PlaySessions.Add(session);
-            startedSession = session;
-        }
-
         await db.SaveChangesAsync(ct);
-        if (startedSession is not null)
-        {
-            transitions.Add(SessionTransition.Started(startedSession, notify: true));
-        }
+
+        await sessions.ApplyPoll(
+            credentialId, integration.UserId, ignored ? null : gameId, platformId, polledAt, ct);
         await transaction.CommitAsync(ct);
-        return new SuccessfulPollOutcome(gameId, ignored, needsCapsule, transitions);
+        return new SuccessfulPollOutcome(gameId, ignored, needsCapsule);
     }
 
     public async Task<List<ActiveCredential>> LoadActiveCredentials(CancellationToken ct)
@@ -206,45 +167,7 @@ public sealed record ActiveCredential(
     string PlatformKey
 );
 
-public enum SessionTransitionKind
-{
-    Started,
-    Ended,
-}
-
-public sealed record SessionTransition(
-    SessionTransitionKind Kind,
-    long SessionId,
-    long CredentialId,
-    long GameId,
-    DateTimeOffset StartedAt,
-    DateTimeOffset? EndedAt,
-    bool Notify)
-{
-    public static SessionTransition Started(PlaySession session, bool notify) => new(
-        SessionTransitionKind.Started,
-        session.Id,
-        session.IntegrationId!.Value,
-        session.GameId,
-        session.StartedAt,
-        null,
-        notify);
-
-    public static SessionTransition Ended(
-        PlaySession session,
-        DateTimeOffset endedAt,
-        bool notify) => new(
-            SessionTransitionKind.Ended,
-            session.Id,
-            session.IntegrationId!.Value,
-            session.GameId,
-            session.StartedAt,
-            endedAt,
-            notify);
-}
-
 public sealed record SuccessfulPollOutcome(
     long? GameId,
     bool Ignored,
-    bool NeedsCapsule,
-    IReadOnlyList<SessionTransition> Transitions);
+    bool NeedsCapsule);

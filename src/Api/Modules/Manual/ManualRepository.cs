@@ -14,23 +14,7 @@ public sealed class ManualRepository(PlaydexDbContext db)
         return result;
     }
 
-    internal Task AcquireUserStartLock(long userId, CancellationToken ct)
-    {
-        var key = $"manual-session-user:{userId}";
-        return db.Database.ExecuteSqlInterpolatedAsync(
-            $"SELECT pg_advisory_xact_lock(hashtextextended({key}, 0))",
-            ct);
-    }
-
-    public Task<int> EndActiveSessions(long userId, CancellationToken ct)
-    {
-        var now = DateTimeOffset.UtcNow;
-        return db.PlaySessions
-            .Where(session => session.UserId == userId && session.CaptureMethod == CaptureMethod.Manual && session.EndedAt == null)
-            .ExecuteUpdateAsync(set => set.SetProperty(session => session.EndedAt, now).SetProperty(session => session.UpdatedAt, now), ct);
-    }
-
-    public async Task<long> CreatePlaySession(long userId, long gameId, long platformId, DateTimeOffset startedAt, DateTimeOffset? endedAt, CancellationToken ct)
+    public async Task<long> CreatePlaySession(long userId, long gameId, long platformId, DateTimeOffset startedAt, DateTimeOffset endedAt, CancellationToken ct)
     {
         var now = DateTimeOffset.UtcNow;
         var session = new PlaySession { UserId = userId, GameId = gameId, PlatformId = platformId, CaptureMethod = CaptureMethod.Manual, StartedAt = startedAt, EndedAt = endedAt, CreatedAt = now, UpdatedAt = now };

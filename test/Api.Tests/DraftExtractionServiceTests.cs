@@ -54,7 +54,8 @@ public sealed class DraftExtractionServiceTests(PostgresFixture postgres)
             manualRepository,
             new IgdbClient(new HttpClient(), igdbOptions),
             igdbOptions,
-            new GameResolver(db));
+            new GameResolver(db),
+            TestSessions.Lifecycle(db));
         var drafts = new DraftService(draftRepository, db, manual, manualRepository);
         var stub = new StubExtractor([new("Assassin's Creed IV: Black Flag", "2026-09-09", 60, "unknown", ["Platform: not indicated."])]);
         var service = new DraftExtractionService(
