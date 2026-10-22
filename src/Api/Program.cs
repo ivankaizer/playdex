@@ -160,7 +160,7 @@ api
     .MapAdmin();
 
 app.MapHealthChecks("/health/live", new HealthCheckOptions { Predicate = _ => false });
-app.MapHealthChecks("/health/ready");
+app.MapHealthChecks("/health/ready", HealthEndpoints.Readiness);
 
 app.MapOpenApi("/swagger/json");
 app.MapGet("/swagger", () => Results.Content("""
