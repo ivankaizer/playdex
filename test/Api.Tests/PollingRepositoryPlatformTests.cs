@@ -91,6 +91,67 @@ public sealed class PollingRepositoryPlatformTests(PostgresFixture postgres)
         }
     }
 
+    [Fact]
+    public async Task RawPayloadIsStoredOnlyWhenThePlayedGameChanges()
+    {
+        if (!postgres.IsConfigured) return;
+
+        await using var db = CreateDb();
+        var now = DateTimeOffset.UtcNow;
+        var suffix = Guid.NewGuid().ToString("n");
+        var steam = await db.Platforms.SingleAsync(platform => platform.Key == "steam");
+        var user = new User { Email = $"poll-payload-{suffix}@example.test", CreatedAt = now, UpdatedAt = now };
+        var game = new Game { Title = $"Poll payload {suffix}", CreatedAt = now, UpdatedAt = now };
+        db.AddRange(user, game);
+        await db.SaveChangesAsync();
+        var integration = new Integration
+        {
+            UserId = user.Id,
+            Type = IntegrationType.Steam,
+            PlatformId = steam.Id,
+            ApiKey = "key",
+            AccountId = $"steam-{suffix}",
+            Active = true,
+            CreatedAt = now,
+            UpdatedAt = now,
+        };
+        db.Integrations.Add(integration);
+        await db.SaveChangesAsync();
+
+        try
+        {
+            var repository = new PollingRepository(db, new FixedGameResolver(game.Id));
+            var playing = new CurrentlyPlayingResult("Game", "570", null, "steam");
+            CurrentlyPlayingResult?[] polls = [playing, playing, null, null, playing];
+            for (var index = 0; index < polls.Length; index++)
+            {
+                await repository.ApplySuccessfulPoll(
+                    integration.Id, polls[index], now.AddMinutes(index), $$"""{"poll":{{index}}}""", default);
+            }
+
+            var payloads = await db.PollResults.AsNoTracking()
+                .Where(row => row.IntegrationId == integration.Id)
+                .OrderBy(row => row.PolledAt)
+                .Select(row => row.RawPayload)
+                .ToListAsync();
+            Assert.Equal(5, payloads.Count);
+            Assert.NotNull(payloads[0]);
+            Assert.Null(payloads[1]);
+            Assert.NotNull(payloads[2]);
+            Assert.Null(payloads[3]);
+            Assert.NotNull(payloads[4]);
+        }
+        finally
+        {
+            db.ChangeTracker.Clear();
+            await db.PollResults.Where(item => item.IntegrationId == integration.Id).ExecuteDeleteAsync();
+            await db.PlaySessions.Where(item => item.IntegrationId == integration.Id).ExecuteDeleteAsync();
+            await db.Integrations.Where(item => item.Id == integration.Id).ExecuteDeleteAsync();
+            await db.Games.Where(item => item.Id == game.Id).ExecuteDeleteAsync();
+            await db.Users.Where(item => item.Id == user.Id).ExecuteDeleteAsync();
+        }
+    }
+
     private PlaydexDbContext CreateDb() => new(
         new DbContextOptionsBuilder<PlaydexDbContext>()
             .UseNpgsql(

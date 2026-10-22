@@ -45,14 +45,12 @@ public sealed class PollingRepository(PlaydexDbContext db, IGameResolver gameRes
                 .AnyAsync(row => row.GameId == gameId, ct);
         }
 
-        db.PollResults.Add(new PollResult
-        {
-            IntegrationId = credentialId,
-            GameExternalIdentityId = identityId,
-            PolledAt = polledAt,
-            RawPayload = rawPayload,
-            CreatedAt = DateTimeOffset.UtcNow,
-        });
+        var previousPoll = await db.PollResults
+            .AsNoTracking()
+            .Where(row => row.IntegrationId == credentialId)
+            .OrderByDescending(row => row.PolledAt)
+            .Select(row => new { row.GameExternalIdentityId })
+            .FirstOrDefaultAsync(ct);
 
         var active = await db.PlaySessions
             .Where(row => row.IntegrationId == credentialId && row.EndedAt == null)
@@ -90,6 +88,21 @@ public sealed class PollingRepository(PlaydexDbContext db, IGameResolver gameRes
             db.PlaySessions.Add(session);
             startedSession = session;
         }
+
+        // A row per poll records when the integration was last polled; the raw response (large, and full of
+        // profile data) is kept only when what the user plays changed.
+        var changed = previousPoll is null
+            || previousPoll.GameExternalIdentityId != identityId
+            || transitions.Count > 0
+            || startedSession is not null;
+        db.PollResults.Add(new PollResult
+        {
+            IntegrationId = credentialId,
+            GameExternalIdentityId = identityId,
+            PolledAt = polledAt,
+            RawPayload = changed ? rawPayload : null,
+            CreatedAt = DateTimeOffset.UtcNow,
+        });
 
         await db.SaveChangesAsync(ct);
         if (startedSession is not null)

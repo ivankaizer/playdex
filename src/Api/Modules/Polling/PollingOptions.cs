@@ -6,8 +6,8 @@ public class PollingOptions
     public bool UseWiremock { get; set; }
 
     /// <summary>
-    /// Days to keep raw provider responses (poll_results) before the hourly cleanup deletes them;
-    /// 0 or less keeps them forever.
+    /// Days to keep poll_results (one row per successful poll; the raw provider response only when the detected game
+    /// changed) before the hourly cleanup deletes them; 0 or less keeps them forever.
     /// </summary>
     public int PollResultRetentionDays { get; set; } = 30;
     public SteamOptions Steam { get; set; } = new();
