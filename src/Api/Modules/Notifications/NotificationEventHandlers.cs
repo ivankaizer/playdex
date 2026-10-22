@@ -11,13 +11,16 @@ namespace Api.Modules.Notifications;
 public sealed class NotificationEventHandlers(AppriseClient client, PendingNotifications pending) :
     IEventSubscriber<SessionStarted>,
     IEventSubscriber<SessionEnded>,
-    IEventSubscriber<PollFailed>
+    IEventSubscriber<PollFailed>,
+    IEventSubscriber<IntegrationPaused>
 {
     public Task Handle(SessionStarted domainEvent, CancellationToken ct) => Enqueue(domainEvent);
 
     public Task Handle(SessionEnded domainEvent, CancellationToken ct) => Enqueue(domainEvent);
 
     public Task Handle(PollFailed domainEvent, CancellationToken ct) => Enqueue(domainEvent);
+
+    public Task Handle(IntegrationPaused domainEvent, CancellationToken ct) => Enqueue(domainEvent);
 
     private Task Enqueue(object domainEvent)
     {

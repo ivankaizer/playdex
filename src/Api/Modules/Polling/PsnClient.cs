@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text;
@@ -33,7 +34,7 @@ public sealed class PsnClient(
         var accountId = credential.AccountId;
 
         if (string.IsNullOrEmpty(npsso))
-            throw new ProviderPollException("PSN credential is missing an NPSSO token.");
+            throw new ProviderPollException("PSN credential is missing an NPSSO token.", authenticationFailure: true);
 
         var accessToken = await GetAccessToken(credential.Id, npsso, ct);
 
@@ -44,7 +45,7 @@ public sealed class PsnClient(
                 throw new ProviderPollException("PSN access token did not contain an account ID.");
         }
 
-        var (presence, rawPresence) = await GetBasicPresence(accessToken, accountId, ct);
+        var (presence, rawPresence) = await GetBasicPresence(credential.Id, accessToken, accountId, ct);
 
         var titleInfo = presence.BasicPresence?.GameTitleInfoList?.FirstOrDefault();
         if (titleInfo?.TitleName is null)
@@ -100,9 +101,15 @@ public sealed class PsnClient(
         if (!string.IsNullOrEmpty(code))
             return code;
 
+        // Sony answers an expired or signed-out NPSSO with a redirect (or a 4xx) that carries no code; a server
+        // error or a rate limit says nothing about the token.
+        var status = (int)response.StatusCode;
+        var rejected = status is >= 300 and < 400
+            || response.StatusCode is HttpStatusCode.BadRequest or HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden;
         throw new ProviderPollException(
-            $"PSN authorize request returned {(int)response.StatusCode} without an access code. " +
-            "The NPSSO token may be invalid or expired.");
+            $"PSN authorize request returned {status} without an access code. " +
+            "The NPSSO token may be invalid or expired.",
+            authenticationFailure: rejected);
     }
 
     private async Task<PsnTokenResponse> ExchangeCodeForAccessToken(string code, CancellationToken ct)
@@ -165,6 +172,7 @@ public sealed class PsnClient(
     }
 
     private async Task<(PsnPresenceResponse Presence, string RawJson)> GetBasicPresence(
+        long credentialId,
         string accessToken,
         string accountId,
         CancellationToken ct)
@@ -176,6 +184,16 @@ public sealed class PsnClient(
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
 
         using var response = await httpClient.SendAsync(request, ct);
+        if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
+        {
+            // The cached access token was revoked: the next poll exchanges the NPSSO again, which tells whether
+            // the NPSSO itself still works.
+            tokenCache.Forget(credentialId);
+            throw new ProviderPollException(
+                $"PSN presence request returned {(int)response.StatusCode} ({response.ReasonPhrase}).",
+                authenticationFailure: true);
+        }
+
         if (!response.IsSuccessStatusCode)
             throw new ProviderPollException(
                 $"PSN presence request returned {(int)response.StatusCode} ({response.ReasonPhrase}).");
@@ -279,6 +297,8 @@ public sealed class PsnTokenCache
         accessToken = string.Empty;
         return false;
     }
+
+    internal void Forget(long credentialId) => _tokens.TryRemove(credentialId, out _);
 
     internal void Set(long credentialId, string npsso, string accessToken, DateTimeOffset expiresAt)
     {

@@ -153,6 +153,26 @@ public sealed class PollingRepository(PlaydexDbContext db, IGameResolver gameRes
         )).ToList();
     }
 
+    /// <summary>
+    /// Stops polling an integration whose credential the provider keeps rejecting, recording why so that the user
+    /// sees it. Only an active integration is paused, so of several pollers only one does it. Its backoff stays until
+    /// the user resumes it, so a poll that was already running counts on and does not announce a new outage.
+    /// </summary>
+    /// <returns>True when this call paused it.</returns>
+    public async Task<bool> PauseIntegration(long credentialId, string reason, DateTimeOffset pausedAt, CancellationToken ct)
+    {
+        var paused = await db.Integrations
+            .Where(integration => integration.Id == credentialId && integration.Active)
+            .ExecuteUpdateAsync(
+                updates => updates
+                    .SetProperty(integration => integration.Active, false)
+                    .SetProperty(integration => integration.PausedReason, reason)
+                    .SetProperty(integration => integration.PausedAt, pausedAt)
+                    .SetProperty(integration => integration.UpdatedAt, pausedAt),
+                ct);
+        return paused > 0;
+    }
+
     public async Task UpdateGameCapsule(long gameId, string capsuleUrl, CancellationToken ct)
     {
         await db.Games

@@ -27,6 +27,7 @@ public sealed partial class NotificationSender(
         SessionStarted started => Send(started, ct),
         SessionEnded ended => Send(ended, ct),
         PollFailed failed => Send(failed, ct),
+        IntegrationPaused paused => Send(paused, ct),
         _ => Task.CompletedTask,
     };
 
@@ -69,6 +70,26 @@ public sealed partial class NotificationSender(
                 $"Polling failed for {@event.Platform}. Error: {@event.Message}. " +
                 $"Retrying in {Math.Round(@event.RetryDelay.TotalSeconds)}s; " +
                 "no further failure messages until polling works again.",
+                ct);
+        }
+        catch (Exception ex)
+        {
+            LogPollFailureNotificationFailed(ex, @event.CredentialId);
+        }
+    }
+
+    public async Task Send(IntegrationPaused @event, CancellationToken ct)
+    {
+        if (!client.IsEnabled) return;
+        var target = await repository.GetCredentialTarget(@event.CredentialId, ct);
+        if (target is null || string.IsNullOrWhiteSpace(target.TelegramChatId)) return;
+        try
+        {
+            await client.SendMessageAsync(
+                target.TelegramChatId,
+                $"Polling for {target.Platform} is paused: {@event.Reason} " +
+                $"It was rejected {@event.AuthFailures} times in a row. " +
+                "Update the credential in Playdex settings, then resume the integration.",
                 ct);
         }
         catch (Exception ex)

@@ -74,6 +74,60 @@ public sealed class PsnClientTests
 
         Assert.Contains("authorize", failure.Message, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("401", failure.Message);
+        Assert.True(failure.IsAuthenticationFailure);
+    }
+
+    [Theory]
+    [InlineData(HttpStatusCode.Found, true)]
+    [InlineData(HttpStatusCode.BadRequest, true)]
+    [InlineData(HttpStatusCode.Forbidden, true)]
+    [InlineData(HttpStatusCode.TooManyRequests, false)]
+    [InlineData(HttpStatusCode.ServiceUnavailable, false)]
+    public async Task OnlyAnAuthorizeRejectionCountsAsARejectedNpsso(HttpStatusCode status, bool rejected)
+    {
+        var client = CreateClient(new RecordingHandler(Response(status, response =>
+        {
+            if (status == HttpStatusCode.Found)
+                response.Headers.Location = new Uri("https://redirect.test/callback?error=login_required");
+        })));
+
+        var failure = await Assert.ThrowsAsync<ProviderPollException>(() =>
+            client.GetCurrentlyPlaying(Credential(), CancellationToken.None));
+
+        Assert.Equal(rejected, failure.IsAuthenticationFailure);
+    }
+
+    [Fact]
+    public async Task AMissingNpssoIsARejectedCredential()
+    {
+        var failure = await Assert.ThrowsAsync<ProviderPollException>(() =>
+            CreateClient(new RecordingHandler()).GetCurrentlyPlaying(
+                new IntegrationCredentials { AccountId = "account-2" }, CancellationToken.None));
+
+        Assert.True(failure.IsAuthenticationFailure);
+    }
+
+    [Fact]
+    public async Task ARejectedAccessTokenIsDroppedSoTheNextPollSignsInAgain()
+    {
+        var handler = new RecordingHandler(
+            Response(HttpStatusCode.Found, response =>
+                response.Headers.Location = new Uri("https://redirect.test/callback?code=access-code")),
+            Json("""{"access_token":"revoked-token","expires_in":3600}"""),
+            Response(HttpStatusCode.Unauthorized),
+            Response(HttpStatusCode.Found, response =>
+                response.Headers.Location = new Uri("https://redirect.test/callback?code=access-code")),
+            Json("""{"access_token":"fresh-token","expires_in":3600}"""),
+            Json("""{"basicPresence":{"gameTitleInfoList":[]}}"""));
+        var client = CreateClient(handler, new PsnTokenCache());
+
+        var failure = await Assert.ThrowsAsync<ProviderPollException>(() =>
+            client.GetCurrentlyPlaying(Credential(), CancellationToken.None));
+        var result = await client.GetCurrentlyPlaying(Credential(), CancellationToken.None);
+
+        Assert.True(failure.IsAuthenticationFailure);
+        Assert.NotNull(result);
+        Assert.Equal("Bearer fresh-token", handler.Requests[5].Authorization);
     }
 
     [Fact]
@@ -169,6 +223,7 @@ public sealed class PsnClientTests
 
     private static IntegrationCredentials Credential() => new()
     {
+        Id = 7,
         ApiKey = "test-npsso",
         AccountId = "account-2",
     };

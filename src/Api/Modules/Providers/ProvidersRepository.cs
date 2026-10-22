@@ -130,12 +130,27 @@ public sealed class ProvidersRepository(PlaydexDbContext db)
                 ct);
         if (credential is null) return null;
 
+        // Resuming (or pausing by hand) is the user taking over: the reason Playdex paused it no longer applies, and a
+        // resumed integration is polled at once rather than after its old backoff.
         credential.Active = status == "active";
+        credential.PausedReason = null;
+        credential.PausedAt = null;
         credential.UpdatedAt = DateTimeOffset.UtcNow;
+        await using var transaction = await db.Database.BeginTransactionAsync(ct);
         await db.SaveChangesAsync(ct);
+        if (credential.Active)
+        {
+            await ForgetPollFailures(credential.Id, ct);
+        }
+
+        await transaction.CommitAsync(ct);
         var platforms = await db.Platforms.AsNoTracking().ToListAsync(ct);
         return ToStatus(credential, platforms);
     }
+
+    /// <summary>Drops the poll backoff, so the next cycle polls the integration with its current credential.</summary>
+    private Task<int> ForgetPollFailures(long integrationId, CancellationToken ct) =>
+        db.IntegrationPollBackoffs.Where(row => row.IntegrationId == integrationId).ExecuteDeleteAsync(ct);
 
     /// <exception cref="DuplicateIntegrationAccountException">The new account is already connected.</exception>
     public async Task<ProviderStatusDto?> UpdateCredential(
@@ -158,6 +173,8 @@ public sealed class ProvidersRepository(PlaydexDbContext db)
         credential.UpdatedAt = DateTimeOffset.UtcNow;
         if (!await TrySaveAccount(credential, ct))
             throw new DuplicateIntegrationAccountException();
+        // A fixed credential is tried on the next cycle, not after the old one's backoff.
+        await ForgetPollFailures(credential.Id, ct);
         var platforms = await db.Platforms.AsNoTracking().ToListAsync(ct);
         return ToStatus(credential, platforms);
     }
@@ -269,9 +286,12 @@ public sealed class ProvidersRepository(PlaydexDbContext db)
         credential.ApiKey = apiKey;
         credential.AccountId = xuid;
         credential.Active = true;
+        credential.PausedReason = null;
+        credential.PausedAt = null;
         credential.UpdatedAt = now;
         if (!await TrySaveAccount(credential, ct))
             throw new DuplicateIntegrationAccountException();
+        await ForgetPollFailures(credential.Id, ct);
 
         var platforms = await db.Platforms.AsNoTracking().ToListAsync(ct);
         return ToStatus(credential, platforms);
@@ -338,7 +358,9 @@ public sealed class ProvidersRepository(PlaydexDbContext db)
             effectivePlatform is null
                 ? null
                 : new ProviderPlatformDto(effectivePlatform.Key, effectivePlatform.Name),
-            options);
+            options,
+            integration.PausedReason,
+            integration.PausedAt);
     }
 }
 

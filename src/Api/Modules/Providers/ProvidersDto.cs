@@ -9,7 +9,9 @@ public sealed record ProviderStatusDto(
     string? ApiKey,
     bool ApiKeyLocked,
     ProviderPlatformDto? SessionPlatform = null,
-    IReadOnlyList<ProviderPlatformDto>? SessionPlatformOptions = null);
+    IReadOnlyList<ProviderPlatformDto>? SessionPlatformOptions = null,
+    string? PausedReason = null,
+    DateTimeOffset? PausedAt = null);
 public sealed record ProvidersResponseDto(IReadOnlyList<ProviderStatusDto> Providers);
 public sealed record ProviderUpdateRequest(long ProviderId, string Status);
 public sealed record ProviderUpdateResponseDto(ProviderStatusDto Provider);

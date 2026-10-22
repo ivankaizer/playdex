@@ -37,6 +37,13 @@ public sealed class SteamClient(HttpClient httpClient, IOptions<SteamOptions> op
                 retryAfter ?? TimeSpan.FromMinutes(1));
         }
 
+        if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
+        {
+            throw new ProviderPollException(
+                $"Steam rejected the Web API key ({(int)response.StatusCode}).",
+                authenticationFailure: true);
+        }
+
         response.EnsureSuccessStatusCode();
 
         var rawJson = await response.Content.ReadAsStringAsync(ct);

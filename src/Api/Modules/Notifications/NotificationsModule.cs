@@ -32,6 +32,8 @@ public static class NotificationsModule
             provider => provider.GetRequiredService<NotificationEventHandlers>());
         services.AddScoped<IEventSubscriber<PollFailed>>(
             provider => provider.GetRequiredService<NotificationEventHandlers>());
+        services.AddScoped<IEventSubscriber<IntegrationPaused>>(
+            provider => provider.GetRequiredService<NotificationEventHandlers>());
         return services;
     }
 }

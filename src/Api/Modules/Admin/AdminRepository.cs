@@ -157,10 +157,18 @@ public sealed class AdminRepository(PlaydexDbContext db)
         foreach (var integration in integrations)
         {
             integration.Active = enabled;
+            integration.PausedReason = null;
+            integration.PausedAt = null;
             integration.UpdatedAt = DateTimeOffset.UtcNow;
         }
 
         await db.SaveChangesAsync(ct);
+        if (enabled)
+        {
+            // Polled at once, not after the backoff from before they were paused.
+            var ids = integrations.Select(integration => integration.Id).ToArray();
+            await db.IntegrationPollBackoffs.Where(row => ids.Contains(row.IntegrationId)).ExecuteDeleteAsync(ct);
+        }
         return (platformRow.Key, integrations.Count);
     }
 

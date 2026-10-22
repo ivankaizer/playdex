@@ -56,6 +56,12 @@ public sealed partial class PollingBackgroundService(
     [LoggerMessage(Level = LogLevel.Error, Message = "Could not update the backoff of credential {CredentialId}")]
     private partial void LogBackoffUpdateFailed(Exception exception, long credentialId);
 
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Paused credential {CredentialId} ({Platform}) after {AuthFailures} rejected sign-ins: {Reason}")]
+    private partial void LogCredentialPaused(long credentialId, string platform, int authFailures, string reason);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Could not pause credential {CredentialId}")]
+    private partial void LogPauseFailed(Exception exception, long credentialId);
+
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         var initialDelayMs = Random.Shared.Next(0, 5001);
@@ -228,6 +234,12 @@ public sealed partial class PollingBackgroundService(
         }
 
         LogCredentialFailed(exception, active.Credential.Id, active.PlatformKey, failure.Delay, exception.Message);
+        if (providerFailure?.IsAuthenticationFailure == true &&
+            await PauseIfCredentialRejected(active, failure, exception.Message, scope.ServiceProvider, ct))
+        {
+            return;
+        }
+
         if (failure.IsFirst)
         {
             // Notify when a working integration starts failing, not on every retry: an expired token would
@@ -242,6 +254,45 @@ public sealed partial class PollingBackgroundService(
                     failure.Delay),
                 ct);
         }
+    }
+
+    /// <summary>
+    /// An expired NPSSO or a revoked key fails the same way on every retry: after
+    /// <see cref="PollingOptions.AuthFailuresBeforePause"/> rejections the integration is paused instead of being
+    /// polled forever, and the user is told once.
+    /// </summary>
+    /// <returns>True when the integration is paused (by this call).</returns>
+    private async Task<bool> PauseIfCredentialRejected(
+        ActiveCredential active,
+        CredentialFailure failure,
+        string reason,
+        IServiceProvider services,
+        CancellationToken ct)
+    {
+        var threshold = pollingOptions.Value.AuthFailuresBeforePause;
+        if (threshold <= 0 || failure.AuthFailures < threshold) return false;
+
+        var pausedAt = DateTimeOffset.UtcNow;
+        try
+        {
+            if (!await services.GetRequiredService<PollingRepository>()
+                    .PauseIntegration(active.Credential.Id, reason, pausedAt, ct))
+            {
+                return false;
+            }
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException || !ct.IsCancellationRequested)
+        {
+            LogPauseFailed(ex, active.Credential.Id);
+            return false;
+        }
+
+        LogCredentialPaused(active.Credential.Id, active.PlatformKey, failure.AuthFailures, reason);
+        await SafePublish(
+            services.GetRequiredService<EventBus>(),
+            new IntegrationPaused(active.Credential.Id, active.PlatformKey, reason, failure.AuthFailures, pausedAt),
+            ct);
+        return true;
     }
 
     internal static async Task<int> EndTimedOutApiSessions(

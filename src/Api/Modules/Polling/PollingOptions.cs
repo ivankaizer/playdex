@@ -8,6 +8,12 @@ public class PollingOptions
     public int MaxConcurrentPolls { get; set; } = 4;
 
     /// <summary>
+    /// Pause an integration once its provider has rejected the credential this many times without a successful poll
+    /// in between (about 30 minutes of backoff at the default); 0 or less never pauses.
+    /// </summary>
+    public int AuthFailuresBeforePause { get; set; } = 10;
+
+    /// <summary>
     /// Days to keep poll_results (one row per successful poll; the raw provider response only when the detected game
     /// changed) before the hourly cleanup deletes them; 0 or less keeps them forever.
     /// </summary>

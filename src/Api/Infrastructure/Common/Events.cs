@@ -25,6 +25,14 @@ public sealed record PollFailed(
     string Message,
     TimeSpan RetryDelay);
 
+/// <summary>Polling paused itself because the provider kept rejecting the credential.</summary>
+public sealed record IntegrationPaused(
+    long CredentialId,
+    string Platform,
+    string Reason,
+    int AuthFailures,
+    DateTimeOffset PausedAt);
+
 public sealed partial class EventBus(IServiceScopeFactory scopeFactory, ILogger<EventBus> logger)
 {
     [LoggerMessage(Level = LogLevel.Debug, Message = "Publish {EventType}")]
