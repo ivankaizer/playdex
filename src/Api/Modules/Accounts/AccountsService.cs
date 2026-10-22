@@ -77,7 +77,8 @@ public sealed class AccountsService(AccountsRepository repository)
         AccountSessionUpdateRequest request,
         CancellationToken ct)
     {
-        var session = await repository.GetSession(sessionId, ct);
+        // Another user's session is never loaded: it reads as not found, like a missing one.
+        var session = await repository.GetOwnedSession(sessionId, userId, ct);
         var response = ApplySessionUpdate(session, userId, request, DateTimeOffset.UtcNow);
         await repository.SaveChanges(ct);
         return response;
