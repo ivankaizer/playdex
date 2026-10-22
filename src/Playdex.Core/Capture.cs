@@ -215,7 +215,7 @@ public sealed class CaptureClient : IDisposable
 /// </summary>
 /// <remarks>
 /// API gap: POST /capture/sessions sets startedAt = now - duration, so a queued session is stored with the wrong
-/// start time. The fix is an optional startedAt on that endpoint (see spike-results.md), not a launcher workaround.
+/// start time. The fix is an optional startedAt on that endpoint, not a launcher workaround.
 /// StartedAt is already kept in the queue file for when the API accepts it.
 /// The launcher and the Wrapper share the file, so every change to it holds an exclusive lock on queue.jsonl.lock
 /// (released by Windows if the process dies) as well as the in-process gate.
