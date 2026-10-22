@@ -52,6 +52,7 @@ public sealed class RefreshTokensMigrationTests(PostgresFixture postgres)
         await Execute(connection, transaction, $"create schema {schema}; set local search_path to {schema};");
         await Execute(connection, transaction, """
             create table users (id bigserial primary key, email text not null unique);
+            create table games (id bigserial primary key, title text not null);
             """);
     }
 

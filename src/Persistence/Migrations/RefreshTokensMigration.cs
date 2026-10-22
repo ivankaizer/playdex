@@ -5,7 +5,8 @@ namespace Playdex.Persistence.Migrations;
 /// <summary>
 /// Stores issued refresh tokens (hashed) so each one can be used once, and makes email addresses unique regardless
 /// of case, since sign-in now matches them that way. Databases where two accounts differ only in the case of their
-/// email are refused rather than changed: the accounts have to be merged or renamed by hand first.
+/// email are refused rather than changed: the accounts have to be merged or renamed by hand first. Also indexes the
+/// title key GameResolver finds games by when a client sends no external id (the expressions must stay identical).
 /// </summary>
 public sealed class RefreshTokensMigration : IPlaydexMigration
 {
@@ -54,5 +55,8 @@ public sealed class RefreshTokensMigration : IPlaydexMigration
         $$;
 
         create unique index if not exists users_email_lower_unique on users (lower(email));
+
+        create index if not exists games_title_key_idx on games ((
+            btrim(regexp_replace(lower(title), '([^a-z0-9\u0080-\U0010ffff]|[©®™])+', ' ', 'g'))));
         """;
 }
