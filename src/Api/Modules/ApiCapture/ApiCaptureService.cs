@@ -34,8 +34,8 @@ public sealed partial class ApiCaptureService(
     }
 
     public async Task<ApiSessionResponseDto?> RecordSession(
-        string apiKey, int durationInSeconds, string gameTitle, string gameId, string? gameProvider, string platform,
-        CancellationToken ct)
+        string apiKey, int durationInSeconds, DateTimeOffset? startedAt, string gameTitle, string gameId, string? gameProvider,
+        string platform, CancellationToken ct)
     {
         await using var tx = await db.Database.BeginTransactionAsync(ct);
 
@@ -47,12 +47,25 @@ public sealed partial class ApiCaptureService(
 
         var (insertedGameId, platformId) = await ResolveGame(gameTitle, gameId, gameProvider, platform, ct);
 
-        var now = DateTimeOffset.UtcNow;
-        var startedAt = now.AddSeconds(-durationInSeconds);
-        var sessionId = await repository.InsertCompletePlaySession(credential, insertedGameId, platformId, startedAt, now, ct);
+        var (start, end) = RecordedRange(DateTimeOffset.UtcNow, durationInSeconds, startedAt);
+        var sessionId = await repository.InsertCompletePlaySession(credential, insertedGameId, platformId, start, end, ct);
 
         await tx.CommitAsync(ct);
         return new ApiSessionResponseDto(sessionId);
+    }
+
+    /// <summary>
+    /// When a recorded session ran: from <paramref name="startedAt"/> for <paramref name="durationInSeconds"/> (a session
+    /// a client kept offline and sends later), or ending <paramref name="now"/> without a start. A start that would end
+    /// the session after now (a client clock ahead of the server's) ends it now instead, so no session is in the future.
+    /// </summary>
+    public static (DateTimeOffset StartedAt, DateTimeOffset EndedAt) RecordedRange(
+        DateTimeOffset now, int durationInSeconds, DateTimeOffset? startedAt)
+    {
+        var duration = TimeSpan.FromSeconds(durationInSeconds);
+        return startedAt is { } start && start + duration <= now
+            ? (start.ToUniversalTime(), (start + duration).ToUniversalTime())
+            : (now - duration, now);
     }
 
     public async Task<ApiSessionStartResponseDto?> StartSession(

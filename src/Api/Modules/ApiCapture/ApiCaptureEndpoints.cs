@@ -49,7 +49,8 @@ public static class ApiCaptureEndpoints
             }
 
             var result = await service.RecordSession(
-                apiKey, durationInSeconds.Value, request.GameTitle, payload.GameId, payload.Provider, payload.Platform, http.RequestAborted);
+                apiKey, durationInSeconds.Value, request.StartedAt, request.GameTitle, payload.GameId, payload.Provider, payload.Platform,
+                http.RequestAborted);
 
             if (result is null)
             {

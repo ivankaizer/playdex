@@ -112,6 +112,10 @@ public sealed class SessionRecorderTests : IDisposable
     {
         File.Delete(_queueFile);
         File.Delete(_queueFile + ".lock");
+        if (Directory.Exists(Path.ChangeExtension(_queueFile, ".running")))
+        {
+            Directory.Delete(Path.ChangeExtension(_queueFile, ".running"), recursive: true);
+        }
     }
 
     private sealed class PathHandler(Func<string, HttpStatusCode> status) : HttpMessageHandler

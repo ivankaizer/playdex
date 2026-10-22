@@ -29,6 +29,22 @@ public sealed class SessionQueueTests : IDisposable
     }
 
     [Fact]
+    public async Task FlushSendsWhenTheSessionStarted()
+    {
+        var handler = new RecordingHandler(HttpStatusCode.Created);
+        using var api = new CaptureClient("key", "https://playdex.test/api", handler);
+        using var queue = new SessionQueue(api, _file);
+        var startedAt = new DateTimeOffset(2026, 10, 21, 23, 30, 0, TimeSpan.FromHours(2));
+        await queue.EnqueueAsync(new QueuedSession("Hades", "1", "steam", "pc", 600, startedAt, startedAt.AddMinutes(10)));
+
+        await queue.FlushAsync();
+
+        var request = Assert.Single(handler.Requests);
+        using var body = System.Text.Json.JsonDocument.Parse(request.Body);
+        Assert.Equal(startedAt, body.RootElement.GetProperty("startedAt").GetDateTimeOffset());
+    }
+
+    [Fact]
     public async Task FlushKeepsEverySessionAfterTheFirstFailure()
     {
         var handler = new RecordingHandler(HttpStatusCode.InternalServerError);
@@ -58,7 +74,15 @@ public sealed class SessionQueueTests : IDisposable
         Assert.Single(await File.ReadAllLinesAsync(_file));
     }
 
-    public void Dispose() => File.Delete(_file);
+    public void Dispose()
+    {
+        File.Delete(_file);
+        File.Delete(_file + ".lock");
+        if (Directory.Exists(Path.ChangeExtension(_file, ".running")))
+        {
+            Directory.Delete(Path.ChangeExtension(_file, ".running"), recursive: true);
+        }
+    }
 
     private static QueuedSession Session(string title, int seconds) =>
         new(title, "1", "steam", "pc", seconds, DateTimeOffset.Now.AddSeconds(-seconds), DateTimeOffset.Now);

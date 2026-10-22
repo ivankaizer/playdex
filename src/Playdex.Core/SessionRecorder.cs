@@ -23,7 +23,9 @@ public enum SessionOutcome
 /// <summary>
 /// One play session sent to Playdex: start when the game runs, a ping every interval while it does, end when it exits.
 /// A session is either online (start succeeded) or offline (queued whole at exit), never both, so it can't be counted
-/// twice. Used by the launcher's <see cref="SessionManager"/> and by the Wrapper.
+/// twice. Used by the launcher's <see cref="SessionManager"/> and by the Wrapper. While it runs it is kept in the
+/// queue's <see cref="SessionJournal"/>, updated every interval, so an offline session whose process ends before the
+/// game does (a crash, a shutdown) is still queued, from its real start, by the next flush.
 /// </summary>
 public sealed class SessionRecorder(
     CaptureClient api, SessionQueue queue, CaptureGame game, TimeSpan pingInterval, Action<int>? pinged = null) : IDisposable
@@ -31,6 +33,7 @@ public sealed class SessionRecorder(
     private readonly CancellationTokenSource _stop = new();
     private Task<bool>? _run;
     private long _runningSince;
+    private RunningSession? _journal;
 
     public CaptureGame Game => game;
 
@@ -47,6 +50,7 @@ public sealed class SessionRecorder(
         }
         _runningSince = Stopwatch.GetTimestamp();
         StartedAt = DateTimeOffset.Now;
+        _journal = queue.Journal.Begin(game, StartedAt);
         _run = Task.Run(RunAsync);
     }
 
@@ -69,7 +73,9 @@ public sealed class SessionRecorder(
 
         if (online)
         {
-            if (!await api.EndAsync(game))
+            var ended = await api.EndAsync(game);
+            _journal?.Complete(); // the server has the session either way
+            if (!ended)
             {
                 Log.Info($"session: end for {game.GameTitle} failed; the server will close it from the last ping");
                 return SessionOutcome.EndFailed;
@@ -79,35 +85,53 @@ public sealed class SessionRecorder(
         }
         if (seconds < 1)
         {
+            _journal?.Complete();
             return SessionOutcome.Dropped;
         }
         await queue.EnqueueAsync(new QueuedSession(
             game.GameTitle, game.GameId, game.GameIdProvider, game.Platform, seconds, StartedAt, endedAt));
+        _journal?.Complete();
         return SessionOutcome.Queued;
     }
 
     private async Task<bool> RunAsync()
     {
-        if (!await api.StartAsync(game))
+        var online = await api.StartAsync(game);
+        if (online)
+        {
+            _journal?.Seen(DateTimeOffset.Now, online: true);
+        }
+        else
         {
             Log.Info($"session: {game.GameTitle} offline; it will be queued at exit");
-            return false;
         }
         try
         {
             using var timer = new PeriodicTimer(pingInterval);
             while (await timer.WaitForNextTickAsync(_stop.Token))
             {
-                await api.PingAsync(game);
-                pinged?.Invoke(Seconds);
+                // Still running: how far an offline session is recovered if this process ends before the game.
+                _journal?.Seen(DateTimeOffset.Now);
+                if (online)
+                {
+                    await api.PingAsync(game);
+                    pinged?.Invoke(Seconds);
+                }
             }
         }
         catch (OperationCanceledException) when (_stop.IsCancellationRequested)
         {
         }
-        return true;
+        return online;
     }
 
-    /// <summary>Stops pinging. The token source is not disposed: the ping loop may still be reading it.</summary>
-    public void Dispose() => _stop.Cancel();
+    /// <summary>
+    /// Stops pinging. A session that was not finished (<see cref="FinishAsync"/>) stays in the journal, to be
+    /// recovered. The token source is not disposed: the ping loop may still be reading it.
+    /// </summary>
+    public void Dispose()
+    {
+        _stop.Cancel();
+        _journal?.Dispose();
+    }
 }

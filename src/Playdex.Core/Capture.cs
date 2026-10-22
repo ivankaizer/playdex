@@ -19,8 +19,9 @@ public sealed record CaptureGame(string GameTitle, string GameId, string GameIdP
         api.ResolvePlatform(game));
 }
 
+/// <param name="StartedAt">When it started, for a session sent after it ended (the offline queue); null: it just ended.</param>
 public sealed record RecordedSession(
-    string GameTitle, string GameId, string GameIdProvider, string Platform, int DurationInSeconds);
+    string GameTitle, string GameId, string GameIdProvider, string Platform, int DurationInSeconds, DateTimeOffset? StartedAt = null);
 
 /// <summary>A session that could not reach Playdex, kept in queue.jsonl until it can be sent.</summary>
 public sealed record QueuedSession(
@@ -211,14 +212,13 @@ public sealed class CaptureClient : IDisposable
 
 /// <summary>
 /// Offline queue. A session is either online (start succeeded; pings keep it alive and end closes it) or offline
-/// (start failed): offline sessions are appended here whole and sent later with POST /capture/sessions.
+/// (start failed): offline sessions are appended here whole and sent later with POST /capture/sessions, with their
+/// real start time. A session still running is kept in <see cref="Journal"/> (queue.running next to queue.jsonl), so
+/// one cut short by a crash or a shutdown comes back here at the next flush instead of being lost.
 /// </summary>
 /// <remarks>
-/// API gap: POST /capture/sessions sets startedAt = now - duration, so a queued session is stored with the wrong
-/// start time. The fix is an optional startedAt on that endpoint (see spike-results.md), not a launcher workaround.
-/// StartedAt is already kept in the queue file for when the API accepts it.
-/// The launcher and the Wrapper share the file, so every change to it holds an exclusive lock on queue.jsonl.lock
-/// (released by Windows if the process dies) as well as the in-process gate.
+/// The app and the per-game launchers share the file, so every change to it holds an exclusive lock on
+/// queue.jsonl.lock (released by Windows if the process dies) as well as the in-process gate.
 /// </remarks>
 [System.Diagnostics.CodeAnalysis.SuppressMessage("Naming", "CA1711", Justification = "It is a queue.")]
 public sealed class SessionQueue(CaptureClient api, string? file = null) : IDisposable
@@ -227,6 +227,9 @@ public sealed class SessionQueue(CaptureClient api, string? file = null) : IDisp
 
     private readonly SemaphoreSlim _gate = new(1, 1);
     private readonly string _file = file ?? Paths.QueueFile;
+
+    /// <summary>The sessions running now, for <see cref="SessionRecorder"/>; recovered into the queue by <see cref="FlushAsync"/>.</summary>
+    internal SessionJournal Journal { get; } = new(Path.ChangeExtension(file ?? Paths.QueueFile, ".running"));
 
     public async Task EnqueueAsync(QueuedSession session)
     {
@@ -244,19 +247,24 @@ public sealed class SessionQueue(CaptureClient api, string? file = null) : IDisp
         }
     }
 
+    /// <summary>
+    /// Queues the sessions that processes which have ended left running (<see cref="SessionJournal.Recover"/>), then
+    /// sends every queued session while Playdex takes them.
+    /// </summary>
     public async Task FlushAsync()
     {
-        if (!api.IsConfigured)
-        {
-            return;
-        }
         await _gate.WaitAsync();
         try
         {
             using var fileLock = await LockFileAsync();
-            if (fileLock is null || !File.Exists(_file))
+            if (fileLock is null)
             {
                 return; // Another process is flushing.
+            }
+            RecoverRunningSessions();
+            if (!api.IsConfigured || !File.Exists(_file))
+            {
+                return;
             }
             var remaining = new List<string>();
             foreach (var line in await File.ReadAllLinesAsync(_file))
@@ -281,7 +289,7 @@ public sealed class SessionQueue(CaptureClient api, string? file = null) : IDisp
                 }
                 // Once one send fails, keep the rest without trying: the API is unreachable.
                 var sent = remaining.Count == 0 && await api.RecordAsync(new RecordedSession(
-                    session.GameTitle, session.GameId, session.GameIdProvider, session.Platform, session.DurationInSeconds));
+                    session.GameTitle, session.GameId, session.GameIdProvider, session.Platform, session.DurationInSeconds, session.StartedAt));
                 if (!sent)
                 {
                     remaining.Add(line);
@@ -300,6 +308,21 @@ public sealed class SessionQueue(CaptureClient api, string? file = null) : IDisp
         finally
         {
             _gate.Release();
+        }
+    }
+
+    /// <summary>Under the file lock: the sessions left running by ended processes go to the end of the queue.</summary>
+    private void RecoverRunningSessions()
+    {
+        try
+        {
+            Journal.Recover(session =>
+                File.AppendAllText(_file, JsonSerializer.Serialize(session, CaptureJson.Default.QueuedSession) + "\n"));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // The session that failed to append stays in the journal for the next flush.
+            Log.Error("queue: could not recover the sessions left running", ex);
         }
     }
 
