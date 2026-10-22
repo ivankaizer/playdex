@@ -1,24 +1,36 @@
 name: Build Windows apps
 
-# Builds and tests the Windows apps on every pull request and on main: Playdex.Core (with a real generated launcher
-# from the published Playdex.Run), the desktop app and the Full Screen Experience launcher. The WinUI projects can't
-# build on Linux, so they are not in Playdex.sln and build here instead of in test.yaml.
+# Builds and tests the Windows apps on pull requests and pushes to main that touch them: Playdex.Core (with a real
+# generated launcher from the published Playdex.Run), the desktop app and the Full Screen Experience launcher. The
+# WinUI projects can't build on Linux, so they are not in Playdex.sln and build here instead of in test.yaml.
+# Windows minutes count double against the GitHub Actions quota, hence the path filter.
 
 on:
   push:
     branches:
       - main
-    paths:
+    paths: &paths
       - "src/Playdex.Core/**"
       - "src/Playdex.Run/**"
       - "src/Playdex.Setup/**"
       - "src/Desktop/**"
       - "src/Launcher/**"
       - "test/Playdex.Core.Tests/**"
+      # Playdex.Core.Tests runs the API in process.
+      - "src/Api/**"
+      - "src/Persistence/**"
+      - "src/ServiceDefaults/**"
       - "Directory.Packages.props"
       - "Directory.Build.props"
+      - "global.json"
+      - ".github/workflows/build-windows.yaml"
   pull_request:
+    paths: *paths
   workflow_dispatch:
+
+concurrency:
+  group: windows-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build:

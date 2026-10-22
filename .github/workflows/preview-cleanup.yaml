@@ -8,6 +8,8 @@ jobs:
   cleanup:
     if: github.event.pull_request.head.repo.full_name == github.repository
     uses: ivankaizer/preview-kit/.github/workflows/cleanup.yml@v1
+    with:
+      runner: '["self-hosted","macserv"]'
     permissions:
       contents: write
     secrets: inherit
