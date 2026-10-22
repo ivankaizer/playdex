@@ -47,6 +47,7 @@ public sealed record PlaydexSentrySettings(
         options.MinimumEventLevel = LogLevel.Error;
         options.SendDefaultPii = false;
         options.MaxRequestBodySize = RequestSize.None;
+        options.SetBeforeBreadcrumb(SensitiveUrls.Redact);
         options.DefaultTags["component"] = "api";
         options.AddExceptionFilterForType<OperationCanceledException>();
         options.UseOtlp();
