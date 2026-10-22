@@ -82,17 +82,35 @@ public sealed class AccountsService(AccountsRepository repository)
             sort, direction, limit, offset, ignoreShortMinutes, ct);
     }
 
-    public async Task<AccountSessionUpdateResponseDto> UpdateSession(
+    /// <summary>
+    /// New times for a finished session. They may not overlap another of the user's sessions on the same platform
+    /// (<see cref="SessionOverlaps"/>), a running one up to now; that is a 409 naming the session in the way.
+    /// </summary>
+    public Task<AccountSessionUpdateResponseDto> UpdateSession(
         long sessionId,
         long userId,
         AccountSessionUpdateRequest request,
-        CancellationToken ct)
-    {
-        var session = await repository.GetSession(sessionId, ct);
-        var response = ApplySessionUpdate(session, userId, request, DateTimeOffset.UtcNow);
-        await repository.SaveChanges(ct);
-        return response;
-    }
+        CancellationToken ct) =>
+        repository.WithUserSessionLock(userId, async () =>
+        {
+            var session = await repository.GetSession(sessionId, ct);
+            var now = DateTimeOffset.UtcNow;
+            var validated = ValidateSessionUpdate(session, userId, request, now);
+            var overlapping = await repository.ListOtherPlatformSessions(
+                userId,
+                session!.PlatformId,
+                validated.StartedAt.ToUniversalTime(),
+                validated.EndedAt.ToUniversalTime(),
+                now,
+                session.Id,
+                ct);
+            if (overlapping.Count > 0)
+                throw AppProblemException.Conflict(SessionOverlaps.ConflictMessage(overlapping[0], request.StartedAt.Offset));
+
+            var response = ApplySessionUpdate(session, userId, request, now);
+            await repository.SaveChanges(ct);
+            return response;
+        }, ct);
 
     public Task<SessionQueryResult> ListSessionsToday(
         long userId, long? accountId, int ignoreShortMinutes, TimeZoneInfo zone, CancellationToken ct) =>

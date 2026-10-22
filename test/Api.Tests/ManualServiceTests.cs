@@ -125,14 +125,16 @@ public sealed class ManualServiceTests
         new(date, minutes, "3H4h3", null, "Hades", "pc", null, timeZone);
 
     [Fact]
-    public void EntriesStartWhenTheirDateBeginsInTheClientsZone()
+    public void EntriesArePlayedOnTheirDateInTheClientsZone()
     {
-        var (start, end) = ManualService.ValidateEntryTimes(Entry("2026-09-09", 90, "America/Los_Angeles"), EntryNow);
-        Assert.Equal(new DateTimeOffset(2026, 9, 9, 7, 0, 0, TimeSpan.Zero), start);
-        Assert.Equal(start.AddMinutes(90), end);
+        var entry = ManualService.ValidateEntryTimes(Entry("2026-09-09", 90, "America/Los_Angeles"), EntryNow);
+        Assert.Equal(new DateOnly(2026, 9, 9), entry.Date);
+        Assert.Equal(new DateTimeOffset(2026, 9, 9, 7, 0, 0, TimeSpan.Zero), entry.DayStart);
+        Assert.Equal(new DateTimeOffset(2026, 9, 10, 7, 0, 0, TimeSpan.Zero), entry.DayEnd);
+        Assert.Equal(TimeSpan.FromMinutes(90), entry.Duration);
 
-        var (utcStart, _) = ManualService.ValidateEntryTimes(Entry("2026-09-09", 90), EntryNow);
-        Assert.Equal(new DateTimeOffset(2026, 9, 9, 0, 0, 0, TimeSpan.Zero), utcStart);
+        var utc = ManualService.ValidateEntryTimes(Entry("2026-09-09", 90), EntryNow);
+        Assert.Equal(new DateTimeOffset(2026, 9, 9, 0, 0, 0, TimeSpan.Zero), utc.DayStart);
     }
 
     [Theory]
@@ -155,7 +157,8 @@ public sealed class ManualServiceTests
     public void TodayAndAWholeDayAreAccepted()
     {
         // Already Sep 11 in Tokyo.
-        var (start, end) = ManualService.ValidateEntryTimes(Entry("2026-09-11", 1440, "Asia/Tokyo"), new(2026, 9, 10, 16, 0, 0, TimeSpan.Zero));
-        Assert.Equal(TimeSpan.FromDays(1), end - start);
+        var entry = ManualService.ValidateEntryTimes(Entry("2026-09-11", 1440, "Asia/Tokyo"), new(2026, 9, 10, 16, 0, 0, TimeSpan.Zero));
+        Assert.Equal(TimeSpan.FromDays(1), entry.Duration);
+        Assert.Equal(entry.DayEnd, entry.DayStart + entry.Duration);
     }
 }

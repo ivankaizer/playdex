@@ -79,7 +79,7 @@ public sealed class ManualService(
     public async Task<ManualEntryCreateResponseDto> CreateEntry(
         long userId, ManualEntryCreateRequest request, CancellationToken ct)
     {
-        var (startTime, endTime) = ValidateEntryTimes(request, DateTimeOffset.UtcNow);
+        var entry = ValidateEntryTimes(request, DateTimeOffset.UtcNow);
         var selection = ValidateGameSelection(
             request.GameId,
             request.IgdbId);
@@ -95,10 +95,36 @@ public sealed class ManualService(
             var gameId = await ResolveGame(resolvedSelection, ct);
             var platformId = await repository.GetPlatformIdByKey(platformKey, ct)
                 ?? throw AppProblemException.Validation("Platform not found.");
+            var (startTime, endTime) = await PlaceEntry(userId, platformId, entry, ct);
             var sessionId = await repository.CreatePlaySession(
                 userId, gameId, platformId, startTime, endTime, ct);
             return new ManualEntryCreateResponseDto(sessionId);
         }, ct);
+    }
+
+    /// <summary>
+    /// When a dated entry (or accepted draft row) is played. It has no time of day, so it takes the first gap of its
+    /// day on that platform, from midnight, that its whole length fits in: an empty day starts it at midnight, and a
+    /// second entry follows the first instead of overlapping it. A day with no such gap is refused with 409. Holds the
+    /// user's session lock, so call it inside the transaction that creates the session.
+    /// </summary>
+    internal async Task<(DateTimeOffset Start, DateTimeOffset End)> PlaceEntry(
+        long userId, long platformId, ManualEntryDay entry, CancellationToken ct)
+    {
+        await repository.AcquireUserStartLock(userId, ct);
+        var now = DateTimeOffset.UtcNow;
+        var taken = await repository.ListPlatformSessions(userId, platformId, entry.DayStart, entry.DayEnd, now, ct);
+        var start = SessionOverlaps.FirstFreeStart(taken, entry.DayStart, entry.DayEnd, entry.Duration, now);
+        if (start is null)
+        {
+            var date = entry.Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+            var length = SessionOverlaps.FormatDuration(entry.Duration);
+            throw AppProblemException.Conflict(taken.Count == 0
+                ? $"{date} is shorter than {length} in your time zone."
+                : $"{date} has no {length} free on {taken[0].Platform}: an entry that long would overlap the "
+                    + "sessions already logged there.");
+        }
+        return (start.Value, start.Value + entry.Duration);
     }
 
     /// <summary>
@@ -143,10 +169,10 @@ public sealed class ManualService(
     }
 
     /// <summary>
-    /// A historical entry starts when its date begins in the client's time zone (UTC when it sent none), lasts at
-    /// most 24 hours and cannot be on a day that has not begun yet.
+    /// A historical entry is played on its date in the client's time zone (UTC when it sent none), lasts at most 24
+    /// hours and cannot be on a day that has not begun yet. <see cref="PlaceEntry"/> picks its start.
     /// </summary>
-    internal static (DateTimeOffset Start, DateTimeOffset End) ValidateEntryTimes(
+    internal static ManualEntryDay ValidateEntryTimes(
         ManualEntryCreateRequest request, DateTimeOffset now)
     {
         if (!DateOnly.TryParseExact(
@@ -169,8 +195,7 @@ public sealed class ManualService(
 
         try
         {
-            var start = LocalCalendar.StartOf(day, zone ?? TimeZoneInfo.Utc);
-            return (start, start.AddMinutes(request.DurationMinutes));
+            return ManualEntryDay.Of(day, zone, TimeSpan.FromMinutes(request.DurationMinutes));
         }
         catch (ArgumentOutOfRangeException)
         {

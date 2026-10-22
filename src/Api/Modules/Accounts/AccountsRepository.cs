@@ -63,7 +63,7 @@ public sealed class AccountsRepository(PlaydexDbContext db, IGames games)
         return new SessionQueryResult(total, limit, offset, sessions.Select(MapSession).ToList());
     }
 
-    /// <summary>How many of today's sessions <see cref="ListSessionsToday"/> lists; its total counts them all.</summary>
+    /// <summary>How many of today's sessions <see cref="ListSessionsToday"/> lists; its total counts all.</summary>
     public const int TodaySessionLimit = 10;
 
     /// <summary>
@@ -115,6 +115,27 @@ public sealed class AccountsRepository(PlaydexDbContext db, IGames games)
         db.PlaySessions.SingleOrDefaultAsync(session => session.Id == sessionId, ct);
 
     public Task SaveChanges(CancellationToken ct) => db.SaveChangesAsync(ct);
+
+    /// <summary>
+    /// Runs <paramref name="action"/> holding the user's session lock (<see cref="SessionOverlaps.LockUserSessions"/>),
+    /// in the caller's transaction when there is one, else in its own.
+    /// </summary>
+    public async Task<T> WithUserSessionLock<T>(long userId, Func<Task<T>> action, CancellationToken ct)
+    {
+        await using var transaction = db.Database.CurrentTransaction is null
+            ? await db.Database.BeginTransactionAsync(ct)
+            : null;
+        await db.LockUserSessions(userId, ct);
+        var result = await action();
+        if (transaction is not null) await transaction.CommitAsync(ct);
+        return result;
+    }
+
+    /// <summary>The user's other sessions on the platform in [from, to), a running one up to now.</summary>
+    public Task<List<PlatformSession>> ListOtherPlatformSessions(
+        long userId, long platformId, DateTimeOffset from, DateTimeOffset to, DateTimeOffset now, long sessionId,
+        CancellationToken ct) =>
+        db.ListPlatformSessions(userId, platformId, from, to, now, sessionId, ct);
 
     public async Task<List<AccountSessionDto>> ListSessionsForStats(
         long userId, long? accountId, DateTimeOffset? from, DateTimeOffset? to,

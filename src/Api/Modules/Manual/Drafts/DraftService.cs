@@ -74,9 +74,11 @@ public sealed class DraftService(DraftRepository repository, PlaydexDbContext db
                     continue;
                 }
                 RequirePending(snapshot, requested.Revision);
+                var zone = Zone(batch);
                 if (!DraftRules.TryGetTimes(
-                        snapshot.Date, snapshot.DurationMinutes, Zone(batch), DateTimeOffset.UtcNow, out var start, out var end))
+                        snapshot.Date, snapshot.DurationMinutes, zone, DateTimeOffset.UtcNow, out var start, out var end))
                     throw AppProblemException.Validation("Correct the date and duration before accepting.");
+                var entry = ManualEntryDay.Of(LocalCalendar.DateOf(start, zone ?? TimeZoneInfo.Utc), zone, end - start);
                 var selection = ManualService.ValidateGameSelection(snapshot.GameId, snapshot.IgdbId);
                 // IGDB fetches happen before a database transaction, then revision is checked under lock.
                 var authoritative = await manual.ResolveAuthoritativeSelection(selection, ct);
@@ -89,7 +91,9 @@ public sealed class DraftService(DraftRepository repository, PlaydexDbContext db
                     var platformId = await manualRepository.GetPlatformIdByKey(row.PlatformKey, ct)
                         ?? throw AppProblemException.Validation("Platform not found.");
                     var gameId = await manual.ResolveGame(authoritative, ct);
-                    var id = await manualRepository.CreatePlaySession(userId, gameId, platformId, start, end, ct);
+                    // Rows of one date follow each other instead of all starting at midnight (ManualService.PlaceEntry).
+                    var (placedStart, placedEnd) = await manual.PlaceEntry(userId, platformId, entry, ct);
+                    var id = await manualRepository.CreatePlaySession(userId, gameId, platformId, placedStart, placedEnd, ct);
                     row.Status = "accepted";
                     row.AcceptedSessionId = id;
                     row.Revision++;

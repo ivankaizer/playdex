@@ -15,13 +15,12 @@ public sealed class ManualRepository(PlaydexDbContext db)
         return result;
     }
 
-    internal Task AcquireUserStartLock(long userId, CancellationToken ct)
-    {
-        var key = $"manual-session-user:{userId}";
-        return db.Database.ExecuteSqlInterpolatedAsync(
-            $"SELECT pg_advisory_xact_lock(hashtextextended({key}, 0))",
-            ct);
-    }
+    internal Task AcquireUserStartLock(long userId, CancellationToken ct) => db.LockUserSessions(userId, ct);
+
+    /// <summary>The user's sessions on the platform in [from, to), a running one up to now (<see cref="SessionOverlaps"/>).</summary>
+    internal Task<List<PlatformSession>> ListPlatformSessions(
+        long userId, long platformId, DateTimeOffset from, DateTimeOffset to, DateTimeOffset now, CancellationToken ct) =>
+        db.ListPlatformSessions(userId, platformId, from, to, now, null, ct);
 
     public Task<int> EndActiveSessions(long userId, CancellationToken ct)
     {
