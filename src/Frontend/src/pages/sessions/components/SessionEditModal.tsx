@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef } from "react";
 import { cx } from "@/lib/cx";
+import { trapTab } from "@/lib/focusTrap";
 import type { DurationCheck } from "../sessionsState";
 
 interface SessionEditModalProps {
@@ -34,6 +35,7 @@ export function SessionEditModal({
 }: SessionEditModalProps) {
   const durationHintId = useId();
   const startedRef = useRef<HTMLInputElement>(null);
+  const dialogRef = useRef<HTMLElement>(null);
   const returnFocus = useRef<Element | null>(null);
 
   // Focus the first field on open and give focus back to whatever opened the dialog on close.
@@ -57,9 +59,11 @@ export function SessionEditModal({
       }}
       onKeyDown={(event) => {
         if (event.key === "Escape" && !isSaving) onCancel?.();
+        trapTab(event, dialogRef.current);
       }}
     >
       <section
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="session-edit-title"

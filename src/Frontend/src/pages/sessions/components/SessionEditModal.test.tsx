@@ -18,6 +18,26 @@ describe("SessionEditModal", () => {
     expect(container.querySelector("button[data-action=save]")).toBeEnabled();
   });
 
+  it("keeps Tab inside the dialog", () => {
+    render(
+      <>
+        <button type="button">Behind the dialog</button>
+        <SessionEditModal gameTitle="Hades II" startedAt="2026-08-04T18:30:15" duration="2h 15m" />
+      </>,
+    );
+    const dialog = screen.getByRole("dialog");
+    const close = screen.getByRole("button", { name: "Close session editor" });
+    const save = screen.getByRole("button", { name: "Save session" });
+
+    save.focus();
+    fireEvent.keyDown(save, { key: "Tab" });
+    expect(close).toHaveFocus();
+
+    fireEvent.keyDown(close, { key: "Tab", shiftKey: true });
+    expect(save).toHaveFocus();
+    expect(dialog).toContainElement(document.activeElement as HTMLElement);
+  });
+
   it("blocks saving a zero or malformed duration and explains why", () => {
     const onSave = vi.fn();
     const { container, rerender } = render(
