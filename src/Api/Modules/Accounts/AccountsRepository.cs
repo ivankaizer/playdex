@@ -63,10 +63,14 @@ public sealed class AccountsRepository(PlaydexDbContext db, IGames games)
         return new SessionQueryResult(total, limit, offset, sessions.Select(MapSession).ToList());
     }
 
+    /// <summary>How many of today's sessions <see cref="ListSessionsToday"/> lists; its total counts them all.</summary>
+    public const int TodaySessionLimit = 10;
+
     /// <summary>
     /// Sessions that overlap the client's current day: one that crossed midnight or is still running counts too.
+    /// The newest <see cref="TodaySessionLimit"/> are listed, and the total counts every one of them.
     /// </summary>
-    public async Task<List<AccountSessionDto>> ListSessionsToday(
+    public async Task<SessionQueryResult> ListSessionsToday(
         long userId, long? accountId, int ignoreShortMinutes, TimeZoneInfo zone, CancellationToken ct)
     {
         var now = DateTimeOffset.UtcNow;
@@ -74,15 +78,17 @@ public sealed class AccountsRepository(PlaydexDbContext db, IGames games)
         var todayStart = LocalCalendar.StartOf(today, zone);
         var todayEnd = LocalCalendar.StartOf(today.AddDays(1), zone);
 
-        var sessions = await BuildSessionQuery(
+        var query = BuildSessionQuery(
                 userId, accountId, null, null, null, null, null, excludeIgnored: false)
-            .Where(row => row.Session.StartedAt < todayEnd && (row.Session.EndedAt ?? now) > todayStart)
+            .Where(row => row.Session.StartedAt < todayEnd && (row.Session.EndedAt ?? now) > todayStart);
+        var total = await query.CountAsync(ct);
+        var sessions = await query
             .OrderByDescending(row => row.Session.StartedAt)
-            .Take(10)
+            .Take(TodaySessionLimit)
             .Select(ToSessionDbRow)
             .ToListAsync(ct);
 
-        return sessions.Select(MapSession).ToList();
+        return new SessionQueryResult(total, TodaySessionLimit, 0, sessions.Select(MapSession).ToList());
     }
 
     public async Task<AccountSessionDto?> LoadCurrentSession(

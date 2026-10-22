@@ -22,9 +22,12 @@ public sealed record AccountSessionsResponseDto(
     int Limit,
     int Offset);
 
+/// <param name="Sessions">The newest of today's sessions, at most <see cref="AccountsRepository.TodaySessionLimit"/>.</param>
+/// <param name="Total">How many sessions today has, listed or not.</param>
 public sealed record AccountTodaySessionsResponseDto(
     long? AccountId,
-    IReadOnlyList<AccountSessionDto> Sessions);
+    IReadOnlyList<AccountSessionDto> Sessions,
+    int Total);
 
 public sealed record AccountCurrentSessionResponseDto(
     long? AccountId,

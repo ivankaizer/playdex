@@ -94,7 +94,7 @@ public sealed class AccountsService(AccountsRepository repository)
         return response;
     }
 
-    public Task<List<AccountSessionDto>> ListSessionsToday(
+    public Task<SessionQueryResult> ListSessionsToday(
         long userId, long? accountId, int ignoreShortMinutes, TimeZoneInfo zone, CancellationToken ct) =>
         repository.ListSessionsToday(userId, accountId, ignoreShortMinutes, zone, ct);
 

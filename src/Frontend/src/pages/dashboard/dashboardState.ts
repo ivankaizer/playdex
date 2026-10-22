@@ -70,9 +70,10 @@ export async function waitAllOrCancel<T extends readonly unknown[]>(
 }
 
 export interface DashboardSnapshot {
+  /** The newest of today's sessions: a page of at most 10, so never the count. */
   todaySessions: AccountSession[];
-  /** Number of sessions logged today (from today's stats); falls back to `todaySessions.length`. */
-  todaySessionCount?: number;
+  /** Number of sessions logged today, counted by the API (today's stats). */
+  todaySessionCount: number;
   /** Latest sessions across all days for the "Recent sessions" list. */
   recentSessions?: AccountSession[];
   todayPlatformTotals: AccountPlatformStat[];
@@ -164,7 +165,7 @@ export function completeRefresh(state: DashboardState, snapshot: DashboardSnapsh
     ...state,
     todaySessions: snapshot.todaySessions,
     todaySessionCards: createTodaySessionCards(snapshot.todaySessions, now),
-    todaySessionCount: snapshot.todaySessionCount ?? snapshot.todaySessions.length,
+    todaySessionCount: snapshot.todaySessionCount,
     recentSessions: snapshot.recentSessions ?? [],
     todayPlatformTotals: snapshot.todayPlatformTotals,
     currentSession: snapshot.currentSession,

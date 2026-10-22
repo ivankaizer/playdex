@@ -92,6 +92,7 @@ function snapshot(): DashboardSnapshot {
 
   return {
     todaySessions: [completed],
+    todaySessionCount: todayStats.sessionCount,
     todayPlatformTotals: todayStats.platforms,
     currentSession: current,
     activeManualSession: {
@@ -329,6 +330,16 @@ describe("dashboard redesign views", () => {
   it("falls back to today's stats until the daily breakdown loads", () => {
     const state = completeRefresh(initialDashboardState, snapshot(), now);
     expect(getTodayView(state, null, now)).toEqual({ seconds: todaySeconds(state), sessions: state.todaySessionCount });
+  });
+
+  it("counts every session today, not only the ten listed", () => {
+    const data = snapshot();
+    const listed = Array.from({ length: 10 }, (_, i) => ({ ...data.todaySessions[0], sessionId: 100 + i }));
+    const state = completeRefresh(initialDashboardState, { ...data, todaySessions: listed, todaySessionCount: 14 }, now);
+    expect(state.todaySessionCards).toHaveLength(10);
+    expect(getTodayView(state, null, now).sessions).toBe(14);
+    expect(getTodayView(state, { days: { "2026-07-13": 600 } }, now).sessions).toBe(14);
+    expect(getTodayView(state, { days: { "2026-07-13": 600 }, sessionCounts: { "2026-07-13": 15 } }, now).sessions).toBe(15);
   });
 
   it("indexes daily session counts by date", () => {

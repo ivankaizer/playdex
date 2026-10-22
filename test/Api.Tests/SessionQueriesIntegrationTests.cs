@@ -113,7 +113,8 @@ public sealed class SessionQueriesIntegrationTests(PostgresFixture postgres)
 
         // The open session started 90 minutes ago: it runs into today even when it began yesterday.
         var today = await repository.ListSessionsToday(data.UserId, null, 0, TimeZoneInfo.Utc, CancellationToken.None);
-        Assert.Equal([data.Open.Id], today.Select(row => row.SessionId));
+        Assert.Equal([data.Open.Id], today.Sessions.Select(row => row.SessionId));
+        Assert.Equal(1, today.Total);
 
         Assert.Equal(0, await repository.DeleteSession(data.Short.Id, data.UserId + 1, CancellationToken.None));
         Assert.Equal(data.Short.Id, await repository.DeleteSession(data.Short.Id, data.UserId, CancellationToken.None));

@@ -59,8 +59,8 @@ public static class AccountsEndpoints
         string? tz,
         CancellationToken ct)
     {
-        var sessions = await service.ListSessionsToday(principal.GetUserId(), null, 0, LocalCalendar.ResolveTimeZone(tz), ct);
-        return TypedResults.Ok(new AccountTodaySessionsResponseDto(null, sessions));
+        var today = await service.ListSessionsToday(principal.GetUserId(), null, 0, LocalCalendar.ResolveTimeZone(tz), ct);
+        return TypedResults.Ok(new AccountTodaySessionsResponseDto(null, today.Sessions, today.Total));
     }
 
     private static async Task<IResult> ListCurrentSession(
@@ -119,9 +119,9 @@ public static class AccountsEndpoints
         CancellationToken ct)
     {
         var parsedAccountId = ParseId(accountId, "accountId");
-        var sessions = await service.ListSessionsToday(
+        var today = await service.ListSessionsToday(
             principal.GetUserId(), parsedAccountId, 0, LocalCalendar.ResolveTimeZone(tz), ct);
-        return TypedResults.Ok(new AccountTodaySessionsResponseDto(parsedAccountId, sessions));
+        return TypedResults.Ok(new AccountTodaySessionsResponseDto(parsedAccountId, today.Sessions, today.Total));
     }
 
     private static async Task<IResult> ListAccountCurrentSession(

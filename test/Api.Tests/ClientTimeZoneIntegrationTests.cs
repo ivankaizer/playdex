@@ -72,8 +72,32 @@ public sealed class ClientTimeZoneIntegrationTests(PostgresFixture postgres)
 
         var today = await CreateService(db).ListSessionsToday(seed.User.Id, null, 0, Tokyo, CancellationToken.None);
 
-        Assert.Equal([crossed.Id, running.Id], today.Select(session => session.SessionId));
-        Assert.DoesNotContain(yesterday.Id, today.Select(session => session.SessionId));
+        Assert.Equal([crossed.Id, running.Id], today.Sessions.Select(session => session.SessionId));
+        Assert.DoesNotContain(yesterday.Id, today.Sessions.Select(session => session.SessionId));
+        Assert.Equal(2, today.Total);
+    }
+
+    [Fact]
+    public async Task TodayListsTheNewestSessionsAndCountsThemAll()
+    {
+        if (!postgres.IsConfigured) return;
+
+        await using var db = CreateDb();
+        await using var transaction = await db.Database.BeginTransactionAsync();
+        var seed = await Seed(db);
+        var game = await AddGame(db, $"Busy day {seed.Suffix}");
+        var todayStart = LocalCalendar.StartOf(LocalCalendar.DateOf(DateTimeOffset.UtcNow, Tokyo), Tokyo);
+        var sessions = Enumerable.Range(0, AccountsRepository.TodaySessionLimit + 2)
+            .Select(index => AddSession(db, seed, game, todayStart.AddMinutes(index), 30))
+            .ToList();
+        await db.SaveChangesAsync();
+
+        var today = await CreateService(db).ListSessionsToday(seed.User.Id, null, 0, Tokyo, CancellationToken.None);
+
+        Assert.Equal(AccountsRepository.TodaySessionLimit + 2, today.Total);
+        Assert.Equal(
+            sessions.Select(session => session.Id).Reverse().Take(AccountsRepository.TodaySessionLimit),
+            today.Sessions.Select(session => session.SessionId));
     }
 
     [Fact]
