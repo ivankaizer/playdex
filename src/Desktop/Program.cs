@@ -73,7 +73,8 @@ public static class Program
         var healthSignal = args.FirstOrDefault(a => a.StartsWith("--update-health=", StringComparison.Ordinal))?["--update-health=".Length..];
         Paths.MoveLegacyLauncherData();
         var store = ConfigStore.Default();
-        var config = store.LoadOrCreate();
+        // A config that can't be read is moved aside and replaced with a default one: the app still opens.
+        var config = store.LoadOrRecover();
         Log.Info($"desktop: {DesktopHost.Version} starting{(background ? " in the tray" : "")}{(bigPicture ? " in Big Picture" : "")}, mode {config.Shell.Mode}{(HasPackageIdentity() ? ", WITH package identity" : "")}");
         Application.Start(callback =>
         {

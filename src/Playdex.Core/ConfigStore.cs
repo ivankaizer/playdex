@@ -69,6 +69,31 @@ public sealed class ConfigStore
         return Normalize(JsonSerializer.Deserialize(stream, ConfigJson.Default.AppConfig) ?? new AppConfig());
     }
 
+    /// <summary>
+    /// <see cref="LoadOrCreate"/> for the app's start: a config that isn't valid JSON doesn't stop the app. It is moved
+    /// aside (config.json.corrupt-…, see <see cref="CorruptFile"/>) and a default config takes its place, so the app
+    /// opens and the games, keys and settings can be set up again or copied back from the old file.
+    /// </summary>
+    public AppConfig LoadOrRecover()
+    {
+        try
+        {
+            return LoadOrCreate();
+        }
+        catch (JsonException ex)
+        {
+            Log.Error($"config: {PathToConfig} is not valid JSON; starting with a default config", ex);
+            var config = new AppConfig();
+            if (CorruptFile.MoveAside(PathToConfig) is not null)
+            {
+                Save(config);
+                return config;
+            }
+            // Not moved: the default config stays in memory, and the next save replaces the unreadable file.
+            return Normalize(config);
+        }
+    }
+
     public async Task<AppConfig> LoadOrCreateAsync(CancellationToken cancellationToken = default)
     {
         if (!File.Exists(PathToConfig))

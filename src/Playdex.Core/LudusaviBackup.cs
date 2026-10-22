@@ -49,8 +49,19 @@ public sealed class BackupStateStore(string path) : IDisposable
             return new BackupState();
         }
 
-        await using var stream = File.OpenRead(PathToState);
-        var state = await JsonSerializer.DeserializeAsync(stream, BackupJson.Default.BackupState, cancellationToken) ?? new BackupState();
+        BackupState state;
+        try
+        {
+            await using var stream = File.OpenRead(PathToState);
+            state = await JsonSerializer.DeserializeAsync(stream, BackupJson.Default.BackupState, cancellationToken) ?? new BackupState();
+        }
+        catch (JsonException ex)
+        {
+            // The app still starts: every game's backup is due again, and the old state is kept aside.
+            Log.Error($"backups: {PathToState} is not valid JSON; starting with no backup history", ex);
+            CorruptFile.MoveAside(PathToState);
+            return new BackupState();
+        }
         state.Games = new Dictionary<string, GameBackupState>(
             state.Games ?? new Dictionary<string, GameBackupState>(),
             StringComparer.OrdinalIgnoreCase);

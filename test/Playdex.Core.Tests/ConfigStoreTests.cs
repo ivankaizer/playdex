@@ -154,6 +154,34 @@ public sealed class ConfigStoreTests : IDisposable
         Assert.Equal(ShellConfig.DesktopMode, store.LoadOrCreate().Shell.Mode);
     }
 
+    [Fact]
+    public void ACorruptConfigIsMovedAsideAndTheAppStartsWithDefaults()
+    {
+        // The Wrapper's old config is still there; recovering from a corrupt config doesn't migrate it again.
+        File.WriteAllText(WrapperConfig, """{ "api": { "apiKey": "wrapper-key" } }""");
+        Directory.CreateDirectory(Path.GetDirectoryName(ConfigPath)!);
+        File.WriteAllText(ConfigPath, """{ "api": { "apiKey": "key" """);
+        Assert.ThrowsAny<System.Text.Json.JsonException>(() => Store().LoadOrCreate());
+
+        var config = Store().LoadOrRecover();
+
+        Assert.Equal("", config.Api.ApiKey);
+        Assert.Empty(config.Games);
+        var aside = Assert.Single(Directory.GetFiles(Path.GetDirectoryName(ConfigPath)!, "config.json.corrupt-*"));
+        Assert.Equal("""{ "api": { "apiKey": "key" """, File.ReadAllText(aside));
+        Assert.Equal("", Store().LoadOrCreate().Api.ApiKey); // a valid default config took its place
+    }
+
+    [Fact]
+    public void AReadableConfigIsLoadedAsItIs()
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(ConfigPath)!);
+        File.WriteAllText(ConfigPath, """{ "api": { "apiKey": "key" } }""");
+
+        Assert.Equal("key", Store().LoadOrRecover().Api.ApiKey);
+        Assert.Empty(Directory.GetFiles(Path.GetDirectoryName(ConfigPath)!, "*.corrupt-*"));
+    }
+
     public void Dispose() => Directory.Delete(_directory, recursive: true);
 
     private ConfigStore Store() => new(ConfigPath, WrapperConfig, LauncherConfig);

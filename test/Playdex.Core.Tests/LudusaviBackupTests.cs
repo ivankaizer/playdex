@@ -28,6 +28,20 @@ public sealed class LudusaviBackupTests
     }
 
     [Fact]
+    public async Task ACorruptBackupStateIsMovedAsideAndStartsEmpty()
+    {
+        var path = Path.Combine(NewTempDir(), "ludusavi-backups.json");
+        await File.WriteAllTextAsync(path, "{ \"games\": { \"doom\": ");
+        using var store = new BackupStateStore(path);
+
+        var loaded = await store.LoadAsync();
+
+        Assert.Empty(loaded.Games);
+        Assert.False(File.Exists(path));
+        Assert.Single(Directory.GetFiles(Path.GetDirectoryName(path)!, "ludusavi-backups.json.corrupt-*"));
+    }
+
+    [Fact]
     public async Task ASchedulerPassSurvivesGamesAddedAndRemovedWhileItRuns()
     {
         var directory = NewTempDir();
