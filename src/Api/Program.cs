@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
@@ -115,7 +116,7 @@ builder.Services.AddHealthChecks()
     .AddCheck<MigrationHealthCheck>("migrations");
 
 var app = builder.Build();
-await app.Services.GetRequiredService<MigrationRunner>().RunAsync();
+await RunMigrations(app.Services.GetRequiredService<MigrationRunner>());
 
 if (args.Contains("migrate", StringComparer.OrdinalIgnoreCase))
 {
@@ -183,5 +184,21 @@ app.MapFallback("/api/{**path}", RouteNotFound);
 app.Run();
 
 static IResult RouteNotFound() => TypedResults.NotFound();
+
+// The host only listens for shutdown signals once it runs, so a stop request during migrations has to be caught here:
+// it cancels the migration (rolling back its transaction) instead of being ignored until the host starts.
+static async Task RunMigrations(MigrationRunner runner)
+{
+    using var stopping = new CancellationTokenSource();
+    void Stop(PosixSignalContext context)
+    {
+        context.Cancel = true;
+        stopping.Cancel();
+    }
+
+    using var terminate = PosixSignalRegistration.Create(PosixSignal.SIGTERM, Stop);
+    using var interrupt = PosixSignalRegistration.Create(PosixSignal.SIGINT, Stop);
+    await runner.RunAsync(stopping.Token);
+}
 
 public partial class Program;
