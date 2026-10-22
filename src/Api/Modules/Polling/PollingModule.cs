@@ -15,6 +15,7 @@ public static class PollingModule
 
         services.AddScoped<PollingRepository>();
         services.AddSingleton<PsnTokenCache>();
+        services.AddSingleton<IgdbTokenCache>();
         services.AddHttpClient<IProviderClient, SteamClient>(c => c.Timeout = TimeSpan.FromSeconds(15));
         services.AddHttpClient<IProviderClient, PsnClient>(c => c.Timeout = TimeSpan.FromSeconds(15))
             .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler

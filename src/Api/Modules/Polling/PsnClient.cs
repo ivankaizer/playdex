@@ -35,7 +35,7 @@ public sealed class PsnClient(
         if (string.IsNullOrEmpty(npsso))
             throw new ProviderPollException("PSN credential is missing an NPSSO token.");
 
-        var accessToken = await GetAccessToken(npsso, ct);
+        var accessToken = await GetAccessToken(credential.Id, npsso, ct);
 
         if (string.IsNullOrEmpty(accountId))
         {
@@ -65,15 +65,16 @@ public sealed class PsnClient(
         );
     }
 
-    private async Task<string> GetAccessToken(string npsso, CancellationToken ct)
+    private async Task<string> GetAccessToken(long credentialId, string npsso, CancellationToken ct)
     {
-        if (tokenCache.TryGet(npsso, DateTimeOffset.UtcNow.AddMinutes(1), out var cachedAccessToken))
+        if (tokenCache.TryGet(credentialId, npsso, DateTimeOffset.UtcNow.AddMinutes(1), out var cachedAccessToken))
             return cachedAccessToken;
 
         var code = await ExchangeNpssoForCode(npsso, ct);
         var tokenResponse = await ExchangeCodeForAccessToken(code, ct);
 
         tokenCache.Set(
+            credentialId,
             npsso,
             tokenResponse.AccessToken,
             DateTimeOffset.UtcNow.AddSeconds(tokenResponse.ExpiresIn));
@@ -252,25 +253,43 @@ public sealed class PsnClient(
     }
 }
 
+/// <summary>
+/// PSN access tokens per credential. Keyed by credential rather than NPSSO, so a rotated NPSSO replaces the old entry
+/// instead of leaving it behind for the life of the process; tokens of deleted credentials are swept once expired.
+/// </summary>
 public sealed class PsnTokenCache
 {
-    private readonly ConcurrentDictionary<string, CachedToken> _tokens = new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<long, CachedToken> _tokens = new();
 
-    internal bool TryGet(string npsso, DateTimeOffset minimumExpiresAt, out string accessToken)
+    internal int Count => _tokens.Count;
+
+    internal bool TryGet(long credentialId, string npsso, DateTimeOffset minimumExpiresAt, out string accessToken)
     {
-        if (_tokens.TryGetValue(npsso, out var cached) && cached.ExpiresAt > minimumExpiresAt)
+        if (_tokens.TryGetValue(credentialId, out var cached))
         {
-            accessToken = cached.AccessToken;
-            return true;
+            if (cached.Npsso == npsso && cached.ExpiresAt > minimumExpiresAt)
+            {
+                accessToken = cached.AccessToken;
+                return true;
+            }
+
+            _tokens.TryRemove(new KeyValuePair<long, CachedToken>(credentialId, cached));
         }
 
-        _tokens.TryRemove(npsso, out _);
         accessToken = string.Empty;
         return false;
     }
 
-    internal void Set(string npsso, string accessToken, DateTimeOffset expiresAt) =>
-        _tokens[npsso] = new CachedToken(accessToken, expiresAt);
+    internal void Set(long credentialId, string npsso, string accessToken, DateTimeOffset expiresAt)
+    {
+        var now = DateTimeOffset.UtcNow;
+        foreach (var expired in _tokens.Where(entry => entry.Value.ExpiresAt <= now))
+        {
+            _tokens.TryRemove(expired);
+        }
 
-    private sealed record CachedToken(string AccessToken, DateTimeOffset ExpiresAt);
+        _tokens[credentialId] = new CachedToken(npsso, accessToken, expiresAt);
+    }
+
+    private sealed record CachedToken(string Npsso, string AccessToken, DateTimeOffset ExpiresAt);
 }

@@ -138,6 +138,23 @@ public sealed class PsnClientTests
             request.Uri.AbsolutePath.EndsWith("/basicPresences", StringComparison.Ordinal)));
     }
 
+    [Fact]
+    public void ARotatedNpssoReplacesItsCachedTokenAndExpiredTokensAreSwept()
+    {
+        var cache = new PsnTokenCache();
+        var later = DateTimeOffset.UtcNow.AddHours(1);
+        cache.Set(1, "old-npsso", "old-token", later);
+        cache.Set(2, "deleted-credential", "expired-token", DateTimeOffset.UtcNow.AddSeconds(-1));
+
+        Assert.False(cache.TryGet(1, "new-npsso", DateTimeOffset.UtcNow, out _));
+        cache.Set(1, "new-npsso", "new-token", later);
+
+        Assert.True(cache.TryGet(1, "new-npsso", DateTimeOffset.UtcNow, out var token));
+        Assert.Equal("new-token", token);
+        Assert.Equal(1, cache.Count);
+        Assert.False(cache.TryGet(1, "old-npsso", DateTimeOffset.UtcNow, out _));
+    }
+
     private static PsnClient CreateClient(
         HttpMessageHandler handler,
         PsnTokenCache? tokenCache = null) => new(

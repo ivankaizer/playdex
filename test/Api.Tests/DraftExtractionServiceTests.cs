@@ -52,7 +52,7 @@ public sealed class DraftExtractionServiceTests(PostgresFixture postgres)
         var draftRepository = new DraftRepository(db);
         var manual = new ManualService(
             manualRepository,
-            new IgdbClient(new HttpClient(), igdbOptions),
+            new IgdbClient(new HttpClient(), igdbOptions, new IgdbTokenCache()),
             igdbOptions,
             new GameResolver(db));
         var drafts = new DraftService(draftRepository, db, manual, manualRepository);
