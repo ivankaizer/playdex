@@ -4,7 +4,7 @@
 // the hash in the policy, or the browser blocks it. Run after the build: `bun run check:csp`.
 //
 // Each target pairs a built page with the file its policy is served from. A page that wasn't built is
-// skipped, but at least one must exist.
+// skipped (landing.yml builds only the landing), but at least one must exist.
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -13,6 +13,7 @@ const root = fileURLToPath(new URL("..", import.meta.url));
 
 const targets = [
   { page: "dist/index.html", policyFile: "security-headers.conf" },
+  { page: "landing/dist/index.html", policyFile: "landing/public/_headers" },
 ];
 
 /** The CSP from an nginx snippet (`add_header Content-Security-Policy "..."`) or a Cloudflare `_headers` file. */

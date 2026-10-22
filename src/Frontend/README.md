@@ -48,8 +48,9 @@ is on another origin, the entrypoint also adds it to the CSP's `connect-src`.
 ## Security headers
 
 nginx sends the security headers and the Content-Security-Policy from
-`security-headers.conf`, included in every location of `nginx.conf`. The CSP
-allows the theme script and boot-loader style inlined in `index.html` by sha256
-hash, so an edit to either block changes its hash: `bun run check:csp` then
-fails and prints the hash the policy needs. CI and the image build run the
-check.
+`security-headers.conf`, included in every location of `nginx.conf`; the
+landing sends the same set from `landing/public/_headers`. Both CSPs allow the
+theme script and boot-loader style inlined in `index.html` and
+`landing/index.html` by sha256 hash, so an edit to either block changes its
+hash: `bun run check:csp` then fails and prints the hash the policy needs. CI,
+the landing deploy and the image build run the check.

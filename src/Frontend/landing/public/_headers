@@ -1,6 +1,13 @@
 /assets/*
   Cache-Control: public, max-age=31536000, immutable
 
+# The same baseline as the app's src/Frontend/security-headers.conf. The landing never calls an API, so
+# connect-src stays on this origin. The hashes allow the theme script and boot-loader style inlined in
+# landing/index.html; `bun run check:csp` fails when they no longer match landing/dist/index.html.
 /*
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin
+  X-Frame-Options: DENY
+  Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=()
+  Cross-Origin-Opener-Policy: same-origin
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'sha256-f++1YCmltJXMhNu0wmoPa/24q1dxRHC40aphoBs/CcU='; style-src 'self' 'sha256-MXxjGA3DQ1FfYsz6cErIy3e24scXKCbIB9mn3z3A1uY=' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'
