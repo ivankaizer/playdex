@@ -31,13 +31,13 @@ import type { AccountDailyStatsResponse, AccountStatsRangeResponse } from "@/mod
 import { LiveSessionControl } from "../sessions/components/LiveSessionControl";
 import {
   beginRefresh,
-  completeRefresh,
+  completeSection,
   dailyPlatforms,
   dailySessionCounts,
   dailyTotals,
   dashboardActivityRequests,
   dashboardRequests,
-  failRefresh,
+  failSection,
   formatHoursGrouped,
   formatShortDuration,
   getOverviewView,
@@ -48,9 +48,10 @@ import {
   initialDashboardState,
   recapPath,
   recentSessionsRequest,
-  waitAllOrCancel,
   type DashboardActivity,
   type DashboardPlatformView,
+  type DashboardSection,
+  type DashboardSectionData,
   type DashboardState,
   type OverviewKpi,
   type OverviewPeriod,
@@ -144,64 +145,49 @@ export function DashboardPage() {
     }
   }, []);
 
+  /** Each panel loads on its own: a failing endpoint leaves its error in that panel, not a blank dashboard. */
   const refreshDashboard = useCallback(
     async (silent: boolean) => {
       const lifetimeController = lifetime.current;
+      const signal = lifetimeController.signal;
       setState((current) => beginRefresh(current, silent));
-      void refreshActivity(lifetimeController.signal);
-      const siblingCancellation = new AbortController();
-      const linkAbort = () => siblingCancellation.abort();
-      lifetimeController.signal.addEventListener("abort", linkAbort);
-      try {
-        const requests = dashboardRequests(new Date());
-        const options = { onAuthFailure: logout, signal: siblingCancellation.signal };
-        const [todaySessions, todayStats, monthlyStats, yearlyStats, currentSession, activeManualSession, recentSessions] =
-          await waitAllOrCancel<
-            [
-              AccountSessionsResponse,
-              AccountStatsRangeResponse,
-              AccountStatsRangeResponse,
-              AccountStatsRangeResponse,
-              AccountCurrentSessionResponse,
-              ManualActiveSessionResponse,
-              AccountSessionsResponse,
-            ]
-          >(
-            [
-              apiRequest<AccountSessionsResponse>(requests.todaySessions, options),
-              apiRequest<AccountStatsRangeResponse>(requests.todayStats, options),
-              apiRequest<AccountStatsRangeResponse>(requests.monthlyStats, options),
-              apiRequest<AccountStatsRangeResponse>(requests.yearlyStats, options),
-              apiRequest<AccountCurrentSessionResponse>(requests.currentSession, options),
-              apiRequest<ManualActiveSessionResponse>(requests.activeManualSession, options),
-              apiRequest<AccountSessionsResponse>(recentSessionsRequest, options),
-            ],
-            siblingCancellation,
-          );
-        if (lifetimeController.signal.aborted) return;
-
-        setState((current) =>
-          completeRefresh(
-            current,
-            {
-              todaySessions: todaySessions.sessions,
-              todaySessionCount: todayStats.stats.sessionCount,
-              recentSessions: recentSessions.sessions,
-              todayPlatformTotals: todayStats.stats.platforms,
-              currentSession: currentSession.session,
-              activeManualSession: activeManualSession.session,
-              monthlyStats: monthlyStats.stats,
-              yearlyStats: yearlyStats.stats,
-            },
-            new Date(),
-          ),
-        );
-      } catch (error) {
-        if (lifetimeController.signal.aborted) return;
-        setState((current) => failRefresh(current, errorMessage(error)));
-      } finally {
-        lifetimeController.signal.removeEventListener("abort", linkAbort);
-      }
+      void refreshActivity(signal);
+      const requests = dashboardRequests(new Date());
+      const options = { onAuthFailure: logout, signal };
+      const load = async <S extends DashboardSection>(section: S, fetch: () => Promise<DashboardSectionData[S]>) => {
+        try {
+          const data = await fetch();
+          if (!signal.aborted) setState((current) => completeSection(current, section, data, new Date()));
+        } catch (error) {
+          if (signal.aborted || isAbortError(error)) return;
+          setState((current) => failSection(current, section, errorMessage(error)));
+        }
+      };
+      await Promise.all([
+        load("live", async () => {
+          const [current, manual] = await Promise.all([
+            apiRequest<AccountCurrentSessionResponse>(requests.currentSession, options),
+            apiRequest<ManualActiveSessionResponse>(requests.activeManualSession, options),
+          ]);
+          return { currentSession: current.session, activeManualSession: manual.session };
+        }),
+        load("today", async () => {
+          const [sessions, stats] = await Promise.all([
+            apiRequest<AccountSessionsResponse>(requests.todaySessions, options),
+            apiRequest<AccountStatsRangeResponse>(requests.todayStats, options),
+          ]);
+          return { todaySessions: sessions.sessions, todaySessionCount: stats.stats.sessionCount, todayPlatformTotals: stats.stats.platforms };
+        }),
+        load("recent", async () => ({
+          recentSessions: (await apiRequest<AccountSessionsResponse>(recentSessionsRequest, options)).sessions,
+        })),
+        load("month", async () => ({
+          monthlyStats: (await apiRequest<AccountStatsRangeResponse>(requests.monthlyStats, options)).stats,
+        })),
+        load("year", async () => ({
+          yearlyStats: (await apiRequest<AccountStatsRangeResponse>(requests.yearlyStats, options)).stats,
+        })),
+      ]);
     },
     [refreshActivity],
   );
@@ -267,7 +253,9 @@ export function DashboardPage() {
           startedAt: state.currentSession.startedAt,
           capsuleUrl: state.currentSession.capsuleUrl,
         });
-  const loading = state.isDashboardLoading;
+  const { loading, errors } = state;
+  // Today falls back to the daily breakdown, which loads on its own: the today panel's error matters only without it.
+  const todayError = activity === null ? errors.today : "";
   const today = getTodayView(state, activity, now);
   const week = getWeekView(activity, now);
   const recent = getRecentSessions(state, now);
@@ -277,7 +265,7 @@ export function DashboardPage() {
 
   return (
     <AppLayout title={greetingFor(now)}>
-      {loading ? (
+      {loading.live ? (
         <section aria-label="Live session controls" aria-busy="true" className="pdx-card !rounded-[28px] !py-3 !pl-7 !pr-3 min-[1041px]:!rounded-full">
           <div className="flex h-10 items-center gap-3">
             <span aria-hidden="true" className="h-[7px] w-[7px] rounded-full bg-faint-2"></span>
@@ -298,7 +286,7 @@ export function DashboardPage() {
         />
       )}
 
-      {state.dashboardError.length > 0 && <ErrorNote>{state.dashboardError}</ErrorNote>}
+      {errors.live.length > 0 && <ErrorNote>Couldn't check for a running session. {errors.live}</ErrorNote>}
 
       <section className="pdx-card grid gap-x-14 gap-y-10 [grid-template-columns:repeat(auto-fit,minmax(min(340px,100%),1fr))]">
         <div className="flex min-w-0 flex-col gap-8">
@@ -320,16 +308,22 @@ export function DashboardPage() {
                 </svg>
               </button>
             </div>
-            <div className="mt-3 flex flex-wrap items-baseline gap-3">
-              <span className="pdx-num text-[64px] font-semibold leading-none tracking-[-0.03em]">
-                {loading ? "—" : formatShortDuration(today.seconds)}
-              </span>
-              {!loading && (
-                <span className="text-[15px] text-muted">
-                  played across {formatCountNoun(today.sessions, "session")}
+            {todayError.length > 0 ? (
+              <div className="mt-3">
+                <ErrorNote>Couldn't load today's play time. {todayError}</ErrorNote>
+              </div>
+            ) : (
+              <div className="mt-3 flex flex-wrap items-baseline gap-3">
+                <span className="pdx-num text-[64px] font-semibold leading-none tracking-[-0.03em]">
+                  {loading.today ? "—" : formatShortDuration(today.seconds)}
                 </span>
-              )}
-            </div>
+                {!loading.today && (
+                  <span className="text-[15px] text-muted">
+                    played across {formatCountNoun(today.sessions, "session")}
+                  </span>
+                )}
+              </div>
+            )}
           </div>
 
           <div className="flex flex-col gap-3">
@@ -379,7 +373,9 @@ export function DashboardPage() {
               View all
             </button>
           </div>
-          {loading ? (
+          {errors.recent.length > 0 ? (
+            <ErrorNote>Couldn't load your recent sessions. {errors.recent}</ErrorNote>
+          ) : loading.recent ? (
             [1, 2, 3].map((item) => (
               <div key={item} className="grid grid-cols-[48px_minmax(0,1fr)_auto] items-center gap-4 py-2.5">
                 <div className="h-12 w-12 rounded-[14px] bg-track"></div>
@@ -448,9 +444,15 @@ export function DashboardPage() {
           </div>
         </div>
 
+        {errors[period].length > 0 && (
+          <ErrorNote>
+            Couldn't load {period === "month" ? "this month's" : "this year's"} stats. {errors[period]}
+          </ErrorNote>
+        )}
+
         <div className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(min(200px,100%),1fr))]">
           {overview.kpis.map((kpi) => (
-            <KpiTile key={kpi.label} kpi={kpi} loading={loading} text={kpi.label === "Top title"} />
+            <KpiTile key={kpi.label} kpi={kpi} loading={loading[period]} text={kpi.label === "Top title"} />
           ))}
         </div>
 
@@ -515,7 +517,7 @@ export function DashboardPage() {
                 <ShareBar pct={game.pct} className="col-start-2 col-end-4" />
               </div>
             ))}
-            {!loading && overview.fewGamesNote && <p className="pdx-dashed mt-auto">{overview.fewGamesNote}</p>}
+            {!loading[period] && overview.fewGamesNote && <p className="pdx-dashed mt-auto">{overview.fewGamesNote}</p>}
           </div>
         </div>
       </section>
