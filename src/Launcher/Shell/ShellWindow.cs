@@ -100,6 +100,7 @@ internal sealed partial class ShellWindow : Window
         _onMessage = onMessage;
         Title = "Playdex";
         _hwnd = WindowNative.GetWindowHandle(this);
+        SetIcon(_hwnd);
 
         // Native splash: what shows until the page paints over it (WebView2's own background is transparent).
         var splash = new TextBlock
@@ -158,6 +159,32 @@ internal sealed partial class ShellWindow : Window
             // The size it restores to; it opens maximized (Show).
             var scale = Native.GetDpiForWindow(_hwnd) / 96.0;
             AppWindow.Resize(new SizeInt32((int)(1360 * scale), (int)(860 * scale)));
+        }
+    }
+
+    // The exe's icon (ApplicationIcon), loaded once and kept for the process: windows come and go with the tray.
+    private static nint _largeIcon;
+    private static nint _smallIcon;
+
+    /// <summary>
+    /// An unpackaged WinUI window doesn't take the exe's icon: without this the title bar, taskbar and Alt+Tab show
+    /// the generic one.
+    /// </summary>
+    private static unsafe void SetIcon(nint hwnd)
+    {
+        if (_largeIcon == 0 && Environment.ProcessPath is { } exe)
+        {
+            nint large, small;
+            if (Native.ExtractIconEx(exe, 0, &large, &small, 1) > 0)
+            {
+                _largeIcon = large;
+                _smallIcon = small;
+            }
+        }
+        if (_largeIcon != 0)
+        {
+            Native.SendMessage(hwnd, Native.WmSetIcon, Native.IconBig, _largeIcon);
+            Native.SendMessage(hwnd, Native.WmSetIcon, Native.IconSmall, _smallIcon);
         }
     }
 
