@@ -11,10 +11,15 @@ concurrency:
   group: test-${{ github.event.pull_request.number || github.sha }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 jobs:
   test:
     name: .NET and frontend tests
-    runs-on: [self-hosted, macserv]
+    # A private repository runs on macserv to save GitHub-hosted minutes. A public one gets those minutes for free
+    # and runs on GitHub, so code from pull requests (forks included) never runs on macserv.
+    runs-on: ${{ github.event.repository.private && fromJSON('["self-hosted","macserv"]') || 'ubuntu-latest' }}
     services:
       db:
         image: postgres:16
@@ -31,17 +36,17 @@ jobs:
           --health-retries=5
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Set up .NET
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
         with:
           dotnet-version: '10.0.x'
         env:
           DOTNET_INSTALL_DIR: ${{ runner.tool_cache }}/dotnet   # the default /usr/share/dotnet isn't writable on macserv
 
       - name: Set up Bun
-        uses: oven-sh/setup-bun@v2
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version: 1.3.14
 
@@ -85,7 +90,7 @@ jobs:
     needs: test
     # Secrets are unavailable to fork PRs.
     if: github.event.pull_request.head.repo.full_name == github.repository
-    uses: ivankaizer/preview-kit/.github/workflows/preview.yml@v1
+    uses: ivankaizer/preview-kit/.github/workflows/preview.yml@96a4c23d83f1bf93aa924e29adc101db7837a6a0 # v1
     with:
       runner: '["self-hosted","macserv"]'
       # One comment per deploy, so earlier demos stay in the PR thread.
@@ -93,7 +98,8 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
-    secrets: inherit
+    secrets:
+      DOKPLOY_API_KEY: ${{ secrets.DOKPLOY_API_KEY }}
 
   # A push to main that passes the tests builds the production images on the macserv runner and
   # deploys them to https://dash.playdex.dev (preview-kit's release workflow; see the "production"
@@ -102,8 +108,9 @@ jobs:
     name: Production
     needs: test
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    uses: ivankaizer/preview-kit/.github/workflows/release.yml@v1
+    uses: ivankaizer/preview-kit/.github/workflows/release.yml@96a4c23d83f1bf93aa924e29adc101db7837a6a0 # v1
     with:
       runner: '["self-hosted","macserv"]'
       tag: main-${{ github.sha }}
-    secrets: inherit
+    secrets:
+      DOKPLOY_API_KEY: ${{ secrets.DOKPLOY_API_KEY }}
