@@ -12,6 +12,8 @@ html[data-mode="desktop"] {
   height: 100vh;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
+  /* The window's width, never the content's: a wide shelf or top bar would otherwise widen the page past the window. */
+  grid-template-columns: minmax(0, 1fr);
   font-size: 14px;
   user-select: none;
 }
@@ -234,6 +236,20 @@ html[data-input="pointer"] .dk :is([data-nav][data-focused], :focus-visible) {
   background: rgb(var(--page) / 0.82);
   border-bottom: 1px solid rgb(var(--line) / 0.6);
 }
+/* Only the game starting or playing gives way (its title ellipsizes); the rest keeps its size. */
+.dk-top > * {
+  flex: none;
+}
+.dk-top > :is(.dk-spacer, .dk-live, .dk-live-wrap) {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+.dk-top > .dk-spacer {
+  flex-grow: 1;
+}
+.dk-live-wrap > .dk-live {
+  max-width: 100%;
+}
 .dk-top .brand {
   font-size: 12px;
   letter-spacing: 0.32em;
@@ -377,6 +393,7 @@ html[data-input="pointer"] .dk :is([data-nav][data-focused], :focus-visible) {
 .dk-page {
   padding: 28px 36px 40px;
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   align-content: start;
   gap: 24px;
   animation: view-in 0.28s var(--ease-out) both;
@@ -1261,22 +1278,26 @@ html[data-input="pointer"] .dk :is([data-nav][data-focused], :focus-visible) {
   display: flex;
   flex-direction: column;
 }
+/* Wraps onto a second row when the covers' column is narrow. */
 .dk-grid-bar {
-  height: 60px;
+  min-height: 60px;
   flex: none;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 12px;
-  padding: 0 24px;
+  gap: 8px 12px;
+  padding: 12px 24px;
   border-bottom: 1px solid rgb(var(--line) / 0.5);
 }
 .dk-grid-bar h1 {
   margin: 0;
   font-size: 17px;
   font-weight: 600;
+  white-space: nowrap;
 }
 .dk-grid-bar .dk-muted {
   font-size: 13px;
+  white-space: nowrap;
 }
 .dk-select {
   height: 32px;
@@ -1313,7 +1334,8 @@ html[data-input="pointer"] .dk :is([data-nav][data-focused], :focus-visible) {
   scrollbar-width: thin;
   padding: 22px 24px 32px;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(var(--dk-cover, 148px), 1fr));
+  /* At least two columns, however narrow the column and large the size picked. */
+  grid-template-columns: repeat(auto-fill, minmax(min(var(--dk-cover, 148px), 40%), 1fr));
   gap: 22px 18px;
   align-content: start;
 }
@@ -1654,4 +1676,115 @@ html[data-input="pointer"] .dk :is([data-nav][data-focused], :focus-visible) {
 .dk-cell-actions .dk-icon-btn svg {
   width: 15px;
   height: 15px;
+}
+
+/*
+ * ---------- A smaller window ----------
+ * The window can be made as small as 800 x 560 (ShellWindow). Below its full size the side panels narrow, the top bar
+ * drops its labels for icons, and Home's tiles stack, so nothing is cut off at the right.
+ */
+@media (max-width: 1200px) {
+  .dk-filters {
+    width: 200px;
+  }
+  .dk-details {
+    width: 300px;
+  }
+  .dk-top .dk-sync .dk-top-label,
+  .dk-top-tools .dk-btn .dk-top-label,
+  .dk-live-label {
+    display: none;
+  }
+  .dk-top-tools .dk-btn-sm {
+    width: 36px;
+    height: 36px;
+    padding: 0;
+  }
+}
+@media (max-width: 1000px) {
+  .dk-side {
+    width: 260px;
+  }
+  .dk-details {
+    width: 260px;
+  }
+  .dk-top {
+    gap: 12px;
+    padding: 0 12px 0 16px;
+  }
+  .dk-top .brand .dk-top-label {
+    display: none;
+  }
+  .dk-tabs {
+    margin-left: 0;
+  }
+  .dk-tabs button {
+    padding: 0 12px;
+  }
+  .dk-page {
+    padding: 24px 24px 32px;
+  }
+  .dk-hero-logo {
+    left: 24px;
+    right: 24px;
+  }
+  .dk-playbar {
+    gap: 24px;
+    padding: 14px 24px 22px;
+  }
+  .dk-playbar > .dk-btn + .dk-btn {
+    margin-left: -12px;
+  }
+  .dk-playbar > .dk-icon-btn + .dk-icon-btn {
+    margin-left: -16px;
+  }
+  .dk-game-body {
+    padding: 0 24px 32px;
+  }
+  .dk-grid-bar {
+    padding: 12px 18px;
+  }
+  .dk-covers {
+    padding: 18px 18px 28px;
+    gap: 18px 14px;
+  }
+  /* Manage's tables: the columns narrow and the row's buttons wrap, so they stay in view. */
+  .dk-table :is(th, td) {
+    padding-left: 10px;
+    padding-right: 10px;
+  }
+  .dk-cell-game {
+    min-width: 160px;
+  }
+  .dk-cell-actions {
+    flex-wrap: wrap;
+  }
+}
+/* The lead tile over the other two, which sit side by side. */
+@media (max-width: 920px) {
+  .dk-jump-grid {
+    flex-direction: column;
+    height: auto;
+  }
+  .dk-lead {
+    flex: none;
+    height: 260px;
+  }
+  .dk-jump-side {
+    flex: none;
+    height: 150px;
+    grid-template-rows: none;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .dk-lead-body {
+    left: 22px;
+    right: 22px;
+    bottom: 20px;
+  }
+  .dk-lead-title {
+    font-size: 26px;
+  }
+  .dk-hero-title {
+    font-size: 32px;
+  }
 }

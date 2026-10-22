@@ -159,6 +159,12 @@ internal sealed partial class ShellWindow : Window
             // The size it restores to; it opens maximized (Show).
             var scale = Native.GetDpiForWindow(_hwnd) / 96.0;
             AppWindow.Resize(new SizeInt32((int)(1360 * scale), (int)(860 * scale)));
+            // The smallest the desktop layout is made for (desktop.css): below it the page would be cut off.
+            if (AppWindow.Presenter is OverlappedPresenter overlapped)
+            {
+                overlapped.PreferredMinimumWidth = (int)(800 * scale);
+                overlapped.PreferredMinimumHeight = (int)(560 * scale);
+            }
         }
     }
 
