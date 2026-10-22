@@ -34,6 +34,26 @@ export function trapTab(event: KeyboardEvent | ReactKeyboardEvent, container: HT
 }
 
 /**
+ * A modal dialog's onKeyDown: Escape calls `close` and Tab stays inside (`trapTab`). Leave `close` out while the dialog
+ * is busy (saving) so Escape does nothing then. An Escape that something inside the dialog already handled (a menu or a
+ * list that closes on it and prevents the default) is left alone, so it closes only that.
+ */
+export function dialogKeyDown(
+  event: KeyboardEvent | ReactKeyboardEvent,
+  container: HTMLElement | null,
+  close: (() => void) | undefined,
+): void {
+  if (event.key === "Escape") {
+    if (close === undefined || event.defaultPrevented) return;
+    event.preventDefault();
+    event.stopPropagation();
+    close();
+    return;
+  }
+  trapTab(event, container);
+}
+
+/**
  * While `active`, moves focus into the dialog (its first form field, else its first control) and gives it back to
  * whatever had it when the dialog closes.
  */

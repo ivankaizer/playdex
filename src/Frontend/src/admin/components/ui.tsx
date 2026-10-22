@@ -9,7 +9,7 @@ import {
 } from "react";
 import { CardHeading } from "@/components/ui";
 import { cx } from "@/lib/cx";
-import { trapTab, useDialogFocus } from "@/lib/focusTrap";
+import { dialogKeyDown, useDialogFocus } from "@/lib/focusTrap";
 
 type Variant = "primary" | "secondary" | "accent" | "danger";
 
@@ -242,14 +242,7 @@ export function Modal({
   const dialogRef = useRef<HTMLElement>(null);
   useDialogFocus(dialogRef);
 
-  const onKeyDown = (event: KeyboardEvent) => {
-    if (event.key === "Escape" && !busy) {
-      event.stopPropagation();
-      onClose();
-      return;
-    }
-    trapTab(event, dialogRef.current);
-  };
+  const onKeyDown = (event: KeyboardEvent) => dialogKeyDown(event, dialogRef.current, busy ? undefined : onClose);
 
   return (
     <div

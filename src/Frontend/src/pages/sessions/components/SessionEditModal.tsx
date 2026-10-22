@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef } from "react";
 import { cx } from "@/lib/cx";
-import { trapTab } from "@/lib/focusTrap";
+import { dialogKeyDown } from "@/lib/focusTrap";
 import type { DurationCheck } from "../sessionsState";
 
 interface SessionEditModalProps {
@@ -57,10 +57,7 @@ export function SessionEditModal({
       onClick={(event) => {
         if (event.target === event.currentTarget && !isSaving) onCancel?.();
       }}
-      onKeyDown={(event) => {
-        if (event.key === "Escape" && !isSaving) onCancel?.();
-        trapTab(event, dialogRef.current);
-      }}
+      onKeyDown={(event) => dialogKeyDown(event, dialogRef.current, isSaving ? undefined : onCancel)}
     >
       <section
         ref={dialogRef}

@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type ChangeEvent, type Re
 import { Cover } from "@/components/ui";
 import { apiRequest, errorMessage } from "@/lib/api";
 import { cx } from "@/lib/cx";
-import { trapTab, useDialogFocus } from "@/lib/focusTrap";
+import { dialogKeyDown, useDialogFocus } from "@/lib/focusTrap";
 import { formatCount, formatCountNoun } from "@/lib/format";
 import type { DraftAcceptRequest, DraftAcceptResponse, DraftBatchDto, DraftCapabilities, DraftRowDto } from "@/models/drafts";
 import type { ManualMappingSearchResponse, ManualMappingSearchResult, ManualPlatform } from "@/models/manual";
@@ -542,7 +542,7 @@ export function DraftWorkspace({
   return (
     <div
       className={embedded ? "w-full" : "pdx-modal-backdrop fixed inset-0 z-[80] overflow-y-auto p-4"}
-      onKeyDown={embedded ? undefined : (event) => trapTab(event, dialogRef.current)}
+      onKeyDown={embedded ? undefined : (event) => dialogKeyDown(event, dialogRef.current, busy ? undefined : () => void close())}
     >
       <section
         ref={dialogRef}
