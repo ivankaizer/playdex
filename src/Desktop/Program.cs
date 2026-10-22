@@ -167,6 +167,12 @@ internal sealed partial class App : Application
         _host = new DesktopHost(_store, _config, _services, () => _window, Quit, () => Open());
         _tray = new TrayIcon("Playdex", () => Open(), Quit, () => IsBigPicture ? "Switch to desktop mode" : "Switch to Big Picture", ToggleMode);
         _host.Tray = _tray;
+        if (_store.Reset is { } reset)
+        {
+            // The config could not be read and a default one took its place (Main): say so, not only in the log. The
+            // unreadable file was moved aside, so the next start doesn't say it again.
+            _tray.Notify(ConfigReset.Title, reset.Message, warning: true);
+        }
         if (UpdateFeature.InstallDirectory is not null)
         {
             // News goes to a Windows notification only while no window is open; the window shows it on its Settings tab.

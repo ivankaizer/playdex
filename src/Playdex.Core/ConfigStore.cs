@@ -12,6 +12,23 @@ internal sealed partial class ConfigJson : JsonSerializerContext;
 internal sealed record LegacyLauncherConfig(string? ApiKey, string? ApiBaseUrl);
 
 /// <summary>
+/// The config at <paramref name="Path"/> could not be read, so the app started with a default one
+/// (<see cref="ConfigStore.LoadOrRecover"/>): what to tell the user, short enough for a Windows notification.
+/// </summary>
+/// <param name="MovedTo">Where the unreadable file was kept; null when it could not be moved.</param>
+public sealed record ConfigReset(string Path, string? MovedTo)
+{
+    /// <summary>At most 64 characters, the notification title's limit.</summary>
+    public const string Title = "Playdex settings were reset";
+
+    /// <summary>At most 256 characters, the notification text's limit.</summary>
+    public string Message => MovedTo is null
+        ? "Your settings file could not be read, so Playdex started with default settings. Set up your games and API key again in Settings."
+        : "Your settings file could not be read, so Playdex started with default settings. " +
+          $"The old file was kept as {System.IO.Path.GetFileName(MovedTo)}; set up your games and API key again in Settings.";
+}
+
+/// <summary>
 /// Reads and writes a <see cref="AppConfig"/>. Saves are atomic (a temporary file, then a move). The install's store,
 /// <see cref="Default"/>, is created on first use from the Wrapper's and the launcher's configs from before the merge,
 /// which are left in place.
@@ -70,9 +87,16 @@ public sealed class ConfigStore
     }
 
     /// <summary>
+    /// Set by <see cref="LoadOrRecover"/> when the config could not be read and a default one took its place, for the
+    /// app to tell the user. The unreadable file has been moved aside, so the next start doesn't reset (or tell) again.
+    /// </summary>
+    public ConfigReset? Reset { get; private set; }
+
+    /// <summary>
     /// <see cref="LoadOrCreate"/> for the app's start: a config that isn't valid JSON doesn't stop the app. It is moved
     /// aside (config.json.corrupt-…, see <see cref="CorruptFile"/>) and a default config takes its place, so the app
-    /// opens and the games, keys and settings can be set up again or copied back from the old file.
+    /// opens and the games, keys and settings can be set up again or copied back from the old file. <see cref="Reset"/>
+    /// then says so.
     /// </summary>
     public AppConfig LoadOrRecover()
     {
@@ -84,7 +108,9 @@ public sealed class ConfigStore
         {
             Log.Error($"config: {PathToConfig} is not valid JSON; starting with a default config", ex);
             var config = new AppConfig();
-            if (CorruptFile.MoveAside(PathToConfig) is not null)
+            var movedTo = CorruptFile.MoveAside(PathToConfig);
+            Reset = new ConfigReset(PathToConfig, movedTo);
+            if (movedTo is not null)
             {
                 Save(config);
                 return config;
