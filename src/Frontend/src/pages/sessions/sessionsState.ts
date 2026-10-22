@@ -344,6 +344,22 @@ export function togglePlatform(state: SessionsState, platform: string): Sessions
   return setPlatform(state, state.platform === platform ? null : platform);
 }
 
+/**
+ * The platform filter's options: every platform Playdex knows (/manual/platforms) and any other the range's stats
+ * mention. Not the stats alone: they are filtered by the selected platform too, so the other options would vanish
+ * once one is picked. The selected platform always has an option, so the select never shows "All platforms" while a
+ * filter applies.
+ */
+export function platformFilterOptions(state: SessionsState): Array<{ key: string; label: string }> {
+  const options = new Map<string, string>();
+  for (const platform of state.platforms) options.set(platform.key, platform.name);
+  for (const item of state.stats?.platforms ?? []) {
+    if (!options.has(item.platformKey)) options.set(item.platformKey, item.platformName);
+  }
+  if (state.platform.length > 0 && !options.has(state.platform)) options.set(state.platform, state.platform);
+  return [...options].map(([key, label]) => ({ key, label }));
+}
+
 export function applyPreset(state: SessionsState, preset: string, now: Date): SessionsState {
   const today = utcDateOnly(now);
   const year = Number(today.slice(0, 4));

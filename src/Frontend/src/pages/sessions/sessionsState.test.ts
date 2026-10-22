@@ -38,6 +38,7 @@ import {
   hasMore,
   listRequestPages,
   nextPageSize,
+  platformFilterOptions,
   rangeDays,
   sessionsDeleteRequest,
   setEditDuration,
@@ -253,6 +254,28 @@ describe("sessions state", () => {
     expect(state.platform).toBe("");
     expect(buildListRequest(state)).not.toContain("platform");
     expect(buildStatsRequest(state)).not.toContain("platform");
+  });
+
+  it("keeps every platform in the filter after one is picked", () => {
+    let state = completePlatforms(createSessionsState(july13), {
+      platforms: [
+        { key: "pc", name: "PC" },
+        { key: "ps5", name: "PlayStation 5" },
+      ],
+    });
+    state = completeStatsLoad(state, {
+      accountId: 1,
+      stats: emptyStats({ platforms: [{ platformKey: "steam", platformName: "Steam", totalSeconds: 3600, source: null }] }),
+    });
+    expect(platformFilterOptions(state)).toEqual([
+      { key: "pc", label: "PC" },
+      { key: "ps5", label: "PlayStation 5" },
+      { key: "steam", label: "Steam" },
+    ]);
+
+    // Filtered stats only mention the selected platform, and here not even that one (no play in the range).
+    state = completeStatsLoad(setPlatform(state, "switch"), { accountId: 1, stats: emptyStats({ platforms: [] }) });
+    expect(platformFilterOptions(state).map((option) => option.key)).toEqual(["pc", "ps5", "switch"]);
   });
 
   it("rejects a stale debounce version so older work cannot win", () => {

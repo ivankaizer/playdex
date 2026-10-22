@@ -67,6 +67,7 @@ import {
   hasMore,
   listRequestPages,
   nextPageSize,
+  platformFilterOptions,
   rangeLabel,
   selectCustomRange,
   sessionsDeleteRequest,
@@ -472,8 +473,9 @@ export function SessionsPage() {
   // An empty range hides the charts, as it hides the donut.
   const showDayChart = hasRecapData && dayPeak > 0;
   const showMonthChart = hasRecapData && !showDayChart && days.length === 0 && monthBars.length > 2 && monthPeak > 0;
+  const platformOptions = platformFilterOptions(state);
   const selectedPlatformLabel =
-    state.platform.length === 0 ? "" : (platformItems.find((item) => item.key === state.platform)?.label ?? state.platform);
+    state.platform.length === 0 ? "" : (platformOptions.find((item) => item.key === state.platform)?.label ?? state.platform);
   const kpiValue = (value: string) => (stats === null && state.isStatsLoading ? "…" : value);
   const topTitle = kpiValue(stats?.topGameTitle?.trim() || "—");
 
@@ -577,7 +579,7 @@ export function SessionsPage() {
             Platform
             <BoundSelect value={state.platform} onValueChange={changePlatform} className="pdx-input !h-11 !pl-4">
               <option value="">All platforms</option>
-              {platformItems.map((platform) => (
+              {platformOptions.map((platform) => (
                 <option key={platform.key} value={platform.key}>
                   {platform.label}
                 </option>
