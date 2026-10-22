@@ -30,7 +30,8 @@ public sealed class PollingRepository(PlaydexDbContext db, IGameResolver gameRes
                     GameExternalIdentityTypes.FromKey(detectedGame.Platform),
                     detectedGame.ExternalId,
                     detectedGame.Title,
-                    detectedGame.CapsuleUrl),
+                    detectedGame.CapsuleUrl,
+                    TitleIsAuthoritative: true),
                 ct);
             gameId = resolution.GameId;
             identityId = resolution.GameExternalIdentityId;

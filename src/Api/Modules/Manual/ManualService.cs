@@ -235,7 +235,8 @@ public sealed class ManualService(
                 GameExternalIdentityTypes.FromKey("igdb"),
                 authoritative.Id,
                 authoritative.Title,
-                authoritative.CoverUrl));
+                authoritative.CoverUrl,
+                TitleIsAuthoritative: true));
     }
 
     internal async Task<long> ResolveGame(
