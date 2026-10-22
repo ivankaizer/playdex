@@ -29,7 +29,10 @@ public sealed record ProviderSessionPlatformUpdateRequest(
     string? Platform,
     bool RewriteExistingSessions);
 public sealed record ProviderSessionPlatformUpdateResponseDto(ProviderStatusDto Provider);
-public sealed record OpenXblConnectRequest(string? ApiKey, string? Xuid);
+/// <param name="ProviderId">
+/// The Xbox integration to connect. Without it, the user's oldest Xbox integration, or a new one when there is none.
+/// </param>
+public sealed record OpenXblConnectRequest(string? ApiKey, string? Xuid, long? ProviderId = null);
 public sealed record OpenXblConnectResponseDto(ProviderStatusDto Provider);
 internal sealed record ValidatedProviderCreation(
     string Platform,
@@ -37,6 +40,10 @@ internal sealed record ValidatedProviderCreation(
     string ApiKey,
     string? AccountId);
 public sealed record ProviderCreateResult(ProviderStatusDto? Provider, bool LimitReached);
+public sealed record OpenXblConnectResult(
+    ProviderStatusDto? Provider,
+    bool ProviderMissing = false,
+    bool ApiKeyLocked = false);
 public sealed record ProviderSessionPlatformUpdateResult(
     ProviderStatusDto? Provider,
     bool InvalidPlatform,

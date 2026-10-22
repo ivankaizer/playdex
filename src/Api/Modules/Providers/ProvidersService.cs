@@ -132,18 +132,23 @@ public sealed class ProvidersService(ProvidersRepository repository)
         var xuid = request.Xuid?.Trim();
         if (!string.IsNullOrEmpty(xuid) && xuid.Any(character => !char.IsAsciiDigit(character)))
             throw AppProblemException.Validation("Xbox XUID must contain digits only.");
-        if (await repository.IsPlatformApiKeyLocked(userId, "xbox", ct))
-            throw AppProblemException.Validation("OpenXBL API key is managed by an administrator.");
+        if (request.ProviderId is <= 0)
+            throw AppProblemException.Validation("providerId must be a positive integer.");
 
-        var provider = await repository.ConnectOpenXbl(
+        var result = await repository.ConnectOpenXbl(
             userId,
+            request.ProviderId,
             apiKey,
             string.IsNullOrEmpty(xuid) ? null : xuid,
             ct);
-        if (provider is null)
+        if (result.ProviderMissing)
+            throw AppProblemException.NotFound("Provider not found.");
+        if (result.ApiKeyLocked)
+            throw AppProblemException.Validation("OpenXBL API key is managed by an administrator.");
+        if (result.Provider is null)
             throw AppProblemException.NotFound("Xbox provider is not installed.");
 
-        return new OpenXblConnectResponseDto(ToResponse(provider));
+        return new OpenXblConnectResponseDto(ToResponse(result.Provider));
     }
 
     internal static string GenerateApiKey()
