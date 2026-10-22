@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
   FSE home app registration. The pattern (windows.gamingApp app extension + gamingHome custom capability + a
-  developer-mode SCCD) follows docs/launcher/research.md; it is not copied from any other project.
+  developer-mode SCCD) is what registers a Full Screen Experience home app; it is not copied from any other project.
 -->
 <Package
   xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"

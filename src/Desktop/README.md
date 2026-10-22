@@ -7,7 +7,7 @@ The Playdex app for Windows: your games and your Playdex history, one app with t
 
 The mode is saved in the config (`shell.mode`, `desktop` or `bigPicture`) and switched in place, without a restart: Settings → This app → Switch to Big Picture, Quick settings → Desktop mode (Quick settings offers the other mode in either one), or the tray menu. A plain start, a click on the tray icon and starting with Windows open the saved mode; `--big-picture` opens Big Picture for that start only.
 
-It shows the React UI in `../Launcher/ui` (`window.__PLAYDEX_MODE__` is `desktop` or `fse`) and compiles in the window, page bridge, controller input and quick settings from `../Launcher/Shell`; sessions, the queue, watchers, Steam and the library are `../Playdex.Core`. It replaced both the WinForms Wrapper and the standalone launcher (`docs/launcher/wrapper-merge-plan.md`).
+It shows the React UI in `../Launcher/ui` (`window.__PLAYDEX_MODE__` is `desktop` or `fse`) and compiles in the window, page bridge, controller input and quick settings from `../Launcher/Shell`; sessions, the queue, watchers, Steam and the library are `../Playdex.Core`. It replaced both the WinForms Wrapper and the standalone launcher.
 
 Windows only, unpackaged and self-contained (WinUI 3, WebView2, Native AOT in Release). It is not in `Playdex.sln`, because the Windows App SDK XAML compiler only runs on Windows. `global.json` here allows any .NET 10 SDK (the root one pins 10.0.302).
 
