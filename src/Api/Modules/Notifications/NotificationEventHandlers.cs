@@ -58,7 +58,8 @@ public sealed partial class NotificationEventHandlers(
             await client.SendMessageAsync(
                 target.TelegramChatId,
                 $"Polling failed for {@event.Platform}. Error: {@event.Message}. " +
-                $"Retrying in {Math.Round(@event.RetryDelay.TotalSeconds)}s.",
+                $"Retrying in {Math.Round(@event.RetryDelay.TotalSeconds)}s; " +
+                "no further failure messages until polling works again.",
                 ct);
         }
         catch (Exception ex)

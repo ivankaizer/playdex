@@ -87,35 +87,7 @@ public sealed partial class PollingBackgroundService(
                             continue;
                         }
 
-                        try
-                        {
-                            using var credentialScope = serviceProvider
-                                .GetRequiredService<IServiceScopeFactory>()
-                                .CreateScope();
-                            await ProcessCredential(active, credentialScope.ServiceProvider, stoppingToken);
-                            _backoff.Reset(active.Credential.Id);
-                        }
-                        catch (Exception ex)
-                        {
-                            var retryAfter = ex is ProviderPollException providerFailure
-                                ? providerFailure.RetryAfter
-                                : null;
-                            var delay = _backoff.RecordFailure(
-                                active.Credential.Id, DateTimeOffset.UtcNow, retryAfter);
-                            LogCredentialFailed(ex, active.Credential.Id, active.PlatformKey, delay, ex.Message);
-                            metrics.RecordPollFailure(active.PlatformKey, DateTimeOffset.UtcNow);
-                            using var notificationScope = serviceProvider
-                                .GetRequiredService<IServiceScopeFactory>()
-                                .CreateScope();
-                            await SafePublish(
-                                notificationScope.ServiceProvider.GetRequiredService<EventBus>(),
-                                new PollFailed(
-                                    active.Credential.Id,
-                                    active.PlatformKey,
-                                    ex.Message,
-                                    delay),
-                                stoppingToken);
-                        }
+                        await PollCredential(active, stoppingToken);
                     }
                 }
                 catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
@@ -142,6 +114,50 @@ public sealed partial class PollingBackgroundService(
         }
     }
 
+    /// <summary>Polls one credential; a failure is recorded and never escapes, except shutdown cancellation.</summary>
+    internal async Task PollCredential(ActiveCredential active, CancellationToken stoppingToken)
+    {
+        try
+        {
+            using var credentialScope = serviceProvider
+                .GetRequiredService<IServiceScopeFactory>()
+                .CreateScope();
+            await ProcessCredential(active, credentialScope.ServiceProvider, stoppingToken);
+            _backoff.Reset(active.Credential.Id);
+        }
+        catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+        {
+            // Shutdown, not a provider failure: no failure metric, backoff or notification.
+            throw;
+        }
+        catch (Exception ex)
+        {
+            var retryAfter = ex is ProviderPollException providerFailure
+                ? providerFailure.RetryAfter
+                : null;
+            var failure = _backoff.RecordFailure(
+                active.Credential.Id, DateTimeOffset.UtcNow, retryAfter);
+            LogCredentialFailed(ex, active.Credential.Id, active.PlatformKey, failure.Delay, ex.Message);
+            metrics.RecordPollFailure(active.PlatformKey, DateTimeOffset.UtcNow);
+            if (failure.IsFirst)
+            {
+                // Notify when a working integration starts failing, not on every retry: an expired token would
+                // otherwise send a message every backoff interval (~144 a day).
+                using var notificationScope = serviceProvider
+                    .GetRequiredService<IServiceScopeFactory>()
+                    .CreateScope();
+                await SafePublish(
+                    notificationScope.ServiceProvider.GetRequiredService<EventBus>(),
+                    new PollFailed(
+                        active.Credential.Id,
+                        active.PlatformKey,
+                        ex.Message,
+                        failure.Delay),
+                    stoppingToken);
+            }
+        }
+    }
+
     internal static async Task<int> EndTimedOutApiSessions(
         IServiceProvider serviceProvider,
         CancellationToken ct)
@@ -159,8 +175,6 @@ public sealed partial class PollingBackgroundService(
     {
         var credential = active.Credential;
         var platformKey = active.PlatformKey;
-        var pollingRepo = services.GetRequiredService<PollingRepository>();
-        var bus = services.GetRequiredService<EventBus>();
         var providerClients = services.GetServices<IProviderClient>()
             .ToDictionary(client => client.PlatformKey, StringComparer.OrdinalIgnoreCase);
 
@@ -171,6 +185,8 @@ public sealed partial class PollingBackgroundService(
         }
 
         var pollResult = await client.GetCurrentlyPlaying(credential, ct);
+        var pollingRepo = services.GetRequiredService<PollingRepository>();
+        var bus = services.GetRequiredService<EventBus>();
 
         var polledAt = DateTimeOffset.UtcNow;
 
@@ -255,6 +271,10 @@ public sealed partial class PollingBackgroundService(
     }
 }
 
+/// <param name="Delay">How long the credential is skipped.</param>
+/// <param name="IsFirst">The credential was healthy until this failure.</param>
+public sealed record CredentialFailure(TimeSpan Delay, bool IsFirst);
+
 public sealed class CredentialBackoffTracker
 {
     private static readonly TimeSpan BaseDelay = TimeSpan.FromSeconds(5);
@@ -272,7 +292,7 @@ public sealed class CredentialBackoffTracker
         return true;
     }
 
-    public TimeSpan RecordFailure(
+    public CredentialFailure RecordFailure(
         long credentialId,
         DateTimeOffset now,
         TimeSpan? retryAfter = null)
@@ -288,7 +308,7 @@ public sealed class CredentialBackoffTracker
             exponentialMs,
             retryAfter?.TotalMilliseconds ?? 0));
         _states[credentialId] = new CredentialBackoffState(failures, now + delay);
-        return delay;
+        return new CredentialFailure(delay, IsFirst: failures == 1);
     }
 
     public void Reset(long credentialId) => _states.Remove(credentialId);
