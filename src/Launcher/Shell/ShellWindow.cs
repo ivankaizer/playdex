@@ -568,16 +568,17 @@ internal sealed partial class ShellWindow : Window
 
     private void OnInput(InputCode code, long timestamp)
     {
-        if (code == InputCode.Guide && !IsForeground())
+        if (IsForeground())
+        {
+            _bridge.Deliver(code, timestamp);
+        }
+        else if (code == InputCode.Guide && _mode == ShellMode.FullScreen)
         {
             // A game is in front: the Guide button brings Big Picture back. Desktop mode leaves it to Windows.
-            if (_mode == ShellMode.FullScreen)
-            {
-                OnRedirectedActivation(null);
-            }
-            return;
+            OnRedirectedActivation(null);
         }
-        _bridge.Deliver(code, timestamp);
+        // Anything else pressed while another window is in front is that window's: the input thread reads the pad at
+        // the foreground rate until the window hears it was deactivated, which can come late or not at all.
     }
 
     private void OnGameExited(long detected)

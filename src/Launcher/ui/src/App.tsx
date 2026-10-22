@@ -6,6 +6,7 @@ import {
   closeGame,
   forceCloseGame,
   launch,
+  launchGuard,
   launching,
   leaveLaunch,
   nowPlaying,
@@ -19,6 +20,7 @@ import {
   toast,
 } from "./app-state";
 import { ArtPicker } from "./components/ArtPicker";
+import { LaunchGuard } from "./components/LaunchGuard";
 import { QuickSettings } from "./components/QuickSettings";
 import { Backdrop, Clock, formatClock, Glyph, Hint, Logo, useElapsed } from "./components/shared";
 import { gameById, isInstalled, recentGames } from "./data/games";
@@ -74,6 +76,7 @@ function BigPictureApp() {
   const gameOpen = useStore(openGameId);
   const settingsOpen = useStore(quickSettingsOpen);
   const artGame = useStore(artPickerGame);
+  const guard = useStore(launchGuard);
   const toastMsg = useStore(toast);
 
   // Loaded off the start-up path: it only marks the Settings tab when an update is ready.
@@ -157,7 +160,7 @@ function BigPictureApp() {
 
   return (
     <>
-      <div className="screen" inert={playing || settingsOpen || artGame ? true : undefined}>
+      <div className="screen" inert={playing || settingsOpen || artGame || guard ? true : undefined}>
         <header className="topbar">
           <span className="brand">
             <span className="brand-dot" />
@@ -248,6 +251,7 @@ function BigPictureApp() {
       {artGame && !playing && !settingsOpen && <ArtPicker gameId={artGame} />}
       {settingsOpen && !playing && <QuickSettings />}
       {playing && <LaunchOverlay gameId={playing} />}
+      {!playing && <LaunchGuard />}
       {toastMsg && (
         <div className="toast" role="status">
           {toastMsg}

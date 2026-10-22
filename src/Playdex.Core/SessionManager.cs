@@ -3,11 +3,13 @@ using System.Diagnostics;
 namespace Playdex.Core;
 
 /// <summary>
-/// Launches a game, follows it to exit, records the session to Playdex (<see cref="SessionRecorder"/>) and reports each
+/// Launches games, follows each to exit, records its session to Playdex (<see cref="SessionRecorder"/>) and reports each
 /// state change (gameId, "starting" | "steam" | "running" | "ended", seconds played; "steam": waiting for the Steam client
 /// to start and log in before the game can be started) through <paramref name="report"/>, from any
 /// thread. A Steam game is not recorded while <paramref name="steamPolling"/> says Playdex polls the user's Steam
-/// account: that records it already, and recording it here too would count the session twice.
+/// account: that records it already, and recording it here too would count the session twice. Several games can run at
+/// once (the launcher asks before starting a second one), each with its own session; a game that is already starting
+/// or running is not launched again.
 /// </summary>
 public sealed class SessionManager(
     AppConfig config,
@@ -20,7 +22,9 @@ public sealed class SessionManager(
     private static readonly TimeSpan _pingInterval = TimeSpan.FromSeconds(30);
 
     private readonly Lock _gate = new();
-    private ActiveSession? _active;
+
+    // The games launched here that are starting or running, oldest launch first.
+    private readonly List<ActiveSession> _sessions = [];
 
     public bool IsGameRunning
     {
@@ -28,7 +32,7 @@ public sealed class SessionManager(
         {
             lock (_gate)
             {
-                return _active is { RunningSince: not null };
+                return _sessions.Exists(session => session.RunningSince is not null);
             }
         }
     }
@@ -40,19 +44,19 @@ public sealed class SessionManager(
         {
             lock (_gate)
             {
-                return _active is not null;
+                return _sessions.Count > 0;
             }
         }
     }
 
-    /// <summary>The game launched here, once it runs; null before that and after it exits.</summary>
+    /// <summary>The running game launched here most recently; null while none runs.</summary>
     public RunningGame? Current
     {
         get
         {
             lock (_gate)
             {
-                return _active is { RunningSince: { } since } session
+                return _sessions.FindLast(session => session.RunningSince is not null) is { RunningSince: { } since } session
                     ? new RunningGame(session.GameId, DateTimeOffset.Now - Stopwatch.GetElapsedTime(since), null)
                     : null;
             }
@@ -64,10 +68,10 @@ public sealed class SessionManager(
     {
         lock (_gate)
         {
-            if (_active is not null)
+            if (_sessions.Find(session => session.GameId == gameId) is { } active)
             {
-                Log.Info($"session: {_active.GameId} is still active; ignoring launch of {gameId}");
-                Post(gameId, _active.GameId == gameId ? _active.State : "ended", 0);
+                Log.Info($"session: {gameId} is already {active.State}; not launching it again");
+                Post(gameId, active.State, active.Seconds);
                 return;
             }
         }
@@ -102,7 +106,7 @@ public sealed class SessionManager(
         var session = new ActiveSession(gameId, watcher, capture);
         lock (_gate)
         {
-            _active = session;
+            _sessions.Add(session);
         }
         watcher.Running += () => OnRunning(session);
         if (watcher is SteamGameWatcher steam)
@@ -120,10 +124,7 @@ public sealed class SessionManager(
             Log.Error($"session: could not launch {gameId}", ex);
             lock (_gate)
             {
-                if (_active == session)
-                {
-                    _active = null;
-                }
+                _sessions.Remove(session);
             }
             watcher.Dispose();
             Post(gameId, "ended", 0);
@@ -135,11 +136,11 @@ public sealed class SessionManager(
     {
         lock (_gate)
         {
-            if (_active is not { RunningSince: null } session || session.GameId != gameId)
+            if (_sessions.Find(active => active.GameId == gameId) is not { RunningSince: null } session)
             {
                 return;
             }
-            _active = null;
+            _sessions.Remove(session);
             session.Watcher.Dispose();
         }
         Log.Info($"session: launch of {gameId} cancelled");
@@ -163,7 +164,7 @@ public sealed class SessionManager(
     {
         lock (_gate)
         {
-            if (_active != session || session.RunningSince is not null)
+            if (!_sessions.Contains(session) || session.RunningSince is not null)
             {
                 return;
             }
@@ -174,13 +175,17 @@ public sealed class SessionManager(
 
     private void OnExited(ActiveSession session, long detected, long processExit)
     {
+        bool covered;
         lock (_gate)
         {
-            if (_active != session)
+            var index = _sessions.IndexOf(session);
+            if (index < 0)
             {
                 return;
             }
-            _active = null;
+            _sessions.RemoveAt(index);
+            // A game launched after this one still runs, in front of it: the launcher stays behind that game.
+            covered = _sessions.Skip(index).Any(newer => newer.RunningSince is not null);
         }
 
         if (processExit != 0)
@@ -191,7 +196,10 @@ public sealed class SessionManager(
         }
 
         Post(session.GameId, "ended", session.Seconds);
-        gameExited(detected);
+        if (!covered)
+        {
+            gameExited(detected);
+        }
         session.Watcher.Dispose();
 
         if (session.Recorder is not { } recorder)

@@ -28,11 +28,45 @@ export function showToast(msg: string) {
 /** Session state reported by the Windows host for the launching game. Null in a plain browser (simulated). */
 export const session = createStore<{ state: SessionState; seconds: number } | null>(null);
 
+/**
+ * Start a game. The game running now is resumed instead of started again. While another game runs the launch waits
+ * in {@link launchGuard} to be confirmed: both then run, and both are recorded.
+ */
 export function launch(gameId: string) {
+  const running = nowPlaying.get()?.gameId;
+  if (running === gameId) {
+    resumeGame();
+    return;
+  }
+  if (running) {
+    launchGuard.set({ gameId, runningId: running });
+    return;
+  }
+  startLaunch(gameId);
+}
+
+function startLaunch(gameId: string) {
   launching.set(gameId);
   if (!inHost) return;
   session.set({ state: "starting", seconds: 0 });
   postToHost({ type: "launch", gameId });
+}
+
+/**
+ * A launch asked for while another game runs, until it is confirmed or cancelled. A controller pressed in a game can
+ * reach Playdex behind it, so A alone must not start a second game: the guard takes RB + Up (components/LaunchGuard).
+ */
+export const launchGuard = createStore<{ gameId: string; runningId: string } | null>(null);
+
+export function confirmLaunch() {
+  const guard = launchGuard.get();
+  if (!guard) return;
+  launchGuard.set(null);
+  startLaunch(guard.gameId);
+}
+
+export function cancelLaunch() {
+  launchGuard.set(null);
 }
 
 /** Leave the launch overlay. A game that has not started yet is cancelled; a running one keeps being tracked. */

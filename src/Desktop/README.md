@@ -88,6 +88,8 @@ The Home rail and the hours on game tiles are the user's Playdex data, nothing l
 
 While a game runs, the top bar shows it with its play time; A on it switches to the game. The game is the one launched here, or else one started elsewhere (`RunningGames` in Core): a game added to Playdex whose process runs (matched by its monitor settings, or its launch executable), or Steam's running app (`HKCU\Software\Valve\Steam\RunningAppID`; no play time, Steam doesn't say when it started). The host checks every 3 s while its window is active and posts `{type:"now-playing", gameId, since}` (epoch ms or null; gameId null when nothing runs) when it changes.
 
+Starting another game while one runs asks first: RB + Up starts it (the mouse gets buttons), B cancels; A does nothing there, since presses meant for a game could reach Playdex. Both games then run and both sessions are recorded; the top bar, Resume and Close game follow the one started last. Starting the game that runs resumes it instead. The host delivers controller input to the page only while its window is in front.
+
 Resume (`{type:"resume-game"}`) brings back the window that was in front when the launcher was called up over the game (Guide, Game Bar "Home"), else a window of the game's process, else the topmost app window below the launcher that isn't Steam's. The launch overlay offers it too (A). If no window is found the page shows a toast (`{type:"resume-failed"}`).
 
 ## Quick settings
