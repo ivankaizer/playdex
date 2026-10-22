@@ -31,7 +31,7 @@ export interface AccountStatsRangeResponse {
   stats: AccountStatsPeriod;
 }
 
-/** One UTC calendar day from `/stats/daily`; `date` is "yyyy-MM-dd". */
+/** One calendar day (of the `tz` sent, else UTC) from `/stats/daily`; `date` is "yyyy-MM-dd". */
 export interface AccountDayStat {
   date: string;
   totalSeconds: number;

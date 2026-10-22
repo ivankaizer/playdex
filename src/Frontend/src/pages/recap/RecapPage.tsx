@@ -19,7 +19,7 @@ import {
   failYears,
   initialRecapState,
   recapTabs,
-  recapYearsPath,
+  recapYearsRequest,
   runInitialCustomFlow,
   selectTab,
   setCustomFrom,
@@ -74,7 +74,7 @@ export function RecapPage() {
     async (lifetime: AbortController) => {
       apply(beginYearsLoad);
       try {
-        const response = await apiRequest<RecapYearsResponse>(recapYearsPath, {
+        const response = await apiRequest<RecapYearsResponse>(recapYearsRequest(), {
           onAuthFailure: logout,
           signal: lifetime.signal,
         });

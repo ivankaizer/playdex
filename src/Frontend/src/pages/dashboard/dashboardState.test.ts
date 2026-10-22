@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { clientTimeZone } from "@/lib/dates";
 import type { AccountSession } from "@/models/sessions";
 import type { AccountStatsPeriod } from "@/models/stats";
 import {
@@ -30,6 +31,7 @@ import {
 } from "./dashboardState";
 
 const now = new Date("2026-07-13T12:00:00Z");
+const tz = `tz=${encodeURIComponent(clientTimeZone())}`;
 const offset = (seconds: number) => new Date(now.getTime() + seconds * 1000).toISOString();
 
 function snapshot(): DashboardSnapshot {
@@ -108,16 +110,16 @@ function snapshot(): DashboardSnapshot {
 describe("dashboardRequests", () => {
   it("includes the manual live session alongside dashboard data", () => {
     expect(Object.values(dashboardRequests(now))).toEqual([
-      "/sessions?limit=10&offset=0&from=2026-07-13&to=2026-07-13&sort=date&direction=desc",
-      "/stats?from=2026-07-13&to=2026-07-13",
-      "/stats?from=2026-07-01&to=2026-07-13",
-      "/stats?from=2026-01-01&to=2026-07-13",
+      `/sessions?limit=10&offset=0&from=2026-07-13&to=2026-07-13&sort=date&direction=desc&${tz}`,
+      `/stats?from=2026-07-13&to=2026-07-13&${tz}`,
+      `/stats?from=2026-07-01&to=2026-07-13&${tz}`,
+      `/stats?from=2026-01-01&to=2026-07-13&${tz}`,
       "/sessions/current",
       "/manual/sessions/current",
     ]);
   });
 
-  it("builds recap paths from UTC dates", () => {
+  it("builds recap page paths from the viewer's dates", () => {
     expect(recapPath("today", now)).toBe("/recap?from=2026-07-13&to=2026-07-13");
     expect(recapPath("month", now)).toBe("/recap?from=2026-07-01&to=2026-07-13");
     expect(recapPath("year", now)).toBe("/recap?from=2026-01-01&to=2026-07-13");
@@ -267,10 +269,10 @@ describe("waitAllOrCancel", () => {
 describe("dashboard redesign views", () => {
   it("requests one daily breakdown from the earlier of Monday and the 1st through today", () => {
     const requests = dashboardActivityRequests(new Date("2026-10-04T12:00:00Z"));
-    expect(requests.daily).toBe("/stats/daily?from=2026-09-28&to=2026-10-04");
+    expect(requests.daily).toBe(`/stats/daily?from=2026-09-28&to=2026-10-04&${tz}`);
 
     const midMonth = dashboardActivityRequests(new Date("2026-10-20T12:00:00Z"));
-    expect(midMonth.daily).toBe("/stats/daily?from=2026-10-01&to=2026-10-20");
+    expect(midMonth.daily).toBe(`/stats/daily?from=2026-10-01&to=2026-10-20&${tz}`);
   });
 
   it("indexes daily totals by date", () => {

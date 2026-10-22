@@ -1,3 +1,4 @@
+import { clientTimeZone } from "@/lib/dates";
 import type { RecapResponse } from "./recapModels";
 import {
   applyLocationQuery,
@@ -28,6 +29,7 @@ function deferred() {
 }
 
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
+const tz = `tz=${encodeURIComponent(clientTimeZone())}`;
 
 /** A tiny mutable holder so async flows can read the latest state, like the page does. */
 function store(initial: RecapState = initialRecapState) {
@@ -151,7 +153,7 @@ describe("recapState", () => {
     expect(state.years).toEqual([2024, 2026, 2025]);
 
     const [afterDefault, request] = takeDefaultRequest(state);
-    expect(request).toBe("/recap");
+    expect(request).toBe(`/recap?${tz}`);
     expect(afterDefault.activeTab).toBe("all-time");
     expect(takeDefaultRequest(afterDefault)[1]).toBeNull();
   });
@@ -163,7 +165,7 @@ describe("recapState", () => {
     expect(state.activeTab).toBe("custom");
     expect(state.customFrom).toBe("2026-07-13");
     expect(state.customTo).toBe("2026-07-19");
-    expect(request).toBe("/recap?from=2026-07-13&to=2026-07-19");
+    expect(request).toBe(`/recap?from=2026-07-13&to=2026-07-19&${tz}`);
   });
 
   it("uses the first value for duplicate range keys", () => {
@@ -174,7 +176,7 @@ describe("recapState", () => {
 
     expect(state.customFrom).toBe("2026-07-13");
     expect(state.customTo).toBe("2026-07-19");
-    expect(request).toBe("/recap?from=2026-07-13&to=2026-07-19");
+    expect(request).toBe(`/recap?from=2026-07-13&to=2026-07-19&${tz}`);
   });
 
   it("ignores a one-sided query and re-arms the all-time request", () => {
@@ -187,7 +189,7 @@ describe("recapState", () => {
     expect(next.activeTab).toBe("all-time");
     expect(next.customFrom).toBe("");
     expect(next.customTo).toBe("");
-    expect(takeDefaultRequest(next)[1]).toBe("/recap");
+    expect(takeDefaultRequest(next)[1]).toBe(`/recap?${tz}`);
   });
 
   it("year tabs keep server order and load their range", () => {
@@ -198,8 +200,8 @@ describe("recapState", () => {
 
     const [next, request] = selectTab(state, "year-2026");
     expect(next.activeTab).toBe("year-2026");
-    expect(request).toBe("/recap?from=2026-01-01&to=2026-12-31");
-    expect(selectTab(state, "all-time")[1]).toBe("/recap");
+    expect(request).toBe(`/recap?from=2026-01-01&to=2026-12-31&${tz}`);
+    expect(selectTab(state, "all-time")[1]).toBe(`/recap?${tz}`);
   });
 
   it("custom range requires both bounds", () => {
@@ -212,7 +214,7 @@ describe("recapState", () => {
     expect(selectTab(state, "custom")[1]).toBeNull();
 
     state = setCustomTo(state, "2026-07-19");
-    expect(selectTab(state, "custom")[1]).toBe("/recap?from=2026-07-13&to=2026-07-19");
+    expect(selectTab(state, "custom")[1]).toBe(`/recap?from=2026-07-13&to=2026-07-19&${tz}`);
     expect(buildCustomNavigation(state)).toBe("/recap?from=2026-07-13&to=2026-07-19");
   });
 
@@ -241,7 +243,7 @@ describe("recapState", () => {
     expect(state.yearsLoaded).toBe(true);
     expect(state.years).toEqual([]);
     expect(state.error).toBe("Failed to load recap years.");
-    expect(takeDefaultRequest(state)[1]).toBe("/recap");
+    expect(takeDefaultRequest(state)[1]).toBe(`/recap?${tz}`);
     expect(beginLoad(state).error).toBe("");
   });
 });
@@ -271,14 +273,14 @@ describe("runInitialCustomFlow", () => {
   it("loads one fallback after years settle when the range was lost", async () => {
     const { s, requests, years, flow } = setup();
 
-    expect(requests).toEqual(["/recap?from=2026-07-13&to=2026-07-19"]);
+    expect(requests).toEqual([`/recap?from=2026-07-13&to=2026-07-19&${tz}`]);
     expect(s.step((current) => applyLocationQuery(current, "?from=2026-07-13"))).toBeNull();
     expect(s.step(takeDefaultRequest)).toBeNull();
 
     years.resolve();
     await flow;
 
-    expect(requests).toEqual(["/recap?from=2026-07-13&to=2026-07-19", "/recap"]);
+    expect(requests).toEqual([`/recap?from=2026-07-13&to=2026-07-19&${tz}`, `/recap?${tz}`]);
     expect(s.step(takeDefaultRequest)).toBeNull();
   });
 
@@ -294,7 +296,7 @@ describe("runInitialCustomFlow", () => {
     years.resolve();
     await flush();
 
-    expect(requests).toEqual([customRequest, "/recap"]);
+    expect(requests).toEqual([customRequest, `/recap?${tz}`]);
     expect(done).toBe(false);
 
     custom.resolve();
@@ -308,7 +310,7 @@ describe("runInitialCustomFlow", () => {
     years.resolve();
     await flow;
 
-    expect(requests).toEqual(["/recap?from=2026-07-13&to=2026-07-19"]);
+    expect(requests).toEqual([`/recap?from=2026-07-13&to=2026-07-19&${tz}`]);
     expect(s.get().hasSearchRange).toBe(true);
     expect(s.step(takeDefaultRequest)).toBeNull();
   });

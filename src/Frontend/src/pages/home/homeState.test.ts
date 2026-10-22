@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { clientTimeZone } from "@/lib/dates";
 import {
   beginLogin,
   beginProfile,
@@ -11,6 +12,8 @@ import {
   isLoginDisabled,
   profileLabel,
 } from "./homeState";
+
+const tz = `tz=${encodeURIComponent(clientTimeZone())}`;
 
 describe("homeState", () => {
   it("disables login only while loading and keeps the error message", () => {
@@ -63,7 +66,7 @@ describe("homeState", () => {
     const day = (date: string, totalSeconds: number) => ({ date, totalSeconds, sessionCount: 1, platforms: [] });
 
     it("asks for a 365-day window ending today", () => {
-      expect(homeStatsRequest(now)).toBe("/stats/daily?from=2025-10-08&to=2026-10-07");
+      expect(homeStatsRequest(now)).toBe(`/stats/daily?from=2025-10-08&to=2026-10-07&${tz}`);
     });
 
     it("sums today and the week from Monday and counts the streak ending today", () => {
