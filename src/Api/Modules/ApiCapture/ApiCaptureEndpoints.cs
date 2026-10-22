@@ -144,7 +144,8 @@ public static class ApiCaptureEndpoints
 
     private static async Task<ApiSessionRequest?> ReadRequest(HttpContext context)
     {
-        if (context.Request.ContentLength is null or 0)
+        // A chunked body has no Content-Length (.NET's JsonContent sends one): it is read like any other JSON body.
+        if (context.Request.ContentLength == 0 || (context.Request.ContentLength is null && !context.Request.HasJsonContentType()))
         {
             return null;
         }
