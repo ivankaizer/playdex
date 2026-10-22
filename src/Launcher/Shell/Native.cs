@@ -105,12 +105,42 @@ internal static unsafe partial class Native
     [return: MarshalAs(UnmanagedType.Bool)]
     public static partial bool AllowSetForegroundWindow(uint processId);
 
+    public const byte VkMenu = 0x12;
+    public const uint KeyEventKeyUp = 0x2;
+
+    [LibraryImport("user32.dll", EntryPoint = "keybd_event")]
+    public static partial void KeybdEvent(byte key, byte scan, uint flags, nuint extraInfo);
+
     [LibraryImport("user32.dll")]
     public static partial uint GetDpiForWindow(nint hwnd);
 
+    [StructLayout(LayoutKind.Sequential)]
+    public struct Rect
+    {
+        public int Left;
+        public int Top;
+        public int Right;
+        public int Bottom;
+    }
+
+    public const nint HwndTop = 0;
+    public const uint SwpNoSize = 0x1;
+    public const uint SwpNoMove = 0x2;
+    public const uint SwpNoActivate = 0x10;
+
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool SetWindowPos(nint hwnd, nint insertAfter, int x, int y, int width, int height, uint flags);
+
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool GetWindowRect(nint hwnd, out Rect rect);
+
     public const uint GwHwndNext = 2;
+    public const uint GwHwndPrev = 3;
     public const uint GwOwner = 4;
     public const int GwlExStyle = -20;
+    public const long WsExTopmost = 0x8;
     public const long WsExToolWindow = 0x80;
     public const uint DwmwaCloaked = 14;
 

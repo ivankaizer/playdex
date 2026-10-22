@@ -63,6 +63,17 @@ public sealed class SessionManager(
         }
     }
 
+    /// <summary>The processes of <paramref name="gameId"/>, launched here, that its watcher knows; empty otherwise.</summary>
+    public IReadOnlyCollection<int> ProcessIds(string gameId)
+    {
+        IGameWatcher? watcher;
+        lock (_gate)
+        {
+            watcher = _sessions.Find(session => session.GameId == gameId)?.Watcher;
+        }
+        return watcher?.ProcessIds ?? [];
+    }
+
     /// <summary>UI thread. <paramref name="game"/> is the host's own library entry (null: not a game on this PC).</summary>
     public void Launch(string gameId, LibraryGame? game)
     {

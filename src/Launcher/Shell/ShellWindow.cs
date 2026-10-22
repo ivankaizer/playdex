@@ -64,6 +64,15 @@ internal sealed partial class ShellWindow : Window
     private long _returnStart;
     private bool _active;
     private long _activateStart;
+
+    // A fullscreen game that loses the foreground can put its window back on top for a moment after (Control: about
+    // 0.5 s), over Big Picture raised once: in front, it then gets the controller while the game is what shows.
+    private static readonly TimeSpan _keepOnTopFor = TimeSpan.FromSeconds(2);
+    private readonly Microsoft.UI.Dispatching.DispatcherQueueTimer _keepOnTopTimer;
+    private long _keepOnTopUntil;
+    private int _raises;
+    private nint _raisedOver;
+
     private bool _ready;
     private bool _suspended;
 
@@ -122,6 +131,10 @@ internal sealed partial class ShellWindow : Window
         _nowPlayingTimer.Interval = _nowPlayingInterval;
         _nowPlayingTimer.Tick += (_, _) => _ = RefreshNowPlayingAsync();
 
+        _keepOnTopTimer = DispatcherQueue.CreateTimer();
+        _keepOnTopTimer.Interval = TimeSpan.FromMilliseconds(100);
+        _keepOnTopTimer.Tick += (_, _) => KeepOnTop();
+
         // Ticks more often than the interval, so timer jitter never skips a refresh; RefreshSummary keeps the pace.
         _summaryTimer = DispatcherQueue.CreateTimer();
         _summaryTimer.Interval = TimeSpan.FromSeconds(15);
@@ -141,6 +154,7 @@ internal sealed partial class ShellWindow : Window
         {
             _nowPlayingTimer.Stop();
             _summaryTimer.Stop();
+            _keepOnTopTimer.Stop();
             services.SessionChanged -= PostSession;
             services.GameExited -= OnGameExited;
             services.InputReceived -= OnInput;
@@ -429,7 +443,7 @@ internal sealed partial class ShellWindow : Window
                 _ = OpenAppAsync(message.GetProperty("id").GetString()!);
                 break;
             case "resume-game":
-                if (!GameWindows.Activate(_hwnd, _gameWindow, _nowPlaying?.ProcessId))
+                if (!GameWindows.Activate(_hwnd, _gameWindow, GameProcessIds()))
                 {
                     Post("""{"type":"resume-failed"}""");
                 }
@@ -696,6 +710,14 @@ internal sealed partial class ShellWindow : Window
         _ = RefreshNowPlayingAsync();
     }
 
+    /// <summary>The running game's processes, when known: its detected process, or those its watcher here follows.</summary>
+    private IReadOnlyCollection<int> GameProcessIds() => _nowPlaying switch
+    {
+        null => [],
+        { ProcessId: { } pid } => [pid],
+        var game => _services.Sessions.ProcessIds(game.GameId),
+    };
+
     private void PostCloseFailed(string message) =>
         Post($$"""{"type":"close-failed","message":{{JsonSerializer.Serialize(message, HostJson.Default.String)}}}""");
 
@@ -738,6 +760,16 @@ internal sealed partial class ShellWindow : Window
         {
             AppWindow.SetPresenter(AppWindowPresenterKind.FullScreen);
         }
+        TakeForeground();
+        if (_mode == ShellMode.FullScreen)
+        {
+            _keepOnTopUntil = Stopwatch.GetTimestamp() + (long)(_keepOnTopFor.TotalSeconds * Stopwatch.Frequency);
+            _keepOnTopTimer.Start();
+        }
+    }
+
+    private void TakeForeground()
+    {
         if (Native.SetForegroundWindow(_hwnd) && IsForeground())
         {
             return;
@@ -750,6 +782,63 @@ internal sealed partial class ShellWindow : Window
         Native.SetForegroundWindow(_hwnd);
         Native.AttachThreadInput(thisThread, foregroundThread, false);
         Log.Info($"bring to front via AttachThreadInput: {(IsForeground() ? "ok" : "failed")}");
+        if (IsForeground())
+        {
+            return;
+        }
+        // Still locked: a controller press is no input to Windows, so the game in front keeps the foreground. An Alt
+        // press lifts the lock, as it does for Alt+Tab; released once Playdex is in front, so the game sees no Alt up.
+        Native.KeybdEvent(Native.VkMenu, 0, 0, 0);
+        Native.SetForegroundWindow(_hwnd);
+        Native.KeybdEvent(Native.VkMenu, 0, Native.KeyEventKeyUp, 0);
+        Log.Info($"bring to front via Alt: {(IsForeground() ? "ok" : "failed")}");
+    }
+
+    /// <summary>After <see cref="BringToFront"/>, while Playdex stays in front: raise it over a game that took the top back.</summary>
+    private void KeepOnTop()
+    {
+        if (Stopwatch.GetTimestamp() > _keepOnTopUntil || !IsForeground())
+        {
+            _keepOnTopTimer.Stop();
+            if (_raises > 0)
+            {
+                Log.Info($"bring to front: raised over window {_raisedOver:x} {_raises} time(s)");
+            }
+            _raises = 0;
+            return;
+        }
+        if (CoveringWindow() is var window && window != 0)
+        {
+            Native.SetWindowPos(_hwnd, Native.HwndTop, 0, 0, 0, 0, Native.SwpNoMove | Native.SwpNoSize | Native.SwpNoActivate);
+            _raisedOver = window;
+            _raises++;
+        }
+    }
+
+    /// <summary>A visible window of another app above Playdex and over part of it; topmost ones (overlays) aside. 0: none.</summary>
+    private nint CoveringWindow()
+    {
+        if (!Native.GetWindowRect(_hwnd, out var own))
+        {
+            return 0;
+        }
+        for (var window = Native.GetWindow(_hwnd, Native.GwHwndPrev); window != 0; window = Native.GetWindow(window, Native.GwHwndPrev))
+        {
+            Native.GetWindowThreadProcessId(window, out var owner);
+            if (owner == Environment.ProcessId
+                || !Native.IsWindowVisible(window)
+                || (Native.GetWindowLongPtr(window, Native.GwlExStyle) & Native.WsExTopmost) != 0
+                || (Native.DwmGetWindowAttribute(window, Native.DwmwaCloaked, out var cloaked, sizeof(int)) == 0 && cloaked != 0)
+                || !Native.GetWindowRect(window, out var rect))
+            {
+                continue;
+            }
+            if (rect.Left < own.Right && own.Left < rect.Right && rect.Top < own.Bottom && own.Top < rect.Bottom)
+            {
+                return window;
+            }
+        }
+        return 0;
     }
 
     /// <summary>Post a message to the page from any thread.</summary>

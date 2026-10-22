@@ -15,6 +15,9 @@ public interface IGameWatcher : IDisposable
     /// <summary>Exit detected. Argument: Stopwatch timestamp of detection, and the last game process' exit
     /// time (FILETIME, 0 if unknown) so exit-detection latency can be measured.</summary>
     event Action<long, long>? Exited;
+
+    /// <summary>The game's processes seen so far (some may have exited), to find its window; empty when not known.</summary>
+    IReadOnlyCollection<int> ProcessIds => [];
 }
 
 /// <summary>
@@ -85,6 +88,17 @@ public sealed partial class SteamGameWatcher : IGameWatcher
         _appId = appId;
         _keyPath = keyPath;
         _key = key;
+    }
+
+    public IReadOnlyCollection<int> ProcessIds
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return [.. _tracked.Select(pid => (int)pid)];
+            }
+        }
     }
 
     public static SteamGameWatcher? Create(int appId)
