@@ -37,8 +37,19 @@ bun run typecheck
 bun run test
 bun run build
 bun run build:landing
+bun run check:csp     # after the builds: CSP hashes match the inline script and style
 docker build -f src/Frontend/Dockerfile .   # from the repository root
 ```
 
 In the container, `PLAYDEX_API_URL` replaces the placeholder in
-`appsettings.json` at startup, so one image can target any API.
+`appsettings.json` at startup, so one image can target any API. When that URL
+is on another origin, the entrypoint also adds it to the CSP's `connect-src`.
+
+## Security headers
+
+nginx sends the security headers and the Content-Security-Policy from
+`security-headers.conf`, included in every location of `nginx.conf`. The CSP
+allows the theme script and boot-loader style inlined in `index.html` by sha256
+hash, so an edit to either block changes its hash: `bun run check:csp` then
+fails and prints the hash the policy needs. CI and the image build run the
+check.
