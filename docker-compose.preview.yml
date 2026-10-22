@@ -56,7 +56,6 @@ services:
       Polling__IntervalSeconds: 10
       Auth__JwtSecret: ${JWT_SECRET:-preview-only-jwt-secret-not-for-production-use}
       Auth__AccessTokenTtl: 30m
-      Polling__UseWiremock: "true"
       Apprise__BaseUrl: http://apprise:8000
       Apprise__TelegramBotToken: ${TELEGRAM_BOT_TOKEN:-}
       Apprise__UseMock: "false"

@@ -148,28 +148,6 @@ public sealed class PollingRepository(PlaydexDbContext db, IGameResolver gameRes
         )).ToList();
     }
 
-    public async Task<bool> CheckIfGameIgnored(long userId, long gameId, CancellationToken ct)
-    {
-        return await db.IgnoredGames.AnyAsync(ig => ig.UserId == userId && ig.GameId == gameId, ct);
-    }
-
-    public async Task RecordPollResult(
-        long credentialId, long? gameId,
-        DateTimeOffset polledAt, string? rawPayload,
-        CancellationToken ct)
-    {
-        db.PollResults.Add(
-            new PollResult
-            {
-                IntegrationId = credentialId,
-                PolledAt = polledAt,
-                RawPayload = rawPayload,
-                CreatedAt = DateTimeOffset.UtcNow,
-            }
-        );
-        await db.SaveChangesAsync(ct);
-    }
-
     public async Task UpdateGameCapsule(long gameId, string capsuleUrl, CancellationToken ct)
     {
         await db.Games
