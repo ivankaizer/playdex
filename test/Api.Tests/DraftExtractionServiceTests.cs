@@ -134,7 +134,8 @@ public sealed class DraftExtractionServiceTests(PostgresFixture postgres)
 
         await using var db = CreateDb();
         var now = DateTimeOffset.UtcNow;
-        var igdbId = Random.Shared.NextInt64(1_000_000_000, 9_000_000_000).ToString(System.Globalization.CultureInfo.InvariantCulture);
+        // IGDB ids are ints (IgdbClient reads them as such); a larger one fails the search and leaves no results.
+        var igdbId = Random.Shared.Next(1_000_000_000, int.MaxValue).ToString(System.Globalization.CultureInfo.InvariantCulture);
         var user = new User { Email = $"draft-saved-{Guid.NewGuid():N}@test.local", CreatedAt = now, UpdatedAt = now };
         var saved = new Game { Title = $"Saved {igdbId}", CreatedAt = now, UpdatedAt = now };
         db.AddRange(user, saved);
