@@ -69,6 +69,7 @@ builder.Services.AddSingleton(new MigrationCatalog([
     new AiGenerationHistoryMigration(),
     new UserTokenVersionMigration(),
     new IndexesAndConstraintsMigration(),
+    new DurableNotificationsAndBackoffMigration(),
 ]));
 builder.Services.AddSingleton<MigrationRunner>();
 builder.Services.AddScoped<EventBus>();

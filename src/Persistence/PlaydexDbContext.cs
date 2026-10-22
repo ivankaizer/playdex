@@ -19,6 +19,8 @@ public sealed class PlaydexDbContext(DbContextOptions<PlaydexDbContext> options)
     public DbSet<UserSettings> UserSettings => Set<UserSettings>();
     public DbSet<GameConnection> GameConnections => Set<GameConnection>();
     public DbSet<NotificationChannel> NotificationChannels => Set<NotificationChannel>();
+    public DbSet<IntegrationPollBackoff> IntegrationPollBackoffs => Set<IntegrationPollBackoff>();
+    public DbSet<NotificationOutboxEntry> NotificationOutbox => Set<NotificationOutboxEntry>();
 
     public DbSet<SessionDraftBatch> SessionDraftBatches => Set<SessionDraftBatch>();
     public DbSet<SessionDraftRow> SessionDraftRows => Set<SessionDraftRow>();
@@ -40,6 +42,48 @@ public sealed class PlaydexDbContext(DbContextOptions<PlaydexDbContext> options)
         ConfigureUserSettings(modelBuilder);
         ConfigureGameConnections(modelBuilder);
         ConfigureNotificationChannels(modelBuilder);
+        ConfigureIntegrationPollBackoff(modelBuilder);
+        ConfigureNotificationOutbox(modelBuilder);
+    }
+
+    private static void ConfigureIntegrationPollBackoff(ModelBuilder modelBuilder)
+    {
+        var entity = modelBuilder.Entity<IntegrationPollBackoff>();
+        entity.ToTable("integration_poll_backoff", table =>
+        {
+            table.HasCheckConstraint("integration_poll_backoff_failures_check", "failures >= 0");
+            table.HasCheckConstraint("integration_poll_backoff_auth_failures_check", "auth_failures >= 0");
+        });
+        entity.HasKey(row => row.IntegrationId);
+        entity.Property(row => row.IntegrationId).HasColumnName("integration_id").ValueGeneratedNever();
+        entity.Property(row => row.Failures).HasColumnName("failures");
+        entity.Property(row => row.AuthFailures).HasColumnName("auth_failures");
+        entity.Property(row => row.FailingSince).HasColumnName("failing_since");
+        entity.Property(row => row.NextPollAt).HasColumnName("next_poll_at");
+        entity.Property(row => row.UpdatedAt).HasColumnName("updated_at");
+        entity.HasOne<Integration>().WithOne().HasForeignKey<IntegrationPollBackoff>(row => row.IntegrationId)
+            .OnDelete(DeleteBehavior.Cascade);
+    }
+
+    private static void ConfigureNotificationOutbox(ModelBuilder modelBuilder)
+    {
+        var entity = modelBuilder.Entity<NotificationOutboxEntry>();
+        entity.ToTable("notification_outbox");
+        entity.HasKey(row => row.Id);
+        entity.Property(row => row.Id).HasColumnName("id").ValueGeneratedOnAdd();
+        entity.Property(row => row.DedupeKey).HasColumnName("dedupe_key");
+        entity.Property(row => row.Kind).HasColumnName("kind");
+        entity.Property(row => row.Payload).HasColumnName("payload").HasColumnType("jsonb");
+        entity.Property(row => row.Attempts).HasColumnName("attempts");
+        entity.Property(row => row.NextAttemptAt).HasColumnName("next_attempt_at");
+        entity.Property(row => row.LastError).HasColumnName("last_error");
+        entity.Property(row => row.CreatedAt).HasColumnName("created_at");
+        entity.Property(row => row.DeliveredAt).HasColumnName("delivered_at");
+        entity.Property(row => row.FailedAt).HasColumnName("failed_at");
+        entity.HasIndex(row => row.DedupeKey).IsUnique().HasDatabaseName("notification_outbox_dedupe_key_unique");
+        entity.HasIndex(row => row.NextAttemptAt)
+            .HasDatabaseName("notification_outbox_pending_idx")
+            .HasFilter("delivered_at is null and failed_at is null");
     }
 
     private static void ConfigureAiGenerations(ModelBuilder modelBuilder)
@@ -186,6 +230,8 @@ public sealed class PlaydexDbContext(DbContextOptions<PlaydexDbContext> options)
         entity.Property(row => row.AccountId).HasColumnName("account_id");
         entity.Property(row => row.ApiKeyLocked).HasColumnName("api_key_locked");
         entity.Property(row => row.Active).HasColumnName("active");
+        entity.Property(row => row.PausedReason).HasColumnName("paused_reason");
+        entity.Property(row => row.PausedAt).HasColumnName("paused_at");
         entity.Property(row => row.CreatedAt).HasColumnName("created_at");
         entity.Property(row => row.UpdatedAt).HasColumnName("updated_at");
         entity.HasIndex(row => row.UserId);
