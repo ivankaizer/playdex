@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Security.Claims;
 using Api.Infrastructure.Auth;
+using Api.Infrastructure.Common;
 using Api.Modules.Recap;
 
 namespace Api.Modules.Launcher;
@@ -16,22 +17,29 @@ public static class LauncherEndpoints
     }
 
     /// <summary>
-    /// The web's recap of one calendar year (<see cref="RecapService"/>, the same numbers as its year tabs, in UTC days as
-    /// there), for the launcher's Playdex tab.
+    /// The web's recap of one calendar year (<see cref="RecapService"/>, the same numbers as its year tabs), for the
+    /// launcher's Playdex tab.
     /// </summary>
-    private static async Task<IResult> Recap(ClaimsPrincipal principal, RecapService recap, int year, CancellationToken ct)
+    /// <param name="tz">
+    /// The launcher's time zone (IANA or Windows id): the year, its days, weekdays and hours are its calendar's, as the
+    /// web's are in the browser's. UTC when missing.
+    /// </param>
+    private static async Task<IResult> Recap(
+        ClaimsPrincipal principal, RecapService recap, int year, string? tz, CancellationToken ct)
     {
         if (year is < 2000 or > 9998)
         {
             return TypedResults.Problem("year must be a calendar year.", statusCode: 400);
         }
-        var from = new DateTimeOffset(year, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        var zone = LocalCalendar.ResolveTimeZone(tz);
+        var first = new DateOnly(year, 1, 1);
         return TypedResults.Ok(await recap.GetRecap(
             principal.GetUserId(),
-            from.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
-            from.AddYears(1).AddDays(-1).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
-            from,
-            from.AddYears(1),
+            first.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+            first.AddYears(1).AddDays(-1).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+            LocalCalendar.StartOf(first, zone),
+            LocalCalendar.StartOf(first.AddYears(1), zone),
+            zone,
             ct));
     }
 

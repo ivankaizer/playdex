@@ -40,6 +40,19 @@ public static class AuthEndpoints
             await result.ExecuteAsync(http);
         }).RequireRateLimiting(RateLimiting.Refresh);
 
+        // Signing out revokes the refresh token server-side; holding the token is the proof, so no access token is needed.
+        api.MapPost("/logout", async (HttpContext http) =>
+        {
+            var request = await http.Request.ReadFromJsonAsync<RefreshRequest>();
+            var refreshToken = request?.RefreshToken?.Trim() ?? "";
+            if (refreshToken.Length > 0)
+            {
+                await http.RequestServices.GetRequiredService<AuthService>().Logout(refreshToken, http.RequestAborted);
+            }
+
+            await TypedResults.NoContent().ExecuteAsync(http);
+        }).RequireRateLimiting(RateLimiting.Refresh);
+
         api.MapGet("/me", Me).RequireAuthorization();
     }
 

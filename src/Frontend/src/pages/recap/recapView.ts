@@ -1,4 +1,5 @@
-import { formatCountNoun, formatDateLabel, formatDuration, formatFixedNumber, formatHours } from "@/lib/format";
+import { formatDateOnlyLabel } from "@/lib/dates";
+import { formatCountNoun, formatDuration, formatFixedNumber, formatHours } from "@/lib/format";
 import type { RecapGameStat, RecapResponse, WeekdayStat } from "./recapModels";
 
 export interface ChartPoint {
@@ -63,9 +64,12 @@ export function formatAverage(value: number, decimals = 1): string {
   return formatFixedNumber(value, decimals);
 }
 
-/** A "yyyy-MM-dd" date taken as UTC midnight and shown as a local date label. */
+/**
+ * A "yyyy-MM-dd" date as "MMM d, yyyy". The date already is a calendar day, so it is not read as UTC midnight and
+ * shifted into local time (which showed the day before west of UTC).
+ */
 export function formatRecapDate(date: string): string {
-  return formatDateLabel(new Date(`${date}T00:00:00Z`));
+  return formatDateOnlyLabel(date);
 }
 
 /** "yyyy-MM" → "MMM yyyy"; anything unparseable is returned unchanged. */
@@ -120,7 +124,7 @@ export function gameMixStats(recap: RecapResponse): LabeledValue[] {
     { label: "New games tried", value: String(recap.newGamesTried) },
     { label: "Games abandoned", value: String(recap.abandonedGames) },
     { label: "Return rate games", value: String(recap.returnRateGames) },
-    { label: "Top 3 time share", value: `${roundPercent(recap.timeOnTop3Percent)}%` },
+    { label: "Top 3 time share", value: `${roundPercent(recap.topThreeGamesSharePercent)}%` },
     { label: "Most binged game", value: binged ? `${binged.title} · ${binged.sessionCount}` : "—" },
   ];
 }

@@ -8,6 +8,7 @@ public sealed class PlaydexDbContext(DbContextOptions<PlaydexDbContext> options)
     public const string UniqueAccountIndex = "integrations_user_type_account_unique";
 
     public DbSet<User> Users => Set<User>();
+    public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
     public DbSet<Platform> Platforms => Set<Platform>();
     public DbSet<Integration> Integrations => Set<Integration>();
     public DbSet<Game> Games => Set<Game>();
@@ -31,6 +32,7 @@ public sealed class PlaydexDbContext(DbContextOptions<PlaydexDbContext> options)
         ConfigureSessionDrafts(modelBuilder);
         ConfigureAiGenerations(modelBuilder);
         ConfigureUsers(modelBuilder);
+        ConfigureRefreshTokens(modelBuilder);
         ConfigurePlatforms(modelBuilder);
         ConfigureIntegrations(modelBuilder);
         ConfigureGames(modelBuilder);
@@ -167,6 +169,24 @@ public sealed class PlaydexDbContext(DbContextOptions<PlaydexDbContext> options)
         entity.Property(row => row.IsAdmin).HasColumnName("is_admin");
         entity.Property(row => row.TokenVersion).HasColumnName("token_version");
         entity.HasIndex(row => row.Email).IsUnique();
+    }
+
+    private static void ConfigureRefreshTokens(ModelBuilder modelBuilder)
+    {
+        var entity = modelBuilder.Entity<RefreshToken>();
+        entity.ToTable("refresh_tokens");
+        entity.HasKey(row => row.Id);
+        entity.Property(row => row.Id).HasColumnName("id").ValueGeneratedOnAdd();
+        entity.Property(row => row.UserId).HasColumnName("user_id");
+        entity.Property(row => row.FamilyId).HasColumnName("family_id");
+        entity.Property(row => row.TokenHash).HasColumnName("token_hash");
+        entity.Property(row => row.CreatedAt).HasColumnName("created_at");
+        entity.Property(row => row.ExpiresAt).HasColumnName("expires_at");
+        entity.Property(row => row.RotatedAt).HasColumnName("rotated_at");
+        entity.HasIndex(row => row.TokenHash).IsUnique();
+        entity.HasIndex(row => row.UserId);
+        entity.HasIndex(row => row.FamilyId);
+        entity.HasOne<User>().WithMany().HasForeignKey(row => row.UserId).OnDelete(DeleteBehavior.Cascade);
     }
 
     private static void ConfigureNotificationChannels(ModelBuilder modelBuilder)

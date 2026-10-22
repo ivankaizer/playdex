@@ -41,7 +41,7 @@ public static class ProvidersEndpoints
                 ? TypedResults.Problem("Request body is required.", statusCode: 400)
                 : TypedResults.Ok(await service.UpdateSessionPlatform(
                     http.User.GetUserId(),
-                    ParseProviderId(providerId),
+                    RouteIds.Parse(providerId, "providerId"),
                     request,
                     http.RequestAborted));
             await result.ExecuteAsync(http);
@@ -61,7 +61,7 @@ public static class ProvidersEndpoints
             {
                 result = TypedResults.Ok(await service.UpdateCredential(
                     http.User.GetUserId(),
-                    ParseProviderId(providerId),
+                    RouteIds.Parse(providerId, "providerId"),
                     ParseCredentialChanges(payload),
                     http.RequestAborted));
             }
@@ -79,7 +79,7 @@ public static class ProvidersEndpoints
             await result.ExecuteAsync(http);
         });
 
-        api.MapPost("/api/key", GetApiKey).RequireAuthorization();
+        api.MapPost("/key", GetApiKey).RequireAuthorization();
     }
 
     private static async Task<IResult> ListProviders(
@@ -117,12 +117,5 @@ public static class ProvidersEndpoints
             throw AppProblemException.Validation($"{name} must be a string or null.");
         var value = property.GetString()?.Trim();
         return (true, string.IsNullOrEmpty(value) ? null : value);
-    }
-
-    private static long ParseProviderId(string value)
-    {
-        if (!long.TryParse(value, out var id) || id <= 0)
-            throw AppProblemException.Validation("providerId must be a positive integer.");
-        return id;
     }
 }

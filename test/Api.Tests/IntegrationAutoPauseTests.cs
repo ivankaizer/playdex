@@ -3,6 +3,7 @@ using Api.Modules.Games;
 using Api.Modules.Metrics;
 using Api.Modules.Polling;
 using Api.Modules.Providers;
+using Api.Modules.Sessions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -44,7 +45,7 @@ public sealed class IntegrationAutoPauseTests(PostgresFixture postgres)
         Assert.Equal((scope.IntegrationId, 3, Rejected), (paused.CredentialId, paused.AuthFailures, paused.Reason));
         Assert.Single(scope.Recorder.Failed);
         Assert.DoesNotContain(
-            await new PollingRepository(db, new GameResolver(db)).LoadActiveCredentials(CancellationToken.None),
+            await new PollingRepository(db, new GameResolver(db), TestSessions.Lifecycle(db)).LoadActiveCredentials(CancellationToken.None),
             row => row.Credential.Id == scope.IntegrationId);
     }
 
@@ -77,7 +78,7 @@ public sealed class IntegrationAutoPauseTests(PostgresFixture postgres)
         }
 
         await using var db = scope.CreateDb();
-        var repository = new ProvidersRepository(db);
+        var repository = new ProvidersRepository(db, TestSessions.Lifecycle(db));
         var paused = Assert.Single(await repository.ListProviders(scope.UserId, CancellationToken.None));
         Assert.Equal(("paused", Rejected), (paused.Status, paused.PausedReason));
         Assert.NotNull(paused.PausedAt);
@@ -99,8 +100,9 @@ public sealed class IntegrationAutoPauseTests(PostgresFixture postgres)
         await scope.Polling.PollCredential(scope.Credential, CancellationToken.None);
 
         await using var db = scope.CreateDb();
-        await new ProvidersRepository(db).UpdateCredential(
-            scope.UserId, scope.IntegrationId, true, "new-npsso", false, null, CancellationToken.None);
+        await new ProvidersRepository(db, TestSessions.Lifecycle(db)).UpdateCredential(
+            scope.UserId, scope.IntegrationId, true, "new-npsso", false, null, ProvidersService.ValidateCredential,
+            CancellationToken.None);
 
         Assert.False(await db.IntegrationPollBackoffs.AnyAsync(row => row.IntegrationId == scope.IntegrationId));
     }
@@ -153,6 +155,7 @@ public sealed class IntegrationAutoPauseTests(PostgresFixture postgres)
                 .AddDbContext<PlaydexDbContext>(options => options.UseNpgsql(dataSource, MapEnums))
                 .AddScoped<IGameResolver, GameResolver>()
                 .AddScoped<PollingRepository>()
+                .AddScoped<SessionLifecycle>()
                 .AddScoped<ICredentialBackoff, CredentialBackoff>()
                 .AddScoped<EventBus>()
                 .AddSingleton<IProviderClient>(new FailingClient(failure))

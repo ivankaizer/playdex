@@ -1,3 +1,4 @@
+import { clientTimeZone } from "@/lib/dates";
 import type { AccountSession } from "@/models/sessions";
 import type { AccountStatsPeriod } from "@/models/stats";
 import {
@@ -58,7 +59,9 @@ import {
   selectCustomRange,
 } from "./sessionsState";
 
-const july13 = new Date("2026-07-13T00:00:00Z");
+// Local midnight, so the week and presets are the same in every time zone the tests run in.
+const july13 = new Date(2026, 6, 13);
+const tz = `tz=${encodeURIComponent(clientTimeZone())}`;
 
 function session(overrides: Partial<AccountSession> = {}): AccountSession {
   const startedAt = new Date(Date.now() - 2 * 3_600_000);
@@ -72,8 +75,6 @@ function session(overrides: Partial<AccountSession> = {}): AccountSession {
     game: "Hades II",
     capsuleUrl: null,
     ignored: false,
-    mappedPlatform: null,
-    mappedSource: null,
     ...overrides,
   };
 }
@@ -129,22 +130,21 @@ describe("session edit state", () => {
   });
 
   it.each([
-    ["", false, false, "Enter how long you played, e.g. 1h 30m."],
-    ["0m", false, false, "A session needs at least 1 minute."],
-    ["0h 0m", false, false, "A session needs at least 1 minute."],
-    ["90", false, false, "Use hours and minutes, e.g. 1h 30m."],
-    ["1.5h", false, false, "Use hours and minutes, e.g. 1h 30m."],
-    ["75m", false, false, "Minutes go up to 59. Write 1h 15m instead."],
-    ["1h 75m", false, false, "Minutes go up to 59. Write 2h 15m instead."],
-    ["45m", true, false, ""],
-    ["1H30M", true, false, ""],
-    ["24h", true, false, ""],
-    ["24h 1m", true, true, "Longer than a day. Double-check before saving."],
-    ["26h 05m", true, true, "Longer than a day. Double-check before saving."],
-  ])("duration %j: ok=%s warn=%s", (value, ok, warn, message) => {
+    ["", false, "Enter how long you played, e.g. 1h 30m."],
+    ["0m", false, "A session needs at least 1 minute."],
+    ["0h 0m", false, "A session needs at least 1 minute."],
+    ["90", false, "Use hours and minutes, e.g. 1h 30m."],
+    ["1.5h", false, "Use hours and minutes, e.g. 1h 30m."],
+    ["75m", false, "Minutes go up to 59. Write 1h 15m instead."],
+    ["1h 75m", false, "Minutes go up to 59. Write 2h 15m instead."],
+    ["45m", true, ""],
+    ["1H30M", true, ""],
+    ["24h", true, ""],
+    ["24h 1m", false, "A session can be at most 24 hours."],
+    ["26h 05m", false, "A session can be at most 24 hours."],
+  ])("duration %j: ok=%s", (value, ok, message) => {
     const check = checkDuration(value);
     expect(check.ok).toBe(ok);
-    expect(check.warn).toBe(warn);
     expect(check.message).toBe(message);
   });
 
@@ -161,10 +161,15 @@ describe("session edit state", () => {
     expect(result.state.error).toContain("Minutes go up to 59");
   });
 
-  it("allows a duration over 24h but flags it for confirmation", () => {
+  it("refuses a duration over 24h, typed or kept from an older session", () => {
     const state = setEditDuration(tryOpenEdit(emptySessionEditState, session())!, "26h 5m");
-    expect(editDurationCheck(state)).toMatchObject({ ok: true, warn: true, minutes: 1565 });
-    expect(tryBuildEditSubmission(state).submission).not.toBeNull();
+    expect(editDurationCheck(state)).toMatchObject({ ok: false, minutes: 1565, message: "A session can be at most 24 hours." });
+    expect(tryBuildEditSubmission(state).submission).toBeNull();
+
+    const startedAt = new Date(Date.now() - 30 * 3_600_000);
+    const long = tryOpenEdit(emptySessionEditState, session({ startedAt: startedAt.toISOString(), endedAt: new Date().toISOString() }))!;
+    expect(editDurationCheck(long).ok).toBe(false);
+    expect(tryBuildEditSubmission(long).state.error).toBe("A session can be at most 24 hours.");
   });
 
   it("formats the duration field in hours and minutes", () => {
@@ -212,32 +217,34 @@ describe("session edit state", () => {
 });
 
 describe("sessions state", () => {
-  it("starts on the UTC Monday-Sunday week with exact URLs", () => {
-    const state = createSessionsState(new Date("2026-07-13T23:30:00-07:00"));
+  it("starts on the viewer's Monday-Sunday week with exact URLs", () => {
+    // Late Monday evening locally, already Tuesday in UTC for a viewer west of Greenwich.
+    const state = createSessionsState(new Date(2026, 6, 13, 23, 30));
     expect(state.preset).toBe("this-week");
     expect(state.from).toBe("2026-07-13");
     expect(state.to).toBe("2026-07-19");
     expect(Limit).toBe(10);
-    expect(buildListRequest(state)).toBe("/sessions?limit=10&offset=0&from=2026-07-13&to=2026-07-19&sort=date&direction=desc");
-    expect(buildStatsRequest(state)).toBe("/stats?from=2026-07-13&to=2026-07-19");
+    expect(buildListRequest(state)).toBe(`/sessions?limit=10&offset=0&from=2026-07-13&to=2026-07-19&sort=date&direction=desc&${tz}`);
+    expect(buildStatsRequest(state)).toBe(`/stats?from=2026-07-13&to=2026-07-19&${tz}`);
   });
 
-  it("trims the debounced title and only changes the list URL", () => {
+  it("trims the debounced title and filters the list and its stats alike", () => {
     let state = createSessionsState(july13);
     state = setTitle(state, "  Hades II  ");
     state = applyDebouncedTitle(state, state.titleVersion)!;
     expect(state.debouncedTitle).toBe("Hades II");
     expect(buildListRequest(state)).toBe(
-      "/sessions?limit=10&offset=0&title=Hades+II&from=2026-07-13&to=2026-07-19&sort=date&direction=desc",
+      `/sessions?limit=10&offset=0&title=Hades+II&from=2026-07-13&to=2026-07-19&sort=date&direction=desc&${tz}`,
     );
-    expect(buildStatsRequest(state)).toBe("/stats?from=2026-07-13&to=2026-07-19");
+    expect(buildStatsRequest(state)).toBe(`/stats?from=2026-07-13&to=2026-07-19&title=Hades+II&${tz}`);
+    expect(buildDailyRequest(state)).toBe(`/stats/daily?from=2026-07-13&to=2026-07-19&title=Hades+II&${tz}`);
   });
 
   it("form-encodes special characters in the title", () => {
     let state = setTitle(createSessionsState(july13), "A~B! (Test)*");
     state = applyDebouncedTitle(state, state.titleVersion)!;
     expect(buildListRequest(state)).toBe(
-      "/sessions?limit=10&offset=0&title=A%7EB%21+%28Test%29*&from=2026-07-13&to=2026-07-19&sort=date&direction=desc",
+      `/sessions?limit=10&offset=0&title=A%7EB%21+%28Test%29*&from=2026-07-13&to=2026-07-19&sort=date&direction=desc&${tz}`,
     );
   });
 
@@ -245,9 +252,9 @@ describe("sessions state", () => {
     let state = setPlatform(createSessionsState(july13), "ps5");
     expect(state.platform).toBe("ps5");
     expect(buildListRequest(state)).toBe(
-      "/sessions?limit=10&offset=0&platform=ps5&from=2026-07-13&to=2026-07-19&sort=date&direction=desc",
+      `/sessions?limit=10&offset=0&platform=ps5&from=2026-07-13&to=2026-07-19&sort=date&direction=desc&${tz}`,
     );
-    expect(buildStatsRequest(state)).toBe("/stats?from=2026-07-13&to=2026-07-19&platform=ps5");
+    expect(buildStatsRequest(state)).toBe(`/stats?from=2026-07-13&to=2026-07-19&platform=ps5&${tz}`);
 
     state = togglePlatform(state, "ps5");
     expect(state.platform).toBe("");
@@ -269,7 +276,7 @@ describe("sessions state", () => {
   it("custom dates switch to custom and stats require both bounds", () => {
     let state = setFrom(createSessionsState(july13), "");
     expect(state.preset).toBe("custom");
-    expect(buildListRequest(state)).toBe("/sessions?limit=10&offset=0&to=2026-07-19&sort=date&direction=desc");
+    expect(buildListRequest(state)).toBe(`/sessions?limit=10&offset=0&to=2026-07-19&sort=date&direction=desc&${tz}`);
     expect(buildStatsRequest(state)).toBeNull();
 
     state = setTo(state, "");
@@ -285,8 +292,9 @@ describe("sessions state", () => {
     ["this-month", "2026-07-01", "2026-07-31"],
     ["this-year", "2026-01-01", "2026-12-31"],
     ["last-year", "2025-01-01", "2025-12-31"],
-  ])("preset %s uses UTC calendar ranges", (preset, from, to) => {
-    const now = new Date("2026-07-13T23:30:00-07:00");
+  ])("preset %s uses the viewer's calendar ranges", (preset, from, to) => {
+    // 23:30 on Tuesday Jul 14 locally, whatever the date is in UTC.
+    const now = new Date(2026, 6, 14, 23, 30);
     const state = applyPreset(createSessionsState(now), preset, now);
     expect(state.preset).toBe(preset);
     expect(state.from).toBe(from);
@@ -294,7 +302,7 @@ describe("sessions state", () => {
   });
 
   it("this-month handles February in a leap year", () => {
-    const now = new Date("2028-02-10T12:00:00Z");
+    const now = new Date(2028, 1, 10, 12);
     const state = applyPreset(createSessionsState(now), "this-month", now);
     expect([state.from, state.to]).toEqual(["2028-02-01", "2028-02-29"]);
   });
@@ -339,7 +347,7 @@ describe("sessions state", () => {
     expect(hasMore(state)).toBe(true);
     expect(nextPageSize(state)).toBe(10);
     expect(listRequestPages(state, "more")).toEqual([
-      "/sessions?limit=10&offset=10&from=2026-07-13&to=2026-07-19&sort=date&direction=desc",
+      `/sessions?limit=10&offset=10&from=2026-07-13&to=2026-07-19&sort=date&direction=desc&${tz}`,
     ]);
 
     state = beginListLoad(state, "more");
@@ -373,7 +381,7 @@ describe("sessions state", () => {
     expect(beginListLoad(state, "refresh").isListLoading).toBe(false);
     expect(listRequestPages(createSessionsState(july13), "refresh")).toHaveLength(1);
     expect(listRequestPages(state, "replace")).toEqual([
-      "/sessions?limit=10&offset=0&from=2026-07-13&to=2026-07-19&sort=date&direction=desc",
+      `/sessions?limit=10&offset=0&from=2026-07-13&to=2026-07-19&sort=date&direction=desc&${tz}`,
     ]);
   });
 
@@ -384,11 +392,11 @@ describe("sessions state", () => {
   });
 
   it("requests per-day stats only for week-sized ranges", () => {
-    const now = new Date("2026-10-03T12:00:00Z");
+    const now = new Date(2026, 9, 3, 12);
     const week = createSessionsState(now);
     expect(rangeDays(week)).toBe(7);
-    expect(buildDailyRequest(week)).toBe("/stats/daily?from=2026-09-28&to=2026-10-04");
-    expect(buildDailyRequest(setPlatform(week, "ps5"))).toBe("/stats/daily?from=2026-09-28&to=2026-10-04&platform=ps5");
+    expect(buildDailyRequest(week)).toBe(`/stats/daily?from=2026-09-28&to=2026-10-04&${tz}`);
+    expect(buildDailyRequest(setPlatform(week, "ps5"))).toBe(`/stats/daily?from=2026-09-28&to=2026-10-04&platform=ps5&${tz}`);
     expect(buildDailyRequest(applyPreset(week, "today", now))).toBeNull();
     expect(buildDailyRequest(applyPreset(week, "this-month", now))).toBeNull();
     expect(buildDailyRequest(setFrom(week, ""))).toBeNull();
@@ -396,7 +404,7 @@ describe("sessions state", () => {
   });
 
   it("daily bars cover every day of the range and mark future days as upcoming", () => {
-    const now = new Date("2026-10-03T12:00:00Z");
+    const now = new Date(2026, 9, 3, 12);
     const state = completeStatsLoad(createSessionsState(now), { accountId: 1, stats: emptyStats() }, [
       { date: "2026-09-28", totalSeconds: 3600, sessionCount: 1, platforms: [] },
       { date: "2026-10-03", totalSeconds: 600, sessionCount: 1, platforms: [] },
@@ -451,7 +459,7 @@ describe("sessions state", () => {
   });
 
   it("row views use platform name, capsule, ignored flag, hash and short duration", () => {
-    const now = new Date("2026-07-13T12:00:00Z");
+    const now = new Date(2026, 6, 13, 12);
     const row = session({
       startedAt: new Date(now.getTime() - 65 * 60_000).toISOString(),
       endedAt: now.toISOString(),
@@ -459,8 +467,6 @@ describe("sessions state", () => {
       platformName: "Manual",
       capsuleUrl: "https://images.test/hades.jpg",
       ignored: true,
-      mappedPlatform: "psn",
-      mappedSource: "igdb",
     });
     const state = completeListLoad(createSessionsState(now), { accountId: 1, sessions: [row], total: 1, limit: 10, offset: 0 });
 
@@ -545,7 +551,7 @@ describe("sessions list presentation", () => {
   });
 
   it("labels the selected range like the design", () => {
-    const now = new Date("2026-10-03T12:00:00Z");
+    const now = new Date(2026, 9, 3, 12);
     const base = createSessionsState(now);
     expect(rangeLabel(base)).toBe("Sep 28 – Oct 4, 2026");
     expect(rangeLabel(applyPreset(base, "today", now))).toBe("Today · Oct 3, 2026");
@@ -559,7 +565,7 @@ describe("sessions list presentation", () => {
   });
 
   it("switching to a custom range keeps the bounds", () => {
-    const state = selectCustomRange(createSessionsState(new Date("2026-10-03T12:00:00Z")));
+    const state = selectCustomRange(createSessionsState(new Date(2026, 9, 3, 12)));
     expect(state.preset).toBe("custom");
     expect([state.from, state.to]).toEqual(["2026-09-28", "2026-10-04"]);
   });

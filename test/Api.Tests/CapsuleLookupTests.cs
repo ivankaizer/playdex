@@ -2,6 +2,7 @@ using Api.Infrastructure.Common;
 using Api.Modules.Games;
 using Api.Modules.Metrics;
 using Api.Modules.Polling;
+using Api.Modules.Sessions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -137,6 +138,7 @@ public sealed class CapsuleLookupTests(PostgresFixture postgres)
                 }))
                 .AddScoped<IGameResolver, GameResolver>()
                 .AddScoped<PollingRepository>()
+                .AddScoped<SessionLifecycle>()
                 .AddScoped<ICredentialBackoff, CredentialBackoff>()
                 .AddScoped<EventBus>()
                 .AddSingleton<IProviderClient>(client)

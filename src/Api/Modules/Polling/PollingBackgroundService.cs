@@ -4,8 +4,8 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Api.Infrastructure.Common;
 using Playdex.Persistence;
-using Api.Modules.ApiCapture;
 using Api.Modules.Metrics;
+using Api.Modules.Sessions;
 
 namespace Api.Modules.Polling;
 
@@ -114,7 +114,12 @@ public sealed partial class PollingBackgroundService(
 
     private async Task RunCycle(Activity? activity, CancellationToken stoppingToken)
     {
-        await EndTimedOutApiSessions(serviceProvider, stoppingToken);
+        using (var sweepScope = serviceProvider.GetRequiredService<IServiceScopeFactory>().CreateScope())
+        {
+            await sweepScope.ServiceProvider
+                .GetRequiredService<SessionLifecycle>()
+                .SweepStaleSessions(stoppingToken);
+        }
 
         List<ActiveCredential> credentials;
         using (var scope = serviceProvider.GetRequiredService<IServiceScopeFactory>().CreateScope())
@@ -296,16 +301,6 @@ public sealed partial class PollingBackgroundService(
         return true;
     }
 
-    internal static async Task<int> EndTimedOutApiSessions(
-        IServiceProvider serviceProvider,
-        CancellationToken ct)
-    {
-        using var scope = serviceProvider.GetRequiredService<IServiceScopeFactory>().CreateScope();
-        return await scope.ServiceProvider
-            .GetRequiredService<IApiSessionTimeoutCleaner>()
-            .EndTimedOutSessions(ct);
-    }
-
     /// <returns>When the provider asked to be left alone (a rate-limited metadata lookup), until when.</returns>
     private async Task<DateTimeOffset?> ProcessCredential(
         ActiveCredential active,
@@ -325,7 +320,7 @@ public sealed partial class PollingBackgroundService(
 
         var pollResult = await client.GetCurrentlyPlaying(credential, ct);
         var pollingRepo = services.GetRequiredService<PollingRepository>();
-        var bus = services.GetRequiredService<EventBus>();
+        var sessions = services.GetRequiredService<SessionLifecycle>();
 
         var polledAt = DateTimeOffset.UtcNow;
 
@@ -341,26 +336,8 @@ public sealed partial class PollingBackgroundService(
             pollResult.RawPayload,
             ct);
         var deferUntil = await EnrichGameIfNeeded(client, credential, pollResult.Game, outcome, pollingRepo, ct);
-        foreach (var transition in outcome.Transitions.Where(row => row.Notify))
-        {
-            if (transition.Kind == SessionTransitionKind.Started)
-            {
-                await SafePublish(bus, new SessionStarted(
-                    transition.SessionId,
-                    transition.CredentialId,
-                    transition.GameId,
-                    transition.StartedAt), ct);
-            }
-            else
-            {
-                await SafePublish(bus, new SessionEnded(
-                    transition.SessionId,
-                    transition.CredentialId,
-                    transition.GameId,
-                    transition.StartedAt,
-                    transition.EndedAt!.Value), ct);
-            }
-        }
+        // Announced after the capsule lookup, so the notification card has the cover.
+        await sessions.PublishPending(ct);
         metrics.RecordPollSuccess(platformKey, polledAt);
         LogSuccessfulPoll(credential.Id, outcome.GameId);
         return deferUntil;

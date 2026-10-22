@@ -25,8 +25,10 @@ public sealed class DraftExtractionService(DraftRepository repository, DraftServ
         if (!opts.IsAvailable) throw new AppProblemException(503, "AI extraction is not configured.");
         var day = ReferenceDate(timezone, clock.GetUtcNow());
         var platforms = await manual.ListPlatforms(ct);
-        var input = new ExtractionInput(text, image, contentType, day, platforms.Where(p => p.Key != "playnite").Select(p => p.Key).ToArray());
-        ExtractionInputValidator.Validate(input, opts);
+        var input = new ExtractionInput(text, image, contentType, day, platforms.Where(p => p.Key != ManualService.PlaynitePlatformKey).Select(p => p.Key).ToArray());
+        // Only cheap checks before the lock: decoding a screenshot is the expensive part, and parallel uploads
+        // must not get to do it without taking the lock and spending quota.
+        ExtractionInputValidator.ValidateRequest(input, opts);
 
         // A dedicated session advisory lock spans the external request without holding a transaction.
         await using var connection = await dataSource.OpenConnectionAsync(ct);
@@ -41,6 +43,7 @@ public sealed class DraftExtractionService(DraftRepository repository, DraftServ
             existing = await repository.FindRequest(userId, requestId, ct);
             if (existing is not null) return DraftService.ToDto(existing);
             await CheckQuota(connection, userId, opts.RequestsPerHour, ct);
+            ExtractionInputValidator.ValidateImage(input, opts);
             generationId = await history.Begin(userId, requestId, timezone, input);
             input = input with { ObserveResponse = response => history.RecordResponse(generationId, response) };
             IReadOnlyList<ExtractedSession> rows;
@@ -65,11 +68,11 @@ public sealed class DraftExtractionService(DraftRepository repository, DraftServ
                 var selected = playedCandidates.Length == 1
                     ? playedCandidates[0]
                     : candidates.Count == 1 ? candidates[0] : null;
-                var platform = platforms.Any(p => p.Key == row.PlatformKey && p.Key != "playnite") ? row.PlatformKey! : "unknown";
+                var platform = platforms.Any(p => p.Key == row.PlatformKey && p.Key != ManualService.PlaynitePlatformKey) ? row.PlatformKey! : "unknown";
                 var warnings = row.Warnings.ToList();
                 if (platform == "unknown"
                     && selected?.PreviouslyPlayed == true
-                    && platforms.Any(candidate => candidate.Key == selected.Platform && candidate.Key != "playnite"))
+                    && platforms.Any(candidate => candidate.Key == selected.Platform && candidate.Key != ManualService.PlaynitePlatformKey))
                 {
                     platform = selected.Platform!;
                     warnings.RemoveAll(warning => warning.StartsWith("Platform:", StringComparison.OrdinalIgnoreCase));

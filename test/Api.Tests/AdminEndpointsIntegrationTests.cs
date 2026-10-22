@@ -30,12 +30,19 @@ public sealed class AdminEndpointsIntegrationTests(AdminApiFixture fixture)
         var otherPlatform = await scenario.AddPlatformAsync($"other-{scenario.Suffix}");
         var otherUser = await scenario.AddUserAsync($"other-{scenario.Suffix}@test.local");
         var other = await scenario.AddIntegrationAsync(IntegrationType.Api, null, true, "api-account", userId: otherUser.Id);
-        for (var i = 0; i < 4; i++) await scenario.AddSessionAsync(scenario.Game.Id, polling.Id, now.AddHours(-5).AddMinutes(i));
-        var api = await scenario.AddSessionAsync(scenario.Game.Id, other.Id, now.AddHours(-1));
-        var manual = await scenario.AddSessionAsync(scenario.Game.Id, polling.Id, now.AddHours(-2));
         await using var db = fixture.CreateDb();
+        var manual = await scenario.AddSessionAsync(scenario.Game.Id, polling.Id, now.AddHours(-2));
         await db.PlaySessions.Where(r => r.Id == manual.Id).ExecuteUpdateAsync(set => set
             .SetProperty(r => r.IntegrationId, (long?)null).SetProperty(r => r.CaptureMethod, CaptureMethod.Manual));
+        // A polling integration has one live session, so the other three live on integrations of their own.
+        for (var i = 0; i < 4; i++)
+        {
+            var integration = i == 0
+                ? polling
+                : await scenario.AddIntegrationAsync(IntegrationType.Steam, scenario.Platform.Id, true, $"account-{i}-{scenario.Suffix}");
+            await scenario.AddSessionAsync(scenario.Game.Id, integration.Id, now.AddHours(-5).AddMinutes(i));
+        }
+        var api = await scenario.AddSessionAsync(scenario.Game.Id, other.Id, now.AddHours(-1));
         await db.PlaySessions.Where(r => r.Id == api.Id).ExecuteUpdateAsync(set => set
             .SetProperty(r => r.CaptureMethod, CaptureMethod.Api).SetProperty(r => r.PlatformId, otherPlatform.Id));
         db.PollResults.AddRange(
@@ -250,11 +257,11 @@ public sealed class AdminEndpointsIntegrationTests(AdminApiFixture fixture)
         var polling = await scenario.AddIntegrationAsync(IntegrationType.Steam, scenario.Platform.Id, true, "polling");
         var apiTarget = await scenario.AddIntegrationAsync(IntegrationType.Api, null, true, "api-target");
         var pollingTarget = await scenario.AddIntegrationAsync(IntegrationType.Xbox, scenario.Platform.Id, true, "xbox-target");
-        var session = await scenario.AddSessionAsync(scenario.Game.Id, polling.Id);
-        var manual = await scenario.AddSessionAsync(scenario.Game.Id, polling.Id);
         await using var db = fixture.CreateDb();
+        var manual = await scenario.AddSessionAsync(scenario.Game.Id, polling.Id);
         await db.PlaySessions.Where(r => r.Id == manual.Id).ExecuteUpdateAsync(set => set
             .SetProperty(r => r.IntegrationId, (long?)null).SetProperty(r => r.CaptureMethod, CaptureMethod.Manual));
+        var session = await scenario.AddSessionAsync(scenario.Game.Id, polling.Id);
 
         // Polling → API integration: the session becomes an API capture and keeps its platform.
         await Transfer(client, [session.Id], apiTarget.Id, expected: 1);
@@ -274,6 +281,13 @@ public sealed class AdminEndpointsIntegrationTests(AdminApiFixture fixture)
         Assert.Equal(pollingTarget.Id, (await db.PlaySessions.AsNoTracking().SingleAsync(r => r.Id == session.Id)).IntegrationId);
         var untouched = await db.PlaySessions.AsNoTracking().SingleAsync(r => r.Id == manual.Id);
         Assert.Equal((CaptureMethod.Manual, (long?)null), (untouched.CaptureMethod, untouched.IntegrationId));
+
+        // A polling integration has one live session: moving a second one onto it is a conflict, and nothing moves.
+        var otherLive = await scenario.AddSessionAsync(scenario.Game.Id, polling.Id);
+        using var conflict = await client.PostAsJsonAsync("/api/admin/sessions/transfer",
+            new { sessionIds = new[] { otherLive.Id }, targetIntegrationId = pollingTarget.Id });
+        Assert.Equal(HttpStatusCode.Conflict, conflict.StatusCode);
+        Assert.Equal(polling.Id, (await db.PlaySessions.AsNoTracking().SingleAsync(r => r.Id == otherLive.Id)).IntegrationId);
     }
 
     [Fact]

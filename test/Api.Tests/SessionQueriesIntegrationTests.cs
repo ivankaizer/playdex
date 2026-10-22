@@ -22,7 +22,7 @@ public sealed class SessionQueriesIntegrationTests(PostgresFixture postgres)
 
         Assert.Equal(
             new[] { 2025, 2026, data.Open.StartedAt.UtcDateTime.Year }.Distinct().OrderDescending(),
-            await repository.ListRecapYears(data.UserId, CancellationToken.None));
+            await repository.ListRecapYears(data.UserId, TimeZoneInfo.Utc, CancellationToken.None));
 
         Assert.Equal(
             [data.Long.Id, data.Medium.Id, data.Open.Id],
@@ -39,6 +39,44 @@ public sealed class SessionQueriesIntegrationTests(PostgresFixture postgres)
         Assert.Equal([data.Alpha.Id, data.Beta.Id], firstSessions.Select(row => row.GameId));
         Assert.Equal(data.Long.StartedAt, firstSessions[0].FirstStartedAt);
         Assert.Equal(data.Medium.StartedAt, firstSessions[1].FirstStartedAt);
+    }
+
+    [Fact]
+    public async Task RecapSkipsARunningSessionThatHasNotYetLastedTheIgnoreSetting()
+    {
+        if (!postgres.IsConfigured) return;
+
+        await using var db = CreateDb();
+        await using var transaction = await db.Database.BeginTransactionAsync();
+        var data = await Seed(db);
+        // A user runs one manual timer at a time: data.Open stops after its 90 minutes before the next one starts.
+        data.Open.EndedAt = DateTimeOffset.UtcNow;
+        await db.SaveChangesAsync();
+        // Running for 5 minutes under a 10-minute setting.
+        var fresh = new PlaySession
+        {
+            UserId = data.UserId,
+            GameId = data.Alpha.Id,
+            PlatformId = data.Open.PlatformId,
+            CaptureMethod = CaptureMethod.Manual,
+            StartedAt = DateTimeOffset.UtcNow.AddMinutes(-5),
+        };
+        db.PlaySessions.Add(fresh);
+        await db.SaveChangesAsync();
+        var repository = new RecapRepository(db);
+
+        Assert.Equal(
+            [data.Long.Id, data.Medium.Id, data.Open.Id],
+            (await repository.ListRecapSessions(data.UserId, null, null, CancellationToken.None)).Select(row => row.Id));
+
+        var recap = await new RecapService(repository).GetRecap(
+            data.UserId, null, null, null, null, TimeZoneInfo.Utc, CancellationToken.None);
+        Assert.Equal(3, recap.TotalSessions);
+
+        // The session list still shows it, not flagged: only the recap waits for it to reach the setting.
+        var listed = await new AccountsRepository(db, new GamesService(new GamesRepository(db))).ListSessions(
+            data.UserId, null, null, null, null, null, null, "date", "desc", 10, 0, 0, CancellationToken.None);
+        Assert.False(listed.Sessions.Single(row => row.SessionId == fresh.Id).Ignored);
     }
 
     [Fact]
@@ -76,13 +114,36 @@ public sealed class SessionQueriesIntegrationTests(PostgresFixture postgres)
 
         Assert.Equal(data.Open.Id, (await repository.LoadCurrentSession(data.UserId, null, CancellationToken.None))?.SessionId);
 
-        var today = await repository.ListSessionsToday(data.UserId, null, 0, CancellationToken.None);
-        var todayStart = DateTimeOffset.UtcNow.UtcDateTime.Date;
-        Assert.Equal(data.Open.StartedAt >= todayStart ? [data.Open.Id] : [], today.Select(row => row.SessionId));
+        // The open session started 90 minutes ago: it runs into today even when it began yesterday.
+        var today = await repository.ListSessionsToday(data.UserId, null, 0, TimeZoneInfo.Utc, CancellationToken.None);
+        Assert.Equal([data.Open.Id], today.Sessions.Select(row => row.SessionId));
+        Assert.Equal(1, today.Total);
 
         Assert.Equal(0, await repository.DeleteSession(data.Short.Id, data.UserId + 1, CancellationToken.None));
         Assert.Equal(data.Short.Id, await repository.DeleteSession(data.Short.Id, data.UserId, CancellationToken.None));
         Assert.False(await db.PlaySessions.AnyAsync(row => row.Id == data.Short.Id));
+    }
+
+    [Fact]
+    public async Task AnOversizedIgnoreSettingCapsAtADayInsteadOfOverflowing()
+    {
+        if (!postgres.IsConfigured) return;
+
+        await using var db = CreateDb();
+        await using var transaction = await db.Database.BeginTransactionAsync();
+        var data = await Seed(db);
+        // Stored before the setting was clamped: minutes * 60 overflows a 32-bit integer.
+        await db.UserSettings
+            .Where(settings => settings.UserId == data.UserId)
+            .ExecuteUpdateAsync(set => set.SetProperty(settings => settings.IgnoreShortSessionsMinutes, int.MaxValue));
+
+        var launcher = await new Api.Modules.Launcher.LauncherRepository(db).ListSessions(data.UserId, CancellationToken.None);
+        Assert.Equal([data.Open.Id], launcher.Select(row => row.SessionId));
+
+        var listed = await new AccountsRepository(db, new GamesService(new GamesRepository(db))).ListSessions(
+            data.UserId, null, null, null, null, null, null, "date", "asc", 10, 0, 0, CancellationToken.None);
+        Assert.Equal(4, listed.Total);
+        Assert.Equal([true, true, true, false], listed.Sessions.Select(row => row.Ignored));
     }
 
     private static async Task<SeedData> Seed(PlaydexDbContext db)

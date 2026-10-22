@@ -11,9 +11,7 @@ public sealed record AccountSessionDto(
     string PlatformName,
     string Game,
     string? CapsuleUrl,
-    bool Ignored,
-    string? MappedPlatform,
-    string? MappedSource);
+    bool Ignored);
 
 public sealed record AccountSessionsResponseDto(
     long? AccountId,
@@ -22,9 +20,12 @@ public sealed record AccountSessionsResponseDto(
     int Limit,
     int Offset);
 
+/// <param name="Sessions">The newest of today's sessions, at most <see cref="AccountsRepository.TodaySessionLimit"/>.</param>
+/// <param name="Total">How many sessions today has, listed or not.</param>
 public sealed record AccountTodaySessionsResponseDto(
     long? AccountId,
-    IReadOnlyList<AccountSessionDto> Sessions);
+    IReadOnlyList<AccountSessionDto> Sessions,
+    int Total);
 
 public sealed record AccountCurrentSessionResponseDto(
     long? AccountId,
@@ -52,16 +53,15 @@ public sealed record AccountStatsPeriodDto(
 public sealed record AccountPlatformStatDto(
     string PlatformKey,
     string PlatformName,
-    double TotalSeconds,
-    string? Source);
+    double TotalSeconds);
 
 public sealed record AccountTopGameDto(string GameId, string Title, double TotalSeconds);
 
 public sealed record AccountMonthStatDto(int Year, int Month, double TotalSeconds);
 
 /// <summary>
-/// Play time within one UTC calendar day ("yyyy-MM-dd"), with sessions split at midnight;
-/// <paramref name="SessionCount"/> counts sessions that overlap the day.
+/// Play time within one calendar day ("yyyy-MM-dd") of the client's time zone (UTC when it sent none), with
+/// sessions split at midnight; <paramref name="SessionCount"/> counts sessions that overlap the day.
 /// </summary>
 public sealed record AccountDayStatDto(
     string Date, double TotalSeconds, int SessionCount, IReadOnlyList<AccountDayPlatformDto> Platforms);

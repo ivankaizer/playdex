@@ -56,10 +56,10 @@ public sealed class AdminRepository(PlaydexDbContext db)
         var liveRows = rows.Where(row => row.EndedAt == null);
         if (!string.IsNullOrWhiteSpace(query))
         {
-            var like = $"%{query.Trim()}%";
-            liveRows = liveRows.Where(row => EF.Functions.ILike(row.Email, like)
-                                             || EF.Functions.ILike(row.Game, like)
-                                             || (row.AccountId != null && EF.Functions.ILike(row.AccountId, like)));
+            var like = SearchText.ContainsPattern(query.Trim());
+            liveRows = liveRows.Where(row => EF.Functions.ILike(row.Email, like, SearchText.EscapeCharacter)
+                                             || EF.Functions.ILike(row.Game, like, SearchText.EscapeCharacter)
+                                             || (row.AccountId != null && EF.Functions.ILike(row.AccountId, like, SearchText.EscapeCharacter)));
         }
 
         if (!string.IsNullOrWhiteSpace(platform)) liveRows = liveRows.Where(row => row.PlatformKey == platform);
@@ -203,7 +203,7 @@ public sealed class AdminRepository(PlaydexDbContext db)
     public async Task<AdminSessionPageDto> SearchSessions(string query, int page, string? status,
         DateTimeOffset? startedFrom, DateTimeOffset? startedBefore, CancellationToken ct)
     {
-        var like = $"%{query.Trim()}%";
+        var like = SearchText.ContainsPattern(query.Trim());
         var rows = from session in db.PlaySessions.AsNoTracking()
             join user in db.Users.AsNoTracking() on session.UserId equals user.Id
             join game in db.Games.AsNoTracking() on session.GameId equals game.Id
@@ -211,10 +211,10 @@ public sealed class AdminRepository(PlaydexDbContext db)
             join integration in db.Integrations.AsNoTracking() on session.IntegrationId equals (long?)integration.Id
                 into integrations
             from integration in integrations.DefaultIfEmpty()
-            where EF.Functions.ILike(user.Email, like) || EF.Functions.ILike(game.Title, like) ||
-                  EF.Functions.ILike(platform.Key, like)
+            where EF.Functions.ILike(user.Email, like, SearchText.EscapeCharacter) || EF.Functions.ILike(game.Title, like, SearchText.EscapeCharacter) ||
+                  EF.Functions.ILike(platform.Key, like, SearchText.EscapeCharacter)
                   || (integration != null && integration.AccountId != null &&
-                      EF.Functions.ILike(integration.AccountId, like))
+                      EF.Functions.ILike(integration.AccountId, like, SearchText.EscapeCharacter))
             select new
             {
                 session.Id,
@@ -284,10 +284,10 @@ public sealed class AdminRepository(PlaydexDbContext db)
     public async Task<IReadOnlyList<AdminGameDto>> SearchGames(string term, CancellationToken ct)
     {
         var exact = ParseGameIdentifier(term);
-        var like = $"%{term}%";
+        var like = SearchText.ContainsPattern(term);
         return await db.Games.AsNoTracking()
-            .Where(game => EF.Functions.ILike(game.Title, like) ||
-                           (game.CapsuleUrl != null && EF.Functions.ILike(game.CapsuleUrl, like)) ||
+            .Where(game => EF.Functions.ILike(game.Title, like, SearchText.EscapeCharacter) ||
+                           (game.CapsuleUrl != null && EF.Functions.ILike(game.CapsuleUrl, like, SearchText.EscapeCharacter)) ||
                            (exact.HasValue && game.Id == exact.Value))
             .OrderByDescending(game => game.UpdatedAt).Take(GameListLimit)
             .Select(game => new AdminGameDto(game.Id, game.Title, game.CapsuleUrl, game.TitleLocked,
@@ -373,10 +373,10 @@ public sealed class AdminRepository(PlaydexDbContext db)
         DateTimeOffset? since, DateTimeOffset? until, CancellationToken ct)
     {
         page = Math.Clamp(page, 0, 100_000);
-        var like = $"%{query.Trim()}%";
+        var like = SearchText.ContainsPattern(query.Trim());
         var rows = from generation in db.AiGenerations.AsNoTracking()
             join user in db.Users.AsNoTracking() on generation.UserId equals user.Id
-            where EF.Functions.ILike(user.Email, like) || EF.Functions.ILike(generation.InputText!, like)
+            where EF.Functions.ILike(user.Email, like, SearchText.EscapeCharacter) || EF.Functions.ILike(generation.InputText!, like, SearchText.EscapeCharacter)
             select new { generation, user.Email };
         if (status == "errors") rows = rows.Where(row => FailureStatuses.Contains(row.generation.Status));
         else if (!string.IsNullOrWhiteSpace(status)) rows = rows.Where(row => row.generation.Status == status);

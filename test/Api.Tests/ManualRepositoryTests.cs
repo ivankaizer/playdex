@@ -21,13 +21,12 @@ public sealed class ManualRepositoryTests(PostgresFixture postgres)
 
         await using var firstDb = CreateDb();
         await using var firstTransaction = await firstDb.Database.BeginTransactionAsync();
-        var firstRepository = new ManualRepository(firstDb);
-        await firstRepository.AcquireUserStartLock(42, CancellationToken.None);
+        await TestSessions.Lifecycle(firstDb).LockManualTimer(42, CancellationToken.None);
 
         await using var secondDb = CreateDb();
         await using var secondTransaction = await secondDb.Database.BeginTransactionAsync();
-        var secondLock = new ManualRepository(secondDb)
-            .AcquireUserStartLock(42, CancellationToken.None);
+        var secondLock = TestSessions.Lifecycle(secondDb)
+            .LockManualTimer(42, CancellationToken.None);
 
         Assert.NotSame(secondLock, await Task.WhenAny(secondLock, Task.Delay(250)));
 
@@ -43,7 +42,7 @@ public sealed class ManualRepositoryTests(PostgresFixture postgres)
 
         await using var firstDb = CreateDb();
         await using var firstTransaction = await firstDb.Database.BeginTransactionAsync();
-        await new ManualRepository(firstDb).AcquireUserStartLock(43, CancellationToken.None);
+        await TestSessions.Lifecycle(firstDb).LockManualTimer(43, CancellationToken.None);
 
         await using var stopDb = CreateDb();
         var stop = CreateService(stopDb).StopSession(43, CancellationToken.None);
@@ -138,7 +137,8 @@ public sealed class ManualRepositoryTests(PostgresFixture postgres)
             new ManualRepository(db),
             new IgdbClient(new HttpClient(handler), options, new IgdbTokenCache()),
             options,
-            new GameResolver(db));
+            new GameResolver(db),
+            TestSessions.Lifecycle(db));
 
         try
         {
@@ -180,7 +180,8 @@ public sealed class ManualRepositoryTests(PostgresFixture postgres)
         new ManualRepository(db),
         new IgdbClient(new HttpClient(), Options.Create(new IgdbOptions()), new IgdbTokenCache()),
         Options.Create(new IgdbOptions()),
-        new GameResolver(db));
+        new GameResolver(db),
+        TestSessions.Lifecycle(db));
 
     private static HttpResponseMessage Json(string json) => new(HttpStatusCode.OK)
     {

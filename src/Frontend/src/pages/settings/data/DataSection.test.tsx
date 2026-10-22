@@ -40,7 +40,7 @@ describe("DataSection", () => {
     fireEvent.click(screen.getByRole("button", { name: "Download my data" }));
 
     await screen.findByText("✓ Download started");
-    expect(apiBlob).toHaveBeenCalledWith("/me/export", expect.anything());
+    expect(apiBlob).toHaveBeenCalledWith("/me/export");
     expect(click).toHaveBeenCalledOnce();
     expect(URL.revokeObjectURL).toHaveBeenCalledWith("blob:export");
     click.mockRestore();

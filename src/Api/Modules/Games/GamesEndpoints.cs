@@ -96,13 +96,16 @@ public static class GamesEndpoints
         return TypedResults.Ok(await service.GetGame(gameId, ct));
     }
 
+    /// <param name="tz">The client's time zone (IANA or Windows id): years and months follow its calendar.</param>
     private static async Task<IResult> GetGameStats(
         string gameId,
         ClaimsPrincipal principal,
         Api.Modules.Accounts.AccountsService service,
+        string? tz,
         CancellationToken ct)
     {
-        return TypedResults.Ok(await service.ComputeGameStats(principal.GetUserId(), gameId, ct));
+        return TypedResults.Ok(await service.ComputeGameStats(
+            principal.GetUserId(), gameId, Api.Infrastructure.Common.LocalCalendar.ResolveTimeZone(tz), ct));
     }
 
     private static async Task<IResult> ListConnections(

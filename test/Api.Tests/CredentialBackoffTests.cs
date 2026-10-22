@@ -86,7 +86,7 @@ public sealed class CredentialBackoffTests(PostgresFixture postgres)
 
         var failure = await backoff.RecordFailure(failing, DateTimeOffset.UtcNow, null, false, CancellationToken.None);
         await backoff.Defer(deferred, until, CancellationToken.None);
-        var loaded = (await new PollingRepository(db, new UnusedGameResolver()).LoadActiveCredentials(CancellationToken.None))
+        var loaded = (await new PollingRepository(db, new UnusedGameResolver(), TestSessions.Lifecycle(db)).LoadActiveCredentials(CancellationToken.None))
             .Where(row => credentials.Ids.Contains(row.Credential.Id))
             .ToDictionary(row => row.Credential.Id, row => row.NextPollAt);
 

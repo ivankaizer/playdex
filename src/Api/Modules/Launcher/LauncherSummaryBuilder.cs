@@ -150,23 +150,10 @@ public static class LauncherSummaryBuilder
     /// The time zone the launcher asked for: an IANA or Windows id (<paramref name="timeZone"/>), else a fixed UTC offset
     /// in minutes (clamped to ±14 h), else UTC.
     /// </summary>
-    public static TimeZoneInfo ResolveTimeZone(string? timeZone, int? utcOffsetMinutes)
-    {
-        if (!string.IsNullOrWhiteSpace(timeZone) && TimeZoneInfo.TryFindSystemTimeZoneById(timeZone.Trim(), out var zone))
-        {
-            return zone;
-        }
-        if (utcOffsetMinutes is { } minutes)
-        {
-            var offset = TimeSpan.FromMinutes(Math.Clamp(minutes, -14 * 60, 14 * 60));
-            var name = $"UTC{(offset < TimeSpan.Zero ? "-" : "+")}{offset.Duration():hh\\:mm}";
-            return TimeZoneInfo.CreateCustomTimeZone(name, offset, name, name);
-        }
-        return TimeZoneInfo.Utc;
-    }
+    public static TimeZoneInfo ResolveTimeZone(string? timeZone, int? utcOffsetMinutes) =>
+        LocalCalendar.ResolveTimeZone(timeZone, utcOffsetMinutes);
 
-    private static DateOnly LocalDate(DateTimeOffset instant, TimeZoneInfo zone) =>
-        DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(instant, zone).DateTime);
+    private static DateOnly LocalDate(DateTimeOffset instant, TimeZoneInfo zone) => LocalCalendar.DateOf(instant, zone);
 
     /// <summary>A running session counts up to now.</summary>
     private static long Seconds(LauncherSessionRow session, DateTimeOffset now) =>
