@@ -10,10 +10,16 @@ public sealed record NotificationCard(
     bool Ended,
     string? Duration);
 
-public sealed class NotificationRenderer(HttpClient httpClient)
+public sealed class NotificationRenderer(HttpClient httpClient, CoverUrlPolicy coverUrls)
 {
     public const int Width = 1280;
     public const int Height = 1024;
+
+    /// <summary>Largest cover download accepted; real capsules and posters are a few hundred kilobytes.</summary>
+    public const int MaxCoverBytes = 5 * 1024 * 1024;
+
+    /// <summary>Largest cover decoded (a 6000 x 4000 image); a small file can still declare a huge bitmap.</summary>
+    public const long MaxCoverPixels = 24_000_000;
 
     private static readonly Lazy<SKTypeface> RegularTypeface = new(() =>
         LoadEmbeddedFont("Resources.Fonts.SpaceGrotesk-Regular.ttf"));
@@ -37,12 +43,16 @@ public sealed class NotificationRenderer(HttpClient httpClient)
         string capsuleUrl,
         CancellationToken ct)
     {
-        using var response = await httpClient.GetAsync(capsuleUrl, ct);
-        response.EnsureSuccessStatusCode();
-        var bytes = await response.Content.ReadAsByteArrayAsync(ct);
-        using var cover = SKBitmap.Decode(bytes);
-        if (cover is null)
-            throw new InvalidOperationException("The game cover is not a supported image.");
+        if (!coverUrls.IsAllowed(capsuleUrl))
+            throw new InvalidOperationException("The game cover is not on an allowed host.");
+        var bytes = await DownloadCover(capsuleUrl, ct);
+        using var data = SKData.CreateCopy(bytes);
+        using var codec = SKCodec.Create(data)
+            ?? throw new InvalidOperationException("The game cover is not a supported image.");
+        if ((long)codec.Info.Width * codec.Info.Height > MaxCoverPixels)
+            throw new InvalidOperationException("The game cover is too large to render.");
+        using var cover = SKBitmap.Decode(codec)
+            ?? throw new InvalidOperationException("The game cover could not be decoded.");
         using var surface = SKSurface.Create(new SKImageInfo(Width, Height));
         var canvas = surface.Canvas;
         canvas.Clear(new SKColor(10, 13, 18));
@@ -78,6 +88,42 @@ public sealed class NotificationRenderer(HttpClient httpClient)
         using var encoded = image.Encode(SKEncodedImageFormat.Webp, 92);
         return encoded.ToArray();
     }
+
+    private async Task<byte[]> DownloadCover(string capsuleUrl, CancellationToken ct)
+    {
+        // The client does not follow redirects on its own (NotificationsModule), so each hop is checked here.
+        var url = new Uri(capsuleUrl);
+        var response = await httpClient.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct);
+        for (var redirects = 0; IsRedirect(response) && redirects < 3; redirects++)
+        {
+            var location = response.Headers.Location;
+            response.Dispose();
+            if (location is null) throw new InvalidOperationException("The game cover redirect has no location.");
+            url = new Uri(url, location);
+            if (!coverUrls.IsAllowed(url.AbsoluteUri))
+                throw new InvalidOperationException("The game cover redirects to a host that is not allowed.");
+            response = await httpClient.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct);
+        }
+
+        using var _ = response;
+        response.EnsureSuccessStatusCode();
+        if (response.Content.Headers.ContentLength > MaxCoverBytes)
+            throw new InvalidOperationException("The game cover is too large to download.");
+        await using var stream = await response.Content.ReadAsStreamAsync(ct);
+        using var buffer = new MemoryStream();
+        var chunk = new byte[81920];
+        int read;
+        while ((read = await stream.ReadAsync(chunk, ct)) > 0)
+        {
+            if (buffer.Length + read > MaxCoverBytes)
+                throw new InvalidOperationException("The game cover is too large to download.");
+            buffer.Write(chunk, 0, read);
+        }
+
+        return buffer.ToArray();
+    }
+
+    private static bool IsRedirect(HttpResponseMessage response) => (int)response.StatusCode is >= 300 and < 400;
 
     private static void DrawCover(SKCanvas canvas, SKBitmap cover)
     {

@@ -20,8 +20,14 @@ public static class NotificationsModule
             }
             client.Timeout = TimeSpan.FromSeconds(60);
         });
+        // Covers come from the poster origins (this API's poster route or WeMod) or a provider CDN.
+        services.AddSingleton(new CoverUrlPolicy([
+            configuration["Posters:PublicBaseUrl"],
+            configuration["Posters:WeModBaseUrl"],
+        ]));
         services.AddHttpClient<NotificationRenderer>(client =>
-            client.Timeout = TimeSpan.FromSeconds(15));
+                client.Timeout = TimeSpan.FromSeconds(15))
+            .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AllowAutoRedirect = false });
         services.AddScoped<NotificationEventHandlers>();
         services.AddScoped<IEventSubscriber<SessionStarted>>(
             provider => provider.GetRequiredService<NotificationEventHandlers>());
