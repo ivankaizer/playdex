@@ -24,6 +24,9 @@ public sealed partial class SessionLifecycle(
     /// <summary>Capture clients ping every 30 s; a session not pinged for this long ends this long after its last ping.</summary>
     public static readonly TimeSpan CaptureTimeout = TimeSpan.FromMinutes(3);
 
+    /// <summary>A manual timer nobody stopped ends this long after it started.</summary>
+    public static readonly TimeSpan ManualTimerLimit = TimeSpan.FromHours(12);
+
     private const int PollingGapIntervals = 5;
     private static readonly TimeSpan MinimumPollingGap = TimeSpan.FromMinutes(5);
 
@@ -217,9 +220,9 @@ public sealed partial class SessionLifecycle(
             ct);
 
     /// <summary>
-    /// Ends the sessions nobody else will: capture sessions not pinged for <see cref="CaptureTimeout"/> and polling
-    /// sessions unseen for longer than the polling gap (a failing or paused integration). Runs before every poll cycle
-    /// and announces what it ended.
+    /// Ends the sessions nobody else will: capture sessions not pinged for <see cref="CaptureTimeout"/>, polling
+    /// sessions unseen for longer than the polling gap (a failing or paused integration) and manual timers running for
+    /// <see cref="ManualTimerLimit"/>. Runs before every poll cycle and announces what it ended.
     /// </summary>
     public async Task<int> SweepStaleSessions(CancellationToken ct)
     {
@@ -227,6 +230,7 @@ public sealed partial class SessionLifecycle(
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
         var ended = await EndUnseen("api", now - CaptureTimeout, CaptureTimeout, now, ct);
         ended.AddRange(await EndUnseen("polling", now - PollingGap, PollingInterval, now, ct));
+        ended.AddRange(await EndOverdueManualTimers(now - ManualTimerLimit, now, ct));
         await transaction.CommitAsync(ct);
         Announce(ended);
         await PublishPending(ct);
@@ -354,6 +358,25 @@ public sealed partial class SessionLifecycle(
             WHERE ps.ended_at IS NULL
               AND ps.capture_method = CAST({captureMethod} AS capture_method)
               AND ps.updated_at < {seenBefore}
+            RETURNING
+                ps.id AS "Id",
+                ps.integration_id AS "IntegrationId",
+                ps.game_id AS "GameId",
+                ps.started_at AS "StartedAt",
+                ps.ended_at AS "EndedAt"
+            """).ToListAsync(ct);
+
+    private Task<List<EndedSessionRow>> EndOverdueManualTimers(
+        DateTimeOffset startedBefore,
+        DateTimeOffset now,
+        CancellationToken ct) =>
+        db.Database.SqlQuery<EndedSessionRow>($"""
+            UPDATE play_sessions ps
+            SET ended_at = ps.started_at + {ManualTimerLimit},
+                updated_at = {now}
+            WHERE ps.ended_at IS NULL
+              AND ps.capture_method = 'manual'
+              AND ps.started_at < {startedBefore}
             RETURNING
                 ps.id AS "Id",
                 ps.integration_id AS "IntegrationId",

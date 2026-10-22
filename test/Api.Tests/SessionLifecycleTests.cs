@@ -122,6 +122,7 @@ public sealed class SessionLifecycleTests(PostgresFixture postgres)
         var polling = await world.AddOpenSession(world.Steam, world.GameA, now.AddHours(-3), now.AddHours(-2));
         var timedOut = await world.AddOpenSession(world.Api, world.GameA, now.AddMinutes(-30), now.AddMinutes(-10));
         var pinged = await world.AddOpenSession(world.Api, world.GameB, now.AddMinutes(-30), now.AddMinutes(-1));
+        var manual = await world.AddManualTimer(world.GameA, now.AddHours(-13));
         var recorder = new SessionEventRecorder();
         var lifecycle = TestSessions.Lifecycle(world.Db, recorder);
 
@@ -131,6 +132,7 @@ public sealed class SessionLifecycleTests(PostgresFixture postgres)
         Assert.Equal(now.AddHours(-2) + PollingInterval, (await world.Session(polling.Id)).EndedAt);
         Assert.Equal(now.AddMinutes(-10) + SessionLifecycle.CaptureTimeout, (await world.Session(timedOut.Id)).EndedAt);
         Assert.Null((await world.Session(pinged.Id)).EndedAt);
+        Assert.Equal(now.AddHours(-13) + SessionLifecycle.ManualTimerLimit, (await world.Session(manual.Id)).EndedAt);
         Assert.Equal(
             [polling.Id, timedOut.Id],
             recorder.Ended.Where(row => world.OwnsSession(row.SessionId)).Select(row => row.SessionId).Order());
@@ -309,6 +311,23 @@ public sealed class SessionLifecycleTests(PostgresFixture postgres)
                 StartedAt = startedAt,
                 CreatedAt = startedAt,
                 UpdatedAt = lastSeen,
+            };
+            db.PlaySessions.Add(session);
+            await db.SaveChangesAsync();
+            return session;
+        }
+
+        public async Task<PlaySession> AddManualTimer(Game game, DateTimeOffset startedAt)
+        {
+            var session = new PlaySession
+            {
+                UserId = user.Id,
+                GameId = game.Id,
+                PlatformId = (await db.Platforms.SingleAsync(row => row.Key == "pc")).Id,
+                CaptureMethod = CaptureMethod.Manual,
+                StartedAt = startedAt,
+                CreatedAt = startedAt,
+                UpdatedAt = startedAt,
             };
             db.PlaySessions.Add(session);
             await db.SaveChangesAsync();
