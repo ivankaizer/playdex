@@ -25,6 +25,8 @@ Copy `.env.example` to the ignored `.env` file and set:
 
 The API exposes only browser-safe values at `GET /api/observability/sentry`. The React frontend loads them before enabling its Sentry SDK. If the API is unavailable during this short bootstrap, the UI still starts with browser telemetry disabled.
 
+The web app's Content-Security-Policy (`src/Frontend/security-headers.conf`) lets the browser reach Sentry Cloud's ingest hosts (`*.ingest.sentry.io`, `*.ingest.us.sentry.io`, `*.ingest.de.sentry.io`) and nothing else outside the app and its API. A browser DSN on any other host, such as a self-hosted Sentry, needs its origin added to `connect-src` there.
+
 For direct frontend development, `src/Frontend/public/appsettings.json` may contain a local `Sentry` section (do not commit a DSN there). Never put a Sentry auth token there; browser code needs only the public DSN.
 
 ## Sentry setup

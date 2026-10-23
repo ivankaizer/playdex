@@ -6,11 +6,13 @@ RUN bun install --frozen-lockfile
 COPY src/Frontend/ .
 RUN bun run build \
     && test -f dist/index.html \
-    && test -f dist/appsettings.json
+    && test -f dist/appsettings.json \
+    && bun run check:csp
 
 FROM nginx:1.27-alpine
 
 COPY src/Frontend/nginx.conf /etc/nginx/conf.d/default.conf
+COPY src/Frontend/security-headers.conf /etc/nginx/snippets/security-headers.conf
 COPY --from=build /src/Frontend/dist /usr/share/nginx/html
 COPY src/Frontend/docker-entrypoint.sh /docker-entrypoint.sh
 RUN chmod +x /docker-entrypoint.sh

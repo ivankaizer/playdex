@@ -1,6 +1,12 @@
 # One origin for everything: the web app at /, the API at /api. Caddy gets the HTTPS certificate itself.
 {$PLAYDEX_DOMAIN} {
 	encode gzip
+	# The web app's nginx sends the other security headers and the CSP. HSTS belongs to the TLS endpoint,
+	# and the Server header (Caddy's or an upstream's) only advertises the software.
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		-Server
+	}
 	handle /api/* {
 		reverse_proxy app:3000
 	}

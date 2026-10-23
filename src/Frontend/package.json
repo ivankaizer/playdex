@@ -11,7 +11,8 @@
     "build:landing": "vite build --config landing/vite.config.ts",
     "preview:landing": "vite preview --config landing/vite.config.ts",
     "typecheck": "tsc -b",
-    "test": "vitest run"
+    "test": "vitest run",
+    "check:csp": "bun scripts/check-csp.mjs"
   },
   "dependencies": {
     "@sentry/react": "^10.0.0",

@@ -38,6 +38,7 @@ jobs:
           bun-version: 1.3.14
       - run: bun install --frozen-lockfile
       - run: bun run build:landing
+      - run: bun run check:csp   # the CSP hashes in landing/public/_headers match the built page
       - run: bun landing/scripts/cloudflare.mjs project
 
       - name: Deploy to Cloudflare Pages
