@@ -25,7 +25,7 @@ public interface IGameWatcher : IDisposable
 /// (RegNotifyChangeKeyValue, no polling) and detect exit from the game's own process handles.
 /// </summary>
 /// <remarks>
-/// Steam clears Running about 2 s after the game process exits (measured; see spike-results.md), which misses the
+/// Steam clears Running about 2 s after the game process exits (measured), which misses the
 /// 250 ms budget. So once running, the game's processes under its install folder are found and their handles waited
 /// on: when the last one exits, one snapshot confirms nothing else from the install folder is alive and the exit is
 /// reported. During the first 30 s (launcher to game hand-offs such as REDprelauncher to witcher3.exe) the folder is
