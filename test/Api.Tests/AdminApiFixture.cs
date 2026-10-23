@@ -43,9 +43,8 @@ public sealed class AdminApiFixture : IAsyncLifetime
         if (string.IsNullOrWhiteSpace(databaseUrl)) return;
 
         Environment.SetEnvironmentVariable("DATABASE_URL", databaseUrl);
-        Environment.SetEnvironmentVariable("POLL_INTERVAL_SECONDS", "3600");
         Environment.SetEnvironmentVariable("Auth__JwtSecret", "admin-api-integration-secret-at-least-thirty-two-bytes");
-        Factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
+        Factory = new PlaydexApiFactory().WithWebHostBuilder(builder =>
             builder.ConfigureServices(services => services.AddSingleton<ILoggerProvider>(Logs)));
 
         await using var db = CreateDb();

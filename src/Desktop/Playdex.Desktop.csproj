@@ -1,8 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <!--
     Playdex for Windows: one app with two modes, Desktop (a normal window and the tray) and Big Picture (full screen,
-    controller first), switched in Settings. The successor of the WinForms Wrapper and of the standalone launcher (see
-    docs/launcher/wrapper-merge-plan.md). WinUI 3 + WebView2 showing the React UI in src/Launcher/ui, unpackaged and
+    controller first), switched in Settings. The successor of the WinForms Wrapper and of the standalone launcher.
+    WinUI 3 + WebView2 showing the React UI in src/Launcher/ui, unpackaged and
     self-contained; it installs per user (%LOCALAPPDATA%\Programs\Playdex) and updates itself from the download feed
     (download.playdex.dev). Not in Playdex.sln for the same reason as the launcher host: the WinUI XAML compiler only
     runs on Windows.

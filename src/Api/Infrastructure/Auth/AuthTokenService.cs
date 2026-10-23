@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
+using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
@@ -8,7 +9,12 @@ using Api.Infrastructure.Common;
 
 namespace Api.Infrastructure.Auth;
 
-public sealed record AuthTokenPair(string AccessToken, string RefreshToken);
+/// <param name="RefreshTokenId">The refresh token's <c>jti</c>; the server keeps only its hash (see <see cref="AuthTokenService.HashTokenId"/>).</param>
+public sealed record AuthTokenPair(
+    string AccessToken,
+    string RefreshToken,
+    string RefreshTokenId,
+    DateTimeOffset RefreshTokenExpiresAt);
 
 public sealed class AuthTokenService(IOptions<AuthOptions> options)
 {
@@ -17,10 +23,24 @@ public sealed class AuthTokenService(IOptions<AuthOptions> options)
     private readonly SymmetricSecurityKey _key = new(Encoding.UTF8.GetBytes(options.Value.JwtSecret));
     private readonly TimeSpan _accessTokenLifetime = ParseLifetime(options.Value.AccessTokenTtl);
 
-    public AuthTokenPair IssueTokenPair(long userId, string email) =>
-        new(
-            Issue(userId, email, "access", _accessTokenLifetime),
-            Issue(userId, email, "refresh", RefreshTokenLifetime));
+    /// <summary>Claim with the user's token version; tokens from an older version are revoked (see users.token_version).</summary>
+    public const string TokenVersionClaim = "ver";
+
+    /// <summary>The refresh token's id, which the server looks up in refresh_tokens.</summary>
+    public const string TokenIdClaim = JwtRegisteredClaimNames.Jti;
+
+    public AuthTokenPair IssueTokenPair(long userId, string email, int tokenVersion)
+    {
+        var now = DateTime.UtcNow;
+        var refreshTokenId = Base64UrlEncoder.Encode(RandomNumberGenerator.GetBytes(32));
+        return new(
+            Issue(userId, email, tokenVersion, "access", now, _accessTokenLifetime, tokenId: null),
+            Issue(userId, email, tokenVersion, "refresh", now, RefreshTokenLifetime, refreshTokenId),
+            refreshTokenId,
+            new DateTimeOffset(now.Add(RefreshTokenLifetime), TimeSpan.Zero));
+    }
+
+    public static byte[] HashTokenId(string tokenId) => SHA256.HashData(Encoding.UTF8.GetBytes(tokenId));
 
     public ClaimsPrincipal Validate(string token, string expectedType)
     {
@@ -50,21 +70,29 @@ public sealed class AuthTokenService(IOptions<AuthOptions> options)
         ValidateAudience = false,
         ValidateIssuerSigningKey = true,
         IssuerSigningKey = _key,
+        ValidAlgorithms = [SecurityAlgorithms.HmacSha256],
         ValidateLifetime = true,
         ClockSkew = TimeSpan.Zero,
         NameClaimType = "email",
     };
 
-    private string Issue(long userId, string email, string type, TimeSpan lifetime)
+    private string Issue(
+        long userId, string email, int tokenVersion, string type, DateTime now, TimeSpan lifetime, string? tokenId)
     {
-        var now = DateTime.UtcNow;
+        List<Claim> claims =
+        [
+            new(JwtRegisteredClaimNames.Sub, userId.ToString(CultureInfo.InvariantCulture)),
+            new(JwtRegisteredClaimNames.Email, email),
+            new("type", type),
+            new(TokenVersionClaim, tokenVersion.ToString(CultureInfo.InvariantCulture), ClaimValueTypes.Integer32),
+        ];
+        if (tokenId is not null)
+        {
+            claims.Add(new Claim(JwtRegisteredClaimNames.Jti, tokenId));
+        }
+
         var token = new JwtSecurityToken(
-            claims:
-            [
-                new Claim(JwtRegisteredClaimNames.Sub, userId.ToString(CultureInfo.InvariantCulture)),
-                new Claim(JwtRegisteredClaimNames.Email, email),
-                new Claim("type", type),
-            ],
+            claims: claims,
             notBefore: now,
             expires: now.Add(lifetime),
             signingCredentials: new SigningCredentials(_key, SecurityAlgorithms.HmacSha256));

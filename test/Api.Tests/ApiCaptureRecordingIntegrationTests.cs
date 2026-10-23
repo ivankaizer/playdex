@@ -107,14 +107,12 @@ public sealed class ApiCaptureRecordingIntegrationTests(PostgresFixture postgres
 
         try
         {
-            await using var events = new ServiceCollection().BuildServiceProvider();
             var service = new ApiCaptureService(
                 new ApiCaptureRepository(db),
                 db,
                 new FixedGameResolver(game.Id),
-                new EventBus(events.GetRequiredService<IServiceScopeFactory>(), NullLogger<EventBus>.Instance),
-                new PosterUrls(Options.Create(new PostersOptions())),
-                NullLogger<ApiCaptureService>.Instance);
+                TestSessions.Lifecycle(db),
+                new PosterUrls(Options.Create(new PostersOptions())));
             await test(db, service, new Seed(now, integration.ApiKey, user.Id, integration.Id, game.Id, platform.Id));
         }
         finally

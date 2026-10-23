@@ -1,3 +1,4 @@
+using Api.Infrastructure.Common;
 using Microsoft.EntityFrameworkCore;
 using Playdex.Persistence;
 using System.Text.RegularExpressions;
@@ -14,23 +15,14 @@ public sealed class ManualRepository(PlaydexDbContext db)
         return result;
     }
 
-    internal Task AcquireUserStartLock(long userId, CancellationToken ct)
-    {
-        var key = $"manual-session-user:{userId}";
-        return db.Database.ExecuteSqlInterpolatedAsync(
-            $"SELECT pg_advisory_xact_lock(hashtextextended({key}, 0))",
-            ct);
-    }
+    internal Task AcquireUserStartLock(long userId, CancellationToken ct) => db.LockUserSessions(userId, ct);
 
-    public Task<int> EndActiveSessions(long userId, CancellationToken ct)
-    {
-        var now = DateTimeOffset.UtcNow;
-        return db.PlaySessions
-            .Where(session => session.UserId == userId && session.CaptureMethod == CaptureMethod.Manual && session.EndedAt == null)
-            .ExecuteUpdateAsync(set => set.SetProperty(session => session.EndedAt, now).SetProperty(session => session.UpdatedAt, now), ct);
-    }
+    /// <summary>The user's sessions on the platform in [from, to), a running one up to now (<see cref="SessionOverlaps"/>).</summary>
+    internal Task<List<PlatformSession>> ListPlatformSessions(
+        long userId, long platformId, DateTimeOffset from, DateTimeOffset to, DateTimeOffset now, CancellationToken ct) =>
+        db.ListPlatformSessions(userId, platformId, from, to, now, null, ct);
 
-    public async Task<long> CreatePlaySession(long userId, long gameId, long platformId, DateTimeOffset startedAt, DateTimeOffset? endedAt, CancellationToken ct)
+    public async Task<long> CreatePlaySession(long userId, long gameId, long platformId, DateTimeOffset startedAt, DateTimeOffset endedAt, CancellationToken ct)
     {
         var now = DateTimeOffset.UtcNow;
         var session = new PlaySession { UserId = userId, GameId = gameId, PlatformId = platformId, CaptureMethod = CaptureMethod.Manual, StartedAt = startedAt, EndedAt = endedAt, CreatedAt = now, UpdatedAt = now };
@@ -39,10 +31,13 @@ public sealed class ManualRepository(PlaydexDbContext db)
         return session.Id;
     }
 
-    public async Task<List<GameSearchRow>> SearchLocalGames(string query, int limit, CancellationToken ct) =>
-        await db.Games.AsNoTracking().Where(g => EF.Functions.ILike(g.Title, $"%{query}%"))
+    public async Task<List<GameSearchRow>> SearchLocalGames(string query, int limit, CancellationToken ct)
+    {
+        var pattern = SearchText.ContainsPattern(query);
+        return await db.Games.AsNoTracking().Where(g => EF.Functions.ILike(g.Title, pattern, SearchText.EscapeCharacter))
             .OrderByDescending(g => g.UpdatedAt).Take(limit)
             .Select(g => new GameSearchRow { Id = g.Id, Title = g.Title, Platform = "unknown", CapsuleUrl = g.CapsuleUrl }).ToListAsync(ct);
+    }
 
     public async Task<List<GameSearchRow>> SearchRecentlyPlayedGames(
         long userId,
@@ -53,8 +48,8 @@ public sealed class ManualRepository(PlaydexDbContext db)
         IQueryable<Game> games = db.Games.AsNoTracking();
         foreach (var term in SignificantTitleTerms(query))
         {
-            var pattern = $"%{term}%";
-            games = games.Where(game => EF.Functions.ILike(game.Title, pattern));
+            var pattern = SearchText.ContainsPattern(term);
+            games = games.Where(game => EF.Functions.ILike(game.Title, pattern, SearchText.EscapeCharacter));
         }
 
         return await games

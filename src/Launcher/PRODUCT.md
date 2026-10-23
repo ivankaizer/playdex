@@ -11,7 +11,7 @@ The UI is a React web app rendered full screen inside a Windows desktop host (We
 ## Stack
 
 - **Host:** .NET 10 (WinUI 3, Native AOT, MSIX).
-- **UI:** React 19 + TypeScript + Vite, rendered in WebView2. See `docs/launcher/research.md` for why.
+- **UI:** React 19 + TypeScript + Vite, rendered in WebView2.
 
 ## Users
 

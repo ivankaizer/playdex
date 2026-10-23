@@ -1,10 +1,10 @@
-import { formatDateLabel, formatUtcDateInput } from "@/lib/format";
+import { withTimeZone } from "@/lib/dates";
+import { formatDateLabel } from "@/lib/format";
 import { decodeGameHash } from "@/lib/gameHash";
 import type { HttpMethod } from "@/lib/api";
 import type { GameIgnoreResponse, GameRatingResponse, GameResponse, GameStatsResponse } from "@/models/games";
 import type { AccountSession, AccountSessionsResponse } from "@/models/sessions";
 
-const AllTimeStartYear = 2025;
 const RecentPageSize = 5;
 const InvalidGameLink = "Invalid game link.";
 const MonthShort = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -19,16 +19,16 @@ export interface GameRequests {
   rating: string;
 }
 
-export function gameRequestsFor(gameHash: string, now: Date): GameRequests {
+/** Every session of the game, however long ago; years and months of the stats follow the viewer's calendar. */
+export function gameRequestsFor(gameHash: string): GameRequests {
   const gameId = decodeGameHash(gameHash);
   if (gameId === null) throw new Error("Invalid game hash.");
-  const to = formatUtcDateInput(now);
   return {
     gameId: String(gameId),
     gameHash,
     details: `/games/${gameHash}`,
-    sessionsBase: `/sessions?gameId=${gameHash}&from=2025-01-01&to=${to}&sort=date&direction=desc`,
-    stats: `/games/${gameHash}/stats`,
+    sessionsBase: `/sessions?gameId=${gameHash}&sort=date&direction=desc`,
+    stats: withTimeZone(`/games/${gameHash}/stats`),
     ignoreStatus: `/games/ignored?gameId=${gameHash}`,
     rating: `/games/rating?gameId=${gameHash}`,
   };
@@ -97,7 +97,7 @@ export function beginGame(gameHash: string | null, now: Date): GameState {
     isRatingLoading: false,
     isRatingSaving: false,
     ratingError: "",
-    selectedYear: now.getUTCFullYear(),
+    selectedYear: now.getFullYear(),
     recentPage: 1,
     recentTotal: 0,
     isRecentPageLoading: false,
@@ -118,7 +118,7 @@ export function beginGame(gameHash: string | null, now: Date): GameState {
 
   return {
     ...base,
-    requests: gameRequestsFor(gameHash, now),
+    requests: gameRequestsFor(gameHash),
     isLoading: true,
     sessionsLoaded: false,
     isIgnoreChecking: true,
@@ -260,11 +260,15 @@ function bucket(key: string, label: string, year: number, month: number, seconds
   return { key, label, year, month, seconds, hours: seconds / 3600 };
 }
 
+/** One bucket per year from the first year played (taken from the stats) through the current year. */
 export function yearlyStats(state: GameState): GameChartBucket[] {
   if (state.stats === null) return [];
-  const endYear = Math.max(AllTimeStartYear, state.now.getUTCFullYear());
+  const currentYear = state.now.getFullYear();
+  const played = state.stats.years.map((item) => item.year);
+  const startYear = Math.min(currentYear, ...played);
+  const endYear = Math.max(currentYear, ...played);
   const totals = new Map<number, number>();
-  for (let year = AllTimeStartYear; year <= endYear; year++) totals.set(year, 0);
+  for (let year = startYear; year <= endYear; year++) totals.set(year, 0);
   for (const item of state.stats.years) {
     if (totals.has(item.year)) totals.set(item.year, item.seconds);
   }

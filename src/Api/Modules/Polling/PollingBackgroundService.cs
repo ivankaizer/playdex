@@ -4,8 +4,8 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Api.Infrastructure.Common;
 using Playdex.Persistence;
-using Api.Modules.ApiCapture;
 using Api.Modules.Metrics;
+using Api.Modules.Sessions;
 
 namespace Api.Modules.Polling;
 
@@ -13,17 +13,21 @@ public sealed partial class PollingBackgroundService(
     IServiceProvider serviceProvider,
     IOptions<PollingOptions> pollingOptions,
     MetricsCollector metrics,
+    PollingLease lease,
+    CapsuleLookupBackoff capsuleLookups,
     ILogger<PollingBackgroundService> logger) : BackgroundService
 {
     internal const string ActivitySourceName = "Playdex.Api.Polling";
     private static readonly ActivitySource ActivitySource = new(ActivitySourceName);
-    private readonly CredentialBackoffTracker _backoff = new();
 
     [LoggerMessage(Level = LogLevel.Information, Message = "PollingBackgroundService will start after {Delay} ms")]
     private partial void LogWillStartAfter(int delay);
 
     [LoggerMessage(Level = LogLevel.Debug, Message = "Starting poll cycle")]
     private partial void LogStartingPollCycle();
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Skipping poll cycle: another instance is polling")]
+    private partial void LogLeaseHeldElsewhere();
 
     [LoggerMessage(Level = LogLevel.Debug, Message = "Loaded {Count} active credentials")]
     private partial void LogLoadedCredentials(int count);
@@ -49,9 +53,17 @@ public sealed partial class PollingBackgroundService(
     [LoggerMessage(Level = LogLevel.Error, Message = "Event handler failed for {EventType}")]
     private partial void LogEventHandlerFailed(Exception exception, string eventType);
 
+    [LoggerMessage(Level = LogLevel.Error, Message = "Could not update the backoff of credential {CredentialId}")]
+    private partial void LogBackoffUpdateFailed(Exception exception, long credentialId);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Paused credential {CredentialId} ({Platform}) after {AuthFailures} rejected sign-ins: {Reason}")]
+    private partial void LogCredentialPaused(long credentialId, string platform, int authFailures, string reason);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Could not pause credential {CredentialId}")]
+    private partial void LogPauseFailed(Exception exception, long credentialId);
+
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        Console.WriteLine("starting polling");
         var initialDelayMs = Random.Shared.Next(0, 5001);
         LogWillStartAfter(initialDelayMs);
         await Task.Delay(initialDelayMs, stoppingToken);
@@ -65,58 +77,15 @@ public sealed partial class PollingBackgroundService(
 
                 try
                 {
-                    await EndTimedOutApiSessions(serviceProvider, stoppingToken);
-
-                    List<ActiveCredential> credentials;
-                    using (var scope = serviceProvider.GetRequiredService<IServiceScopeFactory>().CreateScope())
+                    await using var heldLease = await lease.TryAcquire(stoppingToken);
+                    if (heldLease is null)
                     {
-                        credentials = await scope.ServiceProvider
-                            .GetRequiredService<PollingRepository>()
-                            .LoadActiveCredentials(stoppingToken);
+                        activity?.SetTag("polling.skipped", true);
+                        LogLeaseHeldElsewhere();
                     }
-                    activity?.SetTag("polling.credentials.count", credentials.Count);
-                    LogLoadedCredentials(credentials.Count);
-                    _backoff.Prune(credentials.Select(row => row.Credential.Id));
-
-                    foreach (var active in credentials)
+                    else
                     {
-                        if (stoppingToken.IsCancellationRequested) break;
-                        var now = DateTimeOffset.UtcNow;
-                        if (!_backoff.IsEligible(active.Credential.Id, now, out var nextEligibleAt))
-                        {
-                            LogSkippingCredential(active.Credential.Id, nextEligibleAt);
-                            continue;
-                        }
-
-                        try
-                        {
-                            using var credentialScope = serviceProvider
-                                .GetRequiredService<IServiceScopeFactory>()
-                                .CreateScope();
-                            await ProcessCredential(active, credentialScope.ServiceProvider, stoppingToken);
-                            _backoff.Reset(active.Credential.Id);
-                        }
-                        catch (Exception ex)
-                        {
-                            var retryAfter = ex is ProviderPollException providerFailure
-                                ? providerFailure.RetryAfter
-                                : null;
-                            var delay = _backoff.RecordFailure(
-                                active.Credential.Id, DateTimeOffset.UtcNow, retryAfter);
-                            LogCredentialFailed(ex, active.Credential.Id, active.PlatformKey, delay, ex.Message);
-                            metrics.RecordPollFailure(active.PlatformKey, DateTimeOffset.UtcNow);
-                            using var notificationScope = serviceProvider
-                                .GetRequiredService<IServiceScopeFactory>()
-                                .CreateScope();
-                            await SafePublish(
-                                notificationScope.ServiceProvider.GetRequiredService<EventBus>(),
-                                new PollFailed(
-                                    active.Credential.Id,
-                                    active.PlatformKey,
-                                    ex.Message,
-                                    delay),
-                                stoppingToken);
-                        }
+                        await RunCycle(activity, stoppingToken);
                     }
                 }
                 catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
@@ -143,35 +112,215 @@ public sealed partial class PollingBackgroundService(
         }
     }
 
-    internal static async Task<int> EndTimedOutApiSessions(
-        IServiceProvider serviceProvider,
-        CancellationToken ct)
+    private async Task RunCycle(Activity? activity, CancellationToken stoppingToken)
     {
-        using var scope = serviceProvider.GetRequiredService<IServiceScopeFactory>().CreateScope();
-        return await scope.ServiceProvider
-            .GetRequiredService<IApiSessionTimeoutCleaner>()
-            .EndTimedOutSessions(ct);
+        using (var sweepScope = serviceProvider.GetRequiredService<IServiceScopeFactory>().CreateScope())
+        {
+            await sweepScope.ServiceProvider
+                .GetRequiredService<SessionLifecycle>()
+                .SweepStaleSessions(stoppingToken);
+        }
+
+        List<ActiveCredential> credentials;
+        using (var scope = serviceProvider.GetRequiredService<IServiceScopeFactory>().CreateScope())
+        {
+            credentials = await scope.ServiceProvider
+                .GetRequiredService<PollingRepository>()
+                .LoadActiveCredentials(stoppingToken);
+        }
+        activity?.SetTag("polling.credentials.count", credentials.Count);
+        LogLoadedCredentials(credentials.Count);
+
+        var now = DateTimeOffset.UtcNow;
+        var due = new List<ActiveCredential>(credentials.Count);
+        foreach (var active in credentials)
+        {
+            if (active.NextPollAt is { } nextPollAt && nextPollAt > now)
+            {
+                LogSkippingCredential(active.Credential.Id, nextPollAt);
+            }
+            else
+            {
+                due.Add(active);
+            }
+        }
+
+        await PollAll(due, stoppingToken);
     }
 
-    private async Task ProcessCredential(
+    /// <summary>
+    /// Bounded parallelism: one provider taking its full HTTP timeout used to delay every credential behind it.
+    /// Each credential has its own scope, and its database work is serialized by its own advisory lock.
+    /// </summary>
+    internal async Task PollAll(IReadOnlyList<ActiveCredential> due, CancellationToken stoppingToken)
+    {
+        await Parallel.ForEachAsync(
+            due,
+            new ParallelOptions
+            {
+                MaxDegreeOfParallelism = Math.Max(1, pollingOptions.Value.MaxConcurrentPolls),
+                CancellationToken = stoppingToken,
+            },
+            async (active, ct) => await PollCredential(active, ct));
+    }
+
+    /// <summary>Polls one credential; a failure is recorded and never escapes, except shutdown cancellation.</summary>
+    internal async Task PollCredential(ActiveCredential active, CancellationToken stoppingToken)
+    {
+        DateTimeOffset? deferUntil;
+        try
+        {
+            using var credentialScope = serviceProvider
+                .GetRequiredService<IServiceScopeFactory>()
+                .CreateScope();
+            deferUntil = await ProcessCredential(active, credentialScope.ServiceProvider, stoppingToken);
+        }
+        catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+        {
+            // Shutdown, not a provider failure: no failure metric, backoff or notification.
+            throw;
+        }
+        catch (Exception ex)
+        {
+            await RecordFailure(active, ex, stoppingToken);
+            return;
+        }
+
+        await RecordSuccess(active, deferUntil, stoppingToken);
+    }
+
+    private async Task RecordSuccess(ActiveCredential active, DateTimeOffset? deferUntil, CancellationToken ct)
+    {
+        if (deferUntil is null && active.NextPollAt is null)
+        {
+            // Healthy before and after: nothing to write.
+            return;
+        }
+
+        try
+        {
+            using var scope = serviceProvider.GetRequiredService<IServiceScopeFactory>().CreateScope();
+            var backoff = scope.ServiceProvider.GetRequiredService<ICredentialBackoff>();
+            if (deferUntil is { } until)
+            {
+                await backoff.Defer(active.Credential.Id, until, ct);
+            }
+            else
+            {
+                await backoff.Reset(active.Credential.Id, ct);
+            }
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException || !ct.IsCancellationRequested)
+        {
+            LogBackoffUpdateFailed(ex, active.Credential.Id);
+        }
+    }
+
+    private async Task RecordFailure(ActiveCredential active, Exception exception, CancellationToken ct)
+    {
+        metrics.RecordPollFailure(active.PlatformKey, DateTimeOffset.UtcNow);
+        var providerFailure = exception as ProviderPollException;
+        using var scope = serviceProvider.GetRequiredService<IServiceScopeFactory>().CreateScope();
+        CredentialFailure failure;
+        try
+        {
+            failure = await scope.ServiceProvider.GetRequiredService<ICredentialBackoff>().RecordFailure(
+                active.Credential.Id,
+                DateTimeOffset.UtcNow,
+                providerFailure?.RetryAfter,
+                providerFailure?.IsAuthenticationFailure == true,
+                ct);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException || !ct.IsCancellationRequested)
+        {
+            LogBackoffUpdateFailed(ex, active.Credential.Id);
+            LogCredentialFailed(exception, active.Credential.Id, active.PlatformKey, TimeSpan.Zero, exception.Message);
+            return;
+        }
+
+        LogCredentialFailed(exception, active.Credential.Id, active.PlatformKey, failure.Delay, exception.Message);
+        if (providerFailure?.IsAuthenticationFailure == true &&
+            await PauseIfCredentialRejected(active, failure, exception.Message, scope.ServiceProvider, ct))
+        {
+            return;
+        }
+
+        if (failure.IsFirst)
+        {
+            // Notify when a working integration starts failing, not on every retry: an expired token would
+            // otherwise send a message every backoff interval (~144 a day). The count is shared by every instance,
+            // so only one of them sees the first failure.
+            await SafePublish(
+                scope.ServiceProvider.GetRequiredService<EventBus>(),
+                new PollFailed(
+                    active.Credential.Id,
+                    active.PlatformKey,
+                    exception.Message,
+                    failure.Delay,
+                    failure.FailingSince),
+                ct);
+        }
+    }
+
+    /// <summary>
+    /// An expired NPSSO or a revoked key fails the same way on every retry: after
+    /// <see cref="PollingOptions.AuthFailuresBeforePause"/> rejections the integration is paused instead of being
+    /// polled forever, and the user is told once.
+    /// </summary>
+    /// <returns>True when the integration is paused (by this call).</returns>
+    private async Task<bool> PauseIfCredentialRejected(
+        ActiveCredential active,
+        CredentialFailure failure,
+        string reason,
+        IServiceProvider services,
+        CancellationToken ct)
+    {
+        var threshold = pollingOptions.Value.AuthFailuresBeforePause;
+        if (threshold <= 0 || failure.AuthFailures < threshold) return false;
+
+        var pausedAt = DateTimeOffset.UtcNow;
+        try
+        {
+            if (!await services.GetRequiredService<PollingRepository>()
+                    .PauseIntegration(active.Credential.Id, reason, pausedAt, ct))
+            {
+                return false;
+            }
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException || !ct.IsCancellationRequested)
+        {
+            LogPauseFailed(ex, active.Credential.Id);
+            return false;
+        }
+
+        LogCredentialPaused(active.Credential.Id, active.PlatformKey, failure.AuthFailures, reason);
+        await SafePublish(
+            services.GetRequiredService<EventBus>(),
+            new IntegrationPaused(active.Credential.Id, active.PlatformKey, reason, failure.AuthFailures, pausedAt),
+            ct);
+        return true;
+    }
+
+    /// <returns>When the provider asked to be left alone (a rate-limited metadata lookup), until when.</returns>
+    private async Task<DateTimeOffset?> ProcessCredential(
         ActiveCredential active,
         IServiceProvider services,
         CancellationToken ct)
     {
         var credential = active.Credential;
         var platformKey = active.PlatformKey;
-        var pollingRepo = services.GetRequiredService<PollingRepository>();
-        var bus = services.GetRequiredService<EventBus>();
         var providerClients = services.GetServices<IProviderClient>()
             .ToDictionary(client => client.PlatformKey, StringComparer.OrdinalIgnoreCase);
 
         if (!providerClients.TryGetValue(platformKey, out var client))
         {
             LogNoProviderClient(platformKey);
-            return;
+            return null;
         }
 
         var pollResult = await client.GetCurrentlyPlaying(credential, ct);
+        var pollingRepo = services.GetRequiredService<PollingRepository>();
+        var sessions = services.GetRequiredService<SessionLifecycle>();
 
         var polledAt = DateTimeOffset.UtcNow;
 
@@ -186,32 +335,15 @@ public sealed partial class PollingBackgroundService(
             polledAt,
             pollResult.RawPayload,
             ct);
-        await EnrichGameIfNeeded(client, credential, pollResult.Game, outcome, pollingRepo, ct);
-        foreach (var transition in outcome.Transitions.Where(row => row.Notify))
-        {
-            if (transition.Kind == SessionTransitionKind.Started)
-            {
-                await SafePublish(bus, new SessionStarted(
-                    transition.SessionId,
-                    transition.CredentialId,
-                    transition.GameId,
-                    transition.StartedAt), ct);
-            }
-            else
-            {
-                await SafePublish(bus, new SessionEnded(
-                    transition.SessionId,
-                    transition.CredentialId,
-                    transition.GameId,
-                    transition.StartedAt,
-                    transition.EndedAt!.Value), ct);
-            }
-        }
+        var deferUntil = await EnrichGameIfNeeded(client, credential, pollResult.Game, outcome, pollingRepo, ct);
+        // Announced after the capsule lookup, so the notification card has the cover.
+        await sessions.PublishPending(ct);
         metrics.RecordPollSuccess(platformKey, polledAt);
         LogSuccessfulPoll(credential.Id, outcome.GameId);
+        return deferUntil;
     }
 
-    private async Task EnrichGameIfNeeded(
+    private async Task<DateTimeOffset?> EnrichGameIfNeeded(
         IProviderClient client,
         IntegrationCredentials credential,
         CurrentlyPlayingResult? detectedGame,
@@ -225,7 +357,14 @@ public sealed partial class PollingBackgroundService(
             string.IsNullOrWhiteSpace(detectedGame?.ExternalId) ||
             client is not IProviderGameMetadataClient metadataClient)
         {
-            return;
+            return null;
+        }
+
+        // A game without a capsule used to be looked up again on every poll for as long as it was played.
+        var now = DateTimeOffset.UtcNow;
+        if (!capsuleLookups.IsDue(gameId, now))
+        {
+            return null;
         }
 
         try
@@ -234,12 +373,23 @@ public sealed partial class PollingBackgroundService(
                 credential,
                 detectedGame.ExternalId,
                 ct);
-            if (!string.IsNullOrWhiteSpace(capsuleUrl))
-                await repository.UpdateGameCapsule(gameId, capsuleUrl, ct);
+            if (string.IsNullOrWhiteSpace(capsuleUrl))
+            {
+                capsuleLookups.RecordMiss(gameId, now);
+                return null;
+            }
+
+            await repository.UpdateGameCapsule(gameId, capsuleUrl, ct);
+            capsuleLookups.Forget(gameId);
+            return null;
         }
         catch (Exception ex) when (ex is not OperationCanceledException || !ct.IsCancellationRequested)
         {
             LogMetadataEnrichmentFailed(ex, credential.Id, gameId);
+            var retryAfter = (ex as ProviderPollException)?.RetryAfter;
+            capsuleLookups.RecordFailure(gameId, now, retryAfter);
+            // The metadata endpoint shares the account's quota with presence: honour its Retry-After there too.
+            return retryAfter is { } delay ? now + delay : null;
         }
     }
 
@@ -255,53 +405,3 @@ public sealed partial class PollingBackgroundService(
         }
     }
 }
-
-public sealed class CredentialBackoffTracker
-{
-    private static readonly TimeSpan BaseDelay = TimeSpan.FromSeconds(5);
-    private static readonly TimeSpan MaximumDelay = TimeSpan.FromMinutes(10);
-    private readonly Dictionary<long, CredentialBackoffState> _states = [];
-
-    public bool IsEligible(long credentialId, DateTimeOffset now, out DateTimeOffset nextEligibleAt)
-    {
-        if (_states.TryGetValue(credentialId, out var state) && state.NextEligibleAt > now)
-        {
-            nextEligibleAt = state.NextEligibleAt;
-            return false;
-        }
-        nextEligibleAt = now;
-        return true;
-    }
-
-    public TimeSpan RecordFailure(
-        long credentialId,
-        DateTimeOffset now,
-        TimeSpan? retryAfter = null)
-    {
-        var failures = _states.TryGetValue(credentialId, out var current)
-            ? current.Failures + 1
-            : 1;
-        var exponent = Math.Min(failures - 1, 20);
-        var exponentialMs = Math.Min(
-            BaseDelay.TotalMilliseconds * Math.Pow(2, exponent),
-            MaximumDelay.TotalMilliseconds);
-        var delay = TimeSpan.FromMilliseconds(Math.Max(
-            exponentialMs,
-            retryAfter?.TotalMilliseconds ?? 0));
-        _states[credentialId] = new CredentialBackoffState(failures, now + delay);
-        return delay;
-    }
-
-    public void Reset(long credentialId) => _states.Remove(credentialId);
-
-    public void Prune(IEnumerable<long> activeCredentialIds)
-    {
-        var active = activeCredentialIds.ToHashSet();
-        foreach (var credentialId in _states.Keys.Where(id => !active.Contains(id)).ToArray())
-        {
-            _states.Remove(credentialId);
-        }
-    }
-}
-
-public sealed record CredentialBackoffState(int Failures, DateTimeOffset NextEligibleAt);

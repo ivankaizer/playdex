@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type ChangeEvent, type Re
 import { Cover } from "@/components/ui";
 import { apiRequest, errorMessage } from "@/lib/api";
 import { cx } from "@/lib/cx";
+import { localDateOnly } from "@/lib/dates";
 import { dialogKeyDown, useDialogFocus } from "@/lib/focusTrap";
 import { formatCount, formatCountNoun } from "@/lib/format";
 import type { DraftAcceptRequest, DraftAcceptResponse, DraftBatchDto, DraftCapabilities, DraftRowDto } from "@/models/drafts";
@@ -19,7 +20,6 @@ import {
   isDirty,
   isReady,
   markAccepted,
-  needsDurationCheck,
   needsPlatformReview,
   rowUpdate,
   setDraftTitle,
@@ -532,7 +532,7 @@ export function DraftWorkspace({
 
   const { busy, batch, rows } = state;
   const retentionDays = capabilities?.historyRetentionDays ?? 30;
-  // Ready rows go through "Accept all"; rows over 24 hours need their own "Accept anyway" and count as "to check".
+  // Ready rows go through "Accept all"; matched rows that still need a fix (date, duration, platform) count as "to check".
   const readyCount = rows.filter(isReady).length;
   const unmatchedCount = rows.filter((row) => !row.isAccepted && !hasGameSelection(row)).length;
   const toCheckCount = rows.filter((row) => !row.isAccepted && hasGameSelection(row) && !isReady(row)).length;
@@ -883,7 +883,6 @@ function DraftRowArticle({
   const invalidGame = !hasGameSelection(row);
   const invalidDate = !hasValidDate(row);
   const invalidDuration = !hasValidDuration(row);
-  const longDuration = needsDurationCheck(row);
   const durationNote = durationCheck(row).note;
   const platformReview = needsPlatformReview(row);
   const showSearch = selected === null || changing || row.results.length > 0;
@@ -899,9 +898,7 @@ function DraftRowArticle({
             ? "border-[color:var(--tile-border)] bg-tile"
             : invalidDuration
               ? "border-danger-line bg-tile"
-              : longDuration
-                ? "border-warn bg-tile"
-                : "border-[color:var(--tile-border)] bg-tile",
+              : "border-[color:var(--tile-border)] bg-tile",
       )}
     >
       <fieldset disabled={busy || row.isAccepted} className="m-0 min-w-0 border-0 p-0 disabled:opacity-[.55]">
@@ -959,7 +956,7 @@ function DraftRowArticle({
                   )}
                 </p>
                 {!row.isAccepted && durationNote.length > 0 && (
-                  <p data-duration-note className={cx("mt-1 text-xs font-medium", longDuration ? "text-warn" : "text-danger")}>
+                  <p data-duration-note className="mt-1 text-xs font-medium text-danger">
                     {durationNote}
                   </p>
                 )}
@@ -971,6 +968,7 @@ function DraftRowArticle({
             Date
             <ChangeInput
               type="date"
+              max={localDateOnly(new Date())}
               value={row.date}
               onValueChange={(date) => onField({ date })}
               aria-invalid={ariaInvalid(invalidDate)}
@@ -1056,7 +1054,7 @@ function DraftRowArticle({
                   onClick={onAccept}
                   className="pdx-btn-primary h-10 whitespace-nowrap px-4 text-[13px]"
                 >
-                  {canAccept(row) && longDuration ? "Accept anyway" : "Accept"}
+                  Accept
                 </button>
               </>
             )}

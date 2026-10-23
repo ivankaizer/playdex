@@ -58,17 +58,18 @@ describe("SessionEditModal", () => {
     expect(save).toBeDisabled();
   });
 
-  it("asks for confirmation for more than 24 hours", () => {
+  it("refuses more than 24 hours", () => {
     const onSave = vi.fn();
     const { container } = render(
       <SessionEditModal gameTitle="Rez" startedAt="2026-08-04T18:30:15" duration="26h 5m" durationCheck={checkDuration("26h 5m")} onSave={onSave} />,
     );
     const save = container.querySelector<HTMLButtonElement>("button[data-action=save]")!;
-    expect(screen.getByText("Longer than a day. Double-check before saving.")).toHaveAttribute("data-duration-hint", "warn");
-    expect(save).toHaveTextContent("Save anyway");
-    expect(screen.getByLabelText(/Duration/)).not.toHaveAttribute("aria-invalid");
+    expect(screen.getByText("A session can be at most 24 hours.")).toHaveAttribute("data-duration-hint", "error");
+    expect(save).toHaveTextContent("Save session");
+    expect(save).toBeDisabled();
+    expect(screen.getByLabelText(/Duration/)).toHaveAttribute("aria-invalid", "true");
     fireEvent.click(save);
-    expect(onSave).toHaveBeenCalledTimes(1);
+    expect(onSave).not.toHaveBeenCalled();
   });
 
   it("reports typed durations and closes on Escape", () => {

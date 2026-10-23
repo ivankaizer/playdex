@@ -9,6 +9,8 @@ sidebar:
 
 Each user connects their own accounts in **Settings → Connected services → Add integration**. Nothing to set on the server. Playdex checks every account once a minute.
 
+When a platform keeps rejecting an account's key or token (an expired NPSSO, a revoked key), Playdex pauses that account after about 30 minutes and shows why under **Connected services**. Update the key under **Manage**, then **Resume**.
+
 | Platform | What the user enters | Where to get it |
 |---|---|---|
 | Steam | Steam Web API key, Steam ID | [steamcommunity.com/dev/apikey](https://steamcommunity.com/dev/apikey). Set the profile's **Game details** to Public. |
@@ -30,7 +32,7 @@ IGDB_CLIENT_SECRET=...
 
 ## Telegram notifications
 
-Messages when a session starts or ends, or when an account stops syncing.
+Messages when a session starts or ends, when an account stops syncing, and when one is paused. Messages not sent yet are kept in the database and sent after a restart.
 
 1. Create a bot with [@BotFather](https://t.me/BotFather) and set `TELEGRAM_BOT_TOKEN` in `.env`.
 2. Each user messages the bot once, then saves their chat ID in **Settings → Telegram notifications**.

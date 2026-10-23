@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { useState } from "react";
 import type { DraftBatchDto, DraftCapabilities, DraftRowDto } from "@/models/drafts";
 import type { ManualMappingSearchResult, ManualSessionStartRequest } from "@/models/manual";
@@ -146,7 +146,7 @@ describe("SessionCreateModal readiness", () => {
     expect(container).toHaveTextContent("Hades II · PC · 30m on Oct 4");
   });
 
-  it("rejects minutes over 59 and warns about sessions over 24 hours", () => {
+  it("rejects minutes over 59 and sessions over 24 hours", () => {
     const base = completeSearch(openSessionCreate("historical", new Date(2026, 9, 4)), {
       query: "Hades",
       igdbAvailable: true,
@@ -159,8 +159,8 @@ describe("SessionCreateModal readiness", () => {
     unmount();
 
     const long = render(<CreateModalHarness initial={{ ...ready, hours: "26", minutes: "0" }} embedded />);
-    expect(long.container.querySelector("button[data-action=save]")).not.toBeDisabled();
-    expect(screen.getByText(/over 24 hours, double-check it/)).toHaveClass("text-warn");
+    expect(long.container.querySelector("button[data-action=save]")).toBeDisabled();
+    expect(screen.getByText("A session can be at most 24 hours.")).toHaveClass("text-danger");
   });
 
   it("labels the result count with plurals and wraps long names with a title", () => {
@@ -590,7 +590,7 @@ describe("DraftWorkspace", () => {
     expect(buttonByText("Show fewer")).toBeInTheDocument();
   });
 
-  it("holds drafts over 24 hours out of Accept all and asks to accept them one by one", async () => {
+  it("holds drafts over 24 hours back until their duration is fixed", async () => {
     const normal = draftRow();
     const long = draftRow({ durationMinutes: 26 * 60 });
     stubFetch(batchServer(batchOf(normal, long)));
@@ -599,9 +599,10 @@ describe("DraftWorkspace", () => {
     await waitFor(() => expect(container.querySelectorAll("article")).toHaveLength(2));
     expect(buttonStartingWith("Accept all ready")).toHaveTextContent("Accept all ready (1)");
     expect(container).toHaveTextContent("1 to check");
-    expect(container).toHaveTextContent("Over 24 hours. Check the duration before accepting.");
-    expect(buttonByText("Accept anyway")).not.toBeDisabled();
-    expect(container.querySelectorAll("article")[1]).toHaveClass("border-warn");
+    expect(container).toHaveTextContent("A session can be at most 24 hours.");
+    const longRow = container.querySelectorAll("article")[1];
+    expect(longRow).toHaveClass("border-danger-line");
+    expect(within(longRow as HTMLElement).getByRole("button", { name: "Accept" })).toBeDisabled();
   });
 });
 

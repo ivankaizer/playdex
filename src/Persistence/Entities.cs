@@ -8,6 +8,23 @@ public sealed class User : IHasTimestamps
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }
     public bool IsAdmin { get; set; }
+    /// <summary>Bumped to revoke every token issued so far (see AuthTokenService.TokenVersionClaim).</summary>
+    public int TokenVersion { get; set; }
+}
+
+/// <summary>
+/// A refresh token the server issued, kept as the SHA-256 of its <c>jti</c>. Each refresh swaps it for a new token
+/// in the same family (one sign-in); a token presented again after its swap was copied, so its family is revoked.
+/// </summary>
+public sealed class RefreshToken
+{
+    public long Id { get; set; }
+    public long UserId { get; set; }
+    public Guid FamilyId { get; set; }
+    public required byte[] TokenHash { get; set; }
+    public DateTimeOffset CreatedAt { get; set; }
+    public DateTimeOffset ExpiresAt { get; set; }
+    public DateTimeOffset? RotatedAt { get; set; }
 }
 
 public sealed class NotificationChannel : IHasTimestamps
@@ -32,19 +49,6 @@ public sealed class Platform : IHasTimestamps
     public DateTimeOffset UpdatedAt { get; set; }
 }
 
-public sealed class IntegrationCredentials : IHasTimestamps
-{
-    public long Id { get; set; }
-    public long UserId { get; set; }
-    public string? ApiKey { get; set; }
-    public string? AccountId { get; set; }
-    public bool ApiKeyLocked { get; set; }
-    public DateTimeOffset CreatedAt { get; set; }
-    public DateTimeOffset UpdatedAt { get; set; }
-    public bool Active { get; set; }
-    public long PlatformId { get; set; }
-}
-
 public enum IntegrationType
 {
     Steam,
@@ -64,6 +68,10 @@ public sealed class Integration : IHasTimestamps
     public string? AccountId { get; set; }
     public bool ApiKeyLocked { get; set; }
     public bool Active { get; set; }
+    /// <summary>Why Playdex paused polling itself (a rejected credential); null when active or paused by the user.</summary>
+    public string? PausedReason { get; set; }
+    /// <summary>When Playdex paused polling itself; null when active or paused by the user.</summary>
+    public DateTimeOffset? PausedAt { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }
 }
@@ -122,7 +130,7 @@ public sealed class PlaySession : IHasTimestamps
 public sealed class PollResult
 {
     public long Id { get; set; }
-    public long? IntegrationId { get; set; }
+    public long IntegrationId { get; set; }
     public long? GameExternalIdentityId { get; set; }
     public DateTimeOffset PolledAt { get; set; }
     public string? RawPayload { get; set; }
@@ -163,4 +171,39 @@ public sealed class GameConnection : IHasTimestamps
     public long ConnectedGameId { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }
+}
+
+/// <summary>
+/// Poll failure backoff of a polling integration, shared by every API instance. No row: the integration is healthy
+/// and due. A row with no failures: a provider asked to be left alone until <see cref="NextPollAt"/>.
+/// </summary>
+public sealed class IntegrationPollBackoff
+{
+    public long IntegrationId { get; set; }
+    /// <summary>Failed polls since the last successful one.</summary>
+    public int Failures { get; set; }
+    /// <summary>How many of <see cref="Failures"/> were the provider rejecting the credential.</summary>
+    public int AuthFailures { get; set; }
+    /// <summary>When the first of <see cref="Failures"/> happened; null without failures.</summary>
+    public DateTimeOffset? FailingSince { get; set; }
+    public DateTimeOffset NextPollAt { get; set; }
+    public DateTimeOffset UpdatedAt { get; set; }
+}
+
+/// <summary>A notification waiting for delivery, or delivered recently (kept to recognise a duplicate).</summary>
+public sealed class NotificationOutboxEntry
+{
+    public long Id { get; set; }
+    /// <summary>Identifies the event; a second notification with the same key is not queued.</summary>
+    public required string DedupeKey { get; set; }
+    public required string Kind { get; set; }
+    public required string Payload { get; set; }
+    public int Attempts { get; set; }
+    /// <summary>When the next delivery attempt is due. A claimed entry is pushed past the time its claim lasts.</summary>
+    public DateTimeOffset NextAttemptAt { get; set; }
+    public string? LastError { get; set; }
+    public DateTimeOffset CreatedAt { get; set; }
+    public DateTimeOffset? DeliveredAt { get; set; }
+    /// <summary>Set when delivery was given up.</summary>
+    public DateTimeOffset? FailedAt { get; set; }
 }

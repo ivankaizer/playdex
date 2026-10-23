@@ -15,7 +15,6 @@ import {
 import { apiRequest, errorMessage, isAbortError } from "@/lib/api";
 import { formatCountNoun } from "@/lib/format";
 import { encodeGameId } from "@/lib/gameHash";
-import { logout } from "@/lib/navigation";
 import { platformColor } from "@/lib/platforms";
 import type {
   ManualActiveSession,
@@ -58,7 +57,7 @@ import {
   type OverviewPeriod,
 } from "./dashboardState";
 
-const utcMonthName = new Intl.DateTimeFormat("en-US", { month: "long", timeZone: "UTC" });
+const monthName = new Intl.DateTimeFormat("en-US", { month: "long" });
 
 /** Long game titles step down in size so they stay readable in a KPI tile. */
 function kpiTitleSize(value: string): string {
@@ -131,7 +130,7 @@ export function DashboardPage() {
     const version = ++activityVersion.current;
     const requests = dashboardActivityRequests(new Date());
     try {
-      const daily = await apiRequest<AccountDailyStatsResponse>(requests.daily, { onAuthFailure: logout, signal });
+      const daily = await apiRequest<AccountDailyStatsResponse>(requests.daily, { signal });
       if (signal.aborted || version !== activityVersion.current) return;
       setActivity({
         days: dailyTotals(daily.days),
@@ -152,7 +151,7 @@ export function DashboardPage() {
       setState((current) => beginRefresh(current, silent));
       void refreshActivity(signal);
       const requests = dashboardRequests(new Date());
-      const options = { onAuthFailure: logout, signal };
+      const options = { signal };
       const load = async <S extends DashboardSection>(section: S, fetch: () => Promise<DashboardSectionData[S]>) => {
         try {
           const data = await fetch();
@@ -195,7 +194,7 @@ export function DashboardPage() {
     const controller = new AbortController();
     lifetime.current = controller;
     void refreshDashboard(false);
-    apiRequest<ManualPlatformsResponse>("/manual/platforms", { onAuthFailure: logout, signal: controller.signal })
+    apiRequest<ManualPlatformsResponse>("/manual/platforms", { signal: controller.signal })
       .then((response) => {
         if (!controller.signal.aborted) setPlatforms(response.platforms);
       })
@@ -231,7 +230,7 @@ export function DashboardPage() {
     );
 
   const searchLiveGames = useCallback(
-    (path: string, signal: AbortSignal) => apiRequest<ManualMappingSearchResponse>(path, { onAuthFailure: logout, signal }),
+    (path: string, signal: AbortSignal) => apiRequest<ManualMappingSearchResponse>(path, { signal }),
     [],
   );
 
@@ -424,8 +423,8 @@ export function DashboardPage() {
               value={period}
               onChange={setPeriod}
               options={[
-                { value: "month", label: utcMonthName.format(now) },
-                { value: "year", label: String(now.getUTCFullYear()) },
+                { value: "month", label: monthName.format(now) },
+                { value: "year", label: String(now.getFullYear()) },
               ]}
             />
           </div>

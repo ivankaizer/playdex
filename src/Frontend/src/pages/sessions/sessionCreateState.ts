@@ -4,6 +4,7 @@ import type {
   ManualMappingSearchResult,
   ManualSessionStartRequest,
 } from "@/models/manual";
+import { clientTimeZone, localDateOnly } from "@/lib/dates";
 import { escapeDataString } from "./support";
 
 export type SessionCreateMode = "live" | "historical";
@@ -122,7 +123,8 @@ export function setMinutes(state: SessionCreateState, minutes: string): SessionC
   return { ...state, minutes };
 }
 
-export function tryBuildSubmission(state: SessionCreateState): {
+/** Builds the request, or the message that blocks it; `now` decides which dates are still in the future. */
+export function tryBuildSubmission(state: SessionCreateState, now: Date = new Date()): {
   state: SessionCreateState;
   submission: SessionCreateSubmission | null;
 } {
@@ -151,6 +153,7 @@ export function tryBuildSubmission(state: SessionCreateState): {
   }
 
   if (state.date.length === 0) return fail("Select a date.");
+  if (state.date > localDateOnly(now)) return fail("The date cannot be in the future.");
   const duration = parseDuration(state.hours, state.minutes);
   if (typeof duration === "string") return fail(duration);
 
@@ -168,6 +171,7 @@ export function tryBuildSubmission(state: SessionCreateState): {
         title: game.title,
         platformKey: state.platformKey,
         capsuleUrl: game.capsuleUrl,
+        timeZone: clientTimeZone(),
       },
     },
   };
@@ -177,8 +181,8 @@ export function tryBuildSubmission(state: SessionCreateState): {
  * The validation message that currently blocks saving, or null when the form is complete.
  * Uses the same rules as `tryBuildSubmission`, so the disabled save button and the server request agree.
  */
-export function submissionBlocker(state: SessionCreateState): string | null {
-  const built = tryBuildSubmission(state);
+export function submissionBlocker(state: SessionCreateState, now: Date = new Date()): string | null {
+  const built = tryBuildSubmission(state, now);
   return built.submission === null ? built.state.error : null;
 }
 
@@ -211,15 +215,10 @@ export function parseInvariantDouble(value: string): number | null {
   return null;
 }
 
-/** Durations above this many minutes (24h) are allowed, but only after a second look. */
-export const LongDurationMinutes = 24 * 60;
+/** The longest session the API records (24 hours). */
+export const MaxDurationMinutes = 24 * 60;
 
-/** True for a valid duration over 24 hours, which the form flags before saving. */
-export function isLongDuration(totalMinutes: number): boolean {
-  return totalMinutes > LongDurationMinutes;
-}
-
-/** Whole-minute duration, or the validation message. Zero is rejected, minutes stay under 60, hours at most 99. */
+/** Whole-minute duration, or the validation message. Zero is rejected, minutes stay under 60, at most 24 hours. */
 function parseDuration(hoursText: string, minutesText: string): number | string {
   const hours = parseInvariantDouble(hoursText);
   const minutes = parseInvariantDouble(minutesText);
@@ -234,8 +233,8 @@ function parseDuration(hoursText: string, minutesText: string): number | string 
     return "Enter a valid duration.";
   }
   if (minutes > 59) return "Minutes must be between 0 and 59.";
-  if (hours > 99) return "Hours must be 99 or less.";
 
   const durationMinutes = Math.floor(hours * 60 + minutes);
+  if (durationMinutes > MaxDurationMinutes) return "A session can be at most 24 hours.";
   return durationMinutes > 0 ? durationMinutes : "Add how long you played.";
 }

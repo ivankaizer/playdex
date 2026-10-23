@@ -4,7 +4,7 @@ using Microsoft.EntityFrameworkCore;
 namespace Api.Modules.Notifications;
 
 /// <summary>
-/// Resolves notification routing data from user-owned channels.
+/// Resolves notification routing data from user-owned channels. Sessions of a game the user ignores are not notified.
 /// </summary>
 public sealed class NotificationsRepository(PlaydexDbContext db)
 {
@@ -18,6 +18,7 @@ public sealed class NotificationsRepository(PlaydexDbContext db)
             join game in db.Games on session.GameId equals game.Id
             join platform in db.Platforms on session.PlatformId equals platform.Id
             where session.Id == sessionId && channel.Transport == NotificationChannel.Telegram
+            where !db.IgnoredGames.Any(ignored => ignored.UserId == session.UserId && ignored.GameId == session.GameId)
             where !db.PlaySessions.Any(other =>
                 other.Id != session.Id &&
                 other.UserId == session.UserId &&
@@ -46,6 +47,7 @@ public sealed class NotificationsRepository(PlaydexDbContext db)
             join platform in db.Platforms on session.PlatformId equals platform.Id
             where session.Id == sessionId && session.EndedAt != null
                 && channel.Transport == NotificationChannel.Telegram
+            where !db.IgnoredGames.Any(ignored => ignored.UserId == session.UserId && ignored.GameId == session.GameId)
             where !db.PlaySessions.Any(other =>
                 other.Id != session.Id &&
                 other.UserId == session.UserId &&

@@ -1,4 +1,4 @@
-import { addDays, currentUtcWeek, getDurationSeconds, utcDateOnly } from "@/lib/dates";
+import { addDays, currentLocalWeek, getDurationSeconds, localDateOnly, withTimeZone } from "@/lib/dates";
 import { formatCount, formatCountNoun, formatDateLabel, formatDuration } from "@/lib/format";
 import { encodeGameId } from "@/lib/gameHash";
 import type { ManualActiveSessionResponse, ManualActiveSession, ManualPlatform, ManualPlatformsResponse } from "@/models/manual";
@@ -150,32 +150,35 @@ export interface DurationCheck {
   /** Whole minutes, or null when the text is not a valid duration. */
   minutes: number | null;
   ok: boolean;
-  /** Valid but longer than a day: saving needs an explicit confirmation. */
-  warn: boolean;
   message: string;
 }
 
+/** The longest session the API records. */
 const DayMinutes = 24 * 60;
+const TooLongMessage = "A session can be at most 24 hours.";
 
-/** Duration rules from the design: empty and zero are rejected, minutes stay under 60, over 24h warns. */
+/** Duration rules: empty and zero are rejected, minutes stay under 60, and a session lasts at most 24 hours. */
 export function checkDuration(value: string): DurationCheck {
   const text = value.trim();
-  if (text.length === 0) return { minutes: null, ok: false, warn: false, message: "Enter how long you played, e.g. 1h 30m." };
+  if (text.length === 0) return { minutes: null, ok: false, message: "Enter how long you played, e.g. 1h 30m." };
   const match = /^(?:(\d+)\s*h)?\s*(?:(\d+)\s*m)?$/i.exec(text);
-  if (!match) return { minutes: null, ok: false, warn: false, message: "Use hours and minutes, e.g. 1h 30m." };
+  if (!match) return { minutes: null, ok: false, message: "Use hours and minutes, e.g. 1h 30m." };
   const hours = Number(match[1] ?? 0);
   const minutes = Number(match[2] ?? 0);
-  if (minutes > 59) return { minutes: null, ok: false, warn: false, message: `Minutes go up to 59. Write ${Math.floor(minutes / 60) + hours}h ${pad(minutes % 60)}m instead.` };
+  if (minutes > 59) return { minutes: null, ok: false, message: `Minutes go up to 59. Write ${Math.floor(minutes / 60) + hours}h ${pad(minutes % 60)}m instead.` };
   const total = hours * 60 + minutes;
-  if (total === 0) return { minutes: 0, ok: false, warn: false, message: "A session needs at least 1 minute." };
-  if (total > DayMinutes) return { minutes: total, ok: true, warn: true, message: "Longer than a day. Double-check before saving." };
-  return { minutes: total, ok: true, warn: false, message: "" };
+  if (total === 0) return { minutes: 0, ok: false, message: "A session needs at least 1 minute." };
+  if (total > DayMinutes) return { minutes: total, ok: false, message: TooLongMessage };
+  return { minutes: total, ok: true, message: "" };
 }
 
-/** The duration check for the dialog; an untouched duration is always accepted as-is. */
+/** The duration check for the dialog; an untouched duration keeps its exact length, unless it is over 24 hours. */
 export function editDurationCheck(state: SessionEditState): DurationCheck {
   if (state.session !== null && state.duration.trim() === state.initialDuration) {
-    return { minutes: Math.floor(state.initialSeconds / 60), ok: true, warn: false, message: "" };
+    const minutes = Math.floor(state.initialSeconds / 60);
+    return state.initialSeconds > DayMinutes * 60
+      ? { minutes, ok: false, message: TooLongMessage }
+      : { minutes, ok: true, message: "" };
   }
   return checkDuration(state.duration);
 }
@@ -279,7 +282,7 @@ export interface SessionsState {
 }
 
 export function createSessionsState(now: Date): SessionsState {
-  const range = currentUtcWeek(now);
+  const range = currentLocalWeek(now);
   return {
     preset: "this-week",
     title: "",
@@ -361,7 +364,7 @@ export function platformFilterOptions(state: SessionsState): Array<{ key: string
 }
 
 export function applyPreset(state: SessionsState, preset: string, now: Date): SessionsState {
-  const today = utcDateOnly(now);
+  const today = localDateOnly(now);
   const year = Number(today.slice(0, 4));
   const month = Number(today.slice(5, 7));
   let from: string;
@@ -375,14 +378,14 @@ export function applyPreset(state: SessionsState, preset: string, now: Date): Se
       break;
     case "this-week":
     case "last-week": {
-      const week = currentUtcWeek(now);
+      const week = currentLocalWeek(now);
       from = preset === "last-week" ? addDays(week.from, -7) : week.from;
       to = addDays(from, 6);
       break;
     }
     case "this-month":
       from = `${pad(year, 4)}-${pad(month)}-01`;
-      to = utcDateOnly(new Date(Date.UTC(year, month, 0)));
+      to = localDateOnly(new Date(year, month, 0));
       break;
     case "last-year":
       from = `${pad(year - 1, 4)}-01-01`;
@@ -609,18 +612,31 @@ export function rangeLabel(state: SessionsState): string {
   return `${startMonth} ${a.day} – ${b.day}, ${b.year}`;
 }
 
-export function buildListRequest(state: SessionsState, offset = 0, limit = Limit): string {
+/** The title and platform filters, shared by the list and its stats so both count the same sessions. */
+function filterQuery(state: SessionsState): string {
   const title = state.debouncedTitle.length === 0 ? "" : `&title=${encodeQuery(state.debouncedTitle)}`;
   const platform = state.platform.length === 0 ? "" : `&platform=${encodeQuery(state.platform)}`;
+  return `${title}${platform}`;
+}
+
+/** The range bounds are the viewer's calendar days, so a bounded request carries the time zone. */
+function rangeRequest(path: string, state: SessionsState): string {
+  return state.from.length === 0 && state.to.length === 0 ? path : withTimeZone(path);
+}
+
+export function buildListRequest(state: SessionsState, offset = 0, limit = Limit): string {
   const from = state.from.length === 0 ? "" : `&from=${state.from}`;
   const to = state.to.length === 0 ? "" : `&to=${state.to}`;
-  return `/sessions?limit=${limit}&offset=${offset}${title}${platform}${from}${to}&sort=${state.sortKey}&direction=${state.sortDirection}`;
+  return rangeRequest(
+    `/sessions?limit=${limit}&offset=${offset}${filterQuery(state)}${from}${to}&sort=${state.sortKey}&direction=${state.sortDirection}`,
+    state,
+  );
 }
 
 export function buildStatsRequest(state: SessionsState): string | null {
   return state.from.length === 0 || state.to.length === 0
     ? null
-    : `/stats?from=${state.from}&to=${state.to}${state.platform.length === 0 ? "" : `&platform=${encodeQuery(state.platform)}`}`;
+    : rangeRequest(`/stats?from=${state.from}&to=${state.to}${filterQuery(state)}`, state);
 }
 
 /** Longest range (in days) that gets the hours-per-day chart. */
@@ -637,7 +653,7 @@ export function rangeDays(state: SessionsState): number {
 export function buildDailyRequest(state: SessionsState): string | null {
   const days = rangeDays(state);
   if (days < 2 || days > MaxDailyRangeDays) return null;
-  return `/stats/daily?from=${state.from}&to=${state.to}${state.platform.length === 0 ? "" : `&platform=${encodeQuery(state.platform)}`}`;
+  return rangeRequest(`/stats/daily?from=${state.from}&to=${state.to}${filterQuery(state)}`, state);
 }
 
 const weekdayFormat = new Intl.DateTimeFormat("en-US", { weekday: "short", timeZone: "UTC" });
@@ -647,7 +663,7 @@ export interface DayBar {
   /** "Mon 28". */
   label: string;
   seconds: number;
-  /** After today (UTC): nothing could have been played yet. */
+  /** After today: nothing could have been played yet. */
   upcoming: boolean;
 }
 
@@ -655,7 +671,7 @@ export interface DayBar {
 export function dailyBars(state: SessionsState, now: Date): DayBar[] {
   if (state.daily === null) return [];
   const days = rangeDays(state);
-  const today = utcDateOnly(now);
+  const today = localDateOnly(now);
   const byDate = new Map(state.daily.map((day) => [day.date, day.totalSeconds]));
   return Array.from({ length: days }, (_, index) => {
     const date = addDays(state.from, index);

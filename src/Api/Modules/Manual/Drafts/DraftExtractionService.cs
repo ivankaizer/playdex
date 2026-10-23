@@ -25,8 +25,10 @@ public sealed class DraftExtractionService(DraftRepository repository, DraftServ
         if (!opts.IsAvailable) throw new AppProblemException(503, "AI extraction is not configured.");
         var day = ReferenceDate(timezone, clock.GetUtcNow());
         var platforms = await manual.ListPlatforms(ct);
-        var input = new ExtractionInput(text, image, contentType, day, platforms.Where(p => p.Key != "playnite").Select(p => p.Key).ToArray());
-        ExtractionInputValidator.Validate(input, opts);
+        var input = new ExtractionInput(text, image, contentType, day, platforms.Where(p => p.Key != ManualService.PlaynitePlatformKey).Select(p => p.Key).ToArray());
+        // Only cheap checks before the lock: decoding a screenshot is the expensive part, and parallel uploads
+        // must not get to do it without taking the lock and spending quota.
+        ExtractionInputValidator.ValidateRequest(input, opts);
 
         // A dedicated session advisory lock spans the external request without holding a transaction.
         await using var connection = await dataSource.OpenConnectionAsync(ct);
@@ -41,27 +43,36 @@ public sealed class DraftExtractionService(DraftRepository repository, DraftServ
             existing = await repository.FindRequest(userId, requestId, ct);
             if (existing is not null) return DraftService.ToDto(existing);
             await CheckQuota(connection, userId, opts.RequestsPerHour, ct);
+            ExtractionInputValidator.ValidateImage(input, opts);
             generationId = await history.Begin(userId, requestId, timezone, input);
             input = input with { ObserveResponse = response => history.RecordResponse(generationId, response) };
-            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
-            timeout.CancelAfter(TimeSpan.FromSeconds((long)opts.TimeoutSeconds * 2));
-            var rows = await extractor.Extract(input, timeout.Token);
+            IReadOnlyList<ExtractedSession> rows;
+            using (var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct))
+            {
+                // The extractor makes at most two attempts (one retry on invalid output), each within TimeoutSeconds.
+                timeout.CancelAfter(TimeSpan.FromSeconds((long)opts.TimeoutSeconds * 2));
+                rows = await extractor.Extract(input, timeout.Token);
+            }
             if (rows.Count == 0) throw AppProblemException.Validation("No individual play sessions could be found. Add dates and durations or try a clearer screenshot.");
             if (rows.Count > opts.MaxRows) throw new AppProblemException(502, "Too many sessions were extracted. Try a smaller input.");
+            // Game search has its own budget. It used to share the extraction timeout, so slow IGDB searches turned a
+            // successful (paid) extraction into a 504; now rows whose search runs out are saved without IGDB matches.
+            var searches = await drafts.SearchCandidates(userId, rows.Select(row => row.Title),
+                TimeSpan.FromSeconds(Math.Max(1, opts.SearchTimeoutSeconds)), ct);
             var batch = new SessionDraftBatch { Id=Guid.NewGuid(), UserId=userId, RequestId=requestId,
                 CreatedAt=clock.GetUtcNow(), Timezone=timezone, ReferenceDate=day };
             foreach (var row in rows)
             {
-                var candidates = await drafts.SearchCandidates(userId, row.Title, timeout.Token);
+                var candidates = searches.GetValueOrDefault(row.Title.Trim()) ?? [];
                 var playedCandidates = candidates.Where(candidate => candidate.PreviouslyPlayed).ToArray();
                 var selected = playedCandidates.Length == 1
                     ? playedCandidates[0]
                     : candidates.Count == 1 ? candidates[0] : null;
-                var platform = platforms.Any(p => p.Key == row.PlatformKey && p.Key != "playnite") ? row.PlatformKey! : "unknown";
+                var platform = platforms.Any(p => p.Key == row.PlatformKey && p.Key != ManualService.PlaynitePlatformKey) ? row.PlatformKey! : "unknown";
                 var warnings = row.Warnings.ToList();
                 if (platform == "unknown"
                     && selected?.PreviouslyPlayed == true
-                    && platforms.Any(candidate => candidate.Key == selected.Platform && candidate.Key != "playnite"))
+                    && platforms.Any(candidate => candidate.Key == selected.Platform && candidate.Key != ManualService.PlaynitePlatformKey))
                 {
                     platform = selected.Platform!;
                     warnings.RemoveAll(warning => warning.StartsWith("Platform:", StringComparison.OrdinalIgnoreCase));

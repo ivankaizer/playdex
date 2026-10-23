@@ -10,6 +10,8 @@ COPY src/Persistence/ Persistence/
 RUN dotnet publish Api/Api.csproj -c Release -o /app
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
+# The aspnet image listens on 8080 by default; EXPOSE and the health check below use 3000.
+ENV ASPNETCORE_HTTP_PORTS=3000
 EXPOSE 3000
 WORKDIR /app
 RUN apt-get update \

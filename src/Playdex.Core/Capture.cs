@@ -205,11 +205,18 @@ public sealed class CaptureClient : IDisposable
     public Task<string?> GetLauncherSummaryAsync(CancellationToken ct = default) => GetDataAsync(SummaryPath(), "launcher/summary", ct);
 
     /// <summary>
-    /// The web's recap of one calendar year (GET launcher/recap?year=, API key only), as raw JSON, or null without a
-    /// key, offline, or on an error.
+    /// The web's recap of one calendar year (GET launcher/recap?year=&amp;tz=, API key only), as raw JSON, or null without
+    /// a key, offline, or on an error. Its days and hours are those of <paramref name="timeZone"/>, the page's IANA
+    /// zone, or of this PC's zone when the page sent none.
     /// </summary>
-    public Task<string?> GetLauncherRecapAsync(int year, CancellationToken ct = default) =>
-        GetDataAsync($"launcher/recap?year={year.ToString(System.Globalization.CultureInfo.InvariantCulture)}", "launcher/recap", ct);
+    public Task<string?> GetLauncherRecapAsync(int year, string? timeZone = null, CancellationToken ct = default) =>
+        GetDataAsync(RecapPath(year, timeZone), "launcher/recap", ct);
+
+    internal static string RecapPath(int year, string? timeZone)
+    {
+        var zone = string.IsNullOrWhiteSpace(timeZone) ? TimeZoneInfo.Local.Id : timeZone.Trim();
+        return $"launcher/recap?year={year.ToString(System.Globalization.CultureInfo.InvariantCulture)}&tz={Uri.EscapeDataString(zone)}";
+    }
 
     private async Task<string?> GetDataAsync(string path, string name, CancellationToken ct)
     {

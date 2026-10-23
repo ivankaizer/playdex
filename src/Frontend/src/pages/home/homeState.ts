@@ -1,5 +1,5 @@
 import type { LoginResponse, MeResponse } from "@/lib/auth";
-import { addDays, currentUtcWeek, utcDateOnly, type DateOnly } from "@/lib/dates";
+import { addDays, currentLocalWeek, localDateOnly, withTimeZone, type DateOnly } from "@/lib/dates";
 import type { AccountDayStat } from "@/models/stats";
 
 export type HomeLoginStatus = "idle" | "loading" | "success";
@@ -55,10 +55,10 @@ export function failProfile(state: HomeState): HomeState {
 /** Days of history the signed-in card asks for; a streak reaching past it shows as "365+ days". */
 export const homeStreakWindowDays = 365;
 
-/** One daily breakdown covering this week and the streak window (UTC days, within the API's 366-day cap). */
+/** One daily breakdown covering this week and the streak window (the viewer's days, within the API's 366-day cap). */
 export function homeStatsRequest(now: Date): string {
-  const today = utcDateOnly(now);
-  return `/stats/daily?from=${addDays(today, -(homeStreakWindowDays - 1))}&to=${today}`;
+  const today = localDateOnly(now);
+  return withTimeZone(`/stats/daily?from=${addDays(today, -(homeStreakWindowDays - 1))}&to=${today}`);
 }
 
 export interface HomeMiniStats {
@@ -77,8 +77,8 @@ export function homeMiniStats(days: readonly AccountDayStat[], now: Date): HomeM
   const played = new Map<DateOnly, number>();
   for (const day of days) played.set(day.date, (played.get(day.date) ?? 0) + Math.max(0, day.totalSeconds));
 
-  const today = utcDateOnly(now);
-  const monday = currentUtcWeek(now).from;
+  const today = localDateOnly(now);
+  const monday = currentLocalWeek(now).from;
   let weekSeconds = 0;
   for (let date = monday; date <= today; date = addDays(date, 1)) weekSeconds += played.get(date) ?? 0;
 

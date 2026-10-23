@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text;
@@ -33,9 +34,9 @@ public sealed class PsnClient(
         var accountId = credential.AccountId;
 
         if (string.IsNullOrEmpty(npsso))
-            throw new ProviderPollException("PSN credential is missing an NPSSO token.");
+            throw new ProviderPollException("PSN credential is missing an NPSSO token.", authenticationFailure: true);
 
-        var accessToken = await GetAccessToken(npsso, ct);
+        var accessToken = await GetAccessToken(credential.Id, npsso, ct);
 
         if (string.IsNullOrEmpty(accountId))
         {
@@ -44,7 +45,7 @@ public sealed class PsnClient(
                 throw new ProviderPollException("PSN access token did not contain an account ID.");
         }
 
-        var (presence, rawPresence) = await GetBasicPresence(accessToken, accountId, ct);
+        var (presence, rawPresence) = await GetBasicPresence(credential.Id, accessToken, accountId, ct);
 
         var titleInfo = presence.BasicPresence?.GameTitleInfoList?.FirstOrDefault();
         if (titleInfo?.TitleName is null)
@@ -65,15 +66,16 @@ public sealed class PsnClient(
         );
     }
 
-    private async Task<string> GetAccessToken(string npsso, CancellationToken ct)
+    private async Task<string> GetAccessToken(long credentialId, string npsso, CancellationToken ct)
     {
-        if (tokenCache.TryGet(npsso, DateTimeOffset.UtcNow.AddMinutes(1), out var cachedAccessToken))
+        if (tokenCache.TryGet(credentialId, npsso, DateTimeOffset.UtcNow.AddMinutes(1), out var cachedAccessToken))
             return cachedAccessToken;
 
         var code = await ExchangeNpssoForCode(npsso, ct);
         var tokenResponse = await ExchangeCodeForAccessToken(code, ct);
 
         tokenCache.Set(
+            credentialId,
             npsso,
             tokenResponse.AccessToken,
             DateTimeOffset.UtcNow.AddSeconds(tokenResponse.ExpiresIn));
@@ -99,9 +101,15 @@ public sealed class PsnClient(
         if (!string.IsNullOrEmpty(code))
             return code;
 
+        // Sony answers an expired or signed-out NPSSO with a redirect (or a 4xx) that carries no code; a server
+        // error or a rate limit says nothing about the token.
+        var status = (int)response.StatusCode;
+        var rejected = status is >= 300 and < 400
+            || response.StatusCode is HttpStatusCode.BadRequest or HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden;
         throw new ProviderPollException(
-            $"PSN authorize request returned {(int)response.StatusCode} without an access code. " +
-            "The NPSSO token may be invalid or expired.");
+            $"PSN authorize request returned {status} without an access code. " +
+            "The NPSSO token may be invalid or expired.",
+            authenticationFailure: rejected);
     }
 
     private async Task<PsnTokenResponse> ExchangeCodeForAccessToken(string code, CancellationToken ct)
@@ -164,6 +172,7 @@ public sealed class PsnClient(
     }
 
     private async Task<(PsnPresenceResponse Presence, string RawJson)> GetBasicPresence(
+        long credentialId,
         string accessToken,
         string accountId,
         CancellationToken ct)
@@ -175,6 +184,16 @@ public sealed class PsnClient(
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
 
         using var response = await httpClient.SendAsync(request, ct);
+        if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
+        {
+            // The cached access token was revoked: the next poll exchanges the NPSSO again, which tells whether
+            // the NPSSO itself still works.
+            tokenCache.Forget(credentialId);
+            throw new ProviderPollException(
+                $"PSN presence request returned {(int)response.StatusCode} ({response.ReasonPhrase}).",
+                authenticationFailure: true);
+        }
+
         if (!response.IsSuccessStatusCode)
             throw new ProviderPollException(
                 $"PSN presence request returned {(int)response.StatusCode} ({response.ReasonPhrase}).");
@@ -252,25 +271,45 @@ public sealed class PsnClient(
     }
 }
 
+/// <summary>
+/// PSN access tokens per credential. Keyed by credential rather than NPSSO, so a rotated NPSSO replaces the old entry
+/// instead of leaving it behind for the life of the process; tokens of deleted credentials are swept once expired.
+/// </summary>
 public sealed class PsnTokenCache
 {
-    private readonly ConcurrentDictionary<string, CachedToken> _tokens = new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<long, CachedToken> _tokens = new();
 
-    internal bool TryGet(string npsso, DateTimeOffset minimumExpiresAt, out string accessToken)
+    internal int Count => _tokens.Count;
+
+    internal bool TryGet(long credentialId, string npsso, DateTimeOffset minimumExpiresAt, out string accessToken)
     {
-        if (_tokens.TryGetValue(npsso, out var cached) && cached.ExpiresAt > minimumExpiresAt)
+        if (_tokens.TryGetValue(credentialId, out var cached))
         {
-            accessToken = cached.AccessToken;
-            return true;
+            if (cached.Npsso == npsso && cached.ExpiresAt > minimumExpiresAt)
+            {
+                accessToken = cached.AccessToken;
+                return true;
+            }
+
+            _tokens.TryRemove(new KeyValuePair<long, CachedToken>(credentialId, cached));
         }
 
-        _tokens.TryRemove(npsso, out _);
         accessToken = string.Empty;
         return false;
     }
 
-    internal void Set(string npsso, string accessToken, DateTimeOffset expiresAt) =>
-        _tokens[npsso] = new CachedToken(accessToken, expiresAt);
+    internal void Forget(long credentialId) => _tokens.TryRemove(credentialId, out _);
 
-    private sealed record CachedToken(string AccessToken, DateTimeOffset ExpiresAt);
+    internal void Set(long credentialId, string npsso, string accessToken, DateTimeOffset expiresAt)
+    {
+        var now = DateTimeOffset.UtcNow;
+        foreach (var expired in _tokens.Where(entry => entry.Value.ExpiresAt <= now))
+        {
+            _tokens.TryRemove(expired);
+        }
+
+        _tokens[credentialId] = new CachedToken(npsso, accessToken, expiresAt);
+    }
+
+    private sealed record CachedToken(string Npsso, string AccessToken, DateTimeOffset ExpiresAt);
 }

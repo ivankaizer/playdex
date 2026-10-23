@@ -1,4 +1,4 @@
-import { ApiError, apiRequest } from "@/lib/api";
+import { ApiError, apiRequest, revokeRefreshToken } from "@/lib/api";
 import { authSession, type LoginResponse, type MeResponse } from "@/lib/auth";
 
 export const NotAdministratorMessage = "This account does not have administrator access.";
@@ -39,7 +39,8 @@ export type AdminCheck = { status: "admin"; email: string } | { status: "anonymo
 export async function checkAdminSession(signal?: AbortSignal): Promise<AdminCheck> {
   if (!authSession.isLoggedIn()) return { status: "anonymous" };
   try {
-    const me = await apiRequest<MeResponse>("me", { signal });
+    // A session that can't be renewed shows the login form here instead of the default redirect.
+    const me = await apiRequest<MeResponse>("me", { signal, onAuthFailure: null });
     return me.isAdmin === true ? { status: "admin", email: me.email } : { status: "forbidden" };
   } catch (error) {
     if (error instanceof ApiError && (error.status === 401 || error.status === 404)) {
@@ -51,5 +52,6 @@ export async function checkAdminSession(signal?: AbortSignal): Promise<AdminChec
 }
 
 export function adminLogout(): void {
+  revokeRefreshToken();
   authSession.logout();
 }

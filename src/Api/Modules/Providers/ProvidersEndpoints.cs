@@ -14,7 +14,7 @@ public static class ProvidersEndpoints
 
         providers.MapPost("", async (HttpContext http) =>
         {
-            var request = await http.Request.ReadFromJsonAsync<CreateProviderRequest>();
+            var request = await http.Request.ReadJsonBodyAsync<CreateProviderRequest>();
             var service = http.RequestServices.GetRequiredService<ProvidersService>();
             IResult result = request is null
                 ? TypedResults.Problem("Request body is required.", statusCode: 400)
@@ -25,7 +25,7 @@ public static class ProvidersEndpoints
 
         providers.MapPut("/status", async (HttpContext http) =>
         {
-            var request = await http.Request.ReadFromJsonAsync<ProviderUpdateRequest>();
+            var request = await http.Request.ReadJsonBodyAsync<ProviderUpdateRequest>();
             var service = http.RequestServices.GetRequiredService<ProvidersService>();
             IResult result = request is null
                 ? TypedResults.Problem("Request body is required.", statusCode: 400)
@@ -35,13 +35,13 @@ public static class ProvidersEndpoints
 
         providers.MapPut("/{providerId}/session-platform", async (string providerId, HttpContext http) =>
         {
-            var request = await http.Request.ReadFromJsonAsync<ProviderSessionPlatformUpdateRequest>();
+            var request = await http.Request.ReadJsonBodyAsync<ProviderSessionPlatformUpdateRequest>();
             var service = http.RequestServices.GetRequiredService<ProvidersService>();
             IResult result = request is null
                 ? TypedResults.Problem("Request body is required.", statusCode: 400)
                 : TypedResults.Ok(await service.UpdateSessionPlatform(
                     http.User.GetUserId(),
-                    ParseProviderId(providerId),
+                    RouteIds.Parse(providerId, "providerId"),
                     request,
                     http.RequestAborted));
             await result.ExecuteAsync(http);
@@ -49,7 +49,7 @@ public static class ProvidersEndpoints
 
         providers.MapPut("/{providerId}", async (string providerId, HttpContext http) =>
         {
-            var payload = await http.Request.ReadFromJsonAsync<JsonElement>();
+            var payload = await http.Request.ReadJsonBodyAsync<JsonElement>();
             var service = http.RequestServices.GetRequiredService<ProvidersService>();
 
             IResult result;
@@ -61,7 +61,7 @@ public static class ProvidersEndpoints
             {
                 result = TypedResults.Ok(await service.UpdateCredential(
                     http.User.GetUserId(),
-                    ParseProviderId(providerId),
+                    RouteIds.Parse(providerId, "providerId"),
                     ParseCredentialChanges(payload),
                     http.RequestAborted));
             }
@@ -70,7 +70,7 @@ public static class ProvidersEndpoints
 
         providers.MapPost("/openxbl", async (HttpContext http) =>
         {
-            var request = await http.Request.ReadFromJsonAsync<OpenXblConnectRequest>();
+            var request = await http.Request.ReadJsonBodyAsync<OpenXblConnectRequest>();
             var service = http.RequestServices.GetRequiredService<ProvidersService>();
             IResult result = request is null
                 ? TypedResults.Problem("Request body is required.", statusCode: 400)
@@ -79,7 +79,7 @@ public static class ProvidersEndpoints
             await result.ExecuteAsync(http);
         });
 
-        api.MapPost("/api/key", GetApiKey).RequireAuthorization();
+        api.MapPost("/key", GetApiKey).RequireAuthorization();
     }
 
     private static async Task<IResult> ListProviders(
@@ -117,12 +117,5 @@ public static class ProvidersEndpoints
             throw AppProblemException.Validation($"{name} must be a string or null.");
         var value = property.GetString()?.Trim();
         return (true, string.IsNullOrEmpty(value) ? null : value);
-    }
-
-    private static long ParseProviderId(string value)
-    {
-        if (!long.TryParse(value, out var id) || id <= 0)
-            throw AppProblemException.Validation("providerId must be a positive integer.");
-        return id;
     }
 }

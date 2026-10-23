@@ -52,3 +52,6 @@ todo.md
 src/Launcher/Host/AppPackages/
 *.pfx
 *.cer
+
+# TypeScript incremental build info
+*.tsbuildinfo

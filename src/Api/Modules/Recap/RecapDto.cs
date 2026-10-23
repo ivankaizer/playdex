@@ -15,8 +15,7 @@ public sealed record RecapPlatformStatDto(
     string PlatformKey,
     string PlatformName,
     int SessionCount,
-    double TotalSeconds,
-    string? Source);
+    double TotalSeconds);
 
 public sealed record MostActiveDayDto(string Date, int SessionCount);
 
@@ -74,7 +73,8 @@ public sealed record RecapResponseDto(
     int NewGamesTried,
     int AbandonedGames,
     int ReturnRateGames,
-    double TimeOnTop3Percent,
+    // Percentage (0-100) of all play time spent on the three most-played games.
+    double TopThreeGamesSharePercent,
     BingedGameDto? MostBingedGame,
     IReadOnlyList<RecapPlatformStatDto> PlatformTotals,
     PlatformSummaryDto? MostUsedPlatform,

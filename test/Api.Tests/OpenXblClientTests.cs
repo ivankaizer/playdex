@@ -120,6 +120,7 @@ public sealed class OpenXblClientTests
 
         Assert.Equal(TimeSpan.FromSeconds(45), failure.RetryAfter);
         Assert.Contains("rate limited", failure.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.False(failure.IsAuthenticationFailure);
     }
 
     [Theory]
@@ -133,6 +134,7 @@ public sealed class OpenXblClientTests
             client.GetCurrentlyPlaying(Credential(), CancellationToken.None));
 
         Assert.Equal("OpenXBL rejected the API key.", failure.Message);
+        Assert.True(failure.IsAuthenticationFailure);
     }
 
     [Fact]
@@ -145,6 +147,7 @@ public sealed class OpenXblClientTests
             client.GetCurrentlyPlaying(Credential(apiKey: null), CancellationToken.None));
 
         Assert.Contains("API key", failure.Message);
+        Assert.True(failure.IsAuthenticationFailure);
         Assert.Empty(handler.Requests);
     }
 

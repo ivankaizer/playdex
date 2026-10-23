@@ -1,4 +1,4 @@
-import { addDays, currentUtcWeek, getDurationSeconds, type DateOnly } from "@/lib/dates";
+import { addDays, currentLocalWeek, getDurationSeconds, localDateOnly, withTimeZone, type DateOnly } from "@/lib/dates";
 import {
   formatCount,
   formatCountNoun,
@@ -7,7 +7,6 @@ import {
   formatHoursShort,
   formatPercent,
   formatTimeLabel,
-  formatUtcDateInput,
 } from "@/lib/format";
 import { encodeGameId } from "@/lib/gameHash";
 import type { ManualActiveSession } from "@/models/manual";
@@ -25,14 +24,15 @@ export interface DashboardRequests {
   activeManualSession: string;
 }
 
+/** Today, this month and this year are the viewer's calendar periods, and the API counts them in the same zone. */
 export function dashboardRequests(now: Date): DashboardRequests {
-  const today = formatUtcDateInput(now);
-  const { monthStart, yearStart } = utcPeriodStarts(now);
+  const today = localDateOnly(now);
+  const { monthStart, yearStart } = localPeriodStarts(now);
   return {
-    todaySessions: `/sessions?limit=10&offset=0&from=${today}&to=${today}&sort=date&direction=desc`,
-    todayStats: `/stats?from=${today}&to=${today}`,
-    monthlyStats: `/stats?from=${monthStart}&to=${today}`,
-    yearlyStats: `/stats?from=${yearStart}&to=${today}`,
+    todaySessions: withTimeZone(`/sessions?limit=10&offset=0&from=${today}&to=${today}&sort=date&direction=desc`),
+    todayStats: withTimeZone(`/stats?from=${today}&to=${today}`),
+    monthlyStats: withTimeZone(`/stats?from=${monthStart}&to=${today}`),
+    yearlyStats: withTimeZone(`/stats?from=${yearStart}&to=${today}`),
     currentSession: "/sessions/current",
     activeManualSession: "/manual/sessions/current",
   };
@@ -40,17 +40,17 @@ export function dashboardRequests(now: Date): DashboardRequests {
 
 export type RecapRange = "today" | "month" | "year";
 
+/** The Recap page for the period (a page URL; the page adds the time zone to its requests). */
 export function recapPath(range: RecapRange, now: Date): string {
-  const today = formatUtcDateInput(now);
-  const { monthStart, yearStart } = utcPeriodStarts(now);
+  const today = localDateOnly(now);
+  const { monthStart, yearStart } = localPeriodStarts(now);
   const from = range === "today" ? today : range === "month" ? monthStart : yearStart;
   return `/recap?from=${from}&to=${today}`;
 }
 
-function utcPeriodStarts(now: Date): { monthStart: string; yearStart: string } {
-  const year = String(now.getUTCFullYear()).padStart(4, "0");
-  const month = String(now.getUTCMonth() + 1).padStart(2, "0");
-  return { monthStart: `${year}-${month}-01`, yearStart: `${year}-01-01` };
+function localPeriodStarts(now: Date): { monthStart: string; yearStart: string } {
+  const today = localDateOnly(now);
+  return { monthStart: `${today.slice(0, 7)}-01`, yearStart: `${today.slice(0, 4)}-01-01` };
 }
 
 /**
@@ -83,9 +83,10 @@ function sectionFlags<T>(value: T): Record<DashboardSection, T> {
 }
 
 export interface DashboardSnapshot {
+  /** The newest of today's sessions: a page of at most 10, so never the count. */
   todaySessions: AccountSession[];
-  /** Number of sessions logged today (from today's stats); falls back to `todaySessions.length`. */
-  todaySessionCount?: number;
+  /** Number of sessions logged today, counted by the API (today's stats). */
+  todaySessionCount: number;
   /** Latest sessions across all days for the "Recent sessions" list. */
   recentSessions?: AccountSession[];
   todayPlatformTotals: AccountPlatformStat[];
@@ -218,7 +219,7 @@ export function completeRefresh(state: DashboardState, snapshot: DashboardSnapsh
     "today",
     {
       todaySessions: snapshot.todaySessions,
-      todaySessionCount: snapshot.todaySessionCount ?? snapshot.todaySessions.length,
+      todaySessionCount: snapshot.todaySessionCount,
       todayPlatformTotals: snapshot.todayPlatformTotals,
     },
     now,
@@ -414,7 +415,7 @@ export function todaySeconds(state: DashboardState): number {
   return sumSeconds(state.todayPlatformTotals);
 }
 
-/** Per-day play time (UTC days, sessions split at midnight, running sessions counted up to now). */
+/** Per-day play time (the viewer's calendar days, sessions split at midnight, running sessions counted up to now). */
 export interface DashboardActivity {
   days: Record<DateOnly, number>;
   /** Sessions overlapping each day. */
@@ -428,7 +429,7 @@ export interface DashboardActivity {
  * started yesterday or is still running; falls back to today's period stats until it loads.
  */
 export function getTodayView(state: DashboardState, activity: DashboardActivity | null, now: Date): { seconds: number; sessions: number } {
-  const today = formatUtcDateInput(now);
+  const today = localDateOnly(now);
   if (activity && today in activity.days) {
     return { seconds: activity.days[today], sessions: activity.sessionCounts?.[today] ?? state.todaySessionCount };
   }
@@ -439,13 +440,13 @@ export interface DashboardActivityRequests {
   daily: string;
 }
 
-/** One daily breakdown from the earlier of Monday / the 1st through today (UTC days). */
+/** One daily breakdown from the earlier of Monday / the 1st through today (the viewer's days). */
 export function dashboardActivityRequests(now: Date): DashboardActivityRequests {
-  const today = formatUtcDateInput(now);
-  const { monthStart } = utcPeriodStarts(now);
-  const monday = currentUtcWeek(now).from;
+  const today = localDateOnly(now);
+  const { monthStart } = localPeriodStarts(now);
+  const monday = currentLocalWeek(now).from;
   const first = monday < monthStart ? monday : monthStart;
-  return { daily: `/stats/daily?from=${first}&to=${today}` };
+  return { daily: withTimeZone(`/stats/daily?from=${first}&to=${today}`) };
 }
 
 /** Indexes a daily breakdown by date. */
@@ -497,8 +498,8 @@ function weekRangeLabel(from: DateOnly, to: DateOnly): string {
 }
 
 export function getWeekView(activity: DashboardActivity | null, now: Date): WeekView {
-  const today = formatUtcDateInput(now);
-  const week = currentUtcWeek(now);
+  const today = localDateOnly(now);
+  const week = currentLocalWeek(now);
   const bars = weekdayShortNames.map((label, index) => {
     const date = addDays(week.from, index);
     const future = date > today;
@@ -522,7 +523,6 @@ export function getWeekView(activity: DashboardActivity | null, now: Date): Week
         platformKey: item.platformKey,
         platformName: item.platformName,
         totalSeconds: (current?.totalSeconds ?? 0) + item.totalSeconds,
-        source: null,
       });
     }
   }
@@ -572,8 +572,8 @@ export function getOverviewView(
   const sessions = stats?.sessionCount ?? 0;
   const topGame = stats?.topGames[0] ?? null;
   const topShare = topGame && total > 0 ? formatPercent(topGame.totalSeconds, total) : null;
-  const year = now.getUTCFullYear();
-  const monthIndex = now.getUTCMonth();
+  const year = now.getFullYear();
+  const monthIndex = now.getMonth();
 
   const bars = period === "month" ? monthBars(activity, now) : yearBars(stats, now);
   const played = bars.filter((bar) => !bar.faded && bar.value > 0);
@@ -584,7 +584,7 @@ export function getOverviewView(
   let hoursSub: string | undefined;
   if (period === "month") {
     const daysInMonth = bars.length;
-    const dayOfMonth = now.getUTCDate();
+    const dayOfMonth = now.getDate();
     if (activity !== null) {
       hoursSub = `${formatCount(played.length)} of ${formatCount(daysInMonth)} days played`;
       activityNote =
@@ -640,11 +640,11 @@ export function getOverviewView(
 }
 
 function monthBars(activity: DashboardActivity | null, now: Date): ActivityBar[] {
-  const today = formatUtcDateInput(now);
-  const { monthStart } = utcPeriodStarts(now);
-  const year = now.getUTCFullYear();
-  const month = now.getUTCMonth();
-  const daysInMonth = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+  const today = localDateOnly(now);
+  const { monthStart } = localPeriodStarts(now);
+  const year = now.getFullYear();
+  const month = now.getMonth();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
   return Array.from({ length: daysInMonth }, (_, index) => {
     const day = index + 1;
     const date = addDays(monthStart, index);
@@ -662,8 +662,8 @@ function monthBars(activity: DashboardActivity | null, now: Date): ActivityBar[]
 }
 
 function yearBars(stats: AccountStatsPeriod | null, now: Date): ActivityBar[] {
-  const year = now.getUTCFullYear();
-  const currentMonth = now.getUTCMonth() + 1;
+  const year = now.getFullYear();
+  const currentMonth = now.getMonth() + 1;
   return monthShortNames.map((label, index) => {
     const month = index + 1;
     const future = month > currentMonth;

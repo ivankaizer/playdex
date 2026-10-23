@@ -26,8 +26,8 @@ public sealed class SteamClient(HttpClient httpClient, IOptions<SteamOptions> op
             return null;
         }
 
-        var url = $"{options.Value.BaseUrl.TrimEnd('/')}/ISteamUser/GetPlayerSummaries/v0002/?key={apiKey}&steamids={steamId}";
-        var response = await httpClient.GetAsync(url, ct);
+        var url = $"{options.Value.BaseUrl.TrimEnd('/')}/ISteamUser/GetPlayerSummaries/v0002/?key={Uri.EscapeDataString(apiKey)}&steamids={Uri.EscapeDataString(steamId)}";
+        using var response = await httpClient.GetAsync(url, ct);
 
         if (response.StatusCode == HttpStatusCode.TooManyRequests)
         {
@@ -35,6 +35,13 @@ public sealed class SteamClient(HttpClient httpClient, IOptions<SteamOptions> op
             throw new ProviderPollException(
                 "Steam API rate limited.",
                 retryAfter ?? TimeSpan.FromMinutes(1));
+        }
+
+        if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
+        {
+            throw new ProviderPollException(
+                $"Steam rejected the Web API key ({(int)response.StatusCode}).",
+                authenticationFailure: true);
         }
 
         response.EnsureSuccessStatusCode();

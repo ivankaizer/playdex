@@ -51,8 +51,8 @@ public static class Extensions
 
     public static string? GetSentryDsn(IConfiguration configuration)
     {
-        return Normalize(configuration["SENTRY_DSN"])
-            ?? Normalize(configuration["Sentry:Dsn"]);
+        return NormalizeSetting(configuration["SENTRY_DSN"])
+            ?? NormalizeSetting(configuration["Sentry:Dsn"]);
     }
 
     public static double GetTraceSampleRate(IConfiguration configuration)
@@ -65,7 +65,11 @@ public static class Extensions
             : 0.2;
     }
 
-    private static string? Normalize(string? value)
+    /// <summary>
+    /// A configuration value trimmed, or null when it is blank or still a <c>__PLACEHOLDER__</c> left by a
+    /// container entrypoint.
+    /// </summary>
+    public static string? NormalizeSetting(string? value)
     {
         var normalized = value?.Trim();
         return string.IsNullOrWhiteSpace(normalized) ||

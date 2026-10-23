@@ -21,7 +21,7 @@ public sealed partial class MigrationHealthCheck(
         {
             await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
 
-            const string sql = "SELECT migration_id FROM dotnet_schema_migrations ORDER BY migration_id";
+            const string sql = """SELECT migration_id FROM dotnet_schema_migrations ORDER BY migration_id COLLATE "C" """;
             await using var command = new NpgsqlCommand(sql, connection);
             await using var reader = await command.ExecuteReaderAsync(cancellationToken);
 

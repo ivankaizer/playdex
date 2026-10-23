@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <!--
-    Shared by the launcher (src/Launcher/Host) and, from phase 2 of docs/launcher/wrapper-merge-plan.md, the Wrapper:
+    Shared by the launcher (src/Launcher/Host) and the desktop app (src/Desktop):
     the capture API client and offline queue, session tracking, game watchers, Steam and the game library.
     No UI. Trimming and Native AOT safe, because the launcher is published with Native AOT.
   -->

@@ -4,7 +4,11 @@ namespace Playdex.Persistence;
 
 public sealed class PlaydexDbContext(DbContextOptions<PlaydexDbContext> options) : DbContext(options)
 {
+    /// <summary>Unique (user_id, type, account_id) of polling integrations; see IndexesAndConstraintsMigration.</summary>
+    public const string UniqueAccountIndex = "integrations_user_type_account_unique";
+
     public DbSet<User> Users => Set<User>();
+    public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
     public DbSet<Platform> Platforms => Set<Platform>();
     public DbSet<Integration> Integrations => Set<Integration>();
     public DbSet<Game> Games => Set<Game>();
@@ -16,6 +20,8 @@ public sealed class PlaydexDbContext(DbContextOptions<PlaydexDbContext> options)
     public DbSet<UserSettings> UserSettings => Set<UserSettings>();
     public DbSet<GameConnection> GameConnections => Set<GameConnection>();
     public DbSet<NotificationChannel> NotificationChannels => Set<NotificationChannel>();
+    public DbSet<IntegrationPollBackoff> IntegrationPollBackoffs => Set<IntegrationPollBackoff>();
+    public DbSet<NotificationOutboxEntry> NotificationOutbox => Set<NotificationOutboxEntry>();
 
     public DbSet<SessionDraftBatch> SessionDraftBatches => Set<SessionDraftBatch>();
     public DbSet<SessionDraftRow> SessionDraftRows => Set<SessionDraftRow>();
@@ -26,6 +32,7 @@ public sealed class PlaydexDbContext(DbContextOptions<PlaydexDbContext> options)
         ConfigureSessionDrafts(modelBuilder);
         ConfigureAiGenerations(modelBuilder);
         ConfigureUsers(modelBuilder);
+        ConfigureRefreshTokens(modelBuilder);
         ConfigurePlatforms(modelBuilder);
         ConfigureIntegrations(modelBuilder);
         ConfigureGames(modelBuilder);
@@ -37,6 +44,48 @@ public sealed class PlaydexDbContext(DbContextOptions<PlaydexDbContext> options)
         ConfigureUserSettings(modelBuilder);
         ConfigureGameConnections(modelBuilder);
         ConfigureNotificationChannels(modelBuilder);
+        ConfigureIntegrationPollBackoff(modelBuilder);
+        ConfigureNotificationOutbox(modelBuilder);
+    }
+
+    private static void ConfigureIntegrationPollBackoff(ModelBuilder modelBuilder)
+    {
+        var entity = modelBuilder.Entity<IntegrationPollBackoff>();
+        entity.ToTable("integration_poll_backoff", table =>
+        {
+            table.HasCheckConstraint("integration_poll_backoff_failures_check", "failures >= 0");
+            table.HasCheckConstraint("integration_poll_backoff_auth_failures_check", "auth_failures >= 0");
+        });
+        entity.HasKey(row => row.IntegrationId);
+        entity.Property(row => row.IntegrationId).HasColumnName("integration_id").ValueGeneratedNever();
+        entity.Property(row => row.Failures).HasColumnName("failures");
+        entity.Property(row => row.AuthFailures).HasColumnName("auth_failures");
+        entity.Property(row => row.FailingSince).HasColumnName("failing_since");
+        entity.Property(row => row.NextPollAt).HasColumnName("next_poll_at");
+        entity.Property(row => row.UpdatedAt).HasColumnName("updated_at");
+        entity.HasOne<Integration>().WithOne().HasForeignKey<IntegrationPollBackoff>(row => row.IntegrationId)
+            .OnDelete(DeleteBehavior.Cascade);
+    }
+
+    private static void ConfigureNotificationOutbox(ModelBuilder modelBuilder)
+    {
+        var entity = modelBuilder.Entity<NotificationOutboxEntry>();
+        entity.ToTable("notification_outbox");
+        entity.HasKey(row => row.Id);
+        entity.Property(row => row.Id).HasColumnName("id").ValueGeneratedOnAdd();
+        entity.Property(row => row.DedupeKey).HasColumnName("dedupe_key");
+        entity.Property(row => row.Kind).HasColumnName("kind");
+        entity.Property(row => row.Payload).HasColumnName("payload").HasColumnType("jsonb");
+        entity.Property(row => row.Attempts).HasColumnName("attempts");
+        entity.Property(row => row.NextAttemptAt).HasColumnName("next_attempt_at");
+        entity.Property(row => row.LastError).HasColumnName("last_error");
+        entity.Property(row => row.CreatedAt).HasColumnName("created_at");
+        entity.Property(row => row.DeliveredAt).HasColumnName("delivered_at");
+        entity.Property(row => row.FailedAt).HasColumnName("failed_at");
+        entity.HasIndex(row => row.DedupeKey).IsUnique().HasDatabaseName("notification_outbox_dedupe_key_unique");
+        entity.HasIndex(row => row.NextAttemptAt)
+            .HasDatabaseName("notification_outbox_pending_idx")
+            .HasFilter("delivered_at is null and failed_at is null");
     }
 
     private static void ConfigureAiGenerations(ModelBuilder modelBuilder)
@@ -61,6 +110,7 @@ public sealed class PlaydexDbContext(DbContextOptions<PlaydexDbContext> options)
         entity.Property(row => row.ResultJson).HasColumnName("result_json").HasColumnType("jsonb");
         entity.Property(row => row.ResponsesJson).HasColumnName("responses_json").HasColumnType("jsonb");
         entity.HasIndex(row => row.CreatedAt);
+        entity.HasIndex(row => row.UserId);
         entity.HasOne<User>().WithMany().HasForeignKey(row => row.UserId).OnDelete(DeleteBehavior.Cascade);
     }
 
@@ -117,7 +167,26 @@ public sealed class PlaydexDbContext(DbContextOptions<PlaydexDbContext> options)
         entity.Property(row => row.CreatedAt).HasColumnName("created_at");
         entity.Property(row => row.UpdatedAt).HasColumnName("updated_at");
         entity.Property(row => row.IsAdmin).HasColumnName("is_admin");
+        entity.Property(row => row.TokenVersion).HasColumnName("token_version");
         entity.HasIndex(row => row.Email).IsUnique();
+    }
+
+    private static void ConfigureRefreshTokens(ModelBuilder modelBuilder)
+    {
+        var entity = modelBuilder.Entity<RefreshToken>();
+        entity.ToTable("refresh_tokens");
+        entity.HasKey(row => row.Id);
+        entity.Property(row => row.Id).HasColumnName("id").ValueGeneratedOnAdd();
+        entity.Property(row => row.UserId).HasColumnName("user_id");
+        entity.Property(row => row.FamilyId).HasColumnName("family_id");
+        entity.Property(row => row.TokenHash).HasColumnName("token_hash");
+        entity.Property(row => row.CreatedAt).HasColumnName("created_at");
+        entity.Property(row => row.ExpiresAt).HasColumnName("expires_at");
+        entity.Property(row => row.RotatedAt).HasColumnName("rotated_at");
+        entity.HasIndex(row => row.TokenHash).IsUnique();
+        entity.HasIndex(row => row.UserId);
+        entity.HasIndex(row => row.FamilyId);
+        entity.HasOne<User>().WithMany().HasForeignKey(row => row.UserId).OnDelete(DeleteBehavior.Cascade);
     }
 
     private static void ConfigureNotificationChannels(ModelBuilder modelBuilder)
@@ -181,13 +250,19 @@ public sealed class PlaydexDbContext(DbContextOptions<PlaydexDbContext> options)
         entity.Property(row => row.AccountId).HasColumnName("account_id");
         entity.Property(row => row.ApiKeyLocked).HasColumnName("api_key_locked");
         entity.Property(row => row.Active).HasColumnName("active");
+        entity.Property(row => row.PausedReason).HasColumnName("paused_reason");
+        entity.Property(row => row.PausedAt).HasColumnName("paused_at");
         entity.Property(row => row.CreatedAt).HasColumnName("created_at");
         entity.Property(row => row.UpdatedAt).HasColumnName("updated_at");
         entity.HasIndex(row => row.UserId);
         entity.HasIndex(row => row.PlatformId);
         entity.HasIndex(row => row.SessionPlatformId);
         entity.HasOne<User>().WithMany().HasForeignKey(row => row.UserId).OnDelete(DeleteBehavior.Cascade);
-        entity.HasOne<Platform>().WithMany().HasForeignKey(row => row.PlatformId).OnDelete(DeleteBehavior.NoAction);
+        entity.HasIndex(row => new { row.UserId, row.Type, row.AccountId })
+            .HasDatabaseName(UniqueAccountIndex)
+            .IsUnique()
+            .HasFilter("type <> 'api'");
+        entity.HasOne<Platform>().WithMany().HasForeignKey(row => row.PlatformId).OnDelete(DeleteBehavior.Restrict);
         entity.HasOne<Platform>().WithMany().HasForeignKey(row => row.SessionPlatformId).OnDelete(DeleteBehavior.NoAction);
     }
 
@@ -227,7 +302,9 @@ public sealed class PlaydexDbContext(DbContextOptions<PlaydexDbContext> options)
         entity.Property(row => row.EndedAt).HasColumnName("ended_at");
         entity.Property(row => row.CreatedAt).HasColumnName("created_at");
         entity.Property(row => row.UpdatedAt).HasColumnName("updated_at");
-        entity.HasOne<Game>().WithMany().HasForeignKey(row => row.GameId).OnDelete(DeleteBehavior.Cascade);
+        entity.HasIndex(row => row.GameId);
+        entity.HasIndex(row => row.StartedAt);
+        entity.HasOne<Game>().WithMany().HasForeignKey(row => row.GameId).OnDelete(DeleteBehavior.Restrict);
         entity.HasOne<User>().WithMany().HasForeignKey(row => row.UserId).OnDelete(DeleteBehavior.Restrict);
         entity.HasOne<Platform>().WithMany().HasForeignKey(row => row.PlatformId).OnDelete(DeleteBehavior.Restrict);
         entity.HasOne<Integration>().WithMany().HasForeignKey(row => row.IntegrationId).OnDelete(DeleteBehavior.Restrict);
@@ -244,6 +321,7 @@ public sealed class PlaydexDbContext(DbContextOptions<PlaydexDbContext> options)
         entity.Property(row => row.PolledAt).HasColumnName("polled_at");
         entity.Property(row => row.RawPayload).HasColumnName("raw_payload").HasColumnType("jsonb");
         entity.Property(row => row.CreatedAt).HasColumnName("created_at");
+        entity.HasIndex(row => new { row.IntegrationId, row.PolledAt }).IsDescending(false, true);
         entity.HasOne<Integration>().WithMany().HasForeignKey(row => row.IntegrationId).OnDelete(DeleteBehavior.Restrict);
         entity.HasOne<GameExternalIdentity>().WithMany().HasForeignKey(row => row.GameExternalIdentityId).OnDelete(DeleteBehavior.SetNull);
     }

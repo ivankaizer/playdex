@@ -6,7 +6,7 @@ namespace Playdex.Core;
 /// <summary>
 /// The Steam client's state, from HKCU\Software\Valve\Steam\ActiveProcess: <c>pid</c> of the running client and
 /// <c>ActiveUser</c> once someone is logged in. Steam drops a steam:// launch URL that arrives while it is starting
-/// (spike-results.md, blocker 3), so a launch first makes sure the client is up and logged in.
+/// (seen in testing), so a launch first makes sure the client is up and logged in.
 /// </summary>
 public static class SteamClient
 {
