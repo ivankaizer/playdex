@@ -14,11 +14,12 @@ public sealed class AccountsRepository(PlaydexDbContext db, IGames games)
         return await db.Integrations
             .AsNoTracking()
             .Where(pc => pc.UserId == userId)
+            // Before the projection: EF Core can't translate ordering by a member of a constructor-built DTO.
+            .OrderBy(pc => pc.Id)
             .Select(pc => new AccountSummaryDto(pc.Id,
                 pc.Type == IntegrationType.Steam ? "steam" :
                 pc.Type == IntegrationType.Psn ? "psn" :
                 pc.Type == IntegrationType.Xbox ? "xbox" : "api"))
-            .OrderBy(account => account.Id)
             .ToListAsync(ct);
     }
 
