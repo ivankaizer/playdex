@@ -9,7 +9,7 @@ RUN bun run build \
     && test -f dist/appsettings.json \
     && bun run check:csp
 
-FROM nginx:1.27-alpine
+FROM nginx:1.29-alpine
 
 COPY src/Frontend/nginx.conf /etc/nginx/conf.d/default.conf
 COPY src/Frontend/security-headers.conf /etc/nginx/snippets/security-headers.conf
