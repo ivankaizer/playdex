@@ -242,6 +242,5 @@ export function isAbortError(error: unknown): boolean {
   return error instanceof DOMException && error.name === "AbortError";
 }
 
-export function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
+/** A message for people from anything a request throws (see ./errors). */
+export { errorMessage } from "./errors";

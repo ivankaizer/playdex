@@ -154,6 +154,68 @@ public sealed class ConfigStoreTests : IDisposable
         Assert.Equal(ShellConfig.DesktopMode, store.LoadOrCreate().Shell.Mode);
     }
 
+    [Fact]
+    public void ACorruptConfigIsMovedAsideAndTheAppStartsWithDefaults()
+    {
+        // The Wrapper's old config is still there; recovering from a corrupt config doesn't migrate it again.
+        File.WriteAllText(WrapperConfig, """{ "api": { "apiKey": "wrapper-key" } }""");
+        Directory.CreateDirectory(Path.GetDirectoryName(ConfigPath)!);
+        File.WriteAllText(ConfigPath, """{ "api": { "apiKey": "key" """);
+        Assert.ThrowsAny<System.Text.Json.JsonException>(() => Store().LoadOrCreate());
+
+        var config = Store().LoadOrRecover();
+
+        Assert.Equal("", config.Api.ApiKey);
+        Assert.Empty(config.Games);
+        var aside = Assert.Single(Directory.GetFiles(Path.GetDirectoryName(ConfigPath)!, "config.json.corrupt-*"));
+        Assert.Equal("""{ "api": { "apiKey": "key" """, File.ReadAllText(aside));
+        Assert.Equal("", Store().LoadOrCreate().Api.ApiKey); // a valid default config took its place
+    }
+
+    [Fact]
+    public void AReadableConfigIsLoadedAsItIs()
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(ConfigPath)!);
+        File.WriteAllText(ConfigPath, """{ "api": { "apiKey": "key" } }""");
+        var store = Store();
+
+        Assert.Equal("key", store.LoadOrRecover().Api.ApiKey);
+        Assert.Empty(Directory.GetFiles(Path.GetDirectoryName(ConfigPath)!, "*.corrupt-*"));
+        Assert.Null(store.Reset);
+    }
+
+    [Fact]
+    public void AResetIsToldOnceWithWhereTheOldFileIs()
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(ConfigPath)!);
+        File.WriteAllText(ConfigPath, """{ "games": """);
+        var store = Store();
+
+        store.LoadOrRecover();
+
+        var reset = Assert.IsType<ConfigReset>(store.Reset);
+        var aside = Assert.Single(Directory.GetFiles(Path.GetDirectoryName(ConfigPath)!, "config.json.corrupt-*"));
+        Assert.Equal(aside, reset.MovedTo);
+        Assert.Contains(Path.GetFileName(aside), reset.Message, StringComparison.Ordinal);
+        // A Windows notification's limits.
+        Assert.InRange(ConfigReset.Title.Length, 1, 64);
+        Assert.InRange(reset.Message.Length, 1, 256);
+
+        // The next start reads the default config that took its place: nothing to tell.
+        var next = Store();
+        next.LoadOrRecover();
+        Assert.Null(next.Reset);
+    }
+
+    [Fact]
+    public void AResetWhoseFileCouldNotBeMovedStillFitsANotification()
+    {
+        var reset = new ConfigReset(ConfigPath, null);
+
+        Assert.InRange(reset.Message.Length, 1, 256);
+        Assert.DoesNotContain("corrupt", reset.Message, StringComparison.Ordinal);
+    }
+
     public void Dispose() => Directory.Delete(_directory, recursive: true);
 
     private ConfigStore Store() => new(ConfigPath, WrapperConfig, LauncherConfig);

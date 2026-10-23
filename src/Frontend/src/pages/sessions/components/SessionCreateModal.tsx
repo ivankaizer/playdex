@@ -1,6 +1,7 @@
-import { useId } from "react";
+import { useId, useRef } from "react";
 import { Cover, Dot } from "@/components/ui";
 import { cx } from "@/lib/cx";
+import { dialogKeyDown, useDialogFocus } from "@/lib/focusTrap";
 import { formatCountNoun } from "@/lib/format";
 import { platformColor } from "@/lib/platforms";
 import type { ManualMappingSearchResult, ManualPlatform } from "@/models/manual";
@@ -75,6 +76,9 @@ export function SessionCreateModal({
   onClose,
   onQueryChanged,
 }: SessionCreateModalProps) {
+  const dialogRef = useRef<HTMLElement>(null);
+  useDialogFocus(dialogRef, !embedded);
+
   const changeQuery = (value: string) => {
     onStateChange((current) => setQuery(current, value));
     onQueryChanged?.(value);
@@ -112,8 +116,12 @@ export function SessionCreateModal({
   );
 
   return (
-    <div className="pdx-modal-backdrop fixed inset-0 z-[70] flex items-start justify-center overflow-y-auto p-4 sm:items-center">
+    <div
+      className="pdx-modal-backdrop fixed inset-0 z-[70] flex items-start justify-center overflow-y-auto p-4 sm:items-center"
+      onKeyDown={(event) => dialogKeyDown(event, dialogRef.current, state.isSaving ? undefined : onClose)}
+    >
       <section
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="session-create-title"

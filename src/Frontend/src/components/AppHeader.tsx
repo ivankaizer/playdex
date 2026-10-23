@@ -1,5 +1,6 @@
 import type { Theme } from "@/lib/theme";
 import type { GameSearchResponse } from "@/models/games";
+import { AppLink } from "./AppLink";
 import { GameSearchBox } from "./GameSearchBox";
 import { ThemeToggle } from "./ThemeToggle";
 
@@ -7,6 +8,7 @@ interface AppHeaderProps {
   title: string;
   navItems: ReadonlyArray<{ label: string; path: string }>;
   path: string;
+  /** Where a game picked in the search goes. */
   onNavigate: (path: string) => void;
   onLogout: () => void;
   theme: Theme;
@@ -27,19 +29,18 @@ export function AppHeader({ title, navItems, path, onNavigate, onLogout, theme, 
           {navItems.map((item) => {
             const active = path === item.path || (item.path !== "/" && path.startsWith(`${item.path}/`));
             return (
-              <button
+              <AppLink
                 key={item.path}
-                type="button"
-                onClick={() => onNavigate(item.path)}
+                to={item.path}
                 aria-current={active ? "page" : undefined}
                 className={
                   active
-                    ? "pdx-hit rounded-full border border-pill bg-pill px-[18px] py-[8px] text-[13px] font-semibold tracking-[0.04em] text-pill-ink"
-                    : "pdx-hit rounded-full border border-line px-[18px] py-[8px] text-[13px] font-medium tracking-[0.04em] text-ink-2 transition hover:bg-surface"
+                    ? "pdx-hit rounded-full border border-pill bg-pill px-[18px] py-[8px] text-[13px] font-semibold tracking-[0.04em] text-pill-ink no-underline"
+                    : "pdx-hit rounded-full border border-line px-[18px] py-[8px] text-[13px] font-medium tracking-[0.04em] text-ink-2 no-underline transition hover:bg-surface"
                 }
               >
                 {item.label}
-              </button>
+              </AppLink>
             );
           })}
         </nav>

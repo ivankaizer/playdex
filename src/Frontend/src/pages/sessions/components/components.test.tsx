@@ -96,6 +96,28 @@ describe("SessionCreateModal", () => {
     expect(container.querySelector("[data-layout=extended-manual]")).not.toBeNull();
   });
 
+  it("closes on Escape as a dialog, but not while saving", () => {
+    const onClose = vi.fn();
+    const state = openSessionCreate("historical", new Date());
+    const { rerender } = render(<SessionCreateModal state={state} onStateChange={() => undefined} onClose={onClose} />);
+
+    fireEvent.keyDown(screen.getByRole("searchbox", { name: "Game" }), { key: "Escape" });
+    expect(onClose).toHaveBeenCalledTimes(1);
+
+    rerender(<SessionCreateModal state={{ ...state, isSaving: true }} onStateChange={() => undefined} onClose={onClose} />);
+    fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("embedded, Escape leaves the page alone", () => {
+    const onClose = vi.fn();
+    render(<SessionCreateModal embedded state={openSessionCreate("historical", new Date())} onStateChange={() => undefined} onClose={onClose} />);
+
+    fireEvent.keyDown(screen.getByRole("searchbox", { name: "Game" }), { key: "Escape" });
+
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
   it("a platform without a matching option shows no selection like Blazor", () => {
     const state = { ...openSessionCreate("historical", new Date()), platformKey: "switch" };
     const { container } = render(<CreateModalHarness initial={state} embedded />);
@@ -299,6 +321,24 @@ describe("DraftWorkspace", () => {
   }
 
   afterEach(() => vi.unstubAllGlobals());
+
+  it("closes on Escape as a dialog and keeps Escape for itself embedded", async () => {
+    stubFetch(() => json([]));
+    const onClose = vi.fn();
+    const { container, unmount } = render(<DraftWorkspace capabilities={capabilities()} onClose={onClose} />);
+    await waitFor(() => expect(container.innerHTML).toContain("Nothing waiting for review"));
+
+    fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
+
+    await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+    unmount();
+
+    const embedded = render(<DraftWorkspace embedded capabilities={capabilities()} onClose={onClose} />);
+    await waitFor(() => expect(embedded.container.innerHTML).toContain("Nothing waiting for review"));
+    fireEvent.keyDown(embedded.container.querySelector("textarea")!, { key: "Escape" });
+    await Promise.resolve();
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
 
   it.each([
     [30, "for 30 days"],

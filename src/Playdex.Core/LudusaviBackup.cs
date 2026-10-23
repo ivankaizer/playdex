@@ -49,8 +49,19 @@ public sealed class BackupStateStore(string path) : IDisposable
             return new BackupState();
         }
 
-        await using var stream = File.OpenRead(PathToState);
-        var state = await JsonSerializer.DeserializeAsync(stream, BackupJson.Default.BackupState, cancellationToken) ?? new BackupState();
+        BackupState state;
+        try
+        {
+            await using var stream = File.OpenRead(PathToState);
+            state = await JsonSerializer.DeserializeAsync(stream, BackupJson.Default.BackupState, cancellationToken) ?? new BackupState();
+        }
+        catch (JsonException ex)
+        {
+            // The app still starts: every game's backup is due again, and the old state is kept aside.
+            Log.Error($"backups: {PathToState} is not valid JSON; starting with no backup history", ex);
+            CorruptFile.MoveAside(PathToState);
+            return new BackupState();
+        }
         state.Games = new Dictionary<string, GameBackupState>(
             state.Games ?? new Dictionary<string, GameBackupState>(),
             StringComparer.OrdinalIgnoreCase);
@@ -392,34 +403,62 @@ public sealed partial class BackupCoordinator : IDisposable
         }
     }
 
+    /// <summary>
+    /// Backs up every due game now and every <see cref="SchedulerInterval"/> until disposed. A pass that fails is
+    /// logged and the next one runs on time: the caller discards this task, so an exception would end the schedule
+    /// without a trace.
+    /// </summary>
     public async Task RunSchedulerAsync()
     {
-        try
+        while (!cancellation.IsCancellationRequested)
         {
-            while (!cancellation.IsCancellationRequested)
+            try
             {
                 await RunDueOnceAsync(DateTimeOffset.Now, cancellation.Token);
+            }
+            catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
+            {
+                return;
+            }
+            catch (Exception ex)
+            {
+                LogSchedulerPassFailed(logger, ex);
+            }
+            try
+            {
                 await Task.Delay(SchedulerInterval, cancellation.Token);
             }
-        }
-        catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
-        {
+            catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
+            {
+                return;
+            }
         }
     }
 
     internal async Task RunDueOnceAsync(DateTimeOffset now, CancellationToken cancellationToken)
     {
         if (!config.Ludusavi.IsConfigured) return;
-        foreach (var game in config.Games.Values.Where(game => game.Backup.DailyEnabled))
+        // A copy: the app adds and removes games (on the UI thread) while this awaits a backup.
+        var games = config.Games.Values.Where(game => game.Backup.DailyEnabled).ToList();
+        foreach (var game in games)
         {
-            var gameState = GetState(game.GameId);
-            if (!IsDue(gameState, now)) continue;
-            if (GameLock.IsHeld(config.Storage.StateDirectory, game.GameId))
+            if (!config.Games.ContainsKey(game.GameId)) continue; // removed during the pass
+            try
             {
-                LogBackupDeferred(logger, game.GameId);
-                continue;
+                var gameState = GetState(game.GameId);
+                if (!IsDue(gameState, now)) continue;
+                if (GameLock.IsHeld(config.Storage.StateDirectory, game.GameId))
+                {
+                    LogBackupDeferred(logger, game.GameId);
+                    continue;
+                }
+                await QueueAsync(game, scheduled: true, cancellationToken);
             }
-            await QueueAsync(game, scheduled: true, cancellationToken);
+            catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
+            {
+                // One game's failure (a state file that can't be written) doesn't hold up the others.
+                LogBackupFailed(logger, game.GameId, ex);
+            }
         }
     }
 
@@ -541,4 +580,7 @@ public sealed partial class BackupCoordinator : IDisposable
 
     [LoggerMessage(EventId = 8, Level = LogLevel.Information, Message = "Saved Ludusavi game title for {GameId}: {LudusaviGameTitle}")]
     private static partial void LogLudusaviTitleSaved(ILogger logger, string gameId, string ludusaviGameTitle);
+
+    [LoggerMessage(EventId = 9, Level = LogLevel.Error, Message = "Ludusavi backup scheduler pass failed; the next pass runs as scheduled")]
+    private static partial void LogSchedulerPassFailed(ILogger logger, Exception exception);
 }

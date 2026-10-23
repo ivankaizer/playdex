@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router";
 import { ThemeProvider } from "@/lib/theme";
 import { SessionCreatePage } from "./SessionCreatePage";
@@ -92,7 +92,7 @@ describe("SessionsPage", () => {
     expect(screen.getAllByLabelText("Ignored from stats")).toHaveLength(2);
     expect(container.querySelectorAll("button[data-action=edit]")).toHaveLength(1);
     expect(screen.getByRole("button", { name: "Actions for Hades II" })).toHaveAttribute("aria-haspopup", "menu");
-    expect(row.querySelector("button[data-row-index]")).toHaveAttribute("title", "Hades II");
+    expect(row.querySelector("a[data-row-index]")).toHaveAttribute("title", "Hades II");
     expect(container.querySelector("button[data-action=load-more]")).toBeNull();
   });
 
@@ -246,7 +246,7 @@ describe("SessionCreatePage", () => {
     expect(container.querySelector("button[data-action=save]")).toBeDisabled();
     expect(container).toHaveTextContent("Choose a game to continue.");
     const breadcrumb = screen.getByRole("navigation", { name: "Breadcrumb" });
-    fireEvent.click(breadcrumb.querySelector("button")!);
+    fireEvent.click(within(breadcrumb).getByRole("link", { name: "Sessions" }));
     await waitFor(() => expect(screen.getByTestId("location")).toHaveTextContent("/sessions"));
   });
 });

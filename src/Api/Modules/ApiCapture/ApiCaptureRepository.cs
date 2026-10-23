@@ -42,6 +42,22 @@ public sealed class ApiCaptureRepository(PlaydexDbContext db)
             .Select(p => new ApiCapturePlatformDto(p.Key, p.Name))
             .ToListAsync(ct);
     }
+
+    /// <summary>
+    /// When the sessions the API key has of a game on a platform ran that overlap <paramref name="from"/>..<paramref name="to"/>;
+    /// an ongoing session has no end.
+    /// </summary>
+    public async Task<List<(DateTimeOffset StartedAt, DateTimeOffset? EndedAt)>> ListSessionRanges(
+        long credentialId, long gameId, long platformId, DateTimeOffset from, DateTimeOffset to, CancellationToken ct)
+    {
+        var rows = await db.PlaySessions
+            .AsNoTracking()
+            .Where(ps => ps.IntegrationId == credentialId && ps.GameId == gameId && ps.PlatformId == platformId
+                && ps.StartedAt < to && (ps.EndedAt == null || ps.EndedAt > from))
+            .Select(ps => new { ps.StartedAt, ps.EndedAt })
+            .ToListAsync(ct);
+        return rows.ConvertAll(row => (row.StartedAt, row.EndedAt));
+    }
 }
 
 public sealed class ApiIntegrationRow

@@ -3,12 +3,13 @@ namespace Playdex.Core;
 /// <summary>
 /// Core's log. By default an append-only text file, <see cref="Paths.LogFile"/> (the launcher's); another app picks its
 /// own file with <see cref="UseFile"/>, or routes lines to its own logging with <see cref="UseSink"/>. Classes that take
-/// an <c>ILogger</c> reach it through <see cref="LogLoggerFactory"/>. Never called on the input thread.
+/// an <c>ILogger</c> reach it through <see cref="LogLoggerFactory"/>. Never called on the input thread. The file rolls
+/// over by size (<see cref="RollingLogFile"/>), so an app that runs for weeks in the tray keeps a few megabytes of logs.
 /// </summary>
 public static class Log
 {
     private static readonly Lock _gate = new();
-    private static StreamWriter? _writer;
+    private static RollingLogFile? _writer;
     private static Action<string>? _sink;
     private static string _file = Paths.LogFile;
 
@@ -37,14 +38,10 @@ public static class Log
         {
             try
             {
-                if (_writer is null)
-                {
-                    Directory.CreateDirectory(Path.GetDirectoryName(_file)!);
-                    _writer = new StreamWriter(new FileStream(_file, FileMode.Append, FileAccess.Write, FileShare.ReadWrite)) { AutoFlush = true };
-                }
+                _writer ??= new RollingLogFile(_file);
                 _writer.WriteLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff} [{Environment.CurrentManagedThreadId}] {message}");
             }
-            catch (IOException)
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
                 // Logging must never take the app down.
             }
@@ -53,6 +50,125 @@ public static class Log
     }
 
     public static void Error(string message, Exception ex) => Info($"ERROR {message}: {ex}");
+
+    /// <summary>
+    /// Deletes the logs in <paramref name="directory"/> matching <paramref name="pattern"/> (such as "run-*.log", one
+    /// file per day) last written more than <paramref name="maxAge"/> ago. Best effort: a file in use stays.
+    /// </summary>
+    public static void DeleteOlderThan(string directory, string pattern, TimeSpan maxAge)
+    {
+        try
+        {
+            var cutoff = DateTime.UtcNow - maxAge;
+            foreach (var file in new DirectoryInfo(directory).EnumerateFiles(pattern))
+            {
+                if (file.LastWriteTimeUtc < cutoff)
+                {
+                    try
+                    {
+                        file.Delete();
+                    }
+                    catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                    {
+                    }
+                }
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+        }
+    }
+}
+
+/// <summary>
+/// An append-only text file that rolls over by size: once it reaches <paramref name="maxBytes"/>, name.log becomes
+/// name.1.log (name.1.log becomes name.2.log, and so on), and the oldest beyond <paramref name="keptFiles"/> is deleted.
+/// Several processes may append to one file (each game's launcher does); while another one has it open it can't be
+/// renamed, so the roll is tried again after another <paramref name="maxBytes"/>. Not thread-safe: <see cref="Log"/>
+/// holds its lock around every call.
+/// </summary>
+internal sealed class RollingLogFile(string path, long maxBytes = RollingLogFile.DefaultMaxBytes, int keptFiles = RollingLogFile.DefaultKeptFiles) : IDisposable
+{
+    public const long DefaultMaxBytes = 5 * 1024 * 1024;
+    public const int DefaultKeptFiles = 3;
+
+    private StreamWriter? _writer;
+
+    // How far past maxBytes the next roll waits: the size the log had when another process kept it from rolling.
+    private long _rollDeferredBy;
+
+    public void WriteLine(string line)
+    {
+        if (_writer is null)
+        {
+            Open();
+            if (_writer!.BaseStream.Length >= maxBytes + _rollDeferredBy)
+            {
+                Roll();
+            }
+        }
+        _writer!.WriteLine(line);
+        if (_writer.BaseStream.Length >= maxBytes + _rollDeferredBy)
+        {
+            Roll();
+        }
+    }
+
+    /// <summary>name.1.log for 1: the file the log rolled into <paramref name="generation"/> times ago.</summary>
+    public static string Rolled(string path, int generation) =>
+        Path.Combine(Path.GetDirectoryName(path) ?? "", $"{Path.GetFileNameWithoutExtension(path)}.{generation}{Path.GetExtension(path)}");
+
+    public void Dispose()
+    {
+        _writer?.Dispose();
+        _writer = null;
+    }
+
+    private void Open()
+    {
+        if (Path.GetDirectoryName(path) is { Length: > 0 } directory)
+        {
+            Directory.CreateDirectory(directory);
+        }
+        _writer = new StreamWriter(new FileStream(path, FileMode.Append, FileAccess.Write, FileShare.ReadWrite)) { AutoFlush = true };
+    }
+
+    private void Roll()
+    {
+        var length = _writer!.BaseStream.Length;
+        _writer.Dispose();
+        _writer = null;
+        var rolling = $"{path}.rolling";
+        try
+        {
+            // First out of the way: this fails, and nothing else moves, while another process has the log open.
+            File.Move(path, rolling, overwrite: true);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            _rollDeferredBy = length;
+            Open();
+            return;
+        }
+        try
+        {
+            File.Delete(Rolled(path, keptFiles));
+            for (var generation = keptFiles - 1; generation >= 1; generation--)
+            {
+                if (File.Exists(Rolled(path, generation)))
+                {
+                    File.Move(Rolled(path, generation), Rolled(path, generation + 1), overwrite: true);
+                }
+            }
+            File.Move(rolling, Rolled(path, 1), overwrite: true);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // An older log in use (open in an editor): keep going in a fresh file; the next roll tidies up.
+        }
+        _rollDeferredBy = 0;
+        Open();
+    }
 }
 
 /// <summary>

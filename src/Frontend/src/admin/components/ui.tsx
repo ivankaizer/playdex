@@ -1,5 +1,4 @@
 import {
-  useEffect,
   useId,
   useRef,
   type ButtonHTMLAttributes,
@@ -10,6 +9,7 @@ import {
 } from "react";
 import { CardHeading } from "@/components/ui";
 import { cx } from "@/lib/cx";
+import { dialogKeyDown, useDialogFocus } from "@/lib/focusTrap";
 
 type Variant = "primary" | "secondary" | "accent" | "danger";
 
@@ -221,8 +221,6 @@ export function Pager({
   );
 }
 
-const focusableSelector = 'input, select, textarea, button, a[href], [tabindex]:not([tabindex="-1"])';
-
 /**
  * Centered dialog over a blurred backdrop. Focuses the first form control on open, keeps Tab inside,
  * closes on Escape or a backdrop click (unless busy) and returns focus to the opener on close.
@@ -242,37 +240,9 @@ export function Modal({
 }) {
   const titleId = useId();
   const dialogRef = useRef<HTMLElement>(null);
+  useDialogFocus(dialogRef);
 
-  useEffect(() => {
-    const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    const dialog = dialogRef.current;
-    const first =
-      dialog?.querySelector<HTMLElement>("input, select, textarea") ?? dialog?.querySelector<HTMLElement>(focusableSelector);
-    first?.focus();
-    return () => opener?.focus();
-  }, []);
-
-  const onKeyDown = (event: KeyboardEvent) => {
-    if (event.key === "Escape" && !busy) {
-      event.stopPropagation();
-      onClose();
-      return;
-    }
-    if (event.key !== "Tab" || !dialogRef.current) return;
-    const items = [...dialogRef.current.querySelectorAll<HTMLElement>(focusableSelector)].filter(
-      (element) => !element.hasAttribute("disabled"),
-    );
-    if (items.length === 0) return;
-    const first = items[0];
-    const last = items[items.length - 1];
-    if (event.shiftKey && document.activeElement === first) {
-      event.preventDefault();
-      last.focus();
-    } else if (!event.shiftKey && document.activeElement === last) {
-      event.preventDefault();
-      first.focus();
-    }
-  };
+  const onKeyDown = (event: KeyboardEvent) => dialogKeyDown(event, dialogRef.current, busy ? undefined : onClose);
 
   return (
     <div

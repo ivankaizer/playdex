@@ -5,6 +5,7 @@ import type { AccountStatsPeriod } from "@/models/stats";
 import {
   beginRefresh,
   completeRefresh,
+  completeSection,
   dailySessionCounts,
   dailyTotals,
   dashboardActivityRequests,
@@ -15,7 +16,7 @@ import {
   getTodayView,
   getWeekView,
   greetingFor,
-  failRefresh,
+  failSection,
   getCurrentSession,
   getStatsView,
   getTodayPlatforms,
@@ -26,7 +27,6 @@ import {
   todaySeconds,
   todaySessionPageItems,
   todaySessionsTotalPages,
-  waitAllOrCancel,
   type DashboardSnapshot,
 } from "./dashboardState";
 
@@ -125,13 +125,13 @@ describe("dashboardRequests", () => {
 });
 
 describe("dashboard refresh state", () => {
-  it("is all-or-nothing and a silent refresh does not show the skeleton", () => {
+  it("loads every panel and a silent refresh does not show the skeletons", () => {
     const data = snapshot();
     let state = beginRefresh(initialDashboardState, false);
-    expect(state.isDashboardLoading).toBe(true);
+    expect(Object.values(state.loading)).toEqual([true, true, true, true, true]);
     state = completeRefresh(state, data, now);
 
-    expect(state.isDashboardLoading).toBe(false);
+    expect(Object.values(state.loading)).toEqual([false, false, false, false, false]);
     expect(state.todaySessions).toHaveLength(1);
     expect(state.currentSession).toBe(data.currentSession);
     expect(state.activeManualSession).toBe(data.activeManualSession);
@@ -139,17 +139,38 @@ describe("dashboard refresh state", () => {
     expect(state.yearlyStats).toBe(data.yearlyStats);
 
     state = beginRefresh(state, true);
-    expect(state.isDashboardLoading).toBe(false);
-    state = failRefresh(state, "Dashboard unavailable.");
+    expect(Object.values(state.loading)).toEqual([false, false, false, false, false]);
+  });
 
-    expect(state.todaySessions).toEqual([]);
-    expect(state.todayPlatformTotals).toEqual([]);
-    expect(state.currentSession).toBeNull();
-    expect(state.activeManualSession).toBeNull();
-    expect(state.monthlyStats).toBeNull();
+  it("keeps the other panels when one panel's requests fail", () => {
+    const data = snapshot();
+    let state = beginRefresh(initialDashboardState, false);
+    state = completeSection(state, "live", { currentSession: data.currentSession, activeManualSession: data.activeManualSession }, now);
+    state = completeSection(state, "month", { monthlyStats: data.monthlyStats }, now);
+    state = failSection(state, "year", "Playdex ran into a problem on its side.");
+
+    expect(state.currentSession).toBe(data.currentSession);
+    expect(state.monthlyStats).toBe(data.monthlyStats);
     expect(state.yearlyStats).toBeNull();
-    expect(state.dashboardError).toBe("Dashboard unavailable.");
-    expect(beginRefresh(state, true).dashboardError).toBe("");
+    expect(state.errors).toEqual({ live: "", today: "", recent: "", month: "", year: "Playdex ran into a problem on its side." });
+    expect(state.loading).toEqual({ live: false, today: true, recent: true, month: false, year: false });
+
+    state = completeSection(
+      state,
+      "today",
+      { todaySessions: data.todaySessions, todaySessionCount: 4, todayPlatformTotals: data.todayPlatformTotals },
+      now,
+    );
+    expect(state.todaySessionCards).toHaveLength(1);
+    expect(state.todaySessionCount).toBe(4);
+
+    state = failSection(state, "today", "Can't reach Playdex.");
+    expect(state.todaySessions).toEqual([]);
+    expect(state.todaySessionCards).toEqual([]);
+    expect(state.todayPlatformTotals).toEqual([]);
+    expect(state.currentSession).toBe(data.currentSession);
+
+    expect(beginRefresh(state, true).errors.year).toBe("");
   });
 
   it("derives cards, totals and current session with matching formatting and rounding", () => {
@@ -242,23 +263,6 @@ describe("dashboard refresh state", () => {
     expect(view.platforms.map((item) => item.label)).toEqual(["PlayStation Network", "PlayStation 5"]);
     expect(view.platforms.map((item) => item.key)).toEqual(["psn", "ps5"]);
     expect(view.topTitle).toBe("—");
-  });
-});
-
-describe("waitAllOrCancel", () => {
-  it("reports the first failure without waiting for an unresolved sibling", async () => {
-    const sibling = new AbortController();
-    const failure = new Error("first request failed");
-    const unresolved = new Promise<number>(() => {});
-
-    await expect(waitAllOrCancel<[number, number]>([unresolved, Promise.reject(failure)], sibling)).rejects.toBe(failure);
-    expect(sibling.signal.aborted).toBe(true);
-  });
-
-  it("resolves all values in order", async () => {
-    const sibling = new AbortController();
-    await expect(waitAllOrCancel<[number, string]>([Promise.resolve(1), Promise.resolve("a")], sibling)).resolves.toEqual([1, "a"]);
-    expect(sibling.signal.aborted).toBe(false);
   });
 });
 

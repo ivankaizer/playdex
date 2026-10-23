@@ -114,21 +114,37 @@ public sealed class ApiCaptureEndToEndTests(WrapperPostgresFixture postgres)
         }
         finally
         {
-            await using var cleanup = new NpgsqlCommand("""
-                delete from play_sessions where integration_id = $1;
-                delete from integrations where id = $1;
-                with deleted_identity as (
-                    delete from game_external_identities where external_id = $2 returning game_id
-                )
-                delete from games where id in (select game_id from deleted_identity);
-                delete from users where id = $3;
-                """, connection);
-            cleanup.Parameters.AddWithValue(integrationId);
-            cleanup.Parameters.AddWithValue($"app-{suffix}");
-            cleanup.Parameters.AddWithValue(userId);
+            // Npgsql refuses several statements in one command with positional ($n) parameters (42601), so it is a
+            // batch, one statement each, children before what they reference.
+            await using var cleanup = new NpgsqlBatch(connection)
+            {
+                BatchCommands =
+                {
+                    Delete("delete from play_sessions where integration_id = $1", integrationId),
+                    Delete("delete from integrations where id = $1", integrationId),
+                    Delete("""
+                        with deleted_identity as (
+                            delete from game_external_identities where external_id = $1 returning game_id
+                        )
+                        delete from games where id in (select game_id from deleted_identity)
+                        """, $"app-{suffix}"),
+                    Delete("delete from users where id = $1", userId),
+                },
+            };
             await cleanup.ExecuteNonQueryAsync();
+            Assert.Equal(0L, await Count("select count(*) from play_sessions where integration_id = $1", integrationId));
+            Assert.Equal(0L, await Count("select count(*) from users where id = $1", userId));
+            Assert.Equal(0L, await Count("select count(*) from game_external_identities where external_id = $1", $"app-{suffix}"));
+
+            async Task<long> Count(string sql, object value)
+            {
+                await using var count = new NpgsqlCommand(sql, connection) { Parameters = { new() { Value = value } } };
+                return (long)(await count.ExecuteScalarAsync())!;
+            }
         }
     }
+
+    private static NpgsqlBatchCommand Delete(string sql, object value) => new(sql) { Parameters = { new() { Value = value } } };
 
     private static void ConfigureHost()
     {

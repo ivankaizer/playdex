@@ -54,19 +54,32 @@ function localPeriodStarts(now: Date): { monthStart: string; yearStart: string }
 }
 
 /**
- * Waits for every request; on the first failure cancels the siblings and rethrows
- * that failure without waiting for the remaining requests.
+ * The dashboard's panels, each loaded on its own: one failing endpoint leaves an error in its panel and the rest of
+ * the dashboard as it is. "live": the running session; "today": today's total; "recent": recent sessions; "month" and
+ * "year": the overview's two periods.
  */
-export async function waitAllOrCancel<T extends readonly unknown[]>(
-  requests: { [K in keyof T]: Promise<T[K]> },
-  siblingCancellation: AbortController,
-): Promise<T> {
-  try {
-    return (await Promise.all(requests)) as unknown as T;
-  } catch (error) {
-    siblingCancellation.abort();
-    throw error;
-  }
+export type DashboardSection = "live" | "today" | "recent" | "month" | "year";
+
+/** What each panel's requests bring back. */
+export interface DashboardSectionData {
+  live: { currentSession: AccountSession | null; activeManualSession: ManualActiveSession | null };
+  today: { todaySessions: AccountSession[]; todaySessionCount: number; todayPlatformTotals: AccountPlatformStat[] };
+  recent: { recentSessions: AccountSession[] };
+  month: { monthlyStats: AccountStatsPeriod };
+  year: { yearlyStats: AccountStatsPeriod };
+}
+
+/** A panel without data: what a failed load leaves. */
+const emptySections: Record<DashboardSection, Partial<DashboardState>> = {
+  live: { currentSession: null, activeManualSession: null },
+  today: { todaySessions: [], todaySessionCount: 0, todayPlatformTotals: [] },
+  recent: { recentSessions: [] },
+  month: { monthlyStats: null },
+  year: { yearlyStats: null },
+};
+
+function sectionFlags<T>(value: T): Record<DashboardSection, T> {
+  return { live: value, today: value, recent: value, month: value, year: value };
 }
 
 export interface DashboardSnapshot {
@@ -136,8 +149,10 @@ export interface DashboardState {
   activeManualSession: ManualActiveSession | null;
   monthlyStats: AccountStatsPeriod | null;
   yearlyStats: AccountStatsPeriod | null;
-  isDashboardLoading: boolean;
-  dashboardError: string;
+  /** Panels whose data is loading (they show a skeleton). */
+  loading: Record<DashboardSection, boolean>;
+  /** Each panel's load error; "" when it loaded. */
+  errors: Record<DashboardSection, string>;
   todaySessionsPage: number;
 }
 
@@ -151,48 +166,67 @@ export const initialDashboardState: DashboardState = {
   activeManualSession: null,
   monthlyStats: null,
   yearlyStats: null,
-  isDashboardLoading: false,
-  dashboardError: "",
+  loading: sectionFlags(false),
+  errors: sectionFlags(""),
   todaySessionsPage: 1,
 };
 
+/** Every panel reloads; a silent refresh (after a live action) keeps showing the current data meanwhile. */
 export function beginRefresh(state: DashboardState, silent: boolean): DashboardState {
-  return { ...state, isDashboardLoading: silent ? state.isDashboardLoading : true, dashboardError: "" };
+  return { ...state, loading: silent ? state.loading : sectionFlags(true), errors: sectionFlags("") };
 }
 
+/** One panel's data arrived. */
+export function completeSection<S extends DashboardSection>(
+  state: DashboardState,
+  section: S,
+  data: DashboardSectionData[S],
+  now: Date,
+): DashboardState {
+  const next: DashboardState = {
+    ...state,
+    ...data,
+    loading: { ...state.loading, [section]: false },
+    errors: { ...state.errors, [section]: "" },
+  };
+  if (section === "today") {
+    next.todaySessionCards = createTodaySessionCards(next.todaySessions, now);
+    next.todaySessionsPage = 1;
+  }
+  return next;
+}
+
+/** One panel's requests failed: it shows the error, every other panel keeps its data. */
+export function failSection(state: DashboardState, section: DashboardSection, error: string): DashboardState {
+  const next: DashboardState = {
+    ...state,
+    ...emptySections[section],
+    loading: { ...state.loading, [section]: false },
+    errors: { ...state.errors, [section]: error },
+  };
+  if (section === "today") {
+    next.todaySessionCards = [];
+    next.todaySessionsPage = 1;
+  }
+  return next;
+}
+
+/** Every panel at once, from a full snapshot. */
 export function completeRefresh(state: DashboardState, snapshot: DashboardSnapshot, now: Date): DashboardState {
-  return {
-    ...state,
-    todaySessions: snapshot.todaySessions,
-    todaySessionCards: createTodaySessionCards(snapshot.todaySessions, now),
-    todaySessionCount: snapshot.todaySessionCount,
-    recentSessions: snapshot.recentSessions ?? [],
-    todayPlatformTotals: snapshot.todayPlatformTotals,
-    currentSession: snapshot.currentSession,
-    activeManualSession: snapshot.activeManualSession,
-    monthlyStats: snapshot.monthlyStats,
-    yearlyStats: snapshot.yearlyStats,
-    isDashboardLoading: false,
-    todaySessionsPage: 1,
-  };
-}
-
-export function failRefresh(state: DashboardState, error: string): DashboardState {
-  return {
-    ...state,
-    todaySessions: [],
-    todaySessionCards: [],
-    todaySessionCount: 0,
-    recentSessions: [],
-    todayPlatformTotals: [],
-    currentSession: null,
-    activeManualSession: null,
-    monthlyStats: null,
-    yearlyStats: null,
-    isDashboardLoading: false,
-    dashboardError: error,
-    todaySessionsPage: 1,
-  };
+  let next = completeSection(state, "live", { currentSession: snapshot.currentSession, activeManualSession: snapshot.activeManualSession }, now);
+  next = completeSection(
+    next,
+    "today",
+    {
+      todaySessions: snapshot.todaySessions,
+      todaySessionCount: snapshot.todaySessionCount,
+      todayPlatformTotals: snapshot.todayPlatformTotals,
+    },
+    now,
+  );
+  next = completeSection(next, "recent", { recentSessions: snapshot.recentSessions ?? [] }, now);
+  next = completeSection(next, "month", { monthlyStats: snapshot.monthlyStats }, now);
+  return completeSection(next, "year", { yearlyStats: snapshot.yearlyStats }, now);
 }
 
 export function todayHours(state: DashboardState): string {

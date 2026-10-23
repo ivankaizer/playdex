@@ -22,16 +22,92 @@ public sealed class ApiCaptureService(
     }
 
     public Task<ApiSessionResponseDto?> RecordSession(
-        string apiKey, int durationInSeconds, string gameTitle, string gameId, string? gameProvider, string platform,
-        CancellationToken ct) =>
+        string apiKey, int durationInSeconds, DateTimeOffset? startedAt, string gameTitle, string gameId, string? gameProvider,
+        string platform, CancellationToken ct) =>
         Capture(apiKey, async credential =>
         {
             var (resolvedGameId, platformId) = await ResolveGame(gameTitle, gameId, gameProvider, platform, ct);
-            var now = DateTimeOffset.UtcNow;
-            var sessionId = await sessions.RecordCapture(
-                credential.Id, credential.UserId, resolvedGameId, platformId, now.AddSeconds(-durationInSeconds), now, ct);
-            return new ApiSessionResponseDto(sessionId);
+            var (start, end) = RecordedRange(DateTimeOffset.UtcNow, durationInSeconds, startedAt);
+            IReadOnlyList<(DateTimeOffset StartedAt, DateTimeOffset EndedAt)> pieces = [(start, end)];
+            if (startedAt is not null)
+            {
+                // A session with its real start can be one the server partly has already: play a client sends after an
+                // outage longer than the ping timeout (the server closed its session 3 minutes after the last ping it got),
+                // or a send repeated because its answer was lost. Only the time the server doesn't have yet is recorded.
+                // Capture holds the integration's session lock, so two sends of the same session can't both miss each other.
+                var recorded = await repository.ListSessionRanges(credential.Id, resolvedGameId, platformId, start, end, ct);
+                pieces = Uncovered(start, end, recorded);
+            }
+
+            long? sessionId = null;
+            var recordedSeconds = 0;
+            foreach (var (from, to) in pieces)
+            {
+                var id = await sessions.RecordCapture(
+                    credential.Id, credential.UserId, resolvedGameId, platformId, from, to, ct);
+                sessionId ??= id;
+                recordedSeconds += (int)(to - from).TotalSeconds;
+            }
+
+            return new ApiSessionResponseDto(sessionId, recordedSeconds);
         }, ct);
+
+    /// <summary>
+    /// The parts of <paramref name="start"/>..<paramref name="end"/> that none of <paramref name="recorded"/> (sessions
+    /// the server has, an ongoing one with no end) overlap, in order; parts under a second are left out.
+    /// </summary>
+    public static IReadOnlyList<(DateTimeOffset StartedAt, DateTimeOffset EndedAt)> Uncovered(
+        DateTimeOffset start, DateTimeOffset end, IEnumerable<(DateTimeOffset StartedAt, DateTimeOffset? EndedAt)> recorded)
+    {
+        var pieces = new List<(DateTimeOffset, DateTimeOffset)>();
+        void Add(DateTimeOffset from, DateTimeOffset to)
+        {
+            if (to - from >= TimeSpan.FromSeconds(1))
+            {
+                pieces.Add((from, to));
+            }
+        }
+
+        var cursor = start;
+        foreach (var (from, to) in recorded.OrderBy(session => session.StartedAt))
+        {
+            if (from >= end)
+            {
+                break;
+            }
+            var until = to ?? DateTimeOffset.MaxValue;
+            if (until <= cursor)
+            {
+                continue;
+            }
+            if (from > cursor)
+            {
+                Add(cursor, from);
+            }
+            cursor = until;
+            if (cursor >= end)
+            {
+                return pieces;
+            }
+        }
+        Add(cursor, end);
+        return pieces;
+    }
+
+    /// <summary>
+    /// When a recorded session ran: from <paramref name="startedAt"/> for <paramref name="durationInSeconds"/> (a session
+    /// a client kept offline and sends later), or ending <paramref name="now"/> without a start. A start that would end
+    /// the session after now (a client clock ahead of the server's) ends it now instead, so no session is in the future.
+    /// </summary>
+    public static (DateTimeOffset StartedAt, DateTimeOffset EndedAt) RecordedRange(
+        DateTimeOffset now, int durationInSeconds, DateTimeOffset? startedAt)
+    {
+        var duration = TimeSpan.FromSeconds(durationInSeconds);
+        return startedAt is { } start && start + duration <= now
+            ? (start.ToUniversalTime(), (start + duration).ToUniversalTime())
+            : (now - duration, now);
+    }
+
 
     public Task<ApiSessionStartResponseDto?> StartSession(
         string apiKey, string gameTitle, string gameId, string? gameProvider, string platform,

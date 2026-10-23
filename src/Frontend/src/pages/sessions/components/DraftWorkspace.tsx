@@ -3,6 +3,7 @@ import { Cover } from "@/components/ui";
 import { apiRequest, errorMessage } from "@/lib/api";
 import { cx } from "@/lib/cx";
 import { localDateOnly } from "@/lib/dates";
+import { dialogKeyDown, useDialogFocus } from "@/lib/focusTrap";
 import { formatCount, formatCountNoun } from "@/lib/format";
 import type { DraftAcceptRequest, DraftAcceptResponse, DraftBatchDto, DraftCapabilities, DraftRowDto } from "@/models/drafts";
 import type { ManualMappingSearchResponse, ManualMappingSearchResult, ManualPlatform } from "@/models/manual";
@@ -140,6 +141,8 @@ export function DraftWorkspace({
   const requestId = useRef(newGuid());
   const generatedBatchId = useRef<string | null>(null);
   const pasteArea = useRef<HTMLDivElement>(null);
+  const dialogRef = useRef<HTMLElement>(null);
+  useDialogFocus(dialogRef, !embedded);
   const saveQueue = useRef(new Map<string, Promise<boolean>>());
   const props = useRef({ capabilities, onClose, onAccepted, onToast, onViewChange, onBatchesChange });
 
@@ -537,8 +540,12 @@ export function DraftWorkspace({
   const shownBatches = showAllBatches ? state.batches : state.batches.slice(0, VisibleBatchCount);
 
   return (
-    <div className={embedded ? "w-full" : "pdx-modal-backdrop fixed inset-0 z-[80] overflow-y-auto p-4"}>
+    <div
+      className={embedded ? "w-full" : "pdx-modal-backdrop fixed inset-0 z-[80] overflow-y-auto p-4"}
+      onKeyDown={embedded ? undefined : (event) => dialogKeyDown(event, dialogRef.current, busy ? undefined : () => void close())}
+    >
       <section
+        ref={dialogRef}
         role={embedded ? undefined : "dialog"}
         aria-modal={embedded ? undefined : "true"}
         aria-label="AI session drafts"

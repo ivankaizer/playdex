@@ -214,9 +214,9 @@ public sealed class SessionLifecycleTests(PostgresFixture postgres)
         var recorder = new SessionEventRecorder();
 
         var recorded = await world.Capture(recorder)
-            .RecordSession(world.ApiKey, 3600, "A", "a", "steam", "steam", default);
+            .RecordSession(world.ApiKey, 3600, null, "A", "a", "steam", "steam", default);
 
-        var session = await world.Session(recorded!.SessionId);
+        var session = await world.Session(recorded!.SessionId!.Value);
         Assert.Equal(TimeSpan.FromHours(1), session.EndedAt - session.StartedAt);
         var ended = Assert.IsType<SessionEnded>(Assert.Single(recorder.Events));
         Assert.Equal(
