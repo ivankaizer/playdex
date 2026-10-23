@@ -12,6 +12,7 @@ namespace Api.Infrastructure.Auth;
 public static class UserCommand
 {
     public const string Name = "create-user";
+    public const int PasswordWorkFactor = 12;
 
     public sealed record Result(bool Created, string Password);
 
@@ -41,18 +42,26 @@ public static class UserCommand
         return 0;
     }
 
-    /// <summary>Creates the user or replaces its password. <c>isAdmin</c> only ever grants admin, never takes it away.</summary>
+    /// <summary>
+    /// Creates the user or replaces its password, which also revokes its refresh tokens. <c>isAdmin</c> only ever
+    /// grants admin, never takes it away.
+    /// </summary>
     public static async Task<Result> Upsert(
         PlaydexDbContext db, string email, bool isAdmin, string? password, DateTimeOffset now, CancellationToken ct)
     {
         password ??= GeneratePassword();
-        var hash = BCrypt.Net.BCrypt.HashPassword(password);
+        var hash = BCrypt.Net.BCrypt.HashPassword(password, PasswordWorkFactor);
         var user = await db.Users.SingleOrDefaultAsync(row => row.Email == email, ct);
         var created = user is null;
         if (user is null)
         {
             user = new User { Email = email, CreatedAt = now };
             db.Users.Add(user);
+        }
+
+        if (!created)
+        {
+            user.TokenVersion++;  // a new password signs every existing session out
         }
 
         user.Password = hash;

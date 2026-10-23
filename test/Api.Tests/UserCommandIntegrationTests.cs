@@ -46,6 +46,7 @@ public sealed class UserCommandIntegrationTests(PostgresFixture postgres)
         Assert.True(user.IsAdmin);
         Assert.True(BCrypt.Net.BCrypt.Verify("second", user.Password));
         Assert.Equal(Now, user.CreatedAt);
+        Assert.Equal(1, user.TokenVersion);  // the reset revokes the sessions signed in with the old password
     }
 
     private PlaydexDbContext CreateContext() =>

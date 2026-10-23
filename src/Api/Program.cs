@@ -66,6 +66,7 @@ builder.Services.AddSingleton(new MigrationCatalog([
     new IntegrationSessionPlatformMigration(),
     new AiPlaySessionDraftsMigration(),
     new AiGenerationHistoryMigration(),
+    new UserTokenVersionMigration(),
 ]));
 builder.Services.AddSingleton<MigrationRunner>();
 builder.Services.AddScoped<EventBus>();
@@ -87,6 +88,7 @@ builder.Services
     .AddNotifications(builder.Configuration)
     .AddAdmin();
 
+builder.Services.AddPlaydexRateLimiting();
 builder.Services.AddExceptionHandler<ApiExceptionHandler>();
 builder.Services.AddProblemDetails();
 builder.Services.ConfigureHttpJsonOptions(json =>
@@ -125,12 +127,14 @@ if (args.Contains(UserCommand.Name, StringComparer.OrdinalIgnoreCase))
     return;
 }
 
+app.UseForwardedHeaders();
 app.MapDefaultEndpoints();
 
 app.UseMiddleware<CorrelationIdMiddleware>();
 app.UseMiddleware<ApiEnvelopeMiddleware>();
 app.UseExceptionHandler();
 app.UseCors();
+app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
 

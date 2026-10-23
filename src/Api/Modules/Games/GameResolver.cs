@@ -4,11 +4,17 @@ using Playdex.Persistence;
 
 namespace Api.Modules.Games;
 
+/// <param name="TitleIsAuthoritative">
+/// The title comes from a source the server trusts (a platform API, IGDB) and may rename an existing game. A title a
+/// client sends only names a game the first time it is seen: games are shared by every user, so one user's capture
+/// must not rename them for everybody.
+/// </param>
 public sealed record GameResolutionRequest(
     GameExternalIdentityType? Provider,
     string? ExternalId,
     string Title,
-    string? CapsuleUrl);
+    string? CapsuleUrl,
+    bool TitleIsAuthoritative = false);
 
 public sealed record GameResolution(long GameId, long? GameExternalIdentityId, bool NeedsCapsule);
 
@@ -97,7 +103,7 @@ public sealed class GameResolver(PlaydexDbContext db) : IGameResolver
             }
             else
             {
-                if (!game.TitleLocked)
+                if (!game.TitleLocked && request.TitleIsAuthoritative)
                 {
                     game.Title = title;
                 }
@@ -125,7 +131,7 @@ public sealed class GameResolver(PlaydexDbContext db) : IGameResolver
                     };
                     db.GameExternalIdentities.Add(identity);
                 }
-                else
+                else if (request.TitleIsAuthoritative)
                 {
                     identity.Title = title;
                     identity.UpdatedAt = now;

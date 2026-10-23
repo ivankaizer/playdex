@@ -14,18 +14,23 @@ public sealed record RefreshResult(string AccessToken, string RefreshToken);
 
 public sealed class AuthService(AuthRepository repository, AuthTokenService tokens)
 {
+    // Checked when the email is unknown, so a failed login takes as long whether or not the account exists.
+    private static readonly Lazy<string> UnknownUserHash = new(() => BCrypt.Net.BCrypt.HashPassword(
+        Guid.NewGuid().ToString(), UserCommand.PasswordWorkFactor));
+
     public async Task<LoginResult> Login(
         string email,
         string password,
         CancellationToken cancellationToken = default)
     {
         var user = await repository.FindByEmail(email, cancellationToken);
-        if (user?.Password is null || !BCrypt.Net.BCrypt.Verify(password, user.Password))
+        var verified = BCrypt.Net.BCrypt.Verify(password, user?.Password ?? UnknownUserHash.Value);
+        if (user?.Password is null || !verified)
         {
             throw AppProblemException.Unauthorized("Invalid credentials.");
         }
 
-        var pair = tokens.IssueTokenPair(user.Id, user.Email);
+        var pair = tokens.IssueTokenPair(user.Id, user.Email, user.TokenVersion);
         return new LoginResult(
             user.Id,
             user.Email,
@@ -42,20 +47,22 @@ public sealed class AuthService(AuthRepository repository, AuthTokenService toke
         {
             var principal = tokens.Validate(refreshToken, "refresh");
             var subject = principal.FindFirst("sub")?.Value;
-            var email = principal.FindFirst("email")?.Value;
-            if (!long.TryParse(subject, NumberStyles.None, CultureInfo.InvariantCulture, out var userId)
-                || string.IsNullOrWhiteSpace(email))
+            if (!long.TryParse(subject, NumberStyles.None, CultureInfo.InvariantCulture, out var userId))
             {
                 throw new InvalidTokenException();
             }
+
+            // Tokens issued before versions existed carry none and count as version 0.
+            var version = principal.FindFirst(AuthTokenService.TokenVersionClaim)?.Value;
+            var tokenVersion = version is null ? 0 : int.Parse(version, NumberStyles.None, CultureInfo.InvariantCulture);
 
             var user = await repository.FindById(userId, cancellationToken);
-            if (user is null)
+            if (user is null || user.TokenVersion != tokenVersion)
             {
                 throw new InvalidTokenException();
             }
 
-            var pair = tokens.IssueTokenPair(userId, email);
+            var pair = tokens.IssueTokenPair(user.Id, user.Email, user.TokenVersion);
             return new RefreshResult(pair.AccessToken, pair.RefreshToken);
         }
         catch (InvalidTokenException exception)

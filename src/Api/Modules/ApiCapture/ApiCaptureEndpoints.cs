@@ -6,10 +6,14 @@ namespace Api.Modules.ApiCapture;
 public static class ApiCaptureEndpoints
 {
     private static readonly HashSet<string> AllowedIdentityProviders = ["steam", "psn", "xbox", "igdb"];
+    // A capture body is a few short fields; anything bigger is a mistake or abuse.
+    private const long MaxBodyBytes = 16 * 1024;
+    private const int MaxTitleLength = 200;
+    private const int MaxGameIdLength = 64;
 
     public static void MapApiCaptureEndpoints(this RouteGroupBuilder api)
     {
-        var capture = api.MapGroup("/capture");
+        var capture = api.MapGroup("/capture").RequireRateLimiting(RateLimiting.Capture);
         MapPlatformEndpoints(capture);
         MapSessionEndpoints(capture);
     }
@@ -148,6 +152,17 @@ public static class ApiCaptureEndpoints
             return null;
         }
 
+        if (context.Request.ContentLength > MaxBodyBytes)
+        {
+            throw new AppProblemException(413, "The request body is too large.");
+        }
+
+        var limit = context.Features.Get<Microsoft.AspNetCore.Http.Features.IHttpMaxRequestBodySizeFeature>();
+        if (limit is { IsReadOnly: false })
+        {
+            limit.MaxRequestBodySize = MaxBodyBytes;
+        }
+
         try
         {
             return await context.Request.ReadFromJsonAsync<ApiSessionRequest>(
@@ -163,6 +178,8 @@ public static class ApiCaptureEndpoints
     {
         if (string.IsNullOrWhiteSpace(request?.GameTitle))
             throw AppProblemException.Validation("gameTitle is required.");
+        if (request.GameTitle.Trim().Length > MaxTitleLength)
+            throw AppProblemException.Validation($"gameTitle must be at most {MaxTitleLength} characters.");
 
         var gameId = request.GameId switch
         {
@@ -172,6 +189,8 @@ public static class ApiCaptureEndpoints
         };
         if (string.IsNullOrWhiteSpace(gameId))
             throw AppProblemException.Validation("gameId is required.");
+        if (gameId.Length > MaxGameIdLength)
+            throw AppProblemException.Validation($"gameId must be at most {MaxGameIdLength} characters.");
 
         var provider = request.GameIdProvider?.Trim().ToLowerInvariant();
         if (string.IsNullOrWhiteSpace(provider) || !AllowedIdentityProviders.Contains(provider))

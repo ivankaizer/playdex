@@ -13,7 +13,7 @@ Set these in `.env` next to `docker-compose.yml`, then run `docker compose up -d
 |---|---|
 | `PLAYDEX_DOMAIN` | The name the server answers on. Caddy gets its certificate. |
 | `POSTGRES_PASSWORD` | Database password. Use `openssl rand -hex 32`, so it's safe inside a URL. |
-| `JWT_SECRET` | Signs sign-ins. At least 32 random characters. |
+| `JWT_SECRET` | Signs sign-ins. Use `openssl rand -hex 32`; the API won't start with fewer than 32 bytes. |
 
 ## Optional
 
@@ -41,3 +41,7 @@ The API reads any ASP.NET setting from the environment, with `__` between sectio
 | `AiDrafts__RequestsPerHour` | `10` | AI draft requests per user per hour. |
 | `AiDrafts__HistoryRetentionDays` | `30` | How long AI inputs are kept. |
 | `CORS_ORIGINS` | | Comma-separated origins, only if the web app is on another domain than the API. |
+
+Sign-in, token refresh, the capture API and the poster proxy are rate-limited per client IP address. Behind a
+reverse proxy on a private network (Caddy in this compose file, Traefik, nginx) the address comes from
+`X-Forwarded-For`; a proxy on a public address isn't trusted, so put the API behind one on the same host or network.

@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Options;
+using Api.Infrastructure.Http;
 
 namespace Api.Modules.Posters;
 
@@ -33,7 +34,7 @@ public static class PostersModule
 
             http.Response.Headers.CacheControl = "public, max-age=31536000, immutable";
             return Results.File(poster.Content, poster.ContentType);
-        });
+        }).RequireRateLimiting(RateLimiting.Posters);  // no sign-in, and a miss makes the server fetch and store
         return api;
     }
 }

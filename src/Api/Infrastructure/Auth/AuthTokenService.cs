@@ -17,10 +17,13 @@ public sealed class AuthTokenService(IOptions<AuthOptions> options)
     private readonly SymmetricSecurityKey _key = new(Encoding.UTF8.GetBytes(options.Value.JwtSecret));
     private readonly TimeSpan _accessTokenLifetime = ParseLifetime(options.Value.AccessTokenTtl);
 
-    public AuthTokenPair IssueTokenPair(long userId, string email) =>
+    /// <summary>Claim with the user's token version; tokens from an older version are revoked (see users.token_version).</summary>
+    public const string TokenVersionClaim = "ver";
+
+    public AuthTokenPair IssueTokenPair(long userId, string email, int tokenVersion) =>
         new(
-            Issue(userId, email, "access", _accessTokenLifetime),
-            Issue(userId, email, "refresh", RefreshTokenLifetime));
+            Issue(userId, email, tokenVersion, "access", _accessTokenLifetime),
+            Issue(userId, email, tokenVersion, "refresh", RefreshTokenLifetime));
 
     public ClaimsPrincipal Validate(string token, string expectedType)
     {
@@ -50,12 +53,13 @@ public sealed class AuthTokenService(IOptions<AuthOptions> options)
         ValidateAudience = false,
         ValidateIssuerSigningKey = true,
         IssuerSigningKey = _key,
+        ValidAlgorithms = [SecurityAlgorithms.HmacSha256],
         ValidateLifetime = true,
         ClockSkew = TimeSpan.Zero,
         NameClaimType = "email",
     };
 
-    private string Issue(long userId, string email, string type, TimeSpan lifetime)
+    private string Issue(long userId, string email, int tokenVersion, string type, TimeSpan lifetime)
     {
         var now = DateTime.UtcNow;
         var token = new JwtSecurityToken(
@@ -64,6 +68,7 @@ public sealed class AuthTokenService(IOptions<AuthOptions> options)
                 new Claim(JwtRegisteredClaimNames.Sub, userId.ToString(CultureInfo.InvariantCulture)),
                 new Claim(JwtRegisteredClaimNames.Email, email),
                 new Claim("type", type),
+                new Claim(TokenVersionClaim, tokenVersion.ToString(CultureInfo.InvariantCulture), ClaimValueTypes.Integer32),
             ],
             notBefore: now,
             expires: now.Add(lifetime),
