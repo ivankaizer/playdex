@@ -4,8 +4,8 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Api.Infrastructure.Common;
 using Playdex.Persistence;
-using Api.Modules.ApiCapture;
 using Api.Modules.Metrics;
+using Api.Modules.Sessions;
 
 namespace Api.Modules.Polling;
 
@@ -65,7 +65,12 @@ public sealed partial class PollingBackgroundService(
 
                 try
                 {
-                    await EndTimedOutApiSessions(serviceProvider, stoppingToken);
+                    using (var sweepScope = serviceProvider.GetRequiredService<IServiceScopeFactory>().CreateScope())
+                    {
+                        await sweepScope.ServiceProvider
+                            .GetRequiredService<SessionLifecycle>()
+                            .SweepStaleSessions(stoppingToken);
+                    }
 
                     List<ActiveCredential> credentials;
                     using (var scope = serviceProvider.GetRequiredService<IServiceScopeFactory>().CreateScope())
@@ -143,16 +148,6 @@ public sealed partial class PollingBackgroundService(
         }
     }
 
-    internal static async Task<int> EndTimedOutApiSessions(
-        IServiceProvider serviceProvider,
-        CancellationToken ct)
-    {
-        using var scope = serviceProvider.GetRequiredService<IServiceScopeFactory>().CreateScope();
-        return await scope.ServiceProvider
-            .GetRequiredService<IApiSessionTimeoutCleaner>()
-            .EndTimedOutSessions(ct);
-    }
-
     private async Task ProcessCredential(
         ActiveCredential active,
         IServiceProvider services,
@@ -161,7 +156,7 @@ public sealed partial class PollingBackgroundService(
         var credential = active.Credential;
         var platformKey = active.PlatformKey;
         var pollingRepo = services.GetRequiredService<PollingRepository>();
-        var bus = services.GetRequiredService<EventBus>();
+        var sessions = services.GetRequiredService<SessionLifecycle>();
         var providerClients = services.GetServices<IProviderClient>()
             .ToDictionary(client => client.PlatformKey, StringComparer.OrdinalIgnoreCase);
 
@@ -187,26 +182,8 @@ public sealed partial class PollingBackgroundService(
             pollResult.RawPayload,
             ct);
         await EnrichGameIfNeeded(client, credential, pollResult.Game, outcome, pollingRepo, ct);
-        foreach (var transition in outcome.Transitions.Where(row => row.Notify))
-        {
-            if (transition.Kind == SessionTransitionKind.Started)
-            {
-                await SafePublish(bus, new SessionStarted(
-                    transition.SessionId,
-                    transition.CredentialId,
-                    transition.GameId,
-                    transition.StartedAt), ct);
-            }
-            else
-            {
-                await SafePublish(bus, new SessionEnded(
-                    transition.SessionId,
-                    transition.CredentialId,
-                    transition.GameId,
-                    transition.StartedAt,
-                    transition.EndedAt!.Value), ct);
-            }
-        }
+        // Announced after the capsule lookup, so the notification card has the cover.
+        await sessions.PublishPending(ct);
         metrics.RecordPollSuccess(platformKey, polledAt);
         LogSuccessfulPoll(credential.Id, outcome.GameId);
     }

@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Text.Json;
 using Api.Infrastructure.Http;
+using Npgsql;
 using Playdex.Persistence;
 
 namespace Api.Modules.Admin;
@@ -67,7 +68,16 @@ public sealed partial class AdminService(
         if (await repository.AnyManualSessions(sessionIds, ct))
             throw AppProblemException.Validation(
                 "Manual sessions are not linked to an integration and cannot be transferred. Deselect them and try again.");
-        var updated = await repository.TransferSessions(sessionIds, target, ct);
+        int updated;
+        try
+        {
+            updated = await repository.TransferSessions(sessionIds, target, ct);
+        }
+        catch (PostgresException ex) when (ex.SqlState == PostgresErrorCodes.UniqueViolation)
+        {
+            throw AppProblemException.Conflict(
+                "The target integration already has a live session for this game. End it first, then try again.");
+        }
         var correlationId = CorrelationId();
         LogSessionTransfer(logger, "transfer-sessions", targetId, updated, correlationId);
         return new AdminTransferSessionsResultDto(updated);
