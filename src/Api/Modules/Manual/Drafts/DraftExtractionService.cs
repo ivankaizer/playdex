@@ -46,16 +46,24 @@ public sealed class DraftExtractionService(DraftRepository repository, DraftServ
             ExtractionInputValidator.ValidateImage(input, opts);
             generationId = await history.Begin(userId, requestId, timezone, input);
             input = input with { ObserveResponse = response => history.RecordResponse(generationId, response) };
-            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
-            timeout.CancelAfter(TimeSpan.FromSeconds((long)opts.TimeoutSeconds * 2));
-            var rows = await extractor.Extract(input, timeout.Token);
+            IReadOnlyList<ExtractedSession> rows;
+            using (var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct))
+            {
+                // The extractor makes at most two attempts (one retry on invalid output), each within TimeoutSeconds.
+                timeout.CancelAfter(TimeSpan.FromSeconds((long)opts.TimeoutSeconds * 2));
+                rows = await extractor.Extract(input, timeout.Token);
+            }
             if (rows.Count == 0) throw AppProblemException.Validation("No individual play sessions could be found. Add dates and durations or try a clearer screenshot.");
             if (rows.Count > opts.MaxRows) throw new AppProblemException(502, "Too many sessions were extracted. Try a smaller input.");
+            // Game search has its own budget. It used to share the extraction timeout, so slow IGDB searches turned a
+            // successful (paid) extraction into a 504; now rows whose search runs out are saved without IGDB matches.
+            var searches = await drafts.SearchCandidates(userId, rows.Select(row => row.Title),
+                TimeSpan.FromSeconds(Math.Max(1, opts.SearchTimeoutSeconds)), ct);
             var batch = new SessionDraftBatch { Id=Guid.NewGuid(), UserId=userId, RequestId=requestId,
                 CreatedAt=clock.GetUtcNow(), Timezone=timezone, ReferenceDate=day };
             foreach (var row in rows)
             {
-                var candidates = await drafts.SearchCandidates(userId, row.Title, timeout.Token);
+                var candidates = searches.GetValueOrDefault(row.Title.Trim()) ?? [];
                 var playedCandidates = candidates.Where(candidate => candidate.PreviouslyPlayed).ToArray();
                 var selected = playedCandidates.Length == 1
                     ? playedCandidates[0]

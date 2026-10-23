@@ -201,7 +201,7 @@ public sealed class SessionOverlapIntegrationTests(PostgresFixture postgres)
 
     private static ManualService CreateManualService(PlaydexDbContext db) => new(
         new ManualRepository(db),
-        new IgdbClient(new HttpClient(), Options.Create(new IgdbOptions())),
+        new IgdbClient(new HttpClient(), Options.Create(new IgdbOptions()), new IgdbTokenCache()),
         Options.Create(new IgdbOptions()),
         new GameResolver(db),
         TestSessions.Lifecycle(db));

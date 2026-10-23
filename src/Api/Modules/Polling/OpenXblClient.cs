@@ -23,7 +23,7 @@ public sealed class OpenXblClient(
     {
         var apiKey = credential.ApiKey?.Trim();
         if (string.IsNullOrEmpty(apiKey))
-            throw new ProviderPollException("Xbox credential is missing an OpenXBL API key.");
+            throw new ProviderPollException("Xbox credential is missing an OpenXBL API key.", authenticationFailure: true);
 
         var baseUrl = options.Value.BaseUrl.TrimEnd('/');
         var xuid = credential.AccountId?.Trim();
@@ -44,7 +44,7 @@ public sealed class OpenXblClient(
         }
 
         if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
-            throw new ProviderPollException("OpenXBL rejected the API key.");
+            throw new ProviderPollException("OpenXBL rejected the API key.", authenticationFailure: true);
 
         if (!response.IsSuccessStatusCode)
         {
@@ -106,7 +106,7 @@ public sealed class OpenXblClient(
     {
         var apiKey = credential.ApiKey?.Trim();
         if (string.IsNullOrEmpty(apiKey))
-            throw new ProviderPollException("Xbox credential is missing an OpenXBL API key.");
+            throw new ProviderPollException("Xbox credential is missing an OpenXBL API key.", authenticationFailure: true);
 
         var url = $"{options.Value.BaseUrl.TrimEnd('/')}/v2/marketplace/title/{Uri.EscapeDataString(externalId)}";
         using var request = new HttpRequestMessage(HttpMethod.Get, url);
@@ -121,7 +121,7 @@ public sealed class OpenXblClient(
                 ResolveRetryAfter(response) ?? TimeSpan.FromMinutes(1));
         }
         if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
-            throw new ProviderPollException("OpenXBL rejected the API key.");
+            throw new ProviderPollException("OpenXBL rejected the API key.", authenticationFailure: true);
         if (response.StatusCode == HttpStatusCode.NotFound)
             return null;
         if (!response.IsSuccessStatusCode)

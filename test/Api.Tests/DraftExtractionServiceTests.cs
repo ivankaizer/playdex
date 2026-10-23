@@ -53,7 +53,7 @@ public sealed class DraftExtractionServiceTests(PostgresFixture postgres)
         var draftRepository = new DraftRepository(db);
         var manual = new ManualService(
             manualRepository,
-            new IgdbClient(new HttpClient(), igdbOptions),
+            new IgdbClient(new HttpClient(), igdbOptions, new IgdbTokenCache()),
             igdbOptions,
             new GameResolver(db),
             TestSessions.Lifecycle(db));
@@ -103,6 +103,75 @@ public sealed class DraftExtractionServiceTests(PostgresFixture postgres)
         stub.Error = new AppProblemException(504, "AI extraction timed out.");
         await Assert.ThrowsAsync<AppProblemException>(() => service.Create(user.Id,Guid.NewGuid(),"UTC","Timeout evidence",null,null,default));
         Assert.True(await db.AiGenerations.AnyAsync(generation => generation.UserId == user.Id && generation.Status == "timeout"));
+    }
+
+    [Fact]
+    public async Task GameSearchThatRunsOutOfTimeStillSavesTheExtractedRows()
+    {
+        if (!postgres.IsConfigured) return;
+
+        await using var db = CreateDb();
+        var now = DateTimeOffset.UtcNow;
+        var user = new User { Email = $"draft-slow-search-{Guid.NewGuid():N}@test.local", CreatedAt = now, UpdatedAt = now };
+        db.Users.Add(user);
+        await db.SaveChangesAsync();
+        var title = $"Unmatched title {Guid.NewGuid():N}";
+        var service = CreateService(
+            db,
+            new HangingHandler(),
+            new StubExtractor([new(title, "2026-09-09", 30, "pc", []), new(title, "2026-09-10", 45, "pc", [])]),
+            new AiDraftOptions { Enabled = true, ApiKey = "test", Model = "test", TimeoutSeconds = 1, SearchTimeoutSeconds = 1 });
+
+        var batch = await service.Create(user.Id, Guid.NewGuid(), "UTC", "Two sessions", null, null, CancellationToken.None);
+
+        Assert.Equal(2, batch.Rows.Count);
+        Assert.All(batch.Rows, row => Assert.Null(row.Selection));
+        Assert.Equal("success", (await db.AiGenerations.AsNoTracking().SingleAsync(row => row.UserId == user.Id)).Status);
+    }
+
+    [Fact]
+    public async Task IgdbResultsAlreadySavedAsGamesAreOfferedAsThoseGames()
+    {
+        if (!postgres.IsConfigured) return;
+
+        await using var db = CreateDb();
+        var now = DateTimeOffset.UtcNow;
+        // IGDB ids are ints (IgdbClient reads them as such); a larger one fails the search and leaves no results.
+        var igdbId = Random.Shared.Next(1_000_000_000, int.MaxValue).ToString(System.Globalization.CultureInfo.InvariantCulture);
+        var user = new User { Email = $"draft-saved-{Guid.NewGuid():N}@test.local", CreatedAt = now, UpdatedAt = now };
+        var saved = new Game { Title = $"Saved {igdbId}", CreatedAt = now, UpdatedAt = now };
+        db.AddRange(user, saved);
+        await db.SaveChangesAsync();
+        db.GameExternalIdentities.Add(new GameExternalIdentity
+        {
+            GameId = saved.Id, Type = GameExternalIdentityType.Igdb, ExternalId = igdbId, Title = saved.Title,
+            CreatedAt = now, UpdatedAt = now,
+        });
+        await db.SaveChangesAsync();
+        var igdb = new IgdbHandler($$"""[{"id":{{igdbId}},"name":"Saved"},{"id":1,"name":"Not saved"}]""");
+
+        var candidates = await CreateDraftService(db, igdb)
+            .SearchCandidates(user.Id, ["Zzq first", "Zzq second", "Zzq first"], TimeSpan.FromSeconds(30), default);
+
+        Assert.Equal(["Zzq first", "Zzq second"], candidates.Keys.Order());
+        Assert.Equal(2, igdb.Searches);
+        Assert.All(candidates.Values, results =>
+        {
+            Assert.Contains(results, row => row.Source == "local" && row.GameId == Api.Infrastructure.Common.GameId.Encode(saved.Id));
+            Assert.Contains(results, row => row.Source == "igdb" && row.IgdbId == "1");
+            Assert.DoesNotContain(results, row => row.IgdbId == igdbId);
+        });
+    }
+
+    private DraftExtractionService CreateService(PlaydexDbContext db, HttpMessageHandler igdb, IPlaySessionExtractor extractor,
+        AiDraftOptions options)
+    {
+        var draftRepository = new DraftRepository(db);
+        var manualRepository = new ManualRepository(db);
+        return new DraftExtractionService(draftRepository, CreateDraftService(db, igdb), manualRepository, extractor,
+            Options.Create(options), postgres.DataSource!, TimeProvider.System,
+            new GenerationHistoryRecorder(postgres.DataSource!, Options.Create(new AiDraftOptions { Provider = "test", Model = "test" }),
+                TimeProvider.System, Microsoft.Extensions.Logging.Abstractions.NullLogger<GenerationHistoryRecorder>.Instance));
     }
 
     [Fact]
@@ -193,7 +262,8 @@ public sealed class DraftExtractionServiceTests(PostgresFixture postgres)
         var manualRepository = new ManualRepository(db);
         var draftRepository = new DraftRepository(db);
         var manual = new ManualService(
-            manualRepository, new IgdbClient(new HttpClient(), igdbOptions), igdbOptions, new GameResolver(db), TestSessions.Lifecycle(db));
+            manualRepository, new IgdbClient(new HttpClient(), igdbOptions, new IgdbTokenCache()), igdbOptions, new GameResolver(db),
+            TestSessions.Lifecycle(db));
         return new DraftExtractionService(
             draftRepository,
             new DraftService(draftRepository, db, manual, manualRepository),
@@ -204,6 +274,43 @@ public sealed class DraftExtractionServiceTests(PostgresFixture postgres)
             TimeProvider.System,
             new GenerationHistoryRecorder(postgres.DataSource!, Options.Create(new AiDraftOptions { Provider = "test", Model = "test" }),
                 TimeProvider.System, Microsoft.Extensions.Logging.Abstractions.NullLogger<GenerationHistoryRecorder>.Instance));
+    }
+
+    private static DraftService CreateDraftService(PlaydexDbContext db, HttpMessageHandler igdb)
+    {
+        var igdbOptions = Options.Create(new IgdbOptions { ClientId = "client", ClientSecret = "secret" });
+        var manualRepository = new ManualRepository(db);
+        var manual = new ManualService(manualRepository,
+            new IgdbClient(new HttpClient(igdb), igdbOptions, new IgdbTokenCache()), igdbOptions, new GameResolver(db),
+            TestSessions.Lifecycle(db));
+        return new DraftService(new DraftRepository(db), db, manual, manualRepository);
+    }
+
+    private sealed class HangingHandler : HttpMessageHandler
+    {
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
+        {
+            await Task.Delay(Timeout.Infinite, ct);
+            throw new InvalidOperationException("unreachable");
+        }
+    }
+
+    private sealed class IgdbHandler(string games) : HttpMessageHandler
+    {
+        private int _searches;
+        public int Searches => _searches;
+
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
+        {
+            var body = request.RequestUri!.Host == "id.twitch.tv"
+                ? """{"access_token":"token","expires_in":3600}"""
+                : games;
+            if (request.RequestUri.Host != "id.twitch.tv") Interlocked.Increment(ref _searches);
+            return Task.FromResult(new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+            {
+                Content = new StringContent(body, System.Text.Encoding.UTF8, "application/json"),
+            });
+        }
     }
 
     private static PlaySession Session(long userId, long gameId, long platformId, DateTimeOffset startedAt) => new()

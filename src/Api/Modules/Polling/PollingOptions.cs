@@ -3,17 +3,21 @@ namespace Api.Modules.Polling;
 public class PollingOptions
 {
     public int IntervalSeconds { get; set; } = 60;
-    public bool UseWiremock { get; set; }
+
+    /// <summary>How many credentials one poll cycle polls at the same time.</summary>
+    public int MaxConcurrentPolls { get; set; } = 4;
 
     /// <summary>
-    /// Days to keep raw provider responses (poll_results) before the hourly cleanup deletes them;
-    /// 0 or less keeps them forever.
+    /// Pause an integration once its provider has rejected the credential this many times without a successful poll
+    /// in between (about 30 minutes of backoff at the default); 0 or less never pauses.
+    /// </summary>
+    public int AuthFailuresBeforePause { get; set; } = 10;
+
+    /// <summary>
+    /// Days to keep poll_results (one row per successful poll; the raw provider response only when the detected game
+    /// changed) before the hourly cleanup deletes them; 0 or less keeps them forever.
     /// </summary>
     public int PollResultRetentionDays { get; set; } = 30;
-    public SteamOptions Steam { get; set; } = new();
-    public PsnOptions Psn { get; set; } = new();
-    public OpenXblOptions OpenXbl { get; set; } = new();
-    public IgdbOptions Igdb { get; set; } = new();
 }
 
 public class SteamOptions

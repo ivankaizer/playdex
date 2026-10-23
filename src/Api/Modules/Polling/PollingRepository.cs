@@ -45,28 +45,44 @@ public sealed class PollingRepository(PlaydexDbContext db, IGameResolver gameRes
                 .AnyAsync(row => row.GameId == gameId, ct);
         }
 
+        var previousPoll = await db.PollResults
+            .AsNoTracking()
+            .Where(row => row.IntegrationId == credentialId)
+            .OrderByDescending(row => row.PolledAt)
+            .Select(row => new { row.GameExternalIdentityId })
+            .FirstOrDefaultAsync(ct);
+
+        var sessionsChanged = await sessions.ApplyPoll(
+            credentialId, integration.UserId, ignored ? null : gameId, platformId, polledAt, ct);
+
+        // A row per poll records when the integration was last polled; the raw response (large, and full of
+        // profile data) is kept only when what the user plays changed.
+        var changed = previousPoll is null
+            || previousPoll.GameExternalIdentityId != identityId
+            || sessionsChanged;
         db.PollResults.Add(new PollResult
         {
             IntegrationId = credentialId,
             GameExternalIdentityId = identityId,
             PolledAt = polledAt,
-            RawPayload = rawPayload,
+            RawPayload = changed ? rawPayload : null,
             CreatedAt = DateTimeOffset.UtcNow,
         });
-        await db.SaveChangesAsync(ct);
 
-        await sessions.ApplyPoll(
-            credentialId, integration.UserId, ignored ? null : gameId, platformId, polledAt, ct);
+        await db.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
         return new SuccessfulPollOutcome(gameId, ignored, needsCapsule);
     }
 
     public async Task<List<ActiveCredential>> LoadActiveCredentials(CancellationToken ct)
     {
-        var rows = await db.Integrations
-            .AsNoTracking()
-            .Where(pc => pc.Active && pc.Type != IntegrationType.Api)
-            .Select(pc => new ActiveCredentialRow
+        var rows = await (
+            from pc in db.Integrations.AsNoTracking()
+            where pc.Active && pc.Type != IntegrationType.Api
+            join backoff in db.IntegrationPollBackoffs.AsNoTracking()
+                on pc.Id equals backoff.IntegrationId into backoffs
+            from backoff in backoffs.DefaultIfEmpty()
+            select new ActiveCredentialRow
             {
                 Id = pc.Id,
                 UserId = pc.UserId,
@@ -77,6 +93,7 @@ public sealed class PollingRepository(PlaydexDbContext db, IGameResolver gameRes
                 Active = pc.Active,
                 PlatformId = pc.PlatformId!.Value,
                 Type = pc.Type,
+                NextPollAt = backoff == null ? null : backoff.NextPollAt,
             })
             .ToListAsync(ct);
 
@@ -92,30 +109,29 @@ public sealed class PollingRepository(PlaydexDbContext db, IGameResolver gameRes
                 Active = r.Active,
                 PlatformId = r.PlatformId,
             },
-            GetProviderKey(r.Type)
+            GetProviderKey(r.Type),
+            r.NextPollAt
         )).ToList();
     }
 
-    public async Task<bool> CheckIfGameIgnored(long userId, long gameId, CancellationToken ct)
+    /// <summary>
+    /// Stops polling an integration whose credential the provider keeps rejecting, recording why so that the user
+    /// sees it. Only an active integration is paused, so of several pollers only one does it. Its backoff stays until
+    /// the user resumes it, so a poll that was already running counts on and does not announce a new outage.
+    /// </summary>
+    /// <returns>True when this call paused it.</returns>
+    public async Task<bool> PauseIntegration(long credentialId, string reason, DateTimeOffset pausedAt, CancellationToken ct)
     {
-        return await db.IgnoredGames.AnyAsync(ig => ig.UserId == userId && ig.GameId == gameId, ct);
-    }
-
-    public async Task RecordPollResult(
-        long credentialId, long? gameId,
-        DateTimeOffset polledAt, string? rawPayload,
-        CancellationToken ct)
-    {
-        db.PollResults.Add(
-            new PollResult
-            {
-                IntegrationId = credentialId,
-                PolledAt = polledAt,
-                RawPayload = rawPayload,
-                CreatedAt = DateTimeOffset.UtcNow,
-            }
-        );
-        await db.SaveChangesAsync(ct);
+        var paused = await db.Integrations
+            .Where(integration => integration.Id == credentialId && integration.Active)
+            .ExecuteUpdateAsync(
+                updates => updates
+                    .SetProperty(integration => integration.Active, false)
+                    .SetProperty(integration => integration.PausedReason, reason)
+                    .SetProperty(integration => integration.PausedAt, pausedAt)
+                    .SetProperty(integration => integration.UpdatedAt, pausedAt),
+                ct);
+        return paused > 0;
     }
 
     public async Task UpdateGameCapsule(long gameId, string capsuleUrl, CancellationToken ct)
@@ -143,6 +159,7 @@ public sealed class PollingRepository(PlaydexDbContext db, IGameResolver gameRes
         public bool Active { get; set; }
         public long PlatformId { get; set; }
         public IntegrationType Type { get; set; }
+        public DateTimeOffset? NextPollAt { get; set; }
     }
 
     internal static long GetEffectiveSessionPlatformId(Integration integration) =>
@@ -162,9 +179,14 @@ public sealed class PollingRepository(PlaydexDbContext db, IGameResolver gameRes
 /// A platform credential enriched with its platform key for routing
 /// to the correct <see cref="IProviderClient"/>.
 /// </summary>
+/// <param name="NextPollAt">
+/// Set when the credential has backoff state (it is failing, or its provider asked to be left alone): it is not
+/// polled before then.
+/// </param>
 public sealed record ActiveCredential(
     IntegrationCredentials Credential,
-    string PlatformKey
+    string PlatformKey,
+    DateTimeOffset? NextPollAt = null
 );
 
 public sealed record SuccessfulPollOutcome(

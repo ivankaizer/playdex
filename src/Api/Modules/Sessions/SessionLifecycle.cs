@@ -69,7 +69,8 @@ public sealed partial class SessionLifecycle(
     /// that sees another game or none. After a gap it ended one interval after it was last seen, and a game still
     /// running starts a new session.
     /// </summary>
-    public async Task ApplyPoll(
+    /// <returns>True when a session ended or started.</returns>
+    public async Task<bool> ApplyPoll(
         long integrationId,
         long userId,
         long? gameId,
@@ -78,6 +79,7 @@ public sealed partial class SessionLifecycle(
         CancellationToken ct)
     {
         long? continuing = null;
+        var changed = false;
         foreach (var session in await OpenSessions(row => row.IntegrationId == integrationId, ct))
         {
             var unseen = polledAt - session.UpdatedAt > PollingGap;
@@ -87,11 +89,11 @@ public sealed partial class SessionLifecycle(
                 continue;
             }
 
-            await End([session.Id], polledAt, unseen ? PollingInterval : null, ct);
+            changed |= await End([session.Id], polledAt, unseen ? PollingInterval : null, ct) > 0;
         }
 
-        if (continuing is { } sessionId && await Touch(sessionId, polledAt, ct)) return;
-        if (gameId is not { } detectedGameId) return;
+        if (continuing is { } sessionId && await Touch(sessionId, polledAt, ct)) return changed;
+        if (gameId is not { } detectedGameId) return changed;
 
         await Start(new PlaySession
         {
@@ -104,6 +106,7 @@ public sealed partial class SessionLifecycle(
             CreatedAt = DateTimeOffset.UtcNow,
             UpdatedAt = polledAt,
         }, ct);
+        return true;
     }
 
     /// <summary>A capture client started <paramref name="gameId"/>; an open session of that game restarts.</summary>

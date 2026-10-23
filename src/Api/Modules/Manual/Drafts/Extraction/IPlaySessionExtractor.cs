@@ -12,6 +12,12 @@ public sealed class AiDraftOptions
     public long MaxImagePixels { get; set; } = 20_000_000;
     public int MaxRows { get; set; } = 50;
     public int TimeoutSeconds { get; set; } = 60;
+
+    /// <summary>
+    /// Budget for the IGDB game searches after a successful extraction. When it runs out, the remaining rows are saved
+    /// without IGDB candidates rather than failing the request (and discarding the paid extraction).
+    /// </summary>
+    public int SearchTimeoutSeconds { get; set; } = 20;
     public int RequestsPerHour { get; set; } = 10;
     public int HistoryRetentionDays { get; set; } = 30;
     public bool IsAvailable => Enabled && !string.IsNullOrWhiteSpace(ApiKey) && !string.IsNullOrWhiteSpace(Model)

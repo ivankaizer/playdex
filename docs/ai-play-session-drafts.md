@@ -19,7 +19,9 @@ AiDrafts__MaxImageBytes=10485760
 AiDrafts__MaxImagePixels=20000000
 AiDrafts__MaxRows=50
 AiDrafts__TimeoutSeconds=60
+AiDrafts__SearchTimeoutSeconds=20
 AiDrafts__RequestsPerHour=10
+AiDrafts__HistoryRetentionDays=30
 ```
 
 For OpenRouter, set the provider and endpoint together:
@@ -47,9 +49,13 @@ IGDB candidates include their cover URL when available. Manual entry and AI revi
 
 The adapter sends user text and a base64 PNG/JPEG/WebP as user evidence; separate instructions specify uncertainty, relative dates, conflicts, lifetime totals, and platform granularity. It supplies no tools, identities, or persistence authority. Strict JSON Schema constrains output; local validation additionally rejects malformed responses, unexpected properties, oversized responses/rows/warnings, refusal and incomplete output. Invalid domain dates/durations become null with warnings; unknown platforms become `unknown` with a visible warning. Provider semantic interpretation still requires human review.
 
-Responses use `store: false` on the OpenAI Responses path and no conversation ID. The OpenRouter path uses `stream: false` and a bounded 4,096-token completion. The raw HTTP response is limited to 1 MiB. Application code does not log source text, uploads, prompts, response bodies, or authorization headers. Never enable body/header capture for this client in HTTP logging, tracing, APM, or reverse proxies. `store: false` is not a promise about all provider retention; review the provider's account data controls independently. Persist only normalized draft fields and warnings.
+Responses use `store: false` on the OpenAI Responses path and no conversation ID. Both paths cap the completion at 16,000 tokens (`max_output_tokens` on the Responses path, `max_tokens` on OpenRouter), which leaves reasoning models room to answer; the OpenRouter path also sets `stream: false`. The raw HTTP response is limited to 1 MiB. Application code does not log source text, uploads, prompts, response bodies, or authorization headers. Never enable body/header capture for this client in HTTP logging, tracing, APM, or reverse proxies. `store: false` is not a promise about all provider retention; review the provider's account data controls independently.
 
-Provider HTTP/network failures and malformed/refused output return a generic retryable 502; timeout returns 504; unavailable configuration returns 503; invalid input returns 400. Caller cancellation propagates. No automatic retry is configured in this adapter, to avoid duplicate paid requests; review global HTTP resilience policies when registering it.
+Draft rows store only the normalized fields and warnings. Separately, every extraction is recorded in `ai_generations` for administrators to review: the input text and image, each raw provider response, the status and the resulting batch. Records older than `HistoryRetentionDays` (default 30; `0` keeps them) are deleted hourly, and deleting the account deletes them.
+
+Provider HTTP/network failures and malformed/refused output return a generic retryable 502; timeout returns 504; unavailable configuration returns 503; invalid input returns 400. Caller cancellation propagates. The adapter retries once, and only when the provider's output is invalid or malformed; that retry is a second paid request. HTTP failures and timeouts are not retried; review global HTTP resilience policies when registering the client. Each attempt is bounded by `TimeoutSeconds`, so an extraction takes at most twice that.
+
+After extraction, every distinct title is matched against the user's games, saved games and IGDB. The IGDB searches run three at a time within their own `SearchTimeoutSeconds` budget; a title whose search fails or does not finish in time is saved without IGDB matches (the user picks the game during review) instead of failing the request and discarding the extraction.
 
 ## Verification and activation
 

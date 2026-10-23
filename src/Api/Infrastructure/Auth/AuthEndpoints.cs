@@ -15,7 +15,7 @@ public static class AuthEndpoints
     {
         api.MapPost("/login", async (HttpContext http) =>
         {
-            var request = await http.Request.ReadFromJsonAsync<LoginRequest>();
+            var request = await http.Request.ReadJsonBodyAsync<LoginRequest>();
             var service = http.RequestServices.GetRequiredService<AuthService>();
             var email = request?.Email?.Trim() ?? "";
             var password = request?.Password ?? "";
@@ -29,7 +29,7 @@ public static class AuthEndpoints
 
         api.MapPost("/refresh", async (HttpContext http) =>
         {
-            var request = await http.Request.ReadFromJsonAsync<RefreshRequest>();
+            var request = await http.Request.ReadJsonBodyAsync<RefreshRequest>();
             var service = http.RequestServices.GetRequiredService<AuthService>();
             var refreshToken = request?.RefreshToken?.Trim() ?? "";
 

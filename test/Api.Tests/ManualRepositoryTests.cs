@@ -135,7 +135,7 @@ public sealed class ManualRepositoryTests(PostgresFixture postgres)
         var options = Options.Create(new IgdbOptions { ClientId = "client", ClientSecret = "secret" });
         var service = new ManualService(
             new ManualRepository(db),
-            new IgdbClient(new HttpClient(handler), options),
+            new IgdbClient(new HttpClient(handler), options, new IgdbTokenCache()),
             options,
             new GameResolver(db),
             TestSessions.Lifecycle(db));
@@ -178,7 +178,7 @@ public sealed class ManualRepositoryTests(PostgresFixture postgres)
 
     private static ManualService CreateService(PlaydexDbContext db) => new(
         new ManualRepository(db),
-        new IgdbClient(new HttpClient(), Options.Create(new IgdbOptions())),
+        new IgdbClient(new HttpClient(), Options.Create(new IgdbOptions()), new IgdbTokenCache()),
         Options.Create(new IgdbOptions()),
         new GameResolver(db),
         TestSessions.Lifecycle(db));

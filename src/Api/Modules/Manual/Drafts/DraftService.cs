@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Text.Json;
 using Api.Infrastructure.Common;
 using Api.Infrastructure.Http;
@@ -9,6 +10,9 @@ namespace Api.Modules.Manual.Drafts;
 public sealed class DraftService(DraftRepository repository, PlaydexDbContext db,
     ManualService manual, ManualRepository manualRepository)
 {
+    /// <summary>IGDB searches one extraction runs at once (IGDB allows four requests per second).</summary>
+    public const int MaxParallelIgdbSearches = 3;
+
     public async Task<DraftBatchDto> Get(long userId, Guid id, CancellationToken ct) =>
         ToDto(await RequireBatch(userId, id, ct));
 
@@ -58,7 +62,9 @@ public sealed class DraftService(DraftRepository repository, PlaydexDbContext db
 
     public async Task<DraftAcceptResponse> Accept(long userId, Guid batchId, DraftAcceptRequest request, CancellationToken ct)
     {
-        await RequireBatch(userId, batchId, ct);
+        // Loaded once: each row is re-read and its revision checked under a row lock before it is accepted, so a
+        // snapshot taken here cannot accept a row that changed since.
+        var batch = await RequireBatch(userId, batchId, ct);
         if (request.Rows is null || request.Rows.Count is < 1 or > 50 || request.Rows.Select(r => r.Id).Distinct().Count() != request.Rows.Count)
             throw AppProblemException.Validation("Select between 1 and 50 different draft rows.");
         var results = new List<DraftAcceptResult>();
@@ -66,7 +72,6 @@ public sealed class DraftService(DraftRepository repository, PlaydexDbContext db
         {
             try
             {
-                var batch = await RequireBatch(userId, batchId, ct);
                 var snapshot = batch.Rows.SingleOrDefault(r => r.Id == requested.Id) ?? throw AppProblemException.NotFound();
                 if (snapshot.Status == "accepted")
                 {
@@ -118,23 +123,79 @@ public sealed class DraftService(DraftRepository repository, PlaydexDbContext db
         CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(title) || title.Trim().Length > SearchText.MaxLength) return [];
-        var previouslyPlayed = await manualRepository.SearchRecentlyPlayedGames(userId, title, 5, ct);
-        var response = await manual.SearchMapping(title, ct);
-        var results = previouslyPlayed.Select(PreviouslyPlayed).ToList();
-        foreach (var candidate in response.Results)
+        var candidates = await SearchCandidates(userId, [title], igdbBudget: null, ct);
+        return candidates[title.Trim()];
+    }
+
+    /// <summary>
+    /// Candidates for several titles, keyed by trimmed title: games the user played, then saved games, then IGDB
+    /// results (a result already saved as a game is shown as that game). IGDB is searched in parallel, at most
+    /// <see cref="MaxParallelIgdbSearches"/> at a time, within <paramref name="igdbBudget"/>; a title whose search
+    /// fails or runs out of budget gets no IGDB results. The database is queried one title at a time, and the saved
+    /// games behind IGDB results are loaded in one query. A title longer than <see cref="SearchText.MaxLength"/> is
+    /// not searched and has no entry.
+    /// </summary>
+    internal async Task<IReadOnlyDictionary<string, IReadOnlyList<ManualMappingSearchResultDto>>> SearchCandidates(
+        long userId,
+        IEnumerable<string> titles,
+        TimeSpan? igdbBudget,
+        CancellationToken ct)
+    {
+        var queries = titles.Select(title => title.Trim())
+            .Where(title => title.Length > 0 && title.Length <= SearchText.MaxLength)
+            .Distinct(StringComparer.Ordinal).ToArray();
+        var igdb = await SearchIgdb(queries, igdbBudget, ct);
+
+        var igdbIds = igdb.Values.SelectMany(results => results).Select(result => result.Id).Distinct().ToArray();
+        var savedByIgdbId = igdbIds.Length == 0
+            ? []
+            : await (from identity in db.GameExternalIdentities.AsNoTracking()
+                    join game in db.Games.AsNoTracking() on identity.GameId equals game.Id
+                    where identity.Type == GameExternalIdentityType.Igdb && igdbIds.Contains(identity.ExternalId)
+                    select new { identity.ExternalId, Game = game })
+                .ToDictionaryAsync(row => row.ExternalId, row => row.Game, StringComparer.Ordinal, ct);
+
+        var candidates = new Dictionary<string, IReadOnlyList<ManualMappingSearchResultDto>>(StringComparer.Ordinal);
+        foreach (var query in queries)
         {
-            var selected = candidate;
-            if (candidate.Source == "igdb")
+            var results = (await manualRepository.SearchRecentlyPlayedGames(userId, query, 5, ct))
+                .Select(PreviouslyPlayed).ToList();
+            var others = (await manual.SearchLocal(query, ct)).Concat(igdb[query].Select(result =>
+                savedByIgdbId.TryGetValue(result.Id, out var saved) ? Local(saved) : ManualService.IgdbResult(result)));
+            foreach (var candidate in others)
             {
-                var game = await (from identity in db.GameExternalIdentities.AsNoTracking()
-                    join g in db.Games.AsNoTracking() on identity.GameId equals g.Id
-                    where identity.Type == GameExternalIdentityType.Igdb && identity.ExternalId == candidate.IgdbId
-                    select g).SingleOrDefaultAsync(ct);
-                if (game is not null) selected = Local(game);
+                if (!results.Any(r => candidate.GameId is not null ? r.GameId == candidate.GameId : r.IgdbId == candidate.IgdbId))
+                    results.Add(candidate);
             }
-            if (!results.Any(r => selected.GameId is not null ? r.GameId == selected.GameId : r.IgdbId == selected.IgdbId))
-                results.Add(selected);
+
+            candidates[query] = results;
         }
+
+        return candidates;
+    }
+
+    private async Task<IReadOnlyDictionary<string, IReadOnlyList<Polling.IgdbSearchResult>>> SearchIgdb(
+        IReadOnlyList<string> queries,
+        TimeSpan? budget,
+        CancellationToken ct)
+    {
+        using var budgetTimeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        if (budget is { } limit) budgetTimeout.CancelAfter(limit);
+        var results = new ConcurrentDictionary<string, IReadOnlyList<Polling.IgdbSearchResult>>(StringComparer.Ordinal);
+        await Parallel.ForEachAsync(
+            queries,
+            new ParallelOptions { MaxDegreeOfParallelism = MaxParallelIgdbSearches, CancellationToken = ct },
+            async (query, _) =>
+            {
+                try
+                {
+                    results[query] = (await manual.SearchIgdb(query, budgetTimeout.Token)).Results;
+                }
+                catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+                {
+                    results[query] = [];
+                }
+            });
         return results;
     }
 

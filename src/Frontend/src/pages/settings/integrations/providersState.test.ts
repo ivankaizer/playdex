@@ -218,6 +218,19 @@ describe("providersState", () => {
     expect(s.presentProvider(provider(1, platform, "active")).label).toBe(label);
   });
 
+  it("explains an automatic pause only while the integration stays paused", () => {
+    const paused = { ...provider(1, "psn", "paused"), pausedReason: "OpenXBL rejected the API key." };
+    expect(s.pauseNotice(paused)).toBe(
+      "Paused automatically: OpenXBL rejected the API key. Update the credential under Manage, then resume.",
+    );
+    expect(s.pauseNotice({ ...paused, pausedReason: "Steam rejected the key" })).toBe(
+      "Paused automatically: Steam rejected the key. Update the credential under Manage, then resume.",
+    );
+    expect(s.pauseNotice(provider(1, "psn", "paused"))).toBeNull();
+    expect(s.pauseNotice({ ...paused, pausedReason: "  " })).toBeNull();
+    expect(s.pauseNotice({ ...paused, status: "active" })).toBeNull();
+  });
+
   it("presentation preserves empty subtitles and uses null fallbacks", () => {
     const base = { id: 1, status: "active", apiKeyLocked: false };
     expect(s.presentProvider({ ...base, platform: "steam", accountId: null, apiKey: "secret" }).subtitle).toBe("Local");

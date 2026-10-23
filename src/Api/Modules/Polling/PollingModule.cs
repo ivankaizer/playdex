@@ -14,7 +14,9 @@ public static class PollingModule
         services.Configure<IgdbOptions>(configuration.GetSection("Polling:Igdb"));
 
         services.AddScoped<PollingRepository>();
+        services.AddScoped<ICredentialBackoff, CredentialBackoff>();
         services.AddSingleton<PsnTokenCache>();
+        services.AddSingleton<IgdbTokenCache>();
         services.AddHttpClient<IProviderClient, SteamClient>(c => c.Timeout = TimeSpan.FromSeconds(15));
         services.AddHttpClient<IProviderClient, PsnClient>(c => c.Timeout = TimeSpan.FromSeconds(15))
             .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
@@ -25,6 +27,8 @@ public static class PollingModule
         services.AddHttpClient<IgdbClient>(c => c.Timeout = TimeSpan.FromSeconds(15));
         services.AddOpenTelemetry()
             .WithTracing(tracing => tracing.AddSource(PollingBackgroundService.ActivitySourceName));
+        services.AddSingleton<PollingLease>();
+        services.AddSingleton<CapsuleLookupBackoff>();
         services.AddHostedService<PollingBackgroundService>();
         services.TryAddSingleton(TimeProvider.System);
         services.AddSingleton<PollResultRetention>();

@@ -1,4 +1,5 @@
 using Api.Infrastructure.Common;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Api.Modules.Notifications;
 
@@ -28,12 +29,19 @@ public static class NotificationsModule
         services.AddHttpClient<NotificationRenderer>(client =>
                 client.Timeout = TimeSpan.FromSeconds(15))
             .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AllowAutoRedirect = false });
+        services.AddScoped<NotificationSender>();
+        services.AddScoped<NotificationOutbox>();
+        services.AddSingleton<NotificationSignal>();
+        services.TryAddSingleton(TimeProvider.System);
+        services.AddHostedService<NotificationDispatcher>();
         services.AddScoped<NotificationEventHandlers>();
         services.AddScoped<IEventSubscriber<SessionStarted>>(
             provider => provider.GetRequiredService<NotificationEventHandlers>());
         services.AddScoped<IEventSubscriber<SessionEnded>>(
             provider => provider.GetRequiredService<NotificationEventHandlers>());
         services.AddScoped<IEventSubscriber<PollFailed>>(
+            provider => provider.GetRequiredService<NotificationEventHandlers>());
+        services.AddScoped<IEventSubscriber<IntegrationPaused>>(
             provider => provider.GetRequiredService<NotificationEventHandlers>());
         return services;
     }

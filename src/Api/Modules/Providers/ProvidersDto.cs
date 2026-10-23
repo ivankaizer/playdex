@@ -9,7 +9,9 @@ public sealed record ProviderStatusDto(
     string? ApiKey,
     bool ApiKeyLocked,
     ProviderPlatformDto? SessionPlatform = null,
-    IReadOnlyList<ProviderPlatformDto>? SessionPlatformOptions = null);
+    IReadOnlyList<ProviderPlatformDto>? SessionPlatformOptions = null,
+    string? PausedReason = null,
+    DateTimeOffset? PausedAt = null);
 public sealed record ProvidersResponseDto(IReadOnlyList<ProviderStatusDto> Providers);
 public sealed record ProviderUpdateRequest(long ProviderId, string Status);
 public sealed record ProviderUpdateResponseDto(ProviderStatusDto Provider);
@@ -39,7 +41,7 @@ internal sealed record ValidatedProviderCreation(
     Playdex.Persistence.IntegrationType Type,
     string ApiKey,
     string? AccountId);
-public sealed record ProviderCreateResult(ProviderStatusDto? Provider, bool LimitReached);
+public sealed record ProviderCreateResult(ProviderStatusDto? Provider, bool LimitReached, bool DuplicateAccount = false);
 public sealed record OpenXblConnectResult(
     ProviderStatusDto? Provider,
     bool ProviderMissing = false,

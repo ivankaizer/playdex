@@ -1,6 +1,7 @@
-using Microsoft.EntityFrameworkCore;
-using Playdex.Persistence;
 using Api.Modules.Sessions;
+using Microsoft.EntityFrameworkCore;
+using Npgsql;
+using Playdex.Persistence;
 
 namespace Api.Modules.Providers;
 
@@ -60,6 +61,11 @@ public sealed class ProvidersRepository(PlaydexDbContext db, SessionLifecycle se
         string? accountId,
         CancellationToken ct)
     {
+        // Count and insert under one lock per user and type, or parallel requests could all pass the limit check.
+        await using var transaction = await db.Database.BeginTransactionAsync(ct);
+        var lockKey = $"integration-limit:{userId}:{type}";
+        await db.Database.ExecuteSqlInterpolatedAsync(
+            $"SELECT pg_advisory_xact_lock(hashtextextended({lockKey}, 0))", ct);
         var existingCount = await db.Integrations.AsNoTracking()
             .CountAsync(item => item.UserId == userId && item.Type == type, ct);
         if (existingCount >= MaxIntegrationsPerType)
@@ -88,10 +94,33 @@ public sealed class ProvidersRepository(PlaydexDbContext db, SessionLifecycle se
             UpdatedAt = now,
         };
         db.Integrations.Add(integration);
-        await db.SaveChangesAsync(ct);
+        if (!await TrySaveAccount(integration, ct))
+        {
+            return new ProviderCreateResult(null, LimitReached: false, DuplicateAccount: true);
+        }
 
+        await transaction.CommitAsync(ct);
         var platforms = await db.Platforms.AsNoTracking().ToListAsync(ct);
         return new ProviderCreateResult(ToStatus(integration, platforms), LimitReached: false);
+    }
+
+    /// <returns>False when another integration of the user already polls this account.</returns>
+    private async Task<bool> TrySaveAccount(Integration integration, CancellationToken ct)
+    {
+        try
+        {
+            await db.SaveChangesAsync(ct);
+            return true;
+        }
+        catch (DbUpdateException exception) when (exception.InnerException is PostgresException
+                                                  {
+                                                      SqlState: PostgresErrorCodes.UniqueViolation,
+                                                      ConstraintName: PlaydexDbContext.UniqueAccountIndex,
+                                                  })
+        {
+            db.Entry(integration).State = EntityState.Detached;
+            return false;
+        }
     }
 
     public async Task<ProviderStatusDto?> UpdateProviderStatus(long userId, long providerId, string status, CancellationToken ct)
@@ -104,10 +133,18 @@ public sealed class ProvidersRepository(PlaydexDbContext db, SessionLifecycle se
                 ct);
         if (credential is null) return null;
 
+        // Resuming (or pausing by hand) is the user taking over: the reason Playdex paused it no longer applies, and a
+        // resumed integration is polled at once rather than after its old backoff.
         credential.Active = status == "active";
+        credential.PausedReason = null;
+        credential.PausedAt = null;
         credential.UpdatedAt = DateTimeOffset.UtcNow;
         await db.SaveChangesAsync(ct);
-        if (!credential.Active)
+        if (credential.Active)
+        {
+            await ForgetPollFailures(credential.Id, ct);
+        }
+        else
         {
             await sessions.EndForPausedIntegration(credential.Id, credential.Type, ct);
         }
@@ -118,10 +155,15 @@ public sealed class ProvidersRepository(PlaydexDbContext db, SessionLifecycle se
         return ToStatus(credential, platforms);
     }
 
+    /// <summary>Drops the poll backoff, so the next cycle polls the integration with its current credential.</summary>
+    private Task<int> ForgetPollFailures(long integrationId, CancellationToken ct) =>
+        db.IntegrationPollBackoffs.Where(row => row.IntegrationId == integrationId).ExecuteDeleteAsync(ct);
+
     /// <summary>
     /// Applies the changed fields, then lets <paramref name="validate"/> check the merged credential (its type, API
     /// key and account id) before anything is saved; it throws to refuse the update.
     /// </summary>
+    /// <exception cref="DuplicateIntegrationAccountException">The new account is already connected.</exception>
     public async Task<ProviderStatusDto?> UpdateCredential(
         long userId,
         long providerId,
@@ -145,7 +187,10 @@ public sealed class ProvidersRepository(PlaydexDbContext db, SessionLifecycle se
         credential.ApiKey = mergedApiKey;
         credential.AccountId = mergedAccountId;
         credential.UpdatedAt = DateTimeOffset.UtcNow;
-        await db.SaveChangesAsync(ct);
+        if (!await TrySaveAccount(credential, ct))
+            throw new DuplicateIntegrationAccountException();
+        // A fixed credential is tried on the next cycle, not after the old one's backoff.
+        await ForgetPollFailures(credential.Id, ct);
         var platforms = await db.Platforms.AsNoTracking().ToListAsync(ct);
         return ToStatus(credential, platforms);
     }
@@ -256,8 +301,12 @@ public sealed class ProvidersRepository(PlaydexDbContext db, SessionLifecycle se
         credential.ApiKey = apiKey;
         credential.AccountId = xuid;
         credential.Active = true;
+        credential.PausedReason = null;
+        credential.PausedAt = null;
         credential.UpdatedAt = now;
-        await db.SaveChangesAsync(ct);
+        if (!await TrySaveAccount(credential, ct))
+            throw new DuplicateIntegrationAccountException();
+        await ForgetPollFailures(credential.Id, ct);
 
         var platforms = await db.Platforms.AsNoTracking().ToListAsync(ct);
         return new OpenXblConnectResult(ToStatus(credential, platforms));
@@ -324,6 +373,11 @@ public sealed class ProvidersRepository(PlaydexDbContext db, SessionLifecycle se
             effectivePlatform is null
                 ? null
                 : new ProviderPlatformDto(effectivePlatform.Key, effectivePlatform.Name),
-            options);
+            options,
+            integration.PausedReason,
+            integration.PausedAt);
     }
 }
+
+/// <summary>Another integration of the same user and type already uses this account.</summary>
+public sealed class DuplicateIntegrationAccountException() : Exception("This account is already connected.");
