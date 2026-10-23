@@ -48,7 +48,8 @@ public sealed class RollingLogFileTests
     {
         // Each game's launcher appends to the same run log; a log another one has open can't be renamed.
         var path = Path.Combine(NewTempDir(), "run.log");
-        using var other = new FileStream(path, FileMode.Append, FileAccess.Write, FileShare.ReadWrite);
+        // Closed before the asserts: Windows won't open a file for reading while another handle can write to it.
+        using (new FileStream(path, FileMode.Append, FileAccess.Write, FileShare.ReadWrite))
         using (var log = new RollingLogFile(path, maxBytes: 100, keptFiles: 3))
         {
             for (var i = 0; i < 10; i++)
