@@ -276,7 +276,10 @@ public sealed partial class PollingBackgroundService(
         CancellationToken ct)
     {
         var threshold = pollingOptions.Value.AuthFailuresBeforePause;
-        if (threshold <= 0 || failure.AuthFailures < threshold) return false;
+        if (threshold <= 0 || failure.AuthFailures < threshold)
+        {
+            return false;
+        }
 
         var pausedAt = DateTimeOffset.UtcNow;
         try

@@ -120,8 +120,7 @@ export function useMapping() {
   }, [get, sendConnectionChange, update]);
 
   const disconnectGames = useCallback(
-    (gameId: string, connectedGameId: string) =>
-      sendConnectionChange(mapping.buildDisconnectSubmission(gameId, connectedGameId)),
+    (gameId: string, connectedGameId: string) => sendConnectionChange(mapping.buildDisconnectSubmission(gameId, connectedGameId)),
     [sendConnectionChange],
   );
 

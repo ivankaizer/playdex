@@ -32,7 +32,12 @@ export function AppFooter({ items = navItems }: { items?: ReadonlyArray<{ label:
       <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3 border-t border-[#2a3540] pt-[18px] text-[13px] text-[#8a96a3]">
         <span>
           © {new Date().getFullYear()} Playdex · Game data from{" "}
-          <a href="https://www.igdb.com" target="_blank" rel="noreferrer" className="pdx-hit text-[#b5c0cb] no-underline transition hover:text-[#6fe3b5]">
+          <a
+            href="https://www.igdb.com"
+            target="_blank"
+            rel="noreferrer"
+            className="pdx-hit text-[#b5c0cb] no-underline transition hover:text-[#6fe3b5]"
+          >
             IGDB
           </a>
         </span>
@@ -43,7 +48,12 @@ export function AppFooter({ items = navItems }: { items?: ReadonlyArray<{ label:
           <a href="mailto:hello@playdex.dev" className="pdx-hit text-[#b5c0cb] no-underline transition hover:text-[#6fe3b5]">
             Contact
           </a>
-          <a href="https://github.com/ivankaizer/playdex" target="_blank" rel="noreferrer" className="pdx-hit text-[#b5c0cb] no-underline transition hover:text-[#6fe3b5]">
+          <a
+            href="https://github.com/ivankaizer/playdex"
+            target="_blank"
+            rel="noreferrer"
+            className="pdx-hit text-[#b5c0cb] no-underline transition hover:text-[#6fe3b5]"
+          >
             GitHub ↗
           </a>
         </div>

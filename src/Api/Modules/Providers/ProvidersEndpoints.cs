@@ -111,10 +111,21 @@ public static class ProvidersEndpoints
 
     private static (bool Changed, string? Value) ReadNullableString(JsonElement payload, string name)
     {
-        if (!payload.TryGetProperty(name, out var property)) return (false, null);
-        if (property.ValueKind == JsonValueKind.Null) return (true, null);
+        if (!payload.TryGetProperty(name, out var property))
+        {
+            return (false, null);
+        }
+
+        if (property.ValueKind == JsonValueKind.Null)
+        {
+            return (true, null);
+        }
+
         if (property.ValueKind != JsonValueKind.String)
+        {
             throw AppProblemException.Validation($"{name} must be a string or null.");
+        }
+
         var value = property.GetString()?.Trim();
         return (true, string.IsNullOrEmpty(value) ? null : value);
     }

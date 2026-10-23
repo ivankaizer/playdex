@@ -68,7 +68,11 @@ internal static class RecapRange
     /// <summary>Calendar months of <paramref name="zone"/> touched by [<paramref name="start"/>, <paramref name="endExclusive"/>).</summary>
     public static int CountMonths(DateTimeOffset start, DateTimeOffset endExclusive, TimeZoneInfo zone)
     {
-        if (endExclusive <= start) return 0;
+        if (endExclusive <= start)
+        {
+            return 0;
+        }
+
         var first = LocalCalendar.DateOf(start, zone);
         var last = LocalCalendar.DateOf(endExclusive, zone).AddDays(-1);
         return Math.Max(0, (last.Year - first.Year) * 12 + (last.Month - first.Month) + 1);
@@ -132,7 +136,10 @@ public sealed class RecapService(RecapRepository repository)
         foreach (var session in sessions)
         {
             if (i++ % 1000 == 0)
+            {
                 ct.ThrowIfCancellationRequested();
+            }
+
             var startedMs = session.StartedAt.ToUnixTimeMilliseconds();
             var endedMs = session.EndedAt?.ToUnixTimeMilliseconds() ?? now.ToUnixTimeMilliseconds();
             var durationSeconds = Math.Max(0, Math.Floor((endedMs - startedMs) / 1000.0));
@@ -153,9 +160,13 @@ public sealed class RecapService(RecapRepository repository)
             hourCounts[localStart.Hour]++;
 
             if (localStart.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday)
+            {
                 weekendSeconds += durationSeconds;
+            }
             else
+            {
                 weekdaySeconds += durationSeconds;
+            }
 
             // Platform totals
             var platformKey = session.PlatformKey;
@@ -231,9 +242,13 @@ public sealed class RecapService(RecapRepository repository)
         {
             var dayDate = DateTime.Parse(key, CultureInfo.InvariantCulture);
             if (previousDay is null || (dayDate - previousDay.Value).Days != 1)
+            {
                 currentStreak = 1;
+            }
             else
+            {
                 currentStreak++;
+            }
 
             longestStreakDays = Math.Max(longestStreakDays, currentStreak);
             previousDay = dayDate;
@@ -372,7 +387,10 @@ public sealed class RecapService(RecapRepository repository)
             BingedInfo? best = null;
             foreach (var (rootId, gst) in groupSessionTimes)
             {
-                if (gst.Timestamps.Count == 0) continue;
+                if (gst.Timestamps.Count == 0)
+                {
+                    continue;
+                }
 
                 var sorted = gst.Timestamps.OrderBy(t => t).ToList();
                 var maxCount = 1;
@@ -380,13 +398,17 @@ public sealed class RecapService(RecapRepository repository)
                 for (var right = 0; right < sorted.Count; right++)
                 {
                     while (sorted[right] - sorted[left] > DayMs)
+                    {
                         left++;
+                    }
 
                     maxCount = Math.Max(maxCount, right - left + 1);
                 }
 
                 if (best is null || maxCount > best.SessionCount)
+                {
                     best = new BingedInfo(rootId, maxCount);
+                }
             }
 
             if (best is not null && groupRepresentatives.TryGetValue(best.Root, out var rep))
@@ -422,7 +444,9 @@ public sealed class RecapService(RecapRepository repository)
             if (firstByGroup.TryGetValue(rootId, out var existing))
             {
                 if (fs.StartedAt < existing)
+                {
                     firstByGroup[rootId] = fs.StartedAt;
+                }
             }
             else
             {
@@ -536,7 +560,11 @@ public sealed class RecapService(RecapRepository repository)
 
     private static double ComputeMedianSeconds(List<double> values)
     {
-        if (values.Count == 0) return 0;
+        if (values.Count == 0)
+        {
+            return 0;
+        }
+
         var sorted = values.OrderBy(v => v).ToList();
         var mid = sorted.Count / 2;
         return sorted.Count % 2 == 0
@@ -550,7 +578,9 @@ public sealed class RecapService(RecapRepository repository)
         foreach (var kv in counts)
         {
             if (best is null || kv.Value > best.Value.Value)
+            {
                 best = kv;
+            }
         }
         return best;
     }
@@ -569,7 +599,10 @@ public sealed class RecapService(RecapRepository repository)
                 return x;
             }
             if (p != x)
+            {
                 parent[x] = Find(p);
+            }
+
             return parent[x];
         }
 
@@ -577,14 +610,20 @@ public sealed class RecapService(RecapRepository repository)
         {
             var ra = Find(a);
             var rb = Find(b);
-            if (ra == rb) return;
+            if (ra == rb)
+            {
+                return;
+            }
+
             var min = Math.Min(ra, rb);
             var max = Math.Max(ra, rb);
             parent[max] = min;
         }
 
         foreach (var (gameId, connectedGameId) in edges)
+        {
             Union(gameId, connectedGameId);
+        }
 
         return new ConnectionIndex(Find);
     }

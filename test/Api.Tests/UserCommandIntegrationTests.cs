@@ -15,7 +15,10 @@ public sealed class UserCommandIntegrationTests(PostgresFixture postgres)
     [Fact]
     public async Task CreatesAnAdminWhoseGeneratedPasswordSignsIn()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         await using var db = CreateContext();
         await using var transaction = await db.Database.BeginTransactionAsync();
@@ -34,7 +37,10 @@ public sealed class UserCommandIntegrationTests(PostgresFixture postgres)
     [Fact]
     public async Task ResetsThePasswordOfAnExistingUserAndKeepsAdmin()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         await using var db = CreateContext();
         await using var transaction = await db.Database.BeginTransactionAsync();
@@ -54,7 +60,10 @@ public sealed class UserCommandIntegrationTests(PostgresFixture postgres)
     [Fact]
     public async Task EmailsMatchWhateverTheirCase()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         await using var db = CreateContext();
         await using var transaction = await db.Database.BeginTransactionAsync();

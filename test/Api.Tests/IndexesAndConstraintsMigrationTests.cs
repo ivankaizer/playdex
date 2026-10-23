@@ -14,7 +14,10 @@ public sealed class IndexesAndConstraintsMigrationTests(PostgresFixture postgres
     [Fact]
     public async Task DuplicateAccountsStopTheMigrationAndNameTheRows()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         await using var connection = await postgres.DataSource!.OpenConnectionAsync();
         await using var transaction = await connection.BeginTransactionAsync();
@@ -35,7 +38,10 @@ public sealed class IndexesAndConstraintsMigrationTests(PostgresFixture postgres
     [Fact]
     public async Task MigrationIsRepeatableAndRejectsDuplicateAccounts()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         await using var connection = await postgres.DataSource!.OpenConnectionAsync();
         await using var transaction = await connection.BeginTransactionAsync();
@@ -54,7 +60,10 @@ public sealed class IndexesAndConstraintsMigrationTests(PostgresFixture postgres
     [Fact]
     public async Task ApiIntegrationsMayShareTheirPlaceholderAccount()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         await using var connection = await postgres.DataSource!.OpenConnectionAsync();
         await using var transaction = await connection.BeginTransactionAsync();
@@ -75,7 +84,10 @@ public sealed class IndexesAndConstraintsMigrationTests(PostgresFixture postgres
     [Fact]
     public async Task DeletingAGameWithSessionsFailsInsteadOfErasingThem()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         await using var connection = await postgres.DataSource!.OpenConnectionAsync();
         await using var transaction = await connection.BeginTransactionAsync();
@@ -98,7 +110,10 @@ public sealed class IndexesAndConstraintsMigrationTests(PostgresFixture postgres
     [Fact]
     public async Task DuplicatePlatformKeyIndexIsDroppedOnlyWhenAnotherUniqueIndexRemains()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         await using var connection = await postgres.DataSource!.OpenConnectionAsync();
         await using var transaction = await connection.BeginTransactionAsync();
@@ -120,7 +135,10 @@ public sealed class IndexesAndConstraintsMigrationTests(PostgresFixture postgres
     [Fact]
     public async Task HotPathIndexesExist()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         await using var command = postgres.DataSource!.CreateCommand("""
             select array_agg(indexname::text order by indexname)

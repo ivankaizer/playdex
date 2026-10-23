@@ -50,7 +50,9 @@ export function GenerationDetails({ detail, actions }: { detail: GenerationDetai
         <div className="flex flex-wrap items-center gap-2 text-sm text-ink-2">
           <OutcomeBadge status={detail.status} />
           <span className="pdx-num">{formatLocal(detail.createdAt)}</span>
-          <span aria-hidden="true" className="text-muted">·</span>
+          <span aria-hidden="true" className="text-muted">
+            ·
+          </span>
           <span>
             {detail.provider} / {detail.model}
           </span>
@@ -83,7 +85,9 @@ export function GenerationDetails({ detail, actions }: { detail: GenerationDetai
                   />
                 </>
               ) : screenshot.failed ? (
-                <p role="alert" className="text-sm text-danger">The screenshot could not be loaded.</p>
+                <p role="alert" className="text-sm text-danger">
+                  The screenshot could not be loaded.
+                </p>
               ) : (
                 <p className="text-sm text-muted">Loading screenshot…</p>
               )}

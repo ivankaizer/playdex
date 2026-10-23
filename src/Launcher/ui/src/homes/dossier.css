@@ -19,8 +19,8 @@
 .now-scrim {
   position: absolute;
   inset: 0;
-  background: linear-gradient(0deg, var(--card-bg) 0%, transparent 55%),
-    linear-gradient(0deg, rgb(var(--scrim) / 0.75) 0%, transparent 45%);
+  background:
+    linear-gradient(0deg, var(--card-bg) 0%, transparent 55%), linear-gradient(0deg, rgb(var(--scrim) / 0.75) 0%, transparent 45%);
 }
 .now-body {
   position: relative;

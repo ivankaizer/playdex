@@ -242,7 +242,15 @@ function TopBar({ tab }: { tab: (typeof DESK_TABS)[number] }) {
         >
           {theme === "dark" ? <Sun aria-hidden /> : <Moon aria-hidden />}
         </button>
-        <button className="dk-icon-btn" data-nav data-kind="quick-settings" aria-label="Quick settings" aria-haspopup="dialog" title="Quick settings" onClick={openQuickSettings}>
+        <button
+          className="dk-icon-btn"
+          data-nav
+          data-kind="quick-settings"
+          aria-label="Quick settings"
+          aria-haspopup="dialog"
+          title="Quick settings"
+          onClick={openQuickSettings}
+        >
           <SlidersHorizontal aria-hidden />
         </button>
         <button
@@ -271,7 +279,14 @@ function LaunchStatus() {
       <div className="dk-live" role="status" data-nav-group="launch">
         <span className="live-dot" aria-hidden />
         <span className="dk-live-text">{state === "steam" ? "Starting Steam" : `Starting ${title}`}</span>
-        <button className="dk-live-x" data-nav data-kind="desk" aria-label={`Cancel starting ${title}`} title="Cancel" onClick={leaveLaunch}>
+        <button
+          className="dk-live-x"
+          data-nav
+          data-kind="desk"
+          aria-label={`Cancel starting ${title}`}
+          title="Cancel"
+          onClick={leaveLaunch}
+        >
           <X aria-hidden />
         </button>
       </div>
@@ -286,7 +301,13 @@ function Playing({ gameId, since }: { gameId: string; since: number | null }) {
   const elapsed = useElapsed(since);
   return (
     <div className="dk-live-wrap" data-nav-group="now-playing">
-      <button className="dk-live" data-nav data-kind="now-playing" aria-label={`Now playing ${game.title}. Switch to the game`} onClick={() => resumeGame(gameId)}>
+      <button
+        className="dk-live"
+        data-nav
+        data-kind="now-playing"
+        aria-label={`Now playing ${game.title}. Switch to the game`}
+        onClick={() => resumeGame(gameId)}
+      >
         <span className="live-dot" aria-hidden />
         <span className="dk-live-label">Playing</span>
         <span className="dk-live-text">{game.title}</span>

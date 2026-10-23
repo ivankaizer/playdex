@@ -225,8 +225,7 @@ async function createError(response: Response): Promise<ApiError> {
   try {
     const root = (await response.json()) as Record<string, unknown> | null;
     const envelopeError = root && typeof root === "object" ? root.error : null;
-    const envelopeMessage =
-      envelopeError && typeof envelopeError === "object" ? (envelopeError as Record<string, unknown>).error : null;
+    const envelopeMessage = envelopeError && typeof envelopeError === "object" ? (envelopeError as Record<string, unknown>).error : null;
     if (typeof envelopeMessage === "string" && envelopeMessage.trim()) {
       detail = envelopeMessage;
     } else if (root && typeof root.detail === "string" && root.detail.trim()) {

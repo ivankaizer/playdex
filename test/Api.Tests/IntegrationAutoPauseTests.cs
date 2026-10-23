@@ -24,7 +24,10 @@ public sealed class IntegrationAutoPauseTests(PostgresFixture postgres)
     [Fact]
     public async Task RepeatedRejectionsPauseTheIntegrationOnceWithTheReason()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         await using var scope = await Scope.Create(postgres, new ProviderPollException(Rejected, authenticationFailure: true));
 
@@ -52,7 +55,10 @@ public sealed class IntegrationAutoPauseTests(PostgresFixture postgres)
     [Fact]
     public async Task OtherFailuresNeverPause()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         await using var scope = await Scope.Create(postgres, new ProviderPollException("PSN presence request returned 503."));
 
@@ -69,7 +75,10 @@ public sealed class IntegrationAutoPauseTests(PostgresFixture postgres)
     [Fact]
     public async Task ResumingClearsTheReasonAndTheBackoff()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         await using var scope = await Scope.Create(postgres, new ProviderPollException(Rejected, authenticationFailure: true));
         for (var attempt = 0; attempt < 3; attempt++)
@@ -94,7 +103,10 @@ public sealed class IntegrationAutoPauseTests(PostgresFixture postgres)
     [Fact]
     public async Task ANewCredentialIsPolledOnTheNextCycle()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         await using var scope = await Scope.Create(postgres, new ProviderPollException(Rejected, authenticationFailure: true));
         await scope.Polling.PollCredential(scope.Credential, CancellationToken.None);

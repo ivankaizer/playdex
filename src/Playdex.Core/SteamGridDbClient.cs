@@ -39,7 +39,10 @@ public sealed class SteamGridDbClient(HttpClient? httpClient = null)
         CancellationToken cancellationToken = default)
     {
         apiKey = SteamGridDbConfig.NormalizeApiKey(apiKey);
-        if (string.IsNullOrWhiteSpace(apiKey)) return new SteamGridDbSyncResult(0, 0);
+        if (string.IsNullOrWhiteSpace(apiKey))
+        {
+            return new SteamGridDbSyncResult(0, 0);
+        }
 
         var gameId = await FindGameIdAsync(apiKey, game, cancellationToken)
             ?? throw new InvalidOperationException($"SteamGridDB could not find artwork for '{game.DisplayName}'.");
@@ -72,7 +75,11 @@ public sealed class SteamGridDbClient(HttpClient? httpClient = null)
         CancellationToken cancellationToken = default)
     {
         apiKey = RequireKey(apiKey);
-        if (string.IsNullOrWhiteSpace(term)) return [];
+        if (string.IsNullOrWhiteSpace(term))
+        {
+            return [];
+        }
+
         using var search = await GetJsonAsync(
             $"search/autocomplete/{Uri.EscapeDataString(term.Trim())}",
             apiKey,
@@ -307,7 +314,11 @@ public sealed class SteamGridDbClient(HttpClient? httpClient = null)
         request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", apiKey);
         request.Headers.UserAgent.ParseAdd(Brand.UserAgent);
         using var response = await client.SendAsync(request, cancellationToken);
-        if (allowNotFound && response.StatusCode == HttpStatusCode.NotFound) return null;
+        if (allowNotFound && response.StatusCode == HttpStatusCode.NotFound)
+        {
+            return null;
+        }
+
         if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
         {
             throw new InvalidOperationException("The SteamGridDB API key was rejected.");
@@ -347,7 +358,10 @@ public sealed class SteamGridDbClient(HttpClient? httpClient = null)
             foreach (var oldExtension in new[] { ".png", ".jpg", ".jpeg", ".webp", ".ico" })
             {
                 var oldPath = Path.Combine(directory, stem + oldExtension);
-                if (!string.Equals(oldPath, destination, StringComparison.OrdinalIgnoreCase)) File.Delete(oldPath);
+                if (!string.Equals(oldPath, destination, StringComparison.OrdinalIgnoreCase))
+                {
+                    File.Delete(oldPath);
+                }
             }
             File.Move(temporaryPath, destination, overwrite: true);
         }

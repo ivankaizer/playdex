@@ -28,9 +28,17 @@ public sealed partial class NotificationSender(
 
     public async Task Send(SessionStarted @event, CancellationToken ct)
     {
-        if (!client.IsEnabled) return;
+        if (!client.IsEnabled)
+        {
+            return;
+        }
+
         var target = await repository.GetSessionStartedTarget(@event.SessionId, ct);
-        if (target is null || string.IsNullOrWhiteSpace(target.TelegramChatId)) return;
+        if (target is null || string.IsNullOrWhiteSpace(target.TelegramChatId))
+        {
+            return;
+        }
+
         var (title, platform) = CleanNames(target);
         await SendSessionCard(
             target.TelegramChatId,
@@ -42,9 +50,17 @@ public sealed partial class NotificationSender(
 
     public async Task Send(SessionEnded @event, CancellationToken ct)
     {
-        if (!client.IsEnabled) return;
+        if (!client.IsEnabled)
+        {
+            return;
+        }
+
         var target = await repository.GetSessionEndedTarget(@event.SessionId, ct);
-        if (target is null || string.IsNullOrWhiteSpace(target.TelegramChatId)) return;
+        if (target is null || string.IsNullOrWhiteSpace(target.TelegramChatId))
+        {
+            return;
+        }
+
         var duration = FormatDuration(@event.EndedAt - @event.StartedAt);
         var (title, platform) = CleanNames(target);
         await SendSessionCard(
@@ -57,9 +73,16 @@ public sealed partial class NotificationSender(
 
     public async Task Send(PollFailed @event, CancellationToken ct)
     {
-        if (!client.IsEnabled) return;
+        if (!client.IsEnabled)
+        {
+            return;
+        }
+
         var target = await repository.GetCredentialTarget(@event.CredentialId, ct);
-        if (target is null || string.IsNullOrWhiteSpace(target.TelegramChatId)) return;
+        if (target is null || string.IsNullOrWhiteSpace(target.TelegramChatId))
+        {
+            return;
+        }
         // The provider's error text stays in the server log, where the poller already records it with the
         // credential: it can be long, carries provider internals, and is nothing the user can act on.
         var platform = NotificationText.Clean(target.Platform, NotificationText.MaxPlatformLength);
@@ -73,9 +96,17 @@ public sealed partial class NotificationSender(
 
     public async Task Send(IntegrationPaused @event, CancellationToken ct)
     {
-        if (!client.IsEnabled) return;
+        if (!client.IsEnabled)
+        {
+            return;
+        }
+
         var target = await repository.GetCredentialTarget(@event.CredentialId, ct);
-        if (target is null || string.IsNullOrWhiteSpace(target.TelegramChatId)) return;
+        if (target is null || string.IsNullOrWhiteSpace(target.TelegramChatId))
+        {
+            return;
+        }
+
         var platform = NotificationText.Clean(target.Platform, NotificationText.MaxPlatformLength);
         await client.SendMessageAsync(
             target.TelegramChatId,
@@ -119,8 +150,16 @@ public sealed partial class NotificationSender(
         var hours = totalSeconds / 3600;
         var minutes = totalSeconds % 3600 / 60;
         var seconds = totalSeconds % 60;
-        if (hours > 0) return $"{hours}h {minutes}m";
-        if (minutes > 0) return $"{minutes}m {seconds}s";
+        if (hours > 0)
+        {
+            return $"{hours}h {minutes}m";
+        }
+
+        if (minutes > 0)
+        {
+            return $"{minutes}m {seconds}s";
+        }
+
         return $"{seconds}s";
     }
 }

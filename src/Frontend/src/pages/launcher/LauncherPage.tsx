@@ -83,9 +83,7 @@ function LauncherTour() {
         ))}
       </div>
       <figure id="tour-panel" role="tabpanel" aria-labelledby={`tour-${tour[active].key}`} className="m-0 flex flex-col gap-3">
-        <figcaption className="px-2 text-[17px] text-ink-2">
-          {tour[active].body}
-        </figcaption>
+        <figcaption className="px-2 text-[17px] text-ink-2">{tour[active].body}</figcaption>
         <div className="relative aspect-video w-full overflow-hidden rounded-card bg-tile shadow-cover">
           {tour.map((screen, index) => (
             <img

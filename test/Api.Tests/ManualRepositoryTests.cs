@@ -17,7 +17,10 @@ public sealed class ManualRepositoryTests(PostgresFixture postgres)
     [Fact]
     public async Task PerUserStartLockSerializesCompetingTransactions()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         await using var firstDb = CreateDb();
         await using var firstTransaction = await firstDb.Database.BeginTransactionAsync();
@@ -38,7 +41,10 @@ public sealed class ManualRepositoryTests(PostgresFixture postgres)
     [Fact]
     public async Task StopWaitsForTheSamePerUserStartLock()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         await using var firstDb = CreateDb();
         await using var firstTransaction = await firstDb.Database.BeginTransactionAsync();
@@ -56,7 +62,10 @@ public sealed class ManualRepositoryTests(PostgresFixture postgres)
     [Fact]
     public async Task SavedGameCanBeStartedStoppedAndLoggedHistorically()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         await using var db = CreateDb();
         var now = DateTimeOffset.UtcNow;
@@ -113,7 +122,10 @@ public sealed class ManualRepositoryTests(PostgresFixture postgres)
     [Fact]
     public async Task VerifiedIgdbSelectionCreatesOnceAndReusesTheIdentity()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         await using var db = CreateDb();
         var now = DateTimeOffset.UtcNow;

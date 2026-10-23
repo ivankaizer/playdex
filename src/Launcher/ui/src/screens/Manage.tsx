@@ -17,14 +17,7 @@ import { launch, openApp, showToast } from "../app-state";
 import { SaveGlyph } from "../components/saves";
 import { Cover } from "../components/shared";
 import { gameById, type Game } from "../data/games";
-import {
-  desktopState,
-  rpc,
-  type DesktopApp,
-  type DesktopGame,
-  type MessageView,
-  type PlatformOption,
-} from "../host/desktop";
+import { desktopState, rpc, type DesktopApp, type DesktopGame, type MessageView, type PlatformOption } from "../host/desktop";
 import { focusEl, focusScreenDefault } from "../nav/focus";
 import { useStore } from "../nav/store";
 import "./desk.css";
@@ -83,7 +76,9 @@ export function Manage() {
         <div>
           <span className="dk-kicker">Added to Playdex</span>
           <h1 className="dk-h1">Your games</h1>
-          <p className="dk-muted">Games Playdex starts and records from their .exe or .bat. Steam games installed on this PC are in the Library already.</p>
+          <p className="dk-muted">
+            Games Playdex starts and records from their .exe or .bat. Steam games installed on this PC are in the Library already.
+          </p>
         </div>
         <div className="dk-head-actions" data-nav-group="manage-actions">
           <button
@@ -99,7 +94,14 @@ export function Manage() {
           <button className="dk-btn dk-btn-outline" data-nav data-kind="desk" onClick={() => run("open", () => rpc("launchers.open"))}>
             <FolderOpen aria-hidden /> Launchers folder
           </button>
-          <button className="dk-btn dk-btn-primary" data-nav data-nav-default data-kind="desk" disabled={busy === "add"} onClick={() => run("add", () => rpc("game.add"))}>
+          <button
+            className="dk-btn dk-btn-primary"
+            data-nav
+            data-nav-default
+            data-kind="desk"
+            disabled={busy === "add"}
+            onClick={() => run("add", () => rpc("game.add"))}
+          >
             <Plus aria-hidden /> Add a game
           </button>
         </div>
@@ -110,8 +112,8 @@ export function Manage() {
           <Gamepad2 aria-hidden />
           <h2>No games added yet</h2>
           <p className="dk-muted">
-            Add a game's .exe or .bat to track its sessions, start it from here or from Steam, and back up its saves. Steam games
-            installed on this PC are in the Library already.
+            Add a game's .exe or .bat to track its sessions, start it from here or from Steam, and back up its saves. Steam games installed
+            on this PC are in the Library already.
           </p>
         </div>
       ) : (
@@ -142,7 +144,9 @@ export function Manage() {
               ))}
             </tbody>
           </table>
-          <p className="dk-note dk-table-note">Steam must be closed to add a shortcut. With a SteamGridDB key in Settings it gets cover, hero, logo and icon art.</p>
+          <p className="dk-note dk-table-note">
+            Steam must be closed to add a shortcut. With a SteamGridDB key in Settings it gets cover, hero, logo and icon art.
+          </p>
         </div>
       )}
       <AppsSection apps={state.apps} suggested={state.suggestedApps} busy={busy} run={run} />
@@ -264,7 +268,9 @@ function GameRow({
               aria-label={`Back up ${game.displayName}'s saves now`}
               title="Back up saves now"
               disabled={busy === `backup:${game.gameId}` || game.backup.kind === "running"}
-              onClick={() => run(`backup:${game.gameId}`, async () => report(await rpc<MessageView>("game.backup", { gameId: game.gameId })))}
+              onClick={() =>
+                run(`backup:${game.gameId}`, async () => report(await rpc<MessageView>("game.backup", { gameId: game.gameId })))
+              }
             >
               <Archive aria-hidden />
             </button>
@@ -326,7 +332,14 @@ function GameEditor({ game, onClose }: { game: DesktopGame; onClose: () => void 
   async function save() {
     setSaving(true);
     try {
-      await rpc("game.update", { gameId: game.gameId, displayName: name, apiGameId, launchOptions, platform: platform || null, dailyBackup });
+      await rpc("game.update", {
+        gameId: game.gameId,
+        displayName: name,
+        apiGameId,
+        launchOptions,
+        platform: platform || null,
+        dailyBackup,
+      });
       showToast(`Saved ${name}.`);
       onClose();
     } catch (error) {
@@ -350,7 +363,14 @@ function GameEditor({ game, onClose }: { game: DesktopGame; onClose: () => void 
     >
       <label className="field">
         <span className="label">Name</span>
-        <input id={`edit-name-${game.gameId}`} className="text" value={name} onChange={(e) => setName(e.target.value)} data-nav data-kind="field" />
+        <input
+          id={`edit-name-${game.gameId}`}
+          className="text"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          data-nav
+          data-kind="field"
+        />
       </label>
       <label className="field">
         <span className="label">Game ID</span>
@@ -359,7 +379,14 @@ function GameEditor({ game, onClose }: { game: DesktopGame; onClose: () => void 
       </label>
       <label className="field">
         <span className="label">Launch options</span>
-        <input className="text" value={launchOptions} placeholder="Optional" onChange={(e) => setLaunchOptions(e.target.value)} data-nav data-kind="field" />
+        <input
+          className="text"
+          value={launchOptions}
+          placeholder="Optional"
+          onChange={(e) => setLaunchOptions(e.target.value)}
+          data-nav
+          data-kind="field"
+        />
       </label>
       <label className="field">
         <span className="label">Platform</span>
@@ -418,8 +445,8 @@ function AppsSection({
             Apps in quick settings
           </h2>
           <p className="dk-muted">
-            They open from quick settings (Menu) in Big Picture, since the Full Screen Experience has no taskbar. Apps
-            aren't games: Playdex doesn't record them.
+            They open from quick settings (Menu) in Big Picture, since the Full Screen Experience has no taskbar. Apps aren't games: Playdex
+            doesn't record them.
           </p>
         </div>
         <div className="dk-head-actions" data-nav-group="apps-actions">
@@ -511,7 +538,11 @@ function AppRow({
   };
 
   const origin =
-    app.kind === "browser" ? "Your default browser" : app.kind === "executable" ? "Added from its .exe" : "Started through Discord's updater";
+    app.kind === "browser"
+      ? "Your default browser"
+      : app.kind === "executable"
+        ? "Added from its .exe"
+        : "Started through Discord's updater";
 
   return (
     <>
@@ -537,10 +568,24 @@ function AppRow({
         </td>
         <td>
           <div className="dk-cell-actions">
-            <button className="dk-btn dk-btn-outline dk-btn-sm" data-nav data-kind="desk" disabled={!app.available} onClick={() => openApp(app.id, app.name)}>
+            <button
+              className="dk-btn dk-btn-outline dk-btn-sm"
+              data-nav
+              data-kind="desk"
+              disabled={!app.available}
+              onClick={() => openApp(app.id, app.name)}
+            >
               <ExternalLink aria-hidden /> Open
             </button>
-            <button className="dk-icon-btn" data-nav data-kind="desk" aria-expanded={editing} aria-label={`${app.name} settings`} title="Settings" onClick={onEdit}>
+            <button
+              className="dk-icon-btn"
+              data-nav
+              data-kind="desk"
+              aria-expanded={editing}
+              aria-label={`${app.name} settings`}
+              title="Settings"
+              onClick={onEdit}
+            >
               <Settings2 aria-hidden />
             </button>
             <button
@@ -603,7 +648,14 @@ function AppEditor({ app, onClose }: { app: DesktopApp; onClose: () => void }) {
     >
       <label className="field">
         <span className="label">Name</span>
-        <input id={`app-name-${app.id}`} className="text" value={name} onChange={(e) => setName(e.target.value)} data-nav data-kind="field" />
+        <input
+          id={`app-name-${app.id}`}
+          className="text"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          data-nav
+          data-kind="field"
+        />
       </label>
       <label className="field">
         <span className="label">Launch options</span>

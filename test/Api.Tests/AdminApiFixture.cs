@@ -40,7 +40,10 @@ public sealed class AdminApiFixture : IAsyncLifetime
     public async Task InitializeAsync()
     {
         var databaseUrl = Environment.GetEnvironmentVariable("PLAYDEX_INTEGRATION_DATABASE_URL");
-        if (string.IsNullOrWhiteSpace(databaseUrl)) return;
+        if (string.IsNullOrWhiteSpace(databaseUrl))
+        {
+            return;
+        }
 
         Environment.SetEnvironmentVariable("DATABASE_URL", databaseUrl);
         Environment.SetEnvironmentVariable("Auth__JwtSecret", "admin-api-integration-secret-at-least-thirty-two-bytes");
@@ -53,14 +56,20 @@ public sealed class AdminApiFixture : IAsyncLifetime
         var admin = new User
         {
             Id = Random.Shared.NextInt64(6_200_000_000_000, 6_300_000_000_000),
-            Email = AdminEmail, Password = BCrypt.Net.BCrypt.HashPassword(Password), IsAdmin = true,
-            CreatedAt = now, UpdatedAt = now,
+            Email = AdminEmail,
+            Password = BCrypt.Net.BCrypt.HashPassword(Password),
+            IsAdmin = true,
+            CreatedAt = now,
+            UpdatedAt = now,
         };
         var user = new User
         {
             Id = Random.Shared.NextInt64(6_300_000_000_000, 6_400_000_000_000),
-            Email = UserEmail, Password = BCrypt.Net.BCrypt.HashPassword(Password), IsAdmin = false,
-            CreatedAt = now, UpdatedAt = now,
+            Email = UserEmail,
+            Password = BCrypt.Net.BCrypt.HashPassword(Password),
+            IsAdmin = false,
+            CreatedAt = now,
+            UpdatedAt = now,
         };
         db.Users.AddRange(admin, user);
         await db.SaveChangesAsync();
@@ -70,7 +79,11 @@ public sealed class AdminApiFixture : IAsyncLifetime
 
     public async Task DisposeAsync()
     {
-        if (Factory is null) return;
+        if (Factory is null)
+        {
+            return;
+        }
+
         await using (var db = CreateDb())
         {
             await db.AiGenerations.Where(row => row.UserId == AdminId || row.UserId == UserId).ExecuteDeleteAsync();

@@ -76,9 +76,16 @@ public static class SessionOverlaps
         var start = dayStart;
         foreach (var session in taken.OrderBy(session => session.StartedAt))
         {
-            if (session.StartedAt >= start + duration) break;
+            if (session.StartedAt >= start + duration)
+            {
+                break;
+            }
+
             var end = session.EndedAt ?? now;
-            if (end > start) start = end;
+            if (end > start)
+            {
+                start = end;
+            }
         }
         return start + duration <= dayEnd ? start : null;
     }

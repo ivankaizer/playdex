@@ -192,9 +192,7 @@ export const art = {
 };
 
 /** Sessions sorted newest first (by day, then start time). */
-export const sessionsNewestFirst = [...sessions].sort(
-  (a, b) => a.dayOffset - b.dayOffset || b.start.localeCompare(a.start),
-);
+export const sessionsNewestFirst = [...sessions].sort((a, b) => a.dayOffset - b.dayOffset || b.start.localeCompare(a.start));
 
 export function sessionEnd(s: Session): string {
   const [h, m] = s.start.split(":").map(Number);

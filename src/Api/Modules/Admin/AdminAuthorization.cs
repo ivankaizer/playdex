@@ -20,8 +20,15 @@ public sealed class AdministratorRequirementHandler(AdminRepository repository)
         AdministratorRequirement requirement)
     {
         var subject = context.User.FindFirst("sub")?.Value;
-        if (!long.TryParse(subject, NumberStyles.None, CultureInfo.InvariantCulture, out var userId)) return;
+        if (!long.TryParse(subject, NumberStyles.None, CultureInfo.InvariantCulture, out var userId))
+        {
+            return;
+        }
+
         var ct = (context.Resource as HttpContext)?.RequestAborted ?? CancellationToken.None;
-        if (await repository.IsAdministrator(userId, ct)) context.Succeed(requirement);
+        if (await repository.IsAdministrator(userId, ct))
+        {
+            context.Succeed(requirement);
+        }
     }
 }

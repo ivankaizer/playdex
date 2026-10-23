@@ -26,12 +26,20 @@ public sealed class ProvidersService(ProvidersRepository repository)
             creation.AccountId,
             ct);
         if (result.LimitReached)
+        {
             throw AppProblemException.Conflict(
                 $"{PlatformName(creation.Platform)} supports up to {ProvidersRepository.MaxIntegrationsPerType} integrations.");
+        }
+
         if (result.DuplicateAccount)
+        {
             throw DuplicateAccount(creation.Platform);
+        }
+
         if (result.Provider is null)
+        {
             throw AppProblemException.NotFound($"{PlatformName(creation.Platform)} platform is not installed.");
+        }
 
         return new CreateProviderResponseDto(ToResponse(result.Provider));
     }
@@ -126,7 +134,9 @@ public sealed class ProvidersService(ProvidersRepository repository)
                 "Platform must be the integration's main platform or one of its children.");
         }
         if (result.Provider is null)
+        {
             throw AppProblemException.NotFound("Provider not found.");
+        }
 
         return new ProviderSessionPlatformUpdateResponseDto(ToResponse(result.Provider));
     }
@@ -138,13 +148,20 @@ public sealed class ProvidersService(ProvidersRepository repository)
     {
         var apiKey = request.ApiKey?.Trim();
         if (string.IsNullOrEmpty(apiKey))
+        {
             throw AppProblemException.Validation("OpenXBL API key is required.");
+        }
 
         var xuid = request.Xuid?.Trim();
         if (!string.IsNullOrEmpty(xuid) && xuid.Any(character => !char.IsAsciiDigit(character)))
+        {
             throw AppProblemException.Validation("Xbox XUID must contain digits only.");
+        }
+
         if (request.ProviderId is <= 0)
+        {
             throw AppProblemException.Validation("providerId must be a positive integer.");
+        }
 
         OpenXblConnectResult result;
         try
@@ -162,11 +179,19 @@ public sealed class ProvidersService(ProvidersRepository repository)
         }
 
         if (result.ProviderMissing)
+        {
             throw AppProblemException.NotFound("Provider not found.");
+        }
+
         if (result.ApiKeyLocked)
+        {
             throw AppProblemException.Validation("OpenXBL API key is managed by an administrator.");
+        }
+
         if (result.Provider is null)
+        {
             throw AppProblemException.NotFound("Xbox provider is not installed.");
+        }
 
         return new OpenXblConnectResponseDto(ToResponse(result.Provider));
     }
@@ -181,7 +206,10 @@ public sealed class ProvidersService(ProvidersRepository repository)
     {
         var platform = value?.Trim().ToLowerInvariant();
         if (string.IsNullOrEmpty(platform))
+        {
             throw AppProblemException.Validation("Platform is required.");
+        }
+
         return platform;
     }
 
@@ -211,7 +239,9 @@ public sealed class ProvidersService(ProvidersRepository repository)
     internal static void ValidateCredential(IntegrationType type, string? apiKey, string? accountId)
     {
         if (type == IntegrationType.Api)
+        {
             return;
+        }
 
         if (string.IsNullOrWhiteSpace(apiKey))
         {
@@ -223,7 +253,10 @@ public sealed class ProvidersService(ProvidersRepository repository)
             });
         }
         if (type == IntegrationType.Steam && string.IsNullOrWhiteSpace(accountId))
+        {
             throw AppProblemException.Validation("Steam ID is required.");
+        }
+
         if (type == IntegrationType.Xbox && accountId is not null &&
             accountId.Any(character => !char.IsAsciiDigit(character)))
         {

@@ -14,7 +14,10 @@ public sealed class DurableNotificationsAndBackoffMigrationTests(PostgresFixture
     [Fact]
     public async Task MigrationIsRepeatable()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         await using var connection = await postgres.DataSource!.OpenConnectionAsync();
         await using var transaction = await connection.BeginTransactionAsync();
@@ -35,7 +38,10 @@ public sealed class DurableNotificationsAndBackoffMigrationTests(PostgresFixture
     [Fact]
     public async Task BackoffGoesWithItsIntegration()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         await using var connection = await postgres.DataSource!.OpenConnectionAsync();
         await using var transaction = await connection.BeginTransactionAsync();
@@ -54,7 +60,10 @@ public sealed class DurableNotificationsAndBackoffMigrationTests(PostgresFixture
     [Fact]
     public async Task BackoffCountsCannotGoNegative()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         await using var connection = await postgres.DataSource!.OpenConnectionAsync();
         await using var transaction = await connection.BeginTransactionAsync();
@@ -73,7 +82,10 @@ public sealed class DurableNotificationsAndBackoffMigrationTests(PostgresFixture
     [Fact]
     public async Task AnEventIsQueuedOnce()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         await using var connection = await postgres.DataSource!.OpenConnectionAsync();
         await using var transaction = await connection.BeginTransactionAsync();

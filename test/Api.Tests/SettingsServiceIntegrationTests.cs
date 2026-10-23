@@ -15,7 +15,10 @@ public sealed class SettingsServiceIntegrationTests(PostgresFixture postgres)
     [Fact]
     public async Task ConcurrentFirstSavesForTheSameUserBothSucceed()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         var userId = await CreateUser();
         try
@@ -40,7 +43,10 @@ public sealed class SettingsServiceIntegrationTests(PostgresFixture postgres)
     [Fact]
     public async Task ClearingTheChatIdRemovesTheChannel()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         var userId = await CreateUser();
         try
@@ -64,7 +70,10 @@ public sealed class SettingsServiceIntegrationTests(PostgresFixture postgres)
     [Fact]
     public async Task SettingsAreSavedBeforeAppriseAndAFailureIsAGatewayProblem()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         var userId = await CreateUser();
         try
@@ -91,7 +100,10 @@ public sealed class SettingsServiceIntegrationTests(PostgresFixture postgres)
     [Fact]
     public async Task FailedTestNotificationIsAGatewayProblem()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         var userId = await CreateUser();
         try

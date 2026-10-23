@@ -75,17 +75,12 @@ export function DataSection() {
             <p className="pdx-label">Export</p>
             <p className="mt-2 text-[15px] font-semibold">Download a copy</p>
             <p className="mt-1 text-sm leading-relaxed text-muted">
-              A JSON file with your profile, settings, connected services (without their keys), every session, ratings,
-              game connections, AI drafts and AI batch inputs from the last 30 days.
+              A JSON file with your profile, settings, connected services (without their keys), every session, ratings, game connections, AI
+              drafts and AI batch inputs from the last 30 days.
             </p>
           </div>
           <div className="mt-auto flex flex-wrap items-center gap-3">
-            <button
-              type="button"
-              onClick={downloadExport}
-              disabled={exportStatus === "working"}
-              className="pdx-btn-outline"
-            >
+            <button type="button" onClick={downloadExport} disabled={exportStatus === "working"} className="pdx-btn-outline">
               {exportStatus === "working" ? "Preparing…" : "Download my data"}
             </button>
             {exportStatus === "done" && <span className="text-sm text-accent">✓ Download started</span>}
@@ -102,8 +97,8 @@ export function DataSection() {
             <p className="pdx-label !text-danger">Danger zone</p>
             <p className="mt-2 text-[15px] font-semibold">Delete your account</p>
             <p className="mt-1 text-sm leading-relaxed text-muted">
-              Permanently removes your account, sessions, connected services and their keys, settings, ratings, drafts and
-              AI history. This can't be undone.
+              Permanently removes your account, sessions, connected services and their keys, settings, ratings, drafts and AI history. This
+              can't be undone.
             </p>
           </div>
           {isConfirming ? (

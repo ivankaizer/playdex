@@ -1,8 +1,8 @@
 // @ts-check
 // docs.playdex.dev: how to run Playdex on your own server. A static Starlight site on Cloudflare Pages,
 // deployed by .github/workflows/docs.yml.
-import { defineConfig } from 'astro/config';
-import starlight from '@astrojs/starlight';
+import { defineConfig } from 'astro/config'
+import starlight from '@astrojs/starlight'
 
 export default defineConfig({
   site: 'https://docs.playdex.dev',
@@ -21,4 +21,4 @@ export default defineConfig({
       ],
     }),
   ],
-});
+})

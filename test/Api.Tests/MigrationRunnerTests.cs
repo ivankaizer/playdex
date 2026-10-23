@@ -12,7 +12,10 @@ public sealed class MigrationRunnerTests(PostgresFixture postgres)
     [Fact]
     public async Task ExistingLedgerCanBeReadDuringStartupWithoutWaitingForExclusiveLock()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         await using var scope = await LedgerScope.CreateAsync(postgres.DataSource!);
         var runner = CreateRunner(scope.DataSource, []);
@@ -33,7 +36,10 @@ public sealed class MigrationRunnerTests(PostgresFixture postgres)
     [InlineData(false)]
     public async Task NewAndLegacyLedgersRecordAppliedTimestamp(bool legacyLedger)
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         await using var scope = await LedgerScope.CreateAsync(postgres.DataSource!);
         if (legacyLedger)
@@ -66,15 +72,26 @@ public sealed class MigrationRunnerTests(PostgresFixture postgres)
     [Fact]
     public async Task LedgerIsReadInOrdinalOrderWhateverTheDatabaseCollation()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         await using var scope = await LedgerScope.CreateAsync(postgres.DataSource!);
         // glibc collations skip '_' at the first level, so "004_ab" sorts before "004_a_z"; ordinally it is after.
         await using var find = scope.DataSource.CreateCommand(
             "select collname from pg_collation where collname in ('en_US.utf8', 'en_US.UTF-8', 'en_US') limit 1");
-        if (await find.ExecuteScalarAsync() is not string collation) return;
+        if (await find.ExecuteScalarAsync() is not string collation)
+        {
+            return;
+        }
+
         await using var probe = scope.DataSource.CreateCommand($"""select '004_ab' < '004_a_z' collate "{collation}" """);
-        if (await probe.ExecuteScalarAsync() is not true) return;
+        if (await probe.ExecuteScalarAsync() is not true)
+        {
+            return;
+        }
+
         await using var ledger = scope.DataSource.CreateCommand($"""
             create table dotnet_schema_migrations (
                 migration_id text collate "{collation}" primary key,
@@ -93,7 +110,10 @@ public sealed class MigrationRunnerTests(PostgresFixture postgres)
     [Fact]
     public async Task MigrationThatTimesOutOnALockIsRetried()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         await using var scope = await LedgerScope.CreateAsync(postgres.DataSource!);
         await using (var create = scope.DataSource.CreateCommand("create table locked_table (id int)"))
@@ -118,7 +138,10 @@ public sealed class MigrationRunnerTests(PostgresFixture postgres)
     [Fact]
     public async Task MigrationGivesUpAfterTheLastLockTimeout()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         await using var scope = await LedgerScope.CreateAsync(postgres.DataSource!);
         await using (var create = scope.DataSource.CreateCommand("create table locked_table (id int)"))
@@ -144,7 +167,10 @@ public sealed class MigrationRunnerTests(PostgresFixture postgres)
     [Fact]
     public async Task WaitForAnotherInstanceHoldingTheMigrationLockIsBounded()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         await using var scope = await LedgerScope.CreateAsync(postgres.DataSource!);
         await using var otherInstance = await scope.DataSource.OpenConnectionAsync();

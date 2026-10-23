@@ -45,13 +45,19 @@ public static class RecapEndpoints
         if (from is not null || to is not null)
         {
             if (from is null || to is null)
+            {
                 return TypedResults.Problem("from and to are required.", statusCode: 400);
+            }
 
             if (!TryParseBound(from, zone, out var parsedFrom) || !TryParseBound(to, zone, out var parsedTo))
+            {
                 return TypedResults.Problem("from and to must be valid dates.", statusCode: 400);
+            }
 
             if (parsedFrom > parsedTo)
+            {
                 return TypedResults.Problem("from must be before to.", statusCode: 400);
+            }
 
             startedAt = parsedFrom;
             try
@@ -86,7 +92,10 @@ public static class RecapEndpoints
         }
 
         if (!DateTimeOffset.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var instant))
+        {
             return false;
+        }
+
         bound = instant.ToUniversalTime();
         return true;
     }

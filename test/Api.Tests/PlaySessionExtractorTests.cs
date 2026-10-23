@@ -33,7 +33,7 @@ public sealed class PlaySessionExtractorTests
         ExtractionResponse? captured = null;
         var input = Input() with { ObserveResponse = response => { captured = response; return Task.CompletedTask; } };
         var error = await Assert.ThrowsAsync<AppProblemException>(() => Extractor(new("private provider error")
-            { Status = HttpStatusCode.TooManyRequests }).Extract(input, CancellationToken.None));
+        { Status = HttpStatusCode.TooManyRequests }).Extract(input, CancellationToken.None));
 
         Assert.NotNull(captured);
         Assert.Equal(429, captured.HttpStatus);
@@ -243,7 +243,11 @@ public sealed class PlaySessionExtractorTests
         public HttpStatusCode Status { get; init; } = HttpStatusCode.OK;
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
-            if (WaitForCancellation) await Task.Delay(Timeout.Infinite, cancellationToken);
+            if (WaitForCancellation)
+            {
+                await Task.Delay(Timeout.Infinite, cancellationToken);
+            }
+
             Calls++;
             Body = await request.Content!.ReadAsStringAsync(cancellationToken);
             var responseOutput = Outputs?.Dequeue() ?? output;

@@ -360,7 +360,7 @@ public sealed class SessionQueue(CaptureClient api, string? file = null) : IDisp
         {
             // Losing the session is worse than racing another process's flush, so a lock timeout still appends.
             using var fileLock = await LockFileAsync();
-            await File.AppendAllTextAsync(_file,JsonSerializer.Serialize(session, CaptureJson.Default.QueuedSession) + "\n");
+            await File.AppendAllTextAsync(_file, JsonSerializer.Serialize(session, CaptureJson.Default.QueuedSession) + "\n");
             Log.Info($"queue: stored {session.GameTitle} ({session.DurationInSeconds}s) for later");
         }
         finally

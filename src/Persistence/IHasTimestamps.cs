@@ -2,6 +2,6 @@ namespace Playdex.Persistence;
 
 public interface IHasTimestamps
 {
-    public DateTimeOffset CreatedAt { get; set; }
-    public DateTimeOffset UpdatedAt { get; set; }
+    DateTimeOffset CreatedAt { get; set; }
+    DateTimeOffset UpdatedAt { get; set; }
 }

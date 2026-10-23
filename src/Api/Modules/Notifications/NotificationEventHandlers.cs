@@ -24,7 +24,10 @@ public sealed class NotificationEventHandlers(AppriseClient client, Notification
 
     private async Task Enqueue(object domainEvent)
     {
-        if (!client.IsEnabled) return;
+        if (!client.IsEnabled)
+        {
+            return;
+        }
 
         // Not the publisher's token: the event has happened (the session is saved), so the request or poll that raised
         // it going away must not lose its notification.
@@ -48,7 +51,10 @@ public sealed class NotificationSignal : IDisposable
     {
         lock (_gate)
         {
-            if (_semaphore.CurrentCount == 0) _semaphore.Release();
+            if (_semaphore.CurrentCount == 0)
+            {
+                _semaphore.Release();
+            }
         }
     }
 
@@ -147,7 +153,10 @@ public sealed partial class NotificationDispatcher(
         using var scope = scopeFactory.CreateScope();
         var outbox = scope.ServiceProvider.GetRequiredService<NotificationOutbox>();
         var claimed = await outbox.ClaimNext(ClaimDuration, ct);
-        if (claimed is null) return false;
+        if (claimed is null)
+        {
+            return false;
+        }
 
         var notification = NotificationOutbox.Deserialize(claimed);
         if (notification is null)

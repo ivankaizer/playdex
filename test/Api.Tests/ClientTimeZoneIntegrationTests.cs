@@ -18,7 +18,10 @@ public sealed class ClientTimeZoneIntegrationTests(PostgresFixture postgres)
     [Fact]
     public async Task RangeStatsUseTheClientsMonthsAndTheTitleFilter()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         await using var db = CreateDb();
         await using var transaction = await db.Database.BeginTransactionAsync();
@@ -57,7 +60,10 @@ public sealed class ClientTimeZoneIntegrationTests(PostgresFixture postgres)
     [Fact]
     public async Task TodayIncludesSessionsThatCrossedMidnightOrAreStillRunning()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         await using var db = CreateDb();
         await using var transaction = await db.Database.BeginTransactionAsync();
@@ -80,7 +86,10 @@ public sealed class ClientTimeZoneIntegrationTests(PostgresFixture postgres)
     [Fact]
     public async Task TodayListsTheNewestSessionsAndCountsThemAll()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         await using var db = CreateDb();
         await using var transaction = await db.Database.BeginTransactionAsync();
@@ -103,7 +112,10 @@ public sealed class ClientTimeZoneIntegrationTests(PostgresFixture postgres)
     [Fact]
     public async Task GameStatsStartAtTheFirstYearPlayedInTheClientsCalendar()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         await using var db = CreateDb();
         await using var transaction = await db.Database.BeginTransactionAsync();
@@ -131,7 +143,10 @@ public sealed class ClientTimeZoneIntegrationTests(PostgresFixture postgres)
     [Fact]
     public async Task RecapBucketsDaysHoursAndYearsInTheClientsZone()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         await using var db = CreateDb();
         await using var transaction = await db.Database.BeginTransactionAsync();
@@ -172,7 +187,10 @@ public sealed class ClientTimeZoneIntegrationTests(PostgresFixture postgres)
     [Fact]
     public async Task CurrentYearRecapCountsDaysOnlyUpToToday()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         await using var db = CreateDb();
         await using var transaction = await db.Database.BeginTransactionAsync();

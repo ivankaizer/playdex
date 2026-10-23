@@ -21,7 +21,10 @@ public sealed class NotificationOutboxTests(PostgresFixture postgres)
     [Fact]
     public async Task AnEventPublishedTwiceIsQueuedOnceAndEveryKindRoundTrips()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         await using var scope = await Scope.Create(postgres);
         var started = new SessionStarted(scope.Id(1), scope.IntegrationId, 3, scope.Clock.Now);
@@ -52,7 +55,10 @@ public sealed class NotificationOutboxTests(PostgresFixture postgres)
     [Fact]
     public async Task AQueuedNotificationIsSentAfterARestartExactlyOnce()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         await using var scope = await Scope.Create(postgres);
         await scope.Publish(new PollFailed(scope.IntegrationId, "steam", "down", TimeSpan.FromSeconds(5), scope.Clock.Now));
@@ -71,7 +77,10 @@ public sealed class NotificationOutboxTests(PostgresFixture postgres)
     [Fact]
     public async Task TwoInstancesSendEachNotificationOnce()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         await using var scope = await Scope.Create(postgres, appriseDelay: TimeSpan.FromMilliseconds(30));
         for (var index = 0; index < 8; index++)
@@ -93,7 +102,10 @@ public sealed class NotificationOutboxTests(PostgresFixture postgres)
     [Fact]
     public async Task AFailedDeliveryIsRetriedWithBackoffThenGivenUp()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         await using var scope = await Scope.Create(postgres, appriseStatus: HttpStatusCode.ServiceUnavailable);
         await scope.Publish(new PollFailed(scope.IntegrationId, "steam", "down", TimeSpan.FromSeconds(5), scope.Clock.Now));
@@ -125,7 +137,10 @@ public sealed class NotificationOutboxTests(PostgresFixture postgres)
     [Fact]
     public async Task ANotificationClaimedByAnInstanceThatDiedIsSentOnceTheClaimExpires()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         await using var scope = await Scope.Create(postgres);
         await scope.Publish(new PollFailed(scope.IntegrationId, "steam", "down", TimeSpan.FromSeconds(5), scope.Clock.Now));
@@ -146,7 +161,10 @@ public sealed class NotificationOutboxTests(PostgresFixture postgres)
     [Fact]
     public async Task ShutdownHandsAnUnsentNotificationBack()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         using var stopping = new CancellationTokenSource();
         await using var scope = await Scope.Create(postgres, onSend: stopping.Cancel);
@@ -163,7 +181,10 @@ public sealed class NotificationOutboxTests(PostgresFixture postgres)
     [Fact]
     public async Task UnknownKindsAreGivenUpAndFinishedRowsAreForgottenAfterTheRetention()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         await using var scope = await Scope.Create(postgres);
         await using (var insert = postgres.DataSource!.CreateCommand("""
@@ -332,7 +353,11 @@ public sealed class NotificationOutboxTests(PostgresFixture postgres)
         {
             _requests.Enqueue(request.RequestUri!.ToString());
             onSend?.Invoke();
-            if (delay > TimeSpan.Zero) await Task.Delay(delay, cancellationToken);
+            if (delay > TimeSpan.Zero)
+            {
+                await Task.Delay(delay, cancellationToken);
+            }
+
             cancellationToken.ThrowIfCancellationRequested();
             return new HttpResponseMessage(status) { Content = new StringContent("{}") };
         }

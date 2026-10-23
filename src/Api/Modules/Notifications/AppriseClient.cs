@@ -122,7 +122,10 @@ public sealed partial class AppriseClient
     {
         EnsureEnabled();
         var normalizedChatId = NormalizeTelegramChatId(telegramChatId);
-        if (_options.UseMock) return;
+        if (_options.UseMock)
+        {
+            return;
+        }
 
         var botToken = NormalizeTelegramBotToken(_options.TelegramBotToken);
         var configurationKey = TelegramConfigurationKey(normalizedChatId);
@@ -163,7 +166,9 @@ public sealed partial class AppriseClient
     private void EnsureEnabled()
     {
         if (!IsEnabled)
+        {
             throw new InvalidOperationException("Apprise:BaseUrl is not configured.");
+        }
     }
 
     private static string NormalizeTelegramChatId(string telegramChatId)
@@ -173,7 +178,10 @@ public sealed partial class AppriseClient
                 NumberStyles.AllowLeadingSign,
                 CultureInfo.InvariantCulture,
                 out var parsed) || parsed == 0)
+        {
             throw new ArgumentException("Telegram chat ID must be a non-zero integer.", nameof(telegramChatId));
+        }
+
         return parsed.ToString(CultureInfo.InvariantCulture);
     }
 
@@ -185,8 +193,11 @@ public sealed partial class AppriseClient
             value[..separator].Any(character => !char.IsAsciiDigit(character)) ||
             value[(separator + 1)..].Any(character =>
                 !char.IsAsciiLetterOrDigit(character) && character is not '_' and not '-'))
+        {
             throw new InvalidOperationException(
                 "Apprise:TelegramBotToken is missing or invalid.");
+        }
+
         return value;
     }
 

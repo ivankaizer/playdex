@@ -10,7 +10,10 @@ public sealed class RefreshTokensMigrationTests(PostgresFixture postgres)
     [Fact]
     public async Task EmailsBecomeUniqueRegardlessOfCase()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         await using var connection = await postgres.DataSource!.OpenConnectionAsync();
         await using var transaction = await connection.BeginTransactionAsync();
@@ -27,7 +30,10 @@ public sealed class RefreshTokensMigrationTests(PostgresFixture postgres)
     [Fact]
     public async Task AccountsThatDifferOnlyInEmailCaseStopTheMigrationUntouched()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         await using var connection = await postgres.DataSource!.OpenConnectionAsync();
         await using var transaction = await connection.BeginTransactionAsync();

@@ -12,7 +12,10 @@ public sealed class AccountsPlatformNameTests(PostgresFixture postgres)
     [Fact]
     public async Task SessionAndStatsResponsesUsePersistedPlatformName()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         await using var db = CreateDb();
         var suffix = Guid.NewGuid().ToString("n");

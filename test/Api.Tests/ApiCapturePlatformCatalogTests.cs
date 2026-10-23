@@ -13,7 +13,10 @@ public sealed class ApiCapturePlatformCatalogTests(PostgresFixture postgres)
     [Fact]
     public async Task CatalogRequiresApiKeyAndReturnsRecursivePcHierarchy()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         ConfigureHost();
         await using var factory = new PlaydexApiFactory();

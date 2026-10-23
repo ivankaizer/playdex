@@ -71,7 +71,12 @@ function CopyField({ label, value, hidden = false, copied, onCopy }: CopyFieldPr
           autoComplete="off"
           className="pdx-input !h-11 min-w-0 flex-1 !bg-tile font-mono tracking-normal text-ink-2"
         />
-        <button type="button" onClick={onCopy} aria-label={`Copy ${label.toLowerCase()}`} className="pdx-btn-outline !h-11 shrink-0 !px-4 !text-[13px]">
+        <button
+          type="button"
+          onClick={onCopy}
+          aria-label={`Copy ${label.toLowerCase()}`}
+          className="pdx-btn-outline !h-11 shrink-0 !px-4 !text-[13px]"
+        >
           {copied ? "Copied" : "Copy"}
         </button>
       </span>

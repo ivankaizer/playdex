@@ -48,7 +48,12 @@ export function LaunchGuard() {
   const game = gameById(guard.gameId);
   const running = gameById(guard.runningId);
   return (
-    <div className="launch launch-guard" role="alertdialog" aria-modal="true" aria-label={`Start ${game.title} while ${running.title} is running?`}>
+    <div
+      className="launch launch-guard"
+      role="alertdialog"
+      aria-modal="true"
+      aria-label={`Start ${game.title} while ${running.title} is running?`}
+    >
       <Backdrop gameId={game.id} />
       <div className="launch-scrim" />
       <div className="launch-body">

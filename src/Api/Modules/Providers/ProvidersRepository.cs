@@ -21,7 +21,10 @@ public sealed class ProvidersRepository(PlaydexDbContext db, SessionLifecycle se
         IReadOnlyList<Platform> platforms)
     {
         var main = platforms.FirstOrDefault(platform => platform.Id == mainPlatformId);
-        if (main is null) return [];
+        if (main is null)
+        {
+            return [];
+        }
 
         var options = new List<Platform> { main };
         var pending = new Queue<long>();
@@ -79,7 +82,9 @@ public sealed class ProvidersRepository(PlaydexDbContext db, SessionLifecycle se
             .Select(item => (long?)item.Id)
             .FirstOrDefaultAsync(ct);
         if (!platformId.HasValue)
+        {
             return new ProviderCreateResult(null, LimitReached: false);
+        }
 
         var now = DateTimeOffset.UtcNow;
         var integration = new Integration
@@ -113,10 +118,10 @@ public sealed class ProvidersRepository(PlaydexDbContext db, SessionLifecycle se
             return true;
         }
         catch (DbUpdateException exception) when (exception.InnerException is PostgresException
-                                                  {
-                                                      SqlState: PostgresErrorCodes.UniqueViolation,
-                                                      ConstraintName: PlaydexDbContext.UniqueAccountIndex,
-                                                  })
+        {
+            SqlState: PostgresErrorCodes.UniqueViolation,
+            ConstraintName: PlaydexDbContext.UniqueAccountIndex,
+        })
         {
             db.Entry(integration).State = EntityState.Detached;
             return false;
@@ -131,7 +136,10 @@ public sealed class ProvidersRepository(PlaydexDbContext db, SessionLifecycle se
             .FirstOrDefaultAsync(
                 item => item.Id == providerId && item.UserId == userId,
                 ct);
-        if (credential is null) return null;
+        if (credential is null)
+        {
+            return null;
+        }
 
         // Resuming (or pausing by hand) is the user taking over: the reason Playdex paused it no longer applies, and a
         // resumed integration is polled at once rather than after its old backoff.
@@ -178,7 +186,10 @@ public sealed class ProvidersRepository(PlaydexDbContext db, SessionLifecycle se
             .FirstOrDefaultAsync(
                 item => item.Id == providerId && item.UserId == userId,
                 ct);
-        if (credential is null) return null;
+        if (credential is null)
+        {
+            return null;
+        }
 
         var mergedApiKey = apiKeyChanged ? apiKey : credential.ApiKey;
         var mergedAccountId = accountIdChanged ? accountId : credential.AccountId;
@@ -188,7 +199,9 @@ public sealed class ProvidersRepository(PlaydexDbContext db, SessionLifecycle se
         credential.AccountId = mergedAccountId;
         credential.UpdatedAt = DateTimeOffset.UtcNow;
         if (!await TrySaveAccount(credential, ct))
+        {
             throw new DuplicateIntegrationAccountException();
+        }
         // A fixed credential is tried on the next cycle, not after the old one's backoff.
         await ForgetPollFailures(credential.Id, ct);
         var platforms = await db.Platforms.AsNoTracking().ToListAsync(ct);
@@ -210,7 +223,10 @@ public sealed class ProvidersRepository(PlaydexDbContext db, SessionLifecycle se
             item => item.Id == providerId && item.UserId == userId,
             ct);
         if (integration is null)
+        {
             return new ProviderSessionPlatformUpdateResult(null, InvalidPlatform: false);
+        }
+
         if (integration.PlatformId is not { } mainPlatformId)
         {
             return new ProviderSessionPlatformUpdateResult(
@@ -224,7 +240,9 @@ public sealed class ProvidersRepository(PlaydexDbContext db, SessionLifecycle se
         var selectedPlatform = allowedPlatforms.FirstOrDefault(
             platform => platform.Key == platformKey);
         if (selectedPlatform is null)
+        {
             return new ProviderSessionPlatformUpdateResult(null, InvalidPlatform: true);
+        }
 
         var now = DateTimeOffset.UtcNow;
         integration.SessionPlatformId = selectedPlatform.Id == mainPlatformId
@@ -274,15 +292,25 @@ public sealed class ProvidersRepository(PlaydexDbContext db, SessionLifecycle se
             .Where(platform => platform.Key == "xbox")
             .Select(platform => (long?)platform.Id)
             .FirstOrDefaultAsync(ct);
-        if (!platformId.HasValue) return new OpenXblConnectResult(null);
+        if (!platformId.HasValue)
+        {
+            return new OpenXblConnectResult(null);
+        }
 
         var xboxIntegrations = db.Integrations
             .Where(item => item.UserId == userId && item.PlatformId == platformId.Value);
         var credential = providerId is { } id
             ? await xboxIntegrations.FirstOrDefaultAsync(item => item.Id == id, ct)
             : await xboxIntegrations.OrderBy(item => item.Id).FirstOrDefaultAsync(ct);
-        if (providerId.HasValue && credential is null) return new OpenXblConnectResult(null, ProviderMissing: true);
-        if (credential is { ApiKeyLocked: true }) return new OpenXblConnectResult(null, ApiKeyLocked: true);
+        if (providerId.HasValue && credential is null)
+        {
+            return new OpenXblConnectResult(null, ProviderMissing: true);
+        }
+
+        if (credential is { ApiKeyLocked: true })
+        {
+            return new OpenXblConnectResult(null, ApiKeyLocked: true);
+        }
 
         var now = DateTimeOffset.UtcNow;
         if (credential is null)
@@ -305,7 +333,10 @@ public sealed class ProvidersRepository(PlaydexDbContext db, SessionLifecycle se
         credential.PausedAt = null;
         credential.UpdatedAt = now;
         if (!await TrySaveAccount(credential, ct))
+        {
             throw new DuplicateIntegrationAccountException();
+        }
+
         await ForgetPollFailures(credential.Id, ct);
 
         var platforms = await db.Platforms.AsNoTracking().ToListAsync(ct);
@@ -318,7 +349,10 @@ public sealed class ProvidersRepository(PlaydexDbContext db, SessionLifecycle se
             .Where(credential => credential.UserId == userId && credential.Type == IntegrationType.Api)
             .FirstOrDefaultAsync(ct);
 
-        if (!string.IsNullOrEmpty(existing?.ApiKey)) return existing.ApiKey;
+        if (!string.IsNullOrEmpty(existing?.ApiKey))
+        {
+            return existing.ApiKey;
+        }
 
         if (existing is not null)
         {

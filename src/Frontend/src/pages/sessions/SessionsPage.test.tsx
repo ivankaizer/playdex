@@ -79,7 +79,11 @@ describe("SessionsPage", () => {
     const { container } = renderAt("/sessions");
     await waitFor(() => expect(container.innerHTML).toContain("Showing 1 of 1 session"));
     const paths = calls.map((call) => call.path);
-    expect(paths.some((path) => /^\/sessions\?limit=10&offset=0&from=\d{4}-\d{2}-\d{2}&to=\d{4}-\d{2}-\d{2}&sort=date&direction=desc&tz=[^&]+$/.test(path))).toBe(true);
+    expect(
+      paths.some((path) =>
+        /^\/sessions\?limit=10&offset=0&from=\d{4}-\d{2}-\d{2}&to=\d{4}-\d{2}-\d{2}&sort=date&direction=desc&tz=[^&]+$/.test(path),
+      ),
+    ).toBe(true);
     expect(paths.some((path) => path.startsWith("/stats?from="))).toBe(true);
     expect(paths).toContain("/manual/sessions/current");
     expect(paths).toContain("/manual/platforms");
@@ -182,7 +186,10 @@ describe("SessionsPage", () => {
         if (url.pathname.endsWith("/manual/sessions/current")) return json({ session: null });
         if (url.pathname.endsWith("/stats/daily")) return json({ accountId: 1, days: [] });
         if (url.pathname.endsWith("/stats")) {
-          return json({ accountId: 1, stats: { totalSeconds: 0, sessionCount: 0, topGameTitle: null, platforms: [], topGames: [], months: [] } });
+          return json({
+            accountId: 1,
+            stats: { totalSeconds: 0, sessionCount: 0, topGameTitle: null, platforms: [], topGames: [], months: [] },
+          });
         }
         return json({ accountId: 1, sessions: [], total: 0, limit: 10, offset: 0 });
       }),

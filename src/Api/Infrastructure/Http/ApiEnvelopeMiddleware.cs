@@ -131,7 +131,11 @@ public sealed class ApiEnvelopeMiddleware(RequestDelegate next)
             {
                 using var document = await JsonDocument.ParseAsync(body, cancellationToken: cancellationToken);
                 var root = document.RootElement;
-                if (TryReadString(root, "detail", out var detail)) return detail;
+                if (TryReadString(root, "detail", out var detail))
+                {
+                    return detail;
+                }
+
                 if (root.ValueKind == JsonValueKind.Object &&
                     root.TryGetProperty("error", out var error) &&
                     TryReadString(error, "error", out var nestedError))

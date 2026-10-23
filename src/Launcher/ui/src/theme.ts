@@ -41,7 +41,12 @@ export const PALETTES: PaletteOption[] = [
   { id: "rose-pine", label: "Rosé Pine", note: "Muted rose, gold and pine.", swatch: ["#191724", "#ebbcba", "#f6c177"] },
   { id: "synthwave", label: "Synthwave", note: "Neon pink and cyan on violet. Dark only.", swatch: ["#1a1030", "#ff4fd8", "#36f9f6"] },
   { id: "pocket", label: "Pocket", note: "The four greens of a 1989 handheld's screen.", swatch: ["#9bbc0f", "#0f380f", "#8bac0f"] },
-  { id: "high-contrast", label: "High contrast", note: "Black and white, yellow focus, heavier rings.", swatch: ["#000000", "#ffd400", "#ffffff"] },
+  {
+    id: "high-contrast",
+    label: "High contrast",
+    note: "Black and white, yellow focus, heavier rings.",
+    swatch: ["#000000", "#ffd400", "#ffffff"],
+  },
 ];
 
 const FOLDER: Record<ThemeKind, string> = { skin: "skins", palette: "palettes" };

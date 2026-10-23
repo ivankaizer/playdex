@@ -92,8 +92,15 @@ public sealed partial class SessionLifecycle(
             changed |= await End([session.Id], polledAt, unseen ? PollingInterval : null, ct) > 0;
         }
 
-        if (continuing is { } sessionId && await Touch(sessionId, polledAt, ct)) return changed;
-        if (gameId is not { } detectedGameId) return changed;
+        if (continuing is { } sessionId && await Touch(sessionId, polledAt, ct))
+        {
+            return changed;
+        }
+
+        if (gameId is not { } detectedGameId)
+        {
+            return changed;
+        }
 
         await Start(new PlaySession
         {

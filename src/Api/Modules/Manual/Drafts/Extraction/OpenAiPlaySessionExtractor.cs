@@ -16,7 +16,10 @@ public sealed class OpenAiPlaySessionExtractor(HttpClient client, IOptions<AiDra
     public async Task<IReadOnlyList<ExtractedSession>> Extract(ExtractionInput input, CancellationToken cancellationToken)
     {
         var options = configuredOptions.Value;
-        if (!options.IsAvailable) throw new AppProblemException(503, "AI extraction is unavailable. Use manual entry or try again later.");
+        if (!options.IsAvailable)
+        {
+            throw new AppProblemException(503, "AI extraction is unavailable. Use manual entry or try again later.");
+        }
         // DraftExtractionService has already decoded the screenshot once, under the user's lock.
         ExtractionInputValidator.ValidateRequest(input, options);
         try
@@ -78,27 +81,60 @@ public sealed class OpenAiPlaySessionExtractor(HttpClient client, IOptions<AiDra
             buffer.Write(chunk, 0, count);
         }
         if (input.ObserveResponse is not null)
+        {
             await input.ObserveResponse(new((int)response.StatusCode, Encoding.UTF8.GetString(buffer.ToArray()), truncated));
+        }
+
         if (!response.IsSuccessStatusCode)
+        {
             throw new AppProblemException(502, "AI extraction failed. Please try again or use manual entry.");
-        if (truncated) throw InvalidOutput();
+        }
+
+        if (truncated)
+        {
+            throw InvalidOutput();
+        }
+
         using var envelope = JsonDocument.Parse(buffer.ToArray());
         var root = envelope.RootElement;
         if (options.Provider.Equals("openrouter", StringComparison.OrdinalIgnoreCase))
+        {
             return ParseRows(ReadOpenRouterText(root), input.PlatformKeys, options.MaxRows, input.ReferenceDate);
-        if (root.GetProperty("status").GetString() != "completed") throw InvalidOutput();
+        }
+
+        if (root.GetProperty("status").GetString() != "completed")
+        {
+            throw InvalidOutput();
+        }
+
         var texts = new List<string>();
         foreach (var item in root.GetProperty("output").EnumerateArray())
         {
-            if (item.GetProperty("type").GetString() == "reasoning") continue;
-            if (item.GetProperty("type").GetString() != "message") throw InvalidOutput();
+            if (item.GetProperty("type").GetString() == "reasoning")
+            {
+                continue;
+            }
+
+            if (item.GetProperty("type").GetString() != "message")
+            {
+                throw InvalidOutput();
+            }
+
             foreach (var content in item.GetProperty("content").EnumerateArray())
             {
-                if (content.GetProperty("type").GetString() != "output_text") throw InvalidOutput();
+                if (content.GetProperty("type").GetString() != "output_text")
+                {
+                    throw InvalidOutput();
+                }
+
                 texts.Add(content.GetProperty("text").GetString() ?? throw InvalidOutput());
             }
         }
-        if (texts.Count != 1) throw InvalidOutput();
+        if (texts.Count != 1)
+        {
+            throw InvalidOutput();
+        }
+
         return ParseRows(texts[0], input.PlatformKeys, options.MaxRows, input.ReferenceDate);
     }
 
@@ -111,8 +147,16 @@ public sealed class OpenAiPlaySessionExtractor(HttpClient client, IOptions<AiDra
     private static object BuildRequest(ExtractionInput input, AiDraftOptions options)
     {
         var content = new List<object>();
-        if (!string.IsNullOrWhiteSpace(input.Text)) content.Add(new { type = "input_text", text = input.Text });
-        if (input.Image is not null) content.Add(new { type = "input_image", image_url = $"data:{input.ImageContentType!.ToLowerInvariant()};base64,{Convert.ToBase64String(input.Image)}", detail = "auto" });
+        if (!string.IsNullOrWhiteSpace(input.Text))
+        {
+            content.Add(new { type = "input_text", text = input.Text });
+        }
+
+        if (input.Image is not null)
+        {
+            content.Add(new { type = "input_image", image_url = $"data:{input.ImageContentType!.ToLowerInvariant()};base64,{Convert.ToBase64String(input.Image)}", detail = "auto" });
+        }
+
         return new
         {
             model = options.Model,
@@ -136,18 +180,24 @@ public sealed class OpenAiPlaySessionExtractor(HttpClient client, IOptions<AiDra
             {
                 format = new
                 {
-                    type = "json_schema", name = "play_session_drafts", strict = true,
+                    type = "json_schema",
+                    name = "play_session_drafts",
+                    strict = true,
                     schema = new
                     {
-                        type = "object", additionalProperties = false, required = new[] { "sessions" },
+                        type = "object",
+                        additionalProperties = false,
+                        required = new[] { "sessions" },
                         properties = new
                         {
                             sessions = new
                             {
-                                type = "array", maxItems = options.MaxRows,
+                                type = "array",
+                                maxItems = options.MaxRows,
                                 items = new
                                 {
-                                    type = "object", additionalProperties = false,
+                                    type = "object",
+                                    additionalProperties = false,
                                     required = new[] { "title", "date", "durationMinutes", "platformKey", "warnings" },
                                     properties = new
                                     {
@@ -173,13 +223,19 @@ public sealed class OpenAiPlaySessionExtractor(HttpClient client, IOptions<AiDra
         var schema = responses["text"]!["format"]!["schema"]!.DeepClone();
         var content = new JsonArray { new JsonObject { ["type"] = "text", ["text"] = instructions } };
         if (!string.IsNullOrWhiteSpace(input.Text))
+        {
             content.Add(new JsonObject { ["type"] = "text", ["text"] = input.Text });
+        }
+
         if (input.Image is not null)
+        {
             content.Add(new JsonObject
             {
                 ["type"] = "image_url",
                 ["image_url"] = new JsonObject { ["url"] = $"data:{input.ImageContentType!.ToLowerInvariant()};base64,{Convert.ToBase64String(input.Image)}" },
             });
+        }
+
         return new JsonObject
         {
             ["model"] = options.Model,
@@ -200,7 +256,11 @@ public sealed class OpenAiPlaySessionExtractor(HttpClient client, IOptions<AiDra
     private static string ReadOpenRouterText(JsonElement root)
     {
         var content = root.GetProperty("choices")[0].GetProperty("message").GetProperty("content");
-        if (content.ValueKind == JsonValueKind.String) return content.GetString() ?? throw InvalidOutput();
+        if (content.ValueKind == JsonValueKind.String)
+        {
+            return content.GetString() ?? throw InvalidOutput();
+        }
+
         if (content.ValueKind == JsonValueKind.Array)
         {
             var text = content.EnumerateArray()
@@ -222,17 +282,33 @@ public sealed class OpenAiPlaySessionExtractor(HttpClient client, IOptions<AiDra
         var root = document.RootElement;
         RequireProperties(root, "sessions");
         var rows = root.GetProperty("sessions");
-        if (rows.GetArrayLength() > maxRows) throw InvalidOutput();
+        if (rows.GetArrayLength() > maxRows)
+        {
+            throw InvalidOutput();
+        }
+
         var result = new List<ExtractedSession>();
         foreach (var row in rows.EnumerateArray())
         {
             RequireProperties(row, "title", "date", "durationMinutes", "platformKey", "warnings");
             var title = row.GetProperty("title").GetString()?.Trim();
-            if (string.IsNullOrWhiteSpace(title) || title.Length > 500) throw InvalidOutput();
+            if (string.IsNullOrWhiteSpace(title) || title.Length > 500)
+            {
+                throw InvalidOutput();
+            }
+
             var warningElements = row.GetProperty("warnings");
-            if (warningElements.GetArrayLength() > 10) throw InvalidOutput();
+            if (warningElements.GetArrayLength() > 10)
+            {
+                throw InvalidOutput();
+            }
+
             var warnings = warningElements.EnumerateArray().Select(value => value.GetString()?.Trim() ?? throw InvalidOutput()).ToList();
-            if (warnings.Any(value => value.Length > 300)) throw InvalidOutput();
+            if (warnings.Any(value => value.Length > 300))
+            {
+                throw InvalidOutput();
+            }
+
             warnings.RemoveAll(string.IsNullOrWhiteSpace);
             var date = row.GetProperty("date").GetString();
             var dateValid = TryNormalizeDate(date, referenceDate, out var parsedDate);
@@ -272,16 +348,23 @@ public sealed class OpenAiPlaySessionExtractor(HttpClient client, IOptions<AiDra
         }
 
         if (DateOnly.TryParseExact(value, "yyyy-MM-dd", CultureInfo.InvariantCulture,
-                DateTimeStyles.None, out date)) return true;
+                DateTimeStyles.None, out date))
+        {
+            return true;
+        }
 
         if (int.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out var day))
+        {
             return TryCreateDate(referenceDate.Year, referenceDate.Month, day, out date);
+        }
 
         var parts = value?.Split('.', StringSplitOptions.None);
         if (parts is { Length: 2 }
             && int.TryParse(parts[0], NumberStyles.None, CultureInfo.InvariantCulture, out day)
             && int.TryParse(parts[1], NumberStyles.None, CultureInfo.InvariantCulture, out var month))
+        {
             return TryCreateDate(referenceDate.Year, month, day, out date);
+        }
 
         date = default;
         return false;
@@ -304,7 +387,10 @@ public sealed class OpenAiPlaySessionExtractor(HttpClient client, IOptions<AiDra
     private static void RequireProperties(JsonElement element, params string[] properties)
     {
         var actual = element.EnumerateObject().Select(property => property.Name).ToArray();
-        if (actual.Length != properties.Length || !actual.Order().SequenceEqual(properties.Order())) throw InvalidOutput();
+        if (actual.Length != properties.Length || !actual.Order().SequenceEqual(properties.Order()))
+        {
+            throw InvalidOutput();
+        }
     }
 
     private static AppProblemException InvalidOutput() => new(502, InvalidOutputMessage);

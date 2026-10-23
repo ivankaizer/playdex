@@ -132,12 +132,16 @@ public static class ApiCaptureEndpoints
 
         if (string.IsNullOrEmpty(authHeader) ||
             !authHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+        {
             throw AppProblemException.Unauthorized("Missing api key.");
+        }
 
         var apiKey = authHeader["Bearer ".Length..].Trim();
 
         if (apiKey.Length == 0)
+        {
             throw AppProblemException.Unauthorized("Missing api key.");
+        }
 
         return apiKey;
     }
@@ -187,9 +191,14 @@ public static class ApiCaptureEndpoints
     private static ValidatedGamePayload ValidateGamePayload(ApiSessionRequest? request)
     {
         if (string.IsNullOrWhiteSpace(request?.GameTitle))
+        {
             throw AppProblemException.Validation("gameTitle is required.");
+        }
+
         if (request.GameTitle.Trim().Length > MaxTitleLength)
+        {
             throw AppProblemException.Validation($"gameTitle must be at most {MaxTitleLength} characters.");
+        }
 
         var gameId = request.GameId switch
         {
@@ -198,17 +207,26 @@ public static class ApiCaptureEndpoints
             _ => null,
         };
         if (string.IsNullOrWhiteSpace(gameId))
+        {
             throw AppProblemException.Validation("gameId is required.");
+        }
+
         if (gameId.Length > MaxGameIdLength)
+        {
             throw AppProblemException.Validation($"gameId must be at most {MaxGameIdLength} characters.");
+        }
 
         var provider = request.GameIdProvider?.Trim().ToLowerInvariant();
         if (string.IsNullOrWhiteSpace(provider) || !AllowedIdentityProviders.Contains(provider))
+        {
             throw AppProblemException.Validation("gameIdProvider must be steam, psn, xbox, or igdb.");
+        }
 
         var platform = request.Platform?.Trim().ToLowerInvariant();
         if (string.IsNullOrWhiteSpace(platform))
+        {
             throw AppProblemException.Validation("platform is required.");
+        }
 
         return new ValidatedGamePayload(gameId, provider, platform);
     }

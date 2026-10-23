@@ -28,7 +28,9 @@ public static class SettingsEndpoints
         CancellationToken ct)
     {
         if (request is null)
+        {
             return TypedResults.Problem("Request body is required.", statusCode: 400);
+        }
 
         return TypedResults.Ok(await service.UpdateSettings(principal.GetUserId(), request, ct));
     }

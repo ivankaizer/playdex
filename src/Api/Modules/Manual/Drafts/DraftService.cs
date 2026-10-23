@@ -25,16 +25,30 @@ public sealed class DraftService(DraftRepository repository, PlaydexDbContext db
         var existing = batch.Rows.SingleOrDefault(r => r.Id == rowId) ?? throw AppProblemException.NotFound();
         RequirePending(existing, request.Revision);
         var title = request.Title?.Trim() ?? "";
-        if (title.Length > 500) throw AppProblemException.Validation("Game title must be at most 500 characters.");
-        if (request.Date?.Length > 10) throw AppProblemException.Validation("Use a calendar date in yyyy-MM-dd format.");
+        if (title.Length > 500)
+        {
+            throw AppProblemException.Validation("Game title must be at most 500 characters.");
+        }
+
+        if (request.Date?.Length > 10)
+        {
+            throw AppProblemException.Validation("Use a calendar date in yyyy-MM-dd format.");
+        }
+
         var platform = request.PlatformKey?.Trim().ToLowerInvariant() ?? "unknown";
         // The catalog the review offers excludes Playnite, as extraction does; an edit cannot bring it back.
         if (platform == ManualService.PlaynitePlatformKey || await manualRepository.GetPlatformIdByKey(platform, ct) is null)
+        {
             throw AppProblemException.Validation("Select a platform from the catalog.");
+        }
+
         ManualMappingSearchResultDto? selected = null;
         // A changed query invalidates the prior selection, even when a client sends its stale ID.
         if (title == existing.Title && (!string.IsNullOrWhiteSpace(request.GameId) || !string.IsNullOrWhiteSpace(request.IgdbId)))
+        {
             selected = await VerifySelection(request.GameId, request.IgdbId, ct);
+        }
+
         return await repository.WithLockedRow(userId, batchId, rowId, row =>
         {
             RequirePending(row, request.Revision);
@@ -66,7 +80,10 @@ public sealed class DraftService(DraftRepository repository, PlaydexDbContext db
         // snapshot taken here cannot accept a row that changed since.
         var batch = await RequireBatch(userId, batchId, ct);
         if (request.Rows is null || request.Rows.Count is < 1 or > 50 || request.Rows.Select(r => r.Id).Distinct().Count() != request.Rows.Count)
+        {
             throw AppProblemException.Validation("Select between 1 and 50 different draft rows.");
+        }
+
         var results = new List<DraftAcceptResult>();
         foreach (var requested in request.Rows)
         {
@@ -82,17 +99,27 @@ public sealed class DraftService(DraftRepository repository, PlaydexDbContext db
                 var zone = Zone(batch);
                 if (!DraftRules.TryGetTimes(
                         snapshot.Date, snapshot.DurationMinutes, zone, DateTimeOffset.UtcNow, out var start, out var end))
+                {
                     throw AppProblemException.Validation("Correct the date and duration before accepting.");
+                }
+
                 var entry = ManualEntryDay.Of(LocalCalendar.DateOf(start, zone ?? TimeZoneInfo.Utc), zone, end - start);
                 var selection = ManualService.ValidateGameSelection(snapshot.GameId, snapshot.IgdbId);
                 // IGDB fetches happen before a database transaction, then revision is checked under lock.
                 var authoritative = await manual.ResolveAuthoritativeSelection(selection, ct);
                 var sessionId = await repository.WithLockedRow(userId, batchId, requested.Id, async row =>
                 {
-                    if (row.Status == "accepted") return row.AcceptedSessionId!.Value;
+                    if (row.Status == "accepted")
+                    {
+                        return row.AcceptedSessionId!.Value;
+                    }
+
                     RequirePending(row, requested.Revision);
                     if (authoritative.GameId.HasValue)
+                    {
                         ManualService.RequireExistingGame(await manualRepository.GetGameEntity(authoritative.GameId.Value, ct));
+                    }
+
                     var platformId = await manualRepository.GetPlatformIdByKey(row.PlatformKey, ct)
                         ?? throw AppProblemException.Validation("Platform not found.");
                     var gameId = await manual.ResolveGame(authoritative, ct);
@@ -122,7 +149,11 @@ public sealed class DraftService(DraftRepository repository, PlaydexDbContext db
         string title,
         CancellationToken ct)
     {
-        if (string.IsNullOrWhiteSpace(title) || title.Trim().Length > SearchText.MaxLength) return [];
+        if (string.IsNullOrWhiteSpace(title) || title.Trim().Length > SearchText.MaxLength)
+        {
+            return [];
+        }
+
         var candidates = await SearchCandidates(userId, [title], igdbBudget: null, ct);
         return candidates[title.Trim()];
     }
@@ -150,9 +181,9 @@ public sealed class DraftService(DraftRepository repository, PlaydexDbContext db
         var savedByIgdbId = igdbIds.Length == 0
             ? []
             : await (from identity in db.GameExternalIdentities.AsNoTracking()
-                    join game in db.Games.AsNoTracking() on identity.GameId equals game.Id
-                    where identity.Type == GameExternalIdentityType.Igdb && igdbIds.Contains(identity.ExternalId)
-                    select new { identity.ExternalId, Game = game })
+                     join game in db.Games.AsNoTracking() on identity.GameId equals game.Id
+                     where identity.Type == GameExternalIdentityType.Igdb && igdbIds.Contains(identity.ExternalId)
+                     select new { identity.ExternalId, Game = game })
                 .ToDictionaryAsync(row => row.ExternalId, row => row.Game, StringComparer.Ordinal, ct);
 
         var candidates = new Dictionary<string, IReadOnlyList<ManualMappingSearchResultDto>>(StringComparer.Ordinal);
@@ -165,7 +196,9 @@ public sealed class DraftService(DraftRepository repository, PlaydexDbContext db
             foreach (var candidate in others)
             {
                 if (!results.Any(r => candidate.GameId is not null ? r.GameId == candidate.GameId : r.IgdbId == candidate.IgdbId))
+                {
                     results.Add(candidate);
+                }
             }
 
             candidates[query] = results;
@@ -180,7 +213,11 @@ public sealed class DraftService(DraftRepository repository, PlaydexDbContext db
         CancellationToken ct)
     {
         using var budgetTimeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        if (budget is { } limit) budgetTimeout.CancelAfter(limit);
+        if (budget is { } limit)
+        {
+            budgetTimeout.CancelAfter(limit);
+        }
+
         var results = new ConcurrentDictionary<string, IReadOnlyList<Polling.IgdbSearchResult>>(StringComparer.Ordinal);
         await Parallel.ForEachAsync(
             queries,
@@ -202,10 +239,16 @@ public sealed class DraftService(DraftRepository repository, PlaydexDbContext db
     private async Task<ManualMappingSearchResultDto> VerifySelection(string? gameId, string? igdbId, CancellationToken ct)
     {
         if (!string.IsNullOrWhiteSpace(gameId) && !string.IsNullOrWhiteSpace(igdbId))
+        {
             throw AppProblemException.Validation("Select one saved game or IGDB result.");
+        }
+
         var selected = ManualService.ValidateGameSelection(gameId, igdbId);
         if (selected.GameId.HasValue)
+        {
             return Local(ManualService.RequireExistingGame(await manualRepository.GetGameEntity(selected.GameId.Value, ct)));
+        }
+
         var resolved = await manual.ResolveAuthoritativeSelection(selected, ct);
         var game = resolved.IgdbResolution!;
         return new("igdb", null, game.ExternalId, game.Title, null, null, game.CapsuleUrl);
@@ -220,8 +263,15 @@ public sealed class DraftService(DraftRepository repository, PlaydexDbContext db
         new("local", GameId.Encode(game.Id), null, game.Title, game.Platform, null, game.CapsuleUrl, true);
     private static void RequirePending(SessionDraftRow row, int revision)
     {
-        if (row.Status != "pending") throw AppProblemException.Conflict("This draft is no longer pending.");
-        if (row.Revision != revision) throw AppProblemException.Conflict("This draft changed. Reload it before continuing.");
+        if (row.Status != "pending")
+        {
+            throw AppProblemException.Conflict("This draft is no longer pending.");
+        }
+
+        if (row.Revision != revision)
+        {
+            throw AppProblemException.Conflict("This draft changed. Reload it before continuing.");
+        }
     }
     /// <summary>The time zone the batch was drafted in: its dates are days there.</summary>
     private static TimeZoneInfo? Zone(SessionDraftBatch batch) => LocalCalendar.FindTimeZone(batch.Timezone);
@@ -238,10 +288,22 @@ public sealed class DraftService(DraftRepository repository, PlaydexDbContext db
     {
         var selected = row.SelectionJson is null ? null : JsonSerializer.Deserialize<ManualMappingSearchResultDto>(row.SelectionJson);
         var warnings = row.Warnings.ToList();
-        if (selected is null) warnings.Add("Select a game.");
+        if (selected is null)
+        {
+            warnings.Add("Select a game.");
+        }
+
         var timesProblem = DraftRules.Problem(row.Date, row.DurationMinutes, zone, now, out _, out _);
-        if (timesProblem is not null) warnings.Add(timesProblem);
-        if (row.PlatformKey == "unknown") warnings.Add("Platform is Unknown. You can choose a platform or accept Unknown.");
+        if (timesProblem is not null)
+        {
+            warnings.Add(timesProblem);
+        }
+
+        if (row.PlatformKey == "unknown")
+        {
+            warnings.Add("Platform is Unknown. You can choose a platform or accept Unknown.");
+        }
+
         return new(row.Id, row.Revision, row.Status, row.Title, row.Date, row.DurationMinutes, row.PlatformKey,
             selected, warnings.Distinct().ToArray(), row.Status == "pending" && selected is not null && timesProblem is null,
             row.AcceptedSessionId);

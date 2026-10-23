@@ -16,7 +16,10 @@ public sealed class PrivacyIntegrationTests(PostgresFixture postgres)
     [Fact]
     public async Task ExportIncludesUserDataButNeverCredentials()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         await using var db = CreateContext();
         await using var transaction = await db.Database.BeginTransactionAsync();
@@ -45,7 +48,10 @@ public sealed class PrivacyIntegrationTests(PostgresFixture postgres)
     [Fact]
     public async Task DeleteRejectsWrongPasswordAndKeepsData()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         await using var db = CreateContext();
         await using var transaction = await db.Database.BeginTransactionAsync();
@@ -66,7 +72,10 @@ public sealed class PrivacyIntegrationTests(PostgresFixture postgres)
     [Fact]
     public async Task DeleteRemovesEverythingTheUserOwnsButKeepsSharedGames()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         await using var db = CreateContext();
         await using var transaction = await db.Database.BeginTransactionAsync();
@@ -95,7 +104,10 @@ public sealed class PrivacyIntegrationTests(PostgresFixture postgres)
     [Fact]
     public async Task PollResultRetentionDeletesOnlyExpiredRows()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         await using var db = CreateContext();
         await using var transaction = await db.Database.BeginTransactionAsync();

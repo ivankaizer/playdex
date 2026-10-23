@@ -201,7 +201,11 @@ public sealed class ApiExceptionHandlerTests
         var context = new DefaultHttpContext();
         context.Request.Method = "POST";
         context.Request.Path = "/api/things";
-        if (traceIdentifier is not null) context.TraceIdentifier = traceIdentifier;
+        if (traceIdentifier is not null)
+        {
+            context.TraceIdentifier = traceIdentifier;
+        }
+
         context.Response.Body = new MemoryStream();
         var logger = new RecordingLogger();
 

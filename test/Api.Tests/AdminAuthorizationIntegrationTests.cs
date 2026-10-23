@@ -32,7 +32,11 @@ public sealed class AdminAuthorizationIntegrationTests(AdminApiFixture fixture)
     [Fact]
     public async Task LoginAndMeExposeAdministratorFlag()
     {
-        if (fixture.Factory is null) return;
+        if (fixture.Factory is null)
+        {
+            return;
+        }
+
         using var client = fixture.CreateClient();
         foreach (var (email, expected) in new[] { (AdminApiFixture.AdminEmail, true), (AdminApiFixture.UserEmail, false) })
         {
@@ -49,7 +53,11 @@ public sealed class AdminAuthorizationIntegrationTests(AdminApiFixture fixture)
     [Fact]
     public async Task AnonymousCallersAreUnauthorized()
     {
-        if (fixture.Factory is null) return;
+        if (fixture.Factory is null)
+        {
+            return;
+        }
+
         using var client = fixture.CreateClient();
         foreach (var (method, path) in AdminRoutes)
         {
@@ -61,7 +69,11 @@ public sealed class AdminAuthorizationIntegrationTests(AdminApiFixture fixture)
     [Fact]
     public async Task NonAdministratorsAreForbiddenFromEveryAdminRoute()
     {
-        if (fixture.Factory is null) return;
+        if (fixture.Factory is null)
+        {
+            return;
+        }
+
         using var client = await fixture.LoginAsync(AdminApiFixture.UserEmail);
         foreach (var (method, path) in AdminRoutes)
         {
@@ -74,10 +86,16 @@ public sealed class AdminAuthorizationIntegrationTests(AdminApiFixture fixture)
     [Fact]
     public async Task DemotedAdministratorIsForbiddenWithTheSameTokenAndRestoredOnPromotion()
     {
-        if (fixture.Factory is null) return;
+        if (fixture.Factory is null)
+        {
+            return;
+        }
+
         using var client = await fixture.LoginAsync(AdminApiFixture.AdminEmail);
         using (var allowed = await client.GetAsync("/api/admin/platforms"))
+        {
             Assert.Equal(HttpStatusCode.OK, allowed.StatusCode);
+        }
 
         await fixture.SetAdminAsync(false);
         try
@@ -100,7 +118,11 @@ public sealed class AdminAuthorizationIntegrationTests(AdminApiFixture fixture)
     private static HttpRequestMessage Request(string method, string path)
     {
         var request = new HttpRequestMessage(new HttpMethod(method), path);
-        if (method is "PUT" or "PATCH" or "POST") request.Content = JsonContent.Create(new { });
+        if (method is "PUT" or "PATCH" or "POST")
+        {
+            request.Content = JsonContent.Create(new { });
+        }
+
         return request;
     }
 }

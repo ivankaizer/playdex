@@ -143,7 +143,16 @@ export function LiveSessionControl({
                 title="Search"
                 className="pdx-icon-btn !h-10 !w-10 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                <svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <svg
+                  aria-hidden="true"
+                  viewBox="0 0 24 24"
+                  className="h-4 w-4"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
                   <circle cx="11" cy="11" r="7"></circle>
                   <path d="m20 20-3.5-3.5"></path>
                 </svg>
@@ -237,7 +246,10 @@ function LiveRow({
         </div>
         <p className="mt-px truncate text-[15px] font-semibold" title={session.title}>
           {gamePath ? (
-            <AppLink to={gamePath(session.gameId)} className="inline-block max-w-full truncate font-semibold no-underline hover:text-accent">
+            <AppLink
+              to={gamePath(session.gameId)}
+              className="inline-block max-w-full truncate font-semibold no-underline hover:text-accent"
+            >
               {session.title}
             </AppLink>
           ) : (
@@ -248,9 +260,7 @@ function LiveRow({
           {session.platformName}
           {since && ` · since ${since}`}
         </p>
-        {staleFor && (
-          <p className="mt-0.5 text-xs font-semibold text-warn">Still playing? This session has been running for {staleFor}.</p>
-        )}
+        {staleFor && <p className="mt-0.5 text-xs font-semibold text-warn">Still playing? This session has been running for {staleFor}.</p>}
       </div>
       <span className="pdx-num text-2xl font-semibold tracking-[-0.01em] text-accent" aria-label={`Elapsed ${timer}`} role="timer">
         {timer}

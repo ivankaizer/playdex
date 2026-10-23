@@ -20,7 +20,11 @@ public sealed partial class AdminService(
         var now = clock.GetUtcNow();
         var start = dayStart ?? new DateTimeOffset(now.UtcDateTime.Date, TimeSpan.Zero);
         var end = dayEnd ?? start.AddDays(1);
-        if (end <= start) throw AppProblemException.Validation("dayEnd must be after dayStart.");
+        if (end <= start)
+        {
+            throw AppProblemException.Validation("dayEnd must be after dayStart.");
+        }
+
         return repository.ReadDashboard(query ?? "", string.IsNullOrWhiteSpace(platform) ? null : platform,
             start, end, now, ct);
     }
@@ -44,10 +48,17 @@ public sealed partial class AdminService(
     public async Task UpdateIntegration(long id, AdminUpdateIntegrationRequest request, CancellationToken ct)
     {
         if (!request.ApiKeyChanged && !request.AccountIdChanged)
+        {
             throw AppProblemException.Validation("At least one credential field must be selected.");
+        }
+
         var updated = await repository.UpdateIntegration(id, request.ApiKeyChanged, NormalizeOptional(request.ApiKey),
             request.AccountIdChanged, NormalizeOptional(request.AccountId), ct);
-        if (!updated) throw AppProblemException.NotFound("Integration not found.");
+        if (!updated)
+        {
+            throw AppProblemException.NotFound("Integration not found.");
+        }
+
         var correlationId = CorrelationId();
         LogIntegrationMutation(logger, "update-integration", id, correlationId);
     }
@@ -60,14 +71,24 @@ public sealed partial class AdminService(
         CancellationToken ct)
     {
         var sessionIds = request.SessionIds?.Distinct().ToArray() ?? [];
-        if (sessionIds.Length == 0) throw AppProblemException.Validation("At least one session is required.");
+        if (sessionIds.Length == 0)
+        {
+            throw AppProblemException.Validation("At least one session is required.");
+        }
+
         if (request.TargetIntegrationId is not { } targetId)
+        {
             throw AppProblemException.Validation("A target integration is required.");
+        }
+
         var target = await repository.FindTransferTarget(targetId, ct)
                      ?? throw AppProblemException.NotFound("Target integration not found.");
         if (await repository.AnyManualSessions(sessionIds, ct))
+        {
             throw AppProblemException.Validation(
                 "Manual sessions are not linked to an integration and cannot be transferred. Deselect them and try again.");
+        }
+
         int updated;
         try
         {
@@ -90,7 +111,11 @@ public sealed partial class AdminService(
     public async Task<AdminDeleteSessionsResultDto> DeleteSessions(AdminDeleteSessionsRequest request, CancellationToken ct)
     {
         var sessionIds = request.SessionIds?.Distinct().ToArray() ?? [];
-        if (sessionIds.Length == 0) throw AppProblemException.Validation("At least one session is required.");
+        if (sessionIds.Length == 0)
+        {
+            throw AppProblemException.Validation("At least one session is required.");
+        }
+
         var deleted = await repository.DeleteSessions(sessionIds, ct);
         var correlationId = CorrelationId();
         LogSessionDelete(logger, "delete-sessions", sessionIds.Length, deleted, correlationId);
@@ -107,12 +132,18 @@ public sealed partial class AdminService(
     {
         if (!request.TitleChanged && !request.CapsuleUrlChanged && !request.TitleLocked.HasValue &&
             !request.CapsuleUrlLocked.HasValue)
+        {
             throw AppProblemException.Validation("At least one game field is required.");
+        }
+
         string? normalizedTitle = null;
         if (request.TitleChanged)
         {
             normalizedTitle = request.Title?.Trim();
-            if (string.IsNullOrEmpty(normalizedTitle)) throw AppProblemException.Validation("Title is required.");
+            if (string.IsNullOrEmpty(normalizedTitle))
+            {
+                throw AppProblemException.Validation("Title is required.");
+            }
         }
 
         var game = await repository.FindGameForUpdate(id, ct)
@@ -129,17 +160,30 @@ public sealed partial class AdminService(
         if (request.TitleChanged)
         {
             game.Title = normalizedTitle!;
-            if (!request.TitleLocked.HasValue) game.TitleLocked = true;
+            if (!request.TitleLocked.HasValue)
+            {
+                game.TitleLocked = true;
+            }
         }
 
         if (request.CapsuleUrlChanged)
         {
             game.CapsuleUrl = string.IsNullOrWhiteSpace(request.CapsuleUrl) ? null : request.CapsuleUrl.Trim();
-            if (!request.CapsuleUrlLocked.HasValue) game.CapsuleUrlLocked = true;
+            if (!request.CapsuleUrlLocked.HasValue)
+            {
+                game.CapsuleUrlLocked = true;
+            }
         }
 
-        if (request.TitleLocked.HasValue) game.TitleLocked = request.TitleLocked.Value;
-        if (request.CapsuleUrlLocked.HasValue) game.CapsuleUrlLocked = request.CapsuleUrlLocked.Value;
+        if (request.TitleLocked.HasValue)
+        {
+            game.TitleLocked = request.TitleLocked.Value;
+        }
+
+        if (request.CapsuleUrlLocked.HasValue)
+        {
+            game.CapsuleUrlLocked = request.CapsuleUrlLocked.Value;
+        }
     }
 
     public async Task MergeGames(AdminMergeGamesRequest request, CancellationToken ct)
@@ -147,9 +191,16 @@ public sealed partial class AdminService(
         var sourceId = request.SourceId ?? 0;
         var targetId = request.TargetId ?? 0;
         if (sourceId <= 0 || targetId <= 0 || sourceId == targetId)
+        {
             throw AppProblemException.Validation("Source and target games must be distinct positive ids.");
+        }
+
         var missing = await repository.MergeGames(sourceId, targetId, ct);
-        if (missing is not null) throw AppProblemException.NotFound(missing);
+        if (missing is not null)
+        {
+            throw AppProblemException.NotFound(missing);
+        }
+
         var correlationId = CorrelationId();
         LogGameMerge(logger, "merge-games", sourceId, targetId, correlationId);
     }
@@ -194,7 +245,11 @@ public sealed partial class AdminService(
 
     private static List<AdminGenerationResultRowDto> ParseRows(string? resultJson)
     {
-        if (resultJson is null) return [];
+        if (resultJson is null)
+        {
+            return [];
+        }
+
         try
         {
             var snapshot = JsonSerializer.Deserialize<ResultSnapshot>(resultJson);

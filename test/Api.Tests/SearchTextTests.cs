@@ -45,7 +45,10 @@ public sealed class SearchTextIntegrationTests(PostgresFixture postgres)
     [Fact]
     public async Task PercentAndUnderscoreInASearchMatchOnlyThemselves()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         await using var db = CreateDb();
         await using var transaction = await db.Database.BeginTransactionAsync();
@@ -62,8 +65,12 @@ public sealed class SearchTextIntegrationTests(PostgresFixture postgres)
         {
             db.PlaySessions.Add(new PlaySession
             {
-                UserId = user.Id, GameId = game.Id, PlatformId = platform.Id, CaptureMethod = CaptureMethod.Manual,
-                StartedAt = DateTimeOffset.UtcNow.AddHours(-2), EndedAt = DateTimeOffset.UtcNow.AddHours(-1),
+                UserId = user.Id,
+                GameId = game.Id,
+                PlatformId = platform.Id,
+                CaptureMethod = CaptureMethod.Manual,
+                StartedAt = DateTimeOffset.UtcNow.AddHours(-2),
+                EndedAt = DateTimeOffset.UtcNow.AddHours(-1),
             });
         }
         await db.SaveChangesAsync();

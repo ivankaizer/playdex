@@ -53,9 +53,7 @@ function AdminHeader() {
               className={({ isActive }) =>
                 cx(
                   pillBase,
-                  isActive
-                    ? "border-pill bg-pill font-semibold text-pill-ink"
-                    : "border-line font-medium text-ink-2 hover:bg-surface",
+                  isActive ? "border-pill bg-pill font-semibold text-pill-ink" : "border-line font-medium text-ink-2 hover:bg-surface",
                 )
               }
             >
@@ -65,11 +63,7 @@ function AdminHeader() {
         </nav>
         <div className="flex items-center gap-3">
           <ThemeToggle theme={theme} onToggle={toggleTheme} />
-          <Link
-            to="/dashboard"
-            className="pdx-btn-outline !h-[38px] !px-4 !text-[13px] no-underline"
-            title="Back to the Playdex app"
-          >
+          <Link to="/dashboard" className="pdx-btn-outline !h-[38px] !px-4 !text-[13px] no-underline" title="Back to the Playdex app">
             <svg aria-hidden="true" viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M15 18l-6-6 6-6" strokeLinecap="round" strokeLinejoin="round" />
             </svg>

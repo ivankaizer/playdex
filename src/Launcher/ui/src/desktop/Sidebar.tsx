@@ -56,7 +56,11 @@ export function Sidebar() {
     return [
       { id: "recent", label: "Recent", games: recentGames },
       { id: "favorites", label: "Favorites", games: scope === "favorites" ? [] : visible.filter((g) => favorites.has(g.id)).sort(byTitle) },
-      { id: "all", label: scope === "installed" ? "Installed" : scope === "favorites" ? "Favorites" : "All games", games: [...visible].sort(byTitle) },
+      {
+        id: "all",
+        label: scope === "installed" ? "Installed" : scope === "favorites" ? "Favorites" : "All games",
+        games: [...visible].sort(byTitle),
+      },
     ].filter((g) => g.games.length > 0);
   }, [query, scope, favorites, recent]);
 
@@ -157,7 +161,11 @@ const Row = memo(function Row({ game }: { game: Game }) {
     >
       <Cover game={game} kind="portrait" className="dk-row-art" compact />
       <span className="dk-row-title">{game.title}</span>
-      {playing ? <span className="live-dot" role="img" aria-label="Playing now" /> : <span className="dk-row-meta num">{minutes ? fmtHours(minutes) : ""}</span>}
+      {playing ? (
+        <span className="live-dot" role="img" aria-label="Playing now" />
+      ) : (
+        <span className="dk-row-meta num">{minutes ? fmtHours(minutes) : ""}</span>
+      )}
     </button>
   );
 });

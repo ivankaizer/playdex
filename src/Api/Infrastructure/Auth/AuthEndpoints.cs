@@ -115,7 +115,9 @@ public static class AuthEndpoints
         var userId = principal.GetUserId();
         var user = await repository.FindById(userId, ct);
         if (user is null)
+        {
             return TypedResults.Problem("User not found.", statusCode: 404);
+        }
 
         return TypedResults.Ok(new MeResponse(user.Id, user.Email, user.IsAdmin));
     }

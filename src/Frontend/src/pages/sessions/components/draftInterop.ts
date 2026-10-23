@@ -31,12 +31,7 @@ export interface PasteCallbacks {
 }
 
 /** Listens for pasted screenshots on `element`; returns the detach function. */
-export function attachPaste(
-  element: HTMLElement,
-  callbacks: PasteCallbacks,
-  maxBytes: number,
-  maxPixels: number,
-): () => void {
+export function attachPaste(element: HTMLElement, callbacks: PasteCallbacks, maxBytes: number, maxPixels: number): () => void {
   const handler = (event: ClipboardEvent) => {
     const file = [...(event.clipboardData?.files ?? [])][0];
     if (!file) return;

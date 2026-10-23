@@ -76,13 +76,7 @@ export function Cover({
         {initial}
       </span>
       {showImage && (
-        <img
-          src={src}
-          alt=""
-          loading="lazy"
-          onError={() => setFailed(true)}
-          className="absolute inset-0 h-full w-full object-cover"
-        />
+        <img src={src} alt="" loading="lazy" onError={() => setFailed(true)} className="absolute inset-0 h-full w-full object-cover" />
       )}
     </div>
   );
@@ -190,9 +184,7 @@ export function Donut({
       >
         {center}
       </div>
-      {hover && hovered && (
-        <ChartTooltip text={segmentHoverText(hovered, total)} style={{ left: hover.x, top: hover.y - 10 }} />
-      )}
+      {hover && hovered && <ChartTooltip text={segmentHoverText(hovered, total)} style={{ left: hover.x, top: hover.y - 10 }} />}
     </div>
   );
 }

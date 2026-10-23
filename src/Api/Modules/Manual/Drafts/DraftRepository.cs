@@ -37,7 +37,11 @@ public sealed class DraftRepository(PlaydexDbContext db)
             await transaction.CommitAsync(cancellationToken);
             // Reads and subsequent row locks must observe fresh database state.
             db.Entry(batch).State = EntityState.Detached;
-            foreach (var row in batch.Rows) db.Entry(row).State = EntityState.Detached;
+            foreach (var row in batch.Rows)
+            {
+                db.Entry(row).State = EntityState.Detached;
+            }
+
             return batch;
         }
         catch
@@ -55,11 +59,16 @@ public sealed class DraftRepository(PlaydexDbContext db)
         try
         {
             if (!await db.SessionDraftBatches.AnyAsync(batch => batch.Id == batchId && batch.UserId == userId, cancellationToken))
+            {
                 throw AppProblemException.NotFound("Draft batch not found.");
+            }
 
             // Detach a previous operation's row so a later lock cannot reuse stale tracked values.
             foreach (var entry in db.ChangeTracker.Entries<SessionDraftRow>().Where(entry => entry.Entity.Id == rowId).ToArray())
+            {
                 entry.State = EntityState.Detached;
+            }
+
             var row = await db.SessionDraftRows.FromSqlInterpolated(
                     $"select * from session_draft_rows where batch_id = {batchId} and id = {rowId} for update")
                 .SingleOrDefaultAsync(cancellationToken)

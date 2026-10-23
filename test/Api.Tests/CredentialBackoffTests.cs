@@ -26,7 +26,10 @@ public sealed class CredentialBackoffTests(PostgresFixture postgres)
     [Fact]
     public async Task DelaysDoubleUpToTheCapAndHonourRetryAfter()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         await using var credentials = await Credentials.Create(postgres, count: 2);
         await using var db = CreateDb();
@@ -49,7 +52,10 @@ public sealed class CredentialBackoffTests(PostgresFixture postgres)
     [Fact]
     public async Task OnlyTheFailureThatEndsAHealthyStreakIsFirst()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         await using var credentials = await Credentials.Create(postgres, count: 1);
         await using var db = CreateDb();
@@ -76,7 +82,10 @@ public sealed class CredentialBackoffTests(PostgresFixture postgres)
     [Fact]
     public async Task ACredentialInBackoffIsLoadedWithItsNextPollAndDeferringCountsNoFailure()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         await using var credentials = await Credentials.Create(postgres, count: 2);
         await using var db = CreateDb();
@@ -100,7 +109,10 @@ public sealed class CredentialBackoffTests(PostgresFixture postgres)
     [Fact]
     public async Task InstancesShareOneCountSoOnlyOneSeesTheFirstFailure()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         await using var credentials = await Credentials.Create(postgres, count: 1);
         var id = credentials.Ids[0];
@@ -118,7 +130,10 @@ public sealed class CredentialBackoffTests(PostgresFixture postgres)
     [Fact]
     public async Task AFailingCredentialNotifiesOnceAcrossInstances()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         await using var credentials = await Credentials.Create(postgres, count: 1);
         var recorder = new RecordingPollFailedHandler();
@@ -229,13 +244,20 @@ public sealed class CredentialBackoffTests(PostgresFixture postgres)
         {
             get
             {
-                lock (_gate) return _events.ToArray();
+                lock (_gate)
+                {
+                    return _events.ToArray();
+                }
             }
         }
 
         public Task Handle(PollFailed domainEvent, CancellationToken ct)
         {
-            lock (_gate) _events.Add(domainEvent);
+            lock (_gate)
+            {
+                _events.Add(domainEvent);
+            }
+
             return Task.CompletedTask;
         }
     }

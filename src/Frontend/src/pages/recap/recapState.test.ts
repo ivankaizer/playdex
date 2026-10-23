@@ -39,7 +39,7 @@ function store(initial: RecapState = initialRecapState) {
     apply: (transition: (current: RecapState) => RecapState) => {
       state = transition(state);
     },
-    step: <R,>(transition: (current: RecapState) => readonly [RecapState, R]): R => {
+    step: <R>(transition: (current: RecapState) => readonly [RecapState, R]): R => {
       const [next, result] = transition(state);
       state = next;
       return result;
@@ -169,10 +169,7 @@ describe("recapState", () => {
   });
 
   it("uses the first value for duplicate range keys", () => {
-    const [state, request] = applyLocationQuery(
-      initialRecapState,
-      "?from=2026-07-13&from=2025-01-01&to=2026-07-19&to=2025-12-31",
-    );
+    const [state, request] = applyLocationQuery(initialRecapState, "?from=2026-07-13&from=2025-01-01&to=2026-07-19&to=2025-12-31");
 
     expect(state.customFrom).toBe("2026-07-13");
     expect(state.customTo).toBe("2026-07-19");

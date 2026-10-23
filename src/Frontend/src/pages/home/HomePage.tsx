@@ -28,9 +28,7 @@ export function HomePage() {
   const { theme, toggleTheme } = useTheme();
   // Mirrors App.razor's HomeSessionState: resolved once when the page is created.
   const [isLoggedIn] = useState(() => authSession.isLoggedIn());
-  const [state, setState] = useState<HomeState>(() =>
-    beginProfile(initialHomeState, isLoggedIn, authSession.getEmail()),
-  );
+  const [state, setState] = useState<HomeState>(() => beginProfile(initialHomeState, isLoggedIn, authSession.getEmail()));
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const lifetime = useRef<AbortController | null>(null);
@@ -133,8 +131,7 @@ export function HomePage() {
               Your cross-platform playtime, <span className="text-accent">perfectly organized.</span>
             </h1>
             <p className="m-0 max-w-[34em] text-pretty text-[17px] leading-[1.55] text-ink-2 sm:text-[19px]">
-              Connect your gaming accounts and keep a living history of your sessions, streaks, and favorite titles across
-              platforms.
+              Connect your gaming accounts and keep a living history of your sessions, streaks, and favorite titles across platforms.
             </p>
             <PlatformChips />
           </div>

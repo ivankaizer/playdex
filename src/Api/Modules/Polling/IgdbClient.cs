@@ -21,11 +21,15 @@ public sealed class IgdbClient(HttpClient httpClient, IOptions<IgdbOptions> opti
     {
         var trimmed = query.Trim();
         if (string.IsNullOrEmpty(trimmed))
+        {
             return [];
+        }
 
         var opts = options.Value;
         if (string.IsNullOrEmpty(opts.ClientId) || string.IsNullOrEmpty(opts.ClientSecret))
+        {
             return [];
+        }
 
         return await QueryGames(
             $"search \"{trimmed.Replace("\"", "")}\"; fields id,name,cover.image_id,platforms.id,platforms.name; limit 10;",
@@ -44,7 +48,9 @@ public sealed class IgdbClient(HttpClient httpClient, IOptions<IgdbOptions> opti
 
         var opts = options.Value;
         if (string.IsNullOrEmpty(opts.ClientId) || string.IsNullOrEmpty(opts.ClientSecret))
+        {
             return null;
+        }
 
         var games = await QueryGames(
             $"fields id,name,cover.image_id,platforms.id,platforms.name; where id = ({parsedId}); limit 1;",
@@ -61,7 +67,10 @@ public sealed class IgdbClient(HttpClient httpClient, IOptions<IgdbOptions> opti
         CancellationToken ct)
     {
         var token = await tokenCache.GetOrFetch(fetchCt => FetchToken(clientId, clientSecret, fetchCt), ct);
-        if (token is null) return [];
+        if (token is null)
+        {
+            return [];
+        }
 
         using var request = new HttpRequestMessage(HttpMethod.Post, "https://api.igdb.com/v4/games")
         {
@@ -105,11 +114,15 @@ public sealed class IgdbClient(HttpClient httpClient, IOptions<IgdbOptions> opti
         };
         using var response = await httpClient.SendAsync(request, ct);
         if (!response.IsSuccessStatusCode)
+        {
             return null;
+        }
 
         var payload = await response.Content.ReadFromJsonAsync<IgdbAuthResponse>(JsonOptions, ct);
         if (payload?.AccessToken is null)
+        {
             return null;
+        }
 
         return new IgdbToken(payload.AccessToken, DateTimeOffset.UtcNow.AddSeconds(payload.ExpiresIn - 30));
     }
@@ -117,7 +130,10 @@ public sealed class IgdbClient(HttpClient httpClient, IOptions<IgdbOptions> opti
     private static string? FormatCover(string? imageId)
     {
         if (string.IsNullOrEmpty(imageId))
+        {
             return null;
+        }
+
         return $"https://images.igdb.com/igdb/image/upload/t_cover_big/{imageId}.jpg";
     }
 
@@ -163,12 +179,19 @@ public sealed class IgdbTokenCache : IDisposable
 
     public async Task<string?> GetOrFetch(Func<CancellationToken, Task<IgdbToken?>> fetch, CancellationToken ct)
     {
-        if (Current() is { } cached) return cached;
+        if (Current() is { } cached)
+        {
+            return cached;
+        }
 
         await _refresh.WaitAsync(ct);
         try
         {
-            if (Current() is { } refreshed) return refreshed;
+            if (Current() is { } refreshed)
+            {
+                return refreshed;
+            }
+
             var token = await fetch(ct);
             _token = token;
             return token?.AccessToken;

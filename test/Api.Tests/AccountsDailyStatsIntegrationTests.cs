@@ -13,7 +13,10 @@ public sealed class AccountsDailyStatsIntegrationTests(PostgresFixture postgres)
     [Fact]
     public async Task DailyStatsBucketSessionsByUtcDayAndFillEmptyDays()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         await using var db = CreateContext();
         await using var transaction = await db.Database.BeginTransactionAsync();
@@ -37,7 +40,10 @@ public sealed class AccountsDailyStatsIntegrationTests(PostgresFixture postgres)
     [Fact]
     public async Task DailyStatsBucketSessionsByTheClientsDays()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         await using var db = CreateContext();
         await using var transaction = await db.Database.BeginTransactionAsync();
@@ -56,7 +62,10 @@ public sealed class AccountsDailyStatsIntegrationTests(PostgresFixture postgres)
     [Fact]
     public async Task DailyStatsRejectRangesLongerThanAYear()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         await using var db = CreateContext();
         var service = CreateService(db);

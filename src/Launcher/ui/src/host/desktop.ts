@@ -16,8 +16,7 @@ declare global {
 }
 
 /** True in desktop mode (or with ?mode=desktop in a browser); false in Big Picture. */
-export const isDesktop =
-  window.__PLAYDEX_MODE__ === "desktop" || new URLSearchParams(location.search).get("mode") === "desktop";
+export const isDesktop = window.__PLAYDEX_MODE__ === "desktop" || new URLSearchParams(location.search).get("mode") === "desktop";
 
 export type BackupKind = "off" | "due" | "running" | "success" | "failed" | "unsupported";
 
@@ -376,7 +375,12 @@ async function demo(method: string, params?: Record<string, unknown>): Promise<u
     case "art.search": {
       const title = String(params?.query || gameById(String(params?.libraryId))?.title || "");
       return {
-        games: title ? [{ id: 1, name: title, year: 2024 }, { id: 2, name: `${title}: Deluxe Edition` }] : [],
+        games: title
+          ? [
+              { id: 1, name: title, year: 2024 },
+              { id: 2, name: `${title}: Deluxe Edition` },
+            ]
+          : [],
         picked: demoPicked.get(String(params?.libraryId)) ?? {},
       } satisfies ArtSearchView;
     }

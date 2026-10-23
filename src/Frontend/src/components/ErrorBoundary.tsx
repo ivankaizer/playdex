@@ -44,8 +44,8 @@ function ErrorFallback() {
         <p className="pdx-kicker">Playdex</p>
         <h1 className="pdx-title">Something went wrong</h1>
         <p className="text-[15px] text-muted">
-          This page ran into an error. Your play data is safe. Reloading usually fixes it; a new version of Playdex may
-          have been released since this page was opened.
+          This page ran into an error. Your play data is safe. Reloading usually fixes it; a new version of Playdex may have been released
+          since this page was opened.
         </p>
         <div className="flex flex-wrap gap-3">
           <button type="button" onClick={() => window.location.reload()} className="pdx-btn-primary">

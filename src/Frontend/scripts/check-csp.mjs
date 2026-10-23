@@ -53,7 +53,10 @@ for (const { page, policyFile } of built) {
   if (/<[a-z][^>]*\son[a-z]+\s*=/i.test(html)) failures.push(`${page}: inline event handler attribute`);
   if (/<[a-z][^>]*\sstyle\s*=/i.test(html)) failures.push(`${page}: inline style attribute`);
 
-  for (const [tag, directive] of [["script", "script-src"], ["style", "style-src"]]) {
+  for (const [tag, directive] of [
+    ["script", "script-src"],
+    ["style", "style-src"],
+  ]) {
     const sources = policy.get(directive) ?? policy.get("default-src") ?? [];
     const expected = inlineBlocks(html, tag).map(sha256);
     const listed = sources.filter((source) => source.startsWith("'sha256-"));

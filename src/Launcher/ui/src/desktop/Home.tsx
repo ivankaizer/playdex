@@ -66,7 +66,14 @@ export function Home() {
                   <span className="dk-label">{col.label}</span>
                   <div className="dk-shelf-row">
                     {list.map((r) => (
-                      <button key={r.game.id} className="dk-shelf-item" data-nav data-kind="cover" data-game={r.game.id} onClick={() => openGamePage(r.game.id)}>
+                      <button
+                        key={r.game.id}
+                        className="dk-shelf-item"
+                        data-nav
+                        data-kind="cover"
+                        data-game={r.game.id}
+                        onClick={() => openGamePage(r.game.id)}
+                      >
                         <Cover game={r.game} kind="portrait" className="dk-shelf-art" />
                         <span>{r.game.title}</span>
                       </button>
@@ -89,7 +96,14 @@ function LeadCard({ stats }: { stats: GameStats }) {
     <article className="dk-lead">
       <Cover game={game} kind="hero" className="dk-card-art" eager />
       <div className="dk-lead-scrim" />
-      <button className="dk-stretch" data-nav data-kind="details" data-game={game.id} aria-label={`Open ${game.title}`} onClick={() => openGamePage(game.id)} />
+      <button
+        className="dk-stretch"
+        data-nav
+        data-kind="details"
+        data-game={game.id}
+        aria-label={`Open ${game.title}`}
+        onClick={() => openGamePage(game.id)}
+      />
       <div className="dk-lead-body">
         <span className="dk-kicker">Last played · {lastPlayedText(stats)}</span>
         <Logo game={game} className="dk-lead-logo" titleClass="dk-lead-title" />
@@ -116,7 +130,14 @@ function SideCard({ stats }: { stats: GameStats }) {
     <article className="dk-side-card">
       <Cover game={game} kind="hero" className="dk-card-art" />
       <div className="dk-side-card-scrim" />
-      <button className="dk-stretch" data-nav data-kind="details" data-game={game.id} aria-label={`Open ${game.title}`} onClick={() => openGamePage(game.id)} />
+      <button
+        className="dk-stretch"
+        data-nav
+        data-kind="details"
+        data-game={game.id}
+        aria-label={`Open ${game.title}`}
+        onClick={() => openGamePage(game.id)}
+      />
       <div className="dk-side-card-body">
         <div className="dk-side-card-text">
           <h3>{game.title}</h3>

@@ -26,7 +26,10 @@ public sealed class ProvidersRepositoryTests(PostgresFixture postgres)
     [Fact]
     public async Task SessionPlatformUpdateRewritesAllExistingSessionsOrNone()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         await using var db = CreateDb();
         var now = DateTimeOffset.UtcNow;
@@ -139,7 +142,10 @@ public sealed class ProvidersRepositoryTests(PostgresFixture postgres)
     [Fact]
     public async Task SessionPlatformUpdateWaitsForAnInFlightPollOnTheSameIntegration()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         await using var setupDb = CreateDb();
         var now = DateTimeOffset.UtcNow;
@@ -203,7 +209,10 @@ public sealed class ProvidersRepositoryTests(PostgresFixture postgres)
     [Fact]
     public async Task CreateProviderAllowsThreeOfATypeAndRejectsTheFourth()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         await using var db = CreateDb();
         var suffix = Guid.NewGuid().ToString("n");
@@ -273,7 +282,10 @@ public sealed class ProvidersRepositoryTests(PostgresFixture postgres)
     [Fact]
     public async Task ParallelCreationsStayWithinTheLimit()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         var userId = await CreateUser("provider-limit");
         try
@@ -299,7 +311,10 @@ public sealed class ProvidersRepositoryTests(PostgresFixture postgres)
     [Fact]
     public async Task AnAccountCanBeConnectedOncePerType()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         var userId = await CreateUser("provider-duplicate");
         try
@@ -335,7 +350,10 @@ public sealed class ProvidersRepositoryTests(PostgresFixture postgres)
     [Fact]
     public async Task CredentialUpdatesMustLeaveAPollableCredential()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         // No surrounding transaction: creating and updating providers takes its own.
         var userId = await CreateUser("provider-update");
@@ -374,7 +392,10 @@ public sealed class ProvidersRepositoryTests(PostgresFixture postgres)
     [Fact]
     public async Task ConnectOpenXblUpdatesTheChosenIntegrationOrTheOldest()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         var userId = await CreateUser("provider-openxbl");
         var otherUserId = await CreateUser("provider-openxbl-other");

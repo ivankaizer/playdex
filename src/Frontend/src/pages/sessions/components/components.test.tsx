@@ -111,7 +111,9 @@ describe("SessionCreateModal", () => {
 
   it("embedded, Escape leaves the page alone", () => {
     const onClose = vi.fn();
-    render(<SessionCreateModal embedded state={openSessionCreate("historical", new Date())} onStateChange={() => undefined} onClose={onClose} />);
+    render(
+      <SessionCreateModal embedded state={openSessionCreate("historical", new Date())} onStateChange={() => undefined} onClose={onClose} />,
+    );
 
     fireEvent.keyDown(screen.getByRole("searchbox", { name: "Game" }), { key: "Escape" });
 
@@ -354,7 +356,9 @@ describe("DraftWorkspace", () => {
   });
 
   it("resumes when generation is disabled and missing fields block accept", async () => {
-    const batch = batchOf(draftRow({ date: null, durationMinutes: null, selection: null, ready: false, warnings: ["Platform is Unknown."] }));
+    const batch = batchOf(
+      draftRow({ date: null, durationMinutes: null, selection: null, ready: false, warnings: ["Platform is Unknown."] }),
+    );
     stubFetch(batchServer(batch));
     const { container } = render(<DraftWorkspace />);
     await resume();
@@ -394,7 +398,12 @@ describe("DraftWorkspace", () => {
     stubFetch(
       batchServer(batch, (_url, init) => {
         acceptBody = JSON.parse(String(init.body));
-        return json({ results: [{ id: first.id, sessionId: 42, error: null }, { id: second.id, sessionId: null, error: "IGDB unavailable" }] });
+        return json({
+          results: [
+            { id: first.id, sessionId: 42, error: null },
+            { id: second.id, sessionId: null, error: "IGDB unavailable" },
+          ],
+        });
       }),
     );
     const toast = vi.fn();
@@ -403,7 +412,12 @@ describe("DraftWorkspace", () => {
     await waitFor(() => expect(container.querySelectorAll("article")).toHaveLength(2));
     fireEvent.click(buttonStartingWith("Accept all ready"));
     await waitFor(() => expect(container.innerHTML).toContain("IGDB unavailable"));
-    expect(acceptBody).toEqual({ rows: [{ id: first.id, revision: 1 }, { id: second.id, revision: 1 }] });
+    expect(acceptBody).toEqual({
+      rows: [
+        { id: first.id, revision: 1 },
+        { id: second.id, revision: 1 },
+      ],
+    });
     expect(accepted).toHaveBeenCalled();
     expect(toast).toHaveBeenCalledWith("Hades · 1h added");
     const fieldsets = container.querySelectorAll("fieldset");
@@ -540,7 +554,13 @@ describe("DraftWorkspace", () => {
       platformId: 6,
       capsuleUrl: "https://covers.test/local.png",
     };
-    const igdb: ManualMappingSearchResult = { ...local, source: "igdb", gameId: null, igdbId: "114283", capsuleUrl: "https://covers.test/igdb.png" };
+    const igdb: ManualMappingSearchResult = {
+      ...local,
+      source: "igdb",
+      gameId: null,
+      igdbId: "114283",
+      capsuleUrl: "https://covers.test/igdb.png",
+    };
     let searchQuery = "";
     let patchBody: unknown = null;
     stubFetch(

@@ -46,7 +46,10 @@ public static class AdminEndpoints
         CancellationToken ct)
     {
         if (request?.Enabled is not { } enabled)
+        {
             return TypedResults.Problem("enabled is required.", statusCode: 400);
+        }
+
         return TypedResults.Ok(await service.SetPlatformEnabled(platform, enabled, ct));
     }
 
@@ -59,7 +62,11 @@ public static class AdminEndpoints
         AdminService service,
         CancellationToken ct)
     {
-        if (request is null) return TypedResults.Problem("Request body is required.", statusCode: 400);
+        if (request is null)
+        {
+            return TypedResults.Problem("Request body is required.", statusCode: 400);
+        }
+
         await service.UpdateIntegration(id, request, ct);
         return TypedResults.NoContent();
     }
@@ -75,7 +82,11 @@ public static class AdminEndpoints
         AdminService service,
         CancellationToken ct)
     {
-        if (request is null) return TypedResults.Problem("Request body is required.", statusCode: 400);
+        if (request is null)
+        {
+            return TypedResults.Problem("Request body is required.", statusCode: 400);
+        }
+
         return TypedResults.Ok(await service.TransferSessions(request, ct));
     }
 
@@ -85,7 +96,11 @@ public static class AdminEndpoints
         AdminService service,
         CancellationToken ct)
     {
-        if (request is null) return TypedResults.Problem("Request body is required.", statusCode: 400);
+        if (request is null)
+        {
+            return TypedResults.Problem("Request body is required.", statusCode: 400);
+        }
+
         return TypedResults.Ok(await service.DeleteSessions(request, ct));
     }
 
@@ -98,7 +113,11 @@ public static class AdminEndpoints
         AdminService service,
         CancellationToken ct)
     {
-        if (request is null) return TypedResults.Problem("Request body is required.", statusCode: 400);
+        if (request is null)
+        {
+            return TypedResults.Problem("Request body is required.", statusCode: 400);
+        }
+
         await service.UpdateGame(id, request, ct);
         return TypedResults.NoContent();
     }
@@ -108,7 +127,11 @@ public static class AdminEndpoints
         AdminService service,
         CancellationToken ct)
     {
-        if (request is null) return TypedResults.Problem("Request body is required.", statusCode: 400);
+        if (request is null)
+        {
+            return TypedResults.Problem("Request body is required.", statusCode: 400);
+        }
+
         await service.MergeGames(request, ct);
         return TypedResults.NoContent();
     }

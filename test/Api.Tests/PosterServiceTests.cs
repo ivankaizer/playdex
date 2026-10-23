@@ -122,7 +122,11 @@ public sealed class PosterServiceTests
 
         public Task Save(string key, StoredPoster poster, CancellationToken ct)
         {
-            if (FailSaves) throw new InvalidOperationException("R2 is down.");
+            if (FailSaves)
+            {
+                throw new InvalidOperationException("R2 is down.");
+            }
+
             Posters[key] = poster;
             return Task.CompletedTask;
         }

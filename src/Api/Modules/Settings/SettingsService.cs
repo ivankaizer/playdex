@@ -46,8 +46,10 @@ public sealed class SettingsService(
     {
         var settings = await repository.LoadUserSettings(userId, ct);
         if (string.IsNullOrWhiteSpace(settings.TelegramChatId))
+        {
             throw AppProblemException.Validation(
                 "Configure a Telegram chat ID before sending a test notification.");
+        }
 
         try
         {
@@ -79,14 +81,21 @@ public sealed class SettingsService(
     internal static string? ValidateTelegramChatId(string? value)
     {
         var trimmed = value?.Trim();
-        if (string.IsNullOrEmpty(trimmed)) return null;
+        if (string.IsNullOrEmpty(trimmed))
+        {
+            return null;
+        }
+
         if (!long.TryParse(
                 trimmed,
                 System.Globalization.NumberStyles.AllowLeadingSign,
                 System.Globalization.CultureInfo.InvariantCulture,
                 out var chatId) || chatId == 0)
+        {
             throw AppProblemException.Validation(
                 "telegramChatId must be a non-zero integer.");
+        }
+
         return chatId.ToString(System.Globalization.CultureInfo.InvariantCulture);
     }
 }

@@ -51,7 +51,14 @@ export function GameView({ gameId }: { gameId: string }) {
           <Heart fill={favorite ? "currentColor" : "none"} aria-hidden />
         </button>
         {saves && (
-          <button className="dk-icon-btn" data-nav data-kind="desk" aria-label="Game settings in Manage" title="Game settings in Manage" onClick={() => goTo("Manage")}>
+          <button
+            className="dk-icon-btn"
+            data-nav
+            data-kind="desk"
+            aria-label="Game settings in Manage"
+            title="Game settings in Manage"
+            onClick={() => goTo("Manage")}
+          >
             <Settings2 aria-hidden />
           </button>
         )}
@@ -120,7 +127,9 @@ function Sessions({ game, history }: { game: Game; history: GameHistory }) {
         </p>
       )}
       <p className="dk-note">
-        {isOnPc(game) ? "Playing from here records the session to Playdex automatically." : `Synced from your ${SOURCE_LABEL[game.source]} account.`}
+        {isOnPc(game)
+          ? "Playing from here records the session to Playdex automatically."
+          : `Synced from your ${SOURCE_LABEL[game.source]} account.`}
       </p>
     </section>
   );
@@ -180,7 +189,15 @@ function SavesCard({ saves }: { saves: Saves }) {
         <>
           <div className="dk-toggle-row">
             <span>Daily backup</span>
-            <button className="switch" role="switch" aria-checked={game.dailyBackup} aria-label="Daily backup" data-nav data-kind="daily-backup" onClick={toggleDaily}>
+            <button
+              className="switch"
+              role="switch"
+              aria-checked={game.dailyBackup}
+              aria-label="Daily backup"
+              data-nav
+              data-kind="daily-backup"
+              onClick={toggleDaily}
+            >
               <i aria-hidden />
             </button>
           </div>
@@ -212,7 +229,9 @@ function Details({ game }: { game: Game }) {
           </div>
           <div>
             <dt>Recorded as</dt>
-            <dd className="num">{game.capture ? `${game.capture.provider} · ${game.capture.id}` : game.art ? `Steam · ${game.art}` : "—"}</dd>
+            <dd className="num">
+              {game.capture ? `${game.capture.provider} · ${game.capture.id}` : game.art ? `Steam · ${game.art}` : "—"}
+            </dd>
           </div>
         </dl>
       ) : (

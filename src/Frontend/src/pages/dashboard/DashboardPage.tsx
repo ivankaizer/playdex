@@ -1,17 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AppLayout } from "@/components/AppLayout";
 import { AppLink } from "@/components/AppLink";
-import {
-  BarChart,
-  Cover,
-  Donut,
-  Dot,
-  ErrorNote,
-  LegendRow,
-  Segmented,
-  ShareBar,
-  StackedBar,
-} from "@/components/ui";
+import { BarChart, Cover, Donut, Dot, ErrorNote, LegendRow, Segmented, ShareBar, StackedBar } from "@/components/ui";
 import { apiRequest, errorMessage, isAbortError } from "@/lib/api";
 import { formatCountNoun } from "@/lib/format";
 import { encodeGameId } from "@/lib/gameHash";
@@ -174,7 +164,11 @@ export function DashboardPage() {
             apiRequest<AccountSessionsResponse>(requests.todaySessions, options),
             apiRequest<AccountStatsRangeResponse>(requests.todayStats, options),
           ]);
-          return { todaySessions: sessions.sessions, todaySessionCount: stats.stats.sessionCount, todayPlatformTotals: stats.stats.platforms };
+          return {
+            todaySessions: sessions.sessions,
+            todaySessionCount: stats.stats.sessionCount,
+            todayPlatformTotals: stats.stats.platforms,
+          };
         }),
         load("recent", async () => ({
           recentSessions: (await apiRequest<AccountSessionsResponse>(recentSessionsRequest, options)).sessions,
@@ -225,14 +219,9 @@ export function DashboardPage() {
     runLiveAction((signal) => apiRequest<ManualSessionStopResponse>("/manual/sessions/stop", { method: "POST", signal }));
 
   const startManualSession = (request: ManualSessionStartRequest) =>
-    runLiveAction((signal) =>
-      apiRequest<ManualSessionStartResponse>("/manual/sessions/start", { method: "POST", body: request, signal }),
-    );
+    runLiveAction((signal) => apiRequest<ManualSessionStartResponse>("/manual/sessions/start", { method: "POST", body: request, signal }));
 
-  const searchLiveGames = useCallback(
-    (path: string, signal: AbortSignal) => apiRequest<ManualMappingSearchResponse>(path, { signal }),
-    [],
-  );
+  const searchLiveGames = useCallback((path: string, signal: AbortSignal) => apiRequest<ManualMappingSearchResponse>(path, { signal }), []);
 
   const gamePath = (gameId: string) => `/games/${encodeGameId(gameId)}`;
 
@@ -263,7 +252,11 @@ export function DashboardPage() {
   return (
     <AppLayout title={greetingFor(now)}>
       {loading.live ? (
-        <section aria-label="Live session controls" aria-busy="true" className="pdx-card !rounded-[28px] !py-3 !pl-7 !pr-3 min-[1041px]:!rounded-full">
+        <section
+          aria-label="Live session controls"
+          aria-busy="true"
+          className="pdx-card !rounded-[28px] !py-3 !pl-7 !pr-3 min-[1041px]:!rounded-full"
+        >
           <div className="flex h-10 items-center gap-3">
             <span aria-hidden="true" className="h-[7px] w-[7px] rounded-full bg-faint-2"></span>
             <span className="h-3 w-40 rounded-full bg-track"></span>
@@ -291,7 +284,16 @@ export function DashboardPage() {
             <div className="flex items-center justify-between gap-3">
               <h2 className="pdx-kicker">Today</h2>
               <AppLink to={recapPath("today", now)} className="pdx-icon-btn !h-8 !w-8" aria-label="Open recap" title="Open recap">
-                <svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <svg
+                  aria-hidden="true"
+                  viewBox="0 0 24 24"
+                  className="h-4 w-4"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
                   <path d="M3 3v16a2 2 0 0 0 2 2h16"></path>
                   <path d="M18 17V9"></path>
                   <path d="M13 17V5"></path>
@@ -309,9 +311,7 @@ export function DashboardPage() {
                   {loading.today ? "—" : formatShortDuration(today.seconds)}
                 </span>
                 {!loading.today && (
-                  <span className="text-[15px] text-muted">
-                    played across {formatCountNoun(today.sessions, "session")}
-                  </span>
+                  <span className="text-[15px] text-muted">played across {formatCountNoun(today.sessions, "session")}</span>
                 )}
               </div>
             )}

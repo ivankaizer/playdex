@@ -3,7 +3,24 @@ import { errorMessage } from "@/lib/api";
 import { adminApi, isAbortError, type IntegrationSummary, type PlatformSummary } from "../api";
 import { useNotifications } from "../components/Notifications";
 import { platformColor } from "@/lib/platforms";
-import { Alert, Badge, Button, Checkbox, Modal, Note, Pager, Panel, ProgressBar, rowClass, Select, Table, Td, TextInput, Th, Toolbar } from "../components/ui";
+import {
+  Alert,
+  Badge,
+  Button,
+  Checkbox,
+  Modal,
+  Note,
+  Pager,
+  Panel,
+  ProgressBar,
+  rowClass,
+  Select,
+  Table,
+  Td,
+  TextInput,
+  Th,
+  Toolbar,
+} from "../components/ui";
 import { credentialFormFor, integrationUpdateFor, pageOf, type CredentialForm } from "../logic";
 
 const PageSize = 25;
@@ -170,9 +187,7 @@ export function IntegrationsPage() {
                         </span>
                       </Td>
                       <Td className="break-all">{integration.accountId}</Td>
-                      <Td className="text-center">
-                        {integration.active ? <Badge tone="success">Yes</Badge> : <Badge>No</Badge>}
-                      </Td>
+                      <Td className="text-center">{integration.active ? <Badge tone="success">Yes</Badge> : <Badge>No</Badge>}</Td>
                       <Td>
                         <div className="flex min-w-[220px] items-center justify-between gap-3">
                           <span className="break-all font-mono text-xs text-ink-2">{integration.apiKey ?? "Not set"}</span>

@@ -51,9 +51,7 @@ export async function loadConfig(): Promise<AppConfig> {
   }
 
   const apiBase =
-    normalizeSetting(raw.ApiBaseUrl) ??
-    normalizeSetting(import.meta.env.VITE_API_BASE_URL as string | undefined) ??
-    defaultApiBase();
+    normalizeSetting(raw.ApiBaseUrl) ?? normalizeSetting(import.meta.env.VITE_API_BASE_URL as string | undefined) ?? defaultApiBase();
 
   const config: AppConfig = { apiBase, sentry: await resolveSentry(raw, apiBase) };
   setConfig(config);

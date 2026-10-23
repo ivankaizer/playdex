@@ -9,7 +9,11 @@ public sealed class PollResultRetention(NpgsqlDataSource dataSource, IOptions<Po
     public async Task<int> DeleteExpired(CancellationToken ct)
     {
         var days = options.Value.PollResultRetentionDays;
-        if (days <= 0) return 0;
+        if (days <= 0)
+        {
+            return 0;
+        }
+
         await using var command = dataSource.CreateCommand("delete from poll_results where polled_at < @cutoff");
         command.Parameters.AddWithValue("cutoff", clock.GetUtcNow().AddDays(-days));
         return await command.ExecuteNonQueryAsync(ct);

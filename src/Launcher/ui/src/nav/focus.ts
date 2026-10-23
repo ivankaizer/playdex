@@ -27,9 +27,7 @@ function visible(el: HTMLElement) {
 }
 
 function all(): HTMLElement[] {
-  return Array.from(document.querySelectorAll<HTMLElement>("[data-nav]")).filter(
-    (el) => !el.closest("[inert]") && visible(el),
-  );
+  return Array.from(document.querySelectorAll<HTMLElement>("[data-nav]")).filter((el) => !el.closest("[inert]") && visible(el));
 }
 
 function groupOf(el: Element | null): string | null {
@@ -87,18 +85,12 @@ function score(from: DOMRect, to: DOMRect, dir: Dir): number | null {
     primary = dir === "right" ? to.left - from.right : from.left - to.right;
     if (dir === "right" ? to.left < from.left + tol : to.right > from.right - tol) return null;
     overlap = Math.min(from.bottom, to.bottom) - Math.max(from.top, to.top);
-    offAxis =
-      from.height > to.height + tol
-        ? Math.abs(from.top - to.top)
-        : Math.abs(from.top + from.height / 2 - (to.top + to.height / 2));
+    offAxis = from.height > to.height + tol ? Math.abs(from.top - to.top) : Math.abs(from.top + from.height / 2 - (to.top + to.height / 2));
   } else {
     primary = dir === "down" ? to.top - from.bottom : from.top - to.bottom;
     if (dir === "down" ? to.top < from.top + tol : to.bottom > from.bottom - tol) return null;
     overlap = Math.min(from.right, to.right) - Math.max(from.left, to.left);
-    offAxis =
-      from.width > to.width + tol
-        ? Math.abs(from.left - to.left)
-        : Math.abs(from.left + from.width / 2 - (to.left + to.width / 2));
+    offAxis = from.width > to.width + tol ? Math.abs(from.left - to.left) : Math.abs(from.left + from.width / 2 - (to.left + to.width / 2));
   }
   primary = Math.max(0, primary);
   // Overlapping candidates win; otherwise misalignment costs three times distance.

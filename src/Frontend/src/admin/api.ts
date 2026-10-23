@@ -203,10 +203,7 @@ export const adminApi = {
   updateIntegration(id: number, update: IntegrationUpdate) {
     return send<void>("PATCH", `admin/integrations/${id}`, update);
   },
-  sessions(
-    params: { query: string; page: number; status: string | null; from: string | null; to: string | null },
-    options?: CallOptions,
-  ) {
+  sessions(params: { query: string; page: number; status: string | null; from: string | null; to: string | null }, options?: CallOptions) {
     return get<SessionPage>(`admin/sessions${query(params)}`, options);
   },
   transferSessions(sessionIds: number[], targetIntegrationId: number) {

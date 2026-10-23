@@ -3,7 +3,23 @@ import { Link } from "react-router";
 import { AdminAccessRequired, adminApi, isAbortError, isForbidden, type DashboardSession, type DashboardSnapshot } from "../api";
 import { Cover } from "@/components/ui";
 import { platformColor } from "@/lib/platforms";
-import { Alert, Badge, Button, linkClass, Pager, Panel, ProgressBar, rowClass, Select, Sub, Table, Td, TextInput, Th, Toolbar } from "../components/ui";
+import {
+  Alert,
+  Badge,
+  Button,
+  linkClass,
+  Pager,
+  Panel,
+  ProgressBar,
+  rowClass,
+  Select,
+  Sub,
+  Table,
+  Td,
+  TextInput,
+  Th,
+  Toolbar,
+} from "../components/ui";
 import { aiErrorsLink, DashboardRefreshMs, generationLink, pageOf, sessionsTodayLink, sourceLabel } from "../logic";
 import { formatElapsed, formatLocal, formatLocalSeconds, localDayRange } from "../time";
 

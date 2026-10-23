@@ -21,7 +21,10 @@ public sealed class SessionOverlapIntegrationTests(PostgresFixture postgres)
     [Fact]
     public async Task EntriesOfOneDayFollowEachOtherAndADayWithoutRoomIsRefused()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         await using var db = CreateDb();
         var (user, game) = await Seed(db);
@@ -48,8 +51,12 @@ public sealed class SessionOverlapIntegrationTests(PostgresFixture postgres)
             var pc = await db.Platforms.SingleAsync(item => item.Key == "pc");
             db.PlaySessions.Add(new PlaySession
             {
-                UserId = user.Id, GameId = game.Id, PlatformId = pc.Id, CaptureMethod = CaptureMethod.Manual,
-                StartedAt = Day.AddHours(3), EndedAt = Day.AddHours(23.5),
+                UserId = user.Id,
+                GameId = game.Id,
+                PlatformId = pc.Id,
+                CaptureMethod = CaptureMethod.Manual,
+                StartedAt = Day.AddHours(3),
+                EndedAt = Day.AddHours(23.5),
             });
             await db.SaveChangesAsync();
 
@@ -72,20 +79,33 @@ public sealed class SessionOverlapIntegrationTests(PostgresFixture postgres)
     [Fact]
     public async Task AcceptedDraftRowsOfOneDateFollowEachOther()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         await using var db = CreateDb();
         var (user, game) = await Seed(db);
         var now = DateTimeOffset.UtcNow;
         var batch = new SessionDraftBatch
         {
-            Id = Guid.NewGuid(), UserId = user.Id, RequestId = Guid.NewGuid(), CreatedAt = now, Timezone = "UTC",
+            Id = Guid.NewGuid(),
+            UserId = user.Id,
+            RequestId = Guid.NewGuid(),
+            CreatedAt = now,
+            Timezone = "UTC",
             ReferenceDate = new DateOnly(2026, 9, 7),
         };
         SessionDraftRow Row(int position, int minutes) => new()
         {
-            Id = Guid.NewGuid(), BatchId = batch.Id, Position = position, Title = game.Title, Date = "2026-09-07",
-            DurationMinutes = minutes, PlatformKey = "ps5", GameId = GameId.Encode(game.Id),
+            Id = Guid.NewGuid(),
+            BatchId = batch.Id,
+            Position = position,
+            Title = game.Title,
+            Date = "2026-09-07",
+            DurationMinutes = minutes,
+            PlatformKey = "ps5",
+            GameId = GameId.Encode(game.Id),
             SelectionJson = System.Text.Json.JsonSerializer.Serialize(
                 new ManualMappingSearchResultDto("local", GameId.Encode(game.Id), null, game.Title, null, null, null)),
         };
@@ -124,7 +144,10 @@ public sealed class SessionOverlapIntegrationTests(PostgresFixture postgres)
     [Fact]
     public async Task EditsCannotOverlapAnotherSessionOnTheSamePlatform()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         await using var db = CreateDb();
         await using var transaction = await db.Database.BeginTransactionAsync();
@@ -138,8 +161,12 @@ public sealed class SessionOverlapIntegrationTests(PostgresFixture postgres)
         {
             var session = new PlaySession
             {
-                UserId = user.Id, GameId = played.Id, PlatformId = platform.Id, CaptureMethod = CaptureMethod.Manual,
-                StartedAt = Day.AddHours(startHours), EndedAt = endHours is { } end ? Day.AddHours(end) : null,
+                UserId = user.Id,
+                GameId = played.Id,
+                PlatformId = platform.Id,
+                CaptureMethod = CaptureMethod.Manual,
+                StartedAt = Day.AddHours(startHours),
+                EndedAt = endHours is { } end ? Day.AddHours(end) : null,
             };
             db.PlaySessions.Add(session);
             return session;

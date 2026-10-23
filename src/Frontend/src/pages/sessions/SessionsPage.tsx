@@ -106,7 +106,17 @@ function titleSize(value: string): string {
 }
 
 /** KPI tile whose figure shrinks with clamp() instead of being truncated; a title wraps to 3 lines. */
-function KpiTile({ label, value, size = "clamp(26px,8vw,36px)", clampLines = false }: { label: string; value: string; size?: string; clampLines?: boolean }) {
+function KpiTile({
+  label,
+  value,
+  size = "clamp(26px,8vw,36px)",
+  clampLines = false,
+}: {
+  label: string;
+  value: string;
+  size?: string;
+  clampLines?: boolean;
+}) {
   return (
     <div className="pdx-tile min-w-0 !px-[26px] !py-6">
       <p className="pdx-label">{label}</p>
@@ -478,8 +488,7 @@ export function SessionsPage() {
 
   const sortDirectionLabel = state.sortDirection === "asc" ? "ascending" : "descending";
   const sortGlyph = state.sortDirection === "asc" ? "↑" : "↓";
-  const flatGroupLabel =
-    state.sortKey === "duration" ? (state.sortDirection === "desc" ? "LONGEST FIRST" : "SHORTEST FIRST") : "SESSIONS";
+  const flatGroupLabel = state.sortKey === "duration" ? (state.sortDirection === "desc" ? "LONGEST FIRST" : "SHORTEST FIRST") : "SESSIONS";
   const rowIndex = new Map(state.rows.map((row, index) => [row.sessionId, index]));
 
   const logPastSessionButton = (className: string) => (

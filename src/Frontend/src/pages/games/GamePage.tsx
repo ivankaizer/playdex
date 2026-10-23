@@ -233,9 +233,13 @@ export function GamePage({ hash }: { hash: string | null }) {
           <div className="flex min-w-0 flex-col gap-7">
             <div className="min-w-0">
               <p className="pdx-kicker">Game</p>
-              <h2 className="mt-2 break-words text-[clamp(28px,6vw,40px)] font-semibold leading-[1.08] tracking-[-0.025em] text-ink">{title}</h2>
+              <h2 className="mt-2 break-words text-[clamp(28px,6vw,40px)] font-semibold leading-[1.08] tracking-[-0.025em] text-ink">
+                {title}
+              </h2>
               {state.gameDetailsError.length > 0 && (
-                <p role="alert" className="mt-3 text-[13px] text-danger">{state.gameDetailsError}</p>
+                <p role="alert" className="mt-3 text-[13px] text-danger">
+                  {state.gameDetailsError}
+                </p>
               )}
             </div>
 
@@ -312,7 +316,9 @@ export function GamePage({ hash }: { hash: string | null }) {
                 </div>
 
                 {state.ratingError.length > 0 ? (
-                  <p role="alert" className="text-[13px] text-danger">{state.ratingError}</p>
+                  <p role="alert" className="text-[13px] text-danger">
+                    {state.ratingError}
+                  </p>
                 ) : state.requests === null && state.sessionsLoaded ? (
                   <p className="text-[13px] text-muted">Add a session for this game to unlock ratings.</p>
                 ) : null}
@@ -352,7 +358,9 @@ export function GamePage({ hash }: { hash: string | null }) {
                   </button>
                 </div>
                 {state.ignoreError.length > 0 ? (
-                  <p role="alert" className="text-[13px] text-danger">{state.ignoreError}</p>
+                  <p role="alert" className="text-[13px] text-danger">
+                    {state.ignoreError}
+                  </p>
                 ) : state.requests === null && state.sessionsLoaded ? (
                   <p className="text-[13px] text-muted">Add a session for this game to enable tracking controls.</p>
                 ) : null}
@@ -367,7 +375,9 @@ export function GamePage({ hash }: { hash: string | null }) {
 
         <div className="flex flex-col gap-1">
           {state.gameError.length > 0 ? (
-            <p role="alert" className="text-[13px] text-danger">{state.gameError}</p>
+            <p role="alert" className="text-[13px] text-danger">
+              {state.gameError}
+            </p>
           ) : state.isLoading ? (
             [1, 2, 3].map((item) => (
               <div key={item} aria-hidden="true" className="-mx-3 grid grid-cols-[48px_minmax(0,1fr)_auto] items-center gap-4 px-3 py-2.5">
@@ -444,7 +454,9 @@ export function GamePage({ hash }: { hash: string | null }) {
               <span className="text-[13px] text-muted">All time since 2025</span>
             </div>
             {state.statsError.length > 0 ? (
-              <p role="alert" className="text-[13px] text-danger">{state.statsError}</p>
+              <p role="alert" className="text-[13px] text-danger">
+                {state.statsError}
+              </p>
             ) : state.stats === null ? (
               <BarChart data={placeholderBars(3)} height={130} />
             ) : yearsEmpty ? (
@@ -469,7 +481,9 @@ export function GamePage({ hash }: { hash: string | null }) {
               </label>
             </div>
             {state.statsError.length > 0 ? (
-              <p role="alert" className="text-[13px] text-danger">{state.statsError}</p>
+              <p role="alert" className="text-[13px] text-danger">
+                {state.statsError}
+              </p>
             ) : state.stats === null ? (
               <BarChart data={placeholderBars(12)} height={130} />
             ) : monthsEmpty ? (

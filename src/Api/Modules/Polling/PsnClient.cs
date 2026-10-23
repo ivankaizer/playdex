@@ -34,7 +34,9 @@ public sealed class PsnClient(
         var accountId = credential.AccountId;
 
         if (string.IsNullOrEmpty(npsso))
+        {
             throw new ProviderPollException("PSN credential is missing an NPSSO token.", authenticationFailure: true);
+        }
 
         var accessToken = await GetAccessToken(credential.Id, npsso, ct);
 
@@ -42,18 +44,24 @@ public sealed class PsnClient(
         {
             accountId = ResolveAccountIdFromToken(accessToken);
             if (accountId is null)
+            {
                 throw new ProviderPollException("PSN access token did not contain an account ID.");
+            }
         }
 
         var (presence, rawPresence) = await GetBasicPresence(credential.Id, accessToken, accountId, ct);
 
         var titleInfo = presence.BasicPresence?.GameTitleInfoList?.FirstOrDefault();
         if (titleInfo?.TitleName is null)
+        {
             return new ProviderPollResult(Game: null, RawPayload: rawPresence);
+        }
 
         string? capsuleUrl = null;
         if (titleInfo.ConceptIconUrl is not null)
+        {
             capsuleUrl = titleInfo.ConceptIconUrl;
+        }
 
         return new ProviderPollResult(
             Game: new CurrentlyPlayingResult(
@@ -69,7 +77,9 @@ public sealed class PsnClient(
     private async Task<string> GetAccessToken(long credentialId, string npsso, CancellationToken ct)
     {
         if (tokenCache.TryGet(credentialId, npsso, DateTimeOffset.UtcNow.AddMinutes(1), out var cachedAccessToken))
+        {
             return cachedAccessToken;
+        }
 
         var code = await ExchangeNpssoForCode(npsso, ct);
         var tokenResponse = await ExchangeCodeForAccessToken(code, ct);
@@ -99,7 +109,9 @@ public sealed class PsnClient(
         using var response = await httpClient.SendAsync(request, HttpCompletionOption.ResponseContentRead, ct);
         var code = GetQueryParameter(response.Headers.Location, "code");
         if (!string.IsNullOrEmpty(code))
+        {
             return code;
+        }
 
         // Sony answers an expired or signed-out NPSSO with a redirect (or a 4xx) that carries no code; a server
         // error or a rate limit says nothing about the token.
@@ -137,12 +149,16 @@ public sealed class PsnClient(
 
         using var response = await httpClient.SendAsync(request, ct);
         if (!response.IsSuccessStatusCode)
+        {
             throw new ProviderPollException(
                 $"PSN token request returned {(int)response.StatusCode} ({response.ReasonPhrase}).");
+        }
 
         var token = await response.Content.ReadFromJsonAsync<PsnTokenResponse>(JsonOptions, ct);
         if (token is null || string.IsNullOrEmpty(token.AccessToken))
+        {
             throw new ProviderPollException("PSN token response did not contain an access token.");
+        }
 
         return token;
     }
@@ -151,7 +167,9 @@ public sealed class PsnClient(
     {
         var parts = accessToken.Split('.');
         if (parts.Length < 2)
+        {
             return null;
+        }
 
         var normalized = parts[1]
             .Replace('-', '+')
@@ -195,16 +213,23 @@ public sealed class PsnClient(
         }
 
         if (!response.IsSuccessStatusCode)
+        {
             throw new ProviderPollException(
                 $"PSN presence request returned {(int)response.StatusCode} ({response.ReasonPhrase}).");
+        }
 
         var rawJson = await response.Content.ReadAsStringAsync(ct);
         var presence = JsonSerializer.Deserialize<PsnPresenceResponse>(rawJson, JsonOptions);
         if (presence is null)
+        {
             throw new ProviderPollException("PSN presence response was empty or invalid.");
+        }
+
         if (presence.Error is not null)
+        {
             throw new ProviderPollException(
                 $"PSN presence request failed: {presence.Error.Message ?? "Unexpected Error"}");
+        }
 
         return (presence, rawJson);
     }
@@ -212,13 +237,17 @@ public sealed class PsnClient(
     private static string? GetQueryParameter(Uri? uri, string name)
     {
         if (uri is null)
+        {
             return null;
+        }
 
         foreach (var pair in uri.Query.TrimStart('?').Split('&', StringSplitOptions.RemoveEmptyEntries))
         {
             var parts = pair.Split('=', 2);
             if (string.Equals(parts[0], name, StringComparison.OrdinalIgnoreCase))
+            {
                 return parts.Length == 2 ? Uri.UnescapeDataString(parts[1]) : "";
+            }
         }
 
         return null;

@@ -10,7 +10,10 @@ public sealed class OpenSessionGuardMigrationTests(PostgresFixture postgres)
     [Fact]
     public async Task EndsOpenDuplicatesBeforeGuardingThem()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         await using var connection = await postgres.DataSource!.OpenConnectionAsync();
         await using var transaction = await connection.BeginTransactionAsync();
@@ -85,7 +88,11 @@ public sealed class OpenSessionGuardMigrationTests(PostgresFixture postgres)
         await using var command = new NpgsqlCommand(sql, connection, transaction);
         await using var reader = await command.ExecuteReaderAsync();
         var values = new List<long>();
-        while (await reader.ReadAsync()) values.Add(reader.GetInt64(0));
+        while (await reader.ReadAsync())
+        {
+            values.Add(reader.GetInt64(0));
+        }
+
         return values;
     }
 
@@ -98,7 +105,10 @@ public sealed class OpenSessionGuardMigrationTests(PostgresFixture postgres)
         await using var reader = await command.ExecuteReaderAsync();
         var values = new List<DateTimeOffset?>();
         while (await reader.ReadAsync())
+        {
             values.Add(reader.IsDBNull(0) ? null : reader.GetFieldValue<DateTimeOffset>(0));
+        }
+
         return values;
     }
 }

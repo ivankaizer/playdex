@@ -138,8 +138,7 @@ export function PasteDemo() {
 }
 
 const pad = (value: number) => String(value).padStart(2, "0");
-const clock = (seconds: number) =>
-  `${pad(Math.floor(seconds / 3600))}:${pad(Math.floor((seconds % 3600) / 60))}:${pad(seconds % 60)}`;
+const clock = (seconds: number) => `${pad(Math.floor(seconds / 3600))}:${pad(Math.floor((seconds % 3600) / 60))}:${pad(seconds % 60)}`;
 
 /** A live timer for a platform that doesn't sync. Stop saves it; Start runs a new one. */
 export function TimerDemo() {
@@ -160,7 +159,12 @@ export function TimerDemo() {
   return (
     <div className="flex flex-col gap-2.5">
       <div className="flex items-center gap-3 rounded-2xl bg-surface/80 px-3 py-2.5">
-        <Cover title="Super Mario Bros. Wonder" className="h-10 w-[30px] rounded-lg" initialClassName="text-xs" style={{ background: "linear-gradient(160deg,#f5a3b5,#e0455a)" }} />
+        <Cover
+          title="Super Mario Bros. Wonder"
+          className="h-10 w-[30px] rounded-lg"
+          initialClassName="text-xs"
+          style={{ background: "linear-gradient(160deg,#f5a3b5,#e0455a)" }}
+        />
         <div className="flex min-w-0 flex-1 flex-col">
           <span className="truncate text-sm font-medium">Super Mario Bros. Wonder</span>
           <span className="flex items-center gap-1.5 text-xs text-muted">

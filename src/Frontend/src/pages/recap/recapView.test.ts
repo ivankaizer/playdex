@@ -44,9 +44,7 @@ describe("recap view helpers", () => {
 
   it("shows range and most-active dates as the days they name, west of UTC too", () => {
     expect(formatRecapDate("2026-07-01")).toBe("Jul 1, 2026");
-    expect(rangeLabel({ range: { from: "2026-01-01", to: "2026-12-31" } } as RecapResponse)).toBe(
-      "Jan 1, 2026 — Dec 31, 2026",
-    );
+    expect(rangeLabel({ range: { from: "2026-01-01", to: "2026-12-31" } } as RecapResponse)).toBe("Jan 1, 2026 — Dec 31, 2026");
     expect(rangeLabel(null)).toBe("All time");
   });
 

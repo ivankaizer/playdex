@@ -64,7 +64,17 @@ describe("chart tooltips", () => {
   it("finds the donut segment under the pointer and ignores the hole", () => {
     render(<Donut segments={segments} size={100} thickness={20} />);
     const donut = screen.getByRole("img");
-    donut.getBoundingClientRect = () => ({ left: 0, top: 0, width: 100, height: 100, right: 100, bottom: 100, x: 0, y: 0, toJSON: () => ({}) });
+    donut.getBoundingClientRect = () => ({
+      left: 0,
+      top: 0,
+      width: 100,
+      height: 100,
+      right: 100,
+      bottom: 100,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+    });
 
     // Right edge: 90° clockwise from 12 o'clock is 25%, inside Steam's 0–75%.
     fireEvent.mouseMove(donut, { clientX: 95, clientY: 50 });

@@ -18,7 +18,10 @@ public sealed class WrapperPostgresFixture : IAsyncLifetime
     public async Task InitializeAsync()
     {
         var databaseUrl = Environment.GetEnvironmentVariable("PLAY" + "DEX_INTEGRATION_DATABASE_URL");
-        if (string.IsNullOrWhiteSpace(databaseUrl)) return;
+        if (string.IsNullOrWhiteSpace(databaseUrl))
+        {
+            return;
+        }
 
         var builder = new NpgsqlDataSourceBuilder(PostgresConnectionString.Normalize(databaseUrl));
         builder.MapEnum<GameExternalIdentityType>("game_external_identity_type");
@@ -32,7 +35,10 @@ public sealed class WrapperPostgresFixture : IAsyncLifetime
 
     public async Task DisposeAsync()
     {
-        if (DataSource is not null) await DataSource.DisposeAsync();
+        if (DataSource is not null)
+        {
+            await DataSource.DisposeAsync();
+        }
     }
 }
 
@@ -42,7 +48,10 @@ public sealed class ApiCaptureEndToEndTests(WrapperPostgresFixture postgres)
     [Fact]
     public async Task WrapperStartUsesLiveGenericCaptureContract()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         ConfigureHost();
         await using var factory = new WebApplicationFactory<global::Program>();

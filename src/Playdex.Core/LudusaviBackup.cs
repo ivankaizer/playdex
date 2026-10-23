@@ -307,8 +307,15 @@ public sealed class LudusaviRunner
                 {
                     foreach (var game in games.EnumerateArray())
                     {
-                        if (game.ValueKind == JsonValueKind.String) return game.GetString();
-                        if (game.ValueKind == JsonValueKind.Object && game.TryGetProperty("name", out var name)) return name.GetString();
+                        if (game.ValueKind == JsonValueKind.String)
+                        {
+                            return game.GetString();
+                        }
+
+                        if (game.ValueKind == JsonValueKind.Object && game.TryGetProperty("name", out var name))
+                        {
+                            return name.GetString();
+                        }
                     }
                 }
             }
@@ -339,7 +346,11 @@ public sealed class LudusaviRunner
     {
         var detail = string.IsNullOrWhiteSpace(result.StandardError) ? result.StandardOutput : result.StandardError;
         detail = detail.Trim();
-        if (detail.Length > 300) detail = detail[..300];
+        if (detail.Length > 300)
+        {
+            detail = detail[..300];
+        }
+
         return string.IsNullOrWhiteSpace(detail) ? $"{prefix} (exit code {result.ExitCode})." : $"{prefix}: {detail}";
     }
 
@@ -437,16 +448,27 @@ public sealed partial class BackupCoordinator : IDisposable
 
     internal async Task RunDueOnceAsync(DateTimeOffset now, CancellationToken cancellationToken)
     {
-        if (!config.Ludusavi.IsConfigured) return;
+        if (!config.Ludusavi.IsConfigured)
+        {
+            return;
+        }
         // A copy: the app adds and removes games (on the UI thread) while this awaits a backup.
         var games = config.Games.Values.Where(game => game.Backup.DailyEnabled).ToList();
         foreach (var game in games)
         {
-            if (!config.Games.ContainsKey(game.GameId)) continue; // removed during the pass
+            if (!config.Games.ContainsKey(game.GameId))
+            {
+                continue; // removed during the pass
+            }
+
             try
             {
                 var gameState = GetState(game.GameId);
-                if (!IsDue(gameState, now)) continue;
+                if (!IsDue(gameState, now))
+                {
+                    continue;
+                }
+
                 if (GameLock.IsHeld(config.Storage.StateDirectory, game.GameId))
                 {
                     LogBackupDeferred(logger, game.GameId);
@@ -465,7 +487,11 @@ public sealed partial class BackupCoordinator : IDisposable
     /// <summary>Not backed up successfully today, and no attempt within the last hour.</summary>
     public static bool IsDue(GameBackupState? state, DateTimeOffset now)
     {
-        if (state?.LastSuccessAt?.ToLocalTime().Date == now.ToLocalTime().Date) return false;
+        if (state?.LastSuccessAt?.ToLocalTime().Date == now.ToLocalTime().Date)
+        {
+            return false;
+        }
+
         return state?.LastAttemptAt is null || now - state.LastAttemptAt >= FailureRetryDelay;
     }
 
@@ -514,7 +540,11 @@ public sealed partial class BackupCoordinator : IDisposable
                 gameState.Result = result.Kind;
                 gameState.ResolvedTitle = result.ResolvedTitle ?? gameState.ResolvedTitle;
                 gameState.LastError = result.Error;
-                if (result.IsSuccess) gameState.LastSuccessAt = DateTimeOffset.Now;
+                if (result.IsSuccess)
+                {
+                    gameState.LastSuccessAt = DateTimeOffset.Now;
+                }
+
                 await store.SaveAsync(state, cancellationToken);
                 LogBackupStateChanged(logger, game.GameId, result.Kind, trigger, gameState.ResolvedTitle, gameState.LastError);
                 stateChanged();
@@ -548,7 +578,10 @@ public sealed partial class BackupCoordinator : IDisposable
         }
         finally
         {
-            lock (pendingLock) pendingGames.Remove(game.GameId);
+            lock (pendingLock)
+            {
+                pendingGames.Remove(game.GameId);
+            }
         }
     }
 

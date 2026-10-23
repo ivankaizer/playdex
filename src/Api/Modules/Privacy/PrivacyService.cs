@@ -15,12 +15,16 @@ public sealed class PrivacyService(PrivacyRepository repository, TimeProvider cl
     public async Task DeleteAccount(long userId, string? password, CancellationToken ct)
     {
         if (string.IsNullOrEmpty(password))
+        {
             throw AppProblemException.Validation("Password is required to delete your account.");
+        }
 
         var user = await repository.FindUser(userId, ct)
             ?? throw AppProblemException.NotFound("User not found.");
         if (user.Password is null || !BCrypt.Net.BCrypt.Verify(password, user.Password))
+        {
             throw AppProblemException.Forbidden("Password is incorrect.");
+        }
 
         await repository.DeleteUser(userId, ct);
     }

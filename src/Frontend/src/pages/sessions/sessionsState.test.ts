@@ -549,11 +549,7 @@ describe("sessions list presentation", () => {
 
   it("groups date-sorted rows by local start day with counts and totals", () => {
     const now = at(2026, 10, 3, 20);
-    const rows = [
-      played(1, at(2026, 10, 3, 10), 10),
-      played(2, at(2026, 9, 30, 10), 60),
-      played(3, at(2026, 9, 30, 8), 25),
-    ];
+    const rows = [played(1, at(2026, 10, 3, 10), 10), played(2, at(2026, 9, 30, 10), 60), played(3, at(2026, 9, 30, 8), 25)];
     const state = completeListLoad(createSessionsState(now), { accountId: 1, sessions: rows, total: 3, limit: 10, offset: 0 });
     const groups = groupRowViews(state, getRowViews(state, now), now);
     expect(groups.map((group) => group.label)).toEqual(["TODAY", "WEDNESDAY, SEP 30"]);
@@ -564,7 +560,13 @@ describe("sessions list presentation", () => {
 
   it("keeps a single unlabeled group when sorted by duration", () => {
     const now = new Date();
-    let state = completeListLoad(createSessionsState(now), { accountId: 1, sessions: [session({ sessionId: 1 }), session({ sessionId: 2 })], total: 2, limit: 10, offset: 0 });
+    let state = completeListLoad(createSessionsState(now), {
+      accountId: 1,
+      sessions: [session({ sessionId: 1 }), session({ sessionId: 2 })],
+      total: 2,
+      limit: 10,
+      offset: 0,
+    });
     state = sortBy(state, "duration");
     const groups = groupRowViews(state, getRowViews(state, now), now);
     expect(groups).toHaveLength(1);

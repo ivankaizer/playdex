@@ -12,7 +12,11 @@ public sealed class HostExposureIntegrationTests(AdminApiFixture fixture)
     [Fact]
     public async Task AdministratorsCanReadMetrics()
     {
-        if (fixture.Factory is null) return;
+        if (fixture.Factory is null)
+        {
+            return;
+        }
+
         using var client = await fixture.LoginAsync(AdminApiFixture.AdminEmail);
 
         using var response = await client.GetAsync("/api/metrics");
@@ -23,7 +27,11 @@ public sealed class HostExposureIntegrationTests(AdminApiFixture fixture)
     [Fact]
     public async Task SwaggerIsServedInDevelopment()
     {
-        if (fixture.Factory is null) return;
+        if (fixture.Factory is null)
+        {
+            return;
+        }
+
         using var client = fixture.CreateClient();
 
         using var ui = await client.GetAsync("/swagger");
@@ -38,7 +46,11 @@ public sealed class HostExposureIntegrationTests(AdminApiFixture fixture)
     [InlineData("Staging")]
     public async Task SwaggerIsNotServedOutsideDevelopment(string environment)
     {
-        if (fixture.Factory is null) return;
+        if (fixture.Factory is null)
+        {
+            return;
+        }
+
         await using var factory = fixture.Factory.WithWebHostBuilder(builder => builder.UseEnvironment(environment));
         using var client = factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
 

@@ -227,7 +227,10 @@ public static partial class LaunchOptionsCodec
         {
             throw new InvalidOperationException($"Launch options cannot exceed {LaunchConfig.MaximumLaunchOptionsLength} characters.");
         }
-        if (normalized.Length == 0) return [];
+        if (normalized.Length == 0)
+        {
+            return [];
+        }
 
         var arguments = CommandLineToArgvW($"launcher.exe {normalized}", out var count);
         if (arguments == IntPtr.Zero)
@@ -241,7 +244,10 @@ public static partial class LaunchOptionsCodec
             for (var index = 1; index < count; index++)
             {
                 var value = Marshal.PtrToStringUni(Marshal.ReadIntPtr(arguments, index * IntPtr.Size));
-                if (value is not null) result.Add(value);
+                if (value is not null)
+                {
+                    result.Add(value);
+                }
             }
             return result;
         }

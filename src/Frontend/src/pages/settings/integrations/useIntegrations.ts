@@ -85,15 +85,9 @@ export function useIntegrations() {
     [update],
   );
 
-  const setEditingAccountId = useCallback(
-    (value: string) => update((current) => providers.setEditingAccountId(current, value)),
-    [update],
-  );
+  const setEditingAccountId = useCallback((value: string) => update((current) => providers.setEditingAccountId(current, value)), [update]);
 
-  const setEditingApiKey = useCallback(
-    (value: string) => update((current) => providers.setEditingApiKey(current, value)),
-    [update],
-  );
+  const setEditingApiKey = useCallback((value: string) => update((current) => providers.setEditingApiKey(current, value)), [update]);
 
   const saveCredential = useCallback(
     async (provider: ProviderStatus) => {
@@ -168,10 +162,7 @@ export function useIntegrations() {
     [get, updateCreator],
   );
 
-  const cancelIntegrationCreation = useCallback(
-    () => updateCreator(creator.cancelIntegrationCreation),
-    [updateCreator],
-  );
+  const cancelIntegrationCreation = useCallback(() => updateCreator(creator.cancelIntegrationCreation), [updateCreator]);
 
   const setCreationApiKey = useCallback(
     (value: string) => updateCreator((current) => creator.setCreationApiKey(current, value)),

@@ -18,14 +18,28 @@ export function PlayButton({ game, label = "Play", round = false }: { game: Game
   if (playing) {
     if (round) {
       return (
-        <button className="dk-round" data-nav data-kind="playing" data-game={game.id} aria-label={`Resume ${game.title}`} onClick={() => resumeGame(game.id)}>
+        <button
+          className="dk-round"
+          data-nav
+          data-kind="playing"
+          data-game={game.id}
+          aria-label={`Resume ${game.title}`}
+          onClick={() => resumeGame(game.id)}
+        >
           <Play fill="currentColor" aria-hidden />
         </button>
       );
     }
     return (
       <>
-        <button className="dk-btn dk-btn-primary dk-btn-lg" data-nav data-nav-default data-kind="playing" data-game={game.id} onClick={() => resumeGame(game.id)}>
+        <button
+          className="dk-btn dk-btn-primary dk-btn-lg"
+          data-nav
+          data-nav-default
+          data-kind="playing"
+          data-game={game.id}
+          onClick={() => resumeGame(game.id)}
+        >
           <Play fill="currentColor" aria-hidden /> Resume
         </button>
         <button
@@ -58,7 +72,14 @@ export function PlayButton({ game, label = "Play", round = false }: { game: Game
   if (!isInstalled(game)) {
     const install = () => showToast(`${SOURCE_LABEL[game.source]} would open to install ${game.title}`);
     return round ? null : (
-      <button className="dk-btn dk-btn-outline dk-btn-lg" data-nav data-nav-default data-kind="install" data-game={game.id} onClick={install}>
+      <button
+        className="dk-btn dk-btn-outline dk-btn-lg"
+        data-nav
+        data-nav-default
+        data-kind="install"
+        data-game={game.id}
+        onClick={install}
+      >
         <Download aria-hidden /> Install
       </button>
     );
@@ -97,7 +118,11 @@ export function DayBars({ minutes, label }: { minutes: number[]; label: string }
   const last = minutes.length - 1;
   const total = minutes.reduce((t, m) => t + m, 0);
   return (
-    <div className="dk-days" role="img" aria-label={`${label}: ${total ? fmtMinutes(total) : "nothing"} in total, ${fmtMinutes(minutes[last])} today`}>
+    <div
+      className="dk-days"
+      role="img"
+      aria-label={`${label}: ${total ? fmtMinutes(total) : "nothing"} in total, ${fmtMinutes(minutes[last])} today`}
+    >
       {minutes.map((m, i) => (
         <div key={i} className="dk-day" data-today={i === last ? "" : undefined} title={m ? fmtMinutes(m) : "Not played"}>
           <div className="dk-day-bar">

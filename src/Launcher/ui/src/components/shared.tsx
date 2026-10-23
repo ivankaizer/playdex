@@ -7,7 +7,12 @@ import { focusedGame, useStore } from "../nav/store";
 type GlyphName = "A" | "B" | "X" | "Y" | "LB" | "RB" | "VIEW" | "MENU" | "UP";
 
 export function Glyph({ name }: { name: GlyphName }) {
-  if (name === "LB" || name === "RB") return <span className="glyph glyph-bumper" aria-hidden>{name}</span>;
+  if (name === "LB" || name === "RB")
+    return (
+      <span className="glyph glyph-bumper" aria-hidden>
+        {name}
+      </span>
+    );
   if (name === "VIEW")
     return (
       <span className="glyph" aria-hidden>

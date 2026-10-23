@@ -11,9 +11,14 @@ public sealed class RecapRepository(PlaydexDbContext db)
     {
         var sessions = CountedSessions(userId);
         if (from is { } fromValue)
+        {
             sessions = sessions.Where(ps => ps.StartedAt >= fromValue);
+        }
+
         if (to is { } toValue)
+        {
             sessions = sessions.Where(ps => ps.StartedAt < toValue);
+        }
 
         return await (
                 from ps in sessions

@@ -114,15 +114,7 @@ function VolumeIcon({ volume }: { volume: AudioVolume }) {
  * The default output's volume: left / right step it, A mutes and unmutes, and a pointer sets it by clicking or dragging
  * along the bar.
  */
-function VolumeRow({
-  volume,
-  onChange,
-  onMute,
-}: {
-  volume: AudioVolume;
-  onChange: (level: number) => void;
-  onMute: () => void;
-}) {
+function VolumeRow({ volume, onChange, onMute }: { volume: AudioVolume; onChange: (level: number) => void; onMute: () => void }) {
   const row = useRef<HTMLButtonElement>(null);
   const bar = useRef<HTMLSpanElement>(null);
   // The level the next step starts from, ahead of the re-render when steps come quickly.
@@ -290,7 +282,7 @@ export function QuickSettings() {
     if (!state?.volume) return;
     const muted = !state.volume.muted;
     setArmed(null);
-    setState((s) => s?.volume ? { ...s, volume: { ...s.volume, muted } } : s);
+    setState((s) => (s?.volume ? { ...s, volume: { ...s.volume, muted } } : s));
     postToHost({ type: "mute", muted });
   }
 

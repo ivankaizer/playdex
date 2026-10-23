@@ -38,7 +38,10 @@ public sealed class RecapServiceTests(PostgresFixture postgres)
     [Fact]
     public async Task RecapForARangeAddsUpSessionsDaysStreaksAndGames()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         await using var db = CreateDb();
         await using var transaction = await db.Database.BeginTransactionAsync();
@@ -105,7 +108,10 @@ public sealed class RecapServiceTests(PostgresFixture postgres)
     [Fact]
     public async Task AllTimeRecapSeesEverySessionAndGamesPlayedInSeveralMonths()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         await using var db = CreateDb();
         await using var transaction = await db.Database.BeginTransactionAsync();
@@ -124,7 +130,10 @@ public sealed class RecapServiceTests(PostgresFixture postgres)
     [Fact]
     public async Task EmptyRangeIsAllZeroes()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         await using var db = CreateDb();
         await using var transaction = await db.Database.BeginTransactionAsync();

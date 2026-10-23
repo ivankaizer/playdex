@@ -16,7 +16,10 @@ public sealed class ApiCaptureRequestBodyTests(PostgresFixture postgres)
     [InlineData(false)]
     public async Task TheBodyIsReadWithOrWithoutAContentLength(bool chunked)
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         ConfigureHost();
         await using var factory = new WebApplicationFactory<Program>();

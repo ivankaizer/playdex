@@ -240,11 +240,7 @@ export function displayTitle(state: GameState): string {
 }
 
 export function gameImage(state: GameState): string | null {
-  return (
-    state.recentSessions.find((session) => session.capsuleUrl !== null)?.capsuleUrl ??
-    state.gameDetails?.capsuleUrl ??
-    null
-  );
+  return state.recentSessions.find((session) => session.capsuleUrl !== null)?.capsuleUrl ?? state.gameDetails?.capsuleUrl ?? null;
 }
 
 export function totalSeconds(state: GameState): number {

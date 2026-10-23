@@ -17,7 +17,10 @@ public sealed class RefreshTokenIntegrationTests(PostgresFixture postgres)
     [Fact]
     public async Task EachRefreshTokenWorksOnceAndReusingOneRevokesTheSignIn()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         await using var db = CreateContext();
         await using var transaction = await db.Database.BeginTransactionAsync();
@@ -46,7 +49,10 @@ public sealed class RefreshTokenIntegrationTests(PostgresFixture postgres)
     [Fact]
     public async Task ATokenCanBeRotatedOnlyOnce()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         await using var db = CreateContext();
         await using var transaction = await db.Database.BeginTransactionAsync();
@@ -63,7 +69,10 @@ public sealed class RefreshTokenIntegrationTests(PostgresFixture postgres)
     [Fact]
     public async Task LogoutAndANewPasswordRevokeStoredTokens()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         await using var db = CreateContext();
         await using var transaction = await db.Database.BeginTransactionAsync();

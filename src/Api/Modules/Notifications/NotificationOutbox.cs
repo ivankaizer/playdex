@@ -28,7 +28,11 @@ public sealed class NotificationOutbox(PlaydexDbContext db, TimeProvider clock)
     /// <returns>False when the notification is not one this outbox knows, or the same event is already queued.</returns>
     public async Task<bool> Enqueue(object notification, CancellationToken ct)
     {
-        if (Describe(notification) is not { } described) return false;
+        if (Describe(notification) is not { } described)
+        {
+            return false;
+        }
+
         var (kind, dedupeKey) = described;
 
         var payload = JsonSerializer.Serialize(notification, notification.GetType(), JsonOptions);

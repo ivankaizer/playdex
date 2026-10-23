@@ -127,7 +127,11 @@ export function IntegrationCreator({ integrations }: IntegrationCreatorProps) {
               .
             </p>
           ) : null}
-          {state.creationError ? <p role="alert" className="text-[13px] text-danger">{state.creationError}</p> : null}
+          {state.creationError ? (
+            <p role="alert" className="text-[13px] text-danger">
+              {state.creationError}
+            </p>
+          ) : null}
           <div className="flex flex-wrap justify-end gap-2.5">
             <button
               type="button"
