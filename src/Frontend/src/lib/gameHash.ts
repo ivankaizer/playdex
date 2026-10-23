@@ -4,6 +4,10 @@ const Increment = 811n;
 const MaxSafeInteger = 9_007_199_254_740_991n;
 const Base = BigInt(Alphabet.length);
 
+/**
+ * The hash for a game: a number is encoded, a string that already is a hash is kept, and other digits are read as
+ * a raw id. A hash can be all digits (game 87421 is "2029282"), so it is checked before the digits are re-encoded.
+ */
 export function encodeGameId(gameId: number | string | null | undefined): string {
   if (typeof gameId === "number") {
     if (!Number.isFinite(gameId) || gameId <= 0 || !Number.isInteger(gameId)) return "";
@@ -12,8 +16,8 @@ export function encodeGameId(gameId: number | string | null | undefined): string
 
   const trimmed = gameId?.trim() ?? "";
   if (trimmed.length === 0) return "";
-  if (/^[0-9]+$/.test(trimmed)) return encodeGameId(Number(trimmed));
-  return decodeGameHash(trimmed) !== null ? trimmed : "";
+  if (decodeGameHash(trimmed) !== null) return trimmed;
+  return /^[0-9]+$/.test(trimmed) ? encodeGameId(Number(trimmed)) : "";
 }
 
 export function decodeGameHash(hash: string | null | undefined): number | null {

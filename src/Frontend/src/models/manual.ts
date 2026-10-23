@@ -14,6 +14,8 @@ export interface ManualEntryCreateRequest {
   title: string | null;
   platformKey: string | null;
   capsuleUrl: string | null;
+  /** The viewer's IANA time zone: the entry starts when `date` begins there. */
+  timeZone?: string;
 }
 
 export interface ManualSessionStartResponse {

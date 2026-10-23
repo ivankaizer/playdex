@@ -19,7 +19,7 @@ import {
   failYears,
   initialRecapState,
   recapTabs,
-  recapYearsPath,
+  recapYearsRequest,
   runInitialCustomFlow,
   selectTab,
   setCustomFrom,
@@ -74,7 +74,7 @@ export function RecapPage() {
     async (lifetime: AbortController) => {
       apply(beginYearsLoad);
       try {
-        const response = await apiRequest<RecapYearsResponse>(recapYearsPath, { signal: lifetime.signal });
+        const response = await apiRequest<RecapYearsResponse>(recapYearsRequest(), { signal: lifetime.signal });
         if (!lifetime.signal.aborted) apply((current) => completeYears(current, response));
       } catch (error) {
         if (!lifetime.signal.aborted) apply((current) => failYears(current, errorMessage(error)));

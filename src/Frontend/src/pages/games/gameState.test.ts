@@ -1,3 +1,4 @@
+import { clientTimeZone } from "@/lib/dates";
 import type { AccountSession, AccountSessionsResponse } from "@/models/sessions";
 import {
   activeYear,
@@ -41,17 +42,14 @@ function page(sessions: AccountSession[], total: number, offset: number): Accoun
 
 describe("gameState", () => {
   it("builds the detail, stats and paged session requests", () => {
-    const requests = gameRequestsFor("3H4h3", new Date("2026-07-18T09:00:00Z"));
+    const requests = gameRequestsFor("3H4h3");
 
     expect(requests.gameId).toBe("42");
     expect(requests.details).toBe("/games/3H4h3");
-    expect(requests.stats).toBe("/games/3H4h3/stats");
-    expect(sessionsPagePath(requests, 1)).toBe(
-      "/sessions?gameId=3H4h3&from=2025-01-01&to=2026-07-18&sort=date&direction=desc&limit=5&offset=0",
-    );
-    expect(sessionsPagePath(requests, 2)).toBe(
-      "/sessions?gameId=3H4h3&from=2025-01-01&to=2026-07-18&sort=date&direction=desc&limit=5&offset=5",
-    );
+    expect(requests.stats).toBe(`/games/3H4h3/stats?tz=${encodeURIComponent(clientTimeZone())}`);
+    // Every session of the game, with no fixed start date.
+    expect(sessionsPagePath(requests, 1)).toBe("/sessions?gameId=3H4h3&sort=date&direction=desc&limit=5&offset=0");
+    expect(sessionsPagePath(requests, 2)).toBe("/sessions?gameId=3H4h3&sort=date&direction=desc&limit=5&offset=5");
     expect(requests.ignoreStatus).toBe("/games/ignored?gameId=3H4h3");
     expect(requests.rating).toBe("/games/rating?gameId=3H4h3");
   });
@@ -70,7 +68,7 @@ describe("gameState", () => {
   });
 
   it("starts loading for a valid hash", () => {
-    const state = beginGame("3H4h3", new Date("2026-07-18T00:00:00Z"));
+    const state = beginGame("3H4h3", new Date(2026, 6, 18));
 
     expect(state.requests?.gameHash).toBe("3H4h3");
     expect(state.isLoading).toBe(true);
@@ -82,7 +80,7 @@ describe("gameState", () => {
   });
 
   it("keeps the recent page total and page independent of charts", () => {
-    let state = beginGame("3H4h3", new Date("2026-07-18T00:00:00Z"));
+    let state = beginGame("3H4h3", new Date(2026, 6, 18));
     state = completeFirstSessions(
       state,
       page([session(1, "2026-07-18T08:00:00Z", "2026-07-18T10:00:00Z", "recent.jpg")], 11, 0),
@@ -104,14 +102,14 @@ describe("gameState", () => {
   });
 
   it("builds chart buckets from server stats", () => {
-    let state = beginGame("3H4h3", new Date("2026-07-18T00:00:00Z"));
+    let state = beginGame("3H4h3", new Date(2026, 6, 18));
     expect(yearlyStats(state)).toEqual([]);
     expect(activeYear(state)).toBe(2026);
 
     state = completeStats(state, {
       totalSeconds: 7200,
       sessionCount: 3,
-      lastPlayedAt: "2026-07-18T08:00:00Z",
+      lastPlayedAt: new Date(2026, 6, 18, 8).toISOString(),
       years: [
         { year: 2025, seconds: 1800 },
         { year: 2026, seconds: 5400 },
@@ -134,6 +132,26 @@ describe("gameState", () => {
     expect(activeYear(state)).toBe(2026);
     expect(activeYear({ ...state, selectedYear: 1999 })).toBe(2026);
     expect(activeYear({ ...state, selectedYear: 2025 })).toBe(2025);
+  });
+
+  it("starts the year chart at the first year played, before 2025 too", () => {
+    const state = completeStats(beginGame("3H4h3", new Date(2026, 6, 18)), {
+      totalSeconds: 3600,
+      sessionCount: 1,
+      lastPlayedAt: "2022-03-01T08:00:00Z",
+      years: [
+        { year: 2022, seconds: 3600 },
+        { year: 2023, seconds: 0 },
+        { year: 2024, seconds: 0 },
+        { year: 2025, seconds: 0 },
+        { year: 2026, seconds: 0 },
+      ],
+      months: [],
+    });
+
+    expect(yearlyStats(state).map((item) => item.year)).toEqual([2022, 2023, 2024, 2025, 2026]);
+    expect(yearlyStats(state)[0].hours).toBe(1);
+    expect(activeYear({ ...state, selectedYear: 2022 })).toBe(2022);
   });
 
   it("builds tracking and rating submissions", () => {

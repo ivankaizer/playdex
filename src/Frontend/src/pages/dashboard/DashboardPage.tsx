@@ -57,7 +57,7 @@ import {
   type RecapRange,
 } from "./dashboardState";
 
-const utcMonthName = new Intl.DateTimeFormat("en-US", { month: "long", timeZone: "UTC" });
+const monthName = new Intl.DateTimeFormat("en-US", { month: "long" });
 
 /** Long game titles step down in size so they stay readable in a KPI tile. */
 function kpiTitleSize(value: string): string {
@@ -441,8 +441,8 @@ export function DashboardPage() {
               value={period}
               onChange={setPeriod}
               options={[
-                { value: "month", label: utcMonthName.format(now) },
-                { value: "year", label: String(now.getUTCFullYear()) },
+                { value: "month", label: monthName.format(now) },
+                { value: "year", label: String(now.getFullYear()) },
               ]}
             />
           </div>

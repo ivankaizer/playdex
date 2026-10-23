@@ -65,7 +65,7 @@ public sealed class AccountsPlatformNameTests(PostgresFixture postgres)
 
             var stats = await repository.ComputeStats(
                 user.Id, null, startedAt.AddMinutes(-1), startedAt.AddHours(1),
-                platform.Key, 0, CancellationToken.None);
+                platform.Key, null, 0, TimeZoneInfo.Utc, CancellationToken.None);
             var platformStat = Assert.Single(stats.Platforms);
             Assert.Equal(platform.Key, platformStat.PlatformKey);
             Assert.Equal(platform.Name, platformStat.PlatformName);

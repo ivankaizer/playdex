@@ -118,6 +118,10 @@ public sealed class ProvidersRepository(PlaydexDbContext db, SessionLifecycle se
         return ToStatus(credential, platforms);
     }
 
+    /// <summary>
+    /// Applies the changed fields, then lets <paramref name="validate"/> check the merged credential (its type, API
+    /// key and account id) before anything is saved; it throws to refuse the update.
+    /// </summary>
     public async Task<ProviderStatusDto?> UpdateCredential(
         long userId,
         long providerId,
@@ -125,6 +129,7 @@ public sealed class ProvidersRepository(PlaydexDbContext db, SessionLifecycle se
         string? apiKey,
         bool accountIdChanged,
         string? accountId,
+        Action<IntegrationType, string?, string?> validate,
         CancellationToken ct)
     {
         var credential = await db.Integrations
@@ -133,8 +138,12 @@ public sealed class ProvidersRepository(PlaydexDbContext db, SessionLifecycle se
                 ct);
         if (credential is null) return null;
 
-        if (apiKeyChanged) credential.ApiKey = apiKey;
-        if (accountIdChanged) credential.AccountId = accountId;
+        var mergedApiKey = apiKeyChanged ? apiKey : credential.ApiKey;
+        var mergedAccountId = accountIdChanged ? accountId : credential.AccountId;
+        validate(credential.Type, mergedApiKey, mergedAccountId);
+
+        credential.ApiKey = mergedApiKey;
+        credential.AccountId = mergedAccountId;
         credential.UpdatedAt = DateTimeOffset.UtcNow;
         await db.SaveChangesAsync(ct);
         var platforms = await db.Platforms.AsNoTracking().ToListAsync(ct);
@@ -203,19 +212,14 @@ public sealed class ProvidersRepository(PlaydexDbContext db, SessionLifecycle se
             .Select(item => item.ApiKeyLocked || item.Type == IntegrationType.Api)
             .FirstOrDefaultAsync(ct);
 
-    public Task<bool> IsPlatformApiKeyLocked(long userId, string platformKey, CancellationToken ct) =>
-        db.Integrations
-            .AsNoTracking()
-            .Where(item => item.UserId == userId && item.ApiKeyLocked)
-            .Join(
-                db.Platforms.AsNoTracking().Where(platform => platform.Key == platformKey),
-                credential => credential.PlatformId,
-                platform => platform.Id,
-                (credential, _) => credential)
-            .AnyAsync(ct);
-
-    public async Task<ProviderStatusDto?> ConnectOpenXbl(
+    /// <summary>
+    /// Sets the OpenXBL key (and XUID) of the user's Xbox integration <paramref name="providerId"/>; without one, of
+    /// their oldest Xbox integration, so the same one is picked every time, or of a new one when they have none. Only
+    /// that integration's administrator lock applies.
+    /// </summary>
+    public async Task<OpenXblConnectResult> ConnectOpenXbl(
         long userId,
+        long? providerId,
         string apiKey,
         string? xuid,
         CancellationToken ct)
@@ -225,12 +229,16 @@ public sealed class ProvidersRepository(PlaydexDbContext db, SessionLifecycle se
             .Where(platform => platform.Key == "xbox")
             .Select(platform => (long?)platform.Id)
             .FirstOrDefaultAsync(ct);
-        if (!platformId.HasValue) return null;
+        if (!platformId.HasValue) return new OpenXblConnectResult(null);
 
-        var credential = await db.Integrations
-            .FirstOrDefaultAsync(
-                item => item.UserId == userId && item.PlatformId == platformId.Value,
-                ct);
+        var xboxIntegrations = db.Integrations
+            .Where(item => item.UserId == userId && item.PlatformId == platformId.Value);
+        var credential = providerId is { } id
+            ? await xboxIntegrations.FirstOrDefaultAsync(item => item.Id == id, ct)
+            : await xboxIntegrations.OrderBy(item => item.Id).FirstOrDefaultAsync(ct);
+        if (providerId.HasValue && credential is null) return new OpenXblConnectResult(null, ProviderMissing: true);
+        if (credential is { ApiKeyLocked: true }) return new OpenXblConnectResult(null, ApiKeyLocked: true);
+
         var now = DateTimeOffset.UtcNow;
         if (credential is null)
         {
@@ -252,7 +260,7 @@ public sealed class ProvidersRepository(PlaydexDbContext db, SessionLifecycle se
         await db.SaveChangesAsync(ct);
 
         var platforms = await db.Platforms.AsNoTracking().ToListAsync(ct);
-        return ToStatus(credential, platforms);
+        return new OpenXblConnectResult(ToStatus(credential, platforms));
     }
 
     public async Task<string> GetOrCreateApiKey(long userId, string apiKey, CancellationToken ct)

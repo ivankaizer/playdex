@@ -1,11 +1,14 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
+import { clientTimeZone } from "@/lib/dates";
 import { ThemeProvider } from "@/lib/theme";
 import { RecapPage } from "./RecapPage";
 
 function json(data: unknown) {
   return new Response(JSON.stringify({ data, error: null }), { status: 200, headers: { "Content-Type": "application/json" } });
 }
+
+const tz = `tz=${encodeURIComponent(clientTimeZone())}`;
 
 describe("RecapPage", () => {
   afterEach(() => vi.unstubAllGlobals());
@@ -17,7 +20,7 @@ describe("RecapPage", () => {
       vi.fn(async (input: RequestInfo | URL) => {
         const url = String(input);
         calls.push(new URL(url).pathname.replace(/^\/api/, "") + new URL(url).search);
-        if (url.endsWith("/recap/years")) return json({ years: [2026, 2025] });
+        if (new URL(url).pathname.endsWith("/recap/years")) return json({ years: [2026, 2025] });
         return json({
           range: { from: null, to: null },
           totalSessions: 3,
@@ -67,7 +70,7 @@ describe("RecapPage", () => {
 
     expect(await screen.findByText("Summed playtime by game")).toBeInTheDocument();
     // The layout's background role check (/me) is not part of the page's data flow.
-    expect(calls.filter((path) => path !== "/me")).toEqual(["/recap/years", "/recap"]);
+    expect(calls.filter((path) => path !== "/me")).toEqual([`/recap/years?${tz}`, `/recap?${tz}`]);
     expect(screen.getByRole("button", { name: "2026" })).toBeInTheDocument();
     expect(screen.getByRole("img", { name: "33% of days played" })).toBeInTheDocument();
     expect(screen.getByText(/across 3 sessions and 1 game$/)).toBeInTheDocument();
@@ -123,7 +126,7 @@ describe("RecapPage", () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async (input: RequestInfo | URL) =>
-        String(input).endsWith("/recap/years") ? json({ years: [] }) : json(recap),
+        new URL(String(input)).pathname.endsWith("/recap/years") ? json({ years: [] }) : json(recap),
       ),
     );
     render(

@@ -270,6 +270,104 @@ public sealed class ProvidersRepositoryTests(PostgresFixture postgres)
         }
     }
 
+    [Fact]
+    public async Task CredentialUpdatesMustLeaveAPollableCredential()
+    {
+        if (!postgres.IsConfigured) return;
+
+        await using var db = CreateDb();
+        await using var transaction = await db.Database.BeginTransactionAsync();
+        var suffix = Guid.NewGuid().ToString("n");
+        var user = new User { Email = $"provider-update-{suffix}@example.test" };
+        db.Users.Add(user);
+        await db.SaveChangesAsync();
+        var repository = new ProvidersRepository(db, TestSessions.Lifecycle(db));
+        var service = new ProvidersService(repository);
+        var steam = (await repository.CreateProvider(
+            user.Id, "steam", IntegrationType.Steam, "steam-key", "76561198000000000", default)).Provider!;
+        var xbox = (await repository.CreateProvider(
+            user.Id, "xbox", IntegrationType.Xbox, "openxbl-key", null, default)).Provider!;
+
+        async Task<string> Refused(long providerId, ProviderCredentialChanges changes) =>
+            (await Assert.ThrowsAsync<Api.Infrastructure.Http.AppProblemException>(() =>
+                service.UpdateCredential(user.Id, providerId, changes, default))).Message;
+
+        Assert.Equal("Steam Web API key is required.", await Refused(steam.Id, new(true, null, false, null)));
+        Assert.Equal("Steam ID is required.", await Refused(steam.Id, new(false, null, true, null)));
+        Assert.Equal("Xbox XUID must contain digits only.", await Refused(xbox.Id, new(false, null, true, "gamertag")));
+
+        db.ChangeTracker.Clear();
+        var stored = await db.Integrations.AsNoTracking().SingleAsync(item => item.Id == steam.Id);
+        Assert.Equal(("steam-key", "76561198000000000"), (stored.ApiKey, stored.AccountId));
+
+        var updated = await service.UpdateCredential(user.Id, xbox.Id, new(false, null, true, "2533274817903789"), default);
+        Assert.Equal("2533274817903789", updated.Provider.AccountId);
+    }
+
+    [Fact]
+    public async Task ConnectOpenXblUpdatesTheChosenIntegrationOrTheOldest()
+    {
+        if (!postgres.IsConfigured) return;
+
+        await using var db = CreateDb();
+        await using var transaction = await db.Database.BeginTransactionAsync();
+        var suffix = Guid.NewGuid().ToString("n");
+        var user = new User { Email = $"provider-openxbl-{suffix}@example.test" };
+        var otherUser = new User { Email = $"provider-openxbl-other-{suffix}@example.test" };
+        db.Users.AddRange(user, otherUser);
+        await db.SaveChangesAsync();
+        var repository = new ProvidersRepository(db, TestSessions.Lifecycle(db));
+        var service = new ProvidersService(repository);
+
+        // Without an Xbox integration, connecting creates one.
+        var first = (await service.ConnectOpenXbl(user.Id, new OpenXblConnectRequest("key-1", null), default)).Provider;
+        var second = (await repository.CreateProvider(
+            user.Id, "xbox", IntegrationType.Xbox, "key-2", null, default)).Provider!;
+        var third = (await repository.CreateProvider(
+            user.Id, "xbox", IntegrationType.Xbox, "key-3", null, default)).Provider!;
+        var steam = (await repository.CreateProvider(
+            user.Id, "steam", IntegrationType.Steam, "steam-key", "76561198000000000", default)).Provider!;
+        var foreign = (await repository.CreateProvider(
+            otherUser.Id, "xbox", IntegrationType.Xbox, "foreign-key", null, default)).Provider!;
+
+        async Task<string?> StoredKey(long id) =>
+            (await db.Integrations.AsNoTracking().SingleAsync(item => item.Id == id)).ApiKey;
+
+        // Without providerId the oldest is updated, whichever order the rows come back in.
+        var oldest = await service.ConnectOpenXbl(user.Id, new OpenXblConnectRequest("key-1b", "2533274817903789"), default);
+        Assert.Equal(first.Id, oldest.Provider.Id);
+        Assert.Equal("2533274817903789", oldest.Provider.AccountId);
+        Assert.Equal("key-2", await StoredKey(second.Id));
+
+        var chosen = await service.ConnectOpenXbl(user.Id, new OpenXblConnectRequest("key-3b", null, third.Id), default);
+        Assert.Equal(third.Id, chosen.Provider.Id);
+        Assert.Equal("key-3b", await StoredKey(third.Id));
+        Assert.Equal("key-1b", await StoredKey(first.Id));
+
+        // An administrator lock applies to its own integration only.
+        await db.Integrations.Where(item => item.Id == second.Id)
+            .ExecuteUpdateAsync(set => set.SetProperty(item => item.ApiKeyLocked, true));
+        db.ChangeTracker.Clear();
+        var locked = await Assert.ThrowsAsync<Api.Infrastructure.Http.AppProblemException>(() =>
+            service.ConnectOpenXbl(user.Id, new OpenXblConnectRequest("key-2b", null, second.Id), default));
+        Assert.Equal((400, "OpenXBL API key is managed by an administrator."), (locked.StatusCode, locked.Message));
+        Assert.Equal("key-2", await StoredKey(second.Id));
+        await service.ConnectOpenXbl(user.Id, new OpenXblConnectRequest("key-1c", null), default);
+        Assert.Equal("key-1c", await StoredKey(first.Id));
+
+        foreach (var notXbox in new[] { steam.Id, foreign.Id, long.MaxValue })
+        {
+            var missing = await Assert.ThrowsAsync<Api.Infrastructure.Http.AppProblemException>(() =>
+                service.ConnectOpenXbl(user.Id, new OpenXblConnectRequest("key", null, notXbox), default));
+            Assert.Equal((404, "Provider not found."), (missing.StatusCode, missing.Message));
+        }
+        Assert.Equal("foreign-key", await StoredKey(foreign.Id));
+
+        var invalid = await Assert.ThrowsAsync<Api.Infrastructure.Http.AppProblemException>(() =>
+            service.ConnectOpenXbl(user.Id, new OpenXblConnectRequest("key", null, 0), default));
+        Assert.Equal((400, "providerId must be a positive integer."), (invalid.StatusCode, invalid.Message));
+    }
+
     private PlaydexDbContext CreateDb() => new(
         new DbContextOptionsBuilder<PlaydexDbContext>()
             .UseNpgsql(

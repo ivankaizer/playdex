@@ -1,9 +1,9 @@
+import { clientTimeZone } from "@/lib/dates";
 import type { ManualMappingSearchResult } from "@/models/manual";
 import {
   clearGame,
   completeSearch,
   formatMinutes,
-  isLongDuration,
   failSave,
   openSessionCreate,
   parseInvariantDouble,
@@ -102,13 +102,23 @@ describe("session create state", () => {
     expect(result.state.error).toBe("Select a date.");
   });
 
-  it("rejects minutes over 59 and hours over 99, and flags durations over 24 hours", () => {
+  it("rejects minutes over 59 and durations over 24 hours", () => {
     const state = setPlatform(selectGame(open("historical"), savedGame), "pc");
     expect(tryBuildSubmission(setMinutes(setHours(state, "1"), "60")).state.error).toBe("Minutes must be between 0 and 59.");
-    expect(tryBuildSubmission(setMinutes(setHours(state, "100"), "0")).state.error).toBe("Hours must be 99 or less.");
-    expect(tryBuildSubmission(setMinutes(setHours(state, "26"), "0")).submission?.body).toMatchObject({ durationMinutes: 1560 });
-    expect(isLongDuration(1440)).toBe(false);
-    expect(isLongDuration(1441)).toBe(true);
+    expect(tryBuildSubmission(setMinutes(setHours(state, "24"), "0")).submission?.body).toMatchObject({ durationMinutes: 1440 });
+    expect(tryBuildSubmission(setMinutes(setHours(state, "24"), "1")).state.error).toBe("A session can be at most 24 hours.");
+    expect(tryBuildSubmission(setMinutes(setHours(state, "100"), "0")).state.error).toBe("A session can be at most 24 hours.");
+  });
+
+  it("refuses a future date and sends the viewer's time zone with the entry", () => {
+    const state = setPlatform(selectGame(open("historical"), savedGame), "pc");
+    const now = new Date(2026, 9, 4, 23, 30);
+    expect(tryBuildSubmission(setDate(state, "2026-10-05"), now).state.error).toBe("The date cannot be in the future.");
+    expect(submissionBlocker(setDate(state, "2026-10-05"), now)).toBe("The date cannot be in the future.");
+    expect(tryBuildSubmission(setDate(state, "2026-10-04"), now).submission?.body).toMatchObject({
+      date: "2026-10-04",
+      timeZone: clientTimeZone(),
+    });
   });
 
   it("tracks whether the current query has been searched", () => {
