@@ -86,6 +86,19 @@ public sealed record StagedUpdate(
     string? HealthSignalPath = null,
     string? FailurePath = null);
 
+/// <summary>How the update helper's <see cref="AppUpdate.ApplyAsync"/> ended.</summary>
+public enum UpdateOutcome
+{
+    /// <summary>The new version started and confirmed it is healthy.</summary>
+    Installed,
+
+    /// <summary>Not installed; the previous version is in place (and started again when it had been moved aside).</summary>
+    RolledBack,
+
+    /// <summary>Not installed, and the previous version could not be put back: the app folder is not usable.</summary>
+    RestoreFailed,
+}
+
 [JsonSourceGenerationOptions(WriteIndented = true, PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
 [JsonSerializable(typeof(ReleaseDto))]
 [JsonSerializable(typeof(StagedUpdate))]
@@ -97,6 +110,11 @@ internal sealed partial class UpdateJson : JsonSerializerContext;
 /// in GitHub's release JSON shape (tools/downloads/publish.mjs). The GitHub repository is private, so clients never
 /// read it.
 /// </summary>
+/// <remarks>
+/// The release JSON is only data from a bucket, so its download URLs are not trusted as they are: every file must come
+/// from https on the feed's own host (<see cref="IsFeedUri"/>), and redirects are not followed. A release that lists a
+/// file anywhere else is refused as a whole.
+/// </remarks>
 public sealed class ReleaseFeed(HttpMessageHandler? handler = null) : IDisposable
 {
     public static readonly Uri BaseUri = new("https://download.playdex.dev/windows/releases/");
@@ -104,9 +122,18 @@ public sealed class ReleaseFeed(HttpMessageHandler? handler = null) : IDisposabl
 
     private readonly HttpClient _http = CreateClient(handler);
 
+    /// <summary>True for an https URL on exactly the feed's host (download.playdex.dev, the default port, no user info).</summary>
+    public static bool IsFeedUri(Uri uri) =>
+        uri.IsAbsoluteUri
+        && uri.Scheme == Uri.UriSchemeHttps
+        && string.Equals(uri.Host, BaseUri.Host, StringComparison.OrdinalIgnoreCase)
+        && uri.IsDefaultPort
+        && uri.UserInfo.Length == 0;
+
     private static HttpClient CreateClient(HttpMessageHandler? handler)
     {
-        var http = handler is null ? new HttpClient() : new HttpClient(handler);
+        // No redirects: a file comes from the URL that passed IsFeedUri, not from wherever a response points.
+        var http = new HttpClient(handler ?? new HttpClientHandler { AllowAutoRedirect = false });
         http.Timeout = TimeSpan.FromMinutes(5);
         http.DefaultRequestHeaders.UserAgent.ParseAdd(Brand.UserAgent);
         http.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
@@ -144,8 +171,15 @@ public sealed class ReleaseFeed(HttpMessageHandler? handler = null) : IDisposabl
         {
             return null;
         }
+        foreach (var asset in dto.Assets)
+        {
+            if (!Uri.TryCreate(asset.BrowserDownloadUrl, UriKind.Absolute, out var uri) || !IsFeedUri(uri))
+            {
+                throw new InvalidDataException(
+                    $"The release lists {Shorten(asset.Name)} outside https://{BaseUri.Host}; Playdex only downloads release files from there.");
+            }
+        }
         var assets = dto.Assets
-            .Where(a => Uri.TryCreate(a.BrowserDownloadUrl, UriKind.Absolute, out var uri) && uri.Scheme == Uri.UriSchemeHttps)
             .GroupBy(a => a.Name, StringComparer.Ordinal)
             .Where(g => g.Count() == 1)
             .Select(g => new ReleaseAsset(g.Key, new Uri(g.Single().BrowserDownloadUrl), g.Single().Size))
@@ -153,12 +187,20 @@ public sealed class ReleaseFeed(HttpMessageHandler? handler = null) : IDisposabl
         return new Release(version, assets);
     }
 
-    /// <summary>Download an asset over HTTPS to a new file, refusing anything over <paramref name="maximumBytes"/>.</summary>
+    /// <summary>
+    /// Download an asset from the feed's host (<see cref="IsFeedUri"/>) to a new file, refusing anything over
+    /// <paramref name="maximumBytes"/>.
+    /// </summary>
     public async Task DownloadAsync(ReleaseAsset asset, string destination, long maximumBytes, CancellationToken cancellationToken = default)
     {
-        if (asset.DownloadUri.Scheme != Uri.UriSchemeHttps || asset.Size is < 0 || asset.Size > maximumBytes)
+        if (!IsFeedUri(asset.DownloadUri))
         {
-            throw new InvalidDataException($"{asset.Name} is not a valid release asset.");
+            throw new InvalidDataException(
+                $"{Shorten(asset.Name)} is not on https://{BaseUri.Host}; Playdex only downloads release files from there.");
+        }
+        if (asset.Size is < 0 || asset.Size > maximumBytes)
+        {
+            throw new InvalidDataException($"{Shorten(asset.Name)} is not a valid release asset.");
         }
         using var response = await _http.GetAsync(asset.DownloadUri, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
         response.EnsureSuccessStatusCode();
@@ -183,6 +225,9 @@ public sealed class ReleaseFeed(HttpMessageHandler? handler = null) : IDisposabl
         }
     }
 
+    /// <summary>A name from the feed, cut short for a message.</summary>
+    private static string Shorten(string name) => name.Length <= 80 ? name : $"{name[..80]}…";
+
     public void Dispose() => _http.Dispose();
 }
 
@@ -193,7 +238,8 @@ public sealed class ReleaseFeed(HttpMessageHandler? handler = null) : IDisposabl
 /// check the hash, extract it safely into the update folder.</item>
 /// <item>The app copies Playdex.Run.exe out of its own folder, starts it with --apply-update and exits.</item>
 /// <item><see cref="ApplyAsync"/> (in that helper): wait for the app to exit, move its folder aside, move the new one
-/// in, start it and wait for it to confirm a healthy start; otherwise put the old folder back and start it again.</item>
+/// in, start it and wait for it to confirm a healthy start; otherwise stop it, wait for it to exit, put the old folder
+/// back and start it again.</item>
 /// </list>
 /// </summary>
 public static class AppUpdate
@@ -202,8 +248,19 @@ public static class AppUpdate
     public const string AppExecutable = "Playdex.exe";
     public const string HelperExecutable = "Playdex.Run.exe";
     internal const long MaximumArchiveBytes = 512L * 1024 * 1024;
+
+    /// <summary>Extraction limits, far above the app (v2.1.4: about 140 MB in about 320 files), far below a zip bomb.</summary>
+    internal const long MaximumExtractedBytes = 2L * 1024 * 1024 * 1024;
+
+    internal const int MaximumArchiveEntries = 10_000;
     internal static readonly TimeSpan ParentExitTimeout = TimeSpan.FromSeconds(30);
     internal static readonly TimeSpan HealthTimeout = TimeSpan.FromSeconds(60);
+
+    /// <summary>How long a rollback waits for the stopped new version to exit before it puts the previous one back.</summary>
+    internal static readonly TimeSpan StopTimeout = TimeSpan.FromSeconds(15);
+
+    /// <summary>Tries at putting the previous version back, half a second apart.</summary>
+    internal const int RestoreAttempts = 10;
 
     /// <summary>
     /// Held by the helper while it replaces the app folder. A Playdex.exe started from that folder meanwhile would lock
@@ -318,18 +375,55 @@ public static class AppUpdate
         return Convert.ToHexStringLower(await SHA256.HashDataAsync(stream, cancellationToken));
     }
 
-    /// <summary>Extract every entry under <paramref name="destination"/> (no path may leave it); the app must be at the root.</summary>
+    /// <summary>
+    /// Extract every entry under <paramref name="destination"/> (<see cref="ExtractSafely"/>, within
+    /// <see cref="MaximumExtractedBytes"/> and <see cref="MaximumArchiveEntries"/>); the app must be at the root.
+    /// </summary>
     public static void Extract(string archivePath, string destination)
     {
+        ExtractSafely(archivePath, destination, MaximumExtractedBytes, MaximumArchiveEntries, "The update");
+        foreach (var required in new[] { AppExecutable, HelperExecutable })
+        {
+            if (!File.Exists(Path.Combine(destination, required)))
+            {
+                throw new InvalidDataException($"The update has no {required}.");
+            }
+        }
+    }
+
+    /// <summary>
+    /// Extract every entry of a zip under <paramref name="destination"/>: no path may leave it (zip slip), and the zip
+    /// may hold at most <paramref name="maximumEntries"/> entries and <paramref name="maximumBytes"/> bytes once
+    /// extracted. The sizes the zip declares are checked before anything is written, and the bytes actually written
+    /// count too, as declared sizes can lie. <paramref name="what"/> starts the error messages ("The update").
+    /// </summary>
+    internal static void ExtractSafely(string archivePath, string destination, long maximumBytes, int maximumEntries, string what)
+    {
         Directory.CreateDirectory(destination);
-        var root = Path.GetFullPath(destination) + Path.DirectorySeparatorChar;
+        var root = Path.GetFullPath(destination).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
         using var zip = ZipFile.OpenRead(archivePath);
+        if (zip.Entries.Count > maximumEntries)
+        {
+            throw new InvalidDataException($"{what} has more than {maximumEntries} files.");
+        }
+        long declared = 0;
+        foreach (var entry in zip.Entries)
+        {
+            if (entry.Length < 0 || entry.Length > maximumBytes - declared)
+            {
+                throw new InvalidDataException($"{what} is larger than allowed once extracted.");
+            }
+            declared += entry.Length;
+        }
+
+        var buffer = new byte[81920];
+        long written = 0;
         foreach (var entry in zip.Entries)
         {
             var path = Path.GetFullPath(Path.Combine(destination, entry.FullName));
             if (!path.StartsWith(root, StringComparison.OrdinalIgnoreCase))
             {
-                throw new InvalidDataException("The update contains a path outside its folder.");
+                throw new InvalidDataException($"{what} contains a path outside its folder.");
             }
             if (entry.FullName.EndsWith('/') || entry.FullName.EndsWith('\\'))
             {
@@ -337,13 +431,17 @@ public static class AppUpdate
                 continue;
             }
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-            entry.ExtractToFile(path);
-        }
-        foreach (var required in new[] { AppExecutable, HelperExecutable })
-        {
-            if (!File.Exists(Path.Combine(destination, required)))
+            using var source = entry.Open();
+            using var target = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None);
+            int read;
+            while ((read = source.Read(buffer)) > 0)
             {
-                throw new InvalidDataException($"The update has no {required}.");
+                written += read;
+                if (written > maximumBytes)
+                {
+                    throw new InvalidDataException($"{what} is larger than allowed once extracted.");
+                }
+                target.Write(buffer, 0, read);
             }
         }
     }
@@ -373,12 +471,13 @@ public static class AppUpdate
         return start;
     }
 
-    /// <summary>The helper's side. True when the new version started and confirmed it is healthy.</summary>
-    public static async Task<bool> ApplyAsync(string applyPath, int parentProcessId, CancellationToken cancellationToken = default)
+    /// <summary>The helper's side: install the staged update, or put the previous version back (<see cref="RollBackAsync"/>).</summary>
+    public static async Task<UpdateOutcome> ApplyAsync(string applyPath, int parentProcessId, CancellationToken cancellationToken = default)
     {
         StagedUpdate? manifest = null;
         string? backup = null;
         var swapped = false;
+        Process? updated = null;
         try
         {
             manifest = Load(applyPath);
@@ -392,42 +491,124 @@ public static class AppUpdate
 
             var start = new ProcessStartInfo(Path.Combine(manifest.TargetDirectory, AppExecutable)) { UseShellExecute = false };
             start.ArgumentList.Add($"--update-health={manifest.HealthSignalPath}");
-            using var updated = Process.Start(start) ?? throw new InvalidOperationException("The new version did not start.");
+            updated = Process.Start(start) ?? throw new InvalidOperationException("The new version did not start.");
             if (!await WaitForHealthAsync(updated, manifest.HealthSignalPath!, HealthTimeout, cancellationToken))
             {
-                if (!updated.HasExited)
-                {
-                    updated.Kill(entireProcessTree: true);
-                }
                 throw new InvalidOperationException("The new version did not start properly.");
             }
             TryDeleteDirectory(backup);
             TryDelete(manifest.FailurePath!);
             Log.Info($"update: {manifest.Version} is running");
-            return true;
+            return UpdateOutcome.Installed;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException or InvalidOperationException or System.ComponentModel.Win32Exception)
         {
             Log.Error("update: install failed", ex);
-            if (manifest is not null && swapped && backup is not null)
+            return await RollBackAsync(manifest, swapped ? backup : null, updated, ex);
+        }
+        finally
+        {
+            updated?.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// After a failed install: stop the new version if it runs and wait for it to exit (its files must be free), put
+    /// <paramref name="backup"/> (the previous version, when it was moved aside) back and start it, and leave the reason
+    /// for the app's next start. A restore that does not finish is <see cref="UpdateOutcome.RestoreFailed"/>, never
+    /// reported as rolled back.
+    /// </summary>
+    internal static async Task<UpdateOutcome> RollBackAsync(
+        StagedUpdate? manifest, string? backup, Process? updated, Exception error, int restoreAttempts = RestoreAttempts)
+    {
+        if (updated is not null)
+        {
+            await StopAsync(updated, StopTimeout);
+        }
+        var outcome = UpdateOutcome.RolledBack;
+        var message = $"The update to {manifest?.Version} could not be installed: {error.Message}";
+        if (manifest is not null && backup is not null)
+        {
+            if (await RestoreAsync(backup, manifest.TargetDirectory, restoreAttempts) is { } restoreError)
             {
-                TryDeleteDirectory(manifest.TargetDirectory);
-                try
-                {
-                    Directory.Move(backup, manifest.TargetDirectory);
-                    Process.Start(new ProcessStartInfo(Path.Combine(manifest.TargetDirectory, AppExecutable)) { UseShellExecute = false })?.Dispose();
-                    Log.Info("update: the previous version is back");
-                }
-                catch (Exception restore) when (restore is IOException or UnauthorizedAccessException or System.ComponentModel.Win32Exception)
-                {
-                    Log.Error($"update: could not restore {backup}", restore);
-                }
+                outcome = UpdateOutcome.RestoreFailed;
+                message = $"The update to {manifest.Version} could not be installed ({error.Message}), and the previous version "
+                    + $"could not be put back ({restoreError.Message}). It is in {backup}; run Playdex Setup to install Playdex again.";
             }
-            if (manifest?.FailurePath is { } failure)
+            else
             {
-                TryWrite(failure, $"The update to {manifest.Version} could not be installed: {ex.Message}");
+                Log.Info("update: the previous version is back");
+                TryStart(Path.Combine(manifest.TargetDirectory, AppExecutable));
             }
-            return false;
+        }
+        if (manifest?.FailurePath is { } failure)
+        {
+            TryWrite(failure, message);
+        }
+        return outcome;
+    }
+
+    /// <summary>Kill <paramref name="process"/> (and what it started) and wait up to <paramref name="timeout"/> for it to exit.</summary>
+    private static async Task StopAsync(Process process, TimeSpan timeout)
+    {
+        try
+        {
+            if (!process.HasExited)
+            {
+                process.Kill(entireProcessTree: true);
+            }
+            using var limit = new CancellationTokenSource(timeout);
+            await process.WaitForExitAsync(limit.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            Log.Info($"update: the new version had not exited {timeout.TotalSeconds:0} s after it was stopped");
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception)
+        {
+            Log.Error("update: could not stop the new version", ex);
+        }
+    }
+
+    /// <summary>
+    /// Remove what was installed and move <paramref name="backup"/> back to <paramref name="target"/>, retrying while
+    /// files of a just-stopped process are still being freed. The last error when it could not, else null.
+    /// </summary>
+    private static async Task<Exception?> RestoreAsync(string backup, string target, int attempts)
+    {
+        for (var attempt = 1; ; attempt++)
+        {
+            try
+            {
+                if (Directory.Exists(target))
+                {
+                    Directory.Delete(target, recursive: true);
+                }
+                Directory.Move(backup, target);
+                return null;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                if (attempt >= attempts)
+                {
+                    Log.Error($"update: could not restore {backup}", ex);
+                    return ex;
+                }
+                Log.Info($"update: could not restore {backup} yet ({ex.Message}); retrying");
+                await Task.Delay(500);
+            }
+        }
+    }
+
+    private static void TryStart(string executable)
+    {
+        try
+        {
+            Process.Start(new ProcessStartInfo(executable) { UseShellExecute = false })?.Dispose();
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception)
+        {
+            Log.Error($"update: could not start {executable}", ex);
         }
     }
 

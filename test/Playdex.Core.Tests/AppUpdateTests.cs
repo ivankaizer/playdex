@@ -9,6 +9,8 @@ namespace Playdex.Core.Tests;
 
 public sealed class AppUpdateTests
 {
+    private const string Feed = "https://download.playdex.dev/windows/v2.0.0";
+
     [Fact]
     public void VersionsParseFromStableTagsAndCompare()
     {
@@ -23,7 +25,7 @@ public sealed class AppUpdateTests
     }
 
     [Fact]
-    public void OnlyStableReleasesWithHttpsAssetsCount()
+    public void OnlyStableReleasesWithUniqueAssetsCount()
     {
         static ReleaseDto Dto(string tag, bool draft = false, bool prerelease = false) => new()
         {
@@ -32,10 +34,9 @@ public sealed class AppUpdateTests
             Prerelease = prerelease,
             Assets =
             [
-                new() { Name = "playdex-windows-v2.0.0.zip", BrowserDownloadUrl = "https://example.test/a.zip", Size = 10 },
-                new() { Name = "insecure.zip", BrowserDownloadUrl = "http://example.test/b.zip", Size = 10 },
-                new() { Name = "twice.zip", BrowserDownloadUrl = "https://example.test/c.zip" },
-                new() { Name = "twice.zip", BrowserDownloadUrl = "https://example.test/d.zip" },
+                new() { Name = "playdex-windows-v2.0.0.zip", BrowserDownloadUrl = $"{Feed}/a.zip", Size = 10 },
+                new() { Name = "twice.zip", BrowserDownloadUrl = $"{Feed}/c.zip" },
+                new() { Name = "twice.zip", BrowserDownloadUrl = $"{Feed}/d.zip" },
             ],
         };
 
@@ -44,6 +45,60 @@ public sealed class AppUpdateTests
         Assert.Null(ReleaseFeed.ToRelease(Dto("latest")));
         var release = ReleaseFeed.ToRelease(Dto("v2.0.0"))!;
         Assert.Equal(["playdex-windows-v2.0.0.zip"], release.Assets.Select(a => a.Name));
+    }
+
+    [Theory]
+    [InlineData("http://download.playdex.dev/windows/v2.0.0/b.zip")]
+    [InlineData("https://example.test/windows/v2.0.0/b.zip")]
+    [InlineData("https://download.playdex.dev.example.test/windows/v2.0.0/b.zip")]
+    [InlineData("https://download.playdex.dev./windows/v2.0.0/b.zip")]
+    [InlineData("https://download.playdex.dev@example.test/windows/v2.0.0/b.zip")]
+    [InlineData("https://user@download.playdex.dev/windows/v2.0.0/b.zip")]
+    [InlineData("https://download.playdex.dev:8443/windows/v2.0.0/b.zip")]
+    [InlineData("https://playdex.dev/windows/v2.0.0/b.zip")]
+    [InlineData("ftp://download.playdex.dev/windows/v2.0.0/b.zip")]
+    [InlineData("windows/v2.0.0/b.zip")]
+    [InlineData("")]
+    public void AReleaseWithAFileOffTheFeedIsRefused(string url)
+    {
+        var dto = new ReleaseDto
+        {
+            TagName = "v2.0.0",
+            Assets =
+            [
+                new() { Name = "playdex-windows-v2.0.0.zip", BrowserDownloadUrl = $"{Feed}/a.zip", Size = 10 },
+                new() { Name = "b.zip", BrowserDownloadUrl = url, Size = 10 },
+            ],
+        };
+
+        var refused = Assert.Throws<InvalidDataException>(() => ReleaseFeed.ToRelease(dto));
+        Assert.Contains("https://download.playdex.dev", refused.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void OnlyHttpsOnTheFeedHostIsAFeedUrl()
+    {
+        Assert.Equal("download.playdex.dev", ReleaseFeed.BaseUri.Host);
+        Assert.True(ReleaseFeed.IsFeedUri(new Uri($"{Feed}/playdex-windows-v2.0.0.zip")));
+        Assert.True(ReleaseFeed.IsFeedUri(new Uri("https://DOWNLOAD.playdex.dev:443/windows/v2.0.0/a.zip")));
+        Assert.False(ReleaseFeed.IsFeedUri(new Uri("http://download.playdex.dev/windows/v2.0.0/a.zip")));
+        Assert.False(ReleaseFeed.IsFeedUri(new Uri("https://evil.example/windows/v2.0.0/a.zip")));
+        Assert.False(ReleaseFeed.IsFeedUri(new Uri("windows/v2.0.0/a.zip", UriKind.Relative)));
+    }
+
+    [Fact]
+    public async Task DownloadsOffTheFeedAreRefusedBeforeAnyRequest()
+    {
+        var handler = new FeedHandler("{}");
+        using var feed = new ReleaseFeed(handler);
+        var destination = Path.Combine(NewTempDir(), "a.zip");
+
+        var refused = await Assert.ThrowsAsync<InvalidDataException>(() => feed.DownloadAsync(
+            new ReleaseAsset("a.zip", new Uri("https://evil.example/windows/v2.0.0/a.zip"), 10), destination, 1024));
+
+        Assert.Contains("https://download.playdex.dev", refused.Message, StringComparison.Ordinal);
+        Assert.Empty(handler.Requested);
+        Assert.False(File.Exists(destination));
     }
 
     [Fact]
@@ -93,6 +148,25 @@ public sealed class AppUpdateTests
     }
 
     [Fact]
+    public void ExtractionIsCappedInEntriesAndSizeBeforeAnythingIsWritten()
+    {
+        var directory = NewTempDir();
+        var four = Zip(directory, "four.zip", ("Playdex.exe", "x"), ("Playdex.Run.exe", "x"), ("a.txt", "x"), ("b.txt", "x"));
+        var tooMany = Assert.Throws<InvalidDataException>(() => AppUpdate.ExtractSafely(four, Path.Combine(directory, "a"), 1024, 3, "The update"));
+        Assert.Contains("more than 3 files", tooMany.Message, StringComparison.Ordinal);
+        Assert.Empty(Directory.EnumerateFileSystemEntries(Path.Combine(directory, "a")));
+        AppUpdate.ExtractSafely(four, Path.Combine(directory, "b"), 1024, 4, "The update");
+        Assert.Equal(4, Directory.GetFiles(Path.Combine(directory, "b")).Length);
+
+        var big = Zip(directory, "big.zip", ("Playdex.exe", new string('x', 600)), ("Playdex.Run.exe", new string('x', 600)));
+        var tooBig = Assert.Throws<InvalidDataException>(() => AppUpdate.ExtractSafely(big, Path.Combine(directory, "c"), 1000, 10, "The update"));
+        Assert.Contains("larger than allowed", tooBig.Message, StringComparison.Ordinal);
+        Assert.Empty(Directory.EnumerateFileSystemEntries(Path.Combine(directory, "c")));
+        AppUpdate.ExtractSafely(big, Path.Combine(directory, "d"), 2000, 10, "The update");
+        Assert.Equal(new string('x', 600), File.ReadAllText(Path.Combine(directory, "d", "Playdex.Run.exe")));
+    }
+
+    [Fact]
     public async Task StagingVerifiesTheChecksumAndWritesAManifest()
     {
         var directory = NewTempDir();
@@ -102,8 +176,8 @@ public sealed class AppUpdateTests
         var goodHash = Convert.ToHexStringLower(SHA256.HashData(zipBytes));
         var release = new Release(new ReleaseVersion(2, 1, 0),
         [
-            new ReleaseAsset(name, new Uri("https://example.test/app.zip"), zipBytes.Length),
-            new ReleaseAsset(name + ".sha256", new Uri("https://example.test/app.sha256"), null),
+            new ReleaseAsset(name, new Uri($"{Feed}/{name}"), zipBytes.Length),
+            new ReleaseAsset(name + ".sha256", new Uri($"{Feed}/{name}.sha256"), null),
         ]);
         var install = Path.Combine(directory, "install");
         Directory.CreateDirectory(install);
@@ -191,6 +265,62 @@ public sealed class AppUpdateTests
         Assert.Equal("old", await File.ReadAllTextAsync(Path.Combine(install, "version.txt")));
         Assert.Contains("could not be installed", await File.ReadAllTextAsync(Path.Combine(updates, "last-failure.txt")), StringComparison.Ordinal);
         Assert.Empty(Directory.GetDirectories(Path.GetDirectoryName(install)!, "Playdex.old-*"));
+    }
+
+    [Fact]
+    public async Task ARollBackStopsTheNewVersionAndPutsThePreviousOneBack()
+    {
+        var (install, backup, manifest) = await RollBackSetupAsync();
+        await File.WriteAllTextAsync(Path.Combine(install, "version.txt"), "new");
+        // The new version still running: a process that would otherwise outlive the rollback (ping, about 2 s).
+        using var running = OperatingSystem.IsWindows() ? TestProcess.Start() : null;
+
+        var outcome = await AppUpdate.RollBackAsync(manifest, backup, running, new InvalidOperationException("The new version did not start properly."));
+
+        Assert.Equal(UpdateOutcome.RolledBack, outcome);
+        Assert.True(running?.HasExited ?? true, "the new version was not stopped before the restore");
+        Assert.Equal("old", await File.ReadAllTextAsync(Path.Combine(install, "version.txt")));
+        Assert.False(Directory.Exists(backup));
+        Assert.Equal(
+            "The update to 9.9.9 could not be installed: The new version did not start properly.",
+            await File.ReadAllTextAsync(manifest.FailurePath!));
+    }
+
+    [Fact]
+    public async Task ARollBackThatCannotPutThePreviousVersionBackIsAFailure()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return; // Only Windows refuses to delete a file that is open.
+        }
+        var (install, backup, manifest) = await RollBackSetupAsync();
+
+        UpdateOutcome outcome;
+        using (new FileStream(Path.Combine(install, "Playdex.exe"), FileMode.Create, FileAccess.ReadWrite, FileShare.None))
+        {
+            outcome = await AppUpdate.RollBackAsync(
+                manifest, backup, updated: null, new InvalidOperationException("The new version did not start properly."), restoreAttempts: 2);
+        }
+
+        Assert.Equal(UpdateOutcome.RestoreFailed, outcome);
+        Assert.Equal("old", await File.ReadAllTextAsync(Path.Combine(backup, "version.txt")));
+        var failure = await File.ReadAllTextAsync(manifest.FailurePath!);
+        Assert.Contains("could not be put back", failure, StringComparison.Ordinal);
+        Assert.Contains(backup, failure, StringComparison.Ordinal);
+    }
+
+    /// <summary>An install folder holding the new version and the previous one moved aside, as the helper leaves them.</summary>
+    private static async Task<(string Install, string Backup, StagedUpdate Manifest)> RollBackSetupAsync()
+    {
+        var directory = NewTempDir();
+        var install = Directory.CreateDirectory(Path.Combine(directory, "Programs", "Playdex")).FullName;
+        var backup = Directory.CreateDirectory(install + ".old-test").FullName;
+        await File.WriteAllTextAsync(Path.Combine(backup, "version.txt"), "old");
+        var updates = Path.Combine(directory, "updates");
+        var manifest = new StagedUpdate(
+            "9.9.9", new string('a', 64), Path.Combine(updates, "v9.9.9", "app"), install, updates,
+            FailurePath: Path.Combine(updates, "last-failure.txt"));
+        return (install, backup, manifest);
     }
 
     private static string Zip(string directory, string name, params (string Path, string Content)[] entries)

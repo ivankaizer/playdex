@@ -230,7 +230,7 @@ internal static partial class Program
                 {
                     await InstallFseAsync(fseFolder, staging);
                 }
-                catch (Exception ex) when (ex is InvalidOperationException or IOException or HttpRequestException
+                catch (Exception ex) when (ex is InvalidOperationException or IOException or InvalidDataException or HttpRequestException
                     or System.ComponentModel.Win32Exception or System.Security.Cryptography.CryptographicException)
                 {
                     // The app is installed; the package can be added later from Playdex → Settings.

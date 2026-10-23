@@ -22,14 +22,14 @@ The Windows apps release together from one `v<major>.<minor>.<patch>` tag (`.git
 | `windows/releases/latest.json` | The same for the highest version. The desktop app checks it for updates. Written last, and never moved back to an older tag. |
 | `windows/Playdex-Setup.exe` | The latest setup at a stable URL: the download button on playdex.dev/launcher. |
 
-`ReleaseFeed` (`src/Playdex.Core/AppUpdate.cs`) reads it. Set it up once with `bun tools/downloads/publish.mjs setup` (creates the bucket and attaches the domain); CI needs the `CLOUDFLARE_API_TOKEN` (Workers R2 Storage: Edit; setup also needs Zone: Read on playdex.dev) and `CLOUDFLARE_ACCOUNT_ID` secrets.
+`ReleaseFeed` (`src/Playdex.Core/AppUpdate.cs`) reads it. It only downloads files from https on `download.playdex.dev` itself and follows no redirects: a release JSON that points any file elsewhere is refused as a whole. Set it up once with `bun tools/downloads/publish.mjs setup` (creates the bucket and attaches the domain); CI needs the `CLOUDFLARE_API_TOKEN` (Workers R2 Storage: Edit; setup also needs Zone: Read on playdex.dev) and `CLOUDFLARE_ACCOUNT_ID` secrets.
 
 v1.x WinForms Wrappers still update from the GitHub release, so it keeps being created.
 
 ## Publishing
 
 1. Make sure `build-windows.yaml` passes on the commit (Core tests with the published Playdex.Run, the desktop app, the launcher and the setup build).
-2. Push a tag `v<major>.<minor>.<patch>` higher than the last release. The workflow builds everything with that version, checks the product versions, the archives' contents and their checksums, and creates the release. It builds on the Windows PC when its runner is online and on GitHub otherwise ([windows-pc-runner.md](windows-pc-runner.md)).
+2. Push a tag `v<major>.<minor>.<patch>` higher than the last release, on a commit that is on `main`: the workflow refuses a tag anywhere else before it builds or signs anything. It builds everything with that version, checks the product versions, the archives' contents and their checksums, and creates the release. It builds on the Windows PC when its runner is online and on GitHub otherwise ([windows-pc-runner.md](windows-pc-runner.md)).
 3. Drafts and prereleases are not offered as updates.
 
 To withdraw a faulty release, remove it from the latest release and publish the fix under a higher patch version: installs never downgrade, and assets under a published tag should not be replaced.
@@ -40,7 +40,9 @@ The launcher MSIX is signed with a self-signed code-signing certificate whose su
 
 `src/Launcher/Host/tools/export-signing-secret.ps1` prepares both from the dev certificate that `tools/package.ps1` creates and prints the `gh secret set` commands to run. Using that certificate keeps released packages in the same package family as locally built ones (`Playdex.Launcher_bmt4bex73v8a8`), so they update each other.
 
-Users trust the certificate once: the desktop app's "Use as Full Screen Experience home" imports the release's `playdex-launcher.cer` into Trusted People (one admin prompt) before it installs the package. Developer Mode must be on, because the gamingHome capability is only granted with the developer-mode SCCD.
+Users trust the certificate once: the desktop app's "Use as Full Screen Experience home" (and the setup's option) imports the release's `playdex-launcher.cer` into Trusted People (one admin prompt) before it installs the package. Developer Mode must be on, because the gamingHome capability is only granted with the developer-mode SCCD.
+
+The certificate is pinned: `FsePackage.SigningCertificateSha256` (`src/Playdex.Core/FsePackage.cs`) holds its SHA-256 thumbprint, and the app and the setup refuse a `.cer` with any other thumbprint and a package Windows doesn't report as signed with it, before the admin prompt. The release workflow fails when `LAUNCHER_SIGNING_PFX` holds a different certificate. **Rotating the signing certificate** therefore needs a new app release: change the secrets and the thumbprint in `FsePackage.cs` together. Each app and setup installs the package of its own release, so older installs keep using the packages signed with the old certificate. A package built on another machine with its own dev certificate (`tools/package.ps1`) can only be installed with `tools/install-dev.ps1`.
 
 ## Updates
 

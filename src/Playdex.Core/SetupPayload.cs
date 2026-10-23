@@ -136,23 +136,7 @@ public static class SetupPayload
         }
         try
         {
-            var root = Path.GetFullPath(destination) + Path.DirectorySeparatorChar;
-            using var zip = ZipFile.OpenRead(zipPath);
-            foreach (var entry in zip.Entries)
-            {
-                var target = Path.GetFullPath(Path.Combine(destination, entry.FullName));
-                if (!target.StartsWith(root, StringComparison.OrdinalIgnoreCase))
-                {
-                    throw new InvalidDataException("The setup's payload contains a path outside its folder.");
-                }
-                if (entry.FullName.EndsWith('/'))
-                {
-                    Directory.CreateDirectory(target);
-                    continue;
-                }
-                Directory.CreateDirectory(Path.GetDirectoryName(target)!);
-                entry.ExtractToFile(target, overwrite: true);
-            }
+            AppUpdate.ExtractSafely(zipPath, destination, AppUpdate.MaximumExtractedBytes, AppUpdate.MaximumArchiveEntries, "The setup's payload");
         }
         finally
         {

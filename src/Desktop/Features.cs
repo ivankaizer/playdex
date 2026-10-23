@@ -147,7 +147,9 @@ internal sealed class UpdateFeature(Action changed, Func<bool> gameRunning, Acti
 /// <summary>
 /// "Use as Full Screen Experience home": installs the FSE entry's MSIX (it opens Playdex in Big Picture, see FsePackage) from the
 /// release Playdex came from. The package is signed with the project's self-signed certificate (the .cer next to it in
-/// the release), so Windows must trust that certificate first: one admin prompt imports it into Trusted People.
+/// the release), so Windows must trust that certificate first: one admin prompt imports it into Trusted People. The
+/// .cer is only trusted when it is the certificate pinned in FsePackage.SigningCertificateSha256, and the package only
+/// installed when it is signed with it (FsePackage.InstallAsync checks both).
 /// Developer Mode must be on, because the gamingHome capability is only granted with the developer-mode SCCD.
 /// </summary>
 internal sealed class FseFeature(Action changed) : IDisposable

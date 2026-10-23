@@ -41,10 +41,36 @@ jobs:
     name: Build and release the Windows apps (${{ needs.runner.outputs.where }})
     needs: runner
     runs-on: ${{ fromJSON(needs.runner.outputs.runner) }}
+    # Scripts read the tag (and the version taken from it) from the environment: an expression expanded into a script's
+    # text would run whatever a crafted ref name holds.
+    env:
+      TAG: ${{ github.ref_name }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          # The whole history, to check that the tagged commit is on main.
+          fetch-depth: 0
+
+      # Only a v<major>.<minor>.<patch> tag on a commit that is on main releases; a tag pushed on any other commit
+      # (a branch that never merged, say) stops here, before anything is built, signed or published.
+      - name: Validate release tag
+        id: version
+        shell: pwsh
+        run: |
+          $tag = $env:TAG
+          if ($tag -notmatch '^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$') {
+            throw "Release tag '$tag' must use v<major>.<minor>.<patch>."
+          }
+          if ($env:GITHUB_REF -cne "refs/tags/$tag") { throw "Run the release on its tag, not on $env:GITHUB_REF." }
+          git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main
+          if ($LASTEXITCODE) { throw "Could not fetch main." }
+          $commit = git rev-parse HEAD
+          git merge-base --is-ancestor HEAD refs/remotes/origin/main
+          if ($LASTEXITCODE -eq 1) { throw "$tag ($commit) is not on main; only commits on main are released." }
+          if ($LASTEXITCODE) { throw "Could not check whether $tag ($commit) is on main." }
+          "number=$($tag.Substring(1))" >> $env:GITHUB_OUTPUT
 
       - name: Set up .NET
         uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
@@ -65,20 +91,13 @@ jobs:
         with:
           bun-version: 1.3.14
 
-      - name: Validate release tag
-        id: version
-        shell: pwsh
-        run: |
-          $tag = "${{ github.ref_name }}"
-          if ($tag -notmatch '^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$') {
-            throw "Release tag '$tag' must use v<major>.<minor>.<patch>."
-          }
-          "number=$($tag.Substring(1))" >> $env:GITHUB_OUTPUT
-
       - name: Publish Playdex.Run (Native AOT)
+        shell: pwsh
+        env:
+          VERSION: ${{ steps.version.outputs.number }}
         run: >
           dotnet publish src/Playdex.Run/Playdex.Run.csproj -c Release -r win-x64
-          -p:Version=${{ steps.version.outputs.number }}
+          "-p:Version=$env:VERSION"
           -p:IncludeSourceRevisionInInformationalVersion=false
           -o artifacts/run
 
@@ -97,6 +116,7 @@ jobs:
         id: launcher
         shell: pwsh
         env:
+          VERSION: ${{ steps.version.outputs.number }}
           SIGNING_PFX: ${{ secrets.LAUNCHER_SIGNING_PFX }}
           SIGNING_PASSWORD: ${{ secrets.LAUNCHER_SIGNING_PASSWORD }}
         run: |
@@ -105,7 +125,7 @@ jobs:
             "built=false" >> $env:GITHUB_OUTPUT
             exit 0
           }
-          $version = "${{ steps.version.outputs.number }}"
+          $version = $env:VERSION
           $pfx = Join-Path $env:RUNNER_TEMP 'launcher-signing.pfx'
           [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:SIGNING_PFX))
           # The package version is the release version (MSIX versions have four parts).
@@ -117,19 +137,31 @@ jobs:
           if ($LASTEXITCODE) { throw "Launcher packaging failed." }
           $msix = Get-ChildItem src/Launcher/Host/AppPackages -Recurse -Filter *.msix | Select-Object -First 1
           # Signed by our self-signed certificate, which the runner doesn't trust: check the signer, not the status.
-          if (-not (Get-AuthenticodeSignature $msix.FullName).SignerCertificate) { throw "The launcher package is not signed." }
+          $signer = (Get-AuthenticodeSignature $msix.FullName).SignerCertificate
+          if (-not $signer) { throw "The launcher package is not signed." }
           Copy-Item $msix.FullName "artifacts/playdex-launcher-v$version.msix"
           $cert = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2($pfx, $env:SIGNING_PASSWORD)
+          # Apps and setups only trust the certificate pinned in FsePackage.cs (docs/windows-releases.md, "Signing the launcher").
+          $sha256 = [System.Security.Cryptography.HashAlgorithmName]::SHA256
+          $pinned = [regex]::Match((Get-Content -Raw src/Playdex.Core/FsePackage.cs), 'SigningCertificateSha256 = "([0-9A-F]{64})"').Groups[1].Value
+          foreach ($used in $cert, $signer) {
+            if (-not $pinned -or $used.GetCertHashString($sha256) -ne $pinned) {
+              throw "The launcher signing certificate ($($used.GetCertHashString($sha256))) is not the one pinned in FsePackage.SigningCertificateSha256 ('$pinned'); release the new thumbprint with the new certificate."
+            }
+          }
           [IO.File]::WriteAllBytes('artifacts/playdex-launcher.cer', $cert.Export('Cert'))
           Remove-Item $pfx
           "built=true" >> $env:GITHUB_OUTPUT
 
       - name: Package the Windows apps (Native AOT)
         shell: pwsh
+        env:
+          VERSION: ${{ steps.version.outputs.number }}
+          LAUNCHER_BUILT: ${{ steps.launcher.outputs.built }}
         run: |
-          $version = "${{ steps.version.outputs.number }}"
+          $version = $env:VERSION
           $package = @{ Version = $version; Out = 'artifacts'; Run = 'artifacts/run/Playdex.Run.exe' }
-          if ('${{ steps.launcher.outputs.built }}' -eq 'true') {
+          if ($env:LAUNCHER_BUILT -eq 'true') {
             $package.Msix = "artifacts/playdex-launcher-v$version.msix"
             $package.Cer = 'artifacts/playdex-launcher.cer'
           }
@@ -137,9 +169,11 @@ jobs:
 
       - name: Verify the release contract
         shell: pwsh
+        env:
+          VERSION: ${{ steps.version.outputs.number }}
         run: |
-          $version = "${{ steps.version.outputs.number }}"
-          $tag = "${{ github.ref_name }}"
+          $version = $env:VERSION
+          $tag = $env:TAG
           foreach ($exe in 'artifacts/app/Playdex.exe', 'artifacts/app/Playdex.Run.exe', 'artifacts/Playdex-Setup.exe') {
             $product = (Get-Item -LiteralPath $exe).VersionInfo.ProductVersion
             if ($product -ne $version) { throw "$exe has product version '$product', not '$version'." }
@@ -186,7 +220,8 @@ jobs:
       # download.playdex.dev (Cloudflare R2): the public feed installs and updates read, since this repository is
       # private. Every asset under windows/<tag>/, then the release JSON, then latest.json (tools/downloads/publish.mjs).
       - name: Publish to download.playdex.dev
+        shell: pwsh
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: bun tools/downloads/publish.mjs release ${{ github.ref_name }} artifacts
+        run: bun tools/downloads/publish.mjs release $env:TAG artifacts
