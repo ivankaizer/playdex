@@ -32,7 +32,11 @@ public sealed partial class GenerationHistoryRecorder(NpgsqlDataSource dataSourc
 
     public async Task RecordResponse(Guid? id, ExtractionResponse response)
     {
-        if (id is null) return;
+        if (id is null)
+        {
+            return;
+        }
+
         await using var command = dataSource.CreateCommand("""
             update ai_generations set responses_json=responses_json || @response where id=@id
             """);
@@ -44,7 +48,11 @@ public sealed partial class GenerationHistoryRecorder(NpgsqlDataSource dataSourc
 
     public async Task Complete(Guid? id, string status, string? error = null, DraftBatchDto? result = null)
     {
-        if (id is null) return;
+        if (id is null)
+        {
+            return;
+        }
+
         await using var command = dataSource.CreateCommand("""
             update ai_generations set completed_at=@completed,status=@status,error=@error,result_json=@result where id=@id
             """);
@@ -60,7 +68,11 @@ public sealed partial class GenerationHistoryRecorder(NpgsqlDataSource dataSourc
     public async Task<int> DeleteExpired(CancellationToken ct)
     {
         var days = options.Value.HistoryRetentionDays;
-        if (days <= 0) return 0;
+        if (days <= 0)
+        {
+            return 0;
+        }
+
         await using var command = dataSource.CreateCommand("delete from ai_generations where created_at < @cutoff");
         command.Parameters.AddWithValue("cutoff", clock.GetUtcNow().AddDays(-days));
         return await command.ExecuteNonQueryAsync(ct);

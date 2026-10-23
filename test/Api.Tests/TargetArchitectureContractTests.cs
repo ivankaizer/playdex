@@ -74,7 +74,10 @@ public sealed class TargetArchitectureContractTests
              directory = directory.Parent)
         {
             var candidate = Path.Combine(directory.FullName, "src", "Api");
-            if (Directory.Exists(candidate)) return candidate;
+            if (Directory.Exists(candidate))
+            {
+                return candidate;
+            }
         }
 
         throw new DirectoryNotFoundException("Could not locate src/Api.");

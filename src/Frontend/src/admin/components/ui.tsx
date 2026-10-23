@@ -28,13 +28,7 @@ export function Button({
   type = "button",
   ...props
 }: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: Variant; size?: "sm" | "md" }) {
-  return (
-    <button
-      type={type}
-      className={cx(variants[variant], size === "sm" && "!h-[34px] !px-4 !text-[13px]", className)}
-      {...props}
-    />
-  );
+  return <button type={type} className={cx(variants[variant], size === "sm" && "!h-[34px] !px-4 !text-[13px]", className)} {...props} />;
 }
 
 /** A page section: frosted card with a kicker, title and optional actions. */
@@ -143,9 +137,7 @@ export function Table({ children, label }: { children: ReactNode; label?: string
       tabIndex={label ? 0 : undefined}
       className="-mx-2 overflow-x-auto rounded-[14px] px-2 outline-none focus-visible:ring-2 focus-visible:ring-bar"
     >
-      <table className="w-full min-w-full border-collapse text-left text-sm [&_tbody_tr:last-child_td]:border-b-0">
-        {children}
-      </table>
+      <table className="w-full min-w-full border-collapse text-left text-sm [&_tbody_tr:last-child_td]:border-b-0">{children}</table>
     </div>
   );
 }

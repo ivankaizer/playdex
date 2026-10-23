@@ -9,7 +9,10 @@ public sealed class PollingLeaseTests(PostgresFixture postgres)
     [Fact]
     public async Task OnlyOneInstanceHoldsTheLeaseAtATime()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         var lease = new PollingLease(postgres.DataSource!);
         var otherInstance = new PollingLease(postgres.DataSource!);
@@ -27,7 +30,11 @@ public sealed class PollingLeaseTests(PostgresFixture postgres)
     {
         for (var attempt = 0; attempt < 50; attempt++)
         {
-            if (await lease.TryAcquire(CancellationToken.None) is { } held) return held;
+            if (await lease.TryAcquire(CancellationToken.None) is { } held)
+            {
+                return held;
+            }
+
             await Task.Delay(100);
         }
 

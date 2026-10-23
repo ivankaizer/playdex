@@ -165,7 +165,9 @@ public static class AccountsEndpoints
         CancellationToken ct)
     {
         if (request is null)
+        {
             return TypedResults.Problem("Request body is required.", statusCode: 400);
+        }
 
         return TypedResults.Ok(await service.UpdateSession(
             RouteIds.Parse(sessionId, "sessionId"),
@@ -178,8 +180,11 @@ public static class AccountsEndpoints
     {
         var value = limit ?? 10;
         if (value <= 0)
+        {
             throw Api.Infrastructure.Http.AppProblemException.Validation(
                 "limit and offset must be valid numbers.");
+        }
+
         return Math.Min(value, 100);
     }
 
@@ -187,8 +192,11 @@ public static class AccountsEndpoints
     {
         var value = offset ?? 0;
         if (value < 0)
+        {
             throw Api.Infrastructure.Http.AppProblemException.Validation(
                 "limit and offset must be valid numbers.");
+        }
+
         return value;
     }
 }

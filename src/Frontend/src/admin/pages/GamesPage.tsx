@@ -3,7 +3,24 @@ import { errorMessage } from "@/lib/api";
 import { adminApi, isAbortError, type GameSummary } from "../api";
 import { useNotifications } from "../components/Notifications";
 import { Cover } from "@/components/ui";
-import { Alert, Badge, Button, Checkbox, Field, Modal, Note, Panel, ProgressBar, rowClass, Select, Table, Td, TextInput, Th, Toolbar } from "../components/ui";
+import {
+  Alert,
+  Badge,
+  Button,
+  Checkbox,
+  Field,
+  Modal,
+  Note,
+  Panel,
+  ProgressBar,
+  rowClass,
+  Select,
+  Table,
+  Td,
+  TextInput,
+  Th,
+  Toolbar,
+} from "../components/ui";
 import { gameFormFor, gameUpdateFor, mergeValidationError, type GameForm } from "../logic";
 import { cx } from "@/lib/cx";
 

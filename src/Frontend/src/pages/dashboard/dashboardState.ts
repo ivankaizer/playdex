@@ -1,13 +1,5 @@
 import { addDays, currentLocalWeek, getDurationSeconds, localDateOnly, withTimeZone, type DateOnly } from "@/lib/dates";
-import {
-  formatCount,
-  formatCountNoun,
-  formatDuration,
-  formatHours,
-  formatHoursShort,
-  formatPercent,
-  formatTimeLabel,
-} from "@/lib/format";
+import { formatCount, formatCountNoun, formatDuration, formatHours, formatHoursShort, formatPercent, formatTimeLabel } from "@/lib/format";
 import { encodeGameId } from "@/lib/gameHash";
 import type { ManualActiveSession } from "@/models/manual";
 import type { AccountSession } from "@/models/sessions";
@@ -213,7 +205,12 @@ export function failSection(state: DashboardState, section: DashboardSection, er
 
 /** Every panel at once, from a full snapshot. */
 export function completeRefresh(state: DashboardState, snapshot: DashboardSnapshot, now: Date): DashboardState {
-  let next = completeSection(state, "live", { currentSession: snapshot.currentSession, activeManualSession: snapshot.activeManualSession }, now);
+  let next = completeSection(
+    state,
+    "live",
+    { currentSession: snapshot.currentSession, activeManualSession: snapshot.activeManualSession },
+    now,
+  );
   next = completeSection(
     next,
     "today",
@@ -620,14 +617,21 @@ export function getOverviewView(
     totalSeconds: total,
     kpis: [
       { label: "Hours played", value: formatHoursGrouped(total), sub: hoursSub },
-      { label: "Sessions", value: formatCount(sessions), sub: sessions > 0 ? `Avg. ${formatShortDuration(total / sessions)}` : stats ? "—" : undefined },
+      {
+        label: "Sessions",
+        value: formatCount(sessions),
+        sub: sessions > 0 ? `Avg. ${formatShortDuration(total / sessions)}` : stats ? "—" : undefined,
+      },
       { label: "Top title", value: stats?.topGameTitle ?? "—", sub: topSub },
     ],
     activityLabel: period === "month" ? "Daily activity" : "Monthly activity",
     activityNote,
     bars,
     platforms: stats
-      ? createPlatforms(stats.platforms, stats.totalSeconds).map((item, index) => ({ ...item, seconds: stats.platforms[index].totalSeconds }))
+      ? createPlatforms(stats.platforms, stats.totalSeconds).map((item, index) => ({
+          ...item,
+          seconds: stats.platforms[index].totalSeconds,
+        }))
       : [],
     topGames: (stats?.topGames ?? []).map((game) => ({
       gameId: game.gameId,

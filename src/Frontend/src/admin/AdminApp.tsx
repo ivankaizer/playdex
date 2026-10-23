@@ -53,13 +53,7 @@ function RequireAdmin({ children }: { children: ReactNode }) {
     );
   }
   if (state.status === "redirect") {
-    return (
-      <Navigate
-        to="/admin/login"
-        replace
-        state={{ from: location.pathname + location.search, reason: state.reason }}
-      />
-    );
+    return <Navigate to="/admin/login" replace state={{ from: location.pathname + location.search, reason: state.reason }} />;
   }
   if (state.status === "error") {
     return (

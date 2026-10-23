@@ -17,7 +17,11 @@ public static class NotificationText
     public static string Clean(string? value, int maxLength)
     {
         ArgumentOutOfRangeException.ThrowIfLessThan(maxLength, 2);
-        if (string.IsNullOrEmpty(value)) return "";
+        if (string.IsNullOrEmpty(value))
+        {
+            return "";
+        }
+
         var builder = new StringBuilder(value.Length);
         var pendingSpace = false;
         foreach (var character in value)
@@ -35,14 +39,26 @@ public static class NotificationText
                 continue;
             }
 
-            if (pendingSpace) builder.Append(' ');
+            if (pendingSpace)
+            {
+                builder.Append(' ');
+            }
+
             pendingSpace = false;
             builder.Append(character);
         }
 
-        if (builder.Length <= maxLength) return builder.ToString();
+        if (builder.Length <= maxLength)
+        {
+            return builder.ToString();
+        }
+
         var cut = maxLength - 1;
-        if (char.IsHighSurrogate(builder[cut - 1])) cut--;
+        if (char.IsHighSurrogate(builder[cut - 1]))
+        {
+            cut--;
+        }
+
         return builder.ToString(0, cut).TrimEnd() + "…";
     }
 }

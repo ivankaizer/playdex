@@ -52,7 +52,9 @@ public sealed class GamesService(GamesRepository repository) : IGames
         var first = await repository.GetGameEntity(gameId, ct);
         var second = await repository.GetGameEntity(connectedId, ct);
         if (first is null || second is null)
+        {
             throw AppProblemException.NotFound("Both games must exist to connect.");
+        }
 
         await repository.CreateConnection(userId, gameId, connectedId, ct);
         var normalized = GameConnections.Normalize(gameId, connectedId);
@@ -67,7 +69,10 @@ public sealed class GamesService(GamesRepository repository) : IGames
         var gameId = GameId.Parse(request.GameId);
         var connectedId = GameId.Parse(request.ConnectedGameId);
         if (gameId == connectedId)
+        {
             throw AppProblemException.Validation("gameId and connectedGameId must be different.");
+        }
+
         await repository.DeleteConnection(userId, gameId, connectedId, ct);
         var normalized = GameConnections.Normalize(gameId, connectedId);
         return new GameConnectionChangeResponseDto(
@@ -77,7 +82,11 @@ public sealed class GamesService(GamesRepository repository) : IGames
 
     public async Task<GameIgnoreResponseDto> GetIgnore(long userId, string? gameId, CancellationToken ct)
     {
-        if (gameId is null) throw AppProblemException.Validation("gameId is required.");
+        if (gameId is null)
+        {
+            throw AppProblemException.Validation("gameId is required.");
+        }
+
         var id = GameId.Parse(gameId);
         var ignored = await repository.GetIgnoreStatus(userId, id, ct);
         return new GameIgnoreResponseDto(gameId, ignored);
@@ -97,7 +106,11 @@ public sealed class GamesService(GamesRepository repository) : IGames
 
     public async Task<GameRatingResponseDto> GetRating(long userId, string? gameId, CancellationToken ct)
     {
-        if (gameId is null) throw AppProblemException.Validation("gameId is required.");
+        if (gameId is null)
+        {
+            throw AppProblemException.Validation("gameId is required.");
+        }
+
         var id = GameId.Parse(gameId);
         var rating = await repository.GetRating(userId, id, ct);
         return new GameRatingResponseDto(gameId, rating);

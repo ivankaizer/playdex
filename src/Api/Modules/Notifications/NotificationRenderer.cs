@@ -21,9 +21,9 @@ public sealed class NotificationRenderer(HttpClient httpClient, CoverUrlPolicy c
     /// <summary>Largest cover decoded (a 6000 x 4000 image); a small file can still declare a huge bitmap.</summary>
     public const long MaxCoverPixels = 24_000_000;
 
-    private static readonly Lazy<SKTypeface> RegularTypeface = new(() =>
+    private static readonly Lazy<SKTypeface> _regularTypeface = new(() =>
         LoadEmbeddedFont("Resources.Fonts.SpaceGrotesk-Regular.ttf"));
-    private static readonly Lazy<SKTypeface> BoldTypeface = new(() =>
+    private static readonly Lazy<SKTypeface> _boldTypeface = new(() =>
         LoadEmbeddedFont("Resources.Fonts.SpaceGrotesk-Bold.ttf"));
 
     [SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope",
@@ -35,8 +35,8 @@ public sealed class NotificationRenderer(HttpClient httpClient, CoverUrlPolicy c
         return stream is null ? SKTypeface.Default : SKTypeface.FromStream(stream);
     }
 
-    public static SKTypeface GetRegularTypeface() => RegularTypeface.Value;
-    public static SKTypeface GetBoldTypeface() => BoldTypeface.Value;
+    public static SKTypeface GetRegularTypeface() => _regularTypeface.Value;
+    public static SKTypeface GetBoldTypeface() => _boldTypeface.Value;
 
     public async Task<byte[]> RenderAsync(
         NotificationCard card,
@@ -44,13 +44,19 @@ public sealed class NotificationRenderer(HttpClient httpClient, CoverUrlPolicy c
         CancellationToken ct)
     {
         if (!coverUrls.IsAllowed(capsuleUrl))
+        {
             throw new InvalidOperationException("The game cover is not on an allowed host.");
+        }
+
         var bytes = await DownloadCover(capsuleUrl, ct);
         using var data = SKData.CreateCopy(bytes);
         using var codec = SKCodec.Create(data)
             ?? throw new InvalidOperationException("The game cover is not a supported image.");
         if ((long)codec.Info.Width * codec.Info.Height > MaxCoverPixels)
+        {
             throw new InvalidOperationException("The game cover is too large to render.");
+        }
+
         using var cover = SKBitmap.Decode(codec)
             ?? throw new InvalidOperationException("The game cover could not be decoded.");
         using var surface = SKSurface.Create(new SKImageInfo(Width, Height));
@@ -58,21 +64,28 @@ public sealed class NotificationRenderer(HttpClient httpClient, CoverUrlPolicy c
         canvas.Clear(new SKColor(10, 13, 18));
         DrawCover(canvas, cover);
         using (var overlay = new SKPaint { Color = new SKColor(10, 13, 18, 184) })
+        {
             canvas.DrawRect(0, 0, Width, Height, overlay);
+        }
 
         var panel = new SKRoundRect(new SKRect(64, 600, 1216, 960), 24, 24);
         using (var panelPaint = new SKPaint { Color = new SKColor(9, 12, 18, 220) })
+        {
             canvas.DrawRoundRect(panel, panelPaint);
+        }
+
         using (var border = new SKPaint
         {
             Color = new SKColor(255, 255, 255, 20),
             Style = SKPaintStyle.Stroke,
             StrokeWidth = 1,
         })
+        {
             canvas.DrawRoundRect(panel, border);
+        }
 
-        var regular = RegularTypeface.Value;
-        var bold = BoldTypeface.Value;
+        var regular = _regularTypeface.Value;
+        var bold = _boldTypeface.Value;
         DrawText(canvas, card.Ended ? "SESSION ENDED" : "SESSION STARTED",
             96, 666, 30, new SKColor(249, 216, 74), bold);
         DrawWrappedTitle(canvas, card.Title, bold);
@@ -98,17 +111,27 @@ public sealed class NotificationRenderer(HttpClient httpClient, CoverUrlPolicy c
         {
             var location = response.Headers.Location;
             response.Dispose();
-            if (location is null) throw new InvalidOperationException("The game cover redirect has no location.");
+            if (location is null)
+            {
+                throw new InvalidOperationException("The game cover redirect has no location.");
+            }
+
             url = new Uri(url, location);
             if (!coverUrls.IsAllowed(url.AbsoluteUri))
+            {
                 throw new InvalidOperationException("The game cover redirects to a host that is not allowed.");
+            }
+
             response = await httpClient.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct);
         }
 
         using var _ = response;
         response.EnsureSuccessStatusCode();
         if (response.Content.Headers.ContentLength > MaxCoverBytes)
+        {
             throw new InvalidOperationException("The game cover is too large to download.");
+        }
+
         await using var stream = await response.Content.ReadAsStreamAsync(ct);
         using var buffer = new MemoryStream();
         var chunk = new byte[81920];
@@ -116,7 +139,10 @@ public sealed class NotificationRenderer(HttpClient httpClient, CoverUrlPolicy c
         while ((read = await stream.ReadAsync(chunk, ct)) > 0)
         {
             if (buffer.Length + read > MaxCoverBytes)
+            {
                 throw new InvalidOperationException("The game cover is too large to download.");
+            }
+
             buffer.Write(chunk, 0, read);
         }
 
@@ -163,7 +189,11 @@ public sealed class NotificationRenderer(HttpClient httpClient, CoverUrlPolicy c
                 current = candidate;
             }
         }
-        if (current.Length > 0) lines.Add(current);
+        if (current.Length > 0)
+        {
+            lines.Add(current);
+        }
+
         foreach (var (line, index) in lines.Take(2).Select((line, index) => (line, index)))
         {
             DrawText(canvas, line, 96, 758 + index * 62, size,

@@ -69,14 +69,7 @@ export function Library() {
       <header className="lib-head">
         <div className="seg" role="group" aria-label="Source" data-nav-group="scope">
           {SCOPES.map((s) => (
-            <button
-              key={s.id}
-              className="seg-btn"
-              aria-pressed={scope === s.id}
-              data-nav
-              data-kind="filter"
-              onClick={() => setScope(s.id)}
-            >
+            <button key={s.id} className="seg-btn" aria-pressed={scope === s.id} data-nav data-kind="filter" onClick={() => setScope(s.id)}>
               {s.label}
               <span className="lib-count num">{games.filter(s.test).length}</span>
             </button>
@@ -86,14 +79,7 @@ export function Library() {
         <span className="label">Sort</span>
         <div className="seg" role="group" aria-label="Sort" data-nav-group="sort">
           {SORTS.map((s) => (
-            <button
-              key={s.id}
-              className="seg-btn"
-              aria-pressed={sort === s.id}
-              data-nav
-              data-kind="filter"
-              onClick={() => setSort(s.id)}
-            >
+            <button key={s.id} className="seg-btn" aria-pressed={sort === s.id} data-nav data-kind="filter" onClick={() => setSort(s.id)}>
               {s.label}
             </button>
           ))}
@@ -144,7 +130,11 @@ function CoverGrid({ list, empty }: { list: Game[]; empty: string }) {
   const rowEls = [];
   for (let r = range.first; r <= range.last && r < rows; r++) {
     rowEls.push(
-      <div key={r} className="lib-row" style={{ transform: `translateY(${r * rowPx}px)`, gridTemplateColumns: `repeat(${cols}, var(--lib-col-w))` }}>
+      <div
+        key={r}
+        className="lib-row"
+        style={{ transform: `translateY(${r * rowPx}px)`, gridTemplateColumns: `repeat(${cols}, var(--lib-col-w))` }}
+      >
         {list.slice(r * cols, r * cols + cols).map((g, i) => (
           <CoverItem key={g.id} game={g} isDefault={r === 0 && i === 0} />
         ))}

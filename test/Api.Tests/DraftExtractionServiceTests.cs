@@ -18,20 +18,23 @@ public sealed class DraftExtractionServiceTests(PostgresFixture postgres)
     [Fact]
     public void ReferenceDateUsesUsersLocalDayRatherThanUtc()
     {
-        var instant = new DateTimeOffset(2026,9,9,0,30,0,TimeSpan.Zero);
-        Assert.Equal(new DateOnly(2026,9,8), DraftExtractionService.ReferenceDate("America/Los_Angeles", instant));
-        Assert.Equal(new DateOnly(2026,9,9), DraftExtractionService.ReferenceDate("Europe/Warsaw", instant));
+        var instant = new DateTimeOffset(2026, 9, 9, 0, 30, 0, TimeSpan.Zero);
+        Assert.Equal(new DateOnly(2026, 9, 8), DraftExtractionService.ReferenceDate("America/Los_Angeles", instant));
+        Assert.Equal(new DateOnly(2026, 9, 9), DraftExtractionService.ReferenceDate("Europe/Warsaw", instant));
     }
     [Fact]
     public void InvalidTimezoneIsRejected()
     {
-        Assert.Throws<AppProblemException>(()=>DraftExtractionService.ReferenceDate("not-a-zone",DateTimeOffset.UtcNow));
+        Assert.Throws<AppProblemException>(() => DraftExtractionService.ReferenceDate("not-a-zone", DateTimeOffset.UtcNow));
     }
 
     [Fact]
     public async Task PreviouslyPlayedTitleVariantResolvesGameAndMostRecentPlatform()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         await using var db = CreateDb();
         var now = DateTimeOffset.UtcNow;
@@ -67,7 +70,7 @@ public sealed class DraftExtractionServiceTests(PostgresFixture postgres)
             Options.Create(new AiDraftOptions { Enabled = true, ApiKey = "test", Model = "test" }),
             postgres.DataSource!,
             TimeProvider.System,
-            new GenerationHistoryRecorder(postgres.DataSource!, Options.Create(new AiDraftOptions { Provider="test", Model="test" }),
+            new GenerationHistoryRecorder(postgres.DataSource!, Options.Create(new AiDraftOptions { Provider = "test", Model = "test" }),
                 TimeProvider.System, Microsoft.Extensions.Logging.Abstractions.NullLogger<GenerationHistoryRecorder>.Instance));
 
         var requestId = Guid.NewGuid();
@@ -96,19 +99,22 @@ public sealed class DraftExtractionServiceTests(PostgresFixture postgres)
         await db.SessionDraftRows.Where(draft => draft.Id == row.Id).ExecuteUpdateAsync(setters => setters.SetProperty(draft => draft.Title, "Edited by user"));
         Assert.Equal(history.ResultJson, (await db.AiGenerations.AsNoTracking().SingleAsync(generation => generation.Id == history.Id)).ResultJson);
         stub.Error = new AppProblemException(502, "AI returned invalid extraction.");
-        await Assert.ThrowsAsync<AppProblemException>(() => service.Create(user.Id,Guid.NewGuid(),"UTC","Failed evidence",null,null,default));
+        await Assert.ThrowsAsync<AppProblemException>(() => service.Create(user.Id, Guid.NewGuid(), "UTC", "Failed evidence", null, null, default));
         var failed = await db.AiGenerations.AsNoTracking().SingleAsync(generation => generation.UserId == user.Id && generation.Status == "failure");
-        Assert.Equal("Failed evidence",failed.InputText);
+        Assert.Equal("Failed evidence", failed.InputText);
         Assert.Null(failed.ResultJson);
         stub.Error = new AppProblemException(504, "AI extraction timed out.");
-        await Assert.ThrowsAsync<AppProblemException>(() => service.Create(user.Id,Guid.NewGuid(),"UTC","Timeout evidence",null,null,default));
+        await Assert.ThrowsAsync<AppProblemException>(() => service.Create(user.Id, Guid.NewGuid(), "UTC", "Timeout evidence", null, null, default));
         Assert.True(await db.AiGenerations.AnyAsync(generation => generation.UserId == user.Id && generation.Status == "timeout"));
     }
 
     [Fact]
     public async Task GameSearchThatRunsOutOfTimeStillSavesTheExtractedRows()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         await using var db = CreateDb();
         var now = DateTimeOffset.UtcNow;
@@ -132,7 +138,10 @@ public sealed class DraftExtractionServiceTests(PostgresFixture postgres)
     [Fact]
     public async Task IgdbResultsAlreadySavedAsGamesAreOfferedAsThoseGames()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         await using var db = CreateDb();
         var now = DateTimeOffset.UtcNow;
@@ -144,8 +153,12 @@ public sealed class DraftExtractionServiceTests(PostgresFixture postgres)
         await db.SaveChangesAsync();
         db.GameExternalIdentities.Add(new GameExternalIdentity
         {
-            GameId = saved.Id, Type = GameExternalIdentityType.Igdb, ExternalId = igdbId, Title = saved.Title,
-            CreatedAt = now, UpdatedAt = now,
+            GameId = saved.Id,
+            Type = GameExternalIdentityType.Igdb,
+            ExternalId = igdbId,
+            Title = saved.Title,
+            CreatedAt = now,
+            UpdatedAt = now,
         });
         await db.SaveChangesAsync();
         var igdb = new IgdbHandler($$"""[{"id":{{igdbId}},"name":"Saved"},{"id":1,"name":"Not saved"}]""");
@@ -177,7 +190,10 @@ public sealed class DraftExtractionServiceTests(PostgresFixture postgres)
     [Fact]
     public async Task ScreenshotIsNotDecodedWhileAnotherExtractionHoldsTheUsersLock()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         await using var db = CreateDb();
         var user = await CreateUser(db, "draft-lock");
@@ -213,7 +229,10 @@ public sealed class DraftExtractionServiceTests(PostgresFixture postgres)
     [Fact]
     public async Task ScreenshotIsNotDecodedOnceTheHourlyQuotaIsSpent()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         await using var db = CreateDb();
         var user = await CreateUser(db, "draft-quota");
@@ -233,7 +252,10 @@ public sealed class DraftExtractionServiceTests(PostgresFixture postgres)
     [Fact]
     public async Task UnsupportedScreenshotTypeIsRejectedBeforeTakingTheLock()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         await using var db = CreateDb();
         var user = await CreateUser(db, "draft-type");
@@ -305,7 +327,11 @@ public sealed class DraftExtractionServiceTests(PostgresFixture postgres)
             var body = request.RequestUri!.Host == "id.twitch.tv"
                 ? """{"access_token":"token","expires_in":3600}"""
                 : games;
-            if (request.RequestUri.Host != "id.twitch.tv") Interlocked.Increment(ref _searches);
+            if (request.RequestUri.Host != "id.twitch.tv")
+            {
+                Interlocked.Increment(ref _searches);
+            }
+
             return Task.FromResult(new HttpResponseMessage(System.Net.HttpStatusCode.OK)
             {
                 Content = new StringContent(body, System.Text.Encoding.UTF8, "application/json"),

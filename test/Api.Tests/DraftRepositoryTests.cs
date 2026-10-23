@@ -13,7 +13,11 @@ public sealed class DraftRepositoryTests(PostgresFixture postgres)
     [Fact]
     public async Task OwnerScopeAndRequestDeduplicationPreserveRows()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
+
         await using var db = await Prepare();
         var user = await AddUser(db);
         try
@@ -38,7 +42,11 @@ public sealed class DraftRepositoryTests(PostgresFixture postgres)
     [Fact]
     public async Task ConcurrentRequestsCreateOneBatch()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
+
         await using var db = await Prepare();
         var user = await AddUser(db);
         try
@@ -57,7 +65,11 @@ public sealed class DraftRepositoryTests(PostgresFixture postgres)
     [Fact]
     public async Task RowLockSerializesEditsAndRollbackDiscardsAddedEntities()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
+
         await using var db = await Prepare();
         var user = await AddUser(db);
         try
@@ -102,7 +114,11 @@ public sealed class DraftRepositoryTests(PostgresFixture postgres)
     [InlineData("pending", 1, 123L)]
     public async Task InvalidLifecycleStateIsRejected(string status, int revision, long? sessionId)
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
+
         await using var db = await Prepare();
         var user = await AddUser(db);
         try
@@ -119,7 +135,11 @@ public sealed class DraftRepositoryTests(PostgresFixture postgres)
     [Fact]
     public async Task AcceptedLinkDoesNotRequireASurvivingSession()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
+
         await using var db = await Prepare();
         var user = await AddUser(db);
         try
@@ -136,7 +156,11 @@ public sealed class DraftRepositoryTests(PostgresFixture postgres)
     [Fact]
     public async Task CompletedBatchesAreExcludedFromSavedReview()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
+
         await using var db = await Prepare();
         var user = await AddUser(db);
         try
@@ -159,7 +183,11 @@ public sealed class DraftRepositoryTests(PostgresFixture postgres)
     [Fact]
     public async Task DuplicateRowPositionsAndAcceptedLinksAreRejected()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
+
         await using var db = await Prepare();
         var user = await AddUser(db);
         try
@@ -172,7 +200,11 @@ public sealed class DraftRepositoryTests(PostgresFixture postgres)
             batch.Rows[0].AcceptedSessionId = long.MaxValue - 1;
             batch.Rows.Add(new SessionDraftRow
             {
-                Id = Guid.NewGuid(), Position = 1, Title = "Second", Status = "accepted", AcceptedSessionId = long.MaxValue - 1,
+                Id = Guid.NewGuid(),
+                Position = 1,
+                Title = "Second",
+                Status = "accepted",
+                AcceptedSessionId = long.MaxValue - 1,
             });
             await Assert.ThrowsAsync<DbUpdateException>(() => new DraftRepository(db).CreateBatch(batch, default));
         }
@@ -198,8 +230,12 @@ public sealed class DraftRepositoryTests(PostgresFixture postgres)
 
     private static SessionDraftBatch Batch(long userId, Guid? requestId = null) => new()
     {
-        Id = Guid.NewGuid(), UserId = userId, RequestId = requestId ?? Guid.NewGuid(),
-        CreatedAt = DateTimeOffset.UtcNow, Timezone = "Europe/Warsaw", ReferenceDate = new DateOnly(2026, 9, 9),
+        Id = Guid.NewGuid(),
+        UserId = userId,
+        RequestId = requestId ?? Guid.NewGuid(),
+        CreatedAt = DateTimeOffset.UtcNow,
+        Timezone = "Europe/Warsaw",
+        ReferenceDate = new DateOnly(2026, 9, 9),
         Rows = [new SessionDraftRow { Id = Guid.NewGuid(), Position = 0, Title = "Hades", Warnings = ["date_missing"] }],
     };
 

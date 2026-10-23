@@ -50,10 +50,7 @@ export function AppLayout({ title, children, overlay }: AppLayoutProps) {
   const isAdmin = useIsAdmin();
   const items = useMemo(() => (isAdmin ? [...navItems, AdminNavItem] : navItems), [isAdmin]);
 
-  const search = useCallback(
-    (path: string, signal: AbortSignal) => apiRequest<GameSearchResponse>(path, { signal }),
-    [],
-  );
+  const search = useCallback((path: string, signal: AbortSignal) => apiRequest<GameSearchResponse>(path, { signal }), []);
 
   return (
     <main className="pdx-page relative px-4 pb-8 pt-6 sm:px-8 sm:pb-10 sm:pt-12">

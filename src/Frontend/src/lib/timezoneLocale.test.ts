@@ -20,12 +20,16 @@ async function withDefaultLocale(locale: string): Promise<Format> {
   // Intl's members are not enumerable, so copy them by name rather than spreading.
   const stub: Record<string, unknown> = {};
   for (const name of Object.getOwnPropertyNames(Intl)) stub[name] = Reflect.get(Intl, name);
+  // The stubs are called with `new`, which an arrow function can't be.
+  // biome-ignore lint/complexity/useArrowFunction: constructed with new
   stub.NumberFormat = function (locales?: Intl.LocalesArgument, options?: Intl.NumberFormatOptions) {
     return new NumberFormat(locales ?? locale, options);
   };
+  // biome-ignore lint/complexity/useArrowFunction: constructed with new
   stub.DateTimeFormat = function (locales?: Intl.LocalesArgument, options?: Intl.DateTimeFormatOptions) {
     return new DateTimeFormat(locales ?? locale, options);
   };
+  // biome-ignore lint/complexity/useArrowFunction: constructed with new
   stub.PluralRules = function (locales?: Intl.LocalesArgument, options?: Intl.PluralRulesOptions) {
     return new PluralRules(locales ?? locale, options);
   };

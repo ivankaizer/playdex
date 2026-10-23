@@ -16,7 +16,10 @@ public sealed class AccountsSessionUpdateIntegrationTests(PostgresFixture postgr
     [InlineData(0, 0)]
     public async Task EditingSessionPersistsOffsetTimestampsAsUtc(int startOffsetMinutes, int endOffsetMinutes)
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         await using var db = new PlaydexDbContext(new DbContextOptionsBuilder<PlaydexDbContext>()
             .UseNpgsql(postgres.DataSource!, options =>
@@ -67,7 +70,10 @@ public sealed class AccountsSessionUpdateIntegrationTests(PostgresFixture postgr
     [Fact]
     public async Task AnotherUsersSessionIsNotFoundAndLeftUnchanged()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         await using var db = new PlaydexDbContext(new DbContextOptionsBuilder<PlaydexDbContext>()
             .UseNpgsql(postgres.DataSource!, options =>

@@ -313,7 +313,11 @@ public class DatabaseSeeder(PlaydexDbContext db)
 
     private static GameExternalIdentityType GetExternalIdentityType(Platform platform)
     {
-        if (TryGetExternalIdentityType(platform, out var type)) return type;
+        if (TryGetExternalIdentityType(platform, out var type))
+        {
+            return type;
+        }
+
         throw new InvalidOperationException($"Platform {platform.Key} has no external identity type.");
     }
 

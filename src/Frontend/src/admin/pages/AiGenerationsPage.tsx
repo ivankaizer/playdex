@@ -1,17 +1,24 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { Link, useParams, useSearchParams } from "react-router";
 import { scrollToTop } from "@/lib/navigation";
-import {
-  AdminAccessRequired,
-  adminApi,
-  isAbortError,
-  isForbidden,
-  isNotFound,
-  type GenerationDetail,
-  type GenerationPage,
-} from "../api";
+import { AdminAccessRequired, adminApi, isAbortError, isForbidden, isNotFound, type GenerationDetail, type GenerationPage } from "../api";
 import { GenerationDetails } from "../components/GenerationDetails";
-import { Alert, Button, linkClass, Note, Pager, Panel, ProgressBar, rowClass, Select, Table, Td, TextInput, Th, Toolbar } from "../components/ui";
+import {
+  Alert,
+  Button,
+  linkClass,
+  Note,
+  Pager,
+  Panel,
+  ProgressBar,
+  rowClass,
+  Select,
+  Table,
+  Td,
+  TextInput,
+  Th,
+  Toolbar,
+} from "../components/ui";
 import { OutcomeBadge } from "../components/GenerationDetails";
 import { GenerationStatuses, hasNextPage } from "../logic";
 import { formatLocal, parseTime } from "../time";
@@ -183,12 +190,7 @@ export function AiGenerationsPage() {
               placeholder="Search email or input text"
               aria-label="Search generation history"
             />
-            <Select
-              className="sm:!w-44"
-              value={status}
-              onChange={(event) => setStatus(event.target.value)}
-              aria-label="Generation outcome"
-            >
+            <Select className="sm:!w-44" value={status} onChange={(event) => setStatus(event.target.value)} aria-label="Generation outcome">
               <option value="">All outcomes</option>
               {GenerationStatuses.map((value) => (
                 <option key={value} value={value}>

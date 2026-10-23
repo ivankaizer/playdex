@@ -38,7 +38,7 @@ internal sealed partial class BackupJson : JsonSerializerContext;
 
 public sealed class BackupStateStore(string path) : IDisposable
 {
-    private readonly SemaphoreSlim gate = new(1, 1);
+    private readonly SemaphoreSlim _gate = new(1, 1);
 
     public string PathToState { get; } = path;
 
@@ -78,7 +78,7 @@ public sealed class BackupStateStore(string path) : IDisposable
 
     public async Task SaveAsync(BackupState state, CancellationToken cancellationToken = default)
     {
-        await gate.WaitAsync(cancellationToken);
+        await _gate.WaitAsync(cancellationToken);
         try
         {
             var directory = Path.GetDirectoryName(PathToState);
@@ -104,11 +104,11 @@ public sealed class BackupStateStore(string path) : IDisposable
         }
         finally
         {
-            gate.Release();
+            _gate.Release();
         }
     }
 
-    public void Dispose() => gate.Dispose();
+    public void Dispose() => _gate.Dispose();
 }
 
 public sealed record LudusaviProcessResult(int ExitCode, string StandardOutput, string StandardError);
@@ -163,13 +163,13 @@ public sealed record LudusaviBackupResult(BackupResultKind Kind, string? Resolve
 
 public sealed class LudusaviRunner
 {
-    private static readonly TimeSpan DefaultValidationTimeout = TimeSpan.FromSeconds(15);
-    private static readonly TimeSpan DefaultDiscoveryTimeout = TimeSpan.FromMinutes(1);
-    private static readonly TimeSpan DefaultBackupTimeout = TimeSpan.FromHours(2);
-    private readonly ILudusaviProcess process;
-    private readonly TimeSpan validationTimeout;
-    private readonly TimeSpan discoveryTimeout;
-    private readonly TimeSpan backupTimeout;
+    private static readonly TimeSpan _defaultValidationTimeout = TimeSpan.FromSeconds(15);
+    private static readonly TimeSpan _defaultDiscoveryTimeout = TimeSpan.FromMinutes(1);
+    private static readonly TimeSpan _defaultBackupTimeout = TimeSpan.FromHours(2);
+    private readonly ILudusaviProcess _process;
+    private readonly TimeSpan _validationTimeout;
+    private readonly TimeSpan _discoveryTimeout;
+    private readonly TimeSpan _backupTimeout;
 
     public LudusaviRunner(
         ILudusaviProcess process,
@@ -177,16 +177,16 @@ public sealed class LudusaviRunner
         TimeSpan? discoveryTimeout = null,
         TimeSpan? backupTimeout = null)
     {
-        this.process = process;
-        this.validationTimeout = validationTimeout ?? DefaultValidationTimeout;
-        this.discoveryTimeout = discoveryTimeout ?? DefaultDiscoveryTimeout;
-        this.backupTimeout = backupTimeout ?? DefaultBackupTimeout;
+        this._process = process;
+        this._validationTimeout = validationTimeout ?? _defaultValidationTimeout;
+        this._discoveryTimeout = discoveryTimeout ?? _defaultDiscoveryTimeout;
+        this._backupTimeout = backupTimeout ?? _defaultBackupTimeout;
     }
 
     public async Task<string> ValidateAsync(string executablePath, CancellationToken cancellationToken = default)
     {
         executablePath = LudusaviConfig.NormalizeExecutablePath(executablePath);
-        var result = await RunWithTimeoutAsync(executablePath, ["--version"], validationTimeout, "Ludusavi validation", cancellationToken);
+        var result = await RunWithTimeoutAsync(executablePath, ["--version"], _validationTimeout, "Ludusavi validation", cancellationToken);
         if (result.ExitCode != 0)
         {
             throw new InvalidOperationException(FormatFailure("Ludusavi validation", result));
@@ -230,7 +230,7 @@ public sealed class LudusaviRunner
                 find = await RunWithTimeoutAsync(
                     executablePath,
                     ["--no-manifest-update", "find", "--steam-id", steamId.ToString(System.Globalization.CultureInfo.InvariantCulture), "--backup", "--api"],
-                    discoveryTimeout,
+                    _discoveryTimeout,
                     "Ludusavi game discovery",
                     cancellationToken);
             }
@@ -261,7 +261,7 @@ public sealed class LudusaviRunner
             backup = await RunWithTimeoutAsync(
                 executablePath,
                 ["backup", title, "--cloud-sync", "--force", "--api"],
-                backupTimeout,
+                _backupTimeout,
                 "Ludusavi backup",
                 cancellationToken);
         }
@@ -307,8 +307,15 @@ public sealed class LudusaviRunner
                 {
                     foreach (var game in games.EnumerateArray())
                     {
-                        if (game.ValueKind == JsonValueKind.String) return game.GetString();
-                        if (game.ValueKind == JsonValueKind.Object && game.TryGetProperty("name", out var name)) return name.GetString();
+                        if (game.ValueKind == JsonValueKind.String)
+                        {
+                            return game.GetString();
+                        }
+
+                        if (game.ValueKind == JsonValueKind.Object && game.TryGetProperty("name", out var name))
+                        {
+                            return name.GetString();
+                        }
                     }
                 }
             }
@@ -339,7 +346,11 @@ public sealed class LudusaviRunner
     {
         var detail = string.IsNullOrWhiteSpace(result.StandardError) ? result.StandardOutput : result.StandardError;
         detail = detail.Trim();
-        if (detail.Length > 300) detail = detail[..300];
+        if (detail.Length > 300)
+        {
+            detail = detail[..300];
+        }
+
         return string.IsNullOrWhiteSpace(detail) ? $"{prefix} (exit code {result.ExitCode})." : $"{prefix}: {detail}";
     }
 
@@ -354,7 +365,7 @@ public sealed class LudusaviRunner
         timeoutCancellation.CancelAfter(timeout);
         try
         {
-            return await process.RunAsync(executablePath, arguments, timeoutCancellation.Token);
+            return await _process.RunAsync(executablePath, arguments, timeoutCancellation.Token);
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested && timeoutCancellation.IsCancellationRequested)
         {
@@ -365,70 +376,70 @@ public sealed class LudusaviRunner
 
 public sealed partial class BackupCoordinator : IDisposable
 {
-    private static readonly TimeSpan SchedulerInterval = TimeSpan.FromMinutes(15);
-    private static readonly TimeSpan FailureRetryDelay = TimeSpan.FromHours(1);
-    private readonly AppConfig config;
-    private readonly ConfigStore configStore;
-    private readonly BackupState state;
-    private readonly BackupStateStore store;
-    private readonly LudusaviRunner runner;
-    private readonly ILogger<BackupCoordinator> logger;
-    private readonly Action stateChanged;
-    private readonly SemaphoreSlim operationGate = new(1, 1);
-    private readonly HashSet<string> pendingGames = new(StringComparer.OrdinalIgnoreCase);
-    private readonly object pendingLock = new();
-    private readonly CancellationTokenSource cancellation = new();
+    private static readonly TimeSpan _schedulerInterval = TimeSpan.FromMinutes(15);
+    private static readonly TimeSpan _failureRetryDelay = TimeSpan.FromHours(1);
+    private readonly AppConfig _config;
+    private readonly ConfigStore _configStore;
+    private readonly BackupState _state;
+    private readonly BackupStateStore _store;
+    private readonly LudusaviRunner _runner;
+    private readonly ILogger<BackupCoordinator> _logger;
+    private readonly Action _stateChanged;
+    private readonly SemaphoreSlim _operationGate = new(1, 1);
+    private readonly HashSet<string> _pendingGames = new(StringComparer.OrdinalIgnoreCase);
+    private readonly object _pendingLock = new();
+    private readonly CancellationTokenSource _cancellation = new();
 
     public BackupCoordinator(AppConfig config, ConfigStore configStore, BackupState state, BackupStateStore store, LudusaviRunner runner, ILogger<BackupCoordinator> logger, Action stateChanged)
     {
-        this.config = config;
-        this.configStore = configStore;
-        this.state = state;
-        this.store = store;
-        this.runner = runner;
-        this.logger = logger;
-        this.stateChanged = stateChanged;
+        this._config = config;
+        this._configStore = configStore;
+        this._state = state;
+        this._store = store;
+        this._runner = runner;
+        this._logger = logger;
+        this._stateChanged = stateChanged;
     }
 
-    public GameBackupState? GetState(string gameId) => state.Games.GetValueOrDefault(gameId);
+    public GameBackupState? GetState(string gameId) => _state.Games.GetValueOrDefault(gameId);
 
-    public Task RequestManualAsync(GameConfig game) => QueueAsync(game, scheduled: false, cancellation.Token);
+    public Task RequestManualAsync(GameConfig game) => QueueAsync(game, scheduled: false, _cancellation.Token);
 
     public async Task RemoveStateAsync(string gameId)
     {
-        if (state.Games.Remove(gameId))
+        if (_state.Games.Remove(gameId))
         {
-            await store.SaveAsync(state, cancellation.Token);
-            LogBackupStateRemoved(logger, gameId);
+            await _store.SaveAsync(_state, _cancellation.Token);
+            LogBackupStateRemoved(_logger, gameId);
         }
     }
 
     /// <summary>
-    /// Backs up every due game now and every <see cref="SchedulerInterval"/> until disposed. A pass that fails is
+    /// Backs up every due game now and every <see cref="_schedulerInterval"/> until disposed. A pass that fails is
     /// logged and the next one runs on time: the caller discards this task, so an exception would end the schedule
     /// without a trace.
     /// </summary>
     public async Task RunSchedulerAsync()
     {
-        while (!cancellation.IsCancellationRequested)
+        while (!_cancellation.IsCancellationRequested)
         {
             try
             {
-                await RunDueOnceAsync(DateTimeOffset.Now, cancellation.Token);
+                await RunDueOnceAsync(DateTimeOffset.Now, _cancellation.Token);
             }
-            catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
+            catch (OperationCanceledException) when (_cancellation.IsCancellationRequested)
             {
                 return;
             }
             catch (Exception ex)
             {
-                LogSchedulerPassFailed(logger, ex);
+                LogSchedulerPassFailed(_logger, ex);
             }
             try
             {
-                await Task.Delay(SchedulerInterval, cancellation.Token);
+                await Task.Delay(_schedulerInterval, _cancellation.Token);
             }
-            catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
+            catch (OperationCanceledException) when (_cancellation.IsCancellationRequested)
             {
                 return;
             }
@@ -437,19 +448,30 @@ public sealed partial class BackupCoordinator : IDisposable
 
     internal async Task RunDueOnceAsync(DateTimeOffset now, CancellationToken cancellationToken)
     {
-        if (!config.Ludusavi.IsConfigured) return;
+        if (!_config.Ludusavi.IsConfigured)
+        {
+            return;
+        }
         // A copy: the app adds and removes games (on the UI thread) while this awaits a backup.
-        var games = config.Games.Values.Where(game => game.Backup.DailyEnabled).ToList();
+        var games = _config.Games.Values.Where(game => game.Backup.DailyEnabled).ToList();
         foreach (var game in games)
         {
-            if (!config.Games.ContainsKey(game.GameId)) continue; // removed during the pass
+            if (!_config.Games.ContainsKey(game.GameId))
+            {
+                continue; // removed during the pass
+            }
+
             try
             {
                 var gameState = GetState(game.GameId);
-                if (!IsDue(gameState, now)) continue;
-                if (GameLock.IsHeld(config.Storage.StateDirectory, game.GameId))
+                if (!IsDue(gameState, now))
                 {
-                    LogBackupDeferred(logger, game.GameId);
+                    continue;
+                }
+
+                if (GameLock.IsHeld(_config.Storage.StateDirectory, game.GameId))
+                {
+                    LogBackupDeferred(_logger, game.GameId);
                     continue;
                 }
                 await QueueAsync(game, scheduled: true, cancellationToken);
@@ -457,7 +479,7 @@ public sealed partial class BackupCoordinator : IDisposable
             catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
             {
                 // One game's failure (a state file that can't be written) doesn't hold up the others.
-                LogBackupFailed(logger, game.GameId, ex);
+                LogBackupFailed(_logger, game.GameId, ex);
             }
         }
     }
@@ -465,96 +487,107 @@ public sealed partial class BackupCoordinator : IDisposable
     /// <summary>Not backed up successfully today, and no attempt within the last hour.</summary>
     public static bool IsDue(GameBackupState? state, DateTimeOffset now)
     {
-        if (state?.LastSuccessAt?.ToLocalTime().Date == now.ToLocalTime().Date) return false;
-        return state?.LastAttemptAt is null || now - state.LastAttemptAt >= FailureRetryDelay;
+        if (state?.LastSuccessAt?.ToLocalTime().Date == now.ToLocalTime().Date)
+        {
+            return false;
+        }
+
+        return state?.LastAttemptAt is null || now - state.LastAttemptAt >= _failureRetryDelay;
     }
 
     private async Task QueueAsync(GameConfig game, bool scheduled, CancellationToken cancellationToken)
     {
         var trigger = scheduled ? "scheduled" : "manual";
-        lock (pendingLock)
+        lock (_pendingLock)
         {
-            if (!pendingGames.Add(game.GameId))
+            if (!_pendingGames.Add(game.GameId))
             {
-                LogDuplicateBackupSuppressed(logger, game.GameId, trigger);
+                LogDuplicateBackupSuppressed(_logger, game.GameId, trigger);
                 return;
             }
         }
 
-        LogBackupQueued(logger, game.GameId, trigger);
+        LogBackupQueued(_logger, game.GameId, trigger);
         try
         {
-            await operationGate.WaitAsync(cancellationToken);
+            await _operationGate.WaitAsync(cancellationToken);
             try
             {
-                if (scheduled && GameLock.IsHeld(config.Storage.StateDirectory, game.GameId))
+                if (scheduled && GameLock.IsHeld(_config.Storage.StateDirectory, game.GameId))
                 {
-                    LogBackupDeferred(logger, game.GameId);
+                    LogBackupDeferred(_logger, game.GameId);
                     return;
                 }
-                var gameState = state.Games.GetValueOrDefault(game.GameId) ?? new GameBackupState();
-                state.Games[game.GameId] = gameState;
+                var gameState = _state.Games.GetValueOrDefault(game.GameId) ?? new GameBackupState();
+                _state.Games[game.GameId] = gameState;
                 gameState.Result = BackupResultKind.Running;
                 gameState.LastAttemptAt = DateTimeOffset.Now;
                 gameState.LastError = null;
-                await store.SaveAsync(state, cancellationToken);
-                LogBackupStateChanged(logger, game.GameId, BackupResultKind.Running, trigger, gameState.ResolvedTitle, gameState.LastError);
-                stateChanged();
+                await _store.SaveAsync(_state, cancellationToken);
+                LogBackupStateChanged(_logger, game.GameId, BackupResultKind.Running, trigger, gameState.ResolvedTitle, gameState.LastError);
+                _stateChanged();
 
-                var result = await runner.BackupAsync(
-                    config.Ludusavi,
+                var result = await _runner.BackupAsync(
+                    _config.Ludusavi,
                     game,
                     async (title, token) =>
                     {
                         game.Backup.LudusaviGameTitle = title;
-                        await configStore.SaveAsync(config, token);
-                        LogLudusaviTitleSaved(logger, game.GameId, title);
+                        await _configStore.SaveAsync(_config, token);
+                        LogLudusaviTitleSaved(_logger, game.GameId, title);
                     },
                     cancellationToken);
                 gameState.Result = result.Kind;
                 gameState.ResolvedTitle = result.ResolvedTitle ?? gameState.ResolvedTitle;
                 gameState.LastError = result.Error;
-                if (result.IsSuccess) gameState.LastSuccessAt = DateTimeOffset.Now;
-                await store.SaveAsync(state, cancellationToken);
-                LogBackupStateChanged(logger, game.GameId, result.Kind, trigger, gameState.ResolvedTitle, gameState.LastError);
-                stateChanged();
+                if (result.IsSuccess)
+                {
+                    gameState.LastSuccessAt = DateTimeOffset.Now;
+                }
+
+                await _store.SaveAsync(_state, cancellationToken);
+                LogBackupStateChanged(_logger, game.GameId, result.Kind, trigger, gameState.ResolvedTitle, gameState.LastError);
+                _stateChanged();
             }
             finally
             {
-                operationGate.Release();
+                _operationGate.Release();
             }
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            var gameState = state.Games.GetValueOrDefault(game.GameId) ?? new GameBackupState();
-            state.Games[game.GameId] = gameState;
+            var gameState = _state.Games.GetValueOrDefault(game.GameId) ?? new GameBackupState();
+            _state.Games[game.GameId] = gameState;
             gameState.Result = BackupResultKind.Failed;
             gameState.LastError = "Backup was cancelled.";
-            await store.SaveAsync(state, CancellationToken.None);
-            LogBackupCancelled(logger, game.GameId, trigger);
-            LogBackupStateChanged(logger, game.GameId, gameState.Result, trigger, gameState.ResolvedTitle, gameState.LastError);
-            stateChanged();
+            await _store.SaveAsync(_state, CancellationToken.None);
+            LogBackupCancelled(_logger, game.GameId, trigger);
+            LogBackupStateChanged(_logger, game.GameId, gameState.Result, trigger, gameState.ResolvedTitle, gameState.LastError);
+            _stateChanged();
         }
         catch (Exception ex)
         {
-            var gameState = state.Games.GetValueOrDefault(game.GameId) ?? new GameBackupState();
-            state.Games[game.GameId] = gameState;
+            var gameState = _state.Games.GetValueOrDefault(game.GameId) ?? new GameBackupState();
+            _state.Games[game.GameId] = gameState;
             gameState.Result = BackupResultKind.Failed;
             gameState.LastAttemptAt = DateTimeOffset.Now;
             gameState.LastError = ex.Message;
-            await store.SaveAsync(state, CancellationToken.None);
-            LogBackupFailed(logger, game.GameId, ex);
-            stateChanged();
+            await _store.SaveAsync(_state, CancellationToken.None);
+            LogBackupFailed(_logger, game.GameId, ex);
+            _stateChanged();
         }
         finally
         {
-            lock (pendingLock) pendingGames.Remove(game.GameId);
+            lock (_pendingLock)
+            {
+                _pendingGames.Remove(game.GameId);
+            }
         }
     }
 
     public void Dispose()
     {
-        cancellation.Cancel();
+        _cancellation.Cancel();
     }
 
     [LoggerMessage(EventId = 1, Level = LogLevel.Information, Message = "Ludusavi backup queued for {GameId}; trigger={Trigger}")]

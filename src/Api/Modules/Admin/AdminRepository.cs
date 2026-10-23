@@ -14,7 +14,7 @@ public sealed class AdminRepository(PlaydexDbContext db)
     public const int GenerationPageSize = 25;
     public const int GameListLimit = 20;
 
-    private static readonly string[] FailureStatuses = ["failure", "timeout", "cancelled"];
+    private static readonly string[] _failureStatuses = ["failure", "timeout", "cancelled"];
 
     public Task<bool> IsAdministrator(long userId, CancellationToken ct) =>
         db.Users.AsNoTracking().AnyAsync(user => user.Id == userId && user.IsAdmin, ct);
@@ -26,33 +26,33 @@ public sealed class AdminRepository(PlaydexDbContext db)
     {
         var since = now.AddHours(-24);
         var live = db.PlaySessions.AsNoTracking().Where(row => row.EndedAt == null);
-        var failures = db.AiGenerations.AsNoTracking().Where(row => FailureStatuses.Contains(row.Status));
+        var failures = db.AiGenerations.AsNoTracking().Where(row => _failureStatuses.Contains(row.Status));
         var counts = new AdminDashboardCountsDto(
             await live.CountAsync(ct),
             await live.Select(row => row.UserId).Distinct().CountAsync(ct),
             await db.PlaySessions.CountAsync(row => row.StartedAt >= dayStart && row.StartedAt < dayEnd, ct),
             await failures.CountAsync(row => row.CreatedAt >= since && row.CreatedAt <= now, ct));
         var rows = from session in db.PlaySessions.AsNoTracking()
-            join user in db.Users.AsNoTracking() on session.UserId equals user.Id
-            join game in db.Games.AsNoTracking() on session.GameId equals game.Id
-            join playedPlatform in db.Platforms.AsNoTracking() on session.PlatformId equals playedPlatform.Id
-            join integration in db.Integrations.AsNoTracking() on session.IntegrationId equals (long?)integration.Id
-                into accounts
-            from integration in accounts.DefaultIfEmpty()
-            select new
-            {
-                session.Id,
-                user.Email,
-                Game = game.Title,
-                game.CapsuleUrl,
-                PlatformKey = playedPlatform.Key,
-                Platform = playedPlatform.Name,
-                AccountId = integration == null ? null : integration.AccountId,
-                Source = session.CaptureMethod,
-                session.StartedAt,
-                session.EndedAt,
-                session.IntegrationId,
-            };
+                   join user in db.Users.AsNoTracking() on session.UserId equals user.Id
+                   join game in db.Games.AsNoTracking() on session.GameId equals game.Id
+                   join playedPlatform in db.Platforms.AsNoTracking() on session.PlatformId equals playedPlatform.Id
+                   join integration in db.Integrations.AsNoTracking() on session.IntegrationId equals (long?)integration.Id
+                       into accounts
+                   from integration in accounts.DefaultIfEmpty()
+                   select new
+                   {
+                       session.Id,
+                       user.Email,
+                       Game = game.Title,
+                       game.CapsuleUrl,
+                       PlatformKey = playedPlatform.Key,
+                       Platform = playedPlatform.Name,
+                       AccountId = integration == null ? null : integration.AccountId,
+                       Source = session.CaptureMethod,
+                       session.StartedAt,
+                       session.EndedAt,
+                       session.IntegrationId,
+                   };
         var liveRows = rows.Where(row => row.EndedAt == null);
         if (!string.IsNullOrWhiteSpace(query))
         {
@@ -62,20 +62,42 @@ public sealed class AdminRepository(PlaydexDbContext db)
                                              || (row.AccountId != null && EF.Functions.ILike(row.AccountId, like, SearchText.EscapeCharacter)));
         }
 
-        if (!string.IsNullOrWhiteSpace(platform)) liveRows = liveRows.Where(row => row.PlatformKey == platform);
+        if (!string.IsNullOrWhiteSpace(platform))
+        {
+            liveRows = liveRows.Where(row => row.PlatformKey == platform);
+        }
+
         var liveSessions = await liveRows.OrderBy(row => row.StartedAt).ThenBy(row => row.Id)
             .Select(row => new
             {
-                row.Id, row.Email, row.Game, row.CapsuleUrl, row.PlatformKey, row.Platform, row.AccountId,
-                row.Source, row.StartedAt, row.EndedAt, row.IntegrationId,
+                row.Id,
+                row.Email,
+                row.Game,
+                row.CapsuleUrl,
+                row.PlatformKey,
+                row.Platform,
+                row.AccountId,
+                row.Source,
+                row.StartedAt,
+                row.EndedAt,
+                row.IntegrationId,
             })
             .ToListAsync(ct);
         var ended = await rows.Where(row => row.EndedAt != null)
             .OrderByDescending(row => row.EndedAt).ThenByDescending(row => row.Id).Take(10)
             .Select(row => new
             {
-                row.Id, row.Email, row.Game, row.CapsuleUrl, row.PlatformKey, row.Platform, row.AccountId,
-                row.Source, row.StartedAt, row.EndedAt, row.IntegrationId,
+                row.Id,
+                row.Email,
+                row.Game,
+                row.CapsuleUrl,
+                row.PlatformKey,
+                row.Platform,
+                row.AccountId,
+                row.Source,
+                row.StartedAt,
+                row.EndedAt,
+                row.IntegrationId,
             })
             .ToListAsync(ct);
         var lastPolls = await ReadLastPolls(
@@ -86,10 +108,10 @@ public sealed class AdminRepository(PlaydexDbContext db)
         DateTimeOffset? LastPolledAt(long? integrationId) =>
             integrationId is { } id && lastPolls.TryGetValue(id, out var polledAt) ? polledAt : null;
         var generations = await (from generation in failures
-                join user in db.Users.AsNoTracking() on generation.UserId equals user.Id
-                orderby generation.CreatedAt descending, generation.Id descending
-                select new AdminDashboardGenerationDto(generation.Id, user.Email, generation.Model, generation.Status,
-                    generation.CreatedAt))
+                                 join user in db.Users.AsNoTracking() on generation.UserId equals user.Id
+                                 orderby generation.CreatedAt descending, generation.Id descending
+                                 select new AdminDashboardGenerationDto(generation.Id, user.Email, generation.Model, generation.Status,
+                                     generation.CreatedAt))
             .Take(10).ToListAsync(ct);
         var platforms = await db.Platforms.AsNoTracking().OrderBy(row => row.Name)
             .Select(row => new AdminDashboardPlatformDto(row.Key, row.Name)).ToListAsync(ct);
@@ -113,7 +135,11 @@ public sealed class AdminRepository(PlaydexDbContext db)
         CancellationToken ct)
     {
         var ids = integrationIds.Distinct().ToArray();
-        if (ids.Length == 0) return [];
+        if (ids.Length == 0)
+        {
+            return [];
+        }
+
         return await db.Integrations.AsNoTracking()
             .Where(integration => ids.Contains(integration.Id))
             .Select(integration => new
@@ -139,12 +165,12 @@ public sealed class AdminRepository(PlaydexDbContext db)
 
     public async Task<IReadOnlyList<AdminPlatformSummaryDto>> ListPlatformSummaries(CancellationToken ct) =>
         await (from integration in db.Integrations.AsNoTracking()
-                join platform in db.Platforms.AsNoTracking() on integration.PlatformId equals platform.Id
-                group integration by new { platform.Key, platform.Name }
+               join platform in db.Platforms.AsNoTracking() on integration.PlatformId equals platform.Id
+               group integration by new { platform.Key, platform.Name }
                 into grouped
-                orderby grouped.Key.Name
-                select new AdminPlatformSummaryDto(grouped.Key.Key, grouped.Key.Name, grouped.Count(),
-                    grouped.Count(row => row.Active)))
+               orderby grouped.Key.Name
+               select new AdminPlatformSummaryDto(grouped.Key.Key, grouped.Key.Name, grouped.Count(),
+                   grouped.Count(row => row.Active)))
             .ToListAsync(ct);
 
     /// <returns>The number of integrations updated, or null when the platform does not exist.</returns>
@@ -152,7 +178,11 @@ public sealed class AdminRepository(PlaydexDbContext db)
     {
         var key = platform.Trim();
         var platformRow = await db.Platforms.SingleOrDefaultAsync(row => row.Key == key, ct);
-        if (platformRow is null) return null;
+        if (platformRow is null)
+        {
+            return null;
+        }
+
         var integrations = await db.Integrations.Where(row => row.PlatformId == platformRow.Id).ToListAsync(ct);
         foreach (var integration in integrations)
         {
@@ -174,25 +204,37 @@ public sealed class AdminRepository(PlaydexDbContext db)
 
     public async Task<IReadOnlyList<AdminIntegrationDto>> ListIntegrations(CancellationToken ct) =>
         await (from integration in db.Integrations.AsNoTracking()
-                join user in db.Users.AsNoTracking() on integration.UserId equals user.Id
-                join platform in db.Platforms.AsNoTracking() on integration.PlatformId equals (long?)platform.Id
-                    into platforms
-                from platform in platforms.DefaultIfEmpty()
-                orderby user.Email,
-                    integration.Type == IntegrationType.Api ? "api" : platform!.Key,
-                    integration.Id
-                select new AdminIntegrationDto(integration.Id, user.Email,
-                    integration.Type == IntegrationType.Api ? "api" : platform!.Key,
-                    integration.AccountId, integration.Active, integration.ApiKey))
+               join user in db.Users.AsNoTracking() on integration.UserId equals user.Id
+               join platform in db.Platforms.AsNoTracking() on integration.PlatformId equals (long?)platform.Id
+                   into platforms
+               from platform in platforms.DefaultIfEmpty()
+               orderby user.Email,
+                   integration.Type == IntegrationType.Api ? "api" : platform!.Key,
+                   integration.Id
+               select new AdminIntegrationDto(integration.Id, user.Email,
+                   integration.Type == IntegrationType.Api ? "api" : platform!.Key,
+                   integration.AccountId, integration.Active, integration.ApiKey))
             .ToListAsync(ct);
 
     public async Task<bool> UpdateIntegration(long id, bool apiKeyChanged, string? apiKey, bool accountIdChanged,
         string? accountId, CancellationToken ct)
     {
         var integration = await db.Integrations.SingleOrDefaultAsync(row => row.Id == id, ct);
-        if (integration is null) return false;
-        if (apiKeyChanged) integration.ApiKey = apiKey;
-        if (accountIdChanged) integration.AccountId = accountId;
+        if (integration is null)
+        {
+            return false;
+        }
+
+        if (apiKeyChanged)
+        {
+            integration.ApiKey = apiKey;
+        }
+
+        if (accountIdChanged)
+        {
+            integration.AccountId = accountId;
+        }
+
         integration.UpdatedAt = DateTimeOffset.UtcNow;
         await db.SaveChangesAsync(ct);
         return true;
@@ -205,30 +247,44 @@ public sealed class AdminRepository(PlaydexDbContext db)
     {
         var like = SearchText.ContainsPattern(query.Trim());
         var rows = from session in db.PlaySessions.AsNoTracking()
-            join user in db.Users.AsNoTracking() on session.UserId equals user.Id
-            join game in db.Games.AsNoTracking() on session.GameId equals game.Id
-            join platform in db.Platforms.AsNoTracking() on session.PlatformId equals platform.Id
-            join integration in db.Integrations.AsNoTracking() on session.IntegrationId equals (long?)integration.Id
-                into integrations
-            from integration in integrations.DefaultIfEmpty()
-            where EF.Functions.ILike(user.Email, like, SearchText.EscapeCharacter) || EF.Functions.ILike(game.Title, like, SearchText.EscapeCharacter) ||
-                  EF.Functions.ILike(platform.Key, like, SearchText.EscapeCharacter)
-                  || (integration != null && integration.AccountId != null &&
-                      EF.Functions.ILike(integration.AccountId, like, SearchText.EscapeCharacter))
-            select new
-            {
-                session.Id,
-                user.Email,
-                Platform = platform.Name,
-                AccountId = integration == null ? null : integration.AccountId,
-                Game = game.Title,
-                session.StartedAt,
-                session.EndedAt,
-            };
-        if (status is "live") rows = rows.Where(row => row.EndedAt == null);
-        else if (status is "ended") rows = rows.Where(row => row.EndedAt != null);
-        if (startedFrom is not null) rows = rows.Where(row => row.StartedAt >= startedFrom);
-        if (startedBefore is not null) rows = rows.Where(row => row.StartedAt < startedBefore);
+                   join user in db.Users.AsNoTracking() on session.UserId equals user.Id
+                   join game in db.Games.AsNoTracking() on session.GameId equals game.Id
+                   join platform in db.Platforms.AsNoTracking() on session.PlatformId equals platform.Id
+                   join integration in db.Integrations.AsNoTracking() on session.IntegrationId equals (long?)integration.Id
+                       into integrations
+                   from integration in integrations.DefaultIfEmpty()
+                   where EF.Functions.ILike(user.Email, like, SearchText.EscapeCharacter) || EF.Functions.ILike(game.Title, like, SearchText.EscapeCharacter) ||
+                         EF.Functions.ILike(platform.Key, like, SearchText.EscapeCharacter)
+                         || (integration != null && integration.AccountId != null &&
+                             EF.Functions.ILike(integration.AccountId, like, SearchText.EscapeCharacter))
+                   select new
+                   {
+                       session.Id,
+                       user.Email,
+                       Platform = platform.Name,
+                       AccountId = integration == null ? null : integration.AccountId,
+                       Game = game.Title,
+                       session.StartedAt,
+                       session.EndedAt,
+                   };
+        if (status is "live")
+        {
+            rows = rows.Where(row => row.EndedAt == null);
+        }
+        else if (status is "ended")
+        {
+            rows = rows.Where(row => row.EndedAt != null);
+        }
+
+        if (startedFrom is not null)
+        {
+            rows = rows.Where(row => row.StartedAt >= startedFrom);
+        }
+
+        if (startedBefore is not null)
+        {
+            rows = rows.Where(row => row.StartedAt < startedBefore);
+        }
 
         page = Math.Max(0, page);
         var total = await rows.CountAsync(ct);
@@ -299,7 +355,10 @@ public sealed class AdminRepository(PlaydexDbContext db)
     {
         if (long.TryParse(value, System.Globalization.NumberStyles.Integer,
                 System.Globalization.CultureInfo.InvariantCulture, out var raw))
+        {
             return raw > 0 ? raw : null;
+        }
+
         return GameId.Decode(value);
     }
 
@@ -317,11 +376,27 @@ public sealed class AdminRepository(PlaydexDbContext db)
             .FromSqlInterpolated($"select * from games where id in ({sourceId}, {targetId}) for update")
             .OrderBy(game => game.Id).ToListAsync(ct);
         var source = locked.SingleOrDefault(game => game.Id == sourceId);
-        if (source is null) return "Source game not found.";
+        if (source is null)
+        {
+            return "Source game not found.";
+        }
+
         var target = locked.SingleOrDefault(game => game.Id == targetId);
-        if (target is null) return "Target game not found.";
-        if (!target.TitleLocked && source.TitleLocked) target.Title = source.Title;
-        if (!target.CapsuleUrlLocked && target.CapsuleUrl is null) target.CapsuleUrl = source.CapsuleUrl;
+        if (target is null)
+        {
+            return "Target game not found.";
+        }
+
+        if (!target.TitleLocked && source.TitleLocked)
+        {
+            target.Title = source.Title;
+        }
+
+        if (!target.CapsuleUrlLocked && target.CapsuleUrl is null)
+        {
+            target.CapsuleUrl = source.CapsuleUrl;
+        }
+
         var now = DateTimeOffset.UtcNow;
         target.UpdatedAt = now;
         await db.SaveChangesAsync(ct);
@@ -375,13 +450,28 @@ public sealed class AdminRepository(PlaydexDbContext db)
         page = Math.Clamp(page, 0, 100_000);
         var like = SearchText.ContainsPattern(query.Trim());
         var rows = from generation in db.AiGenerations.AsNoTracking()
-            join user in db.Users.AsNoTracking() on generation.UserId equals user.Id
-            where EF.Functions.ILike(user.Email, like, SearchText.EscapeCharacter) || EF.Functions.ILike(generation.InputText!, like, SearchText.EscapeCharacter)
-            select new { generation, user.Email };
-        if (status == "errors") rows = rows.Where(row => FailureStatuses.Contains(row.generation.Status));
-        else if (!string.IsNullOrWhiteSpace(status)) rows = rows.Where(row => row.generation.Status == status);
-        if (since is not null) rows = rows.Where(row => row.generation.CreatedAt >= since);
-        if (until is not null) rows = rows.Where(row => row.generation.CreatedAt <= until);
+                   join user in db.Users.AsNoTracking() on generation.UserId equals user.Id
+                   where EF.Functions.ILike(user.Email, like, SearchText.EscapeCharacter) || EF.Functions.ILike(generation.InputText!, like, SearchText.EscapeCharacter)
+                   select new { generation, user.Email };
+        if (status == "errors")
+        {
+            rows = rows.Where(row => _failureStatuses.Contains(row.generation.Status));
+        }
+        else if (!string.IsNullOrWhiteSpace(status))
+        {
+            rows = rows.Where(row => row.generation.Status == status);
+        }
+
+        if (since is not null)
+        {
+            rows = rows.Where(row => row.generation.CreatedAt >= since);
+        }
+
+        if (until is not null)
+        {
+            rows = rows.Where(row => row.generation.CreatedAt <= until);
+        }
+
         var total = await rows.CountAsync(ct);
         var items = await rows.OrderByDescending(row => row.generation.CreatedAt)
             .ThenByDescending(row => row.generation.Id)
@@ -398,17 +488,26 @@ public sealed class AdminRepository(PlaydexDbContext db)
 
     public Task<AdminGenerationRecord?> FindGeneration(Guid id, CancellationToken ct) =>
         (from generation in db.AiGenerations.AsNoTracking()
-            join user in db.Users.AsNoTracking() on generation.UserId equals user.Id
-            where generation.Id == id
-            select new AdminGenerationRecord(user.Email, new AiGeneration
-            {
-                Id = generation.Id, UserId = generation.UserId, RequestId = generation.RequestId,
-                CreatedAt = generation.CreatedAt, CompletedAt = generation.CompletedAt,
-                Provider = generation.Provider, Model = generation.Model, Timezone = generation.Timezone,
-                ReferenceDate = generation.ReferenceDate, InputText = generation.InputText,
-                ImageContentType = generation.ImageContentType, Status = generation.Status,
-                Error = generation.Error, ResultJson = generation.ResultJson, ResponsesJson = generation.ResponsesJson,
-            })).SingleOrDefaultAsync(ct);
+         join user in db.Users.AsNoTracking() on generation.UserId equals user.Id
+         where generation.Id == id
+         select new AdminGenerationRecord(user.Email, new AiGeneration
+         {
+             Id = generation.Id,
+             UserId = generation.UserId,
+             RequestId = generation.RequestId,
+             CreatedAt = generation.CreatedAt,
+             CompletedAt = generation.CompletedAt,
+             Provider = generation.Provider,
+             Model = generation.Model,
+             Timezone = generation.Timezone,
+             ReferenceDate = generation.ReferenceDate,
+             InputText = generation.InputText,
+             ImageContentType = generation.ImageContentType,
+             Status = generation.Status,
+             Error = generation.Error,
+             ResultJson = generation.ResultJson,
+             ResponsesJson = generation.ResponsesJson,
+         })).SingleOrDefaultAsync(ct);
 
     public Task<AdminGenerationImage?> FindGenerationImage(Guid id, CancellationToken ct) =>
         db.AiGenerations.AsNoTracking().Where(row => row.Id == id && row.Image != null

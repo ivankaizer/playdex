@@ -46,10 +46,7 @@ export function usePreferences() {
     [update],
   );
 
-  const setTelegramChatId = useCallback(
-    (value: string) => update((current) => preferences.setTelegramChatId(current, value)),
-    [update],
-  );
+  const setTelegramChatId = useCallback((value: string) => update((current) => preferences.setTelegramChatId(current, value)), [update]);
 
   const stepIgnoreShortSessionsMinutes = useCallback(
     (delta: number) => update((current) => preferences.stepIgnoreShortSessionsMinutes(current, delta)),

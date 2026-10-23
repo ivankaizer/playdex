@@ -34,9 +34,21 @@ public sealed class CoverUrlPolicy
 
     public bool IsAllowed(string? url)
     {
-        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) || !string.IsNullOrEmpty(uri.UserInfo)) return false;
-        if (_origins.Contains(OriginOf(uri))) return true;
-        if (uri.Scheme != Uri.UriSchemeHttps || !uri.IsDefaultPort) return false;
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) || !string.IsNullOrEmpty(uri.UserInfo))
+        {
+            return false;
+        }
+
+        if (_origins.Contains(OriginOf(uri)))
+        {
+            return true;
+        }
+
+        if (uri.Scheme != Uri.UriSchemeHttps || !uri.IsDefaultPort)
+        {
+            return false;
+        }
+
         var host = uri.IdnHost;
         return KnownHosts.Any(known =>
             host.Equals(known, StringComparison.OrdinalIgnoreCase) ||

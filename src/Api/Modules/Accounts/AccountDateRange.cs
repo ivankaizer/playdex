@@ -11,7 +11,7 @@ namespace Api.Modules.Accounts;
 internal readonly record struct AccountDateRange(DateTimeOffset? From, DateTimeOffset? ToExclusive)
 {
     private const string InvalidDatesMessage = "from and to must be valid dates.";
-    private static readonly string[] IsoFormats =
+    private static readonly string[] _isoFormats =
     [
         "yyyy-MM-dd'T'HH:mm",
         "yyyy-MM-dd'T'HH:mm'Z'",
@@ -32,13 +32,17 @@ internal readonly record struct AccountDateRange(DateTimeOffset? From, DateTimeO
     private static AccountDateRange Parse(string? from, string? to, bool required, TimeZoneInfo zone)
     {
         if (required && (string.IsNullOrEmpty(from) || string.IsNullOrEmpty(to)))
+        {
             throw AppProblemException.Validation("from and to are required.");
+        }
 
         var parsedFrom = ParseBound(from, zone);
         var parsedTo = ParseBound(to, zone);
 
         if (parsedFrom.HasValue && parsedTo.HasValue && parsedFrom > parsedTo)
+        {
             throw AppProblemException.Validation("from must be before to.");
+        }
 
         try
         {
@@ -56,12 +60,16 @@ internal readonly record struct AccountDateRange(DateTimeOffset? From, DateTimeO
     private static DateTimeOffset? ParseBound(string? value, TimeZoneInfo zone)
     {
         if (string.IsNullOrEmpty(value))
+        {
             return null;
+        }
 
         try
         {
             if (DateOnly.TryParseExact(value, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var day))
+            {
                 return LocalCalendar.StartOf(day, zone);
+            }
         }
         catch (ArgumentOutOfRangeException)
         {
@@ -70,7 +78,7 @@ internal readonly record struct AccountDateRange(DateTimeOffset? From, DateTimeO
 
         if (!DateTimeOffset.TryParseExact(
                 value,
-                IsoFormats,
+                _isoFormats,
                 CultureInfo.InvariantCulture,
                 DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal,
                 out var parsed))

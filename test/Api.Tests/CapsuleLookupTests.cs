@@ -39,7 +39,10 @@ public sealed class CapsuleLookupTests(PostgresFixture postgres)
     [Fact]
     public async Task AGameWithoutACapsuleIsLookedUpOnceNotOnEveryPoll()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         var client = new XboxClient(_ => Task.FromResult<string?>(null));
         await using var scope = await Scope.Create(postgres, client);
@@ -55,7 +58,10 @@ public sealed class CapsuleLookupTests(PostgresFixture postgres)
     [Fact]
     public async Task ARateLimitedLookupHoldsTheCredentialBackWithoutCountingAFailure()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         var client = new XboxClient(_ => throw new ProviderPollException("rate limited", TimeSpan.FromMinutes(10)));
         await using var scope = await Scope.Create(postgres, client);

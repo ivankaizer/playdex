@@ -165,7 +165,12 @@ export function checkDuration(value: string): DurationCheck {
   if (!match) return { minutes: null, ok: false, message: "Use hours and minutes, e.g. 1h 30m." };
   const hours = Number(match[1] ?? 0);
   const minutes = Number(match[2] ?? 0);
-  if (minutes > 59) return { minutes: null, ok: false, message: `Minutes go up to 59. Write ${Math.floor(minutes / 60) + hours}h ${pad(minutes % 60)}m instead.` };
+  if (minutes > 59)
+    return {
+      minutes: null,
+      ok: false,
+      message: `Minutes go up to 59. Write ${Math.floor(minutes / 60) + hours}h ${pad(minutes % 60)}m instead.`,
+    };
   const total = hours * 60 + minutes;
   if (total === 0) return { minutes: 0, ok: false, message: "A session needs at least 1 minute." };
   if (total > DayMinutes) return { minutes: total, ok: false, message: TooLongMessage };
@@ -176,9 +181,7 @@ export function checkDuration(value: string): DurationCheck {
 export function editDurationCheck(state: SessionEditState): DurationCheck {
   if (state.session !== null && state.duration.trim() === state.initialDuration) {
     const minutes = Math.floor(state.initialSeconds / 60);
-    return state.initialSeconds > DayMinutes * 60
-      ? { minutes, ok: false, message: TooLongMessage }
-      : { minutes, ok: true, message: "" };
+    return state.initialSeconds > DayMinutes * 60 ? { minutes, ok: false, message: TooLongMessage } : { minutes, ok: true, message: "" };
   }
   return checkDuration(state.duration);
 }
@@ -579,7 +582,20 @@ export function selectCustomRange(state: SessionsState): SessionsState {
   return { ...state, preset: "custom" };
 }
 
-const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+const monthNames = [
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
+];
 
 function parseDateOnly(value: string): { year: number; month: number; day: number } {
   const [year, month, day] = value.split("-").map(Number);

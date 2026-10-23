@@ -49,8 +49,8 @@ public sealed class GameResolver(PlaydexDbContext db) : IGameResolver
     // Without an external id a game is found by title, ignoring case, spacing, ASCII punctuation and ©/®/™, so
     // "Half-Life 2" finds "HALF LIFE 2™". Other letters are kept: "Ведьмак 3" and "ペルソナ3" must not both become "3".
     // games_title_key_idx (migration 016) indexes the same expression.
-    private static readonly string GamesByTitleSql = $"SELECT * FROM games WHERE {TitleKey("title")} = {TitleKey("{0}")}";
-    private static readonly string LockTitleSql =
+    private static readonly string _gamesByTitleSql = $"SELECT * FROM games WHERE {TitleKey("title")} = {TitleKey("{0}")}";
+    private static readonly string _lockTitleSql =
         $"SELECT pg_advisory_xact_lock(hashtextextended('title:' || {TitleKey("{0}")}, 0))";
 
     public async Task<GameResolution> Resolve(GameResolutionRequest request, CancellationToken ct)
@@ -84,7 +84,7 @@ public sealed class GameResolver(PlaydexDbContext db) : IGameResolver
         {
             if (identityType is null)
             {
-                await db.Database.ExecuteSqlRawAsync(LockTitleSql, [title], ct);
+                await db.Database.ExecuteSqlRawAsync(_lockTitleSql, [title], ct);
             }
             else
             {
@@ -164,7 +164,7 @@ public sealed class GameResolver(PlaydexDbContext db) : IGameResolver
     {
         if (identityType is null)
         {
-            var byTitle = db.Games.FromSqlRaw(GamesByTitleSql, title);
+            var byTitle = db.Games.FromSqlRaw(_gamesByTitleSql, title);
             var game = await (tracked ? byTitle : byTitle.AsNoTracking())
                 .OrderByDescending(row => row.Title == title)
                 .ThenBy(row => row.Id)

@@ -119,19 +119,19 @@ export function RibbonHome() {
             // Total time from Playdex, as on the large tile; the source when Playdex has none for the game.
             const total = playdexGame(summary, r.game)?.totalSeconds ?? 0;
             return (
-              <button
-                key={r.game.id}
-                className="jtile"
-                data-nav
-                data-game={r.game.id}
-                data-kind="game"
-                onClick={() => launch(r.game.id)}
-              >
+              <button key={r.game.id} className="jtile" data-nav data-game={r.game.id} data-kind="game" onClick={() => launch(r.game.id)}>
                 <CardArt game={r.game} />
                 <span className="jtile-foot">
                   <span className="jtile-title">{r.game.title}</span>
                   <span className="jtile-sub num">
-                    {lastPlayedText(r)} · {total > 0 ? <><b>{fmtMinutes(minutes(total))}</b> played</> : SOURCE_LABEL[r.game.source]}
+                    {lastPlayedText(r)} ·{" "}
+                    {total > 0 ? (
+                      <>
+                        <b>{fmtMinutes(minutes(total))}</b> played
+                      </>
+                    ) : (
+                      SOURCE_LABEL[r.game.source]
+                    )}
                   </span>
                 </span>
               </button>

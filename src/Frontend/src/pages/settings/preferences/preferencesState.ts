@@ -47,19 +47,12 @@ export function isPreferencesBusy(state: PreferencesState): boolean {
 }
 
 export function canSendTestNotification(state: PreferencesState): boolean {
-  return (
-    !isPreferencesBusy(state) &&
-    state.savedTelegramChatId.length > 0 &&
-    state.telegramChatId.trim() === state.savedTelegramChatId
-  );
+  return !isPreferencesBusy(state) && state.savedTelegramChatId.length > 0 && state.telegramChatId.trim() === state.savedTelegramChatId;
 }
 
 /** True when either field differs from the last loaded or saved value (Discard has something to restore). */
 export function hasDiscardableChanges(state: PreferencesState): boolean {
-  return (
-    state.ignoreShortSessionsMinutes !== state.savedIgnoreShortSessionsMinutes ||
-    state.telegramChatId !== state.savedTelegramChatId
-  );
+  return state.ignoreShortSessionsMinutes !== state.savedIgnoreShortSessionsMinutes || state.telegramChatId !== state.savedTelegramChatId;
 }
 
 /** True when saving would change what the server stores: an edited field, or a clamped out-of-range minimum. */
@@ -202,10 +195,7 @@ export function beginTestNotification(state: PreferencesState): PreferencesState
   return { ...state, isTestNotificationSending: true, testNotificationMessage: "", testNotificationError: "" };
 }
 
-export function completeTestNotification(
-  state: PreferencesState,
-  response: TestNotificationResponse,
-): PreferencesState {
+export function completeTestNotification(state: PreferencesState, response: TestNotificationResponse): PreferencesState {
   return response.sent
     ? { ...state, testNotificationMessage: `Test message sent to chat ${state.savedTelegramChatId}.` }
     : { ...state, testNotificationError: "The test message was not sent." };

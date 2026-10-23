@@ -23,7 +23,9 @@ public sealed class OpenXblClient(
     {
         var apiKey = credential.ApiKey?.Trim();
         if (string.IsNullOrEmpty(apiKey))
+        {
             throw new ProviderPollException("Xbox credential is missing an OpenXBL API key.", authenticationFailure: true);
+        }
 
         var baseUrl = options.Value.BaseUrl.TrimEnd('/');
         var xuid = credential.AccountId?.Trim();
@@ -44,7 +46,9 @@ public sealed class OpenXblClient(
         }
 
         if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
+        {
             throw new ProviderPollException("OpenXBL rejected the API key.", authenticationFailure: true);
+        }
 
         if (!response.IsSuccessStatusCode)
         {
@@ -56,7 +60,7 @@ public sealed class OpenXblClient(
         OpenXblEnvelope? envelope;
         try
         {
-            envelope = JsonSerializer.Deserialize<OpenXblEnvelope>(rawJson, JsonOptions);
+            envelope = JsonSerializer.Deserialize<OpenXblEnvelope>(rawJson, _jsonOptions);
         }
         catch (JsonException ex)
         {
@@ -64,16 +68,25 @@ public sealed class OpenXblClient(
         }
 
         if (envelope is null || envelope.Content.ValueKind != JsonValueKind.Object)
+        {
             throw new ProviderPollException("OpenXBL presence response was empty or invalid.");
-        if (envelope.Code != 200)
-            throw new ProviderPollException($"OpenXBL presence response reported code {envelope.Code}.");
+        }
 
-        var presence = envelope.Content.Deserialize<OpenXblPresence>(JsonOptions);
+        if (envelope.Code != 200)
+        {
+            throw new ProviderPollException($"OpenXBL presence response reported code {envelope.Code}.");
+        }
+
+        var presence = envelope.Content.Deserialize<OpenXblPresence>(_jsonOptions);
         if (presence is null)
+        {
             throw new ProviderPollException("OpenXBL presence response did not contain presence data.");
+        }
 
         if (!string.Equals(presence.State, "Online", StringComparison.OrdinalIgnoreCase))
+        {
             return new ProviderPollResult(Game: null, RawPayload: rawJson);
+        }
 
         var title = (presence.Devices ?? [])
             .SelectMany(device => device.Titles ?? [])
@@ -88,7 +101,9 @@ public sealed class OpenXblClient(
             .FirstOrDefault();
 
         if (title is null)
+        {
             return new ProviderPollResult(Game: null, RawPayload: rawJson);
+        }
 
         return new ProviderPollResult(
             new CurrentlyPlayingResult(
@@ -106,7 +121,9 @@ public sealed class OpenXblClient(
     {
         var apiKey = credential.ApiKey?.Trim();
         if (string.IsNullOrEmpty(apiKey))
+        {
             throw new ProviderPollException("Xbox credential is missing an OpenXBL API key.", authenticationFailure: true);
+        }
 
         var url = $"{options.Value.BaseUrl.TrimEnd('/')}/v2/marketplace/title/{Uri.EscapeDataString(externalId)}";
         using var request = new HttpRequestMessage(HttpMethod.Get, url);
@@ -121,9 +138,15 @@ public sealed class OpenXblClient(
                 ResolveRetryAfter(response) ?? TimeSpan.FromMinutes(1));
         }
         if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
+        {
             throw new ProviderPollException("OpenXBL rejected the API key.", authenticationFailure: true);
+        }
+
         if (response.StatusCode == HttpStatusCode.NotFound)
+        {
             return null;
+        }
+
         if (!response.IsSuccessStatusCode)
         {
             throw new ProviderPollException(
@@ -134,7 +157,7 @@ public sealed class OpenXblClient(
         OpenXblEnvelope? envelope;
         try
         {
-            envelope = JsonSerializer.Deserialize<OpenXblEnvelope>(rawJson, JsonOptions);
+            envelope = JsonSerializer.Deserialize<OpenXblEnvelope>(rawJson, _jsonOptions);
         }
         catch (JsonException ex)
         {
@@ -142,11 +165,16 @@ public sealed class OpenXblClient(
         }
 
         if (envelope is null || envelope.Content.ValueKind != JsonValueKind.Object)
+        {
             throw new ProviderPollException("OpenXBL marketplace response was empty or invalid.");
-        if (envelope.Code != 200)
-            throw new ProviderPollException($"OpenXBL marketplace response reported code {envelope.Code}.");
+        }
 
-        var marketplace = envelope.Content.Deserialize<OpenXblMarketplaceContent>(JsonOptions);
+        if (envelope.Code != 200)
+        {
+            throw new ProviderPollException($"OpenXBL marketplace response reported code {envelope.Code}.");
+        }
+
+        var marketplace = envelope.Content.Deserialize<OpenXblMarketplaceContent>(_jsonOptions);
         var poster = marketplace?.Products?
             .SelectMany(product => product.LocalizedProperties ?? [])
             .SelectMany(property => property.Images ?? [])
@@ -159,8 +187,16 @@ public sealed class OpenXblClient(
     private static string? NormalizeImageUrl(string? value)
     {
         var trimmed = value?.Trim();
-        if (string.IsNullOrEmpty(trimmed)) return null;
-        if (trimmed.StartsWith("//", StringComparison.Ordinal)) return $"https:{trimmed}";
+        if (string.IsNullOrEmpty(trimmed))
+        {
+            return null;
+        }
+
+        if (trimmed.StartsWith("//", StringComparison.Ordinal))
+        {
+            return $"https:{trimmed}";
+        }
+
         return Uri.TryCreate(trimmed, UriKind.Absolute, out var uri) &&
                uri.Scheme is "http" or "https"
             ? uri.ToString()
@@ -170,7 +206,10 @@ public sealed class OpenXblClient(
     private static TimeSpan? ResolveRetryAfter(HttpResponseMessage response)
     {
         if (response.Headers.RetryAfter?.Delta is { } delta)
+        {
             return delta;
+        }
+
         if (response.Headers.RetryAfter?.Date is { } date)
         {
             var wait = date - DateTimeOffset.UtcNow;
@@ -179,7 +218,7 @@ public sealed class OpenXblClient(
         return null;
     }
 
-    private static readonly JsonSerializerOptions JsonOptions = new()
+    private static readonly JsonSerializerOptions _jsonOptions = new()
     {
         PropertyNameCaseInsensitive = true,
     };

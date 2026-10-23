@@ -12,17 +12,29 @@ public sealed class DraftExtractionService(DraftRepository repository, DraftServ
     ManualRepository manual, IPlaySessionExtractor extractor, IOptions<AiDraftOptions> options,
     NpgsqlDataSource dataSource, TimeProvider clock, GenerationHistoryRecorder history)
 {
-    private static readonly Meter Meter = new("Playdex.AiDrafts");
-    private static readonly Counter<long> Requests = Meter.CreateCounter<long>("playdex.ai_drafts.extractions");
+    private static readonly Meter _meter = new("Playdex.AiDrafts");
+    private static readonly Counter<long> _requests = _meter.CreateCounter<long>("playdex.ai_drafts.extractions");
 
     public async Task<DraftBatchDto> Create(long userId, Guid requestId, string timezone,
         string? text, byte[]? image, string? contentType, CancellationToken ct)
     {
-        if (requestId == Guid.Empty) throw AppProblemException.Validation("A request ID is required.");
+        if (requestId == Guid.Empty)
+        {
+            throw AppProblemException.Validation("A request ID is required.");
+        }
+
         var existing = await repository.FindRequest(userId, requestId, ct);
-        if (existing is not null) return DraftService.ToDto(existing);
+        if (existing is not null)
+        {
+            return DraftService.ToDto(existing);
+        }
+
         var opts = options.Value;
-        if (!opts.IsAvailable) throw new AppProblemException(503, "AI extraction is not configured.");
+        if (!opts.IsAvailable)
+        {
+            throw new AppProblemException(503, "AI extraction is not configured.");
+        }
+
         var day = ReferenceDate(timezone, clock.GetUtcNow());
         var platforms = await manual.ListPlatforms(ct);
         var input = new ExtractionInput(text, image, contentType, day, platforms.Where(p => p.Key != ManualService.PlaynitePlatformKey).Select(p => p.Key).ToArray());
@@ -36,12 +48,19 @@ public sealed class DraftExtractionService(DraftRepository repository, DraftServ
         await using var acquire = new NpgsqlCommand("select pg_try_advisory_lock(hashtextextended(@key,0))", connection);
         acquire.Parameters.AddWithValue("key", key);
         if (await acquire.ExecuteScalarAsync(ct) is not true)
+        {
             throw AppProblemException.Conflict("An extraction is already running. Retry this request when it finishes.");
+        }
+
         Guid? generationId = null;
         try
         {
             existing = await repository.FindRequest(userId, requestId, ct);
-            if (existing is not null) return DraftService.ToDto(existing);
+            if (existing is not null)
+            {
+                return DraftService.ToDto(existing);
+            }
+
             await CheckQuota(connection, userId, opts.RequestsPerHour, ct);
             ExtractionInputValidator.ValidateImage(input, opts);
             generationId = await history.Begin(userId, requestId, timezone, input);
@@ -53,14 +72,28 @@ public sealed class DraftExtractionService(DraftRepository repository, DraftServ
                 timeout.CancelAfter(TimeSpan.FromSeconds((long)opts.TimeoutSeconds * 2));
                 rows = await extractor.Extract(input, timeout.Token);
             }
-            if (rows.Count == 0) throw AppProblemException.Validation("No individual play sessions could be found. Add dates and durations or try a clearer screenshot.");
-            if (rows.Count > opts.MaxRows) throw new AppProblemException(502, "Too many sessions were extracted. Try a smaller input.");
+            if (rows.Count == 0)
+            {
+                throw AppProblemException.Validation("No individual play sessions could be found. Add dates and durations or try a clearer screenshot.");
+            }
+
+            if (rows.Count > opts.MaxRows)
+            {
+                throw new AppProblemException(502, "Too many sessions were extracted. Try a smaller input.");
+            }
             // Game search has its own budget. It used to share the extraction timeout, so slow IGDB searches turned a
             // successful (paid) extraction into a 504; now rows whose search runs out are saved without IGDB matches.
             var searches = await drafts.SearchCandidates(userId, rows.Select(row => row.Title),
                 TimeSpan.FromSeconds(Math.Max(1, opts.SearchTimeoutSeconds)), ct);
-            var batch = new SessionDraftBatch { Id=Guid.NewGuid(), UserId=userId, RequestId=requestId,
-                CreatedAt=clock.GetUtcNow(), Timezone=timezone, ReferenceDate=day };
+            var batch = new SessionDraftBatch
+            {
+                Id = Guid.NewGuid(),
+                UserId = userId,
+                RequestId = requestId,
+                CreatedAt = clock.GetUtcNow(),
+                Timezone = timezone,
+                ReferenceDate = day
+            };
             foreach (var row in rows)
             {
                 var candidates = searches.GetValueOrDefault(row.Title.Trim()) ?? [];
@@ -77,35 +110,45 @@ public sealed class DraftExtractionService(DraftRepository repository, DraftServ
                     platform = selected.Platform!;
                     warnings.RemoveAll(warning => warning.StartsWith("Platform:", StringComparison.OrdinalIgnoreCase));
                 }
-                batch.Rows.Add(new SessionDraftRow { Id=Guid.NewGuid(), BatchId=batch.Id, Position=batch.Rows.Count,
-                    Title=row.Title, Date=row.Date, DurationMinutes=row.DurationMinutes, PlatformKey=platform,
-                    Warnings=warnings.ToArray(), GameId=selected?.GameId, IgdbId=selected?.IgdbId,
-                    SelectionJson=selected is null ? null : JsonSerializer.Serialize(selected) });
+                batch.Rows.Add(new SessionDraftRow
+                {
+                    Id = Guid.NewGuid(),
+                    BatchId = batch.Id,
+                    Position = batch.Rows.Count,
+                    Title = row.Title,
+                    Date = row.Date,
+                    DurationMinutes = row.DurationMinutes,
+                    PlatformKey = platform,
+                    Warnings = warnings.ToArray(),
+                    GameId = selected?.GameId,
+                    IgdbId = selected?.IgdbId,
+                    SelectionJson = selected is null ? null : JsonSerializer.Serialize(selected)
+                });
             }
             var saved = await repository.CreateBatch(batch, ct);
             var result = DraftService.ToDto(saved);
             await history.Complete(generationId, "success", result: result);
-            Requests.Add(1, new KeyValuePair<string,object?>("outcome","success"));
+            _requests.Add(1, new KeyValuePair<string, object?>("outcome", "success"));
             return result;
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)
         {
             await history.Complete(generationId, "timeout", "AI extraction timed out.");
-            Requests.Add(1,new KeyValuePair<string,object?>("outcome","timeout"));
-            throw new AppProblemException(504,"AI extraction timed out. Retry with a smaller input.");
+            _requests.Add(1, new KeyValuePair<string, object?>("outcome", "timeout"));
+            throw new AppProblemException(504, "AI extraction timed out. Retry with a smaller input.");
         }
         catch (Exception exception)
         {
             await history.Complete(generationId, ct.IsCancellationRequested ? "cancelled"
-                : exception is AppProblemException {StatusCode:504} ? "timeout" : "failure",
+                : exception is AppProblemException { StatusCode: 504 } ? "timeout" : "failure",
                 exception is AppProblemException problem ? problem.Message : "AI generation did not complete.");
-            Requests.Add(1,new KeyValuePair<string,object?>("outcome","failure"));
+            _requests.Add(1, new KeyValuePair<string, object?>("outcome", "failure"));
             throw;
         }
         finally
         {
-            await using var release = new NpgsqlCommand("select pg_advisory_unlock(hashtextextended(@key,0))",connection);
-            release.Parameters.AddWithValue("key",key);
+            await using var release = new NpgsqlCommand("select pg_advisory_unlock(hashtextextended(@key,0))", connection);
+            release.Parameters.AddWithValue("key", key);
             await release.ExecuteScalarAsync(CancellationToken.None);
         }
     }
@@ -127,10 +170,12 @@ public sealed class DraftExtractionService(DraftRepository repository, DraftServ
                 attempt_count=case when draft_extraction_attempts.window_started_at <= now()-interval '1 hour' then 1 else draft_extraction_attempts.attempt_count+1 end
             where draft_extraction_attempts.window_started_at <= now()-interval '1 hour' or draft_extraction_attempts.attempt_count < @limit
             returning attempt_count
-            """,connection);
-        command.Parameters.AddWithValue("user",userId);
-        command.Parameters.AddWithValue("limit",limit);
+            """, connection);
+        command.Parameters.AddWithValue("user", userId);
+        command.Parameters.AddWithValue("limit", limit);
         if (await command.ExecuteScalarAsync(ct) is null)
-            throw new AppProblemException(429,"Hourly AI extraction limit reached. Try again later.");
+        {
+            throw new AppProblemException(429, "Hourly AI extraction limit reached. Try again later.");
+        }
     }
 }

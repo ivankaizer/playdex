@@ -9,7 +9,10 @@ public sealed class NotificationChannelsMigrationTests(PostgresFixture postgres)
     [Fact]
     public async Task SchemaUsesChannelsAndRemovesLegacyUserChatId()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         await using var command = postgres.DataSource!.CreateCommand(
             """

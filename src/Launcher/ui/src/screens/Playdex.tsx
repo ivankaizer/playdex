@@ -355,7 +355,9 @@ function RecapView({ year, summary }: { year: number; summary: PlaydexSummary | 
 
   if (!state || state.status === "loading") return <div className="pdx-message pdx-loading">Loading your {year} recap…</div>;
   if (state.status === "unavailable") {
-    return <Message title={`Your ${year} recap couldn't be loaded`} text="Check that this PC can reach Playdex, then open the tab again." />;
+    return (
+      <Message title={`Your ${year} recap couldn't be loaded`} text="Check that this PC can reach Playdex, then open the tab again." />
+    );
   }
   const recap = state.recap;
   if (recap.totalSessions === 0) return <Message title={`Nothing played in ${year}`} text="Sessions recorded to Playdex show up here." />;
@@ -366,7 +368,8 @@ function RecapStats({ year, recap, summary }: { year: number; recap: Recap; summ
   const most = Math.max(recap.topGamesByTime[0]?.totalSeconds ?? 0, 1);
   const weekdays = WEEKDAYS.map((_, i) => recap.sessionsByWeekday.find((d) => d.weekday === i)?.sessionCount ?? 0);
   const hours = Array.from({ length: 24 }, (_, h) => recap.sessionsByHour.find((d) => d.hour === h)?.sessionCount ?? 0);
-  const weekend = recap.weekendSeconds + recap.weekdaySeconds > 0 ? recap.weekendSeconds / (recap.weekendSeconds + recap.weekdaySeconds) : 0;
+  const weekend =
+    recap.weekendSeconds + recap.weekdaySeconds > 0 ? recap.weekendSeconds / (recap.weekendSeconds + recap.weekdaySeconds) : 0;
   const busiestDay = weekdays.indexOf(Math.max(...weekdays));
 
   return (
@@ -444,7 +447,6 @@ function RecapStats({ year, recap, summary }: { year: number; recap: Recap; summ
           <Platforms platforms={[...recap.platformTotals].sort((a, b) => b.totalSeconds - a.totalSeconds)} />
         )}
       </section>
-
     </div>
   );
 }

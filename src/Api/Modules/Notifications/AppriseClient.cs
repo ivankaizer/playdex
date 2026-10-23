@@ -8,7 +8,7 @@ namespace Api.Modules.Notifications;
 
 public sealed partial class AppriseClient
 {
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions _jsonOptions = new(JsonSerializerDefaults.Web);
     private readonly HttpClient _httpClient;
     private readonly AppriseOptions _options;
     private readonly ILogger<AppriseClient> _logger;
@@ -54,14 +54,14 @@ public sealed partial class AppriseClient
         {
             if (_logger.IsEnabled(LogLevel.Information))
             {
-                var payloadJson = JsonSerializer.Serialize(payload, JsonOptions);
+                var payloadJson = JsonSerializer.Serialize(payload, _jsonOptions);
                 LogMockNotify(_logger, normalizedChatId, payloadJson);
             }
             return;
         }
 
         using var firstResponse = await _httpClient.PostAsJsonAsync(
-            NotifyUrl(configurationKey), payload, JsonOptions, ct);
+            NotifyUrl(configurationKey), payload, _jsonOptions, ct);
         if (firstResponse.StatusCode != System.Net.HttpStatusCode.NoContent)
         {
             EnsureDelivered(firstResponse, configurationKey);
@@ -70,7 +70,7 @@ public sealed partial class AppriseClient
 
         await ConfigureTelegramAsync(normalizedChatId, ct);
         using var retryResponse = await _httpClient.PostAsJsonAsync(
-            NotifyUrl(configurationKey), payload, JsonOptions, ct);
+            NotifyUrl(configurationKey), payload, _jsonOptions, ct);
         EnsureDelivered(retryResponse, configurationKey);
     }
 
@@ -96,7 +96,7 @@ public sealed partial class AppriseClient
                     attachmentFileName = "notification.webp",
                     attachmentContentType = "image/webp",
                     attachmentLength = attachment.Length,
-                }, JsonOptions);
+                }, _jsonOptions);
                 LogMockNotify(_logger, normalizedChatId, payload);
             }
             return;
@@ -122,7 +122,10 @@ public sealed partial class AppriseClient
     {
         EnsureEnabled();
         var normalizedChatId = NormalizeTelegramChatId(telegramChatId);
-        if (_options.UseMock) return;
+        if (_options.UseMock)
+        {
+            return;
+        }
 
         var botToken = NormalizeTelegramBotToken(_options.TelegramBotToken);
         var configurationKey = TelegramConfigurationKey(normalizedChatId);
@@ -130,7 +133,7 @@ public sealed partial class AppriseClient
         using var response = await _httpClient.PostAsJsonAsync(
             $"add/{configurationKey}",
             new AppriseConfigurationPayload(serviceUrl),
-            JsonOptions,
+            _jsonOptions,
             ct);
         if (!response.IsSuccessStatusCode)
         {
@@ -163,7 +166,9 @@ public sealed partial class AppriseClient
     private void EnsureEnabled()
     {
         if (!IsEnabled)
+        {
             throw new InvalidOperationException("Apprise:BaseUrl is not configured.");
+        }
     }
 
     private static string NormalizeTelegramChatId(string telegramChatId)
@@ -173,7 +178,10 @@ public sealed partial class AppriseClient
                 NumberStyles.AllowLeadingSign,
                 CultureInfo.InvariantCulture,
                 out var parsed) || parsed == 0)
+        {
             throw new ArgumentException("Telegram chat ID must be a non-zero integer.", nameof(telegramChatId));
+        }
+
         return parsed.ToString(CultureInfo.InvariantCulture);
     }
 
@@ -185,8 +193,11 @@ public sealed partial class AppriseClient
             value[..separator].Any(character => !char.IsAsciiDigit(character)) ||
             value[(separator + 1)..].Any(character =>
                 !char.IsAsciiLetterOrDigit(character) && character is not '_' and not '-'))
+        {
             throw new InvalidOperationException(
                 "Apprise:TelegramBotToken is missing or invalid.");
+        }
+
         return value;
     }
 

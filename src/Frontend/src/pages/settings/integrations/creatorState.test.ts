@@ -32,9 +32,7 @@ describe("creatorState", () => {
   });
 
   it("does not open when every platform is full and rejects unavailable selections", () => {
-    const full = ["steam", "psn", "xbox"].flatMap((platform, p) =>
-      [1, 2, 3].map((n) => provider(p * 10 + n, platform)),
-    );
+    const full = ["steam", "psn", "xbox"].flatMap((platform, p) => [1, 2, 3].map((n) => provider(p * 10 + n, platform)));
     expect(openCreator(full).isIntegrationCreatorOpen).toBe(false);
     const steamFull = [1, 2, 3].map((n) => provider(n, "steam"));
     expect(c.selectCreationPlatform(openCreator(steamFull), steamFull, "steam")).toBeNull();

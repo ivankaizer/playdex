@@ -214,9 +214,7 @@ describe("dashboard refresh state", () => {
     const state = completeRefresh(initialDashboardState, { ...data, todaySessions: [open] }, now);
 
     expect(state.todaySessionCards[0].duration).toBe("10 min");
-    expect(getCurrentSession(state, now)?.elapsed).not.toBe(
-      getCurrentSession(state, new Date(now.getTime() + 5 * 60_000))?.elapsed,
-    );
+    expect(getCurrentSession(state, now)?.elapsed).not.toBe(getCurrentSession(state, new Date(now.getTime() + 5 * 60_000))?.elapsed);
   });
 
   it("paginates today session cards by three with a clamped page", () => {
@@ -367,7 +365,12 @@ describe("dashboard redesign views", () => {
 
   it("formats recent sessions with today and short dates", () => {
     const data = snapshot();
-    const older = { ...data.todaySessions[0], sessionId: 9, startedAt: new Date(2026, 5, 30, 10).toISOString(), endedAt: new Date(2026, 5, 30, 11, 55).toISOString() };
+    const older = {
+      ...data.todaySessions[0],
+      sessionId: 9,
+      startedAt: new Date(2026, 5, 30, 10).toISOString(),
+      endedAt: new Date(2026, 5, 30, 11, 55).toISOString(),
+    };
     const state = completeRefresh(initialDashboardState, { ...data, recentSessions: [older] }, now);
     expect(getRecentSessions(state, now)[0]).toMatchObject({ date: "Jun 30", duration: "1h 55m" });
     expect(formatShortDuration(600)).toBe("10m");
@@ -398,7 +401,11 @@ describe("dashboard redesign views", () => {
 
   it("renders an empty account without NaN and with empty-state notes", () => {
     const empty: AccountStatsPeriod = { totalSeconds: 0, sessionCount: 0, topGameTitle: null, platforms: [], topGames: [], months: [] };
-    const state = completeRefresh(initialDashboardState, { ...snapshot(), monthlyStats: empty, yearlyStats: empty, recentSessions: [] }, now);
+    const state = completeRefresh(
+      initialDashboardState,
+      { ...snapshot(), monthlyStats: empty, yearlyStats: empty, recentSessions: [] },
+      now,
+    );
     const month = getOverviewView(state, { days: {} }, "month", now);
     expect(month.kpis).toEqual([
       { label: "Hours played", value: "0h", sub: "0 of 31 days played" },

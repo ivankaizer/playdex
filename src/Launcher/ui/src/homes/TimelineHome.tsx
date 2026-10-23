@@ -112,7 +112,14 @@ function GameStage() {
           Installed
         </p>
         <div className="stage-actions" data-nav-group="stage-actions">
-          <button className="btn btn-primary btn-lg" data-nav data-nav-default data-kind="continue" data-game={game.id} onClick={() => launch(game.id)}>
+          <button
+            className="btn btn-primary btn-lg"
+            data-nav
+            data-nav-default
+            data-kind="continue"
+            data-game={game.id}
+            onClick={() => launch(game.id)}
+          >
             <Play fill="currentColor" /> Play
           </button>
           <button className="btn btn-outline btn-lg" data-nav data-kind="details" data-game={game.id} onClick={() => openGame(game.id)}>

@@ -13,7 +13,10 @@ public sealed class SessionQueriesIntegrationTests(PostgresFixture postgres)
     [Fact]
     public async Task RecapQueriesSkipSessionsShorterThanTheIgnoreSetting()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         await using var db = CreateDb();
         await using var transaction = await db.Database.BeginTransactionAsync();
@@ -44,7 +47,10 @@ public sealed class SessionQueriesIntegrationTests(PostgresFixture postgres)
     [Fact]
     public async Task RecapSkipsARunningSessionThatHasNotYetLastedTheIgnoreSetting()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         await using var db = CreateDb();
         await using var transaction = await db.Database.BeginTransactionAsync();
@@ -82,7 +88,10 @@ public sealed class SessionQueriesIntegrationTests(PostgresFixture postgres)
     [Fact]
     public async Task AccountSessionQueriesFilterSortAndPage()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         await using var db = CreateDb();
         await using var transaction = await db.Database.BeginTransactionAsync();
@@ -127,7 +136,10 @@ public sealed class SessionQueriesIntegrationTests(PostgresFixture postgres)
     [Fact]
     public async Task AnOversizedIgnoreSettingCapsAtADayInsteadOfOverflowing()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         await using var db = CreateDb();
         await using var transaction = await db.Database.BeginTransactionAsync();

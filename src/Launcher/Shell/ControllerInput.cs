@@ -233,15 +233,34 @@ internal sealed unsafe class ControllerInput
 
     private InputCode? DirectionOf(ushort buttons, short lx, short ly)
     {
-        if ((buttons & DpadUp) != 0) return InputCode.Up;
-        if ((buttons & DpadDown) != 0) return InputCode.Down;
-        if ((buttons & DpadLeft) != 0) return InputCode.Left;
-        if ((buttons & DpadRight) != 0) return InputCode.Right;
+        if ((buttons & DpadUp) != 0)
+        {
+            return InputCode.Up;
+        }
+
+        if ((buttons & DpadDown) != 0)
+        {
+            return InputCode.Down;
+        }
+
+        if ((buttons & DpadLeft) != 0)
+        {
+            return InputCode.Left;
+        }
+
+        if ((buttons & DpadRight) != 0)
+        {
+            return InputCode.Right;
+        }
 
         int ax = Math.Abs((int)lx), ay = Math.Abs((int)ly);
         var magnitude = Math.Max(ax, ay);
         _stickEngaged = magnitude > (_stickEngaged ? StickRelease : StickEngage);
-        if (!_stickEngaged) return null;
+        if (!_stickEngaged)
+        {
+            return null;
+        }
+
         return ax > ay ? (lx > 0 ? InputCode.Right : InputCode.Left) : (ly > 0 ? InputCode.Up : InputCode.Down);
     }
 

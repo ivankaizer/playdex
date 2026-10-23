@@ -13,7 +13,10 @@ public sealed class GamesServiceIntegrationTests(PostgresFixture postgres)
     [Fact]
     public async Task RatingOrIgnoringAnUnknownGameIsNotFound()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         await using var db = new PlaydexDbContext(new DbContextOptionsBuilder<PlaydexDbContext>()
             .UseNpgsql(postgres.DataSource!).Options);

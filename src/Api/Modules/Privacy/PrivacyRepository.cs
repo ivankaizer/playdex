@@ -135,7 +135,11 @@ public sealed class PrivacyRepository(PlaydexDbContext db)
             .Where(poll => db.Integrations.Any(integration => integration.Id == poll.IntegrationId && integration.UserId == userId))
             .ExecuteDeleteAsync(ct);
         var deleted = await db.Users.Where(user => user.Id == userId).ExecuteDeleteAsync(ct);
-        if (transaction is not null) await transaction.CommitAsync(ct);
+        if (transaction is not null)
+        {
+            await transaction.CommitAsync(ct);
+        }
+
         return deleted > 0;
     }
 }

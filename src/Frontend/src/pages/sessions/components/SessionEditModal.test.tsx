@@ -41,7 +41,13 @@ describe("SessionEditModal", () => {
   it("blocks saving a zero or malformed duration and explains why", () => {
     const onSave = vi.fn();
     const { container, rerender } = render(
-      <SessionEditModal gameTitle="Rez" startedAt="2026-08-04T18:30:15" duration="0m" durationCheck={checkDuration("0m")} onSave={onSave} />,
+      <SessionEditModal
+        gameTitle="Rez"
+        startedAt="2026-08-04T18:30:15"
+        duration="0m"
+        durationCheck={checkDuration("0m")}
+        onSave={onSave}
+      />,
     );
     const save = container.querySelector<HTMLButtonElement>("button[data-action=save]")!;
     const input = screen.getByLabelText(/Duration/);
@@ -52,7 +58,13 @@ describe("SessionEditModal", () => {
     expect(onSave).not.toHaveBeenCalled();
 
     rerender(
-      <SessionEditModal gameTitle="Rez" startedAt="2026-08-04T18:30:15" duration="75m" durationCheck={checkDuration("75m")} onSave={onSave} />,
+      <SessionEditModal
+        gameTitle="Rez"
+        startedAt="2026-08-04T18:30:15"
+        duration="75m"
+        durationCheck={checkDuration("75m")}
+        onSave={onSave}
+      />,
     );
     expect(screen.getByText("Minutes go up to 59. Write 1h 15m instead.")).toBeInTheDocument();
     expect(save).toBeDisabled();
@@ -61,7 +73,13 @@ describe("SessionEditModal", () => {
   it("refuses more than 24 hours", () => {
     const onSave = vi.fn();
     const { container } = render(
-      <SessionEditModal gameTitle="Rez" startedAt="2026-08-04T18:30:15" duration="26h 5m" durationCheck={checkDuration("26h 5m")} onSave={onSave} />,
+      <SessionEditModal
+        gameTitle="Rez"
+        startedAt="2026-08-04T18:30:15"
+        duration="26h 5m"
+        durationCheck={checkDuration("26h 5m")}
+        onSave={onSave}
+      />,
     );
     const save = container.querySelector<HTMLButtonElement>("button[data-action=save]")!;
     expect(screen.getByText("A session can be at most 24 hours.")).toHaveAttribute("data-duration-hint", "error");

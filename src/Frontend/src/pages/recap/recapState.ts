@@ -83,10 +83,7 @@ export function applyLocationQuery(state: RecapState, query: string): RecapStep<
   const from = values.get("from");
   const to = values.get("to");
   if (from && to) {
-    return [
-      { ...state, hasSearchRange: true, customFrom: from, customTo: to, activeTab: "custom" },
-      buildRangeRequest(from, to),
-    ];
+    return [{ ...state, hasSearchRange: true, customFrom: from, customTo: to, activeTab: "custom" }, buildRangeRequest(from, to)];
   }
   return [{ ...state, hasSearchRange: false, defaultLoaded: false }, null];
 }
@@ -112,9 +109,7 @@ export function setCustomTo(state: RecapState, to: string): RecapState {
 
 /** The page URL for the custom range (the API request adds the time zone). */
 export function buildCustomNavigation(state: RecapState): string | null {
-  return state.customFrom.length > 0 && state.customTo.length > 0
-    ? rangePath(state.customFrom, state.customTo)
-    : null;
+  return state.customFrom.length > 0 && state.customTo.length > 0 ? rangePath(state.customFrom, state.customTo) : null;
 }
 
 export function beginLoad(state: RecapState): RecapState {

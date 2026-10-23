@@ -19,7 +19,11 @@ public sealed class AdminEndpointsIntegrationTests(AdminApiFixture fixture)
     [Fact]
     public async Task DashboardIncludesAllSourcesGlobalCountsCombinedFiltersAndBoundedRecents()
     {
-        if (fixture.Factory is null) return;
+        if (fixture.Factory is null)
+        {
+            return;
+        }
+
         await using var scenario = await Scenario.CreateAsync(fixture);
         using var client = await fixture.LoginAsync(AdminApiFixture.AdminEmail);
         var now = DateTimeOffset.UtcNow;
@@ -53,17 +57,40 @@ public sealed class AdminEndpointsIntegrationTests(AdminApiFixture fixture)
             await scenario.AddSessionAsync(scenario.Game.Id, polling.Id, now.AddDays(-2).AddMinutes(-i), now.AddMinutes(-i));
             db.AiGenerations.Add(new AiGeneration
             {
-                Id = Guid.NewGuid(), RequestId = Guid.NewGuid(), UserId = scenario.User.Id,
-                CreatedAt = now.AddMinutes(-i - 1), Provider = "test", Model = "test", Timezone = "UTC",
+                Id = Guid.NewGuid(),
+                RequestId = Guid.NewGuid(),
+                UserId = scenario.User.Id,
+                CreatedAt = now.AddMinutes(-i - 1),
+                Provider = "test",
+                Model = "test",
+                Timezone = "UTC",
                 Status = i % 2 == 0 ? "failure" : "timeout",
             });
         }
 
         db.AiGenerations.AddRange(
-            new AiGeneration { Id = Guid.NewGuid(), RequestId = Guid.NewGuid(), UserId = scenario.User.Id,
-                CreatedAt = now.AddHours(-25), Provider = "test", Model = "test", Timezone = "UTC", Status = "cancelled" },
-            new AiGeneration { Id = Guid.NewGuid(), RequestId = Guid.NewGuid(), UserId = scenario.User.Id,
-                CreatedAt = now.AddMinutes(-1), Provider = "test", Model = "test", Timezone = "UTC", Status = "success" });
+            new AiGeneration
+            {
+                Id = Guid.NewGuid(),
+                RequestId = Guid.NewGuid(),
+                UserId = scenario.User.Id,
+                CreatedAt = now.AddHours(-25),
+                Provider = "test",
+                Model = "test",
+                Timezone = "UTC",
+                Status = "cancelled"
+            },
+            new AiGeneration
+            {
+                Id = Guid.NewGuid(),
+                RequestId = Guid.NewGuid(),
+                UserId = scenario.User.Id,
+                CreatedAt = now.AddMinutes(-1),
+                Provider = "test",
+                Model = "test",
+                Timezone = "UTC",
+                Status = "success"
+            });
         await db.SaveChangesAsync();
         try
         {
@@ -107,7 +134,11 @@ public sealed class AdminEndpointsIntegrationTests(AdminApiFixture fixture)
     [Fact]
     public async Task PlatformSummariesAndBulkStatusChangesValidateAndUpdateTimestamps()
     {
-        if (fixture.Factory is null) return;
+        if (fixture.Factory is null)
+        {
+            return;
+        }
+
         await using var scenario = await Scenario.CreateAsync(fixture);
         using var client = await fixture.LoginAsync(AdminApiFixture.AdminEmail);
         await scenario.AddIntegrationAsync(IntegrationType.Steam, scenario.Platform.Id, true, "one");
@@ -137,7 +168,11 @@ public sealed class AdminEndpointsIntegrationTests(AdminApiFixture fixture)
     [Fact]
     public async Task IntegrationListingAndPartialUpdatesPreserveUntouchedFields()
     {
-        if (fixture.Factory is null) return;
+        if (fixture.Factory is null)
+        {
+            return;
+        }
+
         await using var scenario = await Scenario.CreateAsync(fixture);
         using var client = await fixture.LoginAsync(AdminApiFixture.AdminEmail);
         var platformIntegration = await scenario.AddIntegrationAsync(IntegrationType.Steam, scenario.Platform.Id, true, "z-account", "old-secret");
@@ -151,7 +186,10 @@ public sealed class AdminEndpointsIntegrationTests(AdminApiFixture fixture)
 
         using (var response = await client.PatchAsJsonAsync($"/api/admin/integrations/{platformIntegration.Id}",
                    new { apiKeyChanged = false, apiKey = "must-not-be-used", accountIdChanged = true, accountId = "  updated-account  " }))
+        {
             Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        }
+
         await using var db = fixture.CreateDb();
         var updated = await db.Integrations.AsNoTracking().SingleAsync(row => row.Id == platformIntegration.Id);
         Assert.Equal("old-secret", updated.ApiKey);
@@ -160,14 +198,20 @@ public sealed class AdminEndpointsIntegrationTests(AdminApiFixture fixture)
 
         using (var response = await client.PatchAsJsonAsync($"/api/admin/integrations/{apiIntegration.Id}",
                    new { apiKeyChanged = true, apiKey = "  replacement-secret  ", accountIdChanged = false, accountId = "must-not-be-used" }))
+        {
             Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        }
+
         var api = await db.Integrations.AsNoTracking().SingleAsync(row => row.Id == apiIntegration.Id);
         Assert.Equal("replacement-secret", api.ApiKey);
         Assert.Equal("a-account", api.AccountId);
 
         using (var response = await client.PatchAsJsonAsync($"/api/admin/integrations/{apiIntegration.Id}",
                    new { apiKeyChanged = true, apiKey = "   ", accountIdChanged = false }))
+        {
             Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        }
+
         Assert.Null((await db.Integrations.AsNoTracking().SingleAsync(row => row.Id == apiIntegration.Id)).ApiKey);
 
         using var missing = await client.PatchAsJsonAsync($"/api/admin/integrations/{long.MaxValue}",
@@ -183,7 +227,11 @@ public sealed class AdminEndpointsIntegrationTests(AdminApiFixture fixture)
     [Fact]
     public async Task SessionSearchPagesAndTransfersUseTargetOwnershipSemantics()
     {
-        if (fixture.Factory is null) return;
+        if (fixture.Factory is null)
+        {
+            return;
+        }
+
         await using var scenario = await Scenario.CreateAsync(fixture);
         using var client = await fixture.LoginAsync(AdminApiFixture.AdminEmail);
         var source = await scenario.AddIntegrationAsync(IntegrationType.Steam, scenario.Platform.Id, true, $"account-{scenario.Suffix}");
@@ -251,7 +299,11 @@ public sealed class AdminEndpointsIntegrationTests(AdminApiFixture fixture)
     [Fact]
     public async Task TransferKeepsCaptureMethodConsistentAndRejectsManualSessions()
     {
-        if (fixture.Factory is null) return;
+        if (fixture.Factory is null)
+        {
+            return;
+        }
+
         await using var scenario = await Scenario.CreateAsync(fixture);
         using var client = await fixture.LoginAsync(AdminApiFixture.AdminEmail);
         var polling = await scenario.AddIntegrationAsync(IntegrationType.Steam, scenario.Platform.Id, true, "polling");
@@ -293,7 +345,11 @@ public sealed class AdminEndpointsIntegrationTests(AdminApiFixture fixture)
     [Fact]
     public async Task GameSearchSupportsTextRawAndEncodedIdsAndEnforcesLimit()
     {
-        if (fixture.Factory is null) return;
+        if (fixture.Factory is null)
+        {
+            return;
+        }
+
         await using var scenario = await Scenario.CreateAsync(fixture);
         using var client = await fixture.LoginAsync(AdminApiFixture.AdminEmail);
         scenario.Game.Title = $"Needle {scenario.Suffix}";
@@ -315,7 +371,11 @@ public sealed class AdminEndpointsIntegrationTests(AdminApiFixture fixture)
     [Fact]
     public async Task GameUpdatesTrimClearAndApplyExplicitOrAutomaticLocks()
     {
-        if (fixture.Factory is null) return;
+        if (fixture.Factory is null)
+        {
+            return;
+        }
+
         await using var scenario = await Scenario.CreateAsync(fixture);
         using var client = await fixture.LoginAsync(AdminApiFixture.AdminEmail);
         var path = $"/api/admin/games/{scenario.Game.Id}";
@@ -351,7 +411,11 @@ public sealed class AdminEndpointsIntegrationTests(AdminApiFixture fixture)
     [Fact]
     public async Task GameMergeReassignsRelationshipsDraftRowsDeduplicatesAndDeletesSource()
     {
-        if (fixture.Factory is null) return;
+        if (fixture.Factory is null)
+        {
+            return;
+        }
+
         await using var scenario = await Scenario.CreateAsync(fixture);
         using var client = await fixture.LoginAsync(AdminApiFixture.AdminEmail);
         var source = await scenario.AddGameAsync($"Source {scenario.Suffix}", true, "https://source/image.jpg");
@@ -381,7 +445,11 @@ public sealed class AdminEndpointsIntegrationTests(AdminApiFixture fixture)
             });
             db.SessionDraftBatches.Add(new SessionDraftBatch
             {
-                Id = batchId, UserId = scenario.User.Id, RequestId = Guid.NewGuid(), CreatedAt = now, Timezone = "UTC",
+                Id = batchId,
+                UserId = scenario.User.Id,
+                RequestId = Guid.NewGuid(),
+                CreatedAt = now,
+                Timezone = "UTC",
                 ReferenceDate = DateOnly.FromDateTime(now.UtcDateTime),
                 Rows =
                 [
@@ -403,7 +471,10 @@ public sealed class AdminEndpointsIntegrationTests(AdminApiFixture fixture)
         try
         {
             using (var merged = await client.PostAsJsonAsync("/api/admin/games/merge", new { sourceId = source.Id, targetId = scenario.Game.Id }))
+            {
                 Assert.Equal(HttpStatusCode.NoContent, merged.StatusCode);
+            }
+
             await using (var db = fixture.CreateDb())
             {
                 Assert.False(await db.Games.AnyAsync(row => row.Id == source.Id));
@@ -428,7 +499,10 @@ public sealed class AdminEndpointsIntegrationTests(AdminApiFixture fixture)
             }
 
             using (var same = await client.PostAsJsonAsync("/api/admin/games/merge", new { sourceId = scenario.Game.Id, targetId = scenario.Game.Id }))
+            {
                 Assert.Equal(HttpStatusCode.BadRequest, same.StatusCode);
+            }
+
             using var missing = await client.PostAsJsonAsync("/api/admin/games/merge", new { sourceId = long.MaxValue, targetId = scenario.Game.Id });
             Assert.Equal(HttpStatusCode.NotFound, missing.StatusCode);
             Assert.Equal("Source game not found.", await AdminApiFixture.ReadErrorAsync(missing));
@@ -443,7 +517,11 @@ public sealed class AdminEndpointsIntegrationTests(AdminApiFixture fixture)
     [Fact]
     public async Task GameMergeRollsBackEveryEarlierChangeWhenRelationshipReassignmentFails()
     {
-        if (fixture.Factory is null) return;
+        if (fixture.Factory is null)
+        {
+            return;
+        }
+
         await using var scenario = await Scenario.CreateAsync(fixture);
         var source = await scenario.AddGameAsync($"Rollback source {scenario.Suffix}", true);
         var integration = await scenario.AddIntegrationAsync(IntegrationType.Steam, scenario.Platform.Id, false, "rollback");
@@ -453,8 +531,13 @@ public sealed class AdminEndpointsIntegrationTests(AdminApiFixture fixture)
             var now = DateTimeOffset.UtcNow;
             db.GameExternalIdentities.Add(new GameExternalIdentity
             {
-                Id = scenario.NextEntityId(), GameId = source.Id, Type = GameExternalIdentityType.Psn,
-                ExternalId = $"rollback-{scenario.Suffix}", Title = source.Title, CreatedAt = now, UpdatedAt = now,
+                Id = scenario.NextEntityId(),
+                GameId = source.Id,
+                Type = GameExternalIdentityType.Psn,
+                ExternalId = $"rollback-{scenario.Suffix}",
+                Title = source.Title,
+                CreatedAt = now,
+                UpdatedAt = now,
             });
             await db.SaveChangesAsync();
         }
@@ -486,7 +569,11 @@ public sealed class AdminEndpointsIntegrationTests(AdminApiFixture fixture)
     [Fact]
     public async Task MutationsAreAuditedWithoutLeakingSecrets()
     {
-        if (fixture.Factory is null) return;
+        if (fixture.Factory is null)
+        {
+            return;
+        }
+
         await using var scenario = await Scenario.CreateAsync(fixture);
         using var client = await fixture.LoginAsync(AdminApiFixture.AdminEmail);
         var integration = await scenario.AddIntegrationAsync(IntegrationType.Steam, scenario.Platform.Id, true, "audit");
@@ -495,11 +582,18 @@ public sealed class AdminEndpointsIntegrationTests(AdminApiFixture fixture)
         var source = await scenario.AddGameAsync($"Audit source {scenario.Suffix}");
         const string secret = "super-secret-api-key-for-audit";
 
-        using (var r = await client.PutAsJsonAsync($"/api/admin/platforms/{scenario.Platform.Key}", new { enabled = false })) r.EnsureSuccessStatusCode();
+        using (var r = await client.PutAsJsonAsync($"/api/admin/platforms/{scenario.Platform.Key}", new { enabled = false }))
+        {
+            r.EnsureSuccessStatusCode();
+        }
+
         await Patch(client, $"/api/admin/integrations/{integration.Id}", new { apiKeyChanged = true, apiKey = secret, accountIdChanged = false });
         await Transfer(client, [session.Id], target.Id, expected: 1);
         await Patch(client, $"/api/admin/games/{scenario.Game.Id}", new { title = "Audited target", titleChanged = true });
-        using (var r = await client.PostAsJsonAsync("/api/admin/games/merge", new { sourceId = source.Id, targetId = scenario.Game.Id })) r.EnsureSuccessStatusCode();
+        using (var r = await client.PostAsJsonAsync("/api/admin/games/merge", new { sourceId = source.Id, targetId = scenario.Game.Id }))
+        {
+            r.EnsureSuccessStatusCode();
+        }
 
         var entries = fixture.Logs.Entries.Where(row => row.StartsWith("Admin mutation", StringComparison.Ordinal)).ToList();
         Assert.Contains(entries, row => row.Contains("set-platform-enabled", StringComparison.Ordinal) && row.Contains(scenario.Platform.Key, StringComparison.Ordinal));
@@ -514,16 +608,29 @@ public sealed class AdminEndpointsIntegrationTests(AdminApiFixture fixture)
     [Fact]
     public async Task GenerationHistoryPaginatesFiltersShowsDetailsServesImagesAndDeletes()
     {
-        if (fixture.Factory is null) return;
+        if (fixture.Factory is null)
+        {
+            return;
+        }
+
         using var client = await fixture.LoginAsync(AdminApiFixture.AdminEmail);
         var marker = Guid.NewGuid().ToString();
         var now = DateTimeOffset.UtcNow;
         var records = Enumerable.Range(0, 27).Select(i => new AiGeneration
         {
-            Id = Guid.NewGuid(), UserId = fixture.AdminId, RequestId = Guid.NewGuid(), CreatedAt = now.AddSeconds(i),
-            Provider = "test", Model = "test-model", Timezone = "Europe/Warsaw", ReferenceDate = new DateOnly(2026, 9, 16),
-            InputText = marker + new string('x', 200), Image = [1, 2, 3], ImageContentType = "image/png",
-            Status = i == 0 ? "failure" : "success", Error = i == 0 ? "Provider failed." : null,
+            Id = Guid.NewGuid(),
+            UserId = fixture.AdminId,
+            RequestId = Guid.NewGuid(),
+            CreatedAt = now.AddSeconds(i),
+            Provider = "test",
+            Model = "test-model",
+            Timezone = "Europe/Warsaw",
+            ReferenceDate = new DateOnly(2026, 9, 16),
+            InputText = marker + new string('x', 200),
+            Image = [1, 2, 3],
+            ImageContentType = "image/png",
+            Status = i == 0 ? "failure" : "success",
+            Error = i == 0 ? "Provider failed." : null,
             ResponsesJson = i == 0
                 ? """[{"HttpStatus":500,"Body":"{\"error\":\"boom\"}","Truncated":true},{"Body":"malformed"}]"""
                 : "[]",
@@ -573,7 +680,10 @@ public sealed class AdminEndpointsIntegrationTests(AdminApiFixture fixture)
             }
 
             using (var deleted = await client.DeleteAsync($"/api/admin/ai-generations/{records[0].Id}"))
+            {
                 Assert.Equal(HttpStatusCode.NoContent, deleted.StatusCode);
+            }
+
             using (var gone = await client.GetAsync($"/api/admin/ai-generations/{records[0].Id}"))
             {
                 Assert.Equal(HttpStatusCode.NotFound, gone.StatusCode);
@@ -633,31 +743,34 @@ public sealed class AdminEndpointsIntegrationTests(AdminApiFixture fixture)
         {
             if (command.CommandText.Contains("update play_sessions", StringComparison.OrdinalIgnoreCase) &&
                 command.CommandText.Contains("set game_id", StringComparison.OrdinalIgnoreCase))
+            {
                 throw new InvalidOperationException("Injected relationship reassignment failure.");
+            }
+
             return ValueTask.FromResult(result);
         }
     }
 
     private sealed class Scenario : IAsyncDisposable
     {
-        private readonly AdminApiFixture fixture;
-        private readonly List<long> userIds = [];
-        private readonly List<long> platformIds = [];
-        private readonly List<long> gameIds = [];
-        private long nextEntityId;
-        private long nextSessionId = Random.Shared.NextInt64(8_000_000_000_000_000_000, 8_500_000_000_000_000_000);
+        private readonly AdminApiFixture _fixture;
+        private readonly List<long> _userIds = [];
+        private readonly List<long> _platformIds = [];
+        private readonly List<long> _gameIds = [];
+        private long _nextEntityId;
+        private long _nextSessionId = Random.Shared.NextInt64(8_000_000_000_000_000_000, 8_500_000_000_000_000_000);
 
         private Scenario(AdminApiFixture fixture, string suffix, User user, Platform platform, Game game, long nextEntityId)
         {
-            this.fixture = fixture;
+            this._fixture = fixture;
             Suffix = suffix;
             User = user;
             Platform = platform;
             Game = game;
-            this.nextEntityId = nextEntityId;
-            userIds.Add(user.Id);
-            platformIds.Add(platform.Id);
-            gameIds.Add(game.Id);
+            this._nextEntityId = nextEntityId;
+            _userIds.Add(user.Id);
+            _platformIds.Add(platform.Id);
+            _gameIds.Add(game.Id);
         }
 
         public static readonly DateTimeOffset OldTimestamp = new(2000, 1, 1, 0, 0, 0, TimeSpan.Zero);
@@ -681,32 +794,39 @@ public sealed class AdminEndpointsIntegrationTests(AdminApiFixture fixture)
 
         public async Task<User> AddUserAsync(string email)
         {
-            await using var db = fixture.CreateDb();
+            await using var db = _fixture.CreateDb();
             var user = new User { Id = NextEntityId(), Email = email, CreatedAt = OldTimestamp, UpdatedAt = OldTimestamp };
             db.Users.Add(user);
             await db.SaveChangesAsync();
-            userIds.Add(user.Id);
+            _userIds.Add(user.Id);
             return user;
         }
 
         public async Task<Platform> AddPlatformAsync(string key)
         {
-            await using var db = fixture.CreateDb();
+            await using var db = _fixture.CreateDb();
             var platform = new Platform { Id = NextEntityId(), Key = key, Name = key, CreatedAt = OldTimestamp, UpdatedAt = OldTimestamp };
             db.Platforms.Add(platform);
             await db.SaveChangesAsync();
-            platformIds.Add(platform.Id);
+            _platformIds.Add(platform.Id);
             return platform;
         }
 
         public async Task<Integration> AddIntegrationAsync(IntegrationType type, long? platformId, bool active,
             string? accountId, string? apiKey = null, long? userId = null)
         {
-            await using var db = fixture.CreateDb();
+            await using var db = _fixture.CreateDb();
             var integration = new Integration
             {
-                Id = NextEntityId(), UserId = userId ?? User.Id, Type = type, PlatformId = platformId, Active = active,
-                AccountId = accountId, ApiKey = apiKey, CreatedAt = OldTimestamp, UpdatedAt = OldTimestamp,
+                Id = NextEntityId(),
+                UserId = userId ?? User.Id,
+                Type = type,
+                PlatformId = platformId,
+                Active = active,
+                AccountId = accountId,
+                ApiKey = apiKey,
+                CreatedAt = OldTimestamp,
+                UpdatedAt = OldTimestamp,
             };
             db.Integrations.Add(integration);
             await db.SaveChangesAsync();
@@ -715,30 +835,32 @@ public sealed class AdminEndpointsIntegrationTests(AdminApiFixture fixture)
 
         public async Task<Game> AddGameAsync(string title, bool titleLocked = false, string? capsuleUrl = null)
         {
-            await using var db = fixture.CreateDb();
+            await using var db = _fixture.CreateDb();
             var game = new Game { Id = NextEntityId(), Title = title, TitleLocked = titleLocked, CapsuleUrl = capsuleUrl, CreatedAt = OldTimestamp, UpdatedAt = OldTimestamp };
             db.Games.Add(game);
             await db.SaveChangesAsync();
-            gameIds.Add(game.Id);
+            _gameIds.Add(game.Id);
             return game;
         }
 
         public async Task AddGamesAsync(int count, string titlePrefix)
         {
-            await using var db = fixture.CreateDb();
+            await using var db = _fixture.CreateDb();
             var games = Enumerable.Range(0, count).Select(index => new Game
             {
-                Id = NextEntityId(), Title = $"{titlePrefix} {index:D2}",
-                CreatedAt = OldTimestamp.AddMinutes(index), UpdatedAt = DateTimeOffset.UtcNow.AddSeconds(-index - 1),
+                Id = NextEntityId(),
+                Title = $"{titlePrefix} {index:D2}",
+                CreatedAt = OldTimestamp.AddMinutes(index),
+                UpdatedAt = DateTimeOffset.UtcNow.AddSeconds(-index - 1),
             }).ToList();
             db.Games.AddRange(games);
             await db.SaveChangesAsync();
-            gameIds.AddRange(games.Select(row => row.Id));
+            _gameIds.AddRange(games.Select(row => row.Id));
         }
 
         public async Task UpdateGameAsync()
         {
-            await using var db = fixture.CreateDb();
+            await using var db = _fixture.CreateDb();
             var updated = await db.Games.Where(row => row.Id == Game.Id).ExecuteUpdateAsync(setters => setters
                 .SetProperty(row => row.Title, Game.Title)
                 .SetProperty(row => row.CapsuleUrl, Game.CapsuleUrl)
@@ -749,18 +871,20 @@ public sealed class AdminEndpointsIntegrationTests(AdminApiFixture fixture)
         public async Task AddSessionsAsync(int count, DateTimeOffset started, long integrationId)
         {
             for (var index = 0; index < count; index++)
+            {
                 await AddSessionAsync(Game.Id, integrationId, started.AddMinutes(index),
                     index == count - 1 ? null : started.AddMinutes(index + 1));
+            }
         }
 
         public async Task<PlaySession> AddSessionAsync(long gameId, long integrationId, DateTimeOffset? started = null,
             DateTimeOffset? ended = null)
         {
-            await using var db = fixture.CreateDb();
+            await using var db = _fixture.CreateDb();
             var integration = await db.Integrations.AsNoTracking().SingleAsync(row => row.Id == integrationId);
             var session = new PlaySession
             {
-                Id = nextSessionId++,
+                Id = _nextSessionId++,
                 GameId = gameId,
                 UserId = integration.UserId,
                 PlatformId = integration.PlatformId ?? Platform.Id,
@@ -778,19 +902,19 @@ public sealed class AdminEndpointsIntegrationTests(AdminApiFixture fixture)
 
         public async ValueTask DisposeAsync()
         {
-            await using var db = fixture.CreateDb();
-            await db.GameConnections.Where(row => userIds.Contains(row.UserId)).ExecuteDeleteAsync();
-            await db.IgnoredGames.Where(row => userIds.Contains(row.UserId)).ExecuteDeleteAsync();
-            await db.GameRatings.Where(row => userIds.Contains(row.UserId)).ExecuteDeleteAsync();
-            await db.PlaySessions.Where(row => userIds.Contains(row.UserId) || gameIds.Contains(row.GameId)).ExecuteDeleteAsync();
-            await db.PollResults.Where(row => db.Integrations.Any(i => i.Id == row.IntegrationId && userIds.Contains(i.UserId))).ExecuteDeleteAsync();
-            await db.GameExternalIdentities.Where(row => gameIds.Contains(row.GameId)).ExecuteDeleteAsync();
-            await db.Integrations.Where(row => userIds.Contains(row.UserId)).ExecuteDeleteAsync();
-            await db.Games.Where(row => gameIds.Contains(row.Id)).ExecuteDeleteAsync();
-            await db.Platforms.Where(row => platformIds.Contains(row.Id)).ExecuteDeleteAsync();
-            await db.Users.Where(row => userIds.Contains(row.Id)).ExecuteDeleteAsync();
+            await using var db = _fixture.CreateDb();
+            await db.GameConnections.Where(row => _userIds.Contains(row.UserId)).ExecuteDeleteAsync();
+            await db.IgnoredGames.Where(row => _userIds.Contains(row.UserId)).ExecuteDeleteAsync();
+            await db.GameRatings.Where(row => _userIds.Contains(row.UserId)).ExecuteDeleteAsync();
+            await db.PlaySessions.Where(row => _userIds.Contains(row.UserId) || _gameIds.Contains(row.GameId)).ExecuteDeleteAsync();
+            await db.PollResults.Where(row => db.Integrations.Any(i => i.Id == row.IntegrationId && _userIds.Contains(i.UserId))).ExecuteDeleteAsync();
+            await db.GameExternalIdentities.Where(row => _gameIds.Contains(row.GameId)).ExecuteDeleteAsync();
+            await db.Integrations.Where(row => _userIds.Contains(row.UserId)).ExecuteDeleteAsync();
+            await db.Games.Where(row => _gameIds.Contains(row.Id)).ExecuteDeleteAsync();
+            await db.Platforms.Where(row => _platformIds.Contains(row.Id)).ExecuteDeleteAsync();
+            await db.Users.Where(row => _userIds.Contains(row.Id)).ExecuteDeleteAsync();
         }
 
-        public long NextEntityId() => nextEntityId++;
+        public long NextEntityId() => _nextEntityId++;
     }
 }

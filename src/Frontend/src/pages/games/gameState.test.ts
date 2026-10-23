@@ -79,10 +79,7 @@ describe("gameState", () => {
 
   it("keeps the recent page total and page independent of charts", () => {
     let state = beginGame("3H4h3", new Date(2026, 6, 18));
-    state = completeFirstSessions(
-      state,
-      page([session(1, "2026-07-18T08:00:00Z", "2026-07-18T10:00:00Z", "recent.jpg")], 11, 0),
-    );
+    state = completeFirstSessions(state, page([session(1, "2026-07-18T08:00:00Z", "2026-07-18T10:00:00Z", "recent.jpg")], 11, 0));
 
     expect(recentTotalPages(state)).toBe(3);
     expect(state.recentSessions).toHaveLength(1);

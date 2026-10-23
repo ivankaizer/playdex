@@ -326,8 +326,7 @@ export function DraftWorkspace({
 
   const createBatch = async (buildContent: () => FormData): Promise<DraftBatchDto> => {
     const lifetimeSignal = signal();
-    const send = () =>
-      apiRequest<DraftBatchDto>("/manual/draft-batches", { method: "POST", body: buildContent, signal: lifetimeSignal });
+    const send = () => apiRequest<DraftBatchDto>("/manual/draft-batches", { method: "POST", body: buildContent, signal: lifetimeSignal });
     try {
       return await send();
     } catch (exception) {
@@ -610,7 +609,8 @@ export function DraftWorkspace({
                 <p className="pdx-kicker">Natural input</p>
                 <h2 className="pdx-title">Create AI batch</h2>
                 <p className="mt-1.5 max-w-[44em] text-sm leading-normal text-muted">
-                  Describe one or several play sessions, add a screenshot, or use both. You will review every suggestion before it reaches your history.
+                  Describe one or several play sessions, add a screenshot, or use both. You will review every suggestion before it reaches
+                  your history.
                 </p>
               </div>
 
@@ -649,7 +649,10 @@ export function DraftWorkspace({
                         className="h-12 w-12 shrink-0 rounded-[14px] object-cover"
                       />
                     ) : (
-                      <span aria-hidden="true" className="grid h-12 w-12 shrink-0 place-items-center rounded-[14px] bg-mint text-xl text-accent">
+                      <span
+                        aria-hidden="true"
+                        className="grid h-12 w-12 shrink-0 place-items-center rounded-[14px] bg-mint text-xl text-accent"
+                      >
                         ▣
                       </span>
                     )}
@@ -749,7 +752,9 @@ export function DraftWorkspace({
                   {showAllBatches ? "Show fewer" : `Show all ${formatCount(state.batches.length)}`}
                 </button>
               )}
-              {state.batches.length === 0 && <p className="pdx-dashed rounded-[20px] px-[18px] py-4 text-[13px]">Nothing waiting for review.</p>}
+              {state.batches.length === 0 && (
+                <p className="pdx-dashed rounded-[20px] px-[18px] py-4 text-[13px]">Nothing waiting for review.</p>
+              )}
             </aside>
           </div>
         ) : (
@@ -774,7 +779,9 @@ export function DraftWorkspace({
                       {formatCount(unmatchedCount)} {unmatchedCount === 1 ? "needs" : "need"} a game
                     </StatusChip>
                   )}
-                  {acceptedCount > 0 && <StatusChip className="bg-tile text-ink-2">{formatCountNoun(acceptedCount, "session")} added</StatusChip>}
+                  {acceptedCount > 0 && (
+                    <StatusChip className="bg-tile text-ink-2">{formatCountNoun(acceptedCount, "session")} added</StatusChip>
+                  )}
                 </div>
               </div>
               <div className="flex flex-wrap gap-2.5">
@@ -1095,7 +1102,10 @@ function DraftRowArticle({
         </div>
       </fieldset>
       {row.error.length > 0 && (
-        <div role="alert" className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-[18px] bg-surface px-4 py-3 text-sm text-danger">
+        <div
+          role="alert"
+          className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-[18px] bg-surface px-4 py-3 text-sm text-danger"
+        >
           <p className="min-w-0 flex-1">{row.error}</p>
           {!row.isAccepted && isDirty(row) && (
             <button type="button" disabled={busy} onClick={onRetrySave} className="pdx-btn-danger h-9 px-4 text-[13px]">

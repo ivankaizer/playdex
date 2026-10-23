@@ -16,12 +16,15 @@ namespace Api.Tests;
 [Collection(PostgresCollectionDefinition.Name)]
 public sealed class SessionLifecycleTests(PostgresFixture postgres)
 {
-    private static readonly TimeSpan PollingInterval = TimeSpan.FromMinutes(1);
+    private static readonly TimeSpan _pollingInterval = TimeSpan.FromMinutes(1);
 
     [Fact]
     public async Task PollAfterAGapEndsTheSessionOneIntervalAfterItWasLastSeen()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         await using var world = await World.Create(CreateDb());
         var lastSeen = Now().AddHours(-6);
@@ -33,13 +36,13 @@ public sealed class SessionLifecycleTests(PostgresFixture postgres)
         await world.Poll(lifecycle, world.GameA, polledAt);
         await lifecycle.PublishPending(default);
 
-        Assert.Equal(lastSeen + PollingInterval, (await world.Session(stale.Id)).EndedAt);
+        Assert.Equal(lastSeen + _pollingInterval, (await world.Session(stale.Id)).EndedAt);
         var current = Assert.Single(await world.OpenSessions(world.Steam));
         Assert.Equal(polledAt, current.StartedAt);
         Assert.Collection(
             recorder.Events,
             ended => Assert.Equal(
-                new SessionEnded(stale.Id, world.Steam.Id, world.GameA.Id, stale.StartedAt, lastSeen + PollingInterval),
+                new SessionEnded(stale.Id, world.Steam.Id, world.GameA.Id, stale.StartedAt, lastSeen + _pollingInterval),
                 ended),
             started => Assert.Equal(
                 new SessionStarted(current.Id, world.Steam.Id, world.GameA.Id, polledAt),
@@ -49,7 +52,10 @@ public sealed class SessionLifecycleTests(PostgresFixture postgres)
     [Fact]
     public async Task PollOfTheSameGameWithinTheGapContinuesTheSession()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         await using var world = await World.Create(CreateDb());
         var lastSeen = Now().AddMinutes(-2);
@@ -70,7 +76,10 @@ public sealed class SessionLifecycleTests(PostgresFixture postgres)
     [Fact]
     public async Task SwitchingToAnIgnoredGameEndsAndNotifiesThePreviousSession()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         await using var world = await World.Create(CreateDb());
         await world.AddTelegramChannel();
@@ -97,7 +106,10 @@ public sealed class SessionLifecycleTests(PostgresFixture postgres)
     [Fact]
     public async Task PausingAnIntegrationEndsItsSessionAtTheLastSighting()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         await using var world = await World.Create(CreateDb());
         var lastSeen = Now().AddMinutes(-30);
@@ -108,14 +120,17 @@ public sealed class SessionLifecycleTests(PostgresFixture postgres)
             .UpdateProviderStatus(world.User.Id, world.Steam.Id, "paused", default);
 
         Assert.Equal("paused", status!.Status);
-        Assert.Equal(lastSeen + PollingInterval, (await world.Session(open.Id)).EndedAt);
+        Assert.Equal(lastSeen + _pollingInterval, (await world.Session(open.Id)).EndedAt);
         Assert.Equal(open.Id, Assert.Single(recorder.Ended).SessionId);
     }
 
     [Fact]
     public async Task SweepEndsStaleSessionsOnceAndAnnouncesIntegrationSessions()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         await using var world = await World.Create(CreateDb());
         var now = Now();
@@ -129,7 +144,7 @@ public sealed class SessionLifecycleTests(PostgresFixture postgres)
         await lifecycle.SweepStaleSessions(default);
         await lifecycle.SweepStaleSessions(default);
 
-        Assert.Equal(now.AddHours(-2) + PollingInterval, (await world.Session(polling.Id)).EndedAt);
+        Assert.Equal(now.AddHours(-2) + _pollingInterval, (await world.Session(polling.Id)).EndedAt);
         Assert.Equal(now.AddMinutes(-10) + SessionLifecycle.CaptureTimeout, (await world.Session(timedOut.Id)).EndedAt);
         Assert.Null((await world.Session(pinged.Id)).EndedAt);
         Assert.Equal(now.AddHours(-13) + SessionLifecycle.ManualTimerLimit, (await world.Session(manual.Id)).EndedAt);
@@ -142,7 +157,10 @@ public sealed class SessionLifecycleTests(PostgresFixture postgres)
     [Fact]
     public async Task CaptureKeepsOneSessionPerRunningGame()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         await using var world = await World.Create(CreateDb());
         var recorder = new SessionEventRecorder();
@@ -169,7 +187,10 @@ public sealed class SessionLifecycleTests(PostgresFixture postgres)
     [Fact]
     public async Task CaptureRestartsAGameStartedAgainOrPingedOnAnotherPlatform()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         await using var world = await World.Create(CreateDb());
         var recorder = new SessionEventRecorder();
@@ -190,7 +211,10 @@ public sealed class SessionLifecycleTests(PostgresFixture postgres)
     [Fact]
     public async Task CapturePingEndsTimedOutSessionsAtTheirLastPingPlusTheTimeout()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         await using var world = await World.Create(CreateDb());
         var lastPing = Now().AddMinutes(-10);
@@ -208,7 +232,10 @@ public sealed class SessionLifecycleTests(PostgresFixture postgres)
     [Fact]
     public async Task RecordedCaptureSessionIsAnnouncedAsEnded()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         await using var world = await World.Create(CreateDb());
         var recorder = new SessionEventRecorder();
@@ -227,7 +254,10 @@ public sealed class SessionLifecycleTests(PostgresFixture postgres)
     [Fact]
     public async Task ConcurrentPingsForOneGameOpenOneSession()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         await using var world = await World.Create(CreateDb());
         var recorder = new SessionEventRecorder();
@@ -282,13 +312,24 @@ public sealed class SessionLifecycleTests(PostgresFixture postgres)
             await db.SaveChangesAsync();
             var steam = new Integration
             {
-                UserId = user.Id, Type = IntegrationType.Steam, PlatformId = steamPlatform.Id, ApiKey = "steam-key",
-                AccountId = "steam-account", Active = true, CreatedAt = now, UpdatedAt = now,
+                UserId = user.Id,
+                Type = IntegrationType.Steam,
+                PlatformId = steamPlatform.Id,
+                ApiKey = "steam-key",
+                AccountId = "steam-account",
+                Active = true,
+                CreatedAt = now,
+                UpdatedAt = now,
             };
             var api = new Integration
             {
-                UserId = user.Id, Type = IntegrationType.Api, ApiKey = $"lifecycle-{suffix}", AccountId = "api",
-                Active = true, CreatedAt = now, UpdatedAt = now,
+                UserId = user.Id,
+                Type = IntegrationType.Api,
+                ApiKey = $"lifecycle-{suffix}",
+                AccountId = "api",
+                Active = true,
+                CreatedAt = now,
+                UpdatedAt = now,
             };
             db.AddRange(steam, api);
             await db.SaveChangesAsync();
@@ -338,8 +379,11 @@ public sealed class SessionLifecycleTests(PostgresFixture postgres)
         {
             db.NotificationChannels.Add(new NotificationChannel
             {
-                UserId = user.Id, Transport = NotificationChannel.Telegram, Destination = "4242",
-                CreatedAt = DateTimeOffset.UtcNow, UpdatedAt = DateTimeOffset.UtcNow,
+                UserId = user.Id,
+                Transport = NotificationChannel.Telegram,
+                Destination = "4242",
+                CreatedAt = DateTimeOffset.UtcNow,
+                UpdatedAt = DateTimeOffset.UtcNow,
             });
             await db.SaveChangesAsync();
         }
@@ -348,7 +392,10 @@ public sealed class SessionLifecycleTests(PostgresFixture postgres)
         {
             db.IgnoredGames.Add(new IgnoredGame
             {
-                UserId = user.Id, GameId = game.Id, CreatedAt = DateTimeOffset.UtcNow, UpdatedAt = DateTimeOffset.UtcNow,
+                UserId = user.Id,
+                GameId = game.Id,
+                CreatedAt = DateTimeOffset.UtcNow,
+                UpdatedAt = DateTimeOffset.UtcNow,
             });
             await db.SaveChangesAsync();
         }

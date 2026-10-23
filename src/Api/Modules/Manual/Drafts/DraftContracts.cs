@@ -34,9 +34,21 @@ public static class DraftRules
     {
         start = end = default;
         if (!DateOnly.TryParseExact(date, "yyyy-MM-dd", CultureInfo.InvariantCulture,
-                DateTimeStyles.None, out var day) || minutes is null or <= 0) return InvalidTimesWarning;
-        if (minutes > SessionLimits.MaxDurationMinutes) return TooLongWarning;
-        if (day > SessionLimits.LatestDate(now, zone)) return FutureDateWarning;
+                DateTimeStyles.None, out var day) || minutes is null or <= 0)
+        {
+            return InvalidTimesWarning;
+        }
+
+        if (minutes > SessionLimits.MaxDurationMinutes)
+        {
+            return TooLongWarning;
+        }
+
+        if (day > SessionLimits.LatestDate(now, zone))
+        {
+            return FutureDateWarning;
+        }
+
         try
         {
             start = LocalCalendar.StartOf(day, zone ?? TimeZoneInfo.Utc);

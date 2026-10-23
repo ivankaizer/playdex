@@ -25,13 +25,11 @@ export function MappingSection() {
   const { state } = mapping;
   const primary = state.primary.selected;
   const secondary = state.secondary.selected;
-  const canConnect =
-    primary !== null && secondary !== null && primary.gameId !== secondary.gameId && !state.isConnectionSaving;
+  const canConnect = primary !== null && secondary !== null && primary.gameId !== secondary.gameId && !state.isConnectionSaving;
   const pairCount = state.gameConnections.length;
   const [showAllPairs, setShowAllPairs] = useState(false);
   const hasMorePairs = pairCount > PairsPreviewCount;
-  const shownPairs =
-    showAllPairs || !hasMorePairs ? state.gameConnections : state.gameConnections.slice(0, PairsPreviewCount);
+  const shownPairs = showAllPairs || !hasMorePairs ? state.gameConnections : state.gameConnections.slice(0, PairsPreviewCount);
 
   return (
     <section id="game-connections" data-settings-section="game-connections" className="pdx-card flex flex-col gap-6">
@@ -107,9 +105,7 @@ export function MappingSection() {
       <div className="flex flex-col gap-1">
         <div className="pdx-label flex justify-between px-1 pb-2">
           <span>Connected pairs</span>
-          {!state.isGameConnectionsLoading ? (
-            <span className="pdx-num">{formatCountNoun(pairCount, "pair")}</span>
-          ) : null}
+          {!state.isGameConnectionsLoading ? <span className="pdx-num">{formatCountNoun(pairCount, "pair")}</span> : null}
         </div>
         {state.isGameConnectionsLoading ? (
           [1, 2, 3].map((row) => (
@@ -125,11 +121,7 @@ export function MappingSection() {
         ) : (
           <>
             {shownPairs.map((connection) => (
-              <ConnectionRow
-                key={`${connection.gameId}-${connection.connectedGameId}`}
-                connection={connection}
-                mapping={mapping}
-              />
+              <ConnectionRow key={`${connection.gameId}-${connection.connectedGameId}`} connection={connection} mapping={mapping} />
             ))}
             {hasMorePairs ? (
               <button
@@ -190,7 +182,11 @@ function GameSearchField({ slot, title, emptyHint, search, mapping }: GameSearch
           {search.isLoading ? "Searching..." : "Search"}
         </button>
       </div>
-      {search.error.length > 0 ? <p role="alert" className="px-1 text-xs text-danger">{search.error}</p> : null}
+      {search.error.length > 0 ? (
+        <p role="alert" className="px-1 text-xs text-danger">
+          {search.error}
+        </p>
+      ) : null}
       {search.results.length > 0 ? (
         <ul className="flex max-h-72 flex-col gap-0.5 overflow-y-auto rounded-[18px] border border-line bg-surface p-1.5 shadow-pop">
           {search.results.map((result) => (
@@ -213,11 +209,7 @@ function GameSearchField({ slot, title, emptyHint, search, mapping }: GameSearch
 
 function SearchResultButton({ result, onSelect }: { result: GameSearchResult; onSelect: () => void }) {
   return (
-    <button
-      type="button"
-      onClick={onSelect}
-      className="pdx-row flex w-full items-center gap-3 !rounded-[14px] px-2.5 py-2 text-left"
-    >
+    <button type="button" onClick={onSelect} className="pdx-row flex w-full items-center gap-3 !rounded-[14px] px-2.5 py-2 text-left">
       <Cover title={result.title} src={result.capsuleUrl} className="h-9 w-9 rounded-[10px]" initialClassName="text-sm" />
       <span className="min-w-0">
         <span title={result.title} className={cx("block text-sm font-semibold leading-snug", twoLineName)}>
@@ -240,10 +232,7 @@ function ConnectionRow({ connection, mapping }: { connection: GameConnection; ma
         to={mapping.gamePath(connection.gameId)}
         primary
       />
-      <span
-        aria-hidden="true"
-        className="grid h-8 w-8 place-items-center rounded-full bg-mint text-sm text-accent max-[600px]:hidden"
-      >
+      <span aria-hidden="true" className="grid h-8 w-8 place-items-center rounded-full bg-mint text-sm text-accent max-[600px]:hidden">
         ⟵
       </span>
       <div className="min-w-0 max-[600px]:pl-5">
@@ -297,7 +286,10 @@ function ConnectionGame({
         <AppLink
           to={to}
           title={title}
-          className={cx("block max-w-full text-[15px] font-medium leading-[1.3] no-underline transition-colors hover:text-accent", twoLineName)}
+          className={cx(
+            "block max-w-full text-[15px] font-medium leading-[1.3] no-underline transition-colors hover:text-accent",
+            twoLineName,
+          )}
         >
           {title}
         </AppLink>

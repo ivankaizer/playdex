@@ -109,10 +109,7 @@ export function RecapPage() {
     [apply],
   );
 
-  const takeDefault = useCallback(
-    (lifetime: AbortController) => (lifetime.signal.aborted ? null : step(takeDefaultRequest)),
-    [step],
-  );
+  const takeDefault = useCallback((lifetime: AbortController) => (lifetime.signal.aborted ? null : step(takeDefaultRequest)), [step]);
 
   // Component lifetime (re-created on StrictMode remount, which also resets the page state).
   useEffect(() => {
@@ -204,11 +201,7 @@ export function RecapPage() {
 
   return (
     <AppLayout title="Recap">
-      <section
-        className="pdx-card flex flex-col gap-8"
-        style={{ background: "var(--hero-bg)" }}
-        aria-label={`${activeLabel} recap`}
-      >
+      <section className="pdx-card flex flex-col gap-8" style={{ background: "var(--hero-bg)" }} aria-label={`${activeLabel} recap`}>
         <div className="flex flex-wrap items-center justify-between gap-4">
           <p className="pdx-kicker">
             {activeLabel} recap
@@ -325,7 +318,10 @@ export function RecapPage() {
                       </span>
                     </div>
                     <div className="min-w-0">
-                      <p title={game.title} className="line-clamp-2 break-words text-[15px] font-medium leading-[1.3] group-hover:text-accent">
+                      <p
+                        title={game.title}
+                        className="line-clamp-2 break-words text-[15px] font-medium leading-[1.3] group-hover:text-accent"
+                      >
                         {game.title}
                       </p>
                       <p className="pdx-num mt-0.5 text-sm font-semibold text-accent">{formatHoursShort(game.totalSeconds)}</p>
@@ -386,9 +382,7 @@ function RhythmCard({ recap }: { recap: RecapResponse }) {
     highlight: hourMax > 0 && item.sessionCount === hourMax,
   }));
 
-  const weekdayCounts = WeekdayLabels.map(
-    (_, index) => recap.sessionsByWeekday.find((item) => item.weekday === index)?.sessionCount ?? 0,
-  );
+  const weekdayCounts = WeekdayLabels.map((_, index) => recap.sessionsByWeekday.find((item) => item.weekday === index)?.sessionCount ?? 0);
   const weekdayMax = Math.max(0, ...weekdayCounts);
   const busiestIndex = weekdayMax > 0 ? weekdayCounts.indexOf(weekdayMax) : -1;
   const weekdays = weekdayCounts.map((value, index) => ({
@@ -605,9 +599,7 @@ function PlatformMixCard({ recap }: { recap: RecapResponse }) {
                     {item.platformName}
                   </span>
                 </div>
-                <p className="pdx-num text-[32px] font-semibold tracking-[-0.02em]">
-                  {formatPercent(item.totalSeconds, total)}
-                </p>
+                <p className="pdx-num text-[32px] font-semibold tracking-[-0.02em]">{formatPercent(item.totalSeconds, total)}</p>
                 <p className="pdx-num text-[13px] text-muted">
                   {formatHoursShort(item.totalSeconds)} · {sessionsNoun(item.sessionCount)}
                 </p>

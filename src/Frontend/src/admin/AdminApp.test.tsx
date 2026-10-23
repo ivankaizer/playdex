@@ -33,9 +33,7 @@ const snapshot = (updatedAt: string) => ({
     },
   ],
   endedSessions: [],
-  failedGenerations: [
-    { id: "g-1", email: "player@example.test", model: "m", status: "timeout", createdAt: "2026-09-16T11:00:00Z" },
-  ],
+  failedGenerations: [{ id: "g-1", email: "player@example.test", model: "m", status: "timeout", createdAt: "2026-09-16T11:00:00Z" }],
 });
 
 const fetchMock = vi.fn<typeof fetch>();

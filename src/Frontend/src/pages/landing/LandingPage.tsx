@@ -30,7 +30,6 @@ const previewPlatforms: ReadonlyArray<{ key: string; label: string; value: numbe
   { key: "switch-1", label: "Switch", value: 6, hours: "7.6h" },
 ];
 
-
 const previewTopGames: ReadonlyArray<{ gameId: string; title: string; hours: number; cover: string }> = [
   { gameId: "hades-2", title: "Hades II", hours: 26.4, cover: steamCover(1145350) },
   { gameId: "bg3", title: "Baldur's Gate 3", hours: 18.2, cover: steamCover(1086940) },
@@ -46,7 +45,6 @@ const coverFallbacks: readonly string[] = [
   "linear-gradient(160deg,#a6dcf5,#a3d8ea 45%,#4a4f63)",
   "linear-gradient(160deg,#d3c8f7,#b5b8f2 45%,#4a4f63)",
 ];
-
 
 const donutSegments: readonly DonutSegment[] = previewPlatforms.map((platform) => ({
   key: platform.key,
@@ -119,7 +117,10 @@ export function LandingPage() {
               <p className="m-0 text-[15px] leading-relaxed text-muted">A controller-first home screen that tracks every session.</p>
               <span className="mt-1 inline-flex items-center gap-1.5 text-[15px] font-semibold text-accent">
                 See the launcher
-                <span aria-hidden="true" className="transition-transform duration-200 group-hover:translate-x-1 motion-reduce:transition-none">
+                <span
+                  aria-hidden="true"
+                  className="transition-transform duration-200 group-hover:translate-x-1 motion-reduce:transition-none"
+                >
                   →
                 </span>
               </span>
@@ -140,9 +141,7 @@ export function LandingPage() {
           <CardHeading
             kicker="Recap"
             title="Your month at a glance"
-            actions={
-              <span className="rounded-full bg-tile px-3.5 py-1.5 text-xs font-semibold text-ink-2">Sample data</span>
-            }
+            actions={<span className="rounded-full bg-tile px-3.5 py-1.5 text-xs font-semibold text-ink-2">Sample data</span>}
           />
           <div className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(min(200px,100%),1fr))]">
             {previewKpis.map((kpi) => (

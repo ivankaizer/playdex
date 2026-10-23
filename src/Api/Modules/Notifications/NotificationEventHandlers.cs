@@ -24,7 +24,10 @@ public sealed class NotificationEventHandlers(AppriseClient client, Notification
 
     private async Task Enqueue(object domainEvent)
     {
-        if (!client.IsEnabled) return;
+        if (!client.IsEnabled)
+        {
+            return;
+        }
 
         // Not the publisher's token: the event has happened (the session is saved), so the request or poll that raised
         // it going away must not lose its notification.
@@ -48,7 +51,10 @@ public sealed class NotificationSignal : IDisposable
     {
         lock (_gate)
         {
-            if (_semaphore.CurrentCount == 0) _semaphore.Release();
+            if (_semaphore.CurrentCount == 0)
+            {
+                _semaphore.Release();
+            }
         }
     }
 
@@ -74,7 +80,7 @@ public sealed partial class NotificationDispatcher(
     internal static readonly TimeSpan PollInterval = TimeSpan.FromSeconds(30);
     /// <summary>How long a delivered notification is remembered, so the same event is not sent twice.</summary>
     internal static readonly TimeSpan Retention = TimeSpan.FromDays(7);
-    private static readonly TimeSpan CleanupInterval = TimeSpan.FromHours(1);
+    private static readonly TimeSpan _cleanupInterval = TimeSpan.FromHours(1);
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Sending the {Kind} notification {NotificationId} failed (attempt {Attempt}); will retry")]
     private partial void LogSendFailed(Exception exception, string kind, long notificationId, int attempt);
@@ -104,7 +110,7 @@ public sealed partial class NotificationDispatcher(
                     using var scope = scopeFactory.CreateScope();
                     await scope.ServiceProvider.GetRequiredService<NotificationOutbox>()
                         .DeleteFinished(clock.GetUtcNow() - Retention, stoppingToken);
-                    nextCleanup = clock.GetUtcNow() + CleanupInterval;
+                    nextCleanup = clock.GetUtcNow() + _cleanupInterval;
                 }
 
                 await signal.WaitAsync(PollInterval, stoppingToken);
@@ -147,7 +153,10 @@ public sealed partial class NotificationDispatcher(
         using var scope = scopeFactory.CreateScope();
         var outbox = scope.ServiceProvider.GetRequiredService<NotificationOutbox>();
         var claimed = await outbox.ClaimNext(ClaimDuration, ct);
-        if (claimed is null) return false;
+        if (claimed is null)
+        {
+            return false;
+        }
 
         var notification = NotificationOutbox.Deserialize(claimed);
         if (notification is null)

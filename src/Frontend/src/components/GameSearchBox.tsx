@@ -105,8 +105,7 @@ export function GameSearchBox({ search, onNavigate }: GameSearchBoxProps) {
         moveActive(-1);
         break;
       case "Enter": {
-        const selected =
-          state.activeIndex >= 0 && state.activeIndex < state.results.length ? state.results[state.activeIndex] : null;
+        const selected = state.activeIndex >= 0 && state.activeIndex < state.results.length ? state.results[state.activeIndex] : null;
         if (selected) {
           setState(emptyState);
           navigateTo(`/games/${selected.gameId}`);
@@ -180,7 +179,9 @@ export function GameSearchBox({ search, onNavigate }: GameSearchBoxProps) {
             {state.isLoading ? (
               <p className="px-4 py-3 text-sm text-muted">Searching...</p>
             ) : state.error.length > 0 ? (
-              <p role="alert" className="px-4 py-3 text-sm text-danger">{state.error}</p>
+              <p role="alert" className="px-4 py-3 text-sm text-danger">
+                {state.error}
+              </p>
             ) : state.results.length === 0 ? (
               <p className="px-4 py-3 text-sm text-muted">No games found.</p>
             ) : (
@@ -196,11 +197,7 @@ export function GameSearchBox({ search, onNavigate }: GameSearchBoxProps) {
                   className={`flex w-full items-center gap-3 rounded-2xl px-3 py-2 text-left transition hover:bg-tile ${index === state.activeIndex ? "bg-mint" : ""}`}
                 >
                   {result.capsuleUrl !== null ? (
-                    <img
-                      src={result.capsuleUrl}
-                      alt=""
-                      className="h-12 w-9 shrink-0 rounded-[10px] object-cover"
-                    />
+                    <img src={result.capsuleUrl} alt="" className="h-12 w-9 shrink-0 rounded-[10px] object-cover" />
                   ) : (
                     <span aria-hidden="true" className="h-12 w-9 shrink-0 rounded-[10px] bg-track"></span>
                   )}

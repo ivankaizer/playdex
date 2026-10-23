@@ -191,7 +191,10 @@ public sealed class AppriseNotificationTests(PostgresFixture postgres)
     [Fact]
     public async Task SessionEventsSendPhotoFallbackToTextSkipUnlinkedAndReportDeliveryFailure()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         await using var db = CreateDb();
         var suffix = Guid.NewGuid().ToString("n");
@@ -296,7 +299,10 @@ public sealed class AppriseNotificationTests(PostgresFixture postgres)
     [Fact]
     public async Task OverlappingSessionsForSameUserGameAndPlatformNotifyOnce()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         await using var db = CreateDb();
         var suffix = Guid.NewGuid().ToString("n");
@@ -419,7 +425,10 @@ public sealed class AppriseNotificationTests(PostgresFixture postgres)
         finally
         {
             if (secondSession is not null)
+            {
                 db.PlaySessions.Remove(secondSession);
+            }
+
             db.PlaySessions.Remove(firstSession);
             db.Integrations.RemoveRange(firstIntegration, secondIntegration);
             db.Users.Remove(user);
@@ -524,7 +533,9 @@ public sealed class AppriseNotificationTests(PostgresFixture postgres)
         {
             crc ^= b;
             for (var bit = 0; bit < 8; bit++)
+            {
                 crc = (crc & 1) != 0 ? (crc >> 1) ^ 0xEDB88320u : crc >> 1;
+            }
         }
 
         return ~crc;

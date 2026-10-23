@@ -29,7 +29,10 @@ public sealed class GameIdTests
     {
         var encoded = GameId.Encode(id);
         Assert.True(encoded.All(char.IsAsciiDigit), $"{id} encodes as {encoded}");
-        if (expectedEncoding is not null) Assert.Equal(expectedEncoding, encoded);
+        if (expectedEncoding is not null)
+        {
+            Assert.Equal(expectedEncoding, encoded);
+        }
 
         Assert.Equal(id, GameId.Parse(encoded));
     }
@@ -40,7 +43,10 @@ public sealed class GameIdTests
         for (long id = 1; id <= 250_000; id++)
         {
             var encoded = GameId.Encode(id);
-            if (GameId.Parse(encoded) != id) Assert.Fail($"{id} encodes as {encoded} but parses as {GameId.Parse(encoded)}");
+            if (GameId.Parse(encoded) != id)
+            {
+                Assert.Fail($"{id} encodes as {encoded} but parses as {GameId.Parse(encoded)}");
+            }
         }
     }
 

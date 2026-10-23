@@ -44,11 +44,15 @@ export function PreferencesSection({ preferences }: PreferencesSectionProps) {
         : `Sessions under ${minutes} min are ignored.`;
 
   const saveNote = state.settingsError ? (
-    <span role="alert" className="text-danger">{state.settingsError}</span>
+    <span role="alert" className="text-danger">
+      {state.settingsError}
+    </span>
   ) : dirty && (minutes === null || !chatValid) ? (
     <span className="text-warn">{minutes === null ? "Fix the minimum minutes to save" : "Fix the chat ID to save"}</span>
   ) : dirty && !discardable ? (
-    <span className="text-warn">Saved minimum is above {MaxMinimumMinutes} min. Save to cap it at {MaxMinimumMinutes} min</span>
+    <span className="text-warn">
+      Saved minimum is above {MaxMinimumMinutes} min. Save to cap it at {MaxMinimumMinutes} min
+    </span>
   ) : dirty ? (
     <span className="text-warn">You have unsaved changes</span>
   ) : state.isSettingsLoading ? (
@@ -203,7 +207,9 @@ export function PreferencesSection({ preferences }: PreferencesSectionProps) {
                 {state.testNotificationMessage}
               </span>
             ) : state.testNotificationError ? (
-              <span role="alert" className="text-danger">{state.testNotificationError}</span>
+              <span role="alert" className="text-danger">
+                {state.testNotificationError}
+              </span>
             ) : state.savedTelegramChatId.length === 0 || state.telegramChatId.trim() !== state.savedTelegramChatId ? (
               <span className="text-muted">Save a chat ID to send a test message.</span>
             ) : (
@@ -218,12 +224,7 @@ export function PreferencesSection({ preferences }: PreferencesSectionProps) {
           {saveNote}
         </p>
         {discardable ? (
-          <button
-            type="button"
-            onClick={preferences.discardChanges}
-            disabled={busy}
-            className="pdx-btn-outline !h-11 text-ink"
-          >
+          <button type="button" onClick={preferences.discardChanges} disabled={busy} className="pdx-btn-outline !h-11 text-ink">
             Discard
           </button>
         ) : null}

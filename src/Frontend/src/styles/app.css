@@ -135,8 +135,7 @@ textarea::placeholder {
     background:
       radial-gradient(600px 420px at 0% 0%, rgb(var(--blob-mint)), transparent 70%),
       radial-gradient(520px 520px at 100% 38%, rgb(var(--blob-cyan)), transparent 70%),
-      radial-gradient(520px 300px at 45% 100%, rgb(var(--blob-sand)), transparent 70%),
-      rgb(var(--page));
+      radial-gradient(520px 300px at 45% 100%, rgb(var(--blob-sand)), transparent 70%), rgb(var(--page));
   }
 
   /* Frosted main surface (translucent fill over the gradient page). */
@@ -203,7 +202,10 @@ textarea::placeholder {
     letter-spacing: 0.02em;
     white-space: nowrap;
     cursor: pointer;
-    transition: background-color 0.15s, border-color 0.15s, color 0.15s;
+    transition:
+      background-color 0.15s,
+      border-color 0.15s,
+      color 0.15s;
   }
   .pdx-btn:disabled {
     cursor: not-allowed;
@@ -274,7 +276,9 @@ textarea::placeholder {
     background: rgb(var(--surface));
     color: rgb(var(--ink-2));
     cursor: pointer;
-    transition: border-color 0.15s, background-color 0.15s;
+    transition:
+      border-color 0.15s,
+      background-color 0.15s;
   }
   .pdx-icon-btn:hover {
     border-color: rgb(var(--mint-hover));
@@ -293,7 +297,9 @@ textarea::placeholder {
     font: inherit;
     font-size: 14px;
     outline: none;
-    transition: border-color 0.15s, box-shadow 0.15s;
+    transition:
+      border-color 0.15s,
+      box-shadow 0.15s;
   }
   .pdx-input:focus {
     border-color: rgb(var(--bar));
@@ -340,7 +346,9 @@ textarea::placeholder {
     font-weight: 600;
     cursor: pointer;
     white-space: nowrap;
-    transition: background-color 0.15s, color 0.15s;
+    transition:
+      background-color 0.15s,
+      color 0.15s;
   }
   .pdx-seg-btn:hover {
     color: rgb(var(--ink));
@@ -372,7 +380,9 @@ textarea::placeholder {
     font-weight: 500;
     white-space: nowrap;
     cursor: pointer;
-    transition: background-color 0.15s, border-color 0.15s;
+    transition:
+      background-color 0.15s,
+      border-color 0.15s;
   }
   .pdx-chip:hover:not(:disabled) {
     border-color: rgb(var(--mint-hover));
@@ -471,8 +481,13 @@ textarea::placeholder {
   }
 
   @keyframes pdx-pulse {
-    0%, 100% { box-shadow: 0 0 0 4px rgb(var(--brand) / 0.18); }
-    50% { box-shadow: 0 0 0 7px rgb(var(--brand) / 0.06); }
+    0%,
+    100% {
+      box-shadow: 0 0 0 4px rgb(var(--brand) / 0.18);
+    }
+    50% {
+      box-shadow: 0 0 0 7px rgb(var(--brand) / 0.06);
+    }
   }
   .pdx-live-dot {
     width: 7px;
@@ -483,16 +498,26 @@ textarea::placeholder {
   }
   /* A row arriving in a landing demo: it rises and fades in. */
   @keyframes pdx-rise {
-    from { opacity: 0; transform: translateY(8px); }
-    to { opacity: 1; transform: none; }
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
   }
   .pdx-rise {
     animation: pdx-rise 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) both;
   }
   /* The launcher tour's active tab fills as it counts down to the next screen. */
   @keyframes pdx-tour-progress {
-    from { transform: scaleX(0); }
-    to { transform: scaleX(1); }
+    from {
+      transform: scaleX(0);
+    }
+    to {
+      transform: scaleX(1);
+    }
   }
   .pdx-tour-progress {
     animation: pdx-tour-progress linear both;

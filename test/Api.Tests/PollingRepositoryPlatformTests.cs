@@ -30,7 +30,10 @@ public sealed class PollingRepositoryPlatformTests(PostgresFixture postgres)
     [Fact]
     public async Task PsnOverrideStillRoutesToPsnAndRecordsSessionsOnTheOverride()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         await using var db = CreateDb();
         var now = DateTimeOffset.UtcNow;
@@ -94,7 +97,10 @@ public sealed class PollingRepositoryPlatformTests(PostgresFixture postgres)
     [Fact]
     public async Task RawPayloadIsStoredOnlyWhenThePlayedGameChanges()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         await using var db = CreateDb();
         var now = DateTimeOffset.UtcNow;

@@ -56,11 +56,7 @@ export function failGameConnectionsLoad(state: MappingState, error: string): Map
 
 // Game searches (primary and secondary are independent)
 
-function updateSlot(
-  state: MappingState,
-  slot: SearchSlot,
-  change: (search: GameSearchState) => GameSearchState,
-): MappingState {
+function updateSlot(state: MappingState, slot: SearchSlot, change: (search: GameSearchState) => GameSearchState): MappingState {
   return { ...state, [slot]: change(state[slot]) };
 }
 

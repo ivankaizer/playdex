@@ -12,13 +12,16 @@ namespace Api.Tests;
 [Collection(PostgresCollectionDefinition.Name)]
 public sealed class ClientTimeZoneIntegrationTests(PostgresFixture postgres)
 {
-    private static readonly TimeZoneInfo LosAngeles = TimeZoneInfo.FindSystemTimeZoneById("America/Los_Angeles");
-    private static readonly TimeZoneInfo Tokyo = TimeZoneInfo.FindSystemTimeZoneById("Asia/Tokyo");
+    private static readonly TimeZoneInfo _losAngeles = TimeZoneInfo.FindSystemTimeZoneById("America/Los_Angeles");
+    private static readonly TimeZoneInfo _tokyo = TimeZoneInfo.FindSystemTimeZoneById("Asia/Tokyo");
 
     [Fact]
     public async Task RangeStatsUseTheClientsMonthsAndTheTitleFilter()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         await using var db = CreateDb();
         await using var transaction = await db.Database.BeginTransactionAsync();
@@ -32,19 +35,19 @@ public sealed class ClientTimeZoneIntegrationTests(PostgresFixture postgres)
         var service = CreateService(db);
 
         var stats = await service.ComputeStatsForRange(
-            seed.User.Id, null, "2026-10-01", "2026-11-30", null, null, 0, LosAngeles, CancellationToken.None);
+            seed.User.Id, null, "2026-10-01", "2026-11-30", null, null, 0, _losAngeles, CancellationToken.None);
         Assert.Equal(
             [(2026, 10, 3600d), (2026, 11, 1800d)],
             stats.Months.Select(month => (month.Year, month.Month, month.TotalSeconds)));
 
         var hadesOnly = await service.ComputeStatsForRange(
-            seed.User.Id, null, "2026-10-01", "2026-11-30", null, "HADES", 0, LosAngeles, CancellationToken.None);
+            seed.User.Id, null, "2026-10-01", "2026-11-30", null, "HADES", 0, _losAngeles, CancellationToken.None);
         Assert.Equal(1, hadesOnly.SessionCount);
         Assert.Equal(3600d, hadesOnly.TotalSeconds);
         Assert.Equal(hades.Title, hadesOnly.TopGameTitle);
 
         var hadesDays = await service.ComputeDailyStats(
-            seed.User.Id, null, "2026-10-31", "2026-11-10", null, "hades", 0, LosAngeles, CancellationToken.None);
+            seed.User.Id, null, "2026-10-31", "2026-11-10", null, "hades", 0, _losAngeles, CancellationToken.None);
         Assert.Equal(3600d, hadesDays[0].TotalSeconds);
         Assert.Equal(3600d, hadesDays.Sum(day => day.TotalSeconds));
 
@@ -57,20 +60,23 @@ public sealed class ClientTimeZoneIntegrationTests(PostgresFixture postgres)
     [Fact]
     public async Task TodayIncludesSessionsThatCrossedMidnightOrAreStillRunning()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         await using var db = CreateDb();
         await using var transaction = await db.Database.BeginTransactionAsync();
         var seed = await Seed(db);
         var game = await AddGame(db, $"Today {seed.Suffix}");
         var now = DateTimeOffset.UtcNow;
-        var todayStart = LocalCalendar.StartOf(LocalCalendar.DateOf(now, Tokyo), Tokyo);
+        var todayStart = LocalCalendar.StartOf(LocalCalendar.DateOf(now, _tokyo), _tokyo);
         var yesterday = AddSession(db, seed, game, todayStart.AddHours(-3), 3600);
         var running = AddSession(db, seed, game, todayStart.AddHours(-2), null);
         var crossed = AddSession(db, seed, game, todayStart.AddMinutes(-30), 3600);
         await db.SaveChangesAsync();
 
-        var today = await CreateService(db).ListSessionsToday(seed.User.Id, null, 0, Tokyo, CancellationToken.None);
+        var today = await CreateService(db).ListSessionsToday(seed.User.Id, null, 0, _tokyo, CancellationToken.None);
 
         Assert.Equal([crossed.Id, running.Id], today.Sessions.Select(session => session.SessionId));
         Assert.DoesNotContain(yesterday.Id, today.Sessions.Select(session => session.SessionId));
@@ -80,19 +86,22 @@ public sealed class ClientTimeZoneIntegrationTests(PostgresFixture postgres)
     [Fact]
     public async Task TodayListsTheNewestSessionsAndCountsThemAll()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         await using var db = CreateDb();
         await using var transaction = await db.Database.BeginTransactionAsync();
         var seed = await Seed(db);
         var game = await AddGame(db, $"Busy day {seed.Suffix}");
-        var todayStart = LocalCalendar.StartOf(LocalCalendar.DateOf(DateTimeOffset.UtcNow, Tokyo), Tokyo);
+        var todayStart = LocalCalendar.StartOf(LocalCalendar.DateOf(DateTimeOffset.UtcNow, _tokyo), _tokyo);
         var sessions = Enumerable.Range(0, AccountsRepository.TodaySessionLimit + 2)
             .Select(index => AddSession(db, seed, game, todayStart.AddMinutes(index), 30))
             .ToList();
         await db.SaveChangesAsync();
 
-        var today = await CreateService(db).ListSessionsToday(seed.User.Id, null, 0, Tokyo, CancellationToken.None);
+        var today = await CreateService(db).ListSessionsToday(seed.User.Id, null, 0, _tokyo, CancellationToken.None);
 
         Assert.Equal(AccountsRepository.TodaySessionLimit + 2, today.Total);
         Assert.Equal(
@@ -103,7 +112,10 @@ public sealed class ClientTimeZoneIntegrationTests(PostgresFixture postgres)
     [Fact]
     public async Task GameStatsStartAtTheFirstYearPlayedInTheClientsCalendar()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         await using var db = CreateDb();
         await using var transaction = await db.Database.BeginTransactionAsync();
@@ -114,9 +126,9 @@ public sealed class ClientTimeZoneIntegrationTests(PostgresFixture postgres)
         AddSession(db, seed, game, new DateTimeOffset(2024, 6, 1, 12, 0, 0, TimeSpan.Zero), 1800);
         await db.SaveChangesAsync();
         var service = CreateService(db);
-        var currentYear = LocalCalendar.DateOf(DateTimeOffset.UtcNow, Tokyo).Year;
+        var currentYear = LocalCalendar.DateOf(DateTimeOffset.UtcNow, _tokyo).Year;
 
-        var stats = await service.ComputeGameStats(seed.User.Id, GameId.Encode(game.Id), Tokyo, CancellationToken.None);
+        var stats = await service.ComputeGameStats(seed.User.Id, GameId.Encode(game.Id), _tokyo, CancellationToken.None);
 
         Assert.Equal(Enumerable.Range(2023, currentYear - 2022), stats.Years.Select(year => year.Year));
         Assert.Equal(3600d, stats.Years[0].Seconds);
@@ -131,7 +143,10 @@ public sealed class ClientTimeZoneIntegrationTests(PostgresFixture postgres)
     [Fact]
     public async Task RecapBucketsDaysHoursAndYearsInTheClientsZone()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         await using var db = CreateDb();
         await using var transaction = await db.Database.BeginTransactionAsync();
@@ -151,9 +166,9 @@ public sealed class ClientTimeZoneIntegrationTests(PostgresFixture postgres)
             seed.User.Id,
             "2025-03-01",
             "2025-03-31",
-            LocalCalendar.StartOf(new DateOnly(2025, 3, 1), Tokyo),
-            LocalCalendar.StartOf(new DateOnly(2025, 4, 1), Tokyo),
-            Tokyo,
+            LocalCalendar.StartOf(new DateOnly(2025, 3, 1), _tokyo),
+            LocalCalendar.StartOf(new DateOnly(2025, 4, 1), _tokyo),
+            _tokyo,
             CancellationToken.None);
 
         Assert.Equal(3, recap.TotalSessions);
@@ -165,14 +180,17 @@ public sealed class ClientTimeZoneIntegrationTests(PostgresFixture postgres)
         Assert.Equal(0, recap.SessionsByHour[23].SessionCount);
         Assert.Equal(3, recap.AverageSessionsPerMonth, 6);
 
-        Assert.Equal([2025, 2023], await repository.ListRecapYears(seed.User.Id, Tokyo, CancellationToken.None));
+        Assert.Equal([2025, 2023], await repository.ListRecapYears(seed.User.Id, _tokyo, CancellationToken.None));
         Assert.Equal([2025, 2022], await repository.ListRecapYears(seed.User.Id, TimeZoneInfo.Utc, CancellationToken.None));
     }
 
     [Fact]
     public async Task CurrentYearRecapCountsDaysOnlyUpToToday()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         await using var db = CreateDb();
         await using var transaction = await db.Database.BeginTransactionAsync();
@@ -181,16 +199,16 @@ public sealed class ClientTimeZoneIntegrationTests(PostgresFixture postgres)
         var now = DateTimeOffset.UtcNow;
         AddSession(db, seed, game, now.AddHours(-1), 600);
         await db.SaveChangesAsync();
-        var today = LocalCalendar.DateOf(now, LosAngeles);
+        var today = LocalCalendar.DateOf(now, _losAngeles);
         var yearStart = new DateOnly(today.Year, 1, 1);
 
         var recap = await new RecapService(new RecapRepository(db)).GetRecap(
             seed.User.Id,
             $"{today.Year}-01-01",
             $"{today.Year}-12-31",
-            LocalCalendar.StartOf(yearStart, LosAngeles),
-            LocalCalendar.StartOf(yearStart.AddYears(1), LosAngeles),
-            LosAngeles,
+            LocalCalendar.StartOf(yearStart, _losAngeles),
+            LocalCalendar.StartOf(yearStart.AddYears(1), _losAngeles),
+            _losAngeles,
             CancellationToken.None);
 
         var elapsedDays = today.DayNumber - yearStart.DayNumber + 1;

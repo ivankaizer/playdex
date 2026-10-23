@@ -135,7 +135,9 @@ public sealed class ManualService(
     {
         var trimmed = SearchText.Bounded(query);
         if (trimmed.Length == 0)
+        {
             throw AppProblemException.Validation("query is required.");
+        }
 
         var localTask = SearchLocal(trimmed, ct);
         var igdbTask = SearchIgdb(trimmed, ct);
@@ -193,17 +195,26 @@ public sealed class ManualService(
                 CultureInfo.InvariantCulture,
                 DateTimeStyles.None,
                 out var day))
+        {
             throw AppProblemException.Validation("date is required.");
+        }
 
         if (request.DurationMinutes <= 0)
+        {
             throw AppProblemException.Validation("durationMinutes must be a positive integer.");
+        }
+
         if (request.DurationMinutes > SessionLimits.MaxDurationMinutes)
+        {
             throw AppProblemException.Validation(
                 $"durationMinutes must be at most {SessionLimits.MaxDurationMinutes} (24 hours).");
+        }
 
         var zone = LocalCalendar.FindTimeZone(request.TimeZone);
         if (day > SessionLimits.LatestDate(now, zone))
+        {
             throw AppProblemException.Validation("date cannot be in the future.");
+        }
 
         try
         {
@@ -280,7 +291,10 @@ public sealed class ManualService(
     {
         var normalized = platformKey?.Trim().ToLowerInvariant();
         if (string.IsNullOrEmpty(normalized))
+        {
             throw AppProblemException.Validation("platformKey is required.");
+        }
+
         return normalized;
     }
 
@@ -289,11 +303,15 @@ public sealed class ManualService(
         CancellationToken ct)
     {
         if (selection.GameId.HasValue)
+        {
             return new ResolvedManualGameSelection(selection.GameId, null);
+        }
 
         var authoritative = await igdbClient.GetGameById(selection.IgdbId!, ct);
         if (authoritative is null)
+        {
             throw AppProblemException.Validation("IGDB game not found.");
+        }
 
         return new ResolvedManualGameSelection(
             null,

@@ -218,8 +218,15 @@ public sealed class ApiEnvelopeMiddlewareTests
         var middleware = new ApiEnvelopeMiddleware(async inner =>
         {
             inner.Response.StatusCode = status;
-            if (contentType is not null) inner.Response.ContentType = contentType;
-            if (body.Length > 0) await inner.Response.WriteAsync(body);
+            if (contentType is not null)
+            {
+                inner.Response.ContentType = contentType;
+            }
+
+            if (body.Length > 0)
+            {
+                await inner.Response.WriteAsync(body);
+            }
         });
 
         await middleware.InvokeAsync(context);

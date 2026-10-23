@@ -28,7 +28,7 @@ public sealed partial class SessionLifecycle(
     public static readonly TimeSpan ManualTimerLimit = TimeSpan.FromHours(12);
 
     private const int PollingGapIntervals = 5;
-    private static readonly TimeSpan MinimumPollingGap = TimeSpan.FromMinutes(5);
+    private static readonly TimeSpan _minimumPollingGap = TimeSpan.FromMinutes(5);
 
     private readonly List<object> _pending = [];
 
@@ -47,7 +47,7 @@ public sealed partial class SessionLifecycle(
         get
         {
             var gap = PollingInterval * PollingGapIntervals;
-            return gap > MinimumPollingGap ? gap : MinimumPollingGap;
+            return gap > _minimumPollingGap ? gap : _minimumPollingGap;
         }
     }
 
@@ -92,8 +92,15 @@ public sealed partial class SessionLifecycle(
             changed |= await End([session.Id], polledAt, unseen ? PollingInterval : null, ct) > 0;
         }
 
-        if (continuing is { } sessionId && await Touch(sessionId, polledAt, ct)) return changed;
-        if (gameId is not { } detectedGameId) return changed;
+        if (continuing is { } sessionId && await Touch(sessionId, polledAt, ct))
+        {
+            return changed;
+        }
+
+        if (gameId is not { } detectedGameId)
+        {
+            return changed;
+        }
 
         await Start(new PlaySession
         {

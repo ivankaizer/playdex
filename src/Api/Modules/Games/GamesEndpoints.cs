@@ -82,8 +82,11 @@ public static class GamesEndpoints
     {
         var resolvedLimit = limit ?? 10;
         if (resolvedLimit <= 0)
+        {
             throw Api.Infrastructure.Http.AppProblemException.Validation(
                 "limit must be a positive integer.");
+        }
+
         return TypedResults.Ok(await service.Search(query ?? "", resolvedLimit, ct));
     }
 

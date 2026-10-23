@@ -4,7 +4,11 @@ public static class GameConnections
 {
     public static (long First, long Second) Normalize(long a, long b)
     {
-        if (a == b) throw new ArgumentException("Cannot connect a game to itself.");
+        if (a == b)
+        {
+            throw new ArgumentException("Cannot connect a game to itself.");
+        }
+
         return a < b ? (a, b) : (b, a);
     }
 
@@ -13,8 +17,8 @@ public static class GameConnections
         var adj = new Dictionary<long, List<long>>();
         foreach (var (g, c) in edges)
         {
-            if (!adj.ContainsKey(g)) adj[g] = [];
-            if (!adj.ContainsKey(c)) adj[c] = [];
+            adj.TryAdd(g, []);
+            adj.TryAdd(c, []);
             adj[g].Add(c);
             adj[c].Add(g);
         }
@@ -27,7 +31,11 @@ public static class GameConnections
         while (queue.Count > 0)
         {
             var current = queue.Dequeue();
-            if (!adj.TryGetValue(current, out var neighbors)) continue;
+            if (!adj.TryGetValue(current, out var neighbors))
+            {
+                continue;
+            }
+
             foreach (var n in neighbors)
             {
                 if (visited.Add(n))
@@ -47,8 +55,12 @@ public static class GameConnections
         var parent = new Dictionary<long, long>();
         long Find(long x)
         {
-            if (!parent.ContainsKey(x)) parent[x] = x;
-            if (parent[x] != x) parent[x] = Find(parent[x]);
+            parent.TryAdd(x, x);
+            if (parent[x] != x)
+            {
+                parent[x] = Find(parent[x]);
+            }
+
             return parent[x];
         }
         void Union(long a, long b) => parent[Find(a)] = Find(b);

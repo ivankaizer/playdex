@@ -180,10 +180,11 @@ function poll(t: number) {
       setMode("pad");
       confirm();
     }
-    for (const [i, a] of BTN_ACTION) if (edge(i)) {
-      setMode("pad");
-      dispatch(a);
-    }
+    for (const [i, a] of BTN_ACTION)
+      if (edge(i)) {
+        setMode("pad");
+        dispatch(a);
+      }
   }
   requestAnimationFrame(poll);
 }

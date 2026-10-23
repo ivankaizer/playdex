@@ -21,8 +21,7 @@ body {
   background:
     radial-gradient(60vw 45vh at 0% 0%, rgb(var(--blob-mint)), transparent 70%),
     radial-gradient(50vw 55vh at 100% 38%, rgb(var(--blob-cyan)), transparent 70%),
-    radial-gradient(55vw 35vh at 45% 100%, rgb(var(--blob-sand)), transparent 70%),
-    rgb(var(--page));
+    radial-gradient(55vw 35vh at 45% 100%, rgb(var(--blob-sand)), transparent 70%), rgb(var(--page));
   -webkit-font-smoothing: antialiased;
   user-select: none;
 }
@@ -394,8 +393,7 @@ html[data-mode="desktop"][data-input="pointer"] .hints .hint {
   gap: 0.3rem;
   padding: 0.8em;
   background:
-    radial-gradient(120% 90% at 0% 0%, rgb(var(--mint)), transparent 70%),
-    linear-gradient(160deg, rgb(var(--surface)), rgb(var(--tile)));
+    radial-gradient(120% 90% at 0% 0%, rgb(var(--mint)), transparent 70%), linear-gradient(160deg, rgb(var(--surface)), rgb(var(--tile)));
   font-weight: 600;
   line-height: 1.15;
   color: rgb(var(--ink));

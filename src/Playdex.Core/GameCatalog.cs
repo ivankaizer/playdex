@@ -132,7 +132,7 @@ public static class GameCatalog
 
 public static partial class SteamStoreTitleReader
 {
-    private static readonly HttpClient SharedClient = new()
+    private static readonly HttpClient _sharedClient = new()
     {
         Timeout = TimeSpan.FromSeconds(10)
     };
@@ -149,7 +149,7 @@ public static partial class SteamStoreTitleReader
                 $"https://store.steampowered.com/app/{Uri.EscapeDataString(appId)}");
             request.Headers.UserAgent.ParseAdd(Brand.UserAgent);
 
-            using var response = await (httpClient ?? SharedClient).SendAsync(request, cancellationToken);
+            using var response = await (httpClient ?? _sharedClient).SendAsync(request, cancellationToken);
             if (!response.IsSuccessStatusCode)
             {
                 return null;
@@ -227,7 +227,10 @@ public static partial class LaunchOptionsCodec
         {
             throw new InvalidOperationException($"Launch options cannot exceed {LaunchConfig.MaximumLaunchOptionsLength} characters.");
         }
-        if (normalized.Length == 0) return [];
+        if (normalized.Length == 0)
+        {
+            return [];
+        }
 
         var arguments = CommandLineToArgvW($"launcher.exe {normalized}", out var count);
         if (arguments == IntPtr.Zero)
@@ -241,7 +244,10 @@ public static partial class LaunchOptionsCodec
             for (var index = 1; index < count; index++)
             {
                 var value = Marshal.PtrToStringUni(Marshal.ReadIntPtr(arguments, index * IntPtr.Size));
-                if (value is not null) result.Add(value);
+                if (value is not null)
+                {
+                    result.Add(value);
+                }
             }
             return result;
         }

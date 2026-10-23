@@ -78,7 +78,13 @@ function NowCard() {
         <div className="now-scrim" />
       </div>
       <div className="now-body" key={id}>
-        <span className="kicker">{isLatest && st.lastSession ? "Continue playing" : lastDay === undefined ? "Ready to play" : `Last played ${relativeDay(lastDay).toLowerCase()}`}</span>
+        <span className="kicker">
+          {isLatest && st.lastSession
+            ? "Continue playing"
+            : lastDay === undefined
+              ? "Ready to play"
+              : `Last played ${relativeDay(lastDay).toLowerCase()}`}
+        </span>
         <Logo game={game} className="now-logo" titleClass="now-title" />
         <div className="now-stats">
           <div className="tile now-stat">

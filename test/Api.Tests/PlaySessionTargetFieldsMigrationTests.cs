@@ -10,7 +10,10 @@ public sealed class PlaySessionTargetFieldsMigrationTests(PostgresFixture postgr
     [Fact]
     public async Task PlayniteSessionBackfillUsesPcAsCapturedPlatform()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         await using var connection = await postgres.DataSource!.OpenConnectionAsync();
         await using var transaction = await connection.BeginTransactionAsync();
@@ -57,7 +60,10 @@ public sealed class PlaySessionTargetFieldsMigrationTests(PostgresFixture postgr
     [Fact]
     public async Task CorrectiveMigrationChangesOnlyApiSessionsCreatedBeforeLegacyRemoval()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         await using var connection = await postgres.DataSource!.OpenConnectionAsync();
         await using var transaction = await connection.BeginTransactionAsync();

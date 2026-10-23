@@ -18,7 +18,10 @@ public sealed class ApiCaptureRecordingIntegrationTests(PostgresFixture postgres
     [Fact]
     public async Task ASessionSentTwiceIsRecordedOnce()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         await WithApiKey(async (db, service, seed) =>
         {
@@ -40,7 +43,10 @@ public sealed class ApiCaptureRecordingIntegrationTests(PostgresFixture postgres
     [Fact]
     public async Task PlayAfterThePingTimeoutIsRecordedOnlyWhereTheServerHasNoSession()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         await WithApiKey(async (db, service, seed) =>
         {
@@ -67,7 +73,10 @@ public sealed class ApiCaptureRecordingIntegrationTests(PostgresFixture postgres
     [Fact]
     public async Task ASessionWithoutAStartIsRecordedAsBefore()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         await WithApiKey(async (db, service, seed) =>
         {

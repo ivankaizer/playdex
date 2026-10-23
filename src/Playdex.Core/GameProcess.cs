@@ -94,8 +94,16 @@ public sealed unsafe partial class ProcessTree : IDisposable
             || !Native.AssignProcessToJobObject(job, process.Handle))
         {
             Log.Info($"game: {gameId}'s script is followed alone (job object error {Marshal.GetLastPInvokeError()})");
-            if (port != 0) Native.CloseHandle(port);
-            if (job != 0) Native.CloseHandle(job);
+            if (port != 0)
+            {
+                Native.CloseHandle(port);
+            }
+
+            if (job != 0)
+            {
+                Native.CloseHandle(job);
+            }
+
             return null;
         }
         var tree = new ProcessTree(gameId, job, port);

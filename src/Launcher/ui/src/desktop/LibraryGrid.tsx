@@ -104,7 +104,10 @@ export function LibraryGrid() {
       .filter((g) => {
         if (played.size === 0) return true;
         const day = playedDay.get(g.id);
-        return (played.has("recent") && day !== undefined && day <= RECENT_DAYS) || (played.has("never") && day === undefined && !totalMinutes(summary, g));
+        return (
+          (played.has("recent") && day !== undefined && day <= RECENT_DAYS) ||
+          (played.has("never") && day === undefined && !totalMinutes(summary, g))
+        );
       })
       .sort(sorter(sort, summary, recent));
   }, [query, sources, statuses, played, favoritesOnly, favorites, sort, summary, recent, playedDay]);
@@ -154,9 +157,7 @@ export function LibraryGrid() {
       <section className="dk-grid-main" aria-label="Games">
         <div className="dk-grid-bar">
           <h1>{filtered ? "Filtered" : "All games"}</h1>
-          <span className="dk-muted num">
-            {filtered ? `${list.length} of ${games.length}` : `${games.length}`} games
-          </span>
+          <span className="dk-muted num">{filtered ? `${list.length} of ${games.length}` : `${games.length}`} games</span>
           <span className="dk-spacer" />
           <label className="dk-select">
             Sort
@@ -179,7 +180,12 @@ export function LibraryGrid() {
             onChange={(e) => setSize(Number(e.target.value))}
           />
         </div>
-        <div className="dk-covers" data-scroll="y" data-nav-group="grid" style={{ "--dk-cover": `${SIZES[size]}px` } as React.CSSProperties}>
+        <div
+          className="dk-covers"
+          data-scroll="y"
+          data-nav-group="grid"
+          style={{ "--dk-cover": `${SIZES[size]}px` } as React.CSSProperties}
+        >
           {list.length === 0 ? (
             <p className="dk-muted">No games match these filters.</p>
           ) : (
@@ -272,7 +278,14 @@ function Details({ gameId }: { gameId: string }) {
         </div>
         <div className="dk-details-actions" data-nav-group="details-actions">
           <PlayButton game={game} />
-          <button className="dk-icon-btn" data-nav data-kind="details" aria-label="Open the game's page" title="Open the game's page" onClick={() => openGamePage(gameId)}>
+          <button
+            className="dk-icon-btn"
+            data-nav
+            data-kind="details"
+            aria-label="Open the game's page"
+            title="Open the game's page"
+            onClick={() => openGamePage(gameId)}
+          >
             <ArrowUpRight aria-hidden />
           </button>
         </div>
@@ -289,7 +302,10 @@ function Details({ gameId }: { gameId: string }) {
               {history.sessions.slice(0, 3).map((s) => (
                 <li key={`${s.dayOffset}-${s.start}`}>
                   <span>
-                    {dayLabel(s.dayOffset)} · <span className="num">{s.start}–{sessionEnd(s)}</span>
+                    {dayLabel(s.dayOffset)} ·{" "}
+                    <span className="num">
+                      {s.start}–{sessionEnd(s)}
+                    </span>
                   </span>
                   <span className="dk-sessions-dur num">{fmtMinutes(s.minutes)}</span>
                 </li>

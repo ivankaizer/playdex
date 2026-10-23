@@ -102,7 +102,8 @@ export function GamePage({ gameId }: { gameId: string }) {
                 <X /> {closeConfirm ? "Close game?" : "Close game"}
               </button>
             </>
-          ) : onPc &&
+          ) : (
+            onPc &&
             (installed ? (
               <button
                 className="btn btn-primary btn-lg"
@@ -125,7 +126,8 @@ export function GamePage({ gameId }: { gameId: string }) {
               >
                 <Download /> Install
               </button>
-            ))}
+            ))
+          )}
           <button
             className="btn btn-outline btn-lg"
             data-nav
@@ -138,11 +140,24 @@ export function GamePage({ gameId }: { gameId: string }) {
             <Heart fill={fav ? "currentColor" : "none"} /> {fav ? "Favorite" : "Add to favorites"}
           </button>
           {onPc && (
-            <button className="btn btn-outline btn-lg" data-nav data-kind="artwork" data-game={gameId} onClick={() => openArtPicker(gameId)}>
+            <button
+              className="btn btn-outline btn-lg"
+              data-nav
+              data-kind="artwork"
+              data-game={gameId}
+              onClick={() => openArtPicker(gameId)}
+            >
               <ImageIcon /> Artwork
             </button>
           )}
-          {saves?.ready && <SaveActions gameId={gameId} configId={saves.game.gameId} daily={saves.game.dailyBackup} running={saves.game.backup.kind === "running"} />}
+          {saves?.ready && (
+            <SaveActions
+              gameId={gameId}
+              configId={saves.game.gameId}
+              daily={saves.game.dailyBackup}
+              running={saves.game.backup.kind === "running"}
+            />
+          )}
         </div>
       </section>
 
@@ -170,16 +185,16 @@ export function GamePage({ gameId }: { gameId: string }) {
             </dl>
           </div>
           {playedRecently && (
-          <div className="gdays" aria-label="Minutes played per day, last 14 days">
-            {daily.map((m, i) => (
-              <div key={i} className="gday" data-today={i === 13 ? "" : undefined}>
-                <div className="gday-bar">
-                  <i style={{ transform: `scaleY(${m / maxDay})` }} />
+            <div className="gdays" aria-label="Minutes played per day, last 14 days">
+              {daily.map((m, i) => (
+                <div key={i} className="gday" data-today={i === 13 ? "" : undefined}>
+                  <div className="gday-bar">
+                    <i style={{ transform: `scaleY(${m / maxDay})` }} />
+                  </div>
+                  <span>{weekdayInitial(13 - i)}</span>
                 </div>
-                <span>{weekdayInitial(13 - i)}</span>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
           )}
         </div>
 
@@ -248,7 +263,14 @@ function SaveActions({ gameId, configId, daily, running }: { gameId: string; con
       <button className="btn btn-outline btn-lg" data-nav data-kind="backup" data-game={gameId} aria-busy={running} onClick={backUp}>
         <Archive /> {running ? "Backing up…" : "Back up saves"}
       </button>
-      <button className="btn btn-outline btn-lg" data-nav data-kind="daily-backup" data-game={gameId} aria-pressed={daily} onClick={toggleDaily}>
+      <button
+        className="btn btn-outline btn-lg"
+        data-nav
+        data-kind="daily-backup"
+        data-game={gameId}
+        aria-pressed={daily}
+        onClick={toggleDaily}
+      >
         {daily ? <CalendarCheck /> : <CalendarX />} Daily backup {daily ? "on" : "off"}
       </button>
     </>

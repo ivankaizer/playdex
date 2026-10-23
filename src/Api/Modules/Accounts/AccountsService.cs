@@ -106,7 +106,9 @@ public sealed class AccountsService(AccountsRepository repository)
                 session.Id,
                 ct);
             if (overlapping.Count > 0)
+            {
                 throw AppProblemException.Conflict(SessionOverlaps.ConflictMessage(overlapping[0], request.StartedAt.Offset));
+            }
 
             var response = ApplySessionUpdate(session, userId, request, now);
             await repository.SaveChanges(ct);
@@ -170,7 +172,9 @@ public sealed class AccountsService(AccountsRepository repository)
         var dayCount = LocalCalendar.DateOf(range.ToExclusive!.Value, zone).DayNumber
             - LocalCalendar.DateOf(range.From!.Value, zone).DayNumber;
         if (dayCount > MaxDailyStatsDays)
+        {
             throw AppProblemException.Validation($"Daily stats cover at most {MaxDailyStatsDays} days.");
+        }
 
         return repository.ComputeDailyStats(
             userId, accountId, range.From.Value, range.ToExclusive.Value, platform, SearchText.OptionalFilter(title, "title"), ignoreShortMinutes, zone, ct);

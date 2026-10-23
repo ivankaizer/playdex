@@ -4,14 +4,7 @@ import { revokeRefreshToken } from "./api";
 import { authSession } from "./auth";
 import { encodeGameId, decodeGameHash } from "./gameHash";
 
-export const protectedPaths = new Set([
-  "/dashboard",
-  "/sessions",
-  "/sessions/create",
-  "/recap",
-  "/mapping",
-  "/settings",
-]);
+export const protectedPaths = new Set(["/dashboard", "/sessions", "/sessions/create", "/recap", "/mapping", "/settings"]);
 
 export const navItems: ReadonlyArray<{ label: string; path: string }> = [
   { label: "Dashboard", path: "/dashboard" },
@@ -34,8 +27,7 @@ export function normalizeGameHash(escapedRemainder: string): string | null {
 }
 
 export function scrollToTop(): void {
-  const reduceMotion =
-    typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const reduceMotion = typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   window.scrollTo({ top: 0, behavior: reduceMotion ? "auto" : "smooth" });
 }
 

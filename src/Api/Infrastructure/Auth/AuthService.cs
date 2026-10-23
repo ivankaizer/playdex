@@ -16,7 +16,7 @@ public sealed record RefreshResult(string AccessToken, string RefreshToken);
 public sealed partial class AuthService(AuthRepository repository, AuthTokenService tokens, ILogger<AuthService> logger)
 {
     // Checked when the email is unknown, so a failed login takes as long whether or not the account exists.
-    private static readonly Lazy<string> UnknownUserHash = new(() => BCrypt.Net.BCrypt.HashPassword(
+    private static readonly Lazy<string> _unknownUserHash = new(() => BCrypt.Net.BCrypt.HashPassword(
         Guid.NewGuid().ToString(), UserCommand.PasswordWorkFactor));
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Refresh token of user {UserId} was used twice; signed out that session")]
@@ -28,7 +28,7 @@ public sealed partial class AuthService(AuthRepository repository, AuthTokenServ
         CancellationToken cancellationToken = default)
     {
         var user = await repository.FindByEmail(email, cancellationToken);
-        var verified = BCrypt.Net.BCrypt.Verify(password, user?.Password ?? UnknownUserHash.Value);
+        var verified = BCrypt.Net.BCrypt.Verify(password, user?.Password ?? _unknownUserHash.Value);
         if (user?.Password is null || !verified)
         {
             throw AppProblemException.Unauthorized("Invalid credentials.");

@@ -24,11 +24,11 @@ public sealed class ArchitectureTests
 {
     private const string InfrastructureArea = "Infrastructure";
 
-    private static readonly Assembly ApiAssembly = typeof(Program).Assembly;
-    private static readonly Assembly PersistenceAssembly = typeof(PlaydexDbContext).Assembly;
+    private static readonly Assembly _apiAssembly = typeof(Program).Assembly;
+    private static readonly Assembly _persistenceAssembly = typeof(PlaydexDbContext).Assembly;
 
     // Types a module publishes for any other module to use. Everything else in a module is internal to it.
-    private static readonly Type[] PublicContracts =
+    private static readonly Type[] _publicContracts =
     [
         typeof(IGames),
         typeof(IGameResolver),
@@ -41,7 +41,7 @@ public sealed class ArchitectureTests
     ];
 
     // Existing direct uses of another module's types. Accepted as they are; a new one should usually be a contract.
-    private static readonly CrossAreaDependency[] AllowedDependencies =
+    private static readonly CrossAreaDependency[] _allowedDependencies =
     [
         // Accounts computes the per-game stats that GET /games/{id}/stats returns in Games' DTOs.
         new("Accounts", typeof(GameStatsResponseDto)),
@@ -65,7 +65,7 @@ public sealed class ArchitectureTests
 
     // Dependencies that break the layering. They are exempted only so the rules keep guarding everything else;
     // remove an entry once the dependency is gone (ExceptionListsNameOnlyDependenciesThatStillExist enforces it).
-    private static readonly CrossAreaDependency[] KnownLayeringViolations =
+    private static readonly CrossAreaDependency[] _knownLayeringViolations =
     [
         // GET /games/{id}/stats injects AccountsService while Accounts already depends on Games (IGames and the
         // stats DTOs), which makes Games <-> Accounts a cycle.
@@ -75,12 +75,12 @@ public sealed class ArchitectureTests
         new("Sessions", typeof(PollingOptions)),
     ];
 
-    private static readonly Type[] ApiTypes = ApiAssembly.GetTypes().Where(type => !IsCompilerGenerated(type)).ToArray();
+    private static readonly Type[] _apiTypes = _apiAssembly.GetTypes().Where(type => !IsCompilerGenerated(type)).ToArray();
 
     public static TheoryData<string> Modules()
     {
         var modules = new TheoryData<string>();
-        foreach (var module in ApiTypes
+        foreach (var module in _apiTypes
                      .Select(AreaOf)
                      .OfType<string>()
                      .Where(area => area != InfrastructureArea)
@@ -97,11 +97,11 @@ public sealed class ArchitectureTests
     public void PersistenceDoesNotDependOnApi()
     {
         Assert.DoesNotContain(
-            PersistenceAssembly.GetReferencedAssemblies(),
+            _persistenceAssembly.GetReferencedAssemblies(),
             reference => reference.Name is "Api" or "ServiceDefaults");
 
         AssertNoDependencies(
-            Types.InAssembly(PersistenceAssembly).That().ResideInNamespaceMatching(NamespacePattern("Playdex.Persistence")),
+            Types.InAssembly(_persistenceAssembly).That().ResideInNamespaceMatching(NamespacePattern("Playdex.Persistence")),
             ["Api"],
             "Persistence must not depend on the API.");
     }
@@ -110,7 +110,7 @@ public sealed class ArchitectureTests
     public void InfrastructureDoesNotDependOnModules()
     {
         var exempt = ExemptionsFor(InfrastructureArea);
-        var moduleTypes = ApiTypes
+        var moduleTypes = _apiTypes
             .Where(type => AreaOf(type) is { } area && area != InfrastructureArea && !exempt.Contains(type));
 
         AssertNoDependencies(
@@ -123,8 +123,8 @@ public sealed class ArchitectureTests
     [MemberData(nameof(Modules))]
     public void ModuleUsesOtherModulesOnlyThroughPublicContracts(string module)
     {
-        var allowed = PublicContracts.Concat(ExemptionsFor(module)).ToHashSet();
-        var otherModulesInternals = ApiTypes.Where(type =>
+        var allowed = _publicContracts.Concat(ExemptionsFor(module)).ToHashSet();
+        var otherModulesInternals = _apiTypes.Where(type =>
             AreaOf(type) is { } area && area != module && area != InfrastructureArea && !allowed.Contains(type));
 
         AssertNoDependencies(
@@ -136,7 +136,7 @@ public sealed class ArchitectureTests
     [Fact]
     public void RepositoriesArePrivateToTheirOwningNamespace()
     {
-        var repositories = ApiTypes
+        var repositories = _apiTypes
             .Where(type => type.Name.EndsWith("Repository", StringComparison.Ordinal) && OwnerNamespace(type) is not null)
             .ToArray();
         Assert.NotEmpty(repositories);
@@ -144,7 +144,7 @@ public sealed class ArchitectureTests
         foreach (var repository in repositories)
         {
             AssertNoDependencies(
-                Types.InAssembly(ApiAssembly).That().DoNotResideInNamespaceMatching(NamespacePattern(OwnerNamespace(repository)!)),
+                Types.InAssembly(_apiAssembly).That().DoNotResideInNamespaceMatching(NamespacePattern(OwnerNamespace(repository)!)),
                 [DependencyName(repository)],
                 $"{repository.Name} may only be used inside {OwnerNamespace(repository)}.");
         }
@@ -186,14 +186,14 @@ public sealed class ArchitectureTests
     public void ExceptionListsNameOnlyDependenciesThatStillExist()
     {
         var problems = new List<string>();
-        foreach (var exemption in AllowedDependencies.Concat(KnownLayeringViolations))
+        foreach (var exemption in _allowedDependencies.Concat(_knownLayeringViolations))
         {
             var target = exemption.Target;
             if (AreaOf(target) is null or InfrastructureArea || AreaOf(target) == exemption.Area)
             {
                 problems.Add($"{exemption}: the target must be a type of another module.");
             }
-            else if (PublicContracts.Contains(target))
+            else if (_publicContracts.Contains(target))
             {
                 problems.Add($"{exemption}: {target.Name} is a public contract and needs no exception.");
             }
@@ -207,10 +207,10 @@ public sealed class ArchitectureTests
     }
 
     private static PredicateList ApiTypesIn(string @namespace) =>
-        Types.InAssembly(ApiAssembly).That().ResideInNamespaceMatching(NamespacePattern(@namespace));
+        Types.InAssembly(_apiAssembly).That().ResideInNamespaceMatching(NamespacePattern(@namespace));
 
     private static PredicateList ModulesAndInfrastructure() =>
-        Types.InAssembly(ApiAssembly).That().ResideInNamespaceMatching(@"^Api\.(Modules|Infrastructure)(\..+)?$");
+        Types.InAssembly(_apiAssembly).That().ResideInNamespaceMatching(@"^Api\.(Modules|Infrastructure)(\..+)?$");
 
     private static void AssertNoDependencies(PredicateList subjects, IEnumerable<string> forbidden, string rule)
     {
@@ -241,7 +241,7 @@ public sealed class ArchitectureTests
             .Contains(type);
 
     private static HashSet<Type> ExemptionsFor(string area) =>
-        AllowedDependencies.Concat(KnownLayeringViolations)
+        _allowedDependencies.Concat(_knownLayeringViolations)
             .Where(exemption => exemption.Area == area)
             .Select(exemption => exemption.Target)
             .ToHashSet();

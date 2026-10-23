@@ -4,7 +4,24 @@ import { errorMessage } from "@/lib/api";
 import { cx } from "@/lib/cx";
 import { adminApi, isAbortError, type IntegrationSummary, type SessionPage } from "../api";
 import { useNotifications } from "../components/Notifications";
-import { Alert, Badge, Button, linkClass, Note, Pager, Panel, ProgressBar, rowClass, Select, Sub, Table, Td, TextInput, Th, Toolbar } from "../components/ui";
+import {
+  Alert,
+  Badge,
+  Button,
+  linkClass,
+  Note,
+  Pager,
+  Panel,
+  ProgressBar,
+  rowClass,
+  Select,
+  Sub,
+  Table,
+  Td,
+  TextInput,
+  Th,
+  Toolbar,
+} from "../components/ui";
 import { hasNextPage, integrationLabel, SessionStatusOptions } from "../logic";
 import { formatLocal, parseTime } from "../time";
 
@@ -166,12 +183,7 @@ export function SessionsPage() {
         <div className="pdx-tile flex flex-col gap-3 !px-5 !py-4">
           <p className="pdx-label">With the selected sessions</p>
           <Toolbar>
-            <Select
-              className="sm:!w-96"
-              value={target}
-              onChange={(event) => setTarget(event.target.value)}
-              aria-label="Target integration"
-            >
+            <Select className="sm:!w-96" value={target} onChange={(event) => setTarget(event.target.value)} aria-label="Target integration">
               <option value="">Target integration</option>
               {integrations.map((integration) => (
                 <option key={integration.id} value={integration.id}>
@@ -179,11 +191,7 @@ export function SessionsPage() {
                 </option>
               ))}
             </Select>
-            <Button
-              variant="accent"
-              onClick={() => void transfer()}
-              disabled={loading || selected.size === 0 || target === ""}
-            >
+            <Button variant="accent" onClick={() => void transfer()} disabled={loading || selected.size === 0 || target === ""}>
               Transfer selected{selected.size > 0 ? ` (${selected.size})` : ""}
             </Button>
             <Button variant="danger" onClick={() => void remove()} disabled={loading || selected.size === 0}>

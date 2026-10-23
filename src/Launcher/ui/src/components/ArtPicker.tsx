@@ -32,8 +32,7 @@ const labelOf = (kind: ArtKind) => KINDS.find((k) => k.kind === kind)!.label;
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
 /** Focus the tab of an artwork kind once it has rendered. */
-const focusKind = (kind: ArtKind) =>
-  window.setTimeout(() => focusEl(document.querySelector<HTMLElement>(`[data-art-kind="${kind}"]`)));
+const focusKind = (kind: ArtKind) => window.setTimeout(() => focusEl(document.querySelector<HTMLElement>(`[data-art-kind="${kind}"]`)));
 
 /**
  * Change a game's poster, wide cover, background and logo to images from SteamGridDB. The game is matched on
@@ -229,7 +228,13 @@ export function ArtPicker({ gameId }: { gameId: string }) {
                 data-nav-default
                 data-kind="field"
               />
-              <button type="submit" className="btn btn-primary" data-nav data-kind="art-search" disabled={busy === "search" || !query.trim()}>
+              <button
+                type="submit"
+                className="btn btn-primary"
+                data-nav
+                data-kind="art-search"
+                disabled={busy === "search" || !query.trim()}
+              >
                 Search
               </button>
             </form>

@@ -58,7 +58,7 @@ public sealed class AccountsRepository(PlaydexDbContext db, IGames games)
                 ? query.OrderBy(row => row.Session.StartedAt)
                 : query.OrderByDescending(row => row.Session.StartedAt),
         };
-        var sessions = await ordered.Skip(offset).Take(limit).Select(ToSessionDbRow).ToListAsync(ct);
+        var sessions = await ordered.Skip(offset).Take(limit).Select(_toSessionDbRow).ToListAsync(ct);
 
         return new SessionQueryResult(total, limit, offset, sessions.Select(MapSession).ToList());
     }
@@ -85,7 +85,7 @@ public sealed class AccountsRepository(PlaydexDbContext db, IGames games)
         var sessions = await query
             .OrderByDescending(row => row.Session.StartedAt)
             .Take(TodaySessionLimit)
-            .Select(ToSessionDbRow)
+            .Select(_toSessionDbRow)
             .ToListAsync(ct);
 
         return new SessionQueryResult(total, TodaySessionLimit, 0, sessions.Select(MapSession).ToList());
@@ -98,7 +98,7 @@ public sealed class AccountsRepository(PlaydexDbContext db, IGames games)
                 userId, accountId, null, null, null, null, null, excludeIgnored: false)
             .Where(row => row.Session.EndedAt == null)
             .OrderByDescending(row => row.Session.StartedAt)
-            .Select(ToSessionDbRow)
+            .Select(_toSessionDbRow)
             .FirstOrDefaultAsync(ct);
         return session is null ? null : MapSession(session);
     }
@@ -127,7 +127,11 @@ public sealed class AccountsRepository(PlaydexDbContext db, IGames games)
             : null;
         await db.LockUserSessions(userId, ct);
         var result = await action();
-        if (transaction is not null) await transaction.CommitAsync(ct);
+        if (transaction is not null)
+        {
+            await transaction.CommitAsync(ct);
+        }
+
         return result;
     }
 
@@ -149,7 +153,7 @@ public sealed class AccountsRepository(PlaydexDbContext db, IGames games)
         long userId, long? accountId, string? title, DateTimeOffset? from, DateTimeOffset? to, CancellationToken ct) =>
         BuildSessionQuery(userId, accountId, title, null, null, from, to, excludeIgnored: true)
             .OrderBy(row => row.Session.StartedAt)
-            .Select(ToSessionDbRow)
+            .Select(_toSessionDbRow)
             .ToListAsync(ct);
 
     /// <summary>
@@ -165,7 +169,7 @@ public sealed class AccountsRepository(PlaydexDbContext db, IGames games)
         var sessions = await BuildSessionQuery(
                 userId, null, null, gameIds, null, null, null, excludeIgnored: true)
             .OrderBy(row => row.Session.StartedAt)
-            .Select(ToSessionDbRow)
+            .Select(_toSessionDbRow)
             .ToListAsync(ct);
         if (sessions.Count == 0)
         {
@@ -219,7 +223,9 @@ public sealed class AccountsRepository(PlaydexDbContext db, IGames games)
             : allSessions.Where(session => session.PlatformKey == normalizedPlatform).ToList();
         var months = BuildMonthStats(from, to, sessions, now, zone);
         if (sessions.Count == 0)
+        {
             return new AccountStatsPeriodDto(0, 0, null, platforms, [], months);
+        }
 
         var totalSeconds = sessions.Sum(session => Seconds(session, now));
 
@@ -265,7 +271,7 @@ public sealed class AccountsRepository(PlaydexDbContext db, IGames games)
                 userId, accountId, title, null, platform, null, null, excludeIgnored: true)
             .Where(row => row.Session.StartedAt < to && (row.Session.EndedAt ?? now) > from)
             .OrderBy(row => row.Session.StartedAt)
-            .Select(ToSessionDbRow)
+            .Select(_toSessionDbRow)
             .ToListAsync(ct);
 
         return BuildDayStats(from, to, rows.Select(MapSession).ToList(), now, zone);
@@ -283,7 +289,9 @@ public sealed class AccountsRepository(PlaydexDbContext db, IGames games)
             select new SessionQueryRow { Session = row.Session, Game = g, Platform = p, Ignored = row.Ignored };
 
         if (accountId.HasValue)
+        {
             query = query.Where(row => row.Session.IntegrationId == accountId.Value);
+        }
 
         if (!string.IsNullOrWhiteSpace(title))
         {
@@ -292,7 +300,9 @@ public sealed class AccountsRepository(PlaydexDbContext db, IGames games)
         }
 
         if (gameIds is { Count: > 0 })
+        {
             query = query.Where(row => gameIds.Contains(row.Game.Id));
+        }
 
         if (!string.IsNullOrWhiteSpace(platform))
         {
@@ -301,18 +311,24 @@ public sealed class AccountsRepository(PlaydexDbContext db, IGames games)
         }
 
         if (from.HasValue)
+        {
             query = query.Where(row => row.Session.StartedAt >= from.Value);
+        }
 
         if (to.HasValue)
+        {
             query = query.Where(row => row.Session.StartedAt < to.Value);
+        }
 
         if (excludeIgnored)
+        {
             query = query.Where(row => !row.Ignored);
+        }
 
         return query;
     }
 
-    private static readonly Expression<Func<SessionQueryRow, SessionDbRow>> ToSessionDbRow =
+    private static readonly Expression<Func<SessionQueryRow, SessionDbRow>> _toSessionDbRow =
         row => new SessionDbRow
         {
             SessionId = row.Session.Id,
@@ -358,20 +374,35 @@ public sealed class AccountsRepository(PlaydexDbContext db, IGames games)
         {
             var start = session.StartedAt > from ? session.StartedAt : from;
             var end = session.EndedAt ?? now;
-            if (end > to) end = to;
+            if (end > to)
+            {
+                end = to;
+            }
+
             for (var day = LocalCalendar.DateOf(start, zone); ; day = day.AddDays(1))
             {
                 var dayStart = LocalCalendar.StartOf(day, zone);
-                if (dayStart >= end) break;
+                if (dayStart >= end)
+                {
+                    break;
+                }
+
                 var dayEnd = LocalCalendar.StartOf(day.AddDays(1), zone);
                 var sliceStart = start > dayStart ? start : dayStart;
                 var sliceEnd = end < dayEnd ? end : dayEnd;
-                if (sliceEnd <= sliceStart) continue;
+                if (sliceEnd <= sliceStart)
+                {
+                    continue;
+                }
+
                 var slice = (sliceEnd - sliceStart).TotalSeconds;
                 seconds[day] = seconds.GetValueOrDefault(day) + slice;
                 counts[day] = counts.GetValueOrDefault(day) + 1;
                 if (!platforms.TryGetValue(day, out var byPlatform))
+                {
                     platforms[day] = byPlatform = [];
+                }
+
                 var current = byPlatform.GetValueOrDefault(session.PlatformKey, (session.PlatformName, 0));
                 byPlatform[session.PlatformKey] = (current.Name, current.Seconds + slice);
             }

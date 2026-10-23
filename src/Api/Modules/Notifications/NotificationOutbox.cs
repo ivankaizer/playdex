@@ -21,17 +21,21 @@ public sealed class NotificationOutbox(PlaydexDbContext db, TimeProvider clock)
     /// <summary>Attempts before a notification is given up (about three hours of retries).</summary>
     public const int MaxAttempts = 10;
 
-    private static readonly TimeSpan FirstRetry = TimeSpan.FromSeconds(30);
-    private static readonly TimeSpan LongestRetry = TimeSpan.FromHours(1);
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly TimeSpan _firstRetry = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan _longestRetry = TimeSpan.FromHours(1);
+    private static readonly JsonSerializerOptions _jsonOptions = new(JsonSerializerDefaults.Web);
 
     /// <returns>False when the notification is not one this outbox knows, or the same event is already queued.</returns>
     public async Task<bool> Enqueue(object notification, CancellationToken ct)
     {
-        if (Describe(notification) is not { } described) return false;
+        if (Describe(notification) is not { } described)
+        {
+            return false;
+        }
+
         var (kind, dedupeKey) = described;
 
-        var payload = JsonSerializer.Serialize(notification, notification.GetType(), JsonOptions);
+        var payload = JsonSerializer.Serialize(notification, notification.GetType(), _jsonOptions);
         var now = clock.GetUtcNow();
         var inserted = await db.Database.ExecuteSqlInterpolatedAsync($"""
             insert into notification_outbox (dedupe_key, kind, payload, next_attempt_at, created_at)
@@ -82,8 +86,8 @@ public sealed class NotificationOutbox(PlaydexDbContext db, TimeProvider clock)
         var now = clock.GetUtcNow();
         var giveUp = permanent || notification.Attempts >= MaxAttempts;
         var retryDelay = TimeSpan.FromTicks(Math.Min(
-            FirstRetry.Ticks * (1L << Math.Clamp(notification.Attempts - 1, 0, 20)),
-            LongestRetry.Ticks));
+            _firstRetry.Ticks * (1L << Math.Clamp(notification.Attempts - 1, 0, 20)),
+            _longestRetry.Ticks));
         await db.NotificationOutbox
             .Where(row => row.Id == notification.Id)
             .ExecuteUpdateAsync(
@@ -118,10 +122,10 @@ public sealed class NotificationOutbox(PlaydexDbContext db, TimeProvider clock)
     /// <returns>The notification, or null when its kind is unknown (a newer release queued it).</returns>
     public static object? Deserialize(OutboxNotification notification) => notification.Kind switch
     {
-        nameof(SessionStarted) => JsonSerializer.Deserialize<SessionStarted>(notification.Payload, JsonOptions),
-        nameof(SessionEnded) => JsonSerializer.Deserialize<SessionEnded>(notification.Payload, JsonOptions),
-        nameof(PollFailed) => JsonSerializer.Deserialize<PollFailed>(notification.Payload, JsonOptions),
-        nameof(IntegrationPaused) => JsonSerializer.Deserialize<IntegrationPaused>(notification.Payload, JsonOptions),
+        nameof(SessionStarted) => JsonSerializer.Deserialize<SessionStarted>(notification.Payload, _jsonOptions),
+        nameof(SessionEnded) => JsonSerializer.Deserialize<SessionEnded>(notification.Payload, _jsonOptions),
+        nameof(PollFailed) => JsonSerializer.Deserialize<PollFailed>(notification.Payload, _jsonOptions),
+        nameof(IntegrationPaused) => JsonSerializer.Deserialize<IntegrationPaused>(notification.Payload, _jsonOptions),
         _ => null,
     };
 

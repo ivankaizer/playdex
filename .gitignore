@@ -55,3 +55,7 @@ src/Launcher/Host/AppPackages/
 
 # TypeScript incremental build info
 *.tsbuildinfo
+
+# Claude Code: personal settings and agent worktrees (.claude/settings.json and .claude/hooks are shared)
+.claude/settings.local.json
+.claude/worktrees/

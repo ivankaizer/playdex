@@ -229,7 +229,11 @@ describe("SettingsPage", () => {
 
   it("keeps long integration IDs whole in the tooltip and shows the first 6 integrations", async () => {
     const longId = "thisisaverylongusernamethatisall (76561198012345678)";
-    const providers = Array.from({ length: 7 }, (_, index) => ({ ...steam, id: index + 1, accountId: index === 0 ? longId : `acct-${index}` }));
+    const providers = Array.from({ length: 7 }, (_, index) => ({
+      ...steam,
+      id: index + 1,
+      accountId: index === 0 ? longId : `acct-${index}`,
+    }));
     routeApi({ "GET /providers": () => Promise.resolve({ providers }) });
     renderPage();
 

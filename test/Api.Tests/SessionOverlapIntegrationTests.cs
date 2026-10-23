@@ -16,12 +16,15 @@ namespace Api.Tests;
 [Collection(PostgresCollectionDefinition.Name)]
 public sealed class SessionOverlapIntegrationTests(PostgresFixture postgres)
 {
-    private static readonly DateTimeOffset Day = new(2026, 9, 7, 0, 0, 0, TimeSpan.Zero);
+    private static readonly DateTimeOffset _day = new(2026, 9, 7, 0, 0, 0, TimeSpan.Zero);
 
     [Fact]
     public async Task EntriesOfOneDayFollowEachOtherAndADayWithoutRoomIsRefused()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         await using var db = CreateDb();
         var (user, game) = await Seed(db);
@@ -38,18 +41,22 @@ public sealed class SessionOverlapIntegrationTests(PostgresFixture postgres)
 
         try
         {
-            Assert.Equal((Day, Day.AddMinutes(90)), await Times(await Entry(90, "pc")));
+            Assert.Equal((_day, _day.AddMinutes(90)), await Times(await Entry(90, "pc")));
             // The second entry of the day follows the first instead of starting at midnight too.
-            Assert.Equal((Day.AddMinutes(90), Day.AddMinutes(150)), await Times(await Entry(60, "pc")));
+            Assert.Equal((_day.AddMinutes(90), _day.AddMinutes(150)), await Times(await Entry(60, "pc")));
             // Another platform has its own day.
-            Assert.Equal((Day, Day.AddMinutes(60)), await Times(await Entry(60, "ps5")));
+            Assert.Equal((_day, _day.AddMinutes(60)), await Times(await Entry(60, "ps5")));
 
             // Play recorded on PC from 03:00 to 23:30 leaves 02:30-03:00 and 23:30-24:00.
             var pc = await db.Platforms.SingleAsync(item => item.Key == "pc");
             db.PlaySessions.Add(new PlaySession
             {
-                UserId = user.Id, GameId = game.Id, PlatformId = pc.Id, CaptureMethod = CaptureMethod.Manual,
-                StartedAt = Day.AddHours(3), EndedAt = Day.AddHours(23.5),
+                UserId = user.Id,
+                GameId = game.Id,
+                PlatformId = pc.Id,
+                CaptureMethod = CaptureMethod.Manual,
+                StartedAt = _day.AddHours(3),
+                EndedAt = _day.AddHours(23.5),
             });
             await db.SaveChangesAsync();
 
@@ -59,8 +66,8 @@ public sealed class SessionOverlapIntegrationTests(PostgresFixture postgres)
                 "2026-09-07 has no 2 h free on PC: an entry that long would overlap the sessions already logged there.",
                 refused.Message);
 
-            Assert.Equal((Day.AddMinutes(150), Day.AddHours(3)), await Times(await Entry(30, "pc")));
-            Assert.Equal((Day.AddHours(23.5), Day.AddDays(1)), await Times(await Entry(30, "pc")));
+            Assert.Equal((_day.AddMinutes(150), _day.AddHours(3)), await Times(await Entry(30, "pc")));
+            Assert.Equal((_day.AddHours(23.5), _day.AddDays(1)), await Times(await Entry(30, "pc")));
             Assert.Equal(409, (await Assert.ThrowsAsync<AppProblemException>(() => Entry(1, "pc"))).StatusCode);
         }
         finally
@@ -72,20 +79,33 @@ public sealed class SessionOverlapIntegrationTests(PostgresFixture postgres)
     [Fact]
     public async Task AcceptedDraftRowsOfOneDateFollowEachOther()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         await using var db = CreateDb();
         var (user, game) = await Seed(db);
         var now = DateTimeOffset.UtcNow;
         var batch = new SessionDraftBatch
         {
-            Id = Guid.NewGuid(), UserId = user.Id, RequestId = Guid.NewGuid(), CreatedAt = now, Timezone = "UTC",
+            Id = Guid.NewGuid(),
+            UserId = user.Id,
+            RequestId = Guid.NewGuid(),
+            CreatedAt = now,
+            Timezone = "UTC",
             ReferenceDate = new DateOnly(2026, 9, 7),
         };
         SessionDraftRow Row(int position, int minutes) => new()
         {
-            Id = Guid.NewGuid(), BatchId = batch.Id, Position = position, Title = game.Title, Date = "2026-09-07",
-            DurationMinutes = minutes, PlatformKey = "ps5", GameId = GameId.Encode(game.Id),
+            Id = Guid.NewGuid(),
+            BatchId = batch.Id,
+            Position = position,
+            Title = game.Title,
+            Date = "2026-09-07",
+            DurationMinutes = minutes,
+            PlatformKey = "ps5",
+            GameId = GameId.Encode(game.Id),
             SelectionJson = System.Text.Json.JsonSerializer.Serialize(
                 new ManualMappingSearchResultDto("local", GameId.Encode(game.Id), null, game.Title, null, null, null)),
         };
@@ -104,8 +124,8 @@ public sealed class SessionOverlapIntegrationTests(PostgresFixture postgres)
 
             var first = await db.PlaySessions.AsNoTracking().SingleAsync(item => item.Id == results[0].SessionId);
             var second = await db.PlaySessions.AsNoTracking().SingleAsync(item => item.Id == results[1].SessionId);
-            Assert.Equal((Day, Day.AddMinutes(90)), (first.StartedAt, first.EndedAt));
-            Assert.Equal((Day.AddMinutes(90), Day.AddMinutes(150)), (second.StartedAt, second.EndedAt));
+            Assert.Equal((_day, _day.AddMinutes(90)), (first.StartedAt, first.EndedAt));
+            Assert.Equal((_day.AddMinutes(90), _day.AddMinutes(150)), (second.StartedAt, second.EndedAt));
             // 23 hours no longer fit next to the first two; the row stays pending with the reason.
             Assert.Null(results[2].SessionId);
             Assert.Equal(
@@ -124,7 +144,10 @@ public sealed class SessionOverlapIntegrationTests(PostgresFixture postgres)
     [Fact]
     public async Task EditsCannotOverlapAnotherSessionOnTheSamePlatform()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         await using var db = CreateDb();
         await using var transaction = await db.Database.BeginTransactionAsync();
@@ -138,8 +161,12 @@ public sealed class SessionOverlapIntegrationTests(PostgresFixture postgres)
         {
             var session = new PlaySession
             {
-                UserId = user.Id, GameId = played.Id, PlatformId = platform.Id, CaptureMethod = CaptureMethod.Manual,
-                StartedAt = Day.AddHours(startHours), EndedAt = endHours is { } end ? Day.AddHours(end) : null,
+                UserId = user.Id,
+                GameId = played.Id,
+                PlatformId = platform.Id,
+                CaptureMethod = CaptureMethod.Manual,
+                StartedAt = _day.AddHours(startHours),
+                EndedAt = endHours is { } end ? _day.AddHours(end) : null,
             };
             db.PlaySessions.Add(session);
             return session;
@@ -155,8 +182,8 @@ public sealed class SessionOverlapIntegrationTests(PostgresFixture postgres)
                 session.Id,
                 user.Id,
                 new AccountSessionUpdateRequest(
-                    Day.AddHours(startHours).ToOffset(TimeSpan.FromHours(offsetHours)),
-                    Day.AddHours(endHours).ToOffset(TimeSpan.FromHours(offsetHours))),
+                    _day.AddHours(startHours).ToOffset(TimeSpan.FromHours(offsetHours)),
+                    _day.AddHours(endHours).ToOffset(TimeSpan.FromHours(offsetHours))),
                 CancellationToken.None);
 
         var overlap = await Assert.ThrowsAsync<AppProblemException>(() => Edit(noon, 10.5, 12.5, offsetHours: 2));
@@ -166,13 +193,13 @@ public sealed class SessionOverlapIntegrationTests(PostgresFixture postgres)
                 + "Sessions on the same platform cannot overlap.",
             overlap.Message);
         var unchanged = await db.PlaySessions.AsNoTracking().SingleAsync(item => item.Id == noon.Id);
-        Assert.Equal(Day.AddHours(12), unchanged.StartedAt);
+        Assert.Equal(_day.AddHours(12), unchanged.StartedAt);
 
         // Back to back is fine, and so is moving within its own old times.
-        Assert.Equal(Day.AddHours(11), (await Edit(noon, 11, 12.5)).StartedAt);
-        Assert.Equal(Day.AddHours(11.5), (await Edit(noon, 11.5, 12)).StartedAt);
+        Assert.Equal(_day.AddHours(11), (await Edit(noon, 11, 12.5)).StartedAt);
+        Assert.Equal(_day.AddHours(11.5), (await Edit(noon, 11.5, 12)).StartedAt);
         // Another platform is another place to play.
-        Assert.Equal(Day.AddHours(10), (await Edit(console, 10, 11)).StartedAt);
+        Assert.Equal(_day.AddHours(10), (await Edit(console, 10, 11)).StartedAt);
 
         var stillRunning = await Assert.ThrowsAsync<AppProblemException>(() => Edit(morning, 19, 21));
         Assert.Equal(409, stillRunning.StatusCode);

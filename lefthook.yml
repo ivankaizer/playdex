@@ -1,0 +1,17 @@
+# Git hooks (https://lefthook.dev). Install them once per clone with `lefthook install`.
+# They fix the formatting of what you commit, so the checks in .github/workflows/test.yaml pass.
+pre-commit:
+  parallel: true
+  commands:
+    biome:
+      glob: "*.{js,mjs,cjs,ts,tsx,json,jsonc,css}"
+      # `bun run` uses the Biome in node_modules (`bun install` at the root), never the unrelated npm package "biome".
+      run: bun run biome check --write --no-errors-on-unmatched --files-ignore-unknown=true --colors=off {staged_files}
+      stage_fixed: true
+    dotnet-format:
+      glob: "*.cs"
+      # Style needs the solution, so it fixes only the files in Playdex.sln; whitespace fixes them all.
+      run: dotnet format whitespace --folder --include {staged_files} && dotnet format style Playdex.sln --include {staged_files}
+      stage_fixed: true
+    gitleaks:
+      run: command -v gitleaks >/dev/null || exit 0; gitleaks protect --staged --redact

@@ -47,7 +47,7 @@ public sealed class SteamClient(HttpClient httpClient, IOptions<SteamOptions> op
         response.EnsureSuccessStatusCode();
 
         var rawJson = await response.Content.ReadAsStringAsync(ct);
-        var payload = JsonSerializer.Deserialize<SteamPlayerSummariesResponse>(rawJson, JsonOptions);
+        var payload = JsonSerializer.Deserialize<SteamPlayerSummariesResponse>(rawJson, _jsonOptions);
         var player = payload?.Response?.Players?.FirstOrDefault();
 
         if (player?.GameId is null || string.IsNullOrEmpty(player.GameExtraInfo))
@@ -66,7 +66,7 @@ public sealed class SteamClient(HttpClient httpClient, IOptions<SteamOptions> op
         );
     }
 
-    private static readonly JsonSerializerOptions JsonOptions = new()
+    private static readonly JsonSerializerOptions _jsonOptions = new()
     {
         PropertyNameCaseInsensitive = true,
         PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower

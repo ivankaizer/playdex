@@ -12,7 +12,10 @@ public sealed class GameResolverIntegrationTests(PostgresFixture postgres)
     [Fact]
     public async Task AClientTitleNamesANewGameButNeverRenamesAnExistingOne()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         await using var db = CreateContext();
         await using var transaction = await db.Database.BeginTransactionAsync();
@@ -33,7 +36,10 @@ public sealed class GameResolverIntegrationTests(PostgresFixture postgres)
     [Fact]
     public async Task AnAuthoritativeTitleRenamesAnUnlockedGame()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         await using var db = CreateContext();
         await using var transaction = await db.Database.BeginTransactionAsync();
@@ -53,7 +59,10 @@ public sealed class GameResolverIntegrationTests(PostgresFixture postgres)
     [Fact]
     public async Task WithoutAnExternalIdTheSameTitleFindsTheSameGame()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         await using var db = CreateContext();
         await using var transaction = await db.Database.BeginTransactionAsync();
@@ -77,7 +86,10 @@ public sealed class GameResolverIntegrationTests(PostgresFixture postgres)
     [Fact]
     public async Task TitlesInOtherScriptsKeepTheirLetters()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         await using var db = CreateContext();
         await using var transaction = await db.Database.BeginTransactionAsync();
@@ -93,7 +105,10 @@ public sealed class GameResolverIntegrationTests(PostgresFixture postgres)
     [Fact]
     public async Task AGameFoundByTitleKeepsItsTitleAndPoster()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         await using var db = CreateContext();
         await using var transaction = await db.Database.BeginTransactionAsync();
@@ -117,7 +132,10 @@ public sealed class GameResolverIntegrationTests(PostgresFixture postgres)
     [Fact]
     public async Task AnUpToDateGameIsNeitherWrittenNorLocked()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         await using var db = CreateContext();
         await using var transaction = await db.Database.BeginTransactionAsync();
@@ -129,8 +147,12 @@ public sealed class GameResolverIntegrationTests(PostgresFixture postgres)
         await db.SaveChangesAsync();
         var identity = new GameExternalIdentity
         {
-            GameId = before.Id, Type = GameExternalIdentityType.Steam, ExternalId = appId, Title = "Steady Title",
-            CreatedAt = stamp, UpdatedAt = stamp,
+            GameId = before.Id,
+            Type = GameExternalIdentityType.Steam,
+            ExternalId = appId,
+            Title = "Steady Title",
+            CreatedAt = stamp,
+            UpdatedAt = stamp,
         };
         db.GameExternalIdentities.Add(identity);
         await db.SaveChangesAsync();

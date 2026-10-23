@@ -61,9 +61,7 @@ export function isProviderUpdating(state: ProvidersState, providerId: number): b
 
 export function isProviderMutationInProgress(state: ProvidersState, providerId: number): boolean {
   return (
-    state.updatingProviderIds.has(providerId) ||
-    state.savingCredentialIds.has(providerId) ||
-    state.savingSessionPlatformIds.has(providerId)
+    state.updatingProviderIds.has(providerId) || state.savingCredentialIds.has(providerId) || state.savingSessionPlatformIds.has(providerId)
   );
 }
 
@@ -218,11 +216,7 @@ export function endCredentialSave(state: ProvidersState, providerId: number): Pr
 
 // Recording platform
 
-export function selectSessionPlatform(
-  state: ProvidersState,
-  provider: ProviderStatus,
-  platformKey: string,
-): ProvidersState | null {
+export function selectSessionPlatform(state: ProvidersState, provider: ProviderStatus, platformKey: string): ProvidersState | null {
   if (isAnySessionPlatformSaving(state) || isProviderMutationInProgress(state, provider.id)) return null;
   if (!provider.sessionPlatformOptions?.some((option) => option.key === platformKey)) return null;
 
@@ -235,9 +229,7 @@ export function selectSessionPlatform(
 }
 
 export function selectedSessionPlatformKey(state: ProvidersState, provider: ProviderStatus): string {
-  return state.pendingSessionPlatformProviderId === provider.id
-    ? state.selectedSessionPlatformKey
-    : (provider.sessionPlatform?.key ?? "");
+  return state.pendingSessionPlatformProviderId === provider.id ? state.selectedSessionPlatformKey : (provider.sessionPlatform?.key ?? "");
 }
 
 export function buildSessionPlatformSubmission(state: ProvidersState, rewriteExistingSessions: boolean): Submission {

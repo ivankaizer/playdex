@@ -60,10 +60,7 @@ export function IntegrationCard({ provider, integrations }: IntegrationCardProps
             active ? "bg-mint text-accent" : "bg-divider text-ink-3",
           )}
         >
-          <span
-            aria-hidden="true"
-            className={cx("h-[7px] w-[7px] rounded-full", active ? "bg-brand" : "bg-faint")}
-          ></span>
+          <span aria-hidden="true" className={cx("h-[7px] w-[7px] rounded-full", active ? "bg-brand" : "bg-faint")}></span>
           {isUpdating ? "Updating..." : active ? "Active" : "Paused"}
         </span>
         <button
@@ -147,7 +144,11 @@ export function IntegrationCard({ provider, integrations }: IntegrationCardProps
             />
           ) : null}
 
-          {state.credentialError ? <p role="alert" className="text-[13px] text-danger">{state.credentialError}</p> : null}
+          {state.credentialError ? (
+            <p role="alert" className="text-[13px] text-danger">
+              {state.credentialError}
+            </p>
+          ) : null}
 
           <div className="flex flex-wrap items-center gap-2">
             <button
@@ -187,30 +188,26 @@ function RecordingPlatform({ provider, options, integrations, mutationInProgress
   return (
     <div className="rounded-[20px] border border-line bg-surface p-4">
       <div className="flex flex-col gap-1.5">
-      <label className={fieldLabelClass}>
-        Recording platform
-        <select
-          value={selectedSessionPlatformKey(state, provider)}
-          onChange={(event) => integrations.changeSessionPlatform(provider, event.target.value)}
-          disabled={mutationInProgress}
-          className={fieldInputClass}
-        >
-          {options.map((option) => (
-            <option key={option.key} value={option.key}>
-              {option.name}
-            </option>
-          ))}
-        </select>
-      </label>
-      <span className="px-1 text-xs text-muted">New sessions recorded by this integration use this platform.</span>
+        <label className={fieldLabelClass}>
+          Recording platform
+          <select
+            value={selectedSessionPlatformKey(state, provider)}
+            onChange={(event) => integrations.changeSessionPlatform(provider, event.target.value)}
+            disabled={mutationInProgress}
+            className={fieldInputClass}
+          >
+            {options.map((option) => (
+              <option key={option.key} value={option.key}>
+                {option.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <span className="px-1 text-xs text-muted">New sessions recorded by this integration use this platform.</span>
       </div>
 
       {state.pendingSessionPlatformProviderId === provider.id ? (
-        <div
-          role="alertdialog"
-          aria-label="Confirm recording platform change"
-          className="mt-4 border-t border-divider pt-4"
-        >
+        <div role="alertdialog" aria-label="Confirm recording platform change" className="mt-4 border-t border-divider pt-4">
           <p className="text-[13px] text-ink-2">Should existing sessions from this integration also use the new platform?</p>
           <div className="mt-3 flex flex-wrap gap-2">
             <button
@@ -241,7 +238,11 @@ function RecordingPlatform({ provider, options, integrations, mutationInProgress
         </div>
       ) : null}
 
-      {state.sessionPlatformError ? <p role="alert" className="mt-3 text-[13px] text-danger">{state.sessionPlatformError}</p> : null}
+      {state.sessionPlatformError ? (
+        <p role="alert" className="mt-3 text-[13px] text-danger">
+          {state.sessionPlatformError}
+        </p>
+      ) : null}
     </div>
   );
 }

@@ -191,7 +191,7 @@ function demoSummary(): PlaydexSummary {
   const weekByGame = new Map<string, typeof rows>();
   for (const r of week) weekByGame.set(r.gameId, [...(weekByGame.get(r.gameId) ?? []), r]);
   const detail = (list: typeof rows): PlaydexPeriodDetail => {
-    const group = <K,>(key: (r: (typeof rows)[number]) => K) => {
+    const group = <K>(key: (r: (typeof rows)[number]) => K) => {
       const m = new Map<K, typeof rows>();
       for (const r of list) m.set(key(r), [...(m.get(key(r)) ?? []), r]);
       return [...m.entries()];
@@ -240,7 +240,10 @@ function demoSummary(): PlaydexSummary {
           capsuleUrl: null,
           ...period(list),
           totalSeconds: g.totalMinutes * 60,
-          lastPlayedAt: list.map((r) => r.startedAt).sort().at(-1)!,
+          lastPlayedAt: list
+            .map((r) => r.startedAt)
+            .sort()
+            .at(-1)!,
           identities: g.art ? [{ type: "steam", externalId: String(g.art) }] : [],
         };
       }),
@@ -272,7 +275,12 @@ export interface GameHistory {
 const hourMinute = new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit" });
 
 function toSession(s: PlaydexSession, gameId: string): Session {
-  return { gameId, dayOffset: daysAgo(s.startedAt), start: hourMinute.format(Date.parse(s.startedAt)), minutes: Math.round(s.durationSeconds / 60) };
+  return {
+    gameId,
+    dayOffset: daysAgo(s.startedAt),
+    start: hourMinute.format(Date.parse(s.startedAt)),
+    minutes: Math.round(s.durationSeconds / 60),
+  };
 }
 
 /**

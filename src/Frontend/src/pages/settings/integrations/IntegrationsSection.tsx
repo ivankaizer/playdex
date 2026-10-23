@@ -31,9 +31,7 @@ export function IntegrationsSection({ integrations }: IntegrationsSectionProps) 
         aside={
           state.isProvidersLoading || state.providersError ? null : (
             <span className="pdx-num text-[13px] text-muted">
-              {visible.length > 0
-                ? `${formatCount(activeCount)} of ${formatCount(visible.length)} active`
-                : "No services connected"}
+              {visible.length > 0 ? `${formatCount(activeCount)} of ${formatCount(visible.length)} active` : "No services connected"}
             </span>
           )
         }
@@ -62,9 +60,7 @@ export function IntegrationsSection({ integrations }: IntegrationsSectionProps) 
             </div>
           ))
         ) : visible.length === 0 ? (
-          <div className="pdx-dashed !rounded-[20px] !p-5 !text-sm">
-            No integrations connected yet. Add one to start syncing playtime.
-          </div>
+          <div className="pdx-dashed !rounded-[20px] !p-5 !text-sm">No integrations connected yet. Add one to start syncing playtime.</div>
         ) : (
           <>
             {shown.map((provider) => (

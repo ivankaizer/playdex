@@ -13,7 +13,9 @@ describe("errorMessage", () => {
   });
 
   it("explains a generic detail by its status", () => {
-    expect(errorMessage(new ApiError(500, "Internal server error."))).toBe("Playdex ran into a problem on its side. Try again in a moment.");
+    expect(errorMessage(new ApiError(500, "Internal server error."))).toBe(
+      "Playdex ran into a problem on its side. Try again in a moment.",
+    );
     expect(errorMessage(new ApiError(503, "Request failed."))).toBe("Playdex ran into a problem on its side. Try again in a moment.");
     expect(errorMessage(new ApiError(504, "Request failed."))).toBe("Playdex took too long to answer. Try again.");
     expect(errorMessage(new ApiError(401, "Request failed."))).toBe("Your session has expired. Sign in again.");

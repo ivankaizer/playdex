@@ -2,10 +2,7 @@ import { useCallback, useRef, useState } from "react";
 
 /** Equivalent to .NET `Uri.EscapeDataString` (RFC 3986: only unreserved characters stay literal). */
 export function escapeDataString(value: string): string {
-  return encodeURIComponent(value).replace(
-    /[!'()*]/g,
-    (character) => `%${character.charCodeAt(0).toString(16).toUpperCase()}`,
-  );
+  return encodeURIComponent(value).replace(/[!'()*]/g, (character) => `%${character.charCodeAt(0).toString(16).toUpperCase()}`);
 }
 
 /** A request controller that is aborted together with its parent (CancellationTokenSource.CreateLinkedTokenSource). */

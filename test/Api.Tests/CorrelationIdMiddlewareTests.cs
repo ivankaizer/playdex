@@ -74,7 +74,11 @@ public sealed class CorrelationIdMiddlewareTests
     private static async Task<HttpContext> Run(string? supplied)
     {
         var context = new DefaultHttpContext();
-        if (supplied is not null) context.Request.Headers[CorrelationIdMiddleware.HeaderName] = supplied;
+        if (supplied is not null)
+        {
+            context.Request.Headers[CorrelationIdMiddleware.HeaderName] = supplied;
+        }
+
         await new CorrelationIdMiddleware(_ => Task.CompletedTask)
             .InvokeAsync(context, NullLogger<CorrelationIdMiddleware>.Instance);
         return context;

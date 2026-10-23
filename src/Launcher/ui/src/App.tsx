@@ -368,8 +368,8 @@ function EmptyHome() {
         <span className="kicker">No games yet</span>
         <h2>Install a game on Steam or add one in Playdex</h2>
         <p>
-          The launcher lists installed Steam games and games added through the Playdex Wrapper. New games show up the
-          next time the launcher starts.
+          The launcher lists installed Steam games and games added through the Playdex Wrapper. New games show up the next time the launcher
+          starts.
         </p>
       </div>
     </main>

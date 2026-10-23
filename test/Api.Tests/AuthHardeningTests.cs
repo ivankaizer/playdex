@@ -14,7 +14,7 @@ namespace Api.Tests;
 public sealed class AuthHardeningTests
 {
     private const string StrongSecret = "auth-hardening-test-secret-at-least-thirty-two-bytes";
-    private static readonly AuthTokenService Tokens = new(Options.Create(new AuthOptions { JwtSecret = StrongSecret }));
+    private static readonly AuthTokenService _tokens = new(Options.Create(new AuthOptions { JwtSecret = StrongSecret }));
 
     [Theory]
     [InlineData("")]
@@ -49,7 +49,7 @@ public sealed class AuthHardeningTests
     public async Task RefreshTokensFromAnOlderTokenVersionAreRevoked()
     {
         var repository = new FakeAuthRepository(new User { Id = 7, Email = "a@example.com", TokenVersion = 1 });
-        var oldPair = Tokens.IssueTokenPair(7, "a@example.com", tokenVersion: 0);
+        var oldPair = _tokens.IssueTokenPair(7, "a@example.com", tokenVersion: 0);
         repository.Remember(oldPair);
 
         var error = await Assert.ThrowsAsync<AppProblemException>(() => Service(repository).Refresh(oldPair.RefreshToken));
@@ -61,12 +61,12 @@ public sealed class AuthHardeningTests
     public async Task RefreshReissuesWithTheCurrentEmailAndVersion()
     {
         var repository = new FakeAuthRepository(new User { Id = 7, Email = "new@example.com", TokenVersion = 2 });
-        var pair = Tokens.IssueTokenPair(7, "old@example.com", tokenVersion: 2);
+        var pair = _tokens.IssueTokenPair(7, "old@example.com", tokenVersion: 2);
         repository.Remember(pair);
 
         var refreshed = await Service(repository).Refresh(pair.RefreshToken);
 
-        var principal = Tokens.Validate(refreshed.AccessToken, "access");
+        var principal = _tokens.Validate(refreshed.AccessToken, "access");
         Assert.Equal("new@example.com", principal.FindFirst("email")?.Value);
         Assert.Equal("2", principal.FindFirst(AuthTokenService.TokenVersionClaim)?.Value);
     }
@@ -75,7 +75,7 @@ public sealed class AuthHardeningTests
     public async Task ARefreshTokenTheServerNeverStoredIsRejected()
     {
         var repository = new FakeAuthRepository(new User { Id = 7, Email = "a@example.com" });
-        var unknown = Tokens.IssueTokenPair(7, "a@example.com", tokenVersion: 0);
+        var unknown = _tokens.IssueTokenPair(7, "a@example.com", tokenVersion: 0);
 
         var error = await Assert.ThrowsAsync<AppProblemException>(() => Service(repository).Refresh(unknown.RefreshToken));
 
@@ -87,7 +87,7 @@ public sealed class AuthHardeningTests
     {
         var repository = new FakeAuthRepository(new User { Id = 7, Email = "a@example.com" });
         var service = Service(repository);
-        var first = Tokens.IssueTokenPair(7, "a@example.com", tokenVersion: 0);
+        var first = _tokens.IssueTokenPair(7, "a@example.com", tokenVersion: 0);
         repository.Remember(first);
         var second = await service.Refresh(first.RefreshToken);
 
@@ -104,8 +104,8 @@ public sealed class AuthHardeningTests
     {
         var repository = new FakeAuthRepository(new User { Id = 7, Email = "a@example.com" });
         var service = Service(repository);
-        var laptop = Tokens.IssueTokenPair(7, "a@example.com", tokenVersion: 0);
-        var phone = Tokens.IssueTokenPair(7, "a@example.com", tokenVersion: 0);
+        var laptop = _tokens.IssueTokenPair(7, "a@example.com", tokenVersion: 0);
+        var phone = _tokens.IssueTokenPair(7, "a@example.com", tokenVersion: 0);
         repository.Remember(laptop);
         repository.Remember(phone);
         await service.Refresh(laptop.RefreshToken);
@@ -120,7 +120,7 @@ public sealed class AuthHardeningTests
     {
         var repository = new FakeAuthRepository(new User { Id = 7, Email = "a@example.com" });
         var service = Service(repository);
-        var pair = Tokens.IssueTokenPair(7, "a@example.com", tokenVersion: 0);
+        var pair = _tokens.IssueTokenPair(7, "a@example.com", tokenVersion: 0);
         repository.Remember(pair);
         var refreshed = await service.Refresh(pair.RefreshToken);
 
@@ -135,13 +135,13 @@ public sealed class AuthHardeningTests
     [Fact]
     public void RefreshTokensCarryAnIdTheServerStoresOnlyAsAHash()
     {
-        var pair = Tokens.IssueTokenPair(7, "a@example.com", tokenVersion: 0);
+        var pair = _tokens.IssueTokenPair(7, "a@example.com", tokenVersion: 0);
 
-        var principal = Tokens.Validate(pair.RefreshToken, "refresh");
+        var principal = _tokens.Validate(pair.RefreshToken, "refresh");
 
         Assert.Equal(pair.RefreshTokenId, principal.FindFirst(AuthTokenService.TokenIdClaim)?.Value);
         Assert.Equal(32, AuthTokenService.HashTokenId(pair.RefreshTokenId).Length);
-        Assert.NotEqual(pair.RefreshTokenId, Tokens.IssueTokenPair(7, "a@example.com", tokenVersion: 0).RefreshTokenId);
+        Assert.NotEqual(pair.RefreshTokenId, _tokens.IssueTokenPair(7, "a@example.com", tokenVersion: 0).RefreshTokenId);
     }
 
     [Fact]
@@ -156,7 +156,7 @@ public sealed class AuthHardeningTests
     }
 
     private static AuthService Service(AuthRepository repository) =>
-        new(repository, Tokens, NullLogger<AuthService>.Instance);
+        new(repository, _tokens, NullLogger<AuthService>.Instance);
 
     private static IOptions<AuthOptions> AuthOptionsFor(string secret, string environment)
     {

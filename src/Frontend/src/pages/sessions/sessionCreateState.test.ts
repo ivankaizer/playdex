@@ -171,7 +171,9 @@ describe("save readiness", () => {
     expect(submissionBlocker(state)).toBeNull();
     expect(submissionBlocker(setMinutes(setHours(state, "0"), "0"))).toBe("Add how long you played.");
     expect(submissionBlocker(setDate(state, ""))).toBe("Select a date.");
-    expect(submissionBlocker(setMode(selectGame(openSessionCreate("historical", new Date()), savedGame), "live"))).toBe("Select a platform.");
+    expect(submissionBlocker(setMode(selectGame(openSessionCreate("historical", new Date()), savedGame), "live"))).toBe(
+      "Select a platform.",
+    );
   });
 
   it("clearing the game keeps the platform", () => {

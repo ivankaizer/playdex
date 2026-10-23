@@ -93,10 +93,7 @@ export function SessionCreateModal({
 
   if (embedded) {
     return (
-      <div
-        data-layout="extended-manual"
-        className="grid w-full grid-cols-[repeat(auto-fit,minmax(min(360px,100%),1fr))] items-start gap-7"
-      >
+      <div data-layout="extended-manual" className="grid w-full grid-cols-[repeat(auto-fit,minmax(min(360px,100%),1fr))] items-start gap-7">
         <section className="pdx-card flex flex-col gap-[22px]">{gameStep}</section>
         <section className="pdx-card flex flex-col gap-[22px]">{detailsStep}</section>
       </div>
@@ -268,7 +265,10 @@ function ResultButton({ result, selected, onSelect }: { result: ManualMappingSea
       </span>
       <span
         aria-hidden="true"
-        className={cx("grid h-6 w-6 place-items-center rounded-full text-xs font-bold text-white", selected ? "bg-brand" : "bg-transparent")}
+        className={cx(
+          "grid h-6 w-6 place-items-center rounded-full text-xs font-bold text-white",
+          selected ? "bg-brand" : "bg-transparent",
+        )}
       >
         {selected ? "✓" : ""}
       </span>
@@ -320,7 +320,12 @@ function DetailsStep({
 
       {selectedGame !== null ? (
         <div className="flex items-center gap-3.5 rounded-[20px] bg-mint px-3.5 py-3">
-          <Cover title={selectedGame.title} src={selectedGame.capsuleUrl} className="h-[52px] w-[52px] rounded-[14px]" initialClassName="text-[17px]" />
+          <Cover
+            title={selectedGame.title}
+            src={selectedGame.capsuleUrl}
+            className="h-[52px] w-[52px] rounded-[14px]"
+            initialClassName="text-[17px]"
+          />
           <div className="min-w-0 flex-1">
             <p title={selectedGame.title} className="truncate text-[15px] font-semibold">
               {selectedGame.title}

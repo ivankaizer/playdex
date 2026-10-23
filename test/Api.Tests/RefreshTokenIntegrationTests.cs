@@ -11,13 +11,16 @@ namespace Api.Tests;
 [Collection(PostgresCollectionDefinition.Name)]
 public sealed class RefreshTokenIntegrationTests(PostgresFixture postgres)
 {
-    private static readonly AuthTokenService Tokens =
+    private static readonly AuthTokenService _tokens =
         new(Options.Create(new AuthOptions { JwtSecret = "refresh-token-integration-secret-at-least-32-bytes" }));
 
     [Fact]
     public async Task EachRefreshTokenWorksOnceAndReusingOneRevokesTheSignIn()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         await using var db = CreateContext();
         await using var transaction = await db.Database.BeginTransactionAsync();
@@ -32,7 +35,7 @@ public sealed class RefreshTokenIntegrationTests(PostgresFixture postgres)
         Assert.Single(stored.Select(row => row.FamilyId).Distinct());
         Assert.NotNull(stored[0].RotatedAt);
         Assert.Null(stored[1].RotatedAt);
-        var refreshedId = Tokens.Validate(refreshed.RefreshToken, "refresh").FindFirst(AuthTokenService.TokenIdClaim)!.Value;
+        var refreshedId = _tokens.Validate(refreshed.RefreshToken, "refresh").FindFirst(AuthTokenService.TokenIdClaim)!.Value;
         Assert.Equal(AuthTokenService.HashTokenId(refreshedId), stored[1].TokenHash);
 
         var reuse = await Assert.ThrowsAsync<AppProblemException>(() => service.Refresh(login.RefreshToken));
@@ -46,7 +49,10 @@ public sealed class RefreshTokenIntegrationTests(PostgresFixture postgres)
     [Fact]
     public async Task ATokenCanBeRotatedOnlyOnce()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         await using var db = CreateContext();
         await using var transaction = await db.Database.BeginTransactionAsync();
@@ -63,7 +69,10 @@ public sealed class RefreshTokenIntegrationTests(PostgresFixture postgres)
     [Fact]
     public async Task LogoutAndANewPasswordRevokeStoredTokens()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         await using var db = CreateContext();
         await using var transaction = await db.Database.BeginTransactionAsync();
@@ -103,7 +112,7 @@ public sealed class RefreshTokenIntegrationTests(PostgresFixture postgres)
         db.RefreshTokens.AsNoTracking().Where(row => row.UserId == userId).OrderBy(row => row.Id).ToListAsync();
 
     private static AuthService Service(PlaydexDbContext db) =>
-        new(new AuthRepository(db), Tokens, NullLogger<AuthService>.Instance);
+        new(new AuthRepository(db), _tokens, NullLogger<AuthService>.Instance);
 
     private PlaydexDbContext CreateContext() =>
         new(new DbContextOptionsBuilder<PlaydexDbContext>()

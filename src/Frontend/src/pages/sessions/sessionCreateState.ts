@@ -124,7 +124,10 @@ export function setMinutes(state: SessionCreateState, minutes: string): SessionC
 }
 
 /** Builds the request, or the message that blocks it; `now` decides which dates are still in the future. */
-export function tryBuildSubmission(state: SessionCreateState, now: Date = new Date()): {
+export function tryBuildSubmission(
+  state: SessionCreateState,
+  now: Date = new Date(),
+): {
   state: SessionCreateState;
   submission: SessionCreateSubmission | null;
 } {
@@ -222,14 +225,7 @@ export const MaxDurationMinutes = 24 * 60;
 function parseDuration(hoursText: string, minutesText: string): number | string {
   const hours = parseInvariantDouble(hoursText);
   const minutes = parseInvariantDouble(minutesText);
-  if (
-    hours === null ||
-    minutes === null ||
-    !Number.isFinite(hours) ||
-    !Number.isFinite(minutes) ||
-    hours < 0 ||
-    minutes < 0
-  ) {
+  if (hours === null || minutes === null || !Number.isFinite(hours) || !Number.isFinite(minutes) || hours < 0 || minutes < 0) {
     return "Enter a valid duration.";
   }
   if (minutes > 59) return "Minutes must be between 0 and 59.";

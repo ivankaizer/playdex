@@ -18,7 +18,7 @@ public sealed partial class PollingBackgroundService(
     ILogger<PollingBackgroundService> logger) : BackgroundService
 {
     internal const string ActivitySourceName = "Playdex.Api.Polling";
-    private static readonly ActivitySource ActivitySource = new(ActivitySourceName);
+    private static readonly ActivitySource _activitySource = new(ActivitySourceName);
 
     [LoggerMessage(Level = LogLevel.Information, Message = "PollingBackgroundService will start after {Delay} ms")]
     private partial void LogWillStartAfter(int delay);
@@ -71,7 +71,7 @@ public sealed partial class PollingBackgroundService(
         while (!stoppingToken.IsCancellationRequested)
         {
             var cycleStart = Stopwatch.StartNew();
-            using (var activity = ActivitySource.StartActivity("polling.cycle", ActivityKind.Internal))
+            using (var activity = _activitySource.StartActivity("polling.cycle", ActivityKind.Internal))
             {
                 LogStartingPollCycle();
 
@@ -276,7 +276,10 @@ public sealed partial class PollingBackgroundService(
         CancellationToken ct)
     {
         var threshold = pollingOptions.Value.AuthFailuresBeforePause;
-        if (threshold <= 0 || failure.AuthFailures < threshold) return false;
+        if (threshold <= 0 || failure.AuthFailures < threshold)
+        {
+            return false;
+        }
 
         var pausedAt = DateTimeOffset.UtcNow;
         try

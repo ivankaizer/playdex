@@ -55,7 +55,17 @@ describe("RecapPage", () => {
           mostBingedGame: null,
           platformTotals: [{ platformKey: "steam", platformName: "Steam", sessionCount: 3, totalSeconds: 7200 }],
           mostUsedPlatform: null,
-          gamesTable: [{ gameId: "42", title: "Halo", capsuleUrl: null, totalSeconds: 7200, sessionCount: 3, averageSessionSeconds: 2400, isAbandoned: true }],
+          gamesTable: [
+            {
+              gameId: "42",
+              title: "Halo",
+              capsuleUrl: null,
+              totalSeconds: 7200,
+              sessionCount: 3,
+              averageSessionSeconds: 2400,
+              isAbandoned: true,
+            },
+          ],
         });
       }),
     );

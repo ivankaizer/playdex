@@ -13,7 +13,10 @@ public sealed class LauncherSummaryEndpointTests(PostgresFixture postgres)
     [Fact]
     public async Task SummaryTakesTheApiKeyAndReturnsTheUsersPlayWithSteamIdentities()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         ConfigureHost();
         await using var factory = new PlaydexApiFactory();
@@ -32,21 +35,36 @@ public sealed class LauncherSummaryEndpointTests(PostgresFixture postgres)
         var appId = $"9{Random.Shared.Next(10_000_000, 99_999_999)}";
         var identity = new GameExternalIdentity
         {
-            GameId = game.Id, Type = GameExternalIdentityType.Steam, ExternalId = appId, Title = game.Title, CreatedAt = now, UpdatedAt = now,
+            GameId = game.Id,
+            Type = GameExternalIdentityType.Steam,
+            ExternalId = appId,
+            Title = game.Title,
+            CreatedAt = now,
+            UpdatedAt = now,
         };
         var integration = new Integration
         {
-            UserId = user.Id, Type = IntegrationType.Api, ApiKey = $"key-{suffix}", Active = true, CreatedAt = now, UpdatedAt = now,
+            UserId = user.Id,
+            Type = IntegrationType.Api,
+            ApiKey = $"key-{suffix}",
+            Active = true,
+            CreatedAt = now,
+            UpdatedAt = now,
         };
         db.AddRange(identity, integration);
         await db.SaveChangesAsync();
         PlaySession Session(long userId, DateTimeOffset startedAt, int minutes) => new()
         {
             // A session with no integration must be manual (play_sessions_manual_integration_check).
-            GameId = game.Id, UserId = userId, PlatformId = steam.Id,
+            GameId = game.Id,
+            UserId = userId,
+            PlatformId = steam.Id,
             CaptureMethod = userId == user.Id ? CaptureMethod.Api : CaptureMethod.Manual,
             IntegrationId = userId == user.Id ? integration.Id : null,
-            StartedAt = startedAt, EndedAt = startedAt.AddMinutes(minutes), CreatedAt = now, UpdatedAt = now,
+            StartedAt = startedAt,
+            EndedAt = startedAt.AddMinutes(minutes),
+            CreatedAt = now,
+            UpdatedAt = now,
         };
         var sessions = new[]
         {
@@ -58,8 +76,14 @@ public sealed class LauncherSummaryEndpointTests(PostgresFixture postgres)
         await db.SaveChangesAsync();
         var steamIntegration = new Integration
         {
-            UserId = user.Id, Type = IntegrationType.Steam, PlatformId = steam.Id, AccountId = $"steam-{suffix}",
-            ApiKey = $"steam-key-{suffix}", Active = true, CreatedAt = now, UpdatedAt = now,
+            UserId = user.Id,
+            Type = IntegrationType.Steam,
+            PlatformId = steam.Id,
+            AccountId = $"steam-{suffix}",
+            ApiKey = $"steam-key-{suffix}",
+            Active = true,
+            CreatedAt = now,
+            UpdatedAt = now,
         };
 
         try
@@ -129,7 +153,10 @@ public sealed class LauncherSummaryEndpointTests(PostgresFixture postgres)
     [Fact]
     public async Task RecapCountsTheYearInTheLaunchersTimeZone()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         ConfigureHost();
         await using var factory = new PlaydexApiFactory();
@@ -144,15 +171,26 @@ public sealed class LauncherSummaryEndpointTests(PostgresFixture postgres)
         await db.SaveChangesAsync();
         var integration = new Integration
         {
-            UserId = user.Id, Type = IntegrationType.Api, ApiKey = $"key-{suffix}", Active = true, CreatedAt = now, UpdatedAt = now,
+            UserId = user.Id,
+            Type = IntegrationType.Api,
+            ApiKey = $"key-{suffix}",
+            Active = true,
+            CreatedAt = now,
+            UpdatedAt = now,
         };
         db.Add(integration);
         await db.SaveChangesAsync();
         PlaySession Session(DateTimeOffset startedAt) => new()
         {
-            GameId = game.Id, UserId = user.Id, PlatformId = steam.Id, CaptureMethod = CaptureMethod.Api,
-            IntegrationId = integration.Id, StartedAt = startedAt, EndedAt = startedAt.AddMinutes(30),
-            CreatedAt = now, UpdatedAt = now,
+            GameId = game.Id,
+            UserId = user.Id,
+            PlatformId = steam.Id,
+            CaptureMethod = CaptureMethod.Api,
+            IntegrationId = integration.Id,
+            StartedAt = startedAt,
+            EndedAt = startedAt.AddMinutes(30),
+            CreatedAt = now,
+            UpdatedAt = now,
         };
         var sessions = new[]
         {

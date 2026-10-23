@@ -26,7 +26,10 @@ export function PlaydexAppKeyCreator({ onCreated }: PlaydexAppKeyCreatorProps) {
   }
 
   return (
-    <div data-playdex-app-key className="flex flex-wrap items-center gap-4 rounded-tile border border-[var(--tile-border)] bg-tile px-5 py-4">
+    <div
+      data-playdex-app-key
+      className="flex flex-wrap items-center gap-4 rounded-tile border border-[var(--tile-border)] bg-tile px-5 py-4"
+    >
       <div className="min-w-0 flex-[1_1_240px]">
         <p className="text-sm font-semibold">Set up Playdex for Windows</p>
         <p className="mt-1 text-[13px] text-muted">

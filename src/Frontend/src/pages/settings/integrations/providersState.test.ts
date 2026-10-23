@@ -158,7 +158,14 @@ describe("providersState", () => {
 
   it("credential edit builds the exact body and ignores locked api key changes", () => {
     const steam = provider(1, "steam", "active");
-    const locked: ProviderStatus = { id: 2, platform: "psn", accountId: "account-2", status: "active", apiKey: "secret", apiKeyLocked: true };
+    const locked: ProviderStatus = {
+      id: 2,
+      platform: "psn",
+      accountId: "account-2",
+      status: "active",
+      apiKey: "secret",
+      apiKeyLocked: true,
+    };
     let state = s.beginCredentialEdit(loaded(steam, locked), steam);
     expect(s.isEditingCredential(state, 1)).toBe(true);
     expect(state.editingAccountId).toBe("account-1");

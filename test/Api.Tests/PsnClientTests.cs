@@ -88,7 +88,9 @@ public sealed class PsnClientTests
         var client = CreateClient(new RecordingHandler(Response(status, response =>
         {
             if (status == HttpStatusCode.Found)
+            {
                 response.Headers.Location = new Uri("https://redirect.test/callback?error=login_required");
+            }
         })));
 
         var failure = await Assert.ThrowsAsync<ProviderPollException>(() =>

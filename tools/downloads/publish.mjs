@@ -69,8 +69,18 @@ const contentTypes = {
 const contentType = (name) => contentTypes[name.slice(name.lastIndexOf('.'))] ?? 'application/octet-stream'
 
 function put(key, file, cacheControl) {
-  const args = ['x', WRANGLER, 'r2', 'object', 'put', `${BUCKET}/${key}`, '--remote', `--file=${file}`,
-    `--content-type=${contentType(key)}`, `--cache-control=${cacheControl}`]
+  const args = [
+    'x',
+    WRANGLER,
+    'r2',
+    'object',
+    'put',
+    `${BUCKET}/${key}`,
+    '--remote',
+    `--file=${file}`,
+    `--content-type=${contentType(key)}`,
+    `--cache-control=${cacheControl}`,
+  ]
   const run = Bun.spawnSync(['bun', ...args], { stdout: 'inherit', stderr: 'inherit' })
   if (run.exitCode !== 0) throw new Error(`upload of ${key} failed`)
 }
@@ -85,8 +95,13 @@ async function release(tag, dir) {
   const version = parseTag(tag)
   if (!version || !dir) throw new Error('usage: publish.mjs release v<major>.<minor>.<patch> <artifacts dir>')
   const number = tag.slice(1)
-  const required = [`playdex-windows-${tag}.zip`, `playdex-windows-${tag}.zip.sha256`, 'Playdex-Setup.exe',
-    `playdex-wrapper-windows-${tag}.zip`, `playdex-wrapper-windows-${tag}.zip.sha256`]
+  const required = [
+    `playdex-windows-${tag}.zip`,
+    `playdex-windows-${tag}.zip.sha256`,
+    'Playdex-Setup.exe',
+    `playdex-wrapper-windows-${tag}.zip`,
+    `playdex-wrapper-windows-${tag}.zip.sha256`,
+  ]
   const optional = [`playdex-launcher-v${number}.msix`, 'playdex-launcher.cer']
   for (const name of required) if (!existsSync(join(dir, name))) throw new Error(`${dir} has no ${name}`)
   const files = [...required, ...optional.filter((name) => existsSync(join(dir, name)))]
@@ -95,20 +110,29 @@ async function release(tag, dir) {
   for (const name of files) put(`windows/${tag}/${name}`, join(dir, name), IMMUTABLE)
 
   const manifest = join(tmpdir(), `playdex-release-${tag}.json`)
-  writeFileSync(manifest, JSON.stringify({
-    tag_name: tag,
-    draft: false,
-    prerelease: false,
-    assets: files.map((name) => ({
-      name,
-      browser_download_url: `${BASE}/${tag}/${name}`,
-      size: statSync(join(dir, name)).size,
-    })),
-  }, null, 2))
+  writeFileSync(
+    manifest,
+    JSON.stringify(
+      {
+        tag_name: tag,
+        draft: false,
+        prerelease: false,
+        assets: files.map((name) => ({
+          name,
+          browser_download_url: `${BASE}/${tag}/${name}`,
+          size: statSync(join(dir, name)).size,
+        })),
+      },
+      null,
+      2,
+    ),
+  )
   put(`windows/releases/${tag}.json`, manifest, SHORT)
 
   // A re-run of an older tag must not move "latest" backwards.
-  const current = await fetch(`${BASE}/releases/latest.json`).then((r) => (r.ok ? r.json() : null)).catch(() => null)
+  const current = await fetch(`${BASE}/releases/latest.json`)
+    .then((r) => (r.ok ? r.json() : null))
+    .catch(() => null)
   const currentVersion = parseTag(current?.tag_name)
   if (currentVersion && newer(currentVersion, version) > 0) {
     return console.log(`latest stays ${current.tag_name}; published ${tag} at ${BASE}/releases/${tag}.json`)

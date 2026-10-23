@@ -22,7 +22,10 @@ public static class SteamIntegration
         }
         finally
         {
-            foreach (var process in steamProcesses) process.Dispose();
+            foreach (var process in steamProcesses)
+            {
+                process.Dispose();
+            }
         }
 
         return AddShortcut(game, launcherPath, SteamInstallation.FindActiveUserConfigDirectory());
@@ -125,7 +128,11 @@ public static class SteamInstallation
     {
         try
         {
-            if (!File.Exists(loginUsersPath)) return null;
+            if (!File.Exists(loginUsersPath))
+            {
+                return null;
+            }
+
             var contents = File.ReadAllText(loginUsersPath);
             var users = Regex.Matches(
                     contents,
@@ -140,7 +147,10 @@ public static class SteamInstallation
                 .OrderByDescending(user => user.IsMostRecent)
                 .ThenByDescending(user => user.Timestamp)
                 .ToList();
-            if (users.Count == 0) return null;
+            if (users.Count == 0)
+            {
+                return null;
+            }
 
             const ulong individualAccountBase = 76561197960265728ul;
             return users[0].SteamId >= individualAccountBase
@@ -194,7 +204,10 @@ public static class SteamShortcutsFile
 
     public static uint? FindByExecutable(string path, string executable)
     {
-        if (!File.Exists(path)) return null;
+        if (!File.Exists(path))
+        {
+            return null;
+        }
 
         var data = File.ReadAllBytes(path);
         var root = ReadRoot(data);
@@ -270,15 +283,25 @@ public static class SteamShortcutsFile
         {
             var typeOffset = offset;
             var type = ReadByte(data, ref offset);
-            if (type == EndType) return new RootInfo(typeOffset, entries);
-            if (type != ObjectType) throw new InvalidDataException("Steam shortcuts.vdf contains an unexpected root value.");
+            if (type == EndType)
+            {
+                return new RootInfo(typeOffset, entries);
+            }
+
+            if (type != ObjectType)
+            {
+                throw new InvalidDataException("Steam shortcuts.vdf contains an unexpected root value.");
+            }
 
             var name = ReadCString(data, ref offset);
             var entryIndex = int.TryParse(name, out var parsedIndex) ? parsedIndex : entries.Count;
             uint? appId = null;
             string? executable = null;
             ReadEntryObject(data, ref offset, ref appId, ref executable);
-            if (appId is not null) entries.Add(new EntryInfo(entryIndex, appId.Value, executable));
+            if (appId is not null)
+            {
+                entries.Add(new EntryInfo(entryIndex, appId.Value, executable));
+            }
         }
     }
 
@@ -287,7 +310,11 @@ public static class SteamShortcutsFile
         while (true)
         {
             var type = ReadByte(data, ref offset);
-            if (type == EndType) return;
+            if (type == EndType)
+            {
+                return;
+            }
+
             var name = ReadCString(data, ref offset);
             if (type == ObjectType)
             {
@@ -296,12 +323,18 @@ public static class SteamShortcutsFile
             else if (type == StringType)
             {
                 var value = ReadCString(data, ref offset);
-                if (string.Equals(name, "Exe", StringComparison.OrdinalIgnoreCase)) executable = value;
+                if (string.Equals(name, "Exe", StringComparison.OrdinalIgnoreCase))
+                {
+                    executable = value;
+                }
             }
             else if (type == Int32Type)
             {
                 var value = ReadUInt32(data, ref offset);
-                if (string.Equals(name, "appid", StringComparison.OrdinalIgnoreCase)) appId = value;
+                if (string.Equals(name, "appid", StringComparison.OrdinalIgnoreCase))
+                {
+                    appId = value;
+                }
             }
             else
             {
@@ -315,10 +348,20 @@ public static class SteamShortcutsFile
         while (true)
         {
             var type = ReadByte(data, ref offset);
-            if (type == EndType) return;
+            if (type == EndType)
+            {
+                return;
+            }
+
             _ = ReadCString(data, ref offset);
-            if (type == ObjectType) SkipObject(data, ref offset);
-            else SkipValue(data, ref offset, type);
+            if (type == ObjectType)
+            {
+                SkipObject(data, ref offset);
+            }
+            else
+            {
+                SkipValue(data, ref offset, type);
+            }
         }
     }
 
@@ -412,7 +455,11 @@ public static class SteamShortcutsFile
     private static string ReadCString(byte[] data, ref int offset)
     {
         var end = Array.IndexOf(data, (byte)0, offset);
-        if (end < 0) throw new InvalidDataException("Steam shortcuts.vdf contains an unterminated string.");
+        if (end < 0)
+        {
+            throw new InvalidDataException("Steam shortcuts.vdf contains an unterminated string.");
+        }
+
         var value = Encoding.UTF8.GetString(data, offset, end - offset);
         offset = end + 1;
         return value;

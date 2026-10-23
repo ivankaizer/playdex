@@ -97,7 +97,15 @@ function UpdateButton({ update, className = "", isDefault = false }: { update: U
 /** An on/off switch that applies at once. */
 function Switch({ on, label, onChange }: { on: boolean; label: string; onChange: (on: boolean) => void }) {
   return (
-    <button className="switch" role="switch" aria-checked={on} aria-label={label} data-nav data-kind="setting" onClick={() => onChange(!on)}>
+    <button
+      className="switch"
+      role="switch"
+      aria-checked={on}
+      aria-label={label}
+      data-nav
+      data-kind="setting"
+      onClick={() => onChange(!on)}
+    >
       <i aria-hidden />
     </button>
   );
@@ -238,7 +246,9 @@ function DesktopSettingsScreen({ state }: { state: DesktopState }) {
     if (e.key === "Enter" && dirty) void save();
   };
 
-  const platformOptions = platforms.some((p) => p.key === form.platform) ? platforms : [{ key: form.platform, name: form.platform }, ...platforms];
+  const platformOptions = platforms.some((p) => p.key === form.platform)
+    ? platforms
+    : [{ key: form.platform, name: form.platform }, ...platforms];
   const update = state.update;
   const fseAction = state.fse.state === "available" || state.fse.state === "failed";
 
@@ -266,13 +276,18 @@ function DesktopSettingsScreen({ state }: { state: DesktopState }) {
             note="Sessions are recorded with this API key. Create one in Playdex under Integrations."
           >
             <Row label="API URL" htmlFor="set-base-url">
-              <input id="set-base-url" className="text" value={form.baseUrl} onChange={set("baseUrl")} onKeyDown={onEnter} data-nav data-nav-default data-kind="field" />
+              <input
+                id="set-base-url"
+                className="text"
+                value={form.baseUrl}
+                onChange={set("baseUrl")}
+                onKeyDown={onEnter}
+                data-nav
+                data-nav-default
+                data-kind="field"
+              />
             </Row>
-            <Row
-              label="API key"
-              htmlFor="set-api-key"
-              hint={saved.apiKeySet ? <SavedMark>Saved</SavedMark> : "Needed to record sessions."}
-            >
+            <Row label="API key" htmlFor="set-api-key" hint={saved.apiKeySet ? <SavedMark>Saved</SavedMark> : "Needed to record sessions."}>
               <input
                 id="set-api-key"
                 className="text"
@@ -286,7 +301,11 @@ function DesktopSettingsScreen({ state }: { state: DesktopState }) {
                 data-kind="field"
               />
             </Row>
-            <Row label="Default platform" htmlFor="set-platform" hint={platformError ?? "The platform sessions are recorded on, unless a game sets its own."}>
+            <Row
+              label="Default platform"
+              htmlFor="set-platform"
+              hint={platformError ?? "The platform sessions are recorded on, unless a game sets its own."}
+            >
               <select id="set-platform" className="text" value={form.platform} onChange={set("platform")} data-nav data-kind="field">
                 {platformOptions.map((p) => (
                   <option key={p.key} value={p.key}>
@@ -348,11 +367,24 @@ function DesktopSettingsScreen({ state }: { state: DesktopState }) {
             </Row>
           </Section>
 
-          <Section id="look" icon={<LayoutGrid />} title="Appearance" note="How Playdex looks. Theme and colours apply at once in both modes; the home art and layout are Big Picture's.">
+          <Section
+            id="look"
+            icon={<LayoutGrid />}
+            title="Appearance"
+            note="How Playdex looks. Theme and colours apply at once in both modes; the home art and layout are Big Picture's."
+          >
             <Row label="Theme" hint="Light or dark, in both modes.">
               <div className="seg" role="radiogroup" aria-label="Theme">
                 {(["dark", "light"] as const).map((v) => (
-                  <button key={v} className="seg-btn" role="radio" aria-checked={schemeId === v} data-nav data-kind="setting" onClick={() => setScheme(v)}>
+                  <button
+                    key={v}
+                    className="seg-btn"
+                    role="radio"
+                    aria-checked={schemeId === v}
+                    data-nav
+                    data-kind="setting"
+                    onClick={() => setScheme(v)}
+                  >
                     {v === "dark" ? "Dark" : "Light"}
                   </button>
                 ))}
@@ -413,7 +445,10 @@ function DesktopSettingsScreen({ state }: { state: DesktopState }) {
           </Section>
 
           <Section id="app" icon={<AppWindow />} title="This app" note="How Playdex opens, and what it does in the background.">
-            <Row label="Big Picture" hint="Full screen and controller first, for the TV or a handheld. Playdex then opens that way; switch back from Quick settings.">
+            <Row
+              label="Big Picture"
+              hint="Full screen and controller first, for the TV or a handheld. Playdex then opens that way; switch back from Quick settings."
+            >
               <button className="btn btn-outline" data-nav data-kind="setting" onClick={() => switchMode("bigPicture").catch(failed)}>
                 <Gamepad2 aria-hidden /> Switch to Big Picture
               </button>
@@ -575,7 +610,14 @@ function BigPictureSettings({ state }: { state: DesktopState }) {
                 <i />
               </span>
             </button>
-            <button className="bp-row" role="switch" aria-checked={sounds} data-nav data-kind="setting" onClick={() => setSoundsOn(!sounds)}>
+            <button
+              className="bp-row"
+              role="switch"
+              aria-checked={sounds}
+              data-nav
+              data-kind="setting"
+              onClick={() => setSoundsOn(!sounds)}
+            >
               <Volume2 aria-hidden />
               <span className="bp-row-text">
                 <span className="bp-row-name">Navigation sounds</span>
@@ -642,7 +684,11 @@ function BigPictureSettings({ state }: { state: DesktopState }) {
             <StatusRow
               icon={<MonitorPlay aria-hidden />}
               label="Full Screen Experience home"
-              value={fse.state === "installed" ? "Installed. Choose Playdex in Settings → Gaming → Full screen experience" : "Set it up in desktop mode"}
+              value={
+                fse.state === "installed"
+                  ? "Installed. Choose Playdex in Settings → Gaming → Full screen experience"
+                  : "Set it up in desktop mode"
+              }
               on={fse.state === "installed"}
             />
           </div>

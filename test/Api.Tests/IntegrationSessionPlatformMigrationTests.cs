@@ -10,7 +10,10 @@ public sealed class IntegrationSessionPlatformMigrationTests(PostgresFixture pos
     [Fact]
     public async Task MigrationCreatesOverrideAndCompletePsnPlatformTree()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         await using var connection = await postgres.DataSource!.OpenConnectionAsync();
         await using var transaction = await connection.BeginTransactionAsync();
@@ -56,7 +59,10 @@ public sealed class IntegrationSessionPlatformMigrationTests(PostgresFixture pos
             transaction);
         var childKeys = new List<string>();
         await using var reader = await platformsCommand.ExecuteReaderAsync();
-        while (await reader.ReadAsync()) childKeys.Add(reader.GetString(0));
+        while (await reader.ReadAsync())
+        {
+            childKeys.Add(reader.GetString(0));
+        }
 
         Assert.Equal(["ps3", "ps4", "ps5"], childKeys);
     }
@@ -64,7 +70,10 @@ public sealed class IntegrationSessionPlatformMigrationTests(PostgresFixture pos
     [Fact]
     public async Task MigrationRepairsLegacyPlatformIdentityBeforeAddingForeignKey()
     {
-        if (!postgres.IsConfigured) return;
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
 
         await using var connection = await postgres.DataSource!.OpenConnectionAsync();
         await using var transaction = await connection.BeginTransactionAsync();

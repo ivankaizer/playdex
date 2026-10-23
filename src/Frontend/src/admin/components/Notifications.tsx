@@ -32,10 +32,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     },
     [dismiss],
   );
-  const value = useMemo<Notifications>(
-    () => ({ success: (s, d) => push("success", s, d), error: (s, d) => push("error", s, d) }),
-    [push],
-  );
+  const value = useMemo<Notifications>(() => ({ success: (s, d) => push("success", s, d), error: (s, d) => push("error", s, d) }), [push]);
 
   return (
     <NotificationContext.Provider value={value}>

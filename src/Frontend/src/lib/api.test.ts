@@ -246,7 +246,9 @@ describe("error helpers", () => {
 
   it("turns anything thrown into a readable message (see errors.test.ts)", () => {
     expect(errorMessage(new ApiError(409, "An extraction is already running."))).toBe("An extraction is already running.");
-    expect(errorMessage(new ApiError(500, "Internal server error."))).toBe("Playdex ran into a problem on its side. Try again in a moment.");
+    expect(errorMessage(new ApiError(500, "Internal server error."))).toBe(
+      "Playdex ran into a problem on its side. Try again in a moment.",
+    );
     expect(errorMessage(new TypeError("Failed to fetch"))).toBe("Can't reach Playdex. Check your connection and try again.");
     expect(errorMessage("plain text")).toBe("Something went wrong. Try again.");
     expect(errorMessage(42)).toBe("Something went wrong. Try again.");
