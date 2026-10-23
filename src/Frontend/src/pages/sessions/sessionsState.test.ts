@@ -75,8 +75,6 @@ function session(overrides: Partial<AccountSession> = {}): AccountSession {
     game: "Hades II",
     capsuleUrl: null,
     ignored: false,
-    mappedPlatform: null,
-    mappedSource: null,
     ...overrides,
   };
 }
@@ -469,8 +467,6 @@ describe("sessions state", () => {
       platformName: "Manual",
       capsuleUrl: "https://images.test/hades.jpg",
       ignored: true,
-      mappedPlatform: "psn",
-      mappedSource: "igdb",
     });
     const state = completeListLoad(createSessionsState(now), { accountId: 1, sessions: [row], total: 1, limit: 10, offset: 0 });
 

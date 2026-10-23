@@ -124,7 +124,7 @@ export function gameMixStats(recap: RecapResponse): LabeledValue[] {
     { label: "New games tried", value: String(recap.newGamesTried) },
     { label: "Games abandoned", value: String(recap.abandonedGames) },
     { label: "Return rate games", value: String(recap.returnRateGames) },
-    { label: "Top 3 time share", value: `${roundPercent(recap.timeOnTop3Percent)}%` },
+    { label: "Top 3 time share", value: `${roundPercent(recap.topThreeGamesSharePercent)}%` },
     { label: "Most binged game", value: binged ? `${binged.title} · ${binged.sessionCount}` : "—" },
   ];
 }

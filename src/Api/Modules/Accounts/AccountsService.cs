@@ -93,7 +93,8 @@ public sealed class AccountsService(AccountsRepository repository)
         CancellationToken ct) =>
         repository.WithUserSessionLock(userId, async () =>
         {
-            var session = await repository.GetSession(sessionId, ct);
+            // Another user's session is never loaded: it reads as not found, like a missing one.
+            var session = await repository.GetOwnedSession(sessionId, userId, ct);
             var now = DateTimeOffset.UtcNow;
             var validated = ValidateSessionUpdate(session, userId, request, now);
             var overlapping = await repository.ListOtherPlatformSessions(

@@ -12,9 +12,7 @@ internal sealed record SessionData(
     string Game,
     string? CapsuleUrl,
     string PlatformKey,
-    string PlatformName,
-    string? MappedPlatform,
-    string? MappedSource);
+    string PlatformName);
 
 internal sealed record GameAccum(
     string Title,
@@ -353,9 +351,9 @@ public sealed class RecapService(RecapRepository repository)
 
         var uniqueGames = groupEntries.Count;
 
-        // ── Time on top 3% ─────────────────────────────────────
+        // ── Share of play time on the top three games (0-100) ──
 
-        var timeOnTop3Percent = totalSeconds > 0
+        var topThreeGamesSharePercent = totalSeconds > 0
             ? topGamesByTime.Take(3).Sum(g => g.TotalSeconds) / totalSeconds * 100
             : 0;
 
@@ -439,7 +437,7 @@ public sealed class RecapService(RecapRepository repository)
         var platformTotalsList = platformTotals.Values
             .OrderByDescending(p => p.TotalSeconds)
             .Select(p => new RecapPlatformStatDto(
-                p.PlatformKey, p.PlatformName, p.SessionCount, p.TotalSeconds, null))
+                p.PlatformKey, p.PlatformName, p.SessionCount, p.TotalSeconds))
             .ToList();
 
         PlatformSummaryDto? mostUsedPlatform = null;
@@ -486,7 +484,7 @@ public sealed class RecapService(RecapRepository repository)
             NewGamesTried: newGamesTried,
             AbandonedGames: abandonedGames,
             ReturnRateGames: returnRateGames,
-            TimeOnTop3Percent: timeOnTop3Percent,
+            TopThreeGamesSharePercent: topThreeGamesSharePercent,
             MostBingedGame: mostBingedGame,
             PlatformTotals: platformTotalsList,
             MostUsedPlatform: mostUsedPlatform,
@@ -528,7 +526,7 @@ public sealed class RecapService(RecapRepository repository)
     private static SessionData ToSessionData(RecapSessionRow row) =>
         new(row.Id, row.StartedAt, row.EndedAt,
             row.GameId, row.Title, row.CapsuleUrl,
-            row.PlatformKey, row.PlatformName, null, null);
+            row.PlatformKey, row.PlatformName);
 
     private static string ToDateKey(DateTimeOffset localDate) =>
         localDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);

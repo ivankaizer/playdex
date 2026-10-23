@@ -164,8 +164,11 @@ api
 app.MapHealthChecks("/health/live", new HealthCheckOptions { Predicate = _ => false });
 app.MapHealthChecks("/health/ready");
 
-app.MapOpenApi("/swagger/json");
-app.MapGet("/swagger", () => Results.Content("""
+// The API description and its UI are for local development only; production does not publish its route map.
+if (app.Environment.IsDevelopment())
+{
+    app.MapOpenApi("/swagger/json");
+    app.MapGet("/swagger", () => Results.Content("""
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -180,6 +183,7 @@ app.MapGet("/swagger", () => Results.Content("""
 </body>
 </html>
 """, "text/html"));
+}
 
 app.MapFallback("/api/{**path}", RouteNotFound);
 

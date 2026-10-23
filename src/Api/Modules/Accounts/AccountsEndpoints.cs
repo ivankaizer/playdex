@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using Api.Infrastructure.Auth;
 using Api.Infrastructure.Common;
+using Api.Infrastructure.Http;
 
 namespace Api.Modules.Accounts;
 
@@ -102,7 +103,7 @@ public static class AccountsEndpoints
         string? title, string? gameId, string? platform, string? from, string? to, string? tz,
         CancellationToken ct)
     {
-        var parsedAccountId = ParseId(accountId, "accountId");
+        var parsedAccountId = RouteIds.Parse(accountId, "accountId");
         var result = await service.ListSessions(
             principal.GetUserId(), parsedAccountId, title, gameId, platform, from, to,
             sort ?? "date", direction ?? "desc",
@@ -118,7 +119,7 @@ public static class AccountsEndpoints
         string? tz,
         CancellationToken ct)
     {
-        var parsedAccountId = ParseId(accountId, "accountId");
+        var parsedAccountId = RouteIds.Parse(accountId, "accountId");
         var today = await service.ListSessionsToday(
             principal.GetUserId(), parsedAccountId, 0, LocalCalendar.ResolveTimeZone(tz), ct);
         return TypedResults.Ok(new AccountTodaySessionsResponseDto(parsedAccountId, today.Sessions, today.Total));
@@ -130,7 +131,7 @@ public static class AccountsEndpoints
         AccountsService service,
         CancellationToken ct)
     {
-        var parsedAccountId = ParseId(accountId, "accountId");
+        var parsedAccountId = RouteIds.Parse(accountId, "accountId");
         var session = await service.LoadCurrentSession(principal.GetUserId(), parsedAccountId, ct);
         return TypedResults.Ok(new AccountCurrentSessionResponseDto(parsedAccountId, session));
     }
@@ -143,7 +144,7 @@ public static class AccountsEndpoints
         CancellationToken ct)
     {
         return TypedResults.Ok(await service.ComputeAccountStats(
-            principal.GetUserId(), ParseId(accountId, "accountId"), 0, LocalCalendar.ResolveTimeZone(tz), ct));
+            principal.GetUserId(), RouteIds.Parse(accountId, "accountId"), 0, LocalCalendar.ResolveTimeZone(tz), ct));
     }
 
     private static async Task<IResult> DeleteSession(
@@ -153,7 +154,7 @@ public static class AccountsEndpoints
         CancellationToken ct)
     {
         return TypedResults.Ok(await service.DeleteSession(
-            ParseId(sessionId, "sessionId"), principal.GetUserId(), ct));
+            RouteIds.Parse(sessionId, "sessionId"), principal.GetUserId(), ct));
     }
 
     private static async Task<IResult> UpdateSession(
@@ -167,7 +168,7 @@ public static class AccountsEndpoints
             return TypedResults.Problem("Request body is required.", statusCode: 400);
 
         return TypedResults.Ok(await service.UpdateSession(
-            ParseId(sessionId, "sessionId"),
+            RouteIds.Parse(sessionId, "sessionId"),
             principal.GetUserId(),
             request,
             ct));
@@ -189,12 +190,5 @@ public static class AccountsEndpoints
             throw Api.Infrastructure.Http.AppProblemException.Validation(
                 "limit and offset must be valid numbers.");
         return value;
-    }
-
-    private static long ParseId(string value, string name)
-    {
-        if (!long.TryParse(value, out var id))
-            throw Api.Infrastructure.Http.AppProblemException.Validation($"{name} must be a number.");
-        return id;
     }
 }

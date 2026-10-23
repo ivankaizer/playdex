@@ -19,14 +19,14 @@ public sealed record PlaydexSentrySettings(
         IHostEnvironment hostEnvironment)
     {
         var apiDsn = Extensions.GetSentryDsn(configuration);
-        var webDsn = Normalize(configuration["SENTRY_WEB_DSN"])
-            ?? Normalize(configuration["Sentry:WebDsn"])
+        var webDsn = Extensions.NormalizeSetting(configuration["SENTRY_WEB_DSN"])
+            ?? Extensions.NormalizeSetting(configuration["Sentry:WebDsn"])
             ?? apiDsn;
-        var environment = Normalize(configuration["SENTRY_ENVIRONMENT"])
-            ?? Normalize(configuration["Sentry:Environment"])
+        var environment = Extensions.NormalizeSetting(configuration["SENTRY_ENVIRONMENT"])
+            ?? Extensions.NormalizeSetting(configuration["Sentry:Environment"])
             ?? hostEnvironment.EnvironmentName;
-        var release = Normalize(configuration["SENTRY_RELEASE"])
-            ?? Normalize(configuration["Sentry:Release"]);
+        var release = Extensions.NormalizeSetting(configuration["SENTRY_RELEASE"])
+            ?? Extensions.NormalizeSetting(configuration["Sentry:Release"]);
 
         return new PlaydexSentrySettings(
             apiDsn,
@@ -58,19 +58,6 @@ public sealed record PlaydexSentrySettings(
         Environment,
         Release,
         TracesSampleRate);
-
-    private static string? Normalize(string? value)
-    {
-        var normalized = value?.Trim();
-        if (string.IsNullOrWhiteSpace(normalized) ||
-            normalized.StartsWith("__", StringComparison.Ordinal) &&
-            normalized.EndsWith("__", StringComparison.Ordinal))
-        {
-            return null;
-        }
-
-        return normalized;
-    }
 }
 
 public sealed record BrowserSentrySettings(

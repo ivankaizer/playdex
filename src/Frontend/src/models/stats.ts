@@ -2,7 +2,6 @@ export interface AccountPlatformStat {
   platformKey: string;
   platformName: string;
   totalSeconds: number;
-  source: string | null;
 }
 
 export interface AccountTopGame {

@@ -2,7 +2,6 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Text.Json;
 using Playdex.Persistence;
-using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Xunit;
 
@@ -17,7 +16,7 @@ public sealed class LauncherSummaryEndpointTests(PostgresFixture postgres)
         if (!postgres.IsConfigured) return;
 
         ConfigureHost();
-        await using var factory = new WebApplicationFactory<Program>();
+        await using var factory = new PlaydexApiFactory();
         using var client = factory.CreateClient();
         Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/api/launcher/summary")).StatusCode);
 
@@ -133,7 +132,7 @@ public sealed class LauncherSummaryEndpointTests(PostgresFixture postgres)
         if (!postgres.IsConfigured) return;
 
         ConfigureHost();
-        await using var factory = new WebApplicationFactory<Program>();
+        await using var factory = new PlaydexApiFactory();
         using var client = factory.CreateClient();
         await using var db = CreateDb();
         var suffix = Guid.NewGuid().ToString("n");
@@ -199,7 +198,6 @@ public sealed class LauncherSummaryEndpointTests(PostgresFixture postgres)
         var databaseUrl = Environment.GetEnvironmentVariable("PLAYDEX_INTEGRATION_DATABASE_URL")!;
         Environment.SetEnvironmentVariable("DATABASE_URL", databaseUrl);
         Environment.SetEnvironmentVariable("Auth__JwtSecret", "launcher-summary-integration-secret-at-least-thirty-two-bytes");
-        Environment.SetEnvironmentVariable("POLL_INTERVAL_SECONDS", "3600");
     }
 
     private PlaydexDbContext CreateDb() => new(

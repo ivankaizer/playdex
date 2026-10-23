@@ -111,8 +111,8 @@ public sealed class AccountsRepository(PlaydexDbContext db, IGames games)
         return affected == 1 ? sessionId : 0;
     }
 
-    public Task<PlaySession?> GetSession(long sessionId, CancellationToken ct) =>
-        db.PlaySessions.SingleOrDefaultAsync(session => session.Id == sessionId, ct);
+    public Task<PlaySession?> GetOwnedSession(long sessionId, long userId, CancellationToken ct) =>
+        db.PlaySessions.SingleOrDefaultAsync(session => session.Id == sessionId && session.UserId == userId, ct);
 
     public Task SaveChanges(CancellationToken ct) => db.SaveChangesAsync(ct);
 
@@ -207,7 +207,7 @@ public sealed class AccountsRepository(PlaydexDbContext db, IGames games)
         var platforms = allSessions
             .GroupBy(session => session.PlatformKey)
             .Select(g => new AccountPlatformStatDto(
-                g.Key, g.First().PlatformName, g.Sum(session => Seconds(session, now)), null))
+                g.Key, g.First().PlatformName, g.Sum(session => Seconds(session, now))))
             .OrderBy(platform => platform.PlatformKey)
             .ToList();
 
@@ -337,9 +337,7 @@ public sealed class AccountsRepository(PlaydexDbContext db, IGames games)
             row.PlatformName,
             row.GameTitle,
             row.CapsuleUrl,
-            row.Ignored,
-            null,
-            null);
+            row.Ignored);
     }
 
     /// <summary>A running session counts up to now.</summary>

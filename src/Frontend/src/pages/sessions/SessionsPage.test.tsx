@@ -18,15 +18,13 @@ const finished = {
   game: "Hades II",
   capsuleUrl: null,
   ignored: true,
-  mappedPlatform: null,
-  mappedSource: null,
 };
 
 const stats = {
   totalSeconds: 3900,
   sessionCount: 1,
   topGameTitle: "Hades II",
-  platforms: [{ platformKey: "steam", platformName: "Steam", totalSeconds: 3900, source: null }],
+  platforms: [{ platformKey: "steam", platformName: "Steam", totalSeconds: 3900 }],
   topGames: [{ gameId: "42", title: "Hades II", totalSeconds: 3900 }],
   months: [],
 };

@@ -17,7 +17,6 @@ export interface RecapPlatformStat {
   platformName: string;
   sessionCount: number;
   totalSeconds: number;
-  source: string | null;
 }
 
 export interface MostActiveDay {
@@ -94,7 +93,7 @@ export interface RecapResponse {
   newGamesTried: number;
   abandonedGames: number;
   returnRateGames: number;
-  timeOnTop3Percent: number;
+  topThreeGamesSharePercent: number;
   mostBingedGame: BingedGame | null;
   platformTotals: RecapPlatformStat[];
   mostUsedPlatform: PlatformSummary | null;

@@ -71,8 +71,8 @@ public static class GameId
     }
 
     /// <summary>
-    /// The game id behind an encoded id, or a raw numeric id. Decoding comes first: an encoded id can be all digits
-    /// (game 87421 is "2029282"), and reading it as a raw id would pick another game.
+    /// An encoded game id, or a raw numeric one that is not also a valid encoding. Encoded ids are tried first:
+    /// some encode to digits only (87421 is "2029282"), and reading those as raw ids picks a different game.
     /// </summary>
     public static long Parse(string value, string field = "gameId")
     {

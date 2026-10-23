@@ -2,7 +2,6 @@ using System.Collections.Concurrent;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
-using Api.Modules.Polling;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -44,16 +43,9 @@ public sealed class AdminApiFixture : IAsyncLifetime
         if (string.IsNullOrWhiteSpace(databaseUrl)) return;
 
         Environment.SetEnvironmentVariable("DATABASE_URL", databaseUrl);
-        Environment.SetEnvironmentVariable("POLL_INTERVAL_SECONDS", "3600");
         Environment.SetEnvironmentVariable("Auth__JwtSecret", "admin-api-integration-secret-at-least-thirty-two-bytes");
-        Factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
-            builder.ConfigureServices(services =>
-            {
-                services.AddSingleton<ILoggerProvider>(Logs);
-                // The poll loop's stale-session sweep would end the live sessions the tests set up.
-                services.Remove(services.Single(service =>
-                    service.ImplementationType == typeof(PollingBackgroundService)));
-            }));
+        Factory = new PlaydexApiFactory().WithWebHostBuilder(builder =>
+            builder.ConfigureServices(services => services.AddSingleton<ILoggerProvider>(Logs)));
 
         await using var db = CreateDb();
         await RemoveTestUsersAsync(db);

@@ -46,8 +46,6 @@ function snapshot(): DashboardSnapshot {
     game: "Elden Ring",
     capsuleUrl: "https://images.test/elden.jpg",
     ignored: false,
-    mappedPlatform: "psn",
-    mappedSource: "local",
   };
   const current: AccountSession = {
     sessionId: 2,
@@ -59,16 +57,14 @@ function snapshot(): DashboardSnapshot {
     game: "Hades II",
     capsuleUrl: null,
     ignored: false,
-    mappedPlatform: null,
-    mappedSource: null,
   };
   const todayStats: AccountStatsPeriod = {
     totalSeconds: 3600,
     sessionCount: 1,
     topGameTitle: "Elden Ring",
     platforms: [
-      { platformKey: "steam", platformName: "Steam", totalSeconds: 450, source: null },
-      { platformKey: "psn", platformName: "PlayStation Network", totalSeconds: 3150, source: null },
+      { platformKey: "steam", platformName: "Steam", totalSeconds: 450 },
+      { platformKey: "psn", platformName: "PlayStation Network", totalSeconds: 3150 },
     ],
     topGames: [{ gameId: "42", title: "Elden Ring", totalSeconds: 3600 }],
     months: [],
@@ -77,7 +73,7 @@ function snapshot(): DashboardSnapshot {
     totalSeconds: 7200,
     sessionCount: 2,
     topGameTitle: "Elden Ring",
-    platforms: [{ platformKey: "steam", platformName: "Steam", totalSeconds: 7200, source: null }],
+    platforms: [{ platformKey: "steam", platformName: "Steam", totalSeconds: 7200 }],
     topGames: [{ gameId: "42", title: "Elden Ring", totalSeconds: 7200 }],
     months: [],
   };
@@ -85,7 +81,7 @@ function snapshot(): DashboardSnapshot {
     totalSeconds: 10800,
     sessionCount: 3,
     topGameTitle: "Hades II",
-    platforms: [{ platformKey: "manual", platformName: "Manual", totalSeconds: 10800, source: null }],
+    platforms: [{ platformKey: "manual", platformName: "Manual", totalSeconds: 10800 }],
     topGames: [{ gameId: "43", title: "Hades II", totalSeconds: 10800 }],
     months: [],
   };
@@ -213,8 +209,6 @@ describe("dashboard refresh state", () => {
       game: `Game ${i + 1}`,
       capsuleUrl: null,
       ignored: false,
-      mappedPlatform: null,
-      mappedSource: null,
     }));
     let state = completeRefresh(initialDashboardState, { ...snapshot(), todaySessions: sessions }, now);
     const ids = () => todaySessionPageItems(state).map((item) => item.sessionId);
@@ -239,8 +233,8 @@ describe("dashboard refresh state", () => {
       sessionCount: 2,
       topGameTitle: null,
       platforms: [
-        { platformKey: "psn", platformName: "PlayStation Network", totalSeconds: 3600, source: null },
-        { platformKey: "ps5", platformName: "PlayStation 5", totalSeconds: 3600, source: null },
+        { platformKey: "psn", platformName: "PlayStation Network", totalSeconds: 3600 },
+        { platformKey: "ps5", platformName: "PlayStation 5", totalSeconds: 3600 },
       ],
       topGames: [],
       months: [],
