@@ -17,7 +17,8 @@ public sealed class OpenAiPlaySessionExtractor(HttpClient client, IOptions<AiDra
     {
         var options = configuredOptions.Value;
         if (!options.IsAvailable) throw new AppProblemException(503, "AI extraction is unavailable. Use manual entry or try again later.");
-        ExtractionInputValidator.Validate(input, options);
+        // DraftExtractionService has already decoded the screenshot once, under the user's lock.
+        ExtractionInputValidator.ValidateRequest(input, options);
         try
         {
             for (var attempt = 0; ; attempt++)

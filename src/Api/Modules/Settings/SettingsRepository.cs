@@ -23,59 +23,42 @@ public sealed class SettingsRepository(PlaydexDbContext db)
         return new UserSettingsResponseDto(ignoreShortMinutes, telegramChatId);
     }
 
+    /// <summary>
+    /// Insert-or-update in one statement per table: a read-then-insert lets two first saves race on the primary key.
+    /// </summary>
     public async Task<UserSettingsResponseDto> UpsertSettings(
         long userId,
         int ignoreShortMinutes,
         string? telegramChatId,
         CancellationToken ct)
     {
-        var existing = await db.UserSettings
-            .Where(s => s.UserId == userId)
-            .FirstOrDefaultAsync(ct);
-        var telegramChannel = await db.NotificationChannels.SingleOrDefaultAsync(
-            channel =>
-                channel.UserId == userId &&
-                channel.Transport == NotificationChannel.Telegram,
-            ct);
-
         var now = DateTimeOffset.UtcNow;
-        if (existing is null)
+        await using var transaction = await db.Database.BeginTransactionAsync(ct);
+        await db.Database.ExecuteSqlInterpolatedAsync($"""
+            insert into user_settings (user_id, ignore_short_sessions_minutes, created_at, updated_at)
+            values ({userId}, {ignoreShortMinutes}, {now}, {now})
+            on conflict (user_id) do update set
+                ignore_short_sessions_minutes = excluded.ignore_short_sessions_minutes,
+                updated_at = excluded.updated_at
+            """, ct);
+        if (telegramChatId is null)
         {
-            db.UserSettings.Add(new UserSettings
-            {
-                UserId = userId,
-                IgnoreShortSessionsMinutes = ignoreShortMinutes,
-                CreatedAt = now,
-                UpdatedAt = now,
-            });
+            await db.NotificationChannels
+                .Where(channel => channel.UserId == userId && channel.Transport == NotificationChannel.Telegram)
+                .ExecuteDeleteAsync(ct);
         }
         else
         {
-            existing.IgnoreShortSessionsMinutes = ignoreShortMinutes;
-            existing.UpdatedAt = now;
-        }
-        if (telegramChatId is null && telegramChannel is not null)
-        {
-            db.NotificationChannels.Remove(telegramChannel);
-        }
-        else if (telegramChatId is not null && telegramChannel is null)
-        {
-            db.NotificationChannels.Add(new NotificationChannel
-            {
-                UserId = userId,
-                Transport = NotificationChannel.Telegram,
-                Destination = telegramChatId,
-                CreatedAt = now,
-                UpdatedAt = now,
-            });
-        }
-        else if (telegramChatId is not null && telegramChannel is not null)
-        {
-            telegramChannel.Destination = telegramChatId;
-            telegramChannel.UpdatedAt = now;
+            await db.Database.ExecuteSqlInterpolatedAsync($"""
+                insert into notification_channels (user_id, transport, destination, created_at, updated_at)
+                values ({userId}, {NotificationChannel.Telegram}, {telegramChatId}, {now}, {now})
+                on conflict (user_id, transport) do update set
+                    destination = excluded.destination,
+                    updated_at = excluded.updated_at
+                """, ct);
         }
 
-        await db.SaveChangesAsync(ct);
+        await transaction.CommitAsync(ct);
         return new UserSettingsResponseDto(ignoreShortMinutes, telegramChatId);
     }
 }

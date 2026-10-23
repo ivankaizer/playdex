@@ -1,13 +1,13 @@
 using System.Reflection;
 using System.Text.RegularExpressions;
 using Api.Modules.Accounts;
-using Api.Modules.ApiCapture;
 using Api.Modules.Games;
 using Api.Modules.Metrics;
 using Api.Modules.Notifications;
 using Api.Modules.Polling;
 using Api.Modules.Posters;
 using Api.Modules.Recap;
+using Api.Modules.Sessions;
 using NetArchTest.Rules;
 using Playdex.Persistence;
 using Xunit;
@@ -35,7 +35,9 @@ public sealed class ArchitectureTests
         typeof(GameResolutionRequest),
         typeof(GameResolution),
         typeof(GameExternalIdentityTypes),
-        typeof(IApiSessionTimeoutCleaner),
+        // Polling, API capture, manual timers and provider settings start and end sessions only through these.
+        typeof(SessionLifecycle),
+        typeof(CaptureOutcome),
     ];
 
     // Existing direct uses of another module's types. Accepted as they are; a new one should usually be a contract.
@@ -68,9 +70,9 @@ public sealed class ArchitectureTests
         // GET /games/{id}/stats injects AccountsService while Accounts already depends on Games (IGames and the
         // stats DTOs), which makes Games <-> Accounts a cycle.
         new("Games", typeof(AccountsService)),
-        // ApiExceptionHandler maps Notifications' AppriseApiException to a 502, so generic HTTP plumbing knows about
-        // one module's exception type.
-        new(InfrastructureArea, typeof(AppriseApiException)),
+        // SessionLifecycle measures the polling gap in poll intervals, so it reads PollingOptions while Polling already
+        // depends on Sessions (SessionLifecycle), which makes Polling <-> Sessions a cycle.
+        new("Sessions", typeof(PollingOptions)),
     ];
 
     private static readonly Type[] ApiTypes = ApiAssembly.GetTypes().Where(type => !IsCompilerGenerated(type)).ToArray();

@@ -28,6 +28,61 @@ public sealed class LudusaviBackupTests
     }
 
     [Fact]
+    public async Task ACorruptBackupStateIsMovedAsideAndStartsEmpty()
+    {
+        var path = Path.Combine(NewTempDir(), "ludusavi-backups.json");
+        await File.WriteAllTextAsync(path, "{ \"games\": { \"doom\": ");
+        using var store = new BackupStateStore(path);
+
+        var loaded = await store.LoadAsync();
+
+        Assert.Empty(loaded.Games);
+        Assert.False(File.Exists(path));
+        Assert.Single(Directory.GetFiles(Path.GetDirectoryName(path)!, "ludusavi-backups.json.corrupt-*"));
+    }
+
+    [Fact]
+    public async Task ASchedulerPassSurvivesGamesAddedAndRemovedWhileItRuns()
+    {
+        var directory = NewTempDir();
+        var executable = CreateLudusaviExecutable();
+        GameConfig Game(string id) => new()
+        {
+            GameId = id,
+            ApiGameId = "3017860",
+            GameProvider = "steam",
+            Backup = new BackupConfig { DailyEnabled = true, LudusaviGameTitle = id }
+        };
+        var config = new AppConfig
+        {
+            Ludusavi = new LudusaviConfig { ExecutablePath = executable },
+            Storage = new StorageConfig { StateDirectory = directory },
+            Games = new Dictionary<string, GameConfig> { ["first"] = Game("first"), ["second"] = Game("second") }
+        };
+        // The app adds a game, and removes the second, while the first one's backup runs.
+        var process = new CallbackLudusaviProcess(() =>
+        {
+            config.Games["added"] = Game("added");
+            config.Games.Remove("second");
+        });
+        using var stateStore = new BackupStateStore(Path.Combine(directory, "backups.json"));
+        using var coordinator = new BackupCoordinator(
+            config,
+            new ConfigStore(Path.Combine(directory, "config.json")),
+            new BackupState(),
+            stateStore,
+            new LudusaviRunner(process),
+            NullLogger<BackupCoordinator>.Instance,
+            () => { });
+
+        await coordinator.RunDueOnceAsync(DateTimeOffset.Now, CancellationToken.None);
+
+        Assert.Equal(["first"], process.Titles);
+        Assert.Equal(BackupResultKind.Success, coordinator.GetState("first")?.Result);
+        Assert.Null(coordinator.GetState("second"));
+    }
+
+    [Fact]
     public async Task TestRunnerFindsBySteamIdAndBacksUpCanonicalTitle()
     {
         var executable = CreateLudusaviExecutable();
@@ -262,6 +317,23 @@ public sealed class LudusaviBackupTests
         {
             Calls.Add((executablePath, arguments.ToArray()));
             return Task.FromResult(results.Dequeue());
+        }
+    }
+
+    /// <summary>Backs up every game it is asked to, calling <paramref name="during"/> while the first one runs.</summary>
+    private sealed class CallbackLudusaviProcess(Action during) : ILudusaviProcess
+    {
+        public List<string> Titles { get; } = [];
+
+        public async Task<LudusaviProcessResult> RunAsync(string executablePath, IReadOnlyList<string> arguments, CancellationToken cancellationToken)
+        {
+            Titles.Add(arguments[1]);
+            await Task.Yield();
+            if (Titles.Count == 1)
+            {
+                during();
+            }
+            return new LudusaviProcessResult(0, "{\"errors\":[]}", "");
         }
     }
 

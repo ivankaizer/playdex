@@ -19,11 +19,21 @@ public sealed record SessionEnded(
     long GameId,
     DateTimeOffset StartedAt,
     DateTimeOffset EndedAt);
+/// <param name="FailingSince">When the outage began: one outage is announced once.</param>
 public sealed record PollFailed(
     long CredentialId,
     string Platform,
     string Message,
-    TimeSpan RetryDelay);
+    TimeSpan RetryDelay,
+    DateTimeOffset FailingSince);
+
+/// <summary>Polling paused itself because the provider kept rejecting the credential.</summary>
+public sealed record IntegrationPaused(
+    long CredentialId,
+    string Platform,
+    string Reason,
+    int AuthFailures,
+    DateTimeOffset PausedAt);
 
 public sealed partial class EventBus(IServiceScopeFactory scopeFactory, ILogger<EventBus> logger)
 {
@@ -33,6 +43,13 @@ public sealed partial class EventBus(IServiceScopeFactory scopeFactory, ILogger<
     [LoggerMessage(Level = LogLevel.Debug, Message = "Handler {HandlerType} handling {EventType}")]
     private partial void LogHandlerHandling(string handlerType, string eventType);
 
+    [LoggerMessage(Level = LogLevel.Error, Message = "Handler {HandlerType} failed for {EventType}")]
+    private partial void LogHandlerFailed(Exception exception, string handlerType, string eventType);
+
+    /// <summary>
+    /// Runs every subscriber, each isolated: one that throws is logged and does not stop the others. Only
+    /// cancellation of <paramref name="ct"/> propagates.
+    /// </summary>
     public async Task Publish<T>(T domainEvent, CancellationToken ct = default)
     {
         LogPublish(typeof(T).Name);
@@ -43,7 +60,18 @@ public sealed partial class EventBus(IServiceScopeFactory scopeFactory, ILogger<
         foreach (var handler in handlers)
         {
             LogHandlerHandling(handler.GetType().Name, typeof(T).Name);
-            await handler.Handle(domainEvent, ct);
+            try
+            {
+                await handler.Handle(domainEvent, ct);
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception exception)
+            {
+                LogHandlerFailed(exception, handler.GetType().Name, typeof(T).Name);
+            }
         }
     }
 }

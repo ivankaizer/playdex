@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { AppLink } from "@/components/AppLink";
 import { Cover } from "@/components/ui";
 import { isAbortError } from "@/lib/api";
 import { cx } from "@/lib/cx";
@@ -19,8 +20,8 @@ interface LiveSessionControlProps {
   error?: string;
   /** False for a synced (non-manual) session that can only be watched, not stopped. Defaults to true. */
   canStop?: boolean;
-  /** When set, the live game title links to the game. */
-  onOpenGame?: (gameId: string) => void;
+  /** When set, the live game title links to the game's page at this path. */
+  gamePath?: (gameId: string) => string;
   searchGames: (path: string, signal: AbortSignal) => Promise<ManualMappingSearchResponse>;
   onStart: (request: ManualSessionStartRequest) => void | Promise<void>;
   onStop: () => void | Promise<void>;
@@ -33,7 +34,7 @@ export function LiveSessionControl({
   busy = false,
   error = "",
   canStop = true,
-  onOpenGame,
+  gamePath,
   searchGames,
   onStart,
   onStop,
@@ -110,7 +111,7 @@ export function LiveSessionControl({
       style={live ? { background: "var(--live-bg)" } : undefined}
     >
       {live ? (
-        <LiveRow session={activeSession} busy={busy} canStop={canStop} onOpenGame={onOpenGame} onStop={onStop} />
+        <LiveRow session={activeSession} busy={busy} canStop={canStop} gamePath={gamePath} onStop={onStop} />
       ) : (
         <>
           <div className="flex flex-wrap items-center gap-2.5">
@@ -214,13 +215,13 @@ function LiveRow({
   session,
   busy,
   canStop,
-  onOpenGame,
+  gamePath,
   onStop,
 }: {
   session: ManualActiveSession;
   busy: boolean;
   canStop: boolean;
-  onOpenGame?: (gameId: string) => void;
+  gamePath?: (gameId: string) => string;
   onStop: () => void | Promise<void>;
 }) {
   const now = useNow();
@@ -235,10 +236,10 @@ function LiveRow({
           Playing now
         </div>
         <p className="mt-px truncate text-[15px] font-semibold" title={session.title}>
-          {onOpenGame ? (
-            <button type="button" onClick={() => onOpenGame(session.gameId)} className="max-w-full truncate text-left font-semibold hover:text-accent">
+          {gamePath ? (
+            <AppLink to={gamePath(session.gameId)} className="inline-block max-w-full truncate font-semibold no-underline hover:text-accent">
               {session.title}
-            </button>
+            </AppLink>
           ) : (
             session.title
           )}

@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
+import { clientTimeZone } from "@/lib/dates";
 import type { AccountSession } from "@/models/sessions";
 import type { AccountStatsPeriod } from "@/models/stats";
 import {
   beginRefresh,
   completeRefresh,
+  completeSection,
   dailySessionCounts,
   dailyTotals,
   dashboardActivityRequests,
@@ -14,7 +16,7 @@ import {
   getTodayView,
   getWeekView,
   greetingFor,
-  failRefresh,
+  failSection,
   getCurrentSession,
   getStatsView,
   getTodayPlatforms,
@@ -25,11 +27,12 @@ import {
   todaySeconds,
   todaySessionPageItems,
   todaySessionsTotalPages,
-  waitAllOrCancel,
   type DashboardSnapshot,
 } from "./dashboardState";
 
-const now = new Date("2026-07-13T12:00:00Z");
+// Noon on Monday Jul 13 in the zone the tests run in, so "today" is that date in every zone.
+const now = new Date(2026, 6, 13, 12, 0, 0);
+const tz = `tz=${encodeURIComponent(clientTimeZone())}`;
 const offset = (seconds: number) => new Date(now.getTime() + seconds * 1000).toISOString();
 
 function snapshot(): DashboardSnapshot {
@@ -43,8 +46,6 @@ function snapshot(): DashboardSnapshot {
     game: "Elden Ring",
     capsuleUrl: "https://images.test/elden.jpg",
     ignored: false,
-    mappedPlatform: "psn",
-    mappedSource: "local",
   };
   const current: AccountSession = {
     sessionId: 2,
@@ -56,16 +57,14 @@ function snapshot(): DashboardSnapshot {
     game: "Hades II",
     capsuleUrl: null,
     ignored: false,
-    mappedPlatform: null,
-    mappedSource: null,
   };
   const todayStats: AccountStatsPeriod = {
     totalSeconds: 3600,
     sessionCount: 1,
     topGameTitle: "Elden Ring",
     platforms: [
-      { platformKey: "steam", platformName: "Steam", totalSeconds: 450, source: null },
-      { platformKey: "psn", platformName: "PlayStation Network", totalSeconds: 3150, source: null },
+      { platformKey: "steam", platformName: "Steam", totalSeconds: 450 },
+      { platformKey: "psn", platformName: "PlayStation Network", totalSeconds: 3150 },
     ],
     topGames: [{ gameId: "42", title: "Elden Ring", totalSeconds: 3600 }],
     months: [],
@@ -74,7 +73,7 @@ function snapshot(): DashboardSnapshot {
     totalSeconds: 7200,
     sessionCount: 2,
     topGameTitle: "Elden Ring",
-    platforms: [{ platformKey: "steam", platformName: "Steam", totalSeconds: 7200, source: null }],
+    platforms: [{ platformKey: "steam", platformName: "Steam", totalSeconds: 7200 }],
     topGames: [{ gameId: "42", title: "Elden Ring", totalSeconds: 7200 }],
     months: [],
   };
@@ -82,13 +81,14 @@ function snapshot(): DashboardSnapshot {
     totalSeconds: 10800,
     sessionCount: 3,
     topGameTitle: "Hades II",
-    platforms: [{ platformKey: "manual", platformName: "Manual", totalSeconds: 10800, source: null }],
+    platforms: [{ platformKey: "manual", platformName: "Manual", totalSeconds: 10800 }],
     topGames: [{ gameId: "43", title: "Hades II", totalSeconds: 10800 }],
     months: [],
   };
 
   return {
     todaySessions: [completed],
+    todaySessionCount: todayStats.sessionCount,
     todayPlatformTotals: todayStats.platforms,
     currentSession: current,
     activeManualSession: {
@@ -108,16 +108,16 @@ function snapshot(): DashboardSnapshot {
 describe("dashboardRequests", () => {
   it("includes the manual live session alongside dashboard data", () => {
     expect(Object.values(dashboardRequests(now))).toEqual([
-      "/sessions?limit=10&offset=0&from=2026-07-13&to=2026-07-13&sort=date&direction=desc",
-      "/stats?from=2026-07-13&to=2026-07-13",
-      "/stats?from=2026-07-01&to=2026-07-13",
-      "/stats?from=2026-01-01&to=2026-07-13",
+      `/sessions?limit=10&offset=0&from=2026-07-13&to=2026-07-13&sort=date&direction=desc&${tz}`,
+      `/stats?from=2026-07-13&to=2026-07-13&${tz}`,
+      `/stats?from=2026-07-01&to=2026-07-13&${tz}`,
+      `/stats?from=2026-01-01&to=2026-07-13&${tz}`,
       "/sessions/current",
       "/manual/sessions/current",
     ]);
   });
 
-  it("builds recap paths from UTC dates", () => {
+  it("builds recap page paths from the viewer's dates", () => {
     expect(recapPath("today", now)).toBe("/recap?from=2026-07-13&to=2026-07-13");
     expect(recapPath("month", now)).toBe("/recap?from=2026-07-01&to=2026-07-13");
     expect(recapPath("year", now)).toBe("/recap?from=2026-01-01&to=2026-07-13");
@@ -125,13 +125,13 @@ describe("dashboardRequests", () => {
 });
 
 describe("dashboard refresh state", () => {
-  it("is all-or-nothing and a silent refresh does not show the skeleton", () => {
+  it("loads every panel and a silent refresh does not show the skeletons", () => {
     const data = snapshot();
     let state = beginRefresh(initialDashboardState, false);
-    expect(state.isDashboardLoading).toBe(true);
+    expect(Object.values(state.loading)).toEqual([true, true, true, true, true]);
     state = completeRefresh(state, data, now);
 
-    expect(state.isDashboardLoading).toBe(false);
+    expect(Object.values(state.loading)).toEqual([false, false, false, false, false]);
     expect(state.todaySessions).toHaveLength(1);
     expect(state.currentSession).toBe(data.currentSession);
     expect(state.activeManualSession).toBe(data.activeManualSession);
@@ -139,17 +139,38 @@ describe("dashboard refresh state", () => {
     expect(state.yearlyStats).toBe(data.yearlyStats);
 
     state = beginRefresh(state, true);
-    expect(state.isDashboardLoading).toBe(false);
-    state = failRefresh(state, "Dashboard unavailable.");
+    expect(Object.values(state.loading)).toEqual([false, false, false, false, false]);
+  });
 
-    expect(state.todaySessions).toEqual([]);
-    expect(state.todayPlatformTotals).toEqual([]);
-    expect(state.currentSession).toBeNull();
-    expect(state.activeManualSession).toBeNull();
-    expect(state.monthlyStats).toBeNull();
+  it("keeps the other panels when one panel's requests fail", () => {
+    const data = snapshot();
+    let state = beginRefresh(initialDashboardState, false);
+    state = completeSection(state, "live", { currentSession: data.currentSession, activeManualSession: data.activeManualSession }, now);
+    state = completeSection(state, "month", { monthlyStats: data.monthlyStats }, now);
+    state = failSection(state, "year", "Playdex ran into a problem on its side.");
+
+    expect(state.currentSession).toBe(data.currentSession);
+    expect(state.monthlyStats).toBe(data.monthlyStats);
     expect(state.yearlyStats).toBeNull();
-    expect(state.dashboardError).toBe("Dashboard unavailable.");
-    expect(beginRefresh(state, true).dashboardError).toBe("");
+    expect(state.errors).toEqual({ live: "", today: "", recent: "", month: "", year: "Playdex ran into a problem on its side." });
+    expect(state.loading).toEqual({ live: false, today: true, recent: true, month: false, year: false });
+
+    state = completeSection(
+      state,
+      "today",
+      { todaySessions: data.todaySessions, todaySessionCount: 4, todayPlatformTotals: data.todayPlatformTotals },
+      now,
+    );
+    expect(state.todaySessionCards).toHaveLength(1);
+    expect(state.todaySessionCount).toBe(4);
+
+    state = failSection(state, "today", "Can't reach Playdex.");
+    expect(state.todaySessions).toEqual([]);
+    expect(state.todaySessionCards).toEqual([]);
+    expect(state.todayPlatformTotals).toEqual([]);
+    expect(state.currentSession).toBe(data.currentSession);
+
+    expect(beginRefresh(state, true).errors.year).toBe("");
   });
 
   it("derives cards, totals and current session with matching formatting and rounding", () => {
@@ -209,8 +230,6 @@ describe("dashboard refresh state", () => {
       game: `Game ${i + 1}`,
       capsuleUrl: null,
       ignored: false,
-      mappedPlatform: null,
-      mappedSource: null,
     }));
     let state = completeRefresh(initialDashboardState, { ...snapshot(), todaySessions: sessions }, now);
     const ids = () => todaySessionPageItems(state).map((item) => item.sessionId);
@@ -235,8 +254,8 @@ describe("dashboard refresh state", () => {
       sessionCount: 2,
       topGameTitle: null,
       platforms: [
-        { platformKey: "psn", platformName: "PlayStation Network", totalSeconds: 3600, source: null },
-        { platformKey: "ps5", platformName: "PlayStation 5", totalSeconds: 3600, source: null },
+        { platformKey: "psn", platformName: "PlayStation Network", totalSeconds: 3600 },
+        { platformKey: "ps5", platformName: "PlayStation 5", totalSeconds: 3600 },
       ],
       topGames: [],
       months: [],
@@ -247,30 +266,13 @@ describe("dashboard refresh state", () => {
   });
 });
 
-describe("waitAllOrCancel", () => {
-  it("reports the first failure without waiting for an unresolved sibling", async () => {
-    const sibling = new AbortController();
-    const failure = new Error("first request failed");
-    const unresolved = new Promise<number>(() => {});
-
-    await expect(waitAllOrCancel<[number, number]>([unresolved, Promise.reject(failure)], sibling)).rejects.toBe(failure);
-    expect(sibling.signal.aborted).toBe(true);
-  });
-
-  it("resolves all values in order", async () => {
-    const sibling = new AbortController();
-    await expect(waitAllOrCancel<[number, string]>([Promise.resolve(1), Promise.resolve("a")], sibling)).resolves.toEqual([1, "a"]);
-    expect(sibling.signal.aborted).toBe(false);
-  });
-});
-
 describe("dashboard redesign views", () => {
   it("requests one daily breakdown from the earlier of Monday and the 1st through today", () => {
-    const requests = dashboardActivityRequests(new Date("2026-10-04T12:00:00Z"));
-    expect(requests.daily).toBe("/stats/daily?from=2026-09-28&to=2026-10-04");
+    const requests = dashboardActivityRequests(new Date(2026, 9, 4, 12));
+    expect(requests.daily).toBe(`/stats/daily?from=2026-09-28&to=2026-10-04&${tz}`);
 
-    const midMonth = dashboardActivityRequests(new Date("2026-10-20T12:00:00Z"));
-    expect(midMonth.daily).toBe("/stats/daily?from=2026-10-01&to=2026-10-20");
+    const midMonth = dashboardActivityRequests(new Date(2026, 9, 20, 12));
+    expect(midMonth.daily).toBe(`/stats/daily?from=2026-10-01&to=2026-10-20&${tz}`);
   });
 
   it("indexes daily totals by date", () => {
@@ -328,6 +330,16 @@ describe("dashboard redesign views", () => {
     expect(getTodayView(state, null, now)).toEqual({ seconds: todaySeconds(state), sessions: state.todaySessionCount });
   });
 
+  it("counts every session today, not only the ten listed", () => {
+    const data = snapshot();
+    const listed = Array.from({ length: 10 }, (_, i) => ({ ...data.todaySessions[0], sessionId: 100 + i }));
+    const state = completeRefresh(initialDashboardState, { ...data, todaySessions: listed, todaySessionCount: 14 }, now);
+    expect(state.todaySessionCards).toHaveLength(10);
+    expect(getTodayView(state, null, now).sessions).toBe(14);
+    expect(getTodayView(state, { days: { "2026-07-13": 600 } }, now).sessions).toBe(14);
+    expect(getTodayView(state, { days: { "2026-07-13": 600 }, sessionCounts: { "2026-07-13": 15 } }, now).sessions).toBe(15);
+  });
+
   it("indexes daily session counts by date", () => {
     expect(dailySessionCounts([{ date: "2026-07-13", totalSeconds: 60, sessionCount: 3, platforms: [] }])).toEqual({ "2026-07-13": 3 });
   });
@@ -355,7 +367,7 @@ describe("dashboard redesign views", () => {
 
   it("formats recent sessions with today and short dates", () => {
     const data = snapshot();
-    const older = { ...data.todaySessions[0], sessionId: 9, startedAt: "2026-06-30T10:00:00Z", endedAt: "2026-06-30T11:55:00Z" };
+    const older = { ...data.todaySessions[0], sessionId: 9, startedAt: new Date(2026, 5, 30, 10).toISOString(), endedAt: new Date(2026, 5, 30, 11, 55).toISOString() };
     const state = completeRefresh(initialDashboardState, { ...data, recentSessions: [older] }, now);
     expect(getRecentSessions(state, now)[0]).toMatchObject({ date: "Jun 30", duration: "1h 55m" });
     expect(formatShortDuration(600)).toBe("10m");
@@ -431,7 +443,7 @@ describe("dashboard redesign views", () => {
     const late = { ...data.todaySessions[0], sessionId: 10, startedAt: yesterday.toISOString(), endedAt: now.toISOString() };
     const state = completeRefresh(initialDashboardState, { ...data, recentSessions: [late] }, now);
     expect(getRecentSessions(state, now)[0].date).toBe("Yesterday, 23:58");
-    expect(getWeekView(null, new Date("2026-01-01T12:00:00Z")).rangeLabel).toBe("Dec 29, 2025 – Jan 4, 2026");
+    expect(getWeekView(null, new Date(2026, 0, 1, 12)).rangeLabel).toBe("Dec 29, 2025 – Jan 4, 2026");
   });
 
   it("greets by the local hour", () => {

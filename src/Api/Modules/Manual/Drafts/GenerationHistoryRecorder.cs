@@ -95,11 +95,11 @@ public sealed partial class GenerationHistoryCleanup(GenerationHistoryRecorder h
         {
             try { await history.DeleteExpired(stoppingToken); }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { return; }
-            catch (Exception exception) when (exception is NpgsqlException or TimeoutException)
-            { LogCleanupFailed(); }
+            // Any failure, not only database ones: an escaping exception would stop this service for good.
+            catch (Exception exception) { LogCleanupFailed(exception); }
         } while (await timer.WaitForNextTickAsync(stoppingToken));
     }
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "AI generation history cleanup failed; will retry next hour.")]
-    private partial void LogCleanupFailed();
+    private partial void LogCleanupFailed(Exception exception);
 }

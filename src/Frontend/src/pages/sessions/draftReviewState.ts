@@ -1,3 +1,4 @@
+import { localDateOnly } from "@/lib/dates";
 import type { DraftAcceptRow, DraftRowDto, DraftRowUpdate } from "@/models/drafts";
 import type { ManualMappingSearchResult } from "@/models/manual";
 
@@ -29,35 +30,31 @@ function parseInt32(value: string): number | null {
   return parsed >= -2_147_483_648 && parsed <= IntMax ? parsed : null;
 }
 
-/** Whole-minute duration, or null when it is not a positive whole number with minutes under 60 and at most 99 hours. */
+/** Whole-minute duration, or null when it is not a positive whole number with minutes under 60 and at most 24 hours. */
 export function draftDuration(row: Pick<DraftRowEdit, "hours" | "minutes">): number | null {
   return durationCheck(row).minutes;
 }
 
-/** Durations over this many minutes (24h) can be accepted, but only one at a time with "Accept anyway". */
-export const LongDraftMinutes = 24 * 60;
+/** The longest session the API accepts from a draft (24 hours). */
+export const MaxDraftMinutes = 24 * 60;
 
 export interface DraftDurationCheck {
   /** Whole minutes when valid, otherwise null. */
   minutes: number | null;
-  /** Valid but over 24 hours. */
-  long: boolean;
-  /** What is wrong (or worth a second look); empty when the duration is fine. */
+  /** What is wrong; empty when the duration is fine. */
   note: string;
 }
 
 export function durationCheck(row: Pick<DraftRowEdit, "hours" | "minutes">): DraftDurationCheck {
   const hours = parseInt32(row.hours);
   const minutes = parseInt32(row.minutes);
-  const invalid = (note: string): DraftDurationCheck => ({ minutes: null, long: false, note });
+  const invalid = (note: string): DraftDurationCheck => ({ minutes: null, note });
   if (hours === null || minutes === null || hours < 0 || minutes < 0) return invalid("Enter a positive whole-minute duration.");
   if (minutes > 59) return invalid("Minutes must be between 0 and 59.");
-  if (hours > 99) return invalid("Hours must be 99 or less.");
   const total = hours * 60 + minutes;
+  if (total > MaxDraftMinutes) return invalid("A session can be at most 24 hours.");
   if (total === 0) return invalid("Add how long you played.");
-  return total > LongDraftMinutes
-    ? { minutes: total, long: true, note: "Over 24 hours. Check the duration before accepting." }
-    : { minutes: total, long: false, note: "" };
+  return { minutes: total, note: "" };
 }
 
 export const hasGameSelection = (row: DraftRowEdit) => row.selection !== null;
@@ -73,7 +70,10 @@ export function isValidDate(value: string): boolean {
   return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day;
 }
 
-export const hasValidDate = (row: DraftRowEdit) => isValidDate(row.date);
+/** A future date waits until the day begins (the API refuses it, like a manual entry). */
+export const isFutureDate = (date: string, now: Date = new Date()) => isValidDate(date) && date > localDateOnly(now);
+
+export const hasValidDate = (row: DraftRowEdit) => isValidDate(row.date) && !isFutureDate(row.date);
 export const hasValidDuration = (row: DraftRowEdit) => draftDuration(row) !== null;
 export const hasValidPlatform = (row: DraftRowEdit) => row.platformKey.trim().length > 0;
 export const needsPlatformReview = (row: DraftRowEdit) => !hasValidPlatform(row) || row.platformKey === "unknown";
@@ -81,7 +81,7 @@ export const needsPlatformReview = (row: DraftRowEdit) => !hasValidPlatform(row)
 export function corrections(row: DraftRowEdit): string {
   return [
     !hasGameSelection(row) ? "Select a verified game." : "",
-    !hasValidDate(row) ? "Select a valid date." : "",
+    !hasValidDate(row) ? (isFutureDate(row.date) ? "The date cannot be in the future." : "Select a valid date.") : "",
     !hasValidDuration(row) ? durationCheck(row).note : "",
     !hasValidPlatform(row) ? "Select a platform." : "",
   ]
@@ -91,11 +91,8 @@ export function corrections(row: DraftRowEdit): string {
 
 export const canAccept = (row: DraftRowEdit) => !row.isAccepted && corrections(row).length === 0;
 
-/** Valid but over 24 hours: accepted only from its own "Accept anyway" button, never by "Accept all ready". */
-export const needsDurationCheck = (row: DraftRowEdit) => durationCheck(row).long;
-
-/** Rows that "Accept all ready" takes: acceptable and with a duration that needs no second look. */
-export const isReady = (row: DraftRowEdit) => canAccept(row) && !needsDurationCheck(row);
+/** Rows that "Accept all ready" takes. */
+export const isReady = canAccept;
 
 export function rowUpdate(row: DraftRowEdit): DraftRowUpdate {
   return {

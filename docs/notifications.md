@@ -34,6 +34,16 @@ The API accepts these settings:
 
 Docker Compose maps `TELEGRAM_BOT_TOKEN` from `.env` to the application setting.
 
+## Session cards
+
+Session notifications carry an image card built from the game's cover. The API
+downloads the cover itself, so it only fetches https URLs on the hosts Playdex
+takes covers from (WeMod and Steam's CDNs, PlayStation, Xbox and IGDB image
+hosts) or on the configured poster origins (`Posters__PublicBaseUrl`,
+`Posters__WeModBaseUrl`), follows at most three redirects that stay on those
+hosts, and refuses covers over 5 MB or 24 megapixels. Any other cover (for
+example one an administrator pointed elsewhere) gets a text-only notification.
+
 ## Test endpoint
 
 An authenticated user can verify delivery using:

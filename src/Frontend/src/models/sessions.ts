@@ -9,8 +9,6 @@ export interface AccountSession {
   game: string;
   capsuleUrl: string | null;
   ignored: boolean;
-  mappedPlatform: string | null;
-  mappedSource: string | null;
 }
 
 export interface AccountSessionsResponse {
@@ -23,7 +21,10 @@ export interface AccountSessionsResponse {
 
 export interface AccountTodaySessionsResponse {
   accountId: number | null;
+  /** The newest of today's sessions (at most 10). */
   sessions: AccountSession[];
+  /** All of today's sessions, listed or not. */
+  total: number;
 }
 
 export interface AccountCurrentSessionResponse {

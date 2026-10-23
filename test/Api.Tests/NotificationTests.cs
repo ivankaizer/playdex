@@ -17,7 +17,7 @@ public sealed class AppriseNotificationTests(PostgresFixture postgres)
     public async Task RendererProducesDeterministicSizeWebpWithCardContent()
     {
         var cover = CreateCover();
-        var renderer = new NotificationRenderer(new HttpClient(
+        var renderer = Renderer(new HttpClient(
             new StaticHandler(new HttpResponseMessage(HttpStatusCode.OK)
             {
                 Content = new ByteArrayContent(cover),
@@ -40,7 +40,7 @@ public sealed class AppriseNotificationTests(PostgresFixture postgres)
     public async Task GoldenSessionStartedCardMatchesExpectedPixelContent()
     {
         var cover = CreateCover();
-        var renderer = new NotificationRenderer(new HttpClient(
+        var renderer = Renderer(new HttpClient(
             new StaticHandler(new HttpResponseMessage(HttpStatusCode.OK)
             {
                 Content = new ByteArrayContent(cover),
@@ -81,7 +81,7 @@ public sealed class AppriseNotificationTests(PostgresFixture postgres)
     public async Task GoldenShortTitleRendersAtLargerSize()
     {
         var cover = CreateCover();
-        var renderer = new NotificationRenderer(new HttpClient(
+        var renderer = Renderer(new HttpClient(
             new StaticHandler(new HttpResponseMessage(HttpStatusCode.OK)
             {
                 Content = new ByteArrayContent(cover),
@@ -102,7 +102,7 @@ public sealed class AppriseNotificationTests(PostgresFixture postgres)
     public async Task FallbackLongTitleWrapsToTwoLines()
     {
         var cover = CreateCover();
-        var renderer = new NotificationRenderer(new HttpClient(
+        var renderer = Renderer(new HttpClient(
             new StaticHandler(new HttpResponseMessage(HttpStatusCode.OK)
             {
                 Content = new ByteArrayContent(cover),
@@ -124,7 +124,7 @@ public sealed class AppriseNotificationTests(PostgresFixture postgres)
     [Fact]
     public async Task FallbackCoverRetrievalFailureIsThrown()
     {
-        var renderer = new NotificationRenderer(new HttpClient(
+        var renderer = Renderer(new HttpClient(
             new StaticHandler(new HttpResponseMessage(HttpStatusCode.NotFound))));
 
         await Assert.ThrowsAsync<HttpRequestException>(() =>
@@ -137,13 +137,13 @@ public sealed class AppriseNotificationTests(PostgresFixture postgres)
     [Fact]
     public async Task FallbackInvalidImageDataIsThrown()
     {
-        var renderer = new NotificationRenderer(new HttpClient(
+        var renderer = Renderer(new HttpClient(
             new StaticHandler(new HttpResponseMessage(HttpStatusCode.OK)
             {
                 Content = new StringContent("not an image"),
             })));
 
-        await Assert.ThrowsAsync<ArgumentNullException>(() =>
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
             renderer.RenderAsync(
                 new NotificationCard("Hades", "Steam", false, null),
                 "https://covers.test/corrupt.png",
@@ -177,7 +177,7 @@ public sealed class AppriseNotificationTests(PostgresFixture postgres)
     private static async Task<byte[]> RenderWithCover(
         string title, string platform, bool ended, string? duration, byte[] cover)
     {
-        var renderer = new NotificationRenderer(new HttpClient(
+        var renderer = Renderer(new HttpClient(
             new StaticHandler(new HttpResponseMessage(HttpStatusCode.OK)
             {
                 Content = new ByteArrayContent(cover),
@@ -189,7 +189,7 @@ public sealed class AppriseNotificationTests(PostgresFixture postgres)
     }
 
     [Fact]
-    public async Task SessionEventsSendPhotoFallbackToTextSkipUnlinkedAndIsolateDeliveryFailure()
+    public async Task SessionEventsSendPhotoFallbackToTextSkipUnlinkedAndReportDeliveryFailure()
     {
         if (!postgres.IsConfigured) return;
 
@@ -243,19 +243,19 @@ public sealed class AppriseNotificationTests(PostgresFixture postgres)
                 new HttpResponseMessage(HttpStatusCode.FailedDependency));
             var client = new AppriseClient(
                 new HttpClient(appriseHandler) { BaseAddress = new Uri("https://apprise.test/") });
-            var renderer = new NotificationRenderer(new HttpClient(
+            var renderer = Renderer(new HttpClient(
                 new StaticHandler(new HttpResponseMessage(HttpStatusCode.OK)
                 {
                     Content = new ByteArrayContent(CreateCover()),
                 })));
-            var handler = new NotificationEventHandlers(
+            var handler = new NotificationSender(
                 new NotificationsRepository(db),
                 client,
                 renderer,
-                NullLogger<NotificationEventHandlers>.Instance);
+                NullLogger<NotificationSender>.Instance);
             var now = DateTimeOffset.UtcNow;
 
-            await handler.Handle(
+            await handler.Send(
                 new SessionStarted(session.Id, integration.Id, game.Id, now),
                 CancellationToken.None);
             Assert.EndsWith("/notify/telegram_4242", appriseHandler.Requests[0]);
@@ -263,18 +263,22 @@ public sealed class AppriseNotificationTests(PostgresFixture postgres)
             game.CapsuleUrl = null;
             session.EndedAt = now.AddMinutes(65);
             await db.SaveChangesAsync();
-            await handler.Handle(
+            await handler.Send(
                 new SessionEnded(session.Id, integration.Id, game.Id, now, session.EndedAt.Value),
                 CancellationToken.None);
             Assert.EndsWith("/notify/telegram_4242", appriseHandler.Requests[1]);
 
-            await handler.Handle(
-                new PollFailed(integration.Id, "steam", "rate limited", TimeSpan.FromMinutes(1)),
-                CancellationToken.None);
+            // A failed delivery throws, so that the dispatcher retries it. The provider's error text is not sent.
+            await Assert.ThrowsAsync<AppriseApiException>(() => handler.Send(
+                new PollFailed(integration.Id, "steam", "rate limited <provider detail>", TimeSpan.FromMinutes(1), now),
+                CancellationToken.None));
+            Assert.DoesNotContain("provider detail", appriseHandler.Bodies[2], StringComparison.Ordinal);
+            Assert.Contains("could not check your Steam activity", appriseHandler.Bodies[2], StringComparison.Ordinal);
+            Assert.Contains("Retrying in 1m 0s", appriseHandler.Bodies[2], StringComparison.Ordinal);
 
             db.NotificationChannels.Remove(notificationChannel);
             await db.SaveChangesAsync();
-            await handler.Handle(
+            await handler.Send(
                 new SessionStarted(session.Id, integration.Id, game.Id, now),
                 CancellationToken.None);
             Assert.Equal(3, appriseHandler.Requests.Count);
@@ -350,14 +354,14 @@ public sealed class AppriseNotificationTests(PostgresFixture postgres)
         try
         {
             var appriseHandler = new RecordingHandler(Json("{}"), Json("{}"), Json("{}"), Json("{}"));
-            var handler = new NotificationEventHandlers(
+            var handler = new NotificationSender(
                 new NotificationsRepository(db),
                 new AppriseClient(
                     new HttpClient(appriseHandler) { BaseAddress = new Uri("https://apprise.test/") }),
-                new NotificationRenderer(new HttpClient()),
-                NullLogger<NotificationEventHandlers>.Instance);
+                Renderer(new HttpClient()),
+                NullLogger<NotificationSender>.Instance);
 
-            await handler.Handle(
+            await handler.Send(
                 new SessionStarted(
                     firstSession.Id,
                     firstIntegration.Id,
@@ -378,7 +382,7 @@ public sealed class AppriseNotificationTests(PostgresFixture postgres)
             db.PlaySessions.Add(secondSession);
             await db.SaveChangesAsync();
 
-            await handler.Handle(
+            await handler.Send(
                 new SessionStarted(
                     secondSession.Id,
                     secondIntegration.Id,
@@ -389,7 +393,7 @@ public sealed class AppriseNotificationTests(PostgresFixture postgres)
 
             firstSession.EndedAt = startedAt.AddMinutes(10);
             await db.SaveChangesAsync();
-            await handler.Handle(
+            await handler.Send(
                 new SessionEnded(
                     firstSession.Id,
                     firstIntegration.Id,
@@ -401,7 +405,7 @@ public sealed class AppriseNotificationTests(PostgresFixture postgres)
 
             secondSession.EndedAt = startedAt.AddMinutes(11);
             await db.SaveChangesAsync();
-            await handler.Handle(
+            await handler.Send(
                 new SessionEnded(
                     secondSession.Id,
                     secondIntegration.Id,
@@ -422,6 +426,108 @@ public sealed class AppriseNotificationTests(PostgresFixture postgres)
             db.Games.Remove(game);
             await db.SaveChangesAsync();
         }
+    }
+
+    [Fact]
+    public async Task RendererDoesNotFetchCoversFromHostsOutsideTheAllowlist()
+    {
+        var handler = new RecordingHandler();
+        var renderer = Renderer(new HttpClient(handler));
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => renderer.RenderAsync(
+            new NotificationCard("Hades", "Steam", false, null),
+            "http://169.254.169.254/latest/meta-data",
+            CancellationToken.None));
+        Assert.Empty(handler.Requests);
+    }
+
+    [Fact]
+    public async Task RendererChecksEveryRedirectAgainstTheAllowlist()
+    {
+        var redirectOut = new RecordingHandler(Redirect("https://internal.test/cover.png"));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => Renderer(new HttpClient(redirectOut)).RenderAsync(
+            new NotificationCard("Hades", "Steam", false, null), "https://covers.test/hades.png", CancellationToken.None));
+        Assert.Single(redirectOut.Requests);
+
+        var redirectWithin = new RecordingHandler(
+            Redirect("/moved/hades.png"),
+            new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(CreateCover()) });
+        var image = await Renderer(new HttpClient(redirectWithin)).RenderAsync(
+            new NotificationCard("Hades", "Steam", false, null), "https://covers.test/hades.png", CancellationToken.None);
+        Assert.NotEmpty(image);
+        Assert.Equal("https://covers.test/moved/hades.png", redirectWithin.Requests[1]);
+    }
+
+    [Fact]
+    public async Task RendererRefusesCoversOverTheSizeCap()
+    {
+        var renderer = Renderer(new HttpClient(new StaticHandler(new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new ByteArrayContent(new byte[NotificationRenderer.MaxCoverBytes + 1]),
+        })));
+
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => renderer.RenderAsync(
+            new NotificationCard("Hades", "Steam", false, null), "https://covers.test/huge.png", CancellationToken.None));
+        Assert.Contains("too large to download", error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task RendererRefusesCoversThatDeclareTooManyPixels()
+    {
+        // A few dozen bytes that claim a 20000 x 20000 bitmap: rejected from the header, before any decoding.
+        var renderer = Renderer(new HttpClient(new StaticHandler(new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new ByteArrayContent(PngHeader(20_000, 20_000)),
+        })));
+
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => renderer.RenderAsync(
+            new NotificationCard("Hades", "Steam", false, null), "https://covers.test/bomb.png", CancellationToken.None));
+        Assert.Contains("too large to render", error.Message, StringComparison.Ordinal);
+    }
+
+    private static NotificationRenderer Renderer(HttpClient client) =>
+        new(client, new CoverUrlPolicy(["https://covers.test"]));
+
+    private static HttpResponseMessage Redirect(string location)
+    {
+        var response = new HttpResponseMessage(HttpStatusCode.Found);
+        response.Headers.Location = new Uri(location, UriKind.RelativeOrAbsolute);
+        return response;
+    }
+
+    /// <summary>A PNG whose header declares the given size but which carries no pixel data.</summary>
+    private static byte[] PngHeader(int width, int height)
+    {
+        var bytes = new List<byte> { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A };
+        void Chunk(string type, byte[] payload)
+        {
+            var body = Encoding.ASCII.GetBytes(type).Concat(payload).ToArray();
+            bytes.AddRange(BigEndian(payload.Length));
+            bytes.AddRange(body);
+            bytes.AddRange(BigEndian(unchecked((int)Crc32(body))));
+        }
+
+        Chunk("IHDR", [.. BigEndian(width), .. BigEndian(height), 8, 6, 0, 0, 0]);
+        // An empty zlib stream: Skia reads up to the first IDAT before it reports the image size.
+        Chunk("IDAT", [0x78, 0x9C, 0x03, 0x00, 0x00, 0x00, 0x00, 0x01]);
+        Chunk("IEND", []);
+        return bytes.ToArray();
+    }
+
+    private static byte[] BigEndian(int value) =>
+        [(byte)(value >> 24), (byte)(value >> 16), (byte)(value >> 8), (byte)value];
+
+    private static uint Crc32(byte[] data)
+    {
+        var crc = 0xFFFFFFFFu;
+        foreach (var b in data)
+        {
+            crc ^= b;
+            for (var bit = 0; bit < 8; bit++)
+                crc = (crc & 1) != 0 ? (crc >> 1) ^ 0xEDB88320u : crc >> 1;
+        }
+
+        return ~crc;
     }
 
     private static byte[] CreateCover()

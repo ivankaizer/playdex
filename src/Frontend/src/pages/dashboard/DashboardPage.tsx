@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AppLayout } from "@/components/AppLayout";
+import { AppLink } from "@/components/AppLink";
 import {
   BarChart,
   Cover,
@@ -14,7 +15,6 @@ import {
 import { apiRequest, errorMessage, isAbortError } from "@/lib/api";
 import { formatCountNoun } from "@/lib/format";
 import { encodeGameId } from "@/lib/gameHash";
-import { logout, useAppNavigate } from "@/lib/navigation";
 import { platformColor } from "@/lib/platforms";
 import type {
   ManualActiveSession,
@@ -31,13 +31,13 @@ import type { AccountDailyStatsResponse, AccountStatsRangeResponse } from "@/mod
 import { LiveSessionControl } from "../sessions/components/LiveSessionControl";
 import {
   beginRefresh,
-  completeRefresh,
+  completeSection,
   dailyPlatforms,
   dailySessionCounts,
   dailyTotals,
   dashboardActivityRequests,
   dashboardRequests,
-  failRefresh,
+  failSection,
   formatHoursGrouped,
   formatShortDuration,
   getOverviewView,
@@ -48,16 +48,16 @@ import {
   initialDashboardState,
   recapPath,
   recentSessionsRequest,
-  waitAllOrCancel,
   type DashboardActivity,
   type DashboardPlatformView,
+  type DashboardSection,
+  type DashboardSectionData,
   type DashboardState,
   type OverviewKpi,
   type OverviewPeriod,
-  type RecapRange,
 } from "./dashboardState";
 
-const utcMonthName = new Intl.DateTimeFormat("en-US", { month: "long", timeZone: "UTC" });
+const monthName = new Intl.DateTimeFormat("en-US", { month: "long" });
 
 /** Long game titles step down in size so they stay readable in a KPI tile. */
 function kpiTitleSize(value: string): string {
@@ -115,7 +115,6 @@ function minorLabel(label: string, minor: boolean) {
 }
 
 export function DashboardPage() {
-  const navigate = useAppNavigate();
   const [state, setState] = useState<DashboardState>(() => beginRefresh(initialDashboardState, false));
   const [activity, setActivity] = useState<DashboardActivity | null>(null);
   const [platforms, setPlatforms] = useState<readonly ManualPlatform[]>([]);
@@ -131,7 +130,7 @@ export function DashboardPage() {
     const version = ++activityVersion.current;
     const requests = dashboardActivityRequests(new Date());
     try {
-      const daily = await apiRequest<AccountDailyStatsResponse>(requests.daily, { onAuthFailure: logout, signal });
+      const daily = await apiRequest<AccountDailyStatsResponse>(requests.daily, { signal });
       if (signal.aborted || version !== activityVersion.current) return;
       setActivity({
         days: dailyTotals(daily.days),
@@ -144,64 +143,49 @@ export function DashboardPage() {
     }
   }, []);
 
+  /** Each panel loads on its own: a failing endpoint leaves its error in that panel, not a blank dashboard. */
   const refreshDashboard = useCallback(
     async (silent: boolean) => {
       const lifetimeController = lifetime.current;
+      const signal = lifetimeController.signal;
       setState((current) => beginRefresh(current, silent));
-      void refreshActivity(lifetimeController.signal);
-      const siblingCancellation = new AbortController();
-      const linkAbort = () => siblingCancellation.abort();
-      lifetimeController.signal.addEventListener("abort", linkAbort);
-      try {
-        const requests = dashboardRequests(new Date());
-        const options = { onAuthFailure: logout, signal: siblingCancellation.signal };
-        const [todaySessions, todayStats, monthlyStats, yearlyStats, currentSession, activeManualSession, recentSessions] =
-          await waitAllOrCancel<
-            [
-              AccountSessionsResponse,
-              AccountStatsRangeResponse,
-              AccountStatsRangeResponse,
-              AccountStatsRangeResponse,
-              AccountCurrentSessionResponse,
-              ManualActiveSessionResponse,
-              AccountSessionsResponse,
-            ]
-          >(
-            [
-              apiRequest<AccountSessionsResponse>(requests.todaySessions, options),
-              apiRequest<AccountStatsRangeResponse>(requests.todayStats, options),
-              apiRequest<AccountStatsRangeResponse>(requests.monthlyStats, options),
-              apiRequest<AccountStatsRangeResponse>(requests.yearlyStats, options),
-              apiRequest<AccountCurrentSessionResponse>(requests.currentSession, options),
-              apiRequest<ManualActiveSessionResponse>(requests.activeManualSession, options),
-              apiRequest<AccountSessionsResponse>(recentSessionsRequest, options),
-            ],
-            siblingCancellation,
-          );
-        if (lifetimeController.signal.aborted) return;
-
-        setState((current) =>
-          completeRefresh(
-            current,
-            {
-              todaySessions: todaySessions.sessions,
-              todaySessionCount: todayStats.stats.sessionCount,
-              recentSessions: recentSessions.sessions,
-              todayPlatformTotals: todayStats.stats.platforms,
-              currentSession: currentSession.session,
-              activeManualSession: activeManualSession.session,
-              monthlyStats: monthlyStats.stats,
-              yearlyStats: yearlyStats.stats,
-            },
-            new Date(),
-          ),
-        );
-      } catch (error) {
-        if (lifetimeController.signal.aborted) return;
-        setState((current) => failRefresh(current, errorMessage(error)));
-      } finally {
-        lifetimeController.signal.removeEventListener("abort", linkAbort);
-      }
+      void refreshActivity(signal);
+      const requests = dashboardRequests(new Date());
+      const options = { signal };
+      const load = async <S extends DashboardSection>(section: S, fetch: () => Promise<DashboardSectionData[S]>) => {
+        try {
+          const data = await fetch();
+          if (!signal.aborted) setState((current) => completeSection(current, section, data, new Date()));
+        } catch (error) {
+          if (signal.aborted || isAbortError(error)) return;
+          setState((current) => failSection(current, section, errorMessage(error)));
+        }
+      };
+      await Promise.all([
+        load("live", async () => {
+          const [current, manual] = await Promise.all([
+            apiRequest<AccountCurrentSessionResponse>(requests.currentSession, options),
+            apiRequest<ManualActiveSessionResponse>(requests.activeManualSession, options),
+          ]);
+          return { currentSession: current.session, activeManualSession: manual.session };
+        }),
+        load("today", async () => {
+          const [sessions, stats] = await Promise.all([
+            apiRequest<AccountSessionsResponse>(requests.todaySessions, options),
+            apiRequest<AccountStatsRangeResponse>(requests.todayStats, options),
+          ]);
+          return { todaySessions: sessions.sessions, todaySessionCount: stats.stats.sessionCount, todayPlatformTotals: stats.stats.platforms };
+        }),
+        load("recent", async () => ({
+          recentSessions: (await apiRequest<AccountSessionsResponse>(recentSessionsRequest, options)).sessions,
+        })),
+        load("month", async () => ({
+          monthlyStats: (await apiRequest<AccountStatsRangeResponse>(requests.monthlyStats, options)).stats,
+        })),
+        load("year", async () => ({
+          yearlyStats: (await apiRequest<AccountStatsRangeResponse>(requests.yearlyStats, options)).stats,
+        })),
+      ]);
     },
     [refreshActivity],
   );
@@ -210,7 +194,7 @@ export function DashboardPage() {
     const controller = new AbortController();
     lifetime.current = controller;
     void refreshDashboard(false);
-    apiRequest<ManualPlatformsResponse>("/manual/platforms", { onAuthFailure: logout, signal: controller.signal })
+    apiRequest<ManualPlatformsResponse>("/manual/platforms", { signal: controller.signal })
       .then((response) => {
         if (!controller.signal.aborted) setPlatforms(response.platforms);
       })
@@ -246,12 +230,11 @@ export function DashboardPage() {
     );
 
   const searchLiveGames = useCallback(
-    (path: string, signal: AbortSignal) => apiRequest<ManualMappingSearchResponse>(path, { onAuthFailure: logout, signal }),
+    (path: string, signal: AbortSignal) => apiRequest<ManualMappingSearchResponse>(path, { signal }),
     [],
   );
 
-  const navigateToRecap = (range: RecapRange) => navigate(recapPath(range, new Date()));
-  const navigateToGame = (gameId: string) => navigate(`/games/${encodeGameId(gameId)}`);
+  const gamePath = (gameId: string) => `/games/${encodeGameId(gameId)}`;
 
   const now = new Date();
   const liveSession: ManualActiveSession | null =
@@ -267,7 +250,9 @@ export function DashboardPage() {
           startedAt: state.currentSession.startedAt,
           capsuleUrl: state.currentSession.capsuleUrl,
         });
-  const loading = state.isDashboardLoading;
+  const { loading, errors } = state;
+  // Today falls back to the daily breakdown, which loads on its own: the today panel's error matters only without it.
+  const todayError = activity === null ? errors.today : "";
   const today = getTodayView(state, activity, now);
   const week = getWeekView(activity, now);
   const recent = getRecentSessions(state, now);
@@ -277,7 +262,7 @@ export function DashboardPage() {
 
   return (
     <AppLayout title={greetingFor(now)}>
-      {loading ? (
+      {loading.live ? (
         <section aria-label="Live session controls" aria-busy="true" className="pdx-card !rounded-[28px] !py-3 !pl-7 !pr-3 min-[1041px]:!rounded-full">
           <div className="flex h-10 items-center gap-3">
             <span aria-hidden="true" className="h-[7px] w-[7px] rounded-full bg-faint-2"></span>
@@ -291,45 +276,45 @@ export function DashboardPage() {
           canStop={state.activeManualSession !== null}
           busy={isLiveBusy}
           error={manualActionError}
-          onOpenGame={navigateToGame}
+          gamePath={gamePath}
           searchGames={searchLiveGames}
           onStart={startManualSession}
           onStop={stopManualSession}
         />
       )}
 
-      {state.dashboardError.length > 0 && <ErrorNote>{state.dashboardError}</ErrorNote>}
+      {errors.live.length > 0 && <ErrorNote>Couldn't check for a running session. {errors.live}</ErrorNote>}
 
       <section className="pdx-card grid gap-x-14 gap-y-10 [grid-template-columns:repeat(auto-fit,minmax(min(340px,100%),1fr))]">
         <div className="flex min-w-0 flex-col gap-8">
           <div>
             <div className="flex items-center justify-between gap-3">
               <h2 className="pdx-kicker">Today</h2>
-              <button
-                type="button"
-                onClick={() => navigateToRecap("today")}
-                className="pdx-icon-btn !h-8 !w-8"
-                aria-label="Open recap"
-                title="Open recap"
-              >
+              <AppLink to={recapPath("today", now)} className="pdx-icon-btn !h-8 !w-8" aria-label="Open recap" title="Open recap">
                 <svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M3 3v16a2 2 0 0 0 2 2h16"></path>
                   <path d="M18 17V9"></path>
                   <path d="M13 17V5"></path>
                   <path d="M8 17v-3"></path>
                 </svg>
-              </button>
+              </AppLink>
             </div>
-            <div className="mt-3 flex flex-wrap items-baseline gap-3">
-              <span className="pdx-num text-[64px] font-semibold leading-none tracking-[-0.03em]">
-                {loading ? "—" : formatShortDuration(today.seconds)}
-              </span>
-              {!loading && (
-                <span className="text-[15px] text-muted">
-                  played across {formatCountNoun(today.sessions, "session")}
+            {todayError.length > 0 ? (
+              <div className="mt-3">
+                <ErrorNote>Couldn't load today's play time. {todayError}</ErrorNote>
+              </div>
+            ) : (
+              <div className="mt-3 flex flex-wrap items-baseline gap-3">
+                <span className="pdx-num text-[64px] font-semibold leading-none tracking-[-0.03em]">
+                  {loading.today ? "—" : formatShortDuration(today.seconds)}
                 </span>
-              )}
-            </div>
+                {!loading.today && (
+                  <span className="text-[15px] text-muted">
+                    played across {formatCountNoun(today.sessions, "session")}
+                  </span>
+                )}
+              </div>
+            )}
           </div>
 
           <div className="flex flex-col gap-3">
@@ -371,15 +356,13 @@ export function DashboardPage() {
         <div className="flex min-w-0 flex-col gap-2">
           <div className="mb-2 flex items-center justify-between gap-3">
             <h2 className="pdx-kicker">Recent sessions</h2>
-            <button
-              type="button"
-              onClick={() => navigate("/sessions")}
-              className="pdx-btn-outline !h-8 !px-3.5 !text-xs !tracking-[0.06em]"
-            >
+            <AppLink to="/sessions" className="pdx-btn-outline !h-8 !px-3.5 !text-xs !tracking-[0.06em] no-underline">
               View all
-            </button>
+            </AppLink>
           </div>
-          {loading ? (
+          {errors.recent.length > 0 ? (
+            <ErrorNote>Couldn't load your recent sessions. {errors.recent}</ErrorNote>
+          ) : loading.recent ? (
             [1, 2, 3].map((item) => (
               <div key={item} className="grid grid-cols-[48px_minmax(0,1fr)_auto] items-center gap-4 py-2.5">
                 <div className="h-12 w-12 rounded-[14px] bg-track"></div>
@@ -404,14 +387,13 @@ export function DashboardPage() {
                   className="h-12 w-12 rounded-[14px] shadow-[0_4px_10px_-4px_rgba(30,50,70,.35)]"
                 />
                 <div className="min-w-0">
-                  <button
-                    type="button"
-                    onClick={() => navigateToGame(session.gameId)}
+                  <AppLink
+                    to={gamePath(session.gameId)}
                     title={session.title}
-                    className="block max-w-full truncate text-left text-[15px] font-medium transition-colors hover:text-accent"
+                    className="block max-w-full truncate text-[15px] font-medium no-underline transition-colors hover:text-accent"
                   >
                     {session.title}
-                  </button>
+                  </AppLink>
                   <p className="mt-0.5 flex items-center gap-1.5 text-[13px] text-muted">
                     <Dot color={platformColor(session.platformKey, session.platform)} size={7} />
                     <span className="min-w-0 truncate">
@@ -433,24 +415,30 @@ export function DashboardPage() {
             <h2 className="pdx-title">{overview.title}</h2>
           </div>
           <div className="flex flex-wrap items-center gap-3">
-            <button type="button" onClick={() => navigateToRecap(period)} className="pdx-btn-outline !h-[38px] !text-[13px]">
+            <AppLink to={recapPath(period, now)} className="pdx-btn-outline !h-[38px] !text-[13px] no-underline">
               Open recap
-            </button>
+            </AppLink>
             <Segmented<OverviewPeriod>
               ariaLabel="Overview period"
               value={period}
               onChange={setPeriod}
               options={[
-                { value: "month", label: utcMonthName.format(now) },
-                { value: "year", label: String(now.getUTCFullYear()) },
+                { value: "month", label: monthName.format(now) },
+                { value: "year", label: String(now.getFullYear()) },
               ]}
             />
           </div>
         </div>
 
+        {errors[period].length > 0 && (
+          <ErrorNote>
+            Couldn't load {period === "month" ? "this month's" : "this year's"} stats. {errors[period]}
+          </ErrorNote>
+        )}
+
         <div className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(min(200px,100%),1fr))]">
           {overview.kpis.map((kpi) => (
-            <KpiTile key={kpi.label} kpi={kpi} loading={loading} text={kpi.label === "Top title"} />
+            <KpiTile key={kpi.label} kpi={kpi} loading={loading[period]} text={kpi.label === "Top title"} />
           ))}
         </div>
 
@@ -503,19 +491,18 @@ export function DashboardPage() {
             {overview.topGames.map((game, index) => (
               <div key={game.gameId} className="grid grid-cols-[26px_minmax(0,1fr)_auto] items-baseline gap-x-3 gap-y-1.5">
                 <span className="pdx-num text-[13px] text-muted">{String(index + 1).padStart(2, "0")}</span>
-                <button
-                  type="button"
-                  onClick={() => navigateToGame(game.gameId)}
+                <AppLink
+                  to={gamePath(game.gameId)}
                   title={game.title}
-                  className="truncate text-left text-[15px] font-medium transition-colors hover:text-accent"
+                  className="truncate text-[15px] font-medium no-underline transition-colors hover:text-accent"
                 >
                   {game.title}
-                </button>
+                </AppLink>
                 <span className="pdx-num text-sm font-semibold text-accent">{game.hours}</span>
                 <ShareBar pct={game.pct} className="col-start-2 col-end-4" />
               </div>
             ))}
-            {!loading && overview.fewGamesNote && <p className="pdx-dashed mt-auto">{overview.fewGamesNote}</p>}
+            {!loading[period] && overview.fewGamesNote && <p className="pdx-dashed mt-auto">{overview.fewGamesNote}</p>}
           </div>
         </div>
       </section>

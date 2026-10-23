@@ -7,9 +7,10 @@ on:
 jobs:
   cleanup:
     if: github.event.pull_request.head.repo.full_name == github.repository
-    uses: ivankaizer/preview-kit/.github/workflows/cleanup.yml@v1
+    uses: ivankaizer/preview-kit/.github/workflows/cleanup.yml@96a4c23d83f1bf93aa924e29adc101db7837a6a0 # v1
     with:
       runner: '["self-hosted","macserv"]'
     permissions:
       contents: write
-    secrets: inherit
+    secrets:
+      DOKPLOY_API_KEY: ${{ secrets.DOKPLOY_API_KEY }}

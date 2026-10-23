@@ -18,6 +18,26 @@ describe("SessionEditModal", () => {
     expect(container.querySelector("button[data-action=save]")).toBeEnabled();
   });
 
+  it("keeps Tab inside the dialog", () => {
+    render(
+      <>
+        <button type="button">Behind the dialog</button>
+        <SessionEditModal gameTitle="Hades II" startedAt="2026-08-04T18:30:15" duration="2h 15m" />
+      </>,
+    );
+    const dialog = screen.getByRole("dialog");
+    const close = screen.getByRole("button", { name: "Close session editor" });
+    const save = screen.getByRole("button", { name: "Save session" });
+
+    save.focus();
+    fireEvent.keyDown(save, { key: "Tab" });
+    expect(close).toHaveFocus();
+
+    fireEvent.keyDown(close, { key: "Tab", shiftKey: true });
+    expect(save).toHaveFocus();
+    expect(dialog).toContainElement(document.activeElement as HTMLElement);
+  });
+
   it("blocks saving a zero or malformed duration and explains why", () => {
     const onSave = vi.fn();
     const { container, rerender } = render(
@@ -38,17 +58,18 @@ describe("SessionEditModal", () => {
     expect(save).toBeDisabled();
   });
 
-  it("asks for confirmation for more than 24 hours", () => {
+  it("refuses more than 24 hours", () => {
     const onSave = vi.fn();
     const { container } = render(
       <SessionEditModal gameTitle="Rez" startedAt="2026-08-04T18:30:15" duration="26h 5m" durationCheck={checkDuration("26h 5m")} onSave={onSave} />,
     );
     const save = container.querySelector<HTMLButtonElement>("button[data-action=save]")!;
-    expect(screen.getByText("Longer than a day. Double-check before saving.")).toHaveAttribute("data-duration-hint", "warn");
-    expect(save).toHaveTextContent("Save anyway");
-    expect(screen.getByLabelText(/Duration/)).not.toHaveAttribute("aria-invalid");
+    expect(screen.getByText("A session can be at most 24 hours.")).toHaveAttribute("data-duration-hint", "error");
+    expect(save).toHaveTextContent("Save session");
+    expect(save).toBeDisabled();
+    expect(screen.getByLabelText(/Duration/)).toHaveAttribute("aria-invalid", "true");
     fireEvent.click(save);
-    expect(onSave).toHaveBeenCalledTimes(1);
+    expect(onSave).not.toHaveBeenCalled();
   });
 
   it("reports typed durations and closes on Escape", () => {

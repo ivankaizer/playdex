@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { useState } from "react";
 import type { DraftBatchDto, DraftCapabilities, DraftRowDto } from "@/models/drafts";
 import type { ManualMappingSearchResult, ManualSessionStartRequest } from "@/models/manual";
@@ -96,6 +96,28 @@ describe("SessionCreateModal", () => {
     expect(container.querySelector("[data-layout=extended-manual]")).not.toBeNull();
   });
 
+  it("closes on Escape as a dialog, but not while saving", () => {
+    const onClose = vi.fn();
+    const state = openSessionCreate("historical", new Date());
+    const { rerender } = render(<SessionCreateModal state={state} onStateChange={() => undefined} onClose={onClose} />);
+
+    fireEvent.keyDown(screen.getByRole("searchbox", { name: "Game" }), { key: "Escape" });
+    expect(onClose).toHaveBeenCalledTimes(1);
+
+    rerender(<SessionCreateModal state={{ ...state, isSaving: true }} onStateChange={() => undefined} onClose={onClose} />);
+    fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("embedded, Escape leaves the page alone", () => {
+    const onClose = vi.fn();
+    render(<SessionCreateModal embedded state={openSessionCreate("historical", new Date())} onStateChange={() => undefined} onClose={onClose} />);
+
+    fireEvent.keyDown(screen.getByRole("searchbox", { name: "Game" }), { key: "Escape" });
+
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
   it("a platform without a matching option shows no selection like Blazor", () => {
     const state = { ...openSessionCreate("historical", new Date()), platformKey: "switch" };
     const { container } = render(<CreateModalHarness initial={state} embedded />);
@@ -124,7 +146,7 @@ describe("SessionCreateModal readiness", () => {
     expect(container).toHaveTextContent("Hades II · PC · 30m on Oct 4");
   });
 
-  it("rejects minutes over 59 and warns about sessions over 24 hours", () => {
+  it("rejects minutes over 59 and sessions over 24 hours", () => {
     const base = completeSearch(openSessionCreate("historical", new Date(2026, 9, 4)), {
       query: "Hades",
       igdbAvailable: true,
@@ -137,8 +159,8 @@ describe("SessionCreateModal readiness", () => {
     unmount();
 
     const long = render(<CreateModalHarness initial={{ ...ready, hours: "26", minutes: "0" }} embedded />);
-    expect(long.container.querySelector("button[data-action=save]")).not.toBeDisabled();
-    expect(screen.getByText(/over 24 hours, double-check it/)).toHaveClass("text-warn");
+    expect(long.container.querySelector("button[data-action=save]")).toBeDisabled();
+    expect(screen.getByText("A session can be at most 24 hours.")).toHaveClass("text-danger");
   });
 
   it("labels the result count with plurals and wraps long names with a title", () => {
@@ -299,6 +321,24 @@ describe("DraftWorkspace", () => {
   }
 
   afterEach(() => vi.unstubAllGlobals());
+
+  it("closes on Escape as a dialog and keeps Escape for itself embedded", async () => {
+    stubFetch(() => json([]));
+    const onClose = vi.fn();
+    const { container, unmount } = render(<DraftWorkspace capabilities={capabilities()} onClose={onClose} />);
+    await waitFor(() => expect(container.innerHTML).toContain("Nothing waiting for review"));
+
+    fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
+
+    await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+    unmount();
+
+    const embedded = render(<DraftWorkspace embedded capabilities={capabilities()} onClose={onClose} />);
+    await waitFor(() => expect(embedded.container.innerHTML).toContain("Nothing waiting for review"));
+    fireEvent.keyDown(embedded.container.querySelector("textarea")!, { key: "Escape" });
+    await Promise.resolve();
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
 
   it.each([
     [30, "for 30 days"],
@@ -550,7 +590,7 @@ describe("DraftWorkspace", () => {
     expect(buttonByText("Show fewer")).toBeInTheDocument();
   });
 
-  it("holds drafts over 24 hours out of Accept all and asks to accept them one by one", async () => {
+  it("holds drafts over 24 hours back until their duration is fixed", async () => {
     const normal = draftRow();
     const long = draftRow({ durationMinutes: 26 * 60 });
     stubFetch(batchServer(batchOf(normal, long)));
@@ -559,9 +599,10 @@ describe("DraftWorkspace", () => {
     await waitFor(() => expect(container.querySelectorAll("article")).toHaveLength(2));
     expect(buttonStartingWith("Accept all ready")).toHaveTextContent("Accept all ready (1)");
     expect(container).toHaveTextContent("1 to check");
-    expect(container).toHaveTextContent("Over 24 hours. Check the duration before accepting.");
-    expect(buttonByText("Accept anyway")).not.toBeDisabled();
-    expect(container.querySelectorAll("article")[1]).toHaveClass("border-warn");
+    expect(container).toHaveTextContent("A session can be at most 24 hours.");
+    const longRow = container.querySelectorAll("article")[1];
+    expect(longRow).toHaveClass("border-danger-line");
+    expect(within(longRow as HTMLElement).getByRole("button", { name: "Accept" })).toBeDisabled();
   });
 });
 

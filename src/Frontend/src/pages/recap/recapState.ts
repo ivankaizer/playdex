@@ -1,3 +1,4 @@
+import { withTimeZone } from "@/lib/dates";
 import type { RecapResponse, RecapYearsResponse } from "./recapModels";
 
 export interface RecapTab {
@@ -49,7 +50,15 @@ export function recapTabs(state: RecapState): RecapTab[] {
   ];
 }
 
-export const recapYearsPath = "/recap/years";
+/** Years are the viewer's calendar years, like the tabs that request them. */
+export function recapYearsRequest(): string {
+  return withTimeZone("/recap/years");
+}
+
+/** The all-time recap, with days, weekdays and hours in the viewer's time zone. */
+export function allTimeRequest(): string {
+  return withTimeZone("/recap");
+}
 
 export function beginYearsLoad(state: RecapState): RecapState {
   return { ...state, yearsLoaded: false };
@@ -65,7 +74,7 @@ export function failYears(state: RecapState, error: string): RecapState {
 
 export function takeDefaultRequest(state: RecapState): RecapStep<string | null> {
   if (!state.yearsLoaded || state.hasSearchRange || state.defaultLoaded) return [state, null];
-  return [{ ...state, activeTab: "all-time", defaultLoaded: true }, "/recap"];
+  return [{ ...state, activeTab: "all-time", defaultLoaded: true }, allTimeRequest()];
 }
 
 export function applyLocationQuery(state: RecapState, query: string): RecapStep<string | null> {
@@ -84,7 +93,7 @@ export function applyLocationQuery(state: RecapState, query: string): RecapStep<
 
 export function selectTab(state: RecapState, key: string): RecapStep<string | null> {
   const next = { ...state, activeTab: key };
-  if (key === "all-time") return [next, "/recap"];
+  if (key === "all-time") return [next, allTimeRequest()];
   if (key === "custom") {
     return [next, state.customFrom.length > 0 && state.customTo.length > 0 ? buildRangeRequest(state.customFrom, state.customTo) : null];
   }
@@ -101,9 +110,10 @@ export function setCustomTo(state: RecapState, to: string): RecapState {
   return { ...state, customTo: to };
 }
 
+/** The page URL for the custom range (the API request adds the time zone). */
 export function buildCustomNavigation(state: RecapState): string | null {
   return state.customFrom.length > 0 && state.customTo.length > 0
-    ? buildRangeRequest(state.customFrom, state.customTo)
+    ? rangePath(state.customFrom, state.customTo)
     : null;
 }
 
@@ -119,7 +129,12 @@ export function failLoad(state: RecapState, error: string): RecapState {
   return { ...state, recap: null, isLoading: false, error };
 }
 
+/** The recap of an inclusive range of the viewer's calendar days. */
 function buildRangeRequest(from: string, to: string): string {
+  return withTimeZone(rangePath(from, to));
+}
+
+function rangePath(from: string, to: string): string {
   return `/recap?from=${escapeDataString(from)}&to=${escapeDataString(to)}`;
 }
 

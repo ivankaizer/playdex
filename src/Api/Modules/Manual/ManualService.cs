@@ -3,6 +3,7 @@ using Api.Infrastructure.Common;
 using Api.Modules.Games;
 using Api.Infrastructure.Http;
 using Api.Modules.Polling;
+using Api.Modules.Sessions;
 using Microsoft.Extensions.Options;
 using Playdex.Persistence;
 
@@ -12,9 +13,15 @@ public sealed class ManualService(
     ManualRepository repository,
     IgdbClient igdbClient,
     IOptions<IgdbOptions> igdbOptions,
-    IGameResolver gameResolver)
+    IGameResolver gameResolver,
+    SessionLifecycle sessions)
 {
     private const int MaxLocalSearchResults = 5;
+
+    /// <summary>
+    /// Playnite sessions come only from the Playnite integration, so the manual catalog and AI drafts leave it out.
+    /// </summary>
+    internal const string PlaynitePlatformKey = "playnite";
     /// <summary>
     /// Start a new manual tracking session for a saved game or verified IGDB selection.
     /// Ends any active manual sessions first, then creates a new one.
@@ -32,17 +39,15 @@ public sealed class ManualService(
         {
             var startedAt = DateTimeOffset.UtcNow;
 
-            await repository.AcquireUserStartLock(userId, ct);
+            await sessions.LockManualTimer(userId, ct);
             if (resolvedSelection.GameId.HasValue)
             {
                 RequireExistingGame(await repository.GetGameEntity(resolvedSelection.GameId.Value, ct));
             }
-            await repository.EndActiveSessions(userId, ct);
             var gameId = await ResolveGame(resolvedSelection, ct);
             var platformId = await repository.GetPlatformIdByKey(platformKey, ct)
                 ?? throw AppProblemException.Validation("Platform not found.");
-            var sessionId = await repository.CreatePlaySession(
-                userId, gameId, platformId, startedAt, null, ct);
+            var sessionId = await sessions.StartManualTimer(userId, gameId, platformId, startedAt, ct);
 
             return new ManualSessionStartResponseDto(sessionId);
         }, ct);
@@ -54,9 +59,9 @@ public sealed class ManualService(
     public Task<ManualSessionStopResponseDto> StopSession(long userId, CancellationToken ct) =>
         repository.ExecuteInTransaction(async () =>
         {
-            await repository.AcquireUserStartLock(userId, ct);
+            await sessions.LockManualTimer(userId, ct);
             return new ManualSessionStopResponseDto(
-                await repository.EndActiveSessions(userId, ct));
+                await sessions.StopManualTimers(userId, DateTimeOffset.UtcNow, ct));
         }, ct);
 
     public async Task<ManualPlatformsResponseDto> ListPlatforms(CancellationToken ct) =>
@@ -74,19 +79,7 @@ public sealed class ManualService(
     public async Task<ManualEntryCreateResponseDto> CreateEntry(
         long userId, ManualEntryCreateRequest request, CancellationToken ct)
     {
-        if (!DateTime.TryParseExact(
-                request.Date?.Trim(),
-                "yyyy-MM-dd",
-                CultureInfo.InvariantCulture,
-                DateTimeStyles.None,
-                out var parsedDate))
-            throw AppProblemException.Validation("date is required.");
-        var startTime = new DateTimeOffset(DateTime.SpecifyKind(parsedDate, DateTimeKind.Utc));
-
-        if (request.DurationMinutes <= 0)
-            throw AppProblemException.Validation("durationMinutes must be a positive integer.");
-
-        var endTime = startTime.AddMinutes(request.DurationMinutes);
+        var entry = ValidateEntryTimes(request, DateTimeOffset.UtcNow);
         var selection = ValidateGameSelection(
             request.GameId,
             request.IgdbId);
@@ -102,10 +95,36 @@ public sealed class ManualService(
             var gameId = await ResolveGame(resolvedSelection, ct);
             var platformId = await repository.GetPlatformIdByKey(platformKey, ct)
                 ?? throw AppProblemException.Validation("Platform not found.");
+            var (startTime, endTime) = await PlaceEntry(userId, platformId, entry, ct);
             var sessionId = await repository.CreatePlaySession(
                 userId, gameId, platformId, startTime, endTime, ct);
             return new ManualEntryCreateResponseDto(sessionId);
         }, ct);
+    }
+
+    /// <summary>
+    /// When a dated entry (or accepted draft row) is played. It has no time of day, so it takes the first gap of its
+    /// day on that platform, from midnight, that its whole length fits in: an empty day starts it at midnight, and a
+    /// second entry follows the first instead of overlapping it. A day with no such gap is refused with 409. Holds the
+    /// user's session lock, so call it inside the transaction that creates the session.
+    /// </summary>
+    internal async Task<(DateTimeOffset Start, DateTimeOffset End)> PlaceEntry(
+        long userId, long platformId, ManualEntryDay entry, CancellationToken ct)
+    {
+        await repository.AcquireUserStartLock(userId, ct);
+        var now = DateTimeOffset.UtcNow;
+        var taken = await repository.ListPlatformSessions(userId, platformId, entry.DayStart, entry.DayEnd, now, ct);
+        var start = SessionOverlaps.FirstFreeStart(taken, entry.DayStart, entry.DayEnd, entry.Duration, now);
+        if (start is null)
+        {
+            var date = entry.Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+            var length = SessionOverlaps.FormatDuration(entry.Duration);
+            throw AppProblemException.Conflict(taken.Count == 0
+                ? $"{date} is shorter than {length} in your time zone."
+                : $"{date} has no {length} free on {taken[0].Platform}: an entry that long would overlap the "
+                    + "sessions already logged there.");
+        }
+        return (start.Value, start.Value + entry.Duration);
     }
 
     /// <summary>
@@ -114,39 +133,86 @@ public sealed class ManualService(
     public async Task<ManualMappingSearchResponseDto> SearchMapping(
         string query, CancellationToken ct)
     {
-        var trimmed = query.Trim();
+        var trimmed = SearchText.Bounded(query);
         if (trimmed.Length == 0)
             throw AppProblemException.Validation("query is required.");
 
-        var opts = igdbOptions.Value;
-        var igdbConfigured = !string.IsNullOrWhiteSpace(opts.ClientId) &&
-            !string.IsNullOrWhiteSpace(opts.ClientSecret);
-        var localTask = repository.SearchLocalGames(trimmed, MaxLocalSearchResults, ct);
-        var igdbTask = igdbConfigured
-            ? SearchIgdbSafely(() => igdbClient.SearchGames(trimmed, ct), ct)
-            : Task.FromResult(new IgdbSearchAttempt(false, []));
+        var localTask = SearchLocal(trimmed, ct);
+        var igdbTask = SearchIgdb(trimmed, ct);
         await Task.WhenAll(localTask, igdbTask);
         var igdb = igdbTask.Result;
 
-        var results = localTask.Result.Select(r => new ManualMappingSearchResultDto(
+        var results = localTask.Result.Concat(igdb.Results.Select(IgdbResult)).ToList();
+
+        return new ManualMappingSearchResponseDto(trimmed, igdb.Available, results);
+    }
+
+    internal async Task<IReadOnlyList<ManualMappingSearchResultDto>> SearchLocal(string query, CancellationToken ct) =>
+        (await repository.SearchLocalGames(query, MaxLocalSearchResults, ct)).Select(r => new ManualMappingSearchResultDto(
             Source: "local",
             GameId: GameId.Encode(r.Id),
             IgdbId: null,
             Title: r.Title,
             Platform: r.Platform,
             PlatformId: null,
-            CapsuleUrl: r.CapsuleUrl
-        )).Concat(igdb.Results.Select(result => new ManualMappingSearchResultDto(
-            Source: "igdb",
-            GameId: null,
-            IgdbId: result.Id,
-            Title: result.Title,
-            Platform: result.Platform,
-            PlatformId: result.PlatformId,
-            CapsuleUrl: result.CoverUrl
-        ))).ToList();
+            CapsuleUrl: r.CapsuleUrl)).ToList();
 
-        return new ManualMappingSearchResponseDto(trimmed, igdb.Available, results);
+    /// <summary>
+    /// IGDB only, no database access, so it may run in parallel with other searches. Failures report IGDB as
+    /// unavailable; cancellation of <paramref name="ct"/> propagates.
+    /// </summary>
+    internal Task<IgdbSearchAttempt> SearchIgdb(string query, CancellationToken ct)
+    {
+        var opts = igdbOptions.Value;
+        var igdbConfigured = !string.IsNullOrWhiteSpace(opts.ClientId) &&
+            !string.IsNullOrWhiteSpace(opts.ClientSecret);
+        return igdbConfigured
+            ? SearchIgdbSafely(() => igdbClient.SearchGames(query, ct), ct)
+            : Task.FromResult(new IgdbSearchAttempt(false, []));
+    }
+
+    internal static ManualMappingSearchResultDto IgdbResult(IgdbSearchResult result) => new(
+        Source: "igdb",
+        GameId: null,
+        IgdbId: result.Id,
+        Title: result.Title,
+        Platform: result.Platform,
+        PlatformId: result.PlatformId,
+        CapsuleUrl: result.CoverUrl);
+
+    /// <summary>
+    /// A historical entry is played on its date in the client's time zone (UTC when it sent none), lasts at most 24
+    /// hours and cannot be on a day that has not begun yet. <see cref="PlaceEntry"/> picks its start.
+    /// </summary>
+    internal static ManualEntryDay ValidateEntryTimes(
+        ManualEntryCreateRequest request, DateTimeOffset now)
+    {
+        if (!DateOnly.TryParseExact(
+                request.Date?.Trim(),
+                "yyyy-MM-dd",
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.None,
+                out var day))
+            throw AppProblemException.Validation("date is required.");
+
+        if (request.DurationMinutes <= 0)
+            throw AppProblemException.Validation("durationMinutes must be a positive integer.");
+        if (request.DurationMinutes > SessionLimits.MaxDurationMinutes)
+            throw AppProblemException.Validation(
+                $"durationMinutes must be at most {SessionLimits.MaxDurationMinutes} (24 hours).");
+
+        var zone = LocalCalendar.FindTimeZone(request.TimeZone);
+        if (day > SessionLimits.LatestDate(now, zone))
+            throw AppProblemException.Validation("date cannot be in the future.");
+
+        try
+        {
+            return ManualEntryDay.Of(day, zone, TimeSpan.FromMinutes(request.DurationMinutes));
+        }
+        catch (ArgumentOutOfRangeException)
+        {
+            throw AppProblemException.Validation("date is required.");
+        }
     }
 
     internal static ValidatedManualGameSelection ValidateGameSelection(
@@ -170,7 +236,7 @@ public sealed class ManualService(
     internal static ManualPlatformsResponseDto BuildPlatformCatalog(
         IEnumerable<Playdex.Persistence.Platform> platforms) =>
         new(platforms
-            .Where(platform => platform.Key != "playnite")
+            .Where(platform => platform.Key != PlaynitePlatformKey)
             .OrderBy(platform => platform.Name)
             .ThenBy(platform => platform.Key)
             .Select(platform => new ManualPlatformDto(platform.Key, platform.Name))
@@ -235,7 +301,8 @@ public sealed class ManualService(
                 GameExternalIdentityTypes.FromKey("igdb"),
                 authoritative.Id,
                 authoritative.Title,
-                authoritative.CoverUrl));
+                authoritative.CoverUrl,
+                TitleIsAuthoritative: true));
     }
 
     internal async Task<long> ResolveGame(

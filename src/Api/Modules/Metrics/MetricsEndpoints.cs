@@ -1,5 +1,5 @@
-using System.Security.Claims;
-using Api.Infrastructure.Auth;
+using Api.Modules.Admin;
+using Microsoft.AspNetCore.Http.HttpResults;
 
 namespace Api.Modules.Metrics;
 
@@ -7,15 +7,10 @@ public static class MetricsEndpoints
 {
     public static void MapMetricsEndpoints(this RouteGroupBuilder api)
     {
-        var metrics = api.MapGroup("/metrics").RequireAuthorization();
+        // Instance-wide polling statistics: for administrators, not for every signed-in user.
+        var metrics = api.MapGroup("/metrics").RequireAuthorization(AdministratorRequirement.PolicyName);
         metrics.MapGet("", GetMetrics);
     }
 
-    private static Task<IResult> GetMetrics(
-        ClaimsPrincipal principal,
-        MetricsCollector collector,
-        CancellationToken ct)
-    {
-        return Task.FromResult<IResult>(TypedResults.Ok(collector.Snapshot()));
-    }
+    private static Ok<MetricsSnapshotDto> GetMetrics(MetricsCollector collector) => TypedResults.Ok(collector.Snapshot());
 }

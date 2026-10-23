@@ -8,10 +8,10 @@ public sealed class GamesRepository(PlaydexDbContext db)
 {
     public async Task<List<GameSearchResultDto>> SearchGames(string query, int limit, CancellationToken ct)
     {
-        var pattern = $"%{query}%";
+        var pattern = SearchText.ContainsPattern(query);
         var rows = await db.Games
             .AsNoTracking()
-            .Where(game => EF.Functions.ILike(game.Title, pattern))
+            .Where(game => EF.Functions.ILike(game.Title, pattern, SearchText.EscapeCharacter))
             .OrderByDescending(game => game.UpdatedAt)
             .Take(limit)
             .Select(game => new { game.Id, game.Title, Platform = "Unknown", game.CapsuleUrl })

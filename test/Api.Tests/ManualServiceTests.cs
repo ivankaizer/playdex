@@ -118,4 +118,47 @@ public sealed class ManualServiceTests
         Assert.False(result.Available);
         Assert.Empty(result.Results);
     }
+
+    private static readonly DateTimeOffset EntryNow = new(2026, 9, 10, 12, 0, 0, TimeSpan.Zero);
+
+    private static ManualEntryCreateRequest Entry(string date, int minutes, string? timeZone = null) =>
+        new(date, minutes, "3H4h3", null, "Hades", "pc", null, timeZone);
+
+    [Fact]
+    public void EntriesArePlayedOnTheirDateInTheClientsZone()
+    {
+        var entry = ManualService.ValidateEntryTimes(Entry("2026-09-09", 90, "America/Los_Angeles"), EntryNow);
+        Assert.Equal(new DateOnly(2026, 9, 9), entry.Date);
+        Assert.Equal(new DateTimeOffset(2026, 9, 9, 7, 0, 0, TimeSpan.Zero), entry.DayStart);
+        Assert.Equal(new DateTimeOffset(2026, 9, 10, 7, 0, 0, TimeSpan.Zero), entry.DayEnd);
+        Assert.Equal(TimeSpan.FromMinutes(90), entry.Duration);
+
+        var utc = ManualService.ValidateEntryTimes(Entry("2026-09-09", 90), EntryNow);
+        Assert.Equal(new DateTimeOffset(2026, 9, 9, 0, 0, 0, TimeSpan.Zero), utc.DayStart);
+    }
+
+    [Theory]
+    [InlineData("2026-09-09", 1441, null, "durationMinutes must be at most 1440 (24 hours).")]
+    [InlineData("2026-09-09", 2_000_000_000, null, "durationMinutes must be at most 1440 (24 hours).")]
+    [InlineData("2026-09-09", 0, null, "durationMinutes must be a positive integer.")]
+    [InlineData("2026-09-11", 60, "America/Los_Angeles", "date cannot be in the future.")]
+    [InlineData("2026-09-12", 60, null, "date cannot be in the future.")]
+    [InlineData("09/09/2026", 60, null, "date is required.")]
+    public void EntriesLongerThanADayOrInTheFutureAreRejected(string date, int minutes, string? timeZone, string message)
+    {
+        var exception = Assert.Throws<AppProblemException>(() =>
+            ManualService.ValidateEntryTimes(Entry(date, minutes, timeZone), EntryNow));
+
+        Assert.Equal(400, exception.StatusCode);
+        Assert.Equal(message, exception.Message);
+    }
+
+    [Fact]
+    public void TodayAndAWholeDayAreAccepted()
+    {
+        // Already Sep 11 in Tokyo.
+        var entry = ManualService.ValidateEntryTimes(Entry("2026-09-11", 1440, "Asia/Tokyo"), new(2026, 9, 10, 16, 0, 0, TimeSpan.Zero));
+        Assert.Equal(TimeSpan.FromDays(1), entry.Duration);
+        Assert.Equal(entry.DayEnd, entry.DayStart + entry.Duration);
+    }
 }

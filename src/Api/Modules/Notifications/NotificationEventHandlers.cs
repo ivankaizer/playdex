@@ -3,109 +3,198 @@ using Microsoft.Extensions.Logging;
 
 namespace Api.Modules.Notifications;
 
-public sealed partial class NotificationEventHandlers(
-    NotificationsRepository repository,
-    AppriseClient client,
-    NotificationRenderer renderer,
-    ILogger<NotificationEventHandlers> logger) :
+/// <summary>
+/// Queues notification work in the <see cref="NotificationOutbox"/> and returns at once: delivery (cover download, up
+/// to three Apprise calls) used to run inline and held up the wrapper's HTTP request or the polling loop that raised
+/// the event.
+/// </summary>
+public sealed class NotificationEventHandlers(AppriseClient client, NotificationOutbox outbox, NotificationSignal signal) :
     IEventSubscriber<SessionStarted>,
     IEventSubscriber<SessionEnded>,
-    IEventSubscriber<PollFailed>
+    IEventSubscriber<PollFailed>,
+    IEventSubscriber<IntegrationPaused>
 {
-    [LoggerMessage(Level = LogLevel.Error, Message = "Poll-failure notification failed for credential {CredentialId}")]
-    private partial void LogPollFailureNotificationFailed(Exception exception, long credentialId);
+    public Task Handle(SessionStarted domainEvent, CancellationToken ct) => Enqueue(domainEvent);
 
-    [LoggerMessage(Level = LogLevel.Warning, Message = "Notification card rendering or attachment delivery failed; using text fallback")]
-    private partial void LogCardRenderingFailed(Exception exception);
+    public Task Handle(SessionEnded domainEvent, CancellationToken ct) => Enqueue(domainEvent);
 
-    [LoggerMessage(Level = LogLevel.Error, Message = "Notification text fallback failed")]
-    private partial void LogTextFallbackFailed(Exception exception);
+    public Task Handle(PollFailed domainEvent, CancellationToken ct) => Enqueue(domainEvent);
 
-    public async Task Handle(SessionStarted @event, CancellationToken ct)
+    public Task Handle(IntegrationPaused domainEvent, CancellationToken ct) => Enqueue(domainEvent);
+
+    private async Task Enqueue(object domainEvent)
     {
         if (!client.IsEnabled) return;
-        var target = await repository.GetSessionStartedTarget(@event.SessionId, ct);
-        if (target is null || string.IsNullOrWhiteSpace(target.TelegramChatId)) return;
-        await SendSessionCard(
-            target.TelegramChatId,
-            target,
-            new NotificationCard(target.GameTitle, target.Platform, false, null),
-            $"Session started: {target.GameTitle} on {target.Platform}",
-            ct);
-    }
 
-    public async Task Handle(SessionEnded @event, CancellationToken ct)
-    {
-        if (!client.IsEnabled) return;
-        var target = await repository.GetSessionEndedTarget(@event.SessionId, ct);
-        if (target is null || string.IsNullOrWhiteSpace(target.TelegramChatId)) return;
-        var duration = FormatDuration(@event.EndedAt - @event.StartedAt);
-        await SendSessionCard(
-            target.TelegramChatId,
-            target,
-            new NotificationCard(target.GameTitle, target.Platform, true, duration),
-            $"Session ended: {target.GameTitle} on {target.Platform}\nDuration: {duration}",
-            ct);
-    }
-
-    public async Task Handle(PollFailed @event, CancellationToken ct)
-    {
-        if (!client.IsEnabled) return;
-        var target = await repository.GetCredentialTarget(@event.CredentialId, ct);
-        if (target is null || string.IsNullOrWhiteSpace(target.TelegramChatId)) return;
-        try
+        // Not the publisher's token: the event has happened (the session is saved), so the request or poll that raised
+        // it going away must not lose its notification.
+        if (await outbox.Enqueue(domainEvent, CancellationToken.None))
         {
-            await client.SendMessageAsync(
-                target.TelegramChatId,
-                $"Polling failed for {@event.Platform}. Error: {@event.Message}. " +
-                $"Retrying in {Math.Round(@event.RetryDelay.TotalSeconds)}s.",
-                ct);
+            signal.Notify();
         }
-        catch (Exception ex)
+    }
+}
+
+/// <summary>
+/// Wakes this instance's <see cref="NotificationDispatcher"/> when a notification is queued here. It also looks every
+/// <see cref="NotificationDispatcher.PollInterval"/> for ones queued by other instances or due for a retry.
+/// </summary>
+public sealed class NotificationSignal : IDisposable
+{
+    private readonly SemaphoreSlim _semaphore = new(0, 1);
+    private readonly Lock _gate = new();
+
+    public void Notify()
+    {
+        lock (_gate)
         {
-            LogPollFailureNotificationFailed(ex, @event.CredentialId);
+            if (_semaphore.CurrentCount == 0) _semaphore.Release();
         }
     }
 
-    private async Task SendSessionCard(
-        string telegramChatId,
-        NotificationTarget target,
-        NotificationCard card,
-        string fallbackText,
-        CancellationToken ct)
+    /// <returns>True when notified, false when <paramref name="timeout"/> passed first.</returns>
+    public Task<bool> WaitAsync(TimeSpan timeout, CancellationToken ct) => _semaphore.WaitAsync(timeout, ct);
+
+    public void Dispose() => _semaphore.Dispose();
+}
+
+/// <summary>
+/// Sends notifications from the outbox, oldest first, each in its own scope. A failed delivery is retried with
+/// backoff; one in flight at shutdown is handed back and sent after the restart.
+/// </summary>
+public sealed partial class NotificationDispatcher(
+    NotificationSignal signal,
+    IServiceScopeFactory scopeFactory,
+    TimeProvider clock,
+    ILogger<NotificationDispatcher> logger) : BackgroundService
+{
+    /// <summary>How long a claimed notification is reserved: the slowest delivery (a 15 s cover download and two
+    /// 60 s Apprise calls) with room to spare. A sender that dies holds it no longer than this.</summary>
+    internal static readonly TimeSpan ClaimDuration = TimeSpan.FromMinutes(5);
+    internal static readonly TimeSpan PollInterval = TimeSpan.FromSeconds(30);
+    /// <summary>How long a delivered notification is remembered, so the same event is not sent twice.</summary>
+    internal static readonly TimeSpan Retention = TimeSpan.FromDays(7);
+    private static readonly TimeSpan CleanupInterval = TimeSpan.FromHours(1);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Sending the {Kind} notification {NotificationId} failed (attempt {Attempt}); will retry")]
+    private partial void LogSendFailed(Exception exception, string kind, long notificationId, int attempt);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Gave up the {Kind} notification {NotificationId} after {Attempts} attempts")]
+    private partial void LogGaveUp(Exception exception, string kind, long notificationId, int attempts);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Dropped notification {NotificationId} of unknown kind {Kind}")]
+    private partial void LogUnknownKind(long notificationId, string kind);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Notification outbox is unavailable; will retry")]
+    private partial void LogOutboxFailed(Exception exception);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Could not hand back notification {NotificationId} at shutdown; it is sent once its claim expires")]
+    private partial void LogReleaseFailed(Exception exception, long notificationId);
+
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        if (!string.IsNullOrWhiteSpace(target.CapsuleUrl))
+        var nextCleanup = DateTimeOffset.MinValue;
+        while (!stoppingToken.IsCancellationRequested)
         {
             try
             {
-                var image = await renderer.RenderAsync(card, target.CapsuleUrl, ct);
-                await client.SendAttachmentAsync(telegramChatId, image, fallbackText, ct);
+                await DeliverDue(stoppingToken);
+                if (clock.GetUtcNow() >= nextCleanup)
+                {
+                    using var scope = scopeFactory.CreateScope();
+                    await scope.ServiceProvider.GetRequiredService<NotificationOutbox>()
+                        .DeleteFinished(clock.GetUtcNow() - Retention, stoppingToken);
+                    nextCleanup = clock.GetUtcNow() + CleanupInterval;
+                }
+
+                await signal.WaitAsync(PollInterval, stoppingToken);
+            }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+            {
                 return;
             }
-            catch (Exception ex)
+            catch (Exception exception)
             {
-                LogCardRenderingFailed(ex);
+                // The database is down, say: an escaping exception would stop this service for good.
+                LogOutboxFailed(exception);
+                try
+                {
+                    await Task.Delay(PollInterval, stoppingToken);
+                }
+                catch (OperationCanceledException)
+                {
+                    return;
+                }
             }
+        }
+    }
+
+    /// <returns>How many notifications were sent, retried or given up.</returns>
+    internal async Task<int> DeliverDue(CancellationToken ct)
+    {
+        var handled = 0;
+        while (await DeliverNext(ct))
+        {
+            handled++;
+        }
+
+        return handled;
+    }
+
+    /// <returns>False when nothing was due.</returns>
+    internal async Task<bool> DeliverNext(CancellationToken ct)
+    {
+        using var scope = scopeFactory.CreateScope();
+        var outbox = scope.ServiceProvider.GetRequiredService<NotificationOutbox>();
+        var claimed = await outbox.ClaimNext(ClaimDuration, ct);
+        if (claimed is null) return false;
+
+        var notification = NotificationOutbox.Deserialize(claimed);
+        if (notification is null)
+        {
+            LogUnknownKind(claimed.Id, claimed.Kind);
+            await outbox.MarkFailed(claimed, $"Unknown notification kind '{claimed.Kind}'.", permanent: true, ct);
+            return true;
         }
 
         try
         {
-            await client.SendMessageAsync(telegramChatId, fallbackText, ct);
+            await scope.ServiceProvider.GetRequiredService<NotificationSender>().Send(notification, ct);
         }
-        catch (Exception ex)
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
-            LogTextFallbackFailed(ex);
+            await Release(outbox, claimed);
+            throw;
         }
+        catch (Exception exception)
+        {
+            // Not cancellable: the attempt happened and must be recorded even during shutdown.
+            if (await outbox.MarkFailed(claimed, exception.Message, permanent: false, CancellationToken.None))
+            {
+                LogGaveUp(exception, claimed.Kind, claimed.Id, claimed.Attempts);
+            }
+            else
+            {
+                LogSendFailed(exception, claimed.Kind, claimed.Id, claimed.Attempts);
+            }
+
+            return true;
+        }
+
+        // Sent: recorded even during shutdown, or it would be sent again after the restart.
+        await outbox.MarkDelivered(claimed.Id, CancellationToken.None);
+        return true;
     }
 
-    private static string FormatDuration(TimeSpan duration)
+    private async Task Release(NotificationOutbox outbox, OutboxNotification claimed)
     {
-        var totalSeconds = Math.Max(0, (int)Math.Floor(duration.TotalSeconds));
-        var hours = totalSeconds / 3600;
-        var minutes = totalSeconds % 3600 / 60;
-        var seconds = totalSeconds % 60;
-        if (hours > 0) return $"{hours}h {minutes}m";
-        if (minutes > 0) return $"{minutes}m {seconds}s";
-        return $"{seconds}s";
+        try
+        {
+            await outbox.Release(claimed, CancellationToken.None);
+        }
+        catch (Exception exception)
+        {
+            LogReleaseFailed(exception, claimed.Id);
+        }
     }
 }

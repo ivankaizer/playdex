@@ -1,3 +1,4 @@
+using Api.Infrastructure.Common;
 using Microsoft.EntityFrameworkCore;
 using Playdex.Persistence;
 
@@ -5,7 +6,10 @@ namespace Api.Modules.Launcher;
 
 public sealed class LauncherRepository(PlaydexDbContext db)
 {
-    /// <summary>All of the user's sessions, except those the "ignore short sessions" setting hides (as /stats does).</summary>
+    /// <summary>
+    /// All of the user's sessions, except those the "ignore short sessions" setting hides (as /stats does). The
+    /// setting is compared as an interval, capped at a day, so a stored value of any size cannot overflow.
+    /// </summary>
     public async Task<List<LauncherSessionRow>> ListSessions(long userId, CancellationToken ct)
     {
         var rows = await db.Database.SqlQuery<SessionDbRow>($"""
@@ -17,7 +21,8 @@ public sealed class LauncherRepository(PlaydexDbContext db)
             WHERE ps.user_id = {userId}
               AND NOT (COALESCE(us.ignore_short_sessions_minutes, 0) > 0
                   AND ps.ended_at IS NOT NULL
-                  AND EXTRACT(EPOCH FROM (ps.ended_at - ps.started_at)) < COALESCE(us.ignore_short_sessions_minutes, 0) * 60)
+                  AND ps.ended_at - ps.started_at < make_interval(
+                      mins => LEAST(COALESCE(us.ignore_short_sessions_minutes, 0), {SessionLimits.MaxDurationMinutes})))
             """).ToListAsync(ct);
         return rows.Select(row => new LauncherSessionRow(row.SessionId, row.GameId, row.PlatformKey, row.PlatformName, row.StartedAt, row.EndedAt)).ToList();
     }

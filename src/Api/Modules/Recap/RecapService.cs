@@ -12,9 +12,7 @@ internal sealed record SessionData(
     string Game,
     string? CapsuleUrl,
     string PlatformKey,
-    string PlatformName,
-    string? MappedPlatform,
-    string? MappedSource);
+    string PlatformName);
 
 internal sealed record GameAccum(
     string Title,
@@ -50,38 +48,54 @@ internal sealed record BingedInfo(
 
 internal static class RecapRange
 {
+    /// <summary>
+    /// Where the recap's day counts end: the requested end, but never after today in <paramref name="zone"/>, so the
+    /// current year does not count its future days as days not played.
+    /// </summary>
     public static DateTimeOffset ResolveEndExclusive(
         DateTimeOffset now,
-        DateTimeOffset? endpointExclusiveTo) =>
-        endpointExclusiveTo.HasValue
-            ? new DateTimeOffset(
-                endpointExclusiveTo.Value.Year,
-                endpointExclusiveTo.Value.Month,
-                endpointExclusiveTo.Value.Day,
-                0,
-                0,
-                0,
-                TimeSpan.Zero)
-            : new DateTimeOffset(now.Year, now.Month, now.Day, 0, 0, 0, TimeSpan.Zero)
-                .AddDays(1);
+        DateTimeOffset? requestedEndExclusive,
+        TimeZoneInfo zone)
+    {
+        var tomorrow = LocalCalendar.StartOfNextDay(now, zone);
+        return requestedEndExclusive is { } end && end < tomorrow ? end : tomorrow;
+    }
+
+    /// <summary>Calendar days of <paramref name="zone"/> from the day <paramref name="start"/> falls on up to <paramref name="endExclusive"/>.</summary>
+    public static int CountDays(DateTimeOffset start, DateTimeOffset endExclusive, TimeZoneInfo zone) =>
+        Math.Max(0, LocalCalendar.DateOf(endExclusive, zone).DayNumber - LocalCalendar.DateOf(start, zone).DayNumber);
+
+    /// <summary>Calendar months of <paramref name="zone"/> touched by [<paramref name="start"/>, <paramref name="endExclusive"/>).</summary>
+    public static int CountMonths(DateTimeOffset start, DateTimeOffset endExclusive, TimeZoneInfo zone)
+    {
+        if (endExclusive <= start) return 0;
+        var first = LocalCalendar.DateOf(start, zone);
+        var last = LocalCalendar.DateOf(endExclusive, zone).AddDays(-1);
+        return Math.Max(0, (last.Year - first.Year) * 12 + (last.Month - first.Month) + 1);
+    }
 }
 
 public sealed class RecapService(RecapRepository repository)
 {
     private static readonly long DayMs = (long)TimeSpan.FromDays(1).TotalMilliseconds;
 
-    public async Task<RecapYearsResponseDto> GetYears(long userId, CancellationToken ct)
+    public async Task<RecapYearsResponseDto> GetYears(long userId, TimeZoneInfo zone, CancellationToken ct)
     {
-        var years = await repository.ListRecapYears(userId, ct);
+        var years = await repository.ListRecapYears(userId, zone, ct);
         return new RecapYearsResponseDto(years);
     }
 
+    /// <summary>
+    /// The recap of sessions started in [<paramref name="startedAt"/>, <paramref name="endedAt"/>); days, months,
+    /// weekdays and hours are those of <paramref name="zone"/>.
+    /// </summary>
     public async Task<RecapResponseDto> GetRecap(
         long userId,
         string? from,
         string? to,
         DateTimeOffset? startedAt,
         DateTimeOffset? endedAt,
+        TimeZoneInfo zone,
         CancellationToken ct)
     {
         var now = DateTimeOffset.UtcNow;
@@ -125,19 +139,20 @@ public sealed class RecapService(RecapRepository repository)
             durations.Add(durationSeconds);
             totalSeconds += durationSeconds;
 
-            var dayKey = ToUtcDateKey(session.StartedAt);
+            var localStart = TimeZoneInfo.ConvertTime(session.StartedAt, zone);
+            var dayKey = ToDateKey(localStart);
             daySet.Add(dayKey);
             dayCounts[dayKey] = dayCounts.GetValueOrDefault(dayKey) + 1;
 
-            var monthKey = ToUtcMonthKey(session.StartedAt);
+            var monthKey = ToMonthKey(localStart);
             monthCounts[monthKey] = monthCounts.GetValueOrDefault(monthKey) + 1;
 
-            var dayOfWeek = (int)session.StartedAt.DayOfWeek;
+            var dayOfWeek = (int)localStart.DayOfWeek;
             var weekdayIndex = dayOfWeek == 0 ? 6 : dayOfWeek - 1; // Monday=0 .. Sunday=6
             weekdayCounts[weekdayIndex]++;
-            hourCounts[session.StartedAt.Hour]++;
+            hourCounts[localStart.Hour]++;
 
-            if (session.StartedAt.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday)
+            if (localStart.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday)
                 weekendSeconds += durationSeconds;
             else
                 weekdaySeconds += durationSeconds;
@@ -224,33 +239,20 @@ public sealed class RecapService(RecapRepository repository)
             previousDay = dayDate;
         }
 
-        // Date range for averages
-        DateTimeOffset rangeStart;
-        DateTimeOffset rangeEndExclusive;
+        // Date range for averages: whole local days, ending today at the latest.
+        var firstDay = startedAt.HasValue
+            ? LocalCalendar.DateOf(startedAt.Value, zone)
+            : LocalCalendar.DateOf(sessions.Count > 0 ? sessions[0].StartedAt : now, zone);
+        var rangeStart = LocalCalendar.StartOf(firstDay, zone);
+        var rangeEndExclusive = RecapRange.ResolveEndExclusive(now, endedAt, zone);
 
-        if (startedAt.HasValue)
-        {
-            rangeStart = new DateTimeOffset(startedAt.Value.Year, startedAt.Value.Month, startedAt.Value.Day, 0, 0, 0, TimeSpan.Zero);
-        }
-        else if (sessions.Count > 0)
-        {
-            var first = sessions[0].StartedAt;
-            rangeStart = new DateTimeOffset(first.Year, first.Month, first.Day, 0, 0, 0, TimeSpan.Zero);
-        }
-        else
-        {
-            rangeStart = new DateTimeOffset(now.Year, now.Month, now.Day, 0, 0, 0, TimeSpan.Zero);
-        }
-
-        rangeEndExclusive = RecapRange.ResolveEndExclusive(now, endedAt);
-
-        var daysInRange = Math.Max(0, (int)((rangeEndExclusive - rangeStart).TotalDays));
+        var daysInRange = RecapRange.CountDays(rangeStart, rangeEndExclusive, zone);
         var daysPlayed = daySet.Count;
         var daysNotPlayed = Math.Max(0, daysInRange - daysPlayed);
 
         var averageSessionsPerDay = daysInRange > 0 ? (double)totalSessions / daysInRange : 0;
         var averageSessionsPerWeek = daysInRange > 0 ? (double)totalSessions / (daysInRange / 7.0) : 0;
-        var monthsInRange = CountMonthsInRange(rangeStart, rangeEndExclusive);
+        var monthsInRange = RecapRange.CountMonths(rangeStart, rangeEndExclusive, zone);
         var averageSessionsPerMonth = monthsInRange > 0 ? (double)totalSessions / monthsInRange : 0;
 
         // ── Weekday / hour distributions ───────────────────────
@@ -349,9 +351,9 @@ public sealed class RecapService(RecapRepository repository)
 
         var uniqueGames = groupEntries.Count;
 
-        // ── Time on top 3% ─────────────────────────────────────
+        // ── Share of play time on the top three games (0-100) ──
 
-        var timeOnTop3Percent = totalSeconds > 0
+        var topThreeGamesSharePercent = totalSeconds > 0
             ? topGamesByTime.Take(3).Sum(g => g.TotalSeconds) / totalSeconds * 100
             : 0;
 
@@ -435,7 +437,7 @@ public sealed class RecapService(RecapRepository repository)
         var platformTotalsList = platformTotals.Values
             .OrderByDescending(p => p.TotalSeconds)
             .Select(p => new RecapPlatformStatDto(
-                p.PlatformKey, p.PlatformName, p.SessionCount, p.TotalSeconds, null))
+                p.PlatformKey, p.PlatformName, p.SessionCount, p.TotalSeconds))
             .ToList();
 
         PlatformSummaryDto? mostUsedPlatform = null;
@@ -482,7 +484,7 @@ public sealed class RecapService(RecapRepository repository)
             NewGamesTried: newGamesTried,
             AbandonedGames: abandonedGames,
             ReturnRateGames: returnRateGames,
-            TimeOnTop3Percent: timeOnTop3Percent,
+            TopThreeGamesSharePercent: topThreeGamesSharePercent,
             MostBingedGame: mostBingedGame,
             PlatformTotals: platformTotalsList,
             MostUsedPlatform: mostUsedPlatform,
@@ -524,13 +526,13 @@ public sealed class RecapService(RecapRepository repository)
     private static SessionData ToSessionData(RecapSessionRow row) =>
         new(row.Id, row.StartedAt, row.EndedAt,
             row.GameId, row.Title, row.CapsuleUrl,
-            row.PlatformKey, row.PlatformName, null, null);
+            row.PlatformKey, row.PlatformName);
 
-    private static string ToUtcDateKey(DateTimeOffset date) =>
-        date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+    private static string ToDateKey(DateTimeOffset localDate) =>
+        localDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
 
-    private static string ToUtcMonthKey(DateTimeOffset date) =>
-        date.ToString("yyyy-MM", CultureInfo.InvariantCulture);
+    private static string ToMonthKey(DateTimeOffset localDate) =>
+        localDate.ToString("yyyy-MM", CultureInfo.InvariantCulture);
 
     private static double ComputeMedianSeconds(List<double> values)
     {
@@ -551,13 +553,6 @@ public sealed class RecapService(RecapRepository repository)
                 best = kv;
         }
         return best;
-    }
-
-    private static int CountMonthsInRange(DateTimeOffset start, DateTimeOffset endExclusive)
-    {
-        if (endExclusive <= start) return 0;
-        var end = endExclusive.AddDays(-1);
-        return (end.Year - start.Year) * 12 + (end.Month - start.Month) + 1;
     }
 
     // ── Union-Find for game connections ────────────────────────

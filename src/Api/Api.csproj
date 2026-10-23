@@ -24,6 +24,10 @@
     <ProjectReference Include="..\Persistence\Persistence.csproj" />
   </ItemGroup>
   <ItemGroup>
+    <!-- Development settings (a public JWT secret, the Wiremock fakes) never ship in a published build. -->
+    <Content Update="appsettings.Development.json" CopyToPublishDirectory="Never" />
+  </ItemGroup>
+  <ItemGroup>
     <EmbeddedResource Remove="Resources\**\*" />
     <None Remove="Resources\**\*" />
     <EmbeddedResource Include="Resources\Fonts\**\*.ttf" />

@@ -1,4 +1,5 @@
 using Api.Infrastructure.Auth;
+using Api.Infrastructure.Common;
 using Api.Infrastructure.Http;
 using Api.Modules.Manual.Drafts.Extraction;
 using Microsoft.AspNetCore.Http.Features;
@@ -22,7 +23,7 @@ public static class DraftEndpoints
         manual.MapGet("/draft-batches/{id:guid}", async (Guid id,HttpContext http,DraftService service) =>
             TypedResults.Ok(await service.Get(http.User.GetUserId(),id,http.RequestAborted)));
         manual.MapGet("/draft-game-search", async (string query,HttpContext http,DraftService service) =>
-            TypedResults.Ok(await service.SearchCandidates(http.User.GetUserId(),query,http.RequestAborted)));
+            TypedResults.Ok(await service.SearchCandidates(http.User.GetUserId(),SearchText.Bounded(query),http.RequestAborted)));
         manual.MapPost("/draft-batches", Create);
         manual.MapPatch("/draft-batches/{batch:guid}/rows/{row:guid}", async (Guid batch,Guid row,DraftUpdateRequest request,HttpContext http,DraftService service) =>
             TypedResults.Ok(await service.Update(http.User.GetUserId(),batch,row,request,http.RequestAborted)));

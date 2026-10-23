@@ -10,6 +10,7 @@ import {
   isProviderMutationInProgress,
   isProviderUpdating,
   isSessionPlatformSaving,
+  pauseNotice,
   presentProvider,
   selectedSessionPlatformKey,
   truncateMiddle,
@@ -33,6 +34,7 @@ export function IntegrationCard({ provider, integrations }: IntegrationCardProps
   const editing = isEditingCredential(state, provider.id);
   const credentialSaving = isCredentialSaving(state, provider.id);
   const active = provider.status === "active";
+  const notice = pauseNotice(provider);
   const panelId = `integration-${provider.id}-manage`;
 
   return (
@@ -75,6 +77,15 @@ export function IntegrationCard({ provider, integrations }: IntegrationCardProps
           {editing ? "Done" : "Manage"}
         </button>
       </div>
+
+      {notice ? (
+        <p
+          data-integration-pause-notice
+          className="mx-5 mb-4 rounded-[18px] border border-danger-line bg-danger-tint px-4 py-3 text-[13px] text-danger max-[600px]:mx-4"
+        >
+          {notice}
+        </p>
+      ) : null}
 
       {provider.platform === "api" && provider.apiKey ? <PlaydexAppSetup apiKey={provider.apiKey} /> : null}
 
@@ -136,7 +147,7 @@ export function IntegrationCard({ provider, integrations }: IntegrationCardProps
             />
           ) : null}
 
-          {state.credentialError ? <p className="text-[13px] text-danger">{state.credentialError}</p> : null}
+          {state.credentialError ? <p role="alert" className="text-[13px] text-danger">{state.credentialError}</p> : null}
 
           <div className="flex flex-wrap items-center gap-2">
             <button
@@ -230,7 +241,7 @@ function RecordingPlatform({ provider, options, integrations, mutationInProgress
         </div>
       ) : null}
 
-      {state.sessionPlatformError ? <p className="mt-3 text-[13px] text-danger">{state.sessionPlatformError}</p> : null}
+      {state.sessionPlatformError ? <p role="alert" className="mt-3 text-[13px] text-danger">{state.sessionPlatformError}</p> : null}
     </div>
   );
 }

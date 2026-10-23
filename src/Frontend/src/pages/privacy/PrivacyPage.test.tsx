@@ -30,7 +30,7 @@ describe("PrivacyPage", () => {
 
   it("is reachable signed out and links the footer to the real repo", () => {
     renderPage();
-    expect(screen.getByRole("button", { name: "Sign in" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Sign in" })).toHaveAttribute("href", "/");
     expect(screen.getByRole("link", { name: "GitHub ↗" })).toHaveAttribute("href", "https://github.com/ivankaizer/playdex");
     expect(screen.getByRole("link", { name: "Privacy" })).toHaveAttribute("href", "/privacy");
   });

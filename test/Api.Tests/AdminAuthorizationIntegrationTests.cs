@@ -25,6 +25,8 @@ public sealed class AdminAuthorizationIntegrationTests(AdminApiFixture fixture)
         ("GET", $"/api/admin/ai-generations/{Guid.Empty}"),
         ("GET", $"/api/admin/ai-generations/{Guid.Empty}/image"),
         ("DELETE", $"/api/admin/ai-generations/{Guid.Empty}"),
+        // Instance-wide polling statistics live outside /admin but are just as administrator-only.
+        ("GET", "/api/metrics"),
     ];
 
     [Fact]

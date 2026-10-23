@@ -14,14 +14,27 @@ public sealed partial class PosterService(
 {
     public const string WeModHttpClient = "wemod";
 
+    /// <summary>How long an app WeMod has no capsule for is answered with 404 without asking again.</summary>
+    public static readonly TimeSpan MissingPosterRetry = TimeSpan.FromHours(6);
+    private const int MissingPosterPruneThreshold = 10_000;
+
     // Concurrent misses for the same poster share one WeMod download.
     private readonly ConcurrentDictionary<string, Lazy<Task<StoredPoster?>>> _inFlight = new();
+
+    // The endpoint needs no sign-in, so without this every view of a game without a capsule cost an R2 lookup and
+    // a WeMod request.
+    private readonly ConcurrentDictionary<long, DateTimeOffset> _missingUntil = new();
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Storing poster {Key} in R2 failed")]
     private partial void LogStoreFailed(Exception exception, string key);
 
     public async Task<StoredPoster?> GetSteamCapsule(long appId, CancellationToken ct)
     {
+        if (_missingUntil.TryGetValue(appId, out var missingUntil) && missingUntil > DateTimeOffset.UtcNow)
+        {
+            return null;
+        }
+
         var key = $"steam/{appId}/hero_capsule.webp";
         var stored = await store.Find(key, ct);
         if (stored is not null)
@@ -32,12 +45,32 @@ public sealed partial class PosterService(
         var download = _inFlight.GetOrAdd(key, _ => new Lazy<Task<StoredPoster?>>(() => DownloadAndStore(key, appId)));
         try
         {
-            return await download.Value.WaitAsync(ct);
+            var poster = await download.Value.WaitAsync(ct);
+            if (poster is null)
+            {
+                RememberMissing(appId);
+            }
+
+            return poster;
         }
         finally
         {
             _inFlight.TryRemove(new KeyValuePair<string, Lazy<Task<StoredPoster?>>>(key, download));
         }
+    }
+
+    private void RememberMissing(long appId)
+    {
+        var now = DateTimeOffset.UtcNow;
+        if (_missingUntil.Count >= MissingPosterPruneThreshold)
+        {
+            foreach (var expired in _missingUntil.Where(entry => entry.Value <= now))
+            {
+                _missingUntil.TryRemove(expired);
+            }
+        }
+
+        _missingUntil[appId] = now + MissingPosterRetry;
     }
 
     private async Task<StoredPoster?> DownloadAndStore(string key, long appId)

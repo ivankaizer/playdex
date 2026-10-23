@@ -1,4 +1,5 @@
 using System.Globalization;
+using Api.Infrastructure.Common;
 
 namespace Api.Modules.Manual.Drafts;
 
@@ -15,13 +16,37 @@ public sealed record DraftAcceptResponse(IReadOnlyList<DraftAcceptResult> Result
 
 public static class DraftRules
 {
-    public static bool TryGetTimes(string? date, int? minutes, out DateTimeOffset start, out DateTimeOffset end)
+    public const string InvalidTimesWarning = "Provide a valid date and positive duration.";
+    public const string TooLongWarning = "A session can last at most 24 hours.";
+    public const string FutureDateWarning = "The date cannot be in the future.";
+
+    /// <summary>
+    /// The session a row becomes: it starts when its date begins in the batch's time zone (<paramref name="zone"/>,
+    /// UTC when unknown) and lasts the reviewed minutes.
+    /// </summary>
+    public static bool TryGetTimes(string? date, int? minutes, TimeZoneInfo? zone, DateTimeOffset now,
+        out DateTimeOffset start, out DateTimeOffset end) =>
+        Problem(date, minutes, zone, now, out start, out end) is null;
+
+    /// <summary>Why a row cannot become a session yet, or null when it can.</summary>
+    public static string? Problem(string? date, int? minutes, TimeZoneInfo? zone, DateTimeOffset now,
+        out DateTimeOffset start, out DateTimeOffset end)
     {
         start = end = default;
         if (!DateOnly.TryParseExact(date, "yyyy-MM-dd", CultureInfo.InvariantCulture,
-                DateTimeStyles.None, out var day) || minutes is null or <= 0) return false;
-        start = new DateTimeOffset(day.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc));
-        try { end = start.AddMinutes(minutes.Value); return true; }
-        catch (ArgumentOutOfRangeException) { return false; }
+                DateTimeStyles.None, out var day) || minutes is null or <= 0) return InvalidTimesWarning;
+        if (minutes > SessionLimits.MaxDurationMinutes) return TooLongWarning;
+        if (day > SessionLimits.LatestDate(now, zone)) return FutureDateWarning;
+        try
+        {
+            start = LocalCalendar.StartOf(day, zone ?? TimeZoneInfo.Utc);
+            end = start.AddMinutes(minutes.Value);
+            return null;
+        }
+        catch (ArgumentOutOfRangeException)
+        {
+            start = end = default;
+            return InvalidTimesWarning;
+        }
     }
 }

@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using Api.Infrastructure.Auth;
+using Api.Infrastructure.Http;
 
 namespace Api.Modules.Games;
 
@@ -15,7 +16,7 @@ public static class GamesEndpoints
 
         games.MapPost("/connections", async (HttpContext http) =>
         {
-            var request = await http.Request.ReadFromJsonAsync<GameConnectionChangeRequest>();
+            var request = await http.Request.ReadJsonBodyAsync<GameConnectionChangeRequest>();
             var service = http.RequestServices.GetRequiredService<GamesService>();
             IResult result = request is null
                 ? TypedResults.Problem("Request body is required.", statusCode: 400)
@@ -24,7 +25,7 @@ public static class GamesEndpoints
         });
         games.MapDelete("/connections", async (HttpContext http) =>
         {
-            var request = await http.Request.ReadFromJsonAsync<GameConnectionChangeRequest>();
+            var request = await http.Request.ReadJsonBodyAsync<GameConnectionChangeRequest>();
             var service = http.RequestServices.GetRequiredService<GamesService>();
             IResult result = request is null
                 ? TypedResults.Problem("Request body is required.", statusCode: 400)
@@ -35,7 +36,7 @@ public static class GamesEndpoints
         games.MapGet("/ignored", GetIgnored);
         games.MapPost("/ignored", async (HttpContext http) =>
         {
-            var request = await http.Request.ReadFromJsonAsync<GameIgnoreRequest>();
+            var request = await http.Request.ReadJsonBodyAsync<GameIgnoreRequest>();
             var service = http.RequestServices.GetRequiredService<GamesService>();
             IResult result = request is null
                 ? TypedResults.Problem("Request body is required.", statusCode: 400)
@@ -44,7 +45,7 @@ public static class GamesEndpoints
         });
         games.MapDelete("/ignored", async (HttpContext http) =>
         {
-            var request = await http.Request.ReadFromJsonAsync<GameIgnoreRequest>();
+            var request = await http.Request.ReadJsonBodyAsync<GameIgnoreRequest>();
             var service = http.RequestServices.GetRequiredService<GamesService>();
             IResult result = request is null
                 ? TypedResults.Problem("Request body is required.", statusCode: 400)
@@ -55,7 +56,7 @@ public static class GamesEndpoints
         games.MapGet("/rating", GetRating);
         games.MapPost("/rating", async (HttpContext http) =>
         {
-            var request = await http.Request.ReadFromJsonAsync<GameRatingRequest>();
+            var request = await http.Request.ReadJsonBodyAsync<GameRatingRequest>();
             var service = http.RequestServices.GetRequiredService<GamesService>();
             IResult result = request is null
                 ? TypedResults.Problem("Request body is required.", statusCode: 400)
@@ -64,7 +65,7 @@ public static class GamesEndpoints
         });
         games.MapDelete("/rating", async (HttpContext http) =>
         {
-            var request = await http.Request.ReadFromJsonAsync<GameRatingRequest>();
+            var request = await http.Request.ReadJsonBodyAsync<GameRatingRequest>();
             var service = http.RequestServices.GetRequiredService<GamesService>();
             IResult result = request is null
                 ? TypedResults.Problem("Request body is required.", statusCode: 400)
@@ -95,13 +96,16 @@ public static class GamesEndpoints
         return TypedResults.Ok(await service.GetGame(gameId, ct));
     }
 
+    /// <param name="tz">The client's time zone (IANA or Windows id): years and months follow its calendar.</param>
     private static async Task<IResult> GetGameStats(
         string gameId,
         ClaimsPrincipal principal,
         Api.Modules.Accounts.AccountsService service,
+        string? tz,
         CancellationToken ct)
     {
-        return TypedResults.Ok(await service.ComputeGameStats(principal.GetUserId(), gameId, ct));
+        return TypedResults.Ok(await service.ComputeGameStats(
+            principal.GetUserId(), gameId, Api.Infrastructure.Common.LocalCalendar.ResolveTimeZone(tz), ct));
     }
 
     private static async Task<IResult> ListConnections(

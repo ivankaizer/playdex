@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
@@ -19,6 +20,7 @@ using Api.Modules.Posters;
 using Api.Modules.Privacy;
 using Api.Modules.Providers;
 using Api.Modules.Recap;
+using Api.Modules.Sessions;
 using Api.Modules.Settings;
 using Api.Observability;
 
@@ -66,6 +68,11 @@ builder.Services.AddSingleton(new MigrationCatalog([
     new IntegrationSessionPlatformMigration(),
     new AiPlaySessionDraftsMigration(),
     new AiGenerationHistoryMigration(),
+    new UserTokenVersionMigration(),
+    new RefreshTokensMigration(),
+    new OpenSessionGuardMigration(),
+    new IndexesAndConstraintsMigration(),
+    new DurableNotificationsAndBackoffMigration(),
 ]));
 builder.Services.AddSingleton<MigrationRunner>();
 builder.Services.AddScoped<EventBus>();
@@ -76,6 +83,7 @@ builder.Services
     .AddSettings()
     .AddPrivacy()
     .AddGames()
+    .AddSessions()
     .AddManual()
     .AddApiCapture()
     .AddLauncher()
@@ -87,6 +95,7 @@ builder.Services
     .AddNotifications(builder.Configuration)
     .AddAdmin();
 
+builder.Services.AddPlaydexRateLimiting();
 builder.Services.AddExceptionHandler<ApiExceptionHandler>();
 builder.Services.AddProblemDetails();
 builder.Services.ConfigureHttpJsonOptions(json =>
@@ -112,7 +121,7 @@ builder.Services.AddHealthChecks()
     .AddCheck<MigrationHealthCheck>("migrations");
 
 var app = builder.Build();
-await app.Services.GetRequiredService<MigrationRunner>().RunAsync();
+await RunMigrations(app.Services.GetRequiredService<MigrationRunner>());
 
 if (args.Contains("migrate", StringComparer.OrdinalIgnoreCase))
 {
@@ -125,12 +134,14 @@ if (args.Contains(UserCommand.Name, StringComparer.OrdinalIgnoreCase))
     return;
 }
 
+app.UseForwardedHeaders();
 app.MapDefaultEndpoints();
 
 app.UseMiddleware<CorrelationIdMiddleware>();
 app.UseMiddleware<ApiEnvelopeMiddleware>();
 app.UseExceptionHandler();
 app.UseCors();
+app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
 
@@ -154,10 +165,13 @@ api
     .MapAdmin();
 
 app.MapHealthChecks("/health/live", new HealthCheckOptions { Predicate = _ => false });
-app.MapHealthChecks("/health/ready");
+app.MapHealthChecks("/health/ready", HealthEndpoints.Readiness);
 
-app.MapOpenApi("/swagger/json");
-app.MapGet("/swagger", () => Results.Content("""
+// The API description and its UI are for local development only; production does not publish its route map.
+if (app.Environment.IsDevelopment())
+{
+    app.MapOpenApi("/swagger/json");
+    app.MapGet("/swagger", () => Results.Content("""
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -172,11 +186,28 @@ app.MapGet("/swagger", () => Results.Content("""
 </body>
 </html>
 """, "text/html"));
+}
 
 app.MapFallback("/api/{**path}", RouteNotFound);
 
 app.Run();
 
 static IResult RouteNotFound() => TypedResults.NotFound();
+
+// The host only listens for shutdown signals once it runs, so a stop request during migrations has to be caught here:
+// it cancels the migration (rolling back its transaction) instead of being ignored until the host starts.
+static async Task RunMigrations(MigrationRunner runner)
+{
+    using var stopping = new CancellationTokenSource();
+    void Stop(PosixSignalContext context)
+    {
+        context.Cancel = true;
+        stopping.Cancel();
+    }
+
+    using var terminate = PosixSignalRegistration.Create(PosixSignal.SIGTERM, Stop);
+    using var interrupt = PosixSignalRegistration.Create(PosixSignal.SIGINT, Stop);
+    await runner.RunAsync(stopping.Token);
+}
 
 public partial class Program;

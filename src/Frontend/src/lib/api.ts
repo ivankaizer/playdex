@@ -18,53 +18,151 @@ export interface RequestOptions {
   /** JSON body, or a factory producing a fresh body (e.g. FormData) for each attempt. */
   body?: unknown;
   authenticated?: boolean;
-  onAuthFailure?: () => void | Promise<void>;
+  /**
+   * Runs when the session is over: the API refused the access token and then the refresh token. By default the
+   * browser signs out and returns to the home page; `null` leaves it to the caller, which still gets the 401.
+   */
+  onAuthFailure?: (() => void | Promise<void>) | null;
   signal?: AbortSignal;
 }
 
 type Outcome<T> = { value: T; error: null } | { value: null; error: ApiError };
 
+const RefreshLockName = "playdex.refresh";
+
 export async function apiRequest<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const method = options.method ?? "GET";
   const url = buildUrl(path);
-  const useAuthentication = (options.authenticated ?? true) && isApiOrigin(url);
-
-  const first = await sendOnce<T>(url, method, options.body, useAuthentication, options.signal);
-  if (first.error === null) return first.value;
-  if (first.error.status !== 401 || !useAuthentication) throw first.error;
-
-  if (!(await tryRefresh(options.signal))) {
-    if (options.onAuthFailure) await options.onAuthFailure();
-    throw first.error;
+  if (!((options.authenticated ?? true) && isApiOrigin(url))) {
+    const result = await sendOnce<T>(url, method, options.body, null, options.signal);
+    if (result.error !== null) throw result.error;
+    return result.value;
   }
 
-  const retry = await sendOnce<T>(url, method, options.body, true, options.signal);
-  if (retry.error !== null) throw retry.error;
-  return retry.value;
+  return withSession((accessToken) => sendOnce<T>(url, method, options.body, accessToken, options.signal), options);
 }
 
 /** Fetches a binary resource (e.g. an image) with the same auth/refresh semantics. */
 export async function apiBlob(path: string, options: Omit<RequestOptions, "body" | "method"> = {}): Promise<Blob> {
   const url = buildUrl(path);
-  const attempt = async () => {
+  return withSession(async (accessToken): Promise<Outcome<Blob>> => {
     const headers: Record<string, string> = {};
-    const token = authSession.getAccessToken();
-    if (token) headers.Authorization = `Bearer ${token}`;
-    return fetch(url, { headers, signal: options.signal });
-  };
+    if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
+    const response = await fetch(url, { headers, signal: options.signal });
+    if (!response.ok) return { value: null, error: await createError(response) };
+    return { value: await response.blob(), error: null };
+  }, options);
+}
 
-  let response = await attempt();
-  if (response.status === 401 && (await tryRefresh(options.signal))) response = await attempt();
-  if (response.status === 401 && options.onAuthFailure) await options.onAuthFailure();
+/**
+ * Asks the API to revoke the stored refresh token, for signing out. Best effort: signing out neither waits for it
+ * nor fails because of it.
+ */
+export function revokeRefreshToken(): void {
+  const refreshToken = authSession.getRefreshToken();
+  if (!refreshToken) return;
+  void fetch(buildUrl("/logout"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json; charset=utf-8" },
+    body: JSON.stringify({ refreshToken }),
+    keepalive: true,
+  }).catch(() => undefined);
+}
+
+/** Sends an authenticated request; on a 401 renews the session once and retries, or ends the session. */
+async function withSession<T>(
+  attempt: (accessToken: string | null) => Promise<Outcome<T>>,
+  options: Pick<RequestOptions, "onAuthFailure" | "signal">,
+): Promise<T> {
+  const accessToken = authSession.getAccessToken();
+  const first = await attempt(accessToken);
+  if (first.error === null) return first.value;
+  if (first.error.status !== 401) throw first.error;
+
+  // Throws when the API couldn't be asked (offline, 5xx, 429): the session may well be fine, so it stays.
+  if (!(await untilAborted(refreshSession(accessToken), options.signal))) {
+    await endSession(options.onAuthFailure);
+    throw first.error;
+  }
+
+  const retry = await attempt(authSession.getAccessToken());
+  if (retry.error === null) return retry.value;
+  if (retry.error.status === 401) await endSession(options.onAuthFailure);
+  throw retry.error;
+}
+
+let pendingRefresh: Promise<boolean> | null = null;
+
+/**
+ * Replaces the access token the API refused. Resolves true once there is a new one, false when the API refused the
+ * refresh token (the session is over), and throws when the API couldn't be asked. A refresh token works only once
+ * (the API signs the session out when one is used twice), so concurrent callers share one /refresh call and tabs
+ * take turns through a Web Lock.
+ */
+function refreshSession(refusedAccessToken: string | null): Promise<boolean> {
+  pendingRefresh ??= withRefreshLock(() => refreshUnlessReplaced(refusedAccessToken)).finally(() => {
+    pendingRefresh = null;
+  });
+  return pendingRefresh;
+}
+
+async function refreshUnlessReplaced(refusedAccessToken: string | null): Promise<boolean> {
+  // Another request or tab already got a new token while this one waited.
+  const current = authSession.getAccessToken();
+  if (current && current !== refusedAccessToken) return true;
+
+  const refreshToken = authSession.getRefreshToken();
+  if (!refreshToken) return false;
+
+  const response = await fetch(buildUrl("/refresh"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json; charset=utf-8" },
+    body: JSON.stringify({ refreshToken }),
+  });
+  if (response.status === 400 || response.status === 401) return false;
   if (!response.ok) throw await createError(response);
-  return response.blob();
+
+  const tokens = unwrapEnvelope(await response.json()) as Partial<RefreshResponse> | null;
+  if (!tokens?.accessToken || !tokens.refreshToken) throw new Error("The session could not be renewed.");
+  authSession.storeTokens(tokens.accessToken, tokens.refreshToken);
+  return true;
+}
+
+async function withRefreshLock<T>(work: () => Promise<T>): Promise<T> {
+  const locks = typeof navigator === "undefined" ? undefined : navigator.locks;
+  return locks ? await locks.request(RefreshLockName, work) : await work();
+}
+
+async function endSession(onAuthFailure: RequestOptions["onAuthFailure"]): Promise<void> {
+  if (onAuthFailure === null) return;
+  await (onAuthFailure ?? signOut)();
+}
+
+/** The default end of a session the API refused: forget it and start again at the home page. */
+function signOut(): void {
+  authSession.logout();
+  window.location.assign("/");
+}
+
+/** Waits for `promise`, but lets this caller's signal abort the wait without cancelling the shared work. */
+function untilAborted<T>(promise: Promise<T>, signal: AbortSignal | undefined): Promise<T> {
+  if (!signal) return promise;
+  return new Promise<T>((resolve, reject) => {
+    const abort = () => reject(new DOMException("The operation was aborted.", "AbortError"));
+    if (signal.aborted) {
+      abort();
+      return;
+    }
+    signal.addEventListener("abort", abort, { once: true });
+    promise.then(resolve, reject).finally(() => signal.removeEventListener("abort", abort));
+  });
 }
 
 async function sendOnce<T>(
   url: string,
   method: HttpMethod,
   body: unknown,
-  authenticated: boolean,
+  accessToken: string | null,
   signal: AbortSignal | undefined,
 ): Promise<Outcome<T>> {
   const headers: Record<string, string> = {};
@@ -76,45 +174,24 @@ async function sendOnce<T>(
     requestBody = JSON.stringify(body);
   }
 
-  if (authenticated) {
-    const accessToken = authSession.getAccessToken();
-    if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
-  }
+  if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
 
   const response = await fetch(url, { method, headers, body: requestBody, signal });
   if (!response.ok) return { value: null, error: await createError(response) };
   if (response.status === 204) return { value: undefined as T, error: null };
 
-  const root = (await response.json()) as unknown;
-  let payload = root;
-  if (root !== null && typeof root === "object" && !Array.isArray(root) && "data" in root && "error" in root) {
-    payload = (root as { data: unknown }).data;
-  }
+  const payload = unwrapEnvelope(await response.json());
   if (payload === null || payload === undefined) {
     throw new SyntaxError("Successful response contained no JSON data.");
   }
   return { value: payload as T, error: null };
 }
 
-async function tryRefresh(signal: AbortSignal | undefined): Promise<boolean> {
-  const refreshToken = authSession.getRefreshToken();
-  if (!refreshToken) return false;
-
-  try {
-    const response = await sendOnce<RefreshResponse>(
-      buildUrl("/refresh"),
-      "POST",
-      { refreshToken },
-      false,
-      signal,
-    );
-    if (response.error !== null || !response.value.accessToken || !response.value.refreshToken) return false;
-    authSession.storeTokens(response.value.accessToken, response.value.refreshToken);
-    return true;
-  } catch (error) {
-    if (isAbortError(error)) throw error;
-    return false;
+function unwrapEnvelope(root: unknown): unknown {
+  if (root !== null && typeof root === "object" && !Array.isArray(root) && "data" in root && "error" in root) {
+    return (root as { data: unknown }).data;
   }
+  return root;
 }
 
 /** The API's absolute URL without a trailing slash: what the Playdex app is told to use as its server. */
@@ -165,6 +242,5 @@ export function isAbortError(error: unknown): boolean {
   return error instanceof DOMException && error.name === "AbortError";
 }
 
-export function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
+/** A message for people from anything a request throws (see ./errors). */
+export { errorMessage } from "./errors";

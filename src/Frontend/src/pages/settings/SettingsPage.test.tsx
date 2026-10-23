@@ -220,7 +220,7 @@ describe("SettingsPage", () => {
 
     expect(await screen.findByText("12 pairs")).toBeInTheDocument();
     expect(screen.getAllByRole("button", { name: /^Unlink / })).toHaveLength(10);
-    expect(screen.getByRole("button", { name: "Primary game 0" })).toHaveAttribute("title", "Primary game 0");
+    expect(screen.getByRole("link", { name: "Primary game 0" })).toHaveAttribute("title", "Primary game 0");
     fireEvent.click(screen.getByRole("button", { name: "Show all 12" }));
     expect(screen.getAllByRole("button", { name: /^Unlink / })).toHaveLength(12);
     fireEvent.click(screen.getByRole("button", { name: "Show fewer" }));
@@ -246,13 +246,13 @@ describe("SettingsPage", () => {
       providers = [steam, app];
       return Promise.resolve({ apiKey: "plx_new" });
     });
-    routeApi({ "GET /providers": () => Promise.resolve({ providers }), "POST /api/key": post });
+    routeApi({ "GET /providers": () => Promise.resolve({ providers }), "POST /key": post });
     renderPage();
 
     fireEvent.click(await screen.findByRole("button", { name: "Create API key" }));
 
     expect(await screen.findByLabelText("API key")).toHaveValue("plx_new");
-    expect(post).toHaveBeenCalledWith("/api/key", expect.objectContaining({ method: "POST" }));
+    expect(post).toHaveBeenCalledWith("/key", expect.objectContaining({ method: "POST" }));
     expect(screen.queryByRole("button", { name: "Create API key" })).toBeNull();
   });
 });

@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef } from "react";
-import { cx } from "@/lib/cx";
+import { dialogKeyDown } from "@/lib/focusTrap";
 import type { DurationCheck } from "../sessionsState";
 
 interface SessionEditModalProps {
@@ -18,7 +18,7 @@ interface SessionEditModalProps {
 }
 
 const fieldLabel = "flex flex-col gap-1.5 text-xs font-medium text-muted";
-const validDuration: DurationCheck = { minutes: null, ok: true, warn: false, message: "" };
+const validDuration: DurationCheck = { minutes: null, ok: true, message: "" };
 
 export function SessionEditModal({
   gameTitle,
@@ -34,6 +34,7 @@ export function SessionEditModal({
 }: SessionEditModalProps) {
   const durationHintId = useId();
   const startedRef = useRef<HTMLInputElement>(null);
+  const dialogRef = useRef<HTMLElement>(null);
   const returnFocus = useRef<Element | null>(null);
 
   // Focus the first field on open and give focus back to whatever opened the dialog on close.
@@ -55,11 +56,10 @@ export function SessionEditModal({
       onClick={(event) => {
         if (event.target === event.currentTarget && !isSaving) onCancel?.();
       }}
-      onKeyDown={(event) => {
-        if (event.key === "Escape" && !isSaving) onCancel?.();
-      }}
+      onKeyDown={(event) => dialogKeyDown(event, dialogRef.current, isSaving ? undefined : onCancel)}
     >
       <section
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="session-edit-title"
@@ -129,8 +129,8 @@ export function SessionEditModal({
             <span
               id={durationHintId}
               aria-live="polite"
-              data-duration-hint={durationCheck.warn ? "warn" : durationInvalid ? "error" : undefined}
-              className={cx("min-h-4 text-xs", durationCheck.warn ? "text-warn" : "text-danger")}
+              data-duration-hint={durationInvalid ? "error" : undefined}
+              className="min-h-4 text-xs text-danger"
             >
               {durationMessage}
             </span>
@@ -147,7 +147,7 @@ export function SessionEditModal({
               Cancel
             </button>
             <button type="submit" data-action="save" disabled={!canSave} className="pdx-btn-primary !h-11 !px-[22px]">
-              {isSaving ? "Saving…" : durationCheck.warn ? "Save anyway" : "Save session"}
+              {isSaving ? "Saving…" : "Save session"}
             </button>
           </div>
         </form>

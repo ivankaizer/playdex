@@ -15,7 +15,7 @@ public static class AuthEndpoints
     {
         api.MapPost("/login", async (HttpContext http) =>
         {
-            var request = await http.Request.ReadFromJsonAsync<LoginRequest>();
+            var request = await http.Request.ReadJsonBodyAsync<LoginRequest>();
             var service = http.RequestServices.GetRequiredService<AuthService>();
             var email = request?.Email?.Trim() ?? "";
             var password = request?.Password ?? "";
@@ -25,11 +25,11 @@ public static class AuthEndpoints
                 : TypedResults.Ok(await service.Login(email, password, http.RequestAborted));
 
             await result.ExecuteAsync(http);
-        });
+        }).RequireRateLimiting(RateLimiting.SignIn);
 
         api.MapPost("/refresh", async (HttpContext http) =>
         {
-            var request = await http.Request.ReadFromJsonAsync<RefreshRequest>();
+            var request = await http.Request.ReadJsonBodyAsync<RefreshRequest>();
             var service = http.RequestServices.GetRequiredService<AuthService>();
             var refreshToken = request?.RefreshToken?.Trim() ?? "";
 
@@ -38,7 +38,20 @@ public static class AuthEndpoints
                 : TypedResults.Ok(await service.Refresh(refreshToken, http.RequestAborted));
 
             await result.ExecuteAsync(http);
-        });
+        }).RequireRateLimiting(RateLimiting.Refresh);
+
+        // Signing out revokes the refresh token server-side; holding the token is the proof, so no access token is needed.
+        api.MapPost("/logout", async (HttpContext http) =>
+        {
+            var request = await http.Request.ReadFromJsonAsync<RefreshRequest>();
+            var refreshToken = request?.RefreshToken?.Trim() ?? "";
+            if (refreshToken.Length > 0)
+            {
+                await http.RequestServices.GetRequiredService<AuthService>().Logout(refreshToken, http.RequestAborted);
+            }
+
+            await TypedResults.NoContent().ExecuteAsync(http);
+        }).RequireRateLimiting(RateLimiting.Refresh);
 
         api.MapGet("/me", Me).RequireAuthorization();
     }

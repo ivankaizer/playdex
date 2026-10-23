@@ -70,17 +70,21 @@ public static class GameId
         return gameId;
     }
 
+    /// <summary>
+    /// An encoded game id, or a raw numeric one that is not also a valid encoding. Encoded ids are tried first:
+    /// some encode to digits only (87421 is "2029282"), and reading those as raw ids picks a different game.
+    /// </summary>
     public static long Parse(string value, string field = "gameId")
     {
-        if (long.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out var id) && id > 0)
-        {
-            return id;
-        }
-
         var decoded = Decode(value);
         if (decoded.HasValue)
         {
             return decoded.Value;
+        }
+
+        if (long.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out var id) && id > 0)
+        {
+            return id;
         }
 
         throw AppProblemException.Validation($"{field} must be a valid game id.");

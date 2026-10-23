@@ -7,7 +7,7 @@ interface PlaydexAppKeyCreatorProps {
   onCreated: () => Promise<void>;
 }
 
-/** Before a user has a Playdex app key: one button that creates it (POST /api/key returns the existing key if any). */
+/** Before a user has a Playdex app key: one button that creates it (POST /key returns the existing key if any). */
 export function PlaydexAppKeyCreator({ onCreated }: PlaydexAppKeyCreatorProps) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -16,7 +16,7 @@ export function PlaydexAppKeyCreator({ onCreated }: PlaydexAppKeyCreatorProps) {
     setBusy(true);
     setError(null);
     try {
-      await apiRequest<{ apiKey: string }>("/api/key", { method: "POST" });
+      await apiRequest<{ apiKey: string }>("/key", { method: "POST" });
       await onCreated();
     } catch (failure) {
       setError(errorMessage(failure));

@@ -15,11 +15,8 @@ public sealed record IgdbSearchResult(
     string? CoverUrl
 );
 
-public sealed class IgdbClient(HttpClient httpClient, IOptions<IgdbOptions> options)
+public sealed class IgdbClient(HttpClient httpClient, IOptions<IgdbOptions> options, IgdbTokenCache tokenCache)
 {
-    private string? _cachedToken;
-    private DateTimeOffset _cachedExpiresAt;
-
     public async Task<List<IgdbSearchResult>> SearchGames(string query, CancellationToken ct)
     {
         var trimmed = query.Trim();
@@ -63,7 +60,7 @@ public sealed class IgdbClient(HttpClient httpClient, IOptions<IgdbOptions> opti
         string clientSecret,
         CancellationToken ct)
     {
-        var token = await EnsureToken(clientId, clientSecret, ct);
+        var token = await tokenCache.GetOrFetch(fetchCt => FetchToken(clientId, clientSecret, fetchCt), ct);
         if (token is null) return [];
 
         using var request = new HttpRequestMessage(HttpMethod.Post, "https://api.igdb.com/v4/games")
@@ -73,7 +70,12 @@ public sealed class IgdbClient(HttpClient httpClient, IOptions<IgdbOptions> opti
         request.Headers.Add("Client-ID", clientId);
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
-        var response = await httpClient.SendAsync(request, ct);
+        using var response = await httpClient.SendAsync(request, ct);
+        if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+        {
+            tokenCache.Invalidate(token);
+        }
+
         response.EnsureSuccessStatusCode();
         var games = await response.Content.ReadFromJsonAsync<List<IgdbGame>>(JsonOptions, ct) ?? [];
         return games.Select(MapGame).ToList();
@@ -90,18 +92,18 @@ public sealed class IgdbClient(HttpClient httpClient, IOptions<IgdbOptions> opti
             FormatCover(game.Cover?.ImageId));
     }
 
-    private async Task<string?> EnsureToken(string clientId, string clientSecret, CancellationToken ct)
+    private async Task<IgdbToken?> FetchToken(string clientId, string clientSecret, CancellationToken ct)
     {
-        if (_cachedToken is not null && _cachedExpiresAt > DateTimeOffset.UtcNow)
-            return _cachedToken;
-
-        var url = "https://id.twitch.tv/oauth2/token"
-            + $"?client_id={clientId}"
-            + $"&client_secret={clientSecret}"
-            + "&grant_type=client_credentials";
-
-        using var request = new HttpRequestMessage(HttpMethod.Post, url);
-        var response = await httpClient.SendAsync(request, ct);
+        // Credentials go in the form body: in the query string they end up in logs and HTTP tracing.
+        using var request = new HttpRequestMessage(HttpMethod.Post, "https://id.twitch.tv/oauth2/token")
+        {
+            Content = new FormUrlEncodedContent([
+                new KeyValuePair<string, string>("client_id", clientId),
+                new KeyValuePair<string, string>("client_secret", clientSecret),
+                new KeyValuePair<string, string>("grant_type", "client_credentials"),
+            ]),
+        };
+        using var response = await httpClient.SendAsync(request, ct);
         if (!response.IsSuccessStatusCode)
             return null;
 
@@ -109,10 +111,7 @@ public sealed class IgdbClient(HttpClient httpClient, IOptions<IgdbOptions> opti
         if (payload?.AccessToken is null)
             return null;
 
-        _cachedToken = payload.AccessToken;
-        _cachedExpiresAt = DateTimeOffset.UtcNow.AddSeconds(payload.ExpiresIn - 30);
-
-        return _cachedToken;
+        return new IgdbToken(payload.AccessToken, DateTimeOffset.UtcNow.AddSeconds(payload.ExpiresIn - 30));
     }
 
     private static string? FormatCover(string? imageId)
@@ -148,4 +147,49 @@ public sealed class IgdbClient(HttpClient httpClient, IOptions<IgdbOptions> opti
         public int? Id { get; init; }
         public string? Name { get; init; }
     }
+}
+
+public sealed record IgdbToken(string AccessToken, DateTimeOffset ExpiresAt);
+
+/// <summary>
+/// The Twitch app token for IGDB, shared by every <see cref="IgdbClient"/>. The client is a transient typed
+/// HttpClient, so a token kept on the instance was fetched again for every search. Concurrent callers wait for a
+/// single refresh.
+/// </summary>
+public sealed class IgdbTokenCache : IDisposable
+{
+    private readonly SemaphoreSlim _refresh = new(1, 1);
+    private IgdbToken? _token;
+
+    public async Task<string?> GetOrFetch(Func<CancellationToken, Task<IgdbToken?>> fetch, CancellationToken ct)
+    {
+        if (Current() is { } cached) return cached;
+
+        await _refresh.WaitAsync(ct);
+        try
+        {
+            if (Current() is { } refreshed) return refreshed;
+            var token = await fetch(ct);
+            _token = token;
+            return token?.AccessToken;
+        }
+        finally
+        {
+            _refresh.Release();
+        }
+    }
+
+    /// <summary>Drops a token IGDB rejected, so the next call fetches a new one.</summary>
+    public void Invalidate(string accessToken)
+    {
+        var current = _token;
+        if (current?.AccessToken == accessToken)
+        {
+            Interlocked.CompareExchange(ref _token, null, current);
+        }
+    }
+
+    public void Dispose() => _refresh.Dispose();
+
+    private string? Current() => _token is { } token && token.ExpiresAt > DateTimeOffset.UtcNow ? token.AccessToken : null;
 }

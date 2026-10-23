@@ -38,9 +38,44 @@ public sealed class IgdbClientTests
         Assert.Empty(handler.RequestBodies);
     }
 
-    private static IgdbClient CreateClient(HttpMessageHandler handler) => new(
+    [Fact]
+    public async Task TheTwitchTokenIsFetchedOnceAndSentInTheBody()
+    {
+        var handler = new RecordingHandler(
+            Json("""{"access_token":"token","expires_in":3600}"""),
+            Json("[]"),
+            Json("[]"));
+        var tokenCache = new IgdbTokenCache();
+
+        await CreateClient(handler, tokenCache).SearchGames("Hades", CancellationToken.None);
+        await CreateClient(handler, tokenCache).SearchGames("Hades II", CancellationToken.None);
+
+        Assert.Equal(3, handler.RequestBodies.Count);
+        Assert.Equal("https://id.twitch.tv/oauth2/token", handler.RequestUris[0]);
+        Assert.Contains("client_secret=secret", handler.RequestBodies[0]);
+        Assert.All(handler.RequestUris, uri => Assert.DoesNotContain("secret", uri));
+    }
+
+    [Fact]
+    public async Task ARejectedTokenIsFetchedAgain()
+    {
+        var handler = new RecordingHandler(
+            Json("""{"access_token":"revoked","expires_in":3600}"""),
+            new HttpResponseMessage(HttpStatusCode.Unauthorized),
+            Json("""{"access_token":"fresh","expires_in":3600}"""),
+            Json("[]"));
+        var client = CreateClient(handler, new IgdbTokenCache());
+
+        await Assert.ThrowsAsync<HttpRequestException>(() => client.SearchGames("Hades", CancellationToken.None));
+        await client.SearchGames("Hades", CancellationToken.None);
+
+        Assert.Equal("Bearer fresh", handler.Authorizations[3]);
+    }
+
+    private static IgdbClient CreateClient(HttpMessageHandler handler, IgdbTokenCache? tokenCache = null) => new(
         new HttpClient(handler),
-        Options.Create(new IgdbOptions { ClientId = "client", ClientSecret = "secret" }));
+        Options.Create(new IgdbOptions { ClientId = "client", ClientSecret = "secret" }),
+        tokenCache ?? new IgdbTokenCache());
 
     private static HttpResponseMessage Json(string json) => new(HttpStatusCode.OK)
     {
@@ -51,11 +86,15 @@ public sealed class IgdbClientTests
     {
         private readonly Queue<HttpResponseMessage> _responses = new(responses);
         public List<string> RequestBodies { get; } = [];
+        public List<string> RequestUris { get; } = [];
+        public List<string?> Authorizations { get; } = [];
 
         protected override async Task<HttpResponseMessage> SendAsync(
             HttpRequestMessage request,
             CancellationToken cancellationToken)
         {
+            RequestUris.Add(request.RequestUri!.ToString());
+            Authorizations.Add(request.Headers.Authorization?.ToString());
             RequestBodies.Add(request.Content is null
                 ? string.Empty
                 : await request.Content.ReadAsStringAsync(cancellationToken));

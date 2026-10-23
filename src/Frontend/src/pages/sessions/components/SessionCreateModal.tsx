@@ -1,13 +1,13 @@
-import { useId } from "react";
+import { useId, useRef } from "react";
 import { Cover, Dot } from "@/components/ui";
 import { cx } from "@/lib/cx";
+import { dialogKeyDown, useDialogFocus } from "@/lib/focusTrap";
 import { formatCountNoun } from "@/lib/format";
 import { platformColor } from "@/lib/platforms";
 import type { ManualMappingSearchResult, ManualPlatform } from "@/models/manual";
 import {
   clearGame,
   formatMinutes,
-  isLongDuration,
   selectGame,
   setDate,
   setHours,
@@ -76,6 +76,9 @@ export function SessionCreateModal({
   onClose,
   onQueryChanged,
 }: SessionCreateModalProps) {
+  const dialogRef = useRef<HTMLElement>(null);
+  useDialogFocus(dialogRef, !embedded);
+
   const changeQuery = (value: string) => {
     onStateChange((current) => setQuery(current, value));
     onQueryChanged?.(value);
@@ -113,8 +116,12 @@ export function SessionCreateModal({
   );
 
   return (
-    <div className="pdx-modal-backdrop fixed inset-0 z-[70] flex items-start justify-center overflow-y-auto p-4 sm:items-center">
+    <div
+      className="pdx-modal-backdrop fixed inset-0 z-[70] flex items-start justify-center overflow-y-auto p-4 sm:items-center"
+      onKeyDown={(event) => dialogKeyDown(event, dialogRef.current, state.isSaving ? undefined : onClose)}
+    >
       <section
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="session-create-title"
@@ -291,15 +298,14 @@ function DetailsStep({
   const platformName = platforms.find((platform) => platform.key === state.platformKey)?.name ?? state.platformKey;
   const submission = blocker === null ? tryBuildSubmission(state).submission : null;
   const missing = blocker === null ? null : (missingFieldPrompts[blocker] ?? null);
-  const long = submission?.kind === "entry" && isLongDuration(submission.body.durationMinutes);
   const summary =
     submission === null || selectedGame === null
       ? (missing ?? blocker)
       : submission.kind === "entry"
-        ? `${selectedGame.title} · ${platformName} · ${formatMinutes(submission.body.durationMinutes)} on ${shortDate(state.date)}${long ? " · over 24 hours, double-check it" : ""}`
+        ? `${selectedGame.title} · ${platformName} · ${formatMinutes(submission.body.durationMinutes)} on ${shortDate(state.date)}`
         : `${selectedGame.title} · ${platformName} · starts now`;
-  // Missing fields read as a quiet prompt, an invalid duration as an error and a duration over 24h as a warning.
-  const summaryTone = missing !== null ? "text-muted" : blocker !== null ? "text-danger" : long ? "text-warn" : "text-ink";
+  // Missing fields read as a quiet prompt; an invalid duration (over 24 hours too) or a future date as an error.
+  const summaryTone = missing !== null ? "text-muted" : blocker !== null ? "text-danger" : "text-ink";
   const pickDuration = (hours: number, minutes: number) =>
     onStateChange((current) => setMinutes(setHours(current, String(hours)), String(minutes)));
 
@@ -366,6 +372,7 @@ function DetailsStep({
               <ChangeInput
                 id={`${ids}-date`}
                 type="date"
+                max={localDate(0)}
                 value={state.date}
                 onValueChange={(value) => onStateChange((current) => setDate(current, value))}
                 className="pdx-input h-[46px] flex-[1_1_160px]"
