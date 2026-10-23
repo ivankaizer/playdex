@@ -18,15 +18,15 @@ public sealed record PlatformCatalogLoad(
 
 public sealed class PlatformCatalogClient : IDisposable
 {
-    private readonly HttpClient http;
-    private readonly bool ownsClient;
+    private readonly HttpClient _http;
+    private readonly bool _ownsClient;
 
     public PlatformCatalogClient(ApiConfig config, HttpMessageHandler? handler = null)
     {
-        http = handler is null ? new HttpClient() : new HttpClient(handler);
-        ownsClient = true;
-        http.BaseAddress = new Uri(config.BaseUrl.TrimEnd('/') + "/");
-        http.Timeout = TimeSpan.FromSeconds(Math.Max(1, config.RequestTimeoutSeconds));
+        _http = handler is null ? new HttpClient() : new HttpClient(handler);
+        _ownsClient = true;
+        _http.BaseAddress = new Uri(config.BaseUrl.TrimEnd('/') + "/");
+        _http.Timeout = TimeSpan.FromSeconds(Math.Max(1, config.RequestTimeoutSeconds));
     }
 
     public async Task<PlatformCatalogLoad> LoadAsync(string apiKey, CancellationToken cancellationToken = default)
@@ -41,7 +41,7 @@ public sealed class PlatformCatalogClient : IDisposable
             using var request = new HttpRequestMessage(HttpMethod.Get, "capture/platforms");
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey.Trim());
             request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-            using var response = await http.SendAsync(request, cancellationToken);
+            using var response = await _http.SendAsync(request, cancellationToken);
             if (!response.IsSuccessStatusCode)
             {
                 return new PlatformCatalogLoad(
@@ -70,9 +70,9 @@ public sealed class PlatformCatalogClient : IDisposable
 
     public void Dispose()
     {
-        if (ownsClient)
+        if (_ownsClient)
         {
-            http.Dispose();
+            _http.Dispose();
         }
     }
 

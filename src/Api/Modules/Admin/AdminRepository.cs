@@ -14,7 +14,7 @@ public sealed class AdminRepository(PlaydexDbContext db)
     public const int GenerationPageSize = 25;
     public const int GameListLimit = 20;
 
-    private static readonly string[] FailureStatuses = ["failure", "timeout", "cancelled"];
+    private static readonly string[] _failureStatuses = ["failure", "timeout", "cancelled"];
 
     public Task<bool> IsAdministrator(long userId, CancellationToken ct) =>
         db.Users.AsNoTracking().AnyAsync(user => user.Id == userId && user.IsAdmin, ct);
@@ -26,7 +26,7 @@ public sealed class AdminRepository(PlaydexDbContext db)
     {
         var since = now.AddHours(-24);
         var live = db.PlaySessions.AsNoTracking().Where(row => row.EndedAt == null);
-        var failures = db.AiGenerations.AsNoTracking().Where(row => FailureStatuses.Contains(row.Status));
+        var failures = db.AiGenerations.AsNoTracking().Where(row => _failureStatuses.Contains(row.Status));
         var counts = new AdminDashboardCountsDto(
             await live.CountAsync(ct),
             await live.Select(row => row.UserId).Distinct().CountAsync(ct),
@@ -455,7 +455,7 @@ public sealed class AdminRepository(PlaydexDbContext db)
                    select new { generation, user.Email };
         if (status == "errors")
         {
-            rows = rows.Where(row => FailureStatuses.Contains(row.generation.Status));
+            rows = rows.Where(row => _failureStatuses.Contains(row.generation.Status));
         }
         else if (!string.IsNullOrWhiteSpace(status))
         {

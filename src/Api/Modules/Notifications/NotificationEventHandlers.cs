@@ -80,7 +80,7 @@ public sealed partial class NotificationDispatcher(
     internal static readonly TimeSpan PollInterval = TimeSpan.FromSeconds(30);
     /// <summary>How long a delivered notification is remembered, so the same event is not sent twice.</summary>
     internal static readonly TimeSpan Retention = TimeSpan.FromDays(7);
-    private static readonly TimeSpan CleanupInterval = TimeSpan.FromHours(1);
+    private static readonly TimeSpan _cleanupInterval = TimeSpan.FromHours(1);
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Sending the {Kind} notification {NotificationId} failed (attempt {Attempt}); will retry")]
     private partial void LogSendFailed(Exception exception, string kind, long notificationId, int attempt);
@@ -110,7 +110,7 @@ public sealed partial class NotificationDispatcher(
                     using var scope = scopeFactory.CreateScope();
                     await scope.ServiceProvider.GetRequiredService<NotificationOutbox>()
                         .DeleteFinished(clock.GetUtcNow() - Retention, stoppingToken);
-                    nextCleanup = clock.GetUtcNow() + CleanupInterval;
+                    nextCleanup = clock.GetUtcNow() + _cleanupInterval;
                 }
 
                 await signal.WaitAsync(PollInterval, stoppingToken);

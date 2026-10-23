@@ -12,7 +12,7 @@ public sealed partial class AdminService(
     TimeProvider clock,
     ILogger<AdminService> logger)
 {
-    private static readonly JsonSerializerOptions PrettyJson = new() { WriteIndented = true };
+    private static readonly JsonSerializerOptions _prettyJson = new() { WriteIndented = true };
 
     public Task<AdminDashboardDto> ReadDashboard(string? query, string? platform, DateTimeOffset? dayStart,
         DateTimeOffset? dayEnd, CancellationToken ct)
@@ -276,7 +276,7 @@ public sealed partial class AdminService(
         try
         {
             using var document = JsonDocument.Parse(json);
-            return JsonSerializer.Serialize(document.RootElement, PrettyJson);
+            return JsonSerializer.Serialize(document.RootElement, _prettyJson);
         }
         catch (JsonException) { return json; }
     }

@@ -129,7 +129,7 @@ public sealed class MigrationRunnerTests(PostgresFixture postgres)
         }
 
         var migration = new AlterLockedTableMigration(() => blockingTransaction.CommitAsync());
-        await CreateRunner(scope.DataSource, [migration], FastOptions with { MaxAttempts = 3 }).RunAsync();
+        await CreateRunner(scope.DataSource, [migration], _fastOptions with { MaxAttempts = 3 }).RunAsync();
 
         Assert.Equal(2, migration.Attempts);
         await blockingTransaction.DisposeAsync();
@@ -158,7 +158,7 @@ public sealed class MigrationRunnerTests(PostgresFixture postgres)
 
         var migration = new AlterLockedTableMigration(releaseLock: null);
         var exception = await Assert.ThrowsAsync<PostgresException>(() =>
-            CreateRunner(scope.DataSource, [migration], FastOptions with { MaxAttempts = 2 }).RunAsync());
+            CreateRunner(scope.DataSource, [migration], _fastOptions with { MaxAttempts = 2 }).RunAsync());
 
         Assert.Equal(PostgresErrorCodes.LockNotAvailable, exception.SqlState);
         Assert.Equal(2, migration.Attempts);
@@ -182,11 +182,11 @@ public sealed class MigrationRunnerTests(PostgresFixture postgres)
         try
         {
             await Assert.ThrowsAsync<TimeoutException>(() =>
-                CreateRunner(scope.DataSource, [new EmptyMigration()], FastOptions).RunAsync());
+                CreateRunner(scope.DataSource, [new EmptyMigration()], _fastOptions).RunAsync());
 
             using var cancelled = new CancellationTokenSource(TimeSpan.FromMilliseconds(100));
             await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
-                CreateRunner(scope.DataSource, [new EmptyMigration()], FastOptions with
+                CreateRunner(scope.DataSource, [new EmptyMigration()], _fastOptions with
                 {
                     AdvisoryLockWait = TimeSpan.FromMinutes(1),
                 }).RunAsync(cancelled.Token));
@@ -198,7 +198,7 @@ public sealed class MigrationRunnerTests(PostgresFixture postgres)
         }
     }
 
-    private static readonly MigrationRunnerOptions FastOptions = new(
+    private static readonly MigrationRunnerOptions _fastOptions = new(
         TimeSpan.FromMilliseconds(200),
         MaxAttempts: 2,
         AdvisoryLockWait: TimeSpan.FromMilliseconds(300))

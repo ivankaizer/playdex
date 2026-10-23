@@ -17,16 +17,8 @@ public static class GameConnections
         var adj = new Dictionary<long, List<long>>();
         foreach (var (g, c) in edges)
         {
-            if (!adj.ContainsKey(g))
-            {
-                adj[g] = [];
-            }
-
-            if (!adj.ContainsKey(c))
-            {
-                adj[c] = [];
-            }
-
+            adj.TryAdd(g, []);
+            adj.TryAdd(c, []);
             adj[g].Add(c);
             adj[c].Add(g);
         }
@@ -63,11 +55,7 @@ public static class GameConnections
         var parent = new Dictionary<long, long>();
         long Find(long x)
         {
-            if (!parent.ContainsKey(x))
-            {
-                parent[x] = x;
-            }
-
+            parent.TryAdd(x, x);
             if (parent[x] != x)
             {
                 parent[x] = Find(parent[x]);

@@ -81,7 +81,7 @@ internal static class RecapRange
 
 public sealed class RecapService(RecapRepository repository)
 {
-    private static readonly long DayMs = (long)TimeSpan.FromDays(1).TotalMilliseconds;
+    private static readonly long _dayMs = (long)TimeSpan.FromDays(1).TotalMilliseconds;
 
     public async Task<RecapYearsResponseDto> GetYears(long userId, TimeZoneInfo zone, CancellationToken ct)
     {
@@ -397,7 +397,7 @@ public sealed class RecapService(RecapRepository repository)
                 var left = 0;
                 for (var right = 0; right < sorted.Count; right++)
                 {
-                    while (sorted[right] - sorted[left] > DayMs)
+                    while (sorted[right] - sorted[left] > _dayMs)
                     {
                         left++;
                     }

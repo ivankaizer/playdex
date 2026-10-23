@@ -17,11 +17,11 @@ namespace Api.Tests;
 [Collection(PostgresCollectionDefinition.Name)]
 public sealed class CredentialBackoffTests(PostgresFixture postgres)
 {
-    private static readonly DateTimeOffset Now =
+    private static readonly DateTimeOffset _now =
         DateTimeOffset.Parse("2026-08-06T12:00:00Z", CultureInfo.InvariantCulture);
 
     /// <summary>5 s doubling per failure, capped at 10 minutes.</summary>
-    private static readonly int[] ExpectedDelaySeconds = [5, 10, 20, 40, 80, 160, 320, 600, 600];
+    private static readonly int[] _expectedDelaySeconds = [5, 10, 20, 40, 80, 160, 320, 600, 600];
 
     [Fact]
     public async Task DelaysDoubleUpToTheCapAndHonourRetryAfter()
@@ -39,13 +39,13 @@ public sealed class CredentialBackoffTests(PostgresFixture postgres)
         var delays = new List<TimeSpan>();
         for (var attempt = 0; attempt < 9; attempt++)
         {
-            delays.Add((await backoff.RecordFailure(first, Now, retryAfter: null, false, CancellationToken.None)).Delay);
+            delays.Add((await backoff.RecordFailure(first, _now, retryAfter: null, false, CancellationToken.None)).Delay);
         }
 
-        Assert.Equal(ExpectedDelaySeconds.Select(seconds => TimeSpan.FromSeconds(seconds)), delays);
+        Assert.Equal(_expectedDelaySeconds.Select(seconds => TimeSpan.FromSeconds(seconds)), delays);
         Assert.Equal(
             TimeSpan.FromMinutes(2),
-            (await backoff.RecordFailure(credentials.Ids[1], Now, TimeSpan.FromMinutes(2), false, CancellationToken.None))
+            (await backoff.RecordFailure(credentials.Ids[1], _now, TimeSpan.FromMinutes(2), false, CancellationToken.None))
             .Delay);
     }
 
@@ -62,21 +62,21 @@ public sealed class CredentialBackoffTests(PostgresFixture postgres)
         var backoff = new CredentialBackoff(db);
         var id = credentials.Ids[0];
 
-        var first = await backoff.RecordFailure(id, Now, null, authenticationFailure: true, CancellationToken.None);
-        var second = await backoff.RecordFailure(id, Now.AddMinutes(1), null, false, CancellationToken.None);
-        var third = await backoff.RecordFailure(id, Now.AddMinutes(2), null, true, CancellationToken.None);
+        var first = await backoff.RecordFailure(id, _now, null, authenticationFailure: true, CancellationToken.None);
+        var second = await backoff.RecordFailure(id, _now.AddMinutes(1), null, false, CancellationToken.None);
+        var third = await backoff.RecordFailure(id, _now.AddMinutes(2), null, true, CancellationToken.None);
 
         Assert.True(first.IsFirst);
         Assert.False(second.IsFirst);
         Assert.False(third.IsFirst);
         Assert.Equal((3, 2), (third.Failures, third.AuthFailures));
-        Assert.Equal(Now, third.FailingSince);
+        Assert.Equal(_now, third.FailingSince);
 
         await backoff.Reset(id, CancellationToken.None);
 
-        var afterReset = await backoff.RecordFailure(id, Now.AddHours(1), null, false, CancellationToken.None);
+        var afterReset = await backoff.RecordFailure(id, _now.AddHours(1), null, false, CancellationToken.None);
         Assert.True(afterReset.IsFirst);
-        Assert.Equal(Now.AddHours(1), afterReset.FailingSince);
+        Assert.Equal(_now.AddHours(1), afterReset.FailingSince);
     }
 
     [Fact]
@@ -120,7 +120,7 @@ public sealed class CredentialBackoffTests(PostgresFixture postgres)
         var failures = await Task.WhenAll(Enumerable.Range(0, 12).Select(async _ =>
         {
             await using var db = CreateDb();
-            return await new CredentialBackoff(db).RecordFailure(id, Now, null, false, CancellationToken.None);
+            return await new CredentialBackoff(db).RecordFailure(id, _now, null, false, CancellationToken.None);
         }));
 
         Assert.Single(failures, failure => failure.IsFirst);

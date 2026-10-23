@@ -21,9 +21,9 @@ public sealed class NotificationRenderer(HttpClient httpClient, CoverUrlPolicy c
     /// <summary>Largest cover decoded (a 6000 x 4000 image); a small file can still declare a huge bitmap.</summary>
     public const long MaxCoverPixels = 24_000_000;
 
-    private static readonly Lazy<SKTypeface> RegularTypeface = new(() =>
+    private static readonly Lazy<SKTypeface> _regularTypeface = new(() =>
         LoadEmbeddedFont("Resources.Fonts.SpaceGrotesk-Regular.ttf"));
-    private static readonly Lazy<SKTypeface> BoldTypeface = new(() =>
+    private static readonly Lazy<SKTypeface> _boldTypeface = new(() =>
         LoadEmbeddedFont("Resources.Fonts.SpaceGrotesk-Bold.ttf"));
 
     [SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope",
@@ -35,8 +35,8 @@ public sealed class NotificationRenderer(HttpClient httpClient, CoverUrlPolicy c
         return stream is null ? SKTypeface.Default : SKTypeface.FromStream(stream);
     }
 
-    public static SKTypeface GetRegularTypeface() => RegularTypeface.Value;
-    public static SKTypeface GetBoldTypeface() => BoldTypeface.Value;
+    public static SKTypeface GetRegularTypeface() => _regularTypeface.Value;
+    public static SKTypeface GetBoldTypeface() => _boldTypeface.Value;
 
     public async Task<byte[]> RenderAsync(
         NotificationCard card,
@@ -84,8 +84,8 @@ public sealed class NotificationRenderer(HttpClient httpClient, CoverUrlPolicy c
             canvas.DrawRoundRect(panel, border);
         }
 
-        var regular = RegularTypeface.Value;
-        var bold = BoldTypeface.Value;
+        var regular = _regularTypeface.Value;
+        var bold = _boldTypeface.Value;
         DrawText(canvas, card.Ended ? "SESSION ENDED" : "SESSION STARTED",
             96, 666, 30, new SKColor(249, 216, 74), bold);
         DrawWrappedTitle(canvas, card.Title, bold);

@@ -12,8 +12,8 @@ public sealed class DraftExtractionService(DraftRepository repository, DraftServ
     ManualRepository manual, IPlaySessionExtractor extractor, IOptions<AiDraftOptions> options,
     NpgsqlDataSource dataSource, TimeProvider clock, GenerationHistoryRecorder history)
 {
-    private static readonly Meter Meter = new("Playdex.AiDrafts");
-    private static readonly Counter<long> Requests = Meter.CreateCounter<long>("playdex.ai_drafts.extractions");
+    private static readonly Meter _meter = new("Playdex.AiDrafts");
+    private static readonly Counter<long> _requests = _meter.CreateCounter<long>("playdex.ai_drafts.extractions");
 
     public async Task<DraftBatchDto> Create(long userId, Guid requestId, string timezone,
         string? text, byte[]? image, string? contentType, CancellationToken ct)
@@ -128,13 +128,13 @@ public sealed class DraftExtractionService(DraftRepository repository, DraftServ
             var saved = await repository.CreateBatch(batch, ct);
             var result = DraftService.ToDto(saved);
             await history.Complete(generationId, "success", result: result);
-            Requests.Add(1, new KeyValuePair<string, object?>("outcome", "success"));
+            _requests.Add(1, new KeyValuePair<string, object?>("outcome", "success"));
             return result;
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)
         {
             await history.Complete(generationId, "timeout", "AI extraction timed out.");
-            Requests.Add(1, new KeyValuePair<string, object?>("outcome", "timeout"));
+            _requests.Add(1, new KeyValuePair<string, object?>("outcome", "timeout"));
             throw new AppProblemException(504, "AI extraction timed out. Retry with a smaller input.");
         }
         catch (Exception exception)
@@ -142,7 +142,7 @@ public sealed class DraftExtractionService(DraftRepository repository, DraftServ
             await history.Complete(generationId, ct.IsCancellationRequested ? "cancelled"
                 : exception is AppProblemException { StatusCode: 504 } ? "timeout" : "failure",
                 exception is AppProblemException problem ? problem.Message : "AI generation did not complete.");
-            Requests.Add(1, new KeyValuePair<string, object?>("outcome", "failure"));
+            _requests.Add(1, new KeyValuePair<string, object?>("outcome", "failure"));
             throw;
         }
         finally

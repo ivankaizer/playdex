@@ -5,7 +5,7 @@ namespace Api.Tests;
 
 public sealed class CoverUrlPolicyTests
 {
-    private static readonly CoverUrlPolicy Policy = new([
+    private static readonly CoverUrlPolicy _policy = new([
         "https://dash.playdex.test",
         "http://localhost:3000/",
         "https://api-cdn.wemod.com",
@@ -23,7 +23,7 @@ public sealed class CoverUrlPolicyTests
     [InlineData("https://images.igdb.com/igdb/image/upload/t_cover_big/co1abc.jpg")]
     [InlineData("https://dash.playdex.test/api/posters/steam/1245620")]
     [InlineData("http://localhost:3000/api/posters/steam/1245620")]
-    public void CoversFromPlaydexSourcesAreAllowed(string url) => Assert.True(Policy.IsAllowed(url));
+    public void CoversFromPlaydexSourcesAreAllowed(string url) => Assert.True(_policy.IsAllowed(url));
 
     [Theory]
     [InlineData("http://shared.fastly.steamstatic.com/header.jpg")]       // known host, but not https
@@ -38,7 +38,7 @@ public sealed class CoverUrlPolicyTests
     [InlineData("/api/posters/steam/1")]
     [InlineData("")]
     [InlineData(null)]
-    public void EverythingElseIsRefused(string? url) => Assert.False(Policy.IsAllowed(url));
+    public void EverythingElseIsRefused(string? url) => Assert.False(_policy.IsAllowed(url));
 
     [Fact]
     public void WithoutConfiguredOriginsOnlyKnownHostsAreAllowed()

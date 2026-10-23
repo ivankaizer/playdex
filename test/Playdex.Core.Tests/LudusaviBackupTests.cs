@@ -310,13 +310,13 @@ public sealed class LudusaviBackupTests
 
     private sealed class RecordingLudusaviProcess(params LudusaviProcessResult[] results) : ILudusaviProcess
     {
-        private readonly Queue<LudusaviProcessResult> results = new(results);
+        private readonly Queue<LudusaviProcessResult> _results = new(results);
         public List<(string ExecutablePath, IReadOnlyList<string> Arguments)> Calls { get; } = [];
 
         public Task<LudusaviProcessResult> RunAsync(string executablePath, IReadOnlyList<string> arguments, CancellationToken cancellationToken)
         {
             Calls.Add((executablePath, arguments.ToArray()));
-            return Task.FromResult(results.Dequeue());
+            return Task.FromResult(_results.Dequeue());
         }
     }
 

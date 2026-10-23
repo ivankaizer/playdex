@@ -145,11 +145,11 @@ public sealed class AdminApiFixture : IAsyncLifetime
 
 public sealed class CapturingLoggerProvider : ILoggerProvider
 {
-    private readonly ConcurrentQueue<string> entries = new();
+    private readonly ConcurrentQueue<string> _entries = new();
 
-    public IReadOnlyCollection<string> Entries => entries.ToArray();
+    public IReadOnlyCollection<string> Entries => _entries.ToArray();
 
-    public ILogger CreateLogger(string categoryName) => new CapturingLogger(entries);
+    public ILogger CreateLogger(string categoryName) => new CapturingLogger(_entries);
 
     public void Dispose() { }
 

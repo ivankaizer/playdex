@@ -58,7 +58,7 @@ public sealed class AccountsRepository(PlaydexDbContext db, IGames games)
                 ? query.OrderBy(row => row.Session.StartedAt)
                 : query.OrderByDescending(row => row.Session.StartedAt),
         };
-        var sessions = await ordered.Skip(offset).Take(limit).Select(ToSessionDbRow).ToListAsync(ct);
+        var sessions = await ordered.Skip(offset).Take(limit).Select(_toSessionDbRow).ToListAsync(ct);
 
         return new SessionQueryResult(total, limit, offset, sessions.Select(MapSession).ToList());
     }
@@ -85,7 +85,7 @@ public sealed class AccountsRepository(PlaydexDbContext db, IGames games)
         var sessions = await query
             .OrderByDescending(row => row.Session.StartedAt)
             .Take(TodaySessionLimit)
-            .Select(ToSessionDbRow)
+            .Select(_toSessionDbRow)
             .ToListAsync(ct);
 
         return new SessionQueryResult(total, TodaySessionLimit, 0, sessions.Select(MapSession).ToList());
@@ -98,7 +98,7 @@ public sealed class AccountsRepository(PlaydexDbContext db, IGames games)
                 userId, accountId, null, null, null, null, null, excludeIgnored: false)
             .Where(row => row.Session.EndedAt == null)
             .OrderByDescending(row => row.Session.StartedAt)
-            .Select(ToSessionDbRow)
+            .Select(_toSessionDbRow)
             .FirstOrDefaultAsync(ct);
         return session is null ? null : MapSession(session);
     }
@@ -153,7 +153,7 @@ public sealed class AccountsRepository(PlaydexDbContext db, IGames games)
         long userId, long? accountId, string? title, DateTimeOffset? from, DateTimeOffset? to, CancellationToken ct) =>
         BuildSessionQuery(userId, accountId, title, null, null, from, to, excludeIgnored: true)
             .OrderBy(row => row.Session.StartedAt)
-            .Select(ToSessionDbRow)
+            .Select(_toSessionDbRow)
             .ToListAsync(ct);
 
     /// <summary>
@@ -169,7 +169,7 @@ public sealed class AccountsRepository(PlaydexDbContext db, IGames games)
         var sessions = await BuildSessionQuery(
                 userId, null, null, gameIds, null, null, null, excludeIgnored: true)
             .OrderBy(row => row.Session.StartedAt)
-            .Select(ToSessionDbRow)
+            .Select(_toSessionDbRow)
             .ToListAsync(ct);
         if (sessions.Count == 0)
         {
@@ -271,7 +271,7 @@ public sealed class AccountsRepository(PlaydexDbContext db, IGames games)
                 userId, accountId, title, null, platform, null, null, excludeIgnored: true)
             .Where(row => row.Session.StartedAt < to && (row.Session.EndedAt ?? now) > from)
             .OrderBy(row => row.Session.StartedAt)
-            .Select(ToSessionDbRow)
+            .Select(_toSessionDbRow)
             .ToListAsync(ct);
 
         return BuildDayStats(from, to, rows.Select(MapSession).ToList(), now, zone);
@@ -328,7 +328,7 @@ public sealed class AccountsRepository(PlaydexDbContext db, IGames games)
         return query;
     }
 
-    private static readonly Expression<Func<SessionQueryRow, SessionDbRow>> ToSessionDbRow =
+    private static readonly Expression<Func<SessionQueryRow, SessionDbRow>> _toSessionDbRow =
         row => new SessionDbRow
         {
             SessionId = row.Session.Id,

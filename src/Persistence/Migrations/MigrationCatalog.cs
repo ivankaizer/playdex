@@ -4,7 +4,7 @@ namespace Playdex.Persistence.Migrations;
 
 public sealed class MigrationCatalog
 {
-    private static readonly Regex IdentifierPattern = new(
+    private static readonly Regex _identifierPattern = new(
         "^[0-9]{3}_[a-z0-9]+(?:_[a-z0-9]+)*$",
         RegexOptions.CultureInvariant);
 
@@ -14,7 +14,7 @@ public sealed class MigrationCatalog
 
         foreach (var migration in Migrations)
         {
-            if (!IdentifierPattern.IsMatch(migration.Id))
+            if (!_identifierPattern.IsMatch(migration.Id))
             {
                 throw new InvalidOperationException(
                     $"Migration identifier '{migration.Id}' must match NNN_slug.");

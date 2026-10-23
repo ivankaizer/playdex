@@ -86,7 +86,7 @@ public sealed class IgdbClient(HttpClient httpClient, IOptions<IgdbOptions> opti
         }
 
         response.EnsureSuccessStatusCode();
-        var games = await response.Content.ReadFromJsonAsync<List<IgdbGame>>(JsonOptions, ct) ?? [];
+        var games = await response.Content.ReadFromJsonAsync<List<IgdbGame>>(_jsonOptions, ct) ?? [];
         return games.Select(MapGame).ToList();
     }
 
@@ -118,7 +118,7 @@ public sealed class IgdbClient(HttpClient httpClient, IOptions<IgdbOptions> opti
             return null;
         }
 
-        var payload = await response.Content.ReadFromJsonAsync<IgdbAuthResponse>(JsonOptions, ct);
+        var payload = await response.Content.ReadFromJsonAsync<IgdbAuthResponse>(_jsonOptions, ct);
         if (payload?.AccessToken is null)
         {
             return null;
@@ -137,7 +137,7 @@ public sealed class IgdbClient(HttpClient httpClient, IOptions<IgdbOptions> opti
         return $"https://images.igdb.com/igdb/image/upload/t_cover_big/{imageId}.jpg";
     }
 
-    private static readonly JsonSerializerOptions JsonOptions = new()
+    private static readonly JsonSerializerOptions _jsonOptions = new()
     {
         PropertyNameCaseInsensitive = true,
         PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower

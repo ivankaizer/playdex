@@ -60,7 +60,7 @@ public sealed class OpenXblClient(
         OpenXblEnvelope? envelope;
         try
         {
-            envelope = JsonSerializer.Deserialize<OpenXblEnvelope>(rawJson, JsonOptions);
+            envelope = JsonSerializer.Deserialize<OpenXblEnvelope>(rawJson, _jsonOptions);
         }
         catch (JsonException ex)
         {
@@ -77,7 +77,7 @@ public sealed class OpenXblClient(
             throw new ProviderPollException($"OpenXBL presence response reported code {envelope.Code}.");
         }
 
-        var presence = envelope.Content.Deserialize<OpenXblPresence>(JsonOptions);
+        var presence = envelope.Content.Deserialize<OpenXblPresence>(_jsonOptions);
         if (presence is null)
         {
             throw new ProviderPollException("OpenXBL presence response did not contain presence data.");
@@ -157,7 +157,7 @@ public sealed class OpenXblClient(
         OpenXblEnvelope? envelope;
         try
         {
-            envelope = JsonSerializer.Deserialize<OpenXblEnvelope>(rawJson, JsonOptions);
+            envelope = JsonSerializer.Deserialize<OpenXblEnvelope>(rawJson, _jsonOptions);
         }
         catch (JsonException ex)
         {
@@ -174,7 +174,7 @@ public sealed class OpenXblClient(
             throw new ProviderPollException($"OpenXBL marketplace response reported code {envelope.Code}.");
         }
 
-        var marketplace = envelope.Content.Deserialize<OpenXblMarketplaceContent>(JsonOptions);
+        var marketplace = envelope.Content.Deserialize<OpenXblMarketplaceContent>(_jsonOptions);
         var poster = marketplace?.Products?
             .SelectMany(product => product.LocalizedProperties ?? [])
             .SelectMany(property => property.Images ?? [])
@@ -218,7 +218,7 @@ public sealed class OpenXblClient(
         return null;
     }
 
-    private static readonly JsonSerializerOptions JsonOptions = new()
+    private static readonly JsonSerializerOptions _jsonOptions = new()
     {
         PropertyNameCaseInsensitive = true,
     };

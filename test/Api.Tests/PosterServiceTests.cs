@@ -9,7 +9,7 @@ namespace Api.Tests;
 
 public sealed class PosterServiceTests
 {
-    private static readonly byte[] Webp = [0x52, 0x49, 0x46, 0x46];
+    private static readonly byte[] _webp = [0x52, 0x49, 0x46, 0x46];
 
     [Fact]
     public async Task DownloadsFromWeModOnceAndServesLaterRequestsFromTheStore()
@@ -21,11 +21,11 @@ public sealed class PosterServiceTests
         var first = await service.GetSteamCapsule(570, CancellationToken.None);
         var second = await service.GetSteamCapsule(570, CancellationToken.None);
 
-        Assert.Equal(Webp, first!.Content);
+        Assert.Equal(_webp, first!.Content);
         Assert.Equal("image/webp", first.ContentType);
-        Assert.Equal(Webp, second!.Content);
+        Assert.Equal(_webp, second!.Content);
         Assert.Equal(["https://wemod.test/steam_apps/570/hero_capsule.webp"], weMod.Requests);
-        Assert.Equal(Webp, store.Posters["steam/570/hero_capsule.webp"].Content);
+        Assert.Equal(_webp, store.Posters["steam/570/hero_capsule.webp"].Content);
     }
 
     [Fact]
@@ -45,7 +45,7 @@ public sealed class PosterServiceTests
         release.SetResult();
         var posters = await Task.WhenAll(requests);
 
-        Assert.All(posters, poster => Assert.Equal(Webp, poster!.Content));
+        Assert.All(posters, poster => Assert.Equal(_webp, poster!.Content));
         Assert.Single(weMod.Requests);
     }
 
@@ -79,7 +79,7 @@ public sealed class PosterServiceTests
 
         var poster = await service.GetSteamCapsule(570, CancellationToken.None);
 
-        Assert.Equal(Webp, poster!.Content);
+        Assert.Equal(_webp, poster!.Content);
     }
 
     [Fact]
@@ -107,7 +107,7 @@ public sealed class PosterServiceTests
 
     private static HttpResponseMessage Image()
     {
-        var content = new ByteArrayContent(Webp);
+        var content = new ByteArrayContent(_webp);
         content.Headers.ContentType = new("image/webp");
         return new HttpResponseMessage(HttpStatusCode.OK) { Content = content };
     }

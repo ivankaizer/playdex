@@ -18,7 +18,7 @@ public sealed record AuthTokenPair(
 
 public sealed class AuthTokenService(IOptions<AuthOptions> options)
 {
-    private static readonly TimeSpan RefreshTokenLifetime = TimeSpan.FromDays(30);
+    private static readonly TimeSpan _refreshTokenLifetime = TimeSpan.FromDays(30);
     private readonly JwtSecurityTokenHandler _handler = new() { MapInboundClaims = false };
     private readonly SymmetricSecurityKey _key = new(Encoding.UTF8.GetBytes(options.Value.JwtSecret));
     private readonly TimeSpan _accessTokenLifetime = ParseLifetime(options.Value.AccessTokenTtl);
@@ -35,9 +35,9 @@ public sealed class AuthTokenService(IOptions<AuthOptions> options)
         var refreshTokenId = Base64UrlEncoder.Encode(RandomNumberGenerator.GetBytes(32));
         return new(
             Issue(userId, email, tokenVersion, "access", now, _accessTokenLifetime, tokenId: null),
-            Issue(userId, email, tokenVersion, "refresh", now, RefreshTokenLifetime, refreshTokenId),
+            Issue(userId, email, tokenVersion, "refresh", now, _refreshTokenLifetime, refreshTokenId),
             refreshTokenId,
-            new DateTimeOffset(now.Add(RefreshTokenLifetime), TimeSpan.Zero));
+            new DateTimeOffset(now.Add(_refreshTokenLifetime), TimeSpan.Zero));
     }
 
     public static byte[] HashTokenId(string tokenId) => SHA256.HashData(Encoding.UTF8.GetBytes(tokenId));

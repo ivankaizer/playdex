@@ -15,21 +15,21 @@ public sealed record SteamGridDbImagePage(IReadOnlyList<SteamGridDbImage> Images
 
 public sealed class SteamGridDbClient(HttpClient? httpClient = null)
 {
-    private static readonly HttpClient SharedClient = new()
+    private static readonly HttpClient _sharedClient = new()
     {
         Timeout = TimeSpan.FromSeconds(30)
     };
-    private readonly HttpClient client = httpClient ?? SharedClient;
+    private readonly HttpClient _client = httpClient ?? _sharedClient;
 
     /// <summary>Largest image <see cref="DownloadImageAsync"/> accepts.</summary>
     private const long MaximumImageBytes = 32 * 1024 * 1024;
 
     // Each launcher artwork kind (CustomArt.Kinds), and the icon, as SteamGridDB serves it, with its Steam grid file suffix.
-    private static readonly AssetRequest Portrait = new("grids", "dimensions=600x900,342x482,660x930&types=static", "p");
-    private static readonly AssetRequest Capsule = new("grids", "dimensions=920x430,460x215&types=static", "");
-    private static readonly AssetRequest Hero = new("heroes", "dimensions=1920x620,3840x1240,1600x650&types=static", "_hero");
-    private static readonly AssetRequest LogoArt = new("logos", "types=static", "_logo");
-    private static readonly AssetRequest Icon = new("icons", "types=static", "_icon");
+    private static readonly AssetRequest _portrait = new("grids", "dimensions=600x900,342x482,660x930&types=static", "p");
+    private static readonly AssetRequest _capsule = new("grids", "dimensions=920x430,460x215&types=static", "");
+    private static readonly AssetRequest _hero = new("heroes", "dimensions=1920x620,3840x1240,1600x650&types=static", "_hero");
+    private static readonly AssetRequest _logoArt = new("logos", "types=static", "_logo");
+    private static readonly AssetRequest _icon = new("icons", "types=static", "_icon");
 
     public async Task<SteamGridDbSyncResult> SynchronizeAsync(
         string apiKey,
@@ -47,7 +47,7 @@ public sealed class SteamGridDbClient(HttpClient? httpClient = null)
         var gameId = await FindGameIdAsync(apiKey, game, cancellationToken)
             ?? throw new InvalidOperationException($"SteamGridDB could not find artwork for '{game.DisplayName}'.");
 
-        var requests = new[] { Portrait, Capsule, Hero, LogoArt, Icon };
+        var requests = new[] { _portrait, _capsule, _hero, _logoArt, _icon };
         var urls = await Task.WhenAll(requests.Select(async request => new
         {
             Request = request,
@@ -117,10 +117,10 @@ public sealed class SteamGridDbClient(HttpClient? httpClient = null)
         page = Math.Max(0, page);
         var asset = CustomArt.NormalizeKind(kind) switch
         {
-            "portrait" => Portrait,
-            "capsule" => Capsule,
-            "hero" => Hero,
-            _ => LogoArt,
+            "portrait" => _portrait,
+            "capsule" => _capsule,
+            "hero" => _hero,
+            _ => _logoArt,
         };
         using var response = await GetJsonAsync(
             $"{asset.Resource}/game/{gameId}?{asset.Query}&page={page}",
@@ -168,7 +168,7 @@ public sealed class SteamGridDbClient(HttpClient? httpClient = null)
         var temporaryPath = $"{destination}.{Guid.NewGuid():N}.tmp";
         try
         {
-            using var response = await client.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+            using var response = await _client.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
             response.EnsureSuccessStatusCode();
             if (response.Content.Headers.ContentType?.MediaType is { } type && !type.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
             {
@@ -313,7 +313,7 @@ public sealed class SteamGridDbClient(HttpClient? httpClient = null)
             $"https://www.steamgriddb.com/api/v2/{relativePath}");
         request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", apiKey);
         request.Headers.UserAgent.ParseAdd(Brand.UserAgent);
-        using var response = await client.SendAsync(request, cancellationToken);
+        using var response = await _client.SendAsync(request, cancellationToken);
         if (allowNotFound && response.StatusCode == HttpStatusCode.NotFound)
         {
             return null;
@@ -341,7 +341,7 @@ public sealed class SteamGridDbClient(HttpClient? httpClient = null)
         var temporaryPath = $"{destination}.{Guid.NewGuid():N}.tmp";
         try
         {
-            using var response = await client.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+            using var response = await _client.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
             response.EnsureSuccessStatusCode();
             await using (var source = await response.Content.ReadAsStreamAsync(cancellationToken))
             await using (var target = new FileStream(

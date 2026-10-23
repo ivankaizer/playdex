@@ -16,7 +16,7 @@ namespace Api.Tests;
 [Collection(PostgresCollectionDefinition.Name)]
 public sealed class SessionLifecycleTests(PostgresFixture postgres)
 {
-    private static readonly TimeSpan PollingInterval = TimeSpan.FromMinutes(1);
+    private static readonly TimeSpan _pollingInterval = TimeSpan.FromMinutes(1);
 
     [Fact]
     public async Task PollAfterAGapEndsTheSessionOneIntervalAfterItWasLastSeen()
@@ -36,13 +36,13 @@ public sealed class SessionLifecycleTests(PostgresFixture postgres)
         await world.Poll(lifecycle, world.GameA, polledAt);
         await lifecycle.PublishPending(default);
 
-        Assert.Equal(lastSeen + PollingInterval, (await world.Session(stale.Id)).EndedAt);
+        Assert.Equal(lastSeen + _pollingInterval, (await world.Session(stale.Id)).EndedAt);
         var current = Assert.Single(await world.OpenSessions(world.Steam));
         Assert.Equal(polledAt, current.StartedAt);
         Assert.Collection(
             recorder.Events,
             ended => Assert.Equal(
-                new SessionEnded(stale.Id, world.Steam.Id, world.GameA.Id, stale.StartedAt, lastSeen + PollingInterval),
+                new SessionEnded(stale.Id, world.Steam.Id, world.GameA.Id, stale.StartedAt, lastSeen + _pollingInterval),
                 ended),
             started => Assert.Equal(
                 new SessionStarted(current.Id, world.Steam.Id, world.GameA.Id, polledAt),
@@ -120,7 +120,7 @@ public sealed class SessionLifecycleTests(PostgresFixture postgres)
             .UpdateProviderStatus(world.User.Id, world.Steam.Id, "paused", default);
 
         Assert.Equal("paused", status!.Status);
-        Assert.Equal(lastSeen + PollingInterval, (await world.Session(open.Id)).EndedAt);
+        Assert.Equal(lastSeen + _pollingInterval, (await world.Session(open.Id)).EndedAt);
         Assert.Equal(open.Id, Assert.Single(recorder.Ended).SessionId);
     }
 
@@ -144,7 +144,7 @@ public sealed class SessionLifecycleTests(PostgresFixture postgres)
         await lifecycle.SweepStaleSessions(default);
         await lifecycle.SweepStaleSessions(default);
 
-        Assert.Equal(now.AddHours(-2) + PollingInterval, (await world.Session(polling.Id)).EndedAt);
+        Assert.Equal(now.AddHours(-2) + _pollingInterval, (await world.Session(polling.Id)).EndedAt);
         Assert.Equal(now.AddMinutes(-10) + SessionLifecycle.CaptureTimeout, (await world.Session(timedOut.Id)).EndedAt);
         Assert.Null((await world.Session(pinged.Id)).EndedAt);
         Assert.Equal(now.AddHours(-13) + SessionLifecycle.ManualTimerLimit, (await world.Session(manual.Id)).EndedAt);

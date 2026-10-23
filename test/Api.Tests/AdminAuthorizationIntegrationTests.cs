@@ -8,7 +8,7 @@ namespace Api.Tests;
 [Collection(AdminApiCollectionDefinition.Name)]
 public sealed class AdminAuthorizationIntegrationTests(AdminApiFixture fixture)
 {
-    private static readonly (string Method, string Path)[] AdminRoutes =
+    private static readonly (string Method, string Path)[] _adminRoutes =
     [
         ("GET", "/api/admin/dashboard"),
         ("GET", "/api/admin/platforms"),
@@ -59,7 +59,7 @@ public sealed class AdminAuthorizationIntegrationTests(AdminApiFixture fixture)
         }
 
         using var client = fixture.CreateClient();
-        foreach (var (method, path) in AdminRoutes)
+        foreach (var (method, path) in _adminRoutes)
         {
             using var response = await client.SendAsync(Request(method, path));
             Assert.True(response.StatusCode == HttpStatusCode.Unauthorized, $"{method} {path} → {response.StatusCode}");
@@ -75,7 +75,7 @@ public sealed class AdminAuthorizationIntegrationTests(AdminApiFixture fixture)
         }
 
         using var client = await fixture.LoginAsync(AdminApiFixture.UserEmail);
-        foreach (var (method, path) in AdminRoutes)
+        foreach (var (method, path) in _adminRoutes)
         {
             using var response = await client.SendAsync(Request(method, path));
             Assert.True(response.StatusCode == HttpStatusCode.Forbidden, $"{method} {path} → {response.StatusCode}");
@@ -100,7 +100,7 @@ public sealed class AdminAuthorizationIntegrationTests(AdminApiFixture fixture)
         await fixture.SetAdminAsync(false);
         try
         {
-            foreach (var (method, path) in AdminRoutes)
+            foreach (var (method, path) in _adminRoutes)
             {
                 using var response = await client.SendAsync(Request(method, path));
                 Assert.True(response.StatusCode == HttpStatusCode.Forbidden, $"{method} {path} → {response.StatusCode}");

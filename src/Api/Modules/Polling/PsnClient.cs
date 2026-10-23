@@ -21,7 +21,7 @@ public sealed class PsnClient(
     private const string BasicAuthorization =
         "MDk1MTUxNTktNzIzNy00MzcwLTliNDAtMzgwNmU2N2MwODkxOnVjUGprYTV0bnRCMktxc1A=";
 
-    private static readonly JsonSerializerOptions TokenClaimsOptions = new()
+    private static readonly JsonSerializerOptions _tokenClaimsOptions = new()
     {
         PropertyNameCaseInsensitive = true,
     };
@@ -154,7 +154,7 @@ public sealed class PsnClient(
                 $"PSN token request returned {(int)response.StatusCode} ({response.ReasonPhrase}).");
         }
 
-        var token = await response.Content.ReadFromJsonAsync<PsnTokenResponse>(JsonOptions, ct);
+        var token = await response.Content.ReadFromJsonAsync<PsnTokenResponse>(_jsonOptions, ct);
         if (token is null || string.IsNullOrEmpty(token.AccessToken))
         {
             throw new ProviderPollException("PSN token response did not contain an access token.");
@@ -180,7 +180,7 @@ public sealed class PsnClient(
         try
         {
             var payload = Encoding.UTF8.GetString(Convert.FromBase64String(padded));
-            var claims = JsonSerializer.Deserialize<PsnTokenClaims>(payload, TokenClaimsOptions);
+            var claims = JsonSerializer.Deserialize<PsnTokenClaims>(payload, _tokenClaimsOptions);
             return claims?.AccountId;
         }
         catch
@@ -219,7 +219,7 @@ public sealed class PsnClient(
         }
 
         var rawJson = await response.Content.ReadAsStringAsync(ct);
-        var presence = JsonSerializer.Deserialize<PsnPresenceResponse>(rawJson, JsonOptions);
+        var presence = JsonSerializer.Deserialize<PsnPresenceResponse>(rawJson, _jsonOptions);
         if (presence is null)
         {
             throw new ProviderPollException("PSN presence response was empty or invalid.");
@@ -253,7 +253,7 @@ public sealed class PsnClient(
         return null;
     }
 
-    private static readonly JsonSerializerOptions JsonOptions = new()
+    private static readonly JsonSerializerOptions _jsonOptions = new()
     {
         PropertyNameCaseInsensitive = true,
         PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower

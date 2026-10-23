@@ -10,25 +10,25 @@ namespace Playdex.Core;
 
 public sealed partial class SessionCoordinator : IDisposable
 {
-    private readonly AppConfig config;
-    private readonly GameConfig game;
-    private readonly ILogger<SessionCoordinator> logger;
-    private readonly CaptureClient? api;
-    private readonly SessionQueue? queue;
-    private readonly GameLock gameLock;
+    private readonly AppConfig _config;
+    private readonly GameConfig _game;
+    private readonly ILogger<SessionCoordinator> _logger;
+    private readonly CaptureClient? _api;
+    private readonly SessionQueue? _queue;
+    private readonly GameLock _gameLock;
 
     private SessionCoordinator(AppConfig config, GameConfig game, ILogger<SessionCoordinator> logger, string? queueFile, HttpMessageHandler? handler)
     {
-        this.config = config;
-        this.game = game;
-        this.logger = logger;
+        this._config = config;
+        this._game = game;
+        this._logger = logger;
 
         if (config.Api.IsEnabled)
         {
-            api = new CaptureClient(config.Api, handler);
-            queue = new SessionQueue(api, queueFile);
+            _api = new CaptureClient(config.Api, handler);
+            _queue = new SessionQueue(_api, queueFile);
         }
-        gameLock = GameLock.Acquire(config.Storage.StateDirectory, game.GameId);
+        _gameLock = GameLock.Acquire(config.Storage.StateDirectory, game.GameId);
     }
 
     /// <param name="queueFile">The offline queue; null for the install's, shared with the launcher.</param>
@@ -39,39 +39,39 @@ public sealed partial class SessionCoordinator : IDisposable
 
     public async Task RunAsync(CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(game.Launch.ExecutablePath))
+        if (string.IsNullOrWhiteSpace(_game.Launch.ExecutablePath))
         {
-            LogMissingExecutable(logger, game.GameId);
+            LogMissingExecutable(_logger, _game.GameId);
             throw new InvalidOperationException("Game executable path is not configured. Open Playdex settings to configure it.");
         }
 
-        using var started = LaunchGame(game);
-        if (api is null || queue is null)
+        using var started = LaunchGame(_game);
+        if (_api is null || _queue is null)
         {
-            LogApiTrackingDisabled(logger, game.GameId);
-            await new ProcessMonitor(game.Monitor).WaitForExitAsync(started, cancellationToken);
+            LogApiTrackingDisabled(_logger, _game.GameId);
+            await new ProcessMonitor(_game.Monitor).WaitForExitAsync(started, cancellationToken);
             return;
         }
 
         // Start, a ping every interval, then end; or the whole session to the offline queue if start failed.
         using var recorder = new SessionRecorder(
-            api, queue, CaptureGame.From(game, config.Api), TimeSpan.FromSeconds(Math.Max(1, config.Api.PingIntervalSeconds)));
+            _api, _queue, CaptureGame.From(_game, _config.Api), TimeSpan.FromSeconds(Math.Max(1, _config.Api.PingIntervalSeconds)));
         recorder.Start();
         DateTimeOffset? exitedAt = null;
         try
         {
-            exitedAt = await new ProcessMonitor(game.Monitor).WaitForExitAsync(started, cancellationToken);
+            exitedAt = await new ProcessMonitor(_game.Monitor).WaitForExitAsync(started, cancellationToken);
         }
         finally
         {
             var finished = await recorder.FinishAsync(exitedAt);
-            LogSessionFinished(logger, game.GameId, finished);
+            LogSessionFinished(_logger, _game.GameId, finished);
         }
     }
 
     private StartedGame LaunchGame(GameConfig selectedGame)
     {
-        LogGameLaunching(logger, selectedGame.GameId, selectedGame.Launch.ExecutablePath);
+        LogGameLaunching(_logger, selectedGame.GameId, selectedGame.Launch.ExecutablePath);
         return GameProcess.Start(selectedGame);
     }
 
@@ -89,8 +89,8 @@ public sealed partial class SessionCoordinator : IDisposable
 
     public void Dispose()
     {
-        queue?.Dispose();
-        api?.Dispose();
-        gameLock.Dispose();
+        _queue?.Dispose();
+        _api?.Dispose();
+        _gameLock.Dispose();
     }
 }

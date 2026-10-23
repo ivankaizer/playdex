@@ -10,7 +10,7 @@ namespace Api.Tests;
 
 public sealed class EventDispatchTests
 {
-    private static readonly SessionStarted Started = new(1, 2, 3, DateTimeOffset.UnixEpoch);
+    private static readonly SessionStarted _started = new(1, 2, 3, DateTimeOffset.UnixEpoch);
 
     [Fact]
     public async Task AFailingHandlerDoesNotStopTheOthers()
@@ -22,9 +22,9 @@ public sealed class EventDispatchTests
             .BuildServiceProvider();
         var bus = new EventBus(services.GetRequiredService<IServiceScopeFactory>(), NullLogger<EventBus>.Instance);
 
-        await bus.Publish(Started);
+        await bus.Publish(_started);
 
-        Assert.Equal([Started], recorder.Events);
+        Assert.Equal([_started], recorder.Events);
     }
 
     [Fact]
@@ -37,7 +37,7 @@ public sealed class EventDispatchTests
             .BuildServiceProvider();
         var bus = new EventBus(services.GetRequiredService<IServiceScopeFactory>(), NullLogger<EventBus>.Instance);
 
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => bus.Publish(Started, cancelled.Token));
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => bus.Publish(_started, cancelled.Token));
     }
 
     [Fact]
@@ -52,7 +52,7 @@ public sealed class EventDispatchTests
             new NotificationOutbox(db, TimeProvider.System),
             signal);
 
-        await handlers.Handle(Started, CancellationToken.None);
+        await handlers.Handle(_started, CancellationToken.None);
 
         Assert.False(await signal.WaitAsync(TimeSpan.Zero, CancellationToken.None));
     }

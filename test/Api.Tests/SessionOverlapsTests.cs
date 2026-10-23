@@ -5,52 +5,52 @@ namespace Api.Tests;
 
 public sealed class SessionOverlapsTests
 {
-    private static readonly DateTimeOffset Day = new(2026, 9, 9, 0, 0, 0, TimeSpan.Zero);
-    private static readonly DateTimeOffset Now = new(2026, 9, 20, 12, 0, 0, TimeSpan.Zero);
+    private static readonly DateTimeOffset _day = new(2026, 9, 9, 0, 0, 0, TimeSpan.Zero);
+    private static readonly DateTimeOffset _now = new(2026, 9, 20, 12, 0, 0, TimeSpan.Zero);
 
     private static PlatformSession Taken(double startHours, double? endHours) => new(
-        1, "Hades", "PlayStation 5", Day.AddHours(startHours), endHours is { } end ? Day.AddHours(end) : null);
+        1, "Hades", "PlayStation 5", _day.AddHours(startHours), endHours is { } end ? _day.AddHours(end) : null);
 
     private static DateTimeOffset? FirstFree(double hours, params PlatformSession[] taken) =>
-        SessionOverlaps.FirstFreeStart(taken, Day, Day.AddDays(1), TimeSpan.FromHours(hours), Now);
+        SessionOverlaps.FirstFreeStart(taken, _day, _day.AddDays(1), TimeSpan.FromHours(hours), _now);
 
     [Fact]
     public void AnEmptyDayStartsAtMidnight()
     {
-        Assert.Equal(Day, FirstFree(2));
-        Assert.Equal(Day, FirstFree(24));
+        Assert.Equal(_day, FirstFree(2));
+        Assert.Equal(_day, FirstFree(24));
     }
 
     [Fact]
     public void AnEntryFollowsTheSessionsItWouldOverlap()
     {
-        Assert.Equal(Day.AddHours(1), FirstFree(2, Taken(0, 1)));
+        Assert.Equal(_day.AddHours(1), FirstFree(2, Taken(0, 1)));
         // Taken out of order: 00:00-01:00 and 01:00-03:00 are back to back.
-        Assert.Equal(Day.AddHours(3), FirstFree(2, Taken(1, 3), Taken(0, 1)));
+        Assert.Equal(_day.AddHours(3), FirstFree(2, Taken(1, 3), Taken(0, 1)));
     }
 
     [Fact]
     public void AnEntryTakesTheFirstGapItFits()
     {
         // 30 minutes fit before 00:30, two hours only between 04:00 and 20:00.
-        Assert.Equal(Day, FirstFree(0.5, Taken(0.5, 4), Taken(20, 22)));
-        Assert.Equal(Day.AddHours(4), FirstFree(2, Taken(0.5, 4), Taken(20, 22)));
+        Assert.Equal(_day, FirstFree(0.5, Taken(0.5, 4), Taken(20, 22)));
+        Assert.Equal(_day.AddHours(4), FirstFree(2, Taken(0.5, 4), Taken(20, 22)));
         // A session from the day before that runs past midnight takes the start of the day.
-        Assert.Equal(Day.AddHours(1), FirstFree(1, Taken(-2, 1)));
+        Assert.Equal(_day.AddHours(1), FirstFree(1, Taken(-2, 1)));
         // Back to back with the next session is not an overlap.
-        Assert.Equal(Day, FirstFree(3, Taken(3, 5)));
+        Assert.Equal(_day, FirstFree(3, Taken(3, 5)));
     }
 
     [Fact]
     public void ARunningSessionIsTakenUntilNow()
     {
         // Today: running since 10:00, now 12:00, so 00:00-10:00 and 12:00-24:00 are free.
-        var today = Now.AddHours(-12);
-        var running = new PlatformSession(1, "Hades", "PC", Now.AddHours(-2), null);
+        var today = _now.AddHours(-12);
+        var running = new PlatformSession(1, "Hades", "PC", _now.AddHours(-2), null);
         DateTimeOffset? Free(int hours) =>
-            SessionOverlaps.FirstFreeStart([running], today, today.AddDays(1), TimeSpan.FromHours(hours), Now);
+            SessionOverlaps.FirstFreeStart([running], today, today.AddDays(1), TimeSpan.FromHours(hours), _now);
         Assert.Equal(today, Free(10));
-        Assert.Equal(Now, Free(11));
+        Assert.Equal(_now, Free(11));
         Assert.Null(Free(13));
     }
 
@@ -61,7 +61,7 @@ public sealed class SessionOverlapsTests
         Assert.Null(FirstFree(24, Taken(12, 12.5)));
         Assert.Null(FirstFree(1.5, Taken(0, 1), Taken(2, 23.5)));
         // A 23-hour day (spring forward) cannot hold 24 hours.
-        Assert.Null(SessionOverlaps.FirstFreeStart([], Day, Day.AddHours(23), TimeSpan.FromHours(24), Now));
+        Assert.Null(SessionOverlaps.FirstFreeStart([], _day, _day.AddHours(23), TimeSpan.FromHours(24), _now));
     }
 
     [Theory]

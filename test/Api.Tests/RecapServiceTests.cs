@@ -32,8 +32,8 @@ public sealed class RecapRangeTests
 [Collection(PostgresCollectionDefinition.Name)]
 public sealed class RecapServiceTests(PostgresFixture postgres)
 {
-    private static readonly DateTimeOffset RangeStart = new(2026, 3, 1, 0, 0, 0, TimeSpan.Zero);
-    private static readonly DateTimeOffset RangeEndExclusive = new(2026, 3, 11, 0, 0, 0, TimeSpan.Zero);
+    private static readonly DateTimeOffset _rangeStart = new(2026, 3, 1, 0, 0, 0, TimeSpan.Zero);
+    private static readonly DateTimeOffset _rangeEndExclusive = new(2026, 3, 11, 0, 0, 0, TimeSpan.Zero);
 
     [Fact]
     public async Task RecapForARangeAddsUpSessionsDaysStreaksAndGames()
@@ -49,7 +49,7 @@ public sealed class RecapServiceTests(PostgresFixture postgres)
         var service = new RecapService(new RecapRepository(db));
 
         var recap = await service.GetRecap(
-            scenario.User.Id, "2026-03-01", "2026-03-10", RangeStart, RangeEndExclusive, TimeZoneInfo.Utc, CancellationToken.None);
+            scenario.User.Id, "2026-03-01", "2026-03-10", _rangeStart, _rangeEndExclusive, TimeZoneInfo.Utc, CancellationToken.None);
 
         // Six counted sessions: the 5-minute one falls under the user's 10-minute threshold, two are outside.
         Assert.Equal(new RecapRangeDto("2026-03-01", "2026-03-10"), recap.Range);

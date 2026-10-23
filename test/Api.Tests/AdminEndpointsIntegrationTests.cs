@@ -753,24 +753,24 @@ public sealed class AdminEndpointsIntegrationTests(AdminApiFixture fixture)
 
     private sealed class Scenario : IAsyncDisposable
     {
-        private readonly AdminApiFixture fixture;
-        private readonly List<long> userIds = [];
-        private readonly List<long> platformIds = [];
-        private readonly List<long> gameIds = [];
-        private long nextEntityId;
-        private long nextSessionId = Random.Shared.NextInt64(8_000_000_000_000_000_000, 8_500_000_000_000_000_000);
+        private readonly AdminApiFixture _fixture;
+        private readonly List<long> _userIds = [];
+        private readonly List<long> _platformIds = [];
+        private readonly List<long> _gameIds = [];
+        private long _nextEntityId;
+        private long _nextSessionId = Random.Shared.NextInt64(8_000_000_000_000_000_000, 8_500_000_000_000_000_000);
 
         private Scenario(AdminApiFixture fixture, string suffix, User user, Platform platform, Game game, long nextEntityId)
         {
-            this.fixture = fixture;
+            this._fixture = fixture;
             Suffix = suffix;
             User = user;
             Platform = platform;
             Game = game;
-            this.nextEntityId = nextEntityId;
-            userIds.Add(user.Id);
-            platformIds.Add(platform.Id);
-            gameIds.Add(game.Id);
+            this._nextEntityId = nextEntityId;
+            _userIds.Add(user.Id);
+            _platformIds.Add(platform.Id);
+            _gameIds.Add(game.Id);
         }
 
         public static readonly DateTimeOffset OldTimestamp = new(2000, 1, 1, 0, 0, 0, TimeSpan.Zero);
@@ -794,28 +794,28 @@ public sealed class AdminEndpointsIntegrationTests(AdminApiFixture fixture)
 
         public async Task<User> AddUserAsync(string email)
         {
-            await using var db = fixture.CreateDb();
+            await using var db = _fixture.CreateDb();
             var user = new User { Id = NextEntityId(), Email = email, CreatedAt = OldTimestamp, UpdatedAt = OldTimestamp };
             db.Users.Add(user);
             await db.SaveChangesAsync();
-            userIds.Add(user.Id);
+            _userIds.Add(user.Id);
             return user;
         }
 
         public async Task<Platform> AddPlatformAsync(string key)
         {
-            await using var db = fixture.CreateDb();
+            await using var db = _fixture.CreateDb();
             var platform = new Platform { Id = NextEntityId(), Key = key, Name = key, CreatedAt = OldTimestamp, UpdatedAt = OldTimestamp };
             db.Platforms.Add(platform);
             await db.SaveChangesAsync();
-            platformIds.Add(platform.Id);
+            _platformIds.Add(platform.Id);
             return platform;
         }
 
         public async Task<Integration> AddIntegrationAsync(IntegrationType type, long? platformId, bool active,
             string? accountId, string? apiKey = null, long? userId = null)
         {
-            await using var db = fixture.CreateDb();
+            await using var db = _fixture.CreateDb();
             var integration = new Integration
             {
                 Id = NextEntityId(),
@@ -835,17 +835,17 @@ public sealed class AdminEndpointsIntegrationTests(AdminApiFixture fixture)
 
         public async Task<Game> AddGameAsync(string title, bool titleLocked = false, string? capsuleUrl = null)
         {
-            await using var db = fixture.CreateDb();
+            await using var db = _fixture.CreateDb();
             var game = new Game { Id = NextEntityId(), Title = title, TitleLocked = titleLocked, CapsuleUrl = capsuleUrl, CreatedAt = OldTimestamp, UpdatedAt = OldTimestamp };
             db.Games.Add(game);
             await db.SaveChangesAsync();
-            gameIds.Add(game.Id);
+            _gameIds.Add(game.Id);
             return game;
         }
 
         public async Task AddGamesAsync(int count, string titlePrefix)
         {
-            await using var db = fixture.CreateDb();
+            await using var db = _fixture.CreateDb();
             var games = Enumerable.Range(0, count).Select(index => new Game
             {
                 Id = NextEntityId(),
@@ -855,12 +855,12 @@ public sealed class AdminEndpointsIntegrationTests(AdminApiFixture fixture)
             }).ToList();
             db.Games.AddRange(games);
             await db.SaveChangesAsync();
-            gameIds.AddRange(games.Select(row => row.Id));
+            _gameIds.AddRange(games.Select(row => row.Id));
         }
 
         public async Task UpdateGameAsync()
         {
-            await using var db = fixture.CreateDb();
+            await using var db = _fixture.CreateDb();
             var updated = await db.Games.Where(row => row.Id == Game.Id).ExecuteUpdateAsync(setters => setters
                 .SetProperty(row => row.Title, Game.Title)
                 .SetProperty(row => row.CapsuleUrl, Game.CapsuleUrl)
@@ -880,11 +880,11 @@ public sealed class AdminEndpointsIntegrationTests(AdminApiFixture fixture)
         public async Task<PlaySession> AddSessionAsync(long gameId, long integrationId, DateTimeOffset? started = null,
             DateTimeOffset? ended = null)
         {
-            await using var db = fixture.CreateDb();
+            await using var db = _fixture.CreateDb();
             var integration = await db.Integrations.AsNoTracking().SingleAsync(row => row.Id == integrationId);
             var session = new PlaySession
             {
-                Id = nextSessionId++,
+                Id = _nextSessionId++,
                 GameId = gameId,
                 UserId = integration.UserId,
                 PlatformId = integration.PlatformId ?? Platform.Id,
@@ -902,19 +902,19 @@ public sealed class AdminEndpointsIntegrationTests(AdminApiFixture fixture)
 
         public async ValueTask DisposeAsync()
         {
-            await using var db = fixture.CreateDb();
-            await db.GameConnections.Where(row => userIds.Contains(row.UserId)).ExecuteDeleteAsync();
-            await db.IgnoredGames.Where(row => userIds.Contains(row.UserId)).ExecuteDeleteAsync();
-            await db.GameRatings.Where(row => userIds.Contains(row.UserId)).ExecuteDeleteAsync();
-            await db.PlaySessions.Where(row => userIds.Contains(row.UserId) || gameIds.Contains(row.GameId)).ExecuteDeleteAsync();
-            await db.PollResults.Where(row => db.Integrations.Any(i => i.Id == row.IntegrationId && userIds.Contains(i.UserId))).ExecuteDeleteAsync();
-            await db.GameExternalIdentities.Where(row => gameIds.Contains(row.GameId)).ExecuteDeleteAsync();
-            await db.Integrations.Where(row => userIds.Contains(row.UserId)).ExecuteDeleteAsync();
-            await db.Games.Where(row => gameIds.Contains(row.Id)).ExecuteDeleteAsync();
-            await db.Platforms.Where(row => platformIds.Contains(row.Id)).ExecuteDeleteAsync();
-            await db.Users.Where(row => userIds.Contains(row.Id)).ExecuteDeleteAsync();
+            await using var db = _fixture.CreateDb();
+            await db.GameConnections.Where(row => _userIds.Contains(row.UserId)).ExecuteDeleteAsync();
+            await db.IgnoredGames.Where(row => _userIds.Contains(row.UserId)).ExecuteDeleteAsync();
+            await db.GameRatings.Where(row => _userIds.Contains(row.UserId)).ExecuteDeleteAsync();
+            await db.PlaySessions.Where(row => _userIds.Contains(row.UserId) || _gameIds.Contains(row.GameId)).ExecuteDeleteAsync();
+            await db.PollResults.Where(row => db.Integrations.Any(i => i.Id == row.IntegrationId && _userIds.Contains(i.UserId))).ExecuteDeleteAsync();
+            await db.GameExternalIdentities.Where(row => _gameIds.Contains(row.GameId)).ExecuteDeleteAsync();
+            await db.Integrations.Where(row => _userIds.Contains(row.UserId)).ExecuteDeleteAsync();
+            await db.Games.Where(row => _gameIds.Contains(row.Id)).ExecuteDeleteAsync();
+            await db.Platforms.Where(row => _platformIds.Contains(row.Id)).ExecuteDeleteAsync();
+            await db.Users.Where(row => _userIds.Contains(row.Id)).ExecuteDeleteAsync();
         }
 
-        public long NextEntityId() => nextEntityId++;
+        public long NextEntityId() => _nextEntityId++;
     }
 }

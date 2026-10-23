@@ -11,7 +11,7 @@ namespace Api.Modules.Accounts;
 internal readonly record struct AccountDateRange(DateTimeOffset? From, DateTimeOffset? ToExclusive)
 {
     private const string InvalidDatesMessage = "from and to must be valid dates.";
-    private static readonly string[] IsoFormats =
+    private static readonly string[] _isoFormats =
     [
         "yyyy-MM-dd'T'HH:mm",
         "yyyy-MM-dd'T'HH:mm'Z'",
@@ -78,7 +78,7 @@ internal readonly record struct AccountDateRange(DateTimeOffset? From, DateTimeO
 
         if (!DateTimeOffset.TryParseExact(
                 value,
-                IsoFormats,
+                _isoFormats,
                 CultureInfo.InvariantCulture,
                 DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal,
                 out var parsed))

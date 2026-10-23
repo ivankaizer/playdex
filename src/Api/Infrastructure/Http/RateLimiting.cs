@@ -20,7 +20,7 @@ public static class RateLimiting
     public const string Capture = "capture";
     public const string Posters = "posters";
 
-    private static readonly IPNetwork[] PrivateNetworks =
+    private static readonly IPNetwork[] _privateNetworks =
     [
         IPNetwork.Parse("10.0.0.0/8"),
         IPNetwork.Parse("172.16.0.0/12"),
@@ -38,7 +38,7 @@ public static class RateLimiting
             options.ForwardLimit = null;
             options.KnownIPNetworks.Clear();
             options.KnownProxies.Clear();
-            foreach (var network in PrivateNetworks)
+            foreach (var network in _privateNetworks)
             {
                 options.KnownIPNetworks.Add(network);
             }
