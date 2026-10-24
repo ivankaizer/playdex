@@ -14,6 +14,7 @@ Set these in `.env` next to `docker-compose.yml`, then run `docker compose up -d
 | `PLAYDEX_DOMAIN` | The name the server answers on. Caddy gets its certificate. |
 | `POSTGRES_PASSWORD` | Database password. Use `openssl rand -hex 32`, so it's safe inside a URL. |
 | `JWT_SECRET` | Signs sign-ins. Use `openssl rand -hex 32`; the API won't start with fewer than 32 bytes. |
+| `CREDENTIALS_KEY` | Encrypts the Steam, PSN and OpenXBL keys in the database. Use `openssl rand -hex 32`; the API won't start with fewer than 32 bytes. If it's lost or changed, every Steam, PlayStation and Xbox integration needs its key entered again. |
 
 ## Optional
 

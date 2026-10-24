@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Api.Infrastructure.Auth;
 using Api.Infrastructure.Common;
+using Api.Infrastructure.Credentials;
 using Api.Infrastructure.Http;
 using Playdex.Persistence;
 using Playdex.Persistence.Migrations;
@@ -79,6 +80,7 @@ builder.Services.AddScoped<EventBus>();
 
 builder.Services
     .AddAuth(builder.Configuration)
+    .AddCredentialEncryption(builder.Configuration)
     .AddAccounts()
     .AddSettings()
     .AddPrivacy()

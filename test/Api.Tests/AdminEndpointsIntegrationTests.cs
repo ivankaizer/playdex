@@ -554,7 +554,7 @@ public sealed class AdminEndpointsIntegrationTests(AdminApiFixture fixture)
         await using (var failing = new PlaydexDbContext(options))
         {
             await Assert.ThrowsAsync<InvalidOperationException>(() =>
-                new AdminRepository(failing).MergeGames(source.Id, scenario.Game.Id, CancellationToken.None));
+                new AdminRepository(failing, TestCredentials.Protector).MergeGames(source.Id, scenario.Game.Id, CancellationToken.None));
         }
 
         await using var verification = fixture.CreateDb();

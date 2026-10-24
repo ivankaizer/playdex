@@ -44,6 +44,7 @@ public sealed class ApiCaptureRequestBodyTests(PostgresFixture postgres)
     {
         Environment.SetEnvironmentVariable("DATABASE_URL", Environment.GetEnvironmentVariable("PLAYDEX_INTEGRATION_DATABASE_URL"));
         Environment.SetEnvironmentVariable("Auth__JwtSecret", "capture-body-integration-secret-at-least-thirty-two-bytes");
+        Environment.SetEnvironmentVariable("Credentials__EncryptionKey", TestCredentials.Key);
         Environment.SetEnvironmentVariable("POLL_INTERVAL_SECONDS", "3600");
     }
 

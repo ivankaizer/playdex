@@ -1,3 +1,4 @@
+using Api.Infrastructure.Credentials;
 using Api.Modules.Sessions;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
@@ -5,7 +6,7 @@ using Playdex.Persistence;
 
 namespace Api.Modules.Providers;
 
-public sealed class ProvidersRepository(PlaydexDbContext db, SessionLifecycle sessions)
+public sealed class ProvidersRepository(PlaydexDbContext db, SessionLifecycle sessions, CredentialProtector protector)
 {
     public const int MaxIntegrationsPerType = 3;
 
@@ -92,7 +93,7 @@ public sealed class ProvidersRepository(PlaydexDbContext db, SessionLifecycle se
             UserId = userId,
             Type = type,
             PlatformId = platformId.Value,
-            ApiKey = apiKey,
+            ApiKey = protector.Protect(type, apiKey),
             AccountId = accountId,
             Active = true,
             CreatedAt = now,
@@ -191,11 +192,16 @@ public sealed class ProvidersRepository(PlaydexDbContext db, SessionLifecycle se
             return null;
         }
 
+        // The stored key is only checked for being there, so it isn't decrypted.
         var mergedApiKey = apiKeyChanged ? apiKey : credential.ApiKey;
         var mergedAccountId = accountIdChanged ? accountId : credential.AccountId;
         validate(credential.Type, mergedApiKey, mergedAccountId);
 
-        credential.ApiKey = mergedApiKey;
+        if (apiKeyChanged)
+        {
+            credential.ApiKey = protector.Protect(credential.Type, apiKey);
+        }
+
         credential.AccountId = mergedAccountId;
         credential.UpdatedAt = DateTimeOffset.UtcNow;
         if (!await TrySaveAccount(credential, ct))
@@ -326,7 +332,7 @@ public sealed class ProvidersRepository(PlaydexDbContext db, SessionLifecycle se
             db.Integrations.Add(credential);
         }
 
-        credential.ApiKey = apiKey;
+        credential.ApiKey = protector.Protect(credential.Type, apiKey);
         credential.AccountId = xuid;
         credential.Active = true;
         credential.PausedReason = null;
@@ -379,7 +385,7 @@ public sealed class ProvidersRepository(PlaydexDbContext db, SessionLifecycle se
         return apiKey;
     }
 
-    private static ProviderStatusDto ToStatus(
+    private ProviderStatusDto ToStatus(
         Integration integration,
         IReadOnlyList<Platform> platforms)
     {
@@ -402,7 +408,7 @@ public sealed class ProvidersRepository(PlaydexDbContext db, SessionLifecycle se
             },
             integration.AccountId,
             integration.Active ? "active" : "paused",
-            integration.ApiKey,
+            protector.Unprotect(integration.Type, integration.ApiKey),
             integration.ApiKeyLocked || integration.Type == IntegrationType.Api,
             effectivePlatform is null
                 ? null

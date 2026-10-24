@@ -162,6 +162,9 @@ public sealed class ApiCaptureEndToEndTests(WrapperPostgresFixture postgres)
         Environment.SetEnvironmentVariable(
             "Auth__JwtSecret",
             "wrapper-capture-integration-secret-at-least-thirty-two-bytes");
+        Environment.SetEnvironmentVariable(
+            "Credentials__EncryptionKey",
+            "wrapper-capture-credentials-key-at-least-thirty-two-bytes");
         Environment.SetEnvironmentVariable("POLL_INTERVAL_SECONDS", "3600");
     }
 }

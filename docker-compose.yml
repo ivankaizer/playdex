@@ -58,6 +58,7 @@ services:
       CORS_ORIGINS: "http://ui.playdex.orb.local,https://ui.playdex.orb.local,http://localhost:5173"
       Polling__IntervalSeconds: 10
       Auth__JwtSecret: ${JWT_SECRET:-dev-only-jwt-secret-do-not-use-in-production}
+      Credentials__EncryptionKey: ${CREDENTIALS_KEY:-dev-only-credentials-key-do-not-use-in-production}
       Auth__AccessTokenTtl: 30m
       Apprise__BaseUrl: http://apprise:8000
       Apprise__TelegramBotToken: ${TELEGRAM_BOT_TOKEN:-}

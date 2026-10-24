@@ -1,3 +1,4 @@
+using Api.Infrastructure.Credentials;
 using Playdex.Persistence;
 using Api.Modules.Providers;
 using Microsoft.EntityFrameworkCore;
@@ -83,7 +84,7 @@ public sealed class ProvidersRepositoryTests(PostgresFixture postgres)
 
         try
         {
-            var repository = new ProvidersRepository(db, TestSessions.Lifecycle(db));
+            var repository = new ProvidersRepository(db, TestSessions.Lifecycle(db), TestCredentials.Protector);
             var futureOnly = await repository.UpdateSessionPlatform(
                 user.Id, integration.Id, "ps5", rewriteExistingSessions: false, default);
 
@@ -179,7 +180,7 @@ public sealed class ProvidersRepositoryTests(PostgresFixture postgres)
                 $"SELECT pg_advisory_xact_lock({integration.Id})");
 
             await using var updateDb = CreateDb();
-            var updateTask = new ProvidersRepository(updateDb, TestSessions.Lifecycle(updateDb)).UpdateSessionPlatform(
+            var updateTask = new ProvidersRepository(updateDb, TestSessions.Lifecycle(updateDb), TestCredentials.Protector).UpdateSessionPlatform(
                 user.Id,
                 integration.Id,
                 "ps5",
@@ -228,7 +229,7 @@ public sealed class ProvidersRepositoryTests(PostgresFixture postgres)
 
         try
         {
-            var repository = new ProvidersRepository(db, TestSessions.Lifecycle(db));
+            var repository = new ProvidersRepository(db, TestSessions.Lifecycle(db), TestCredentials.Protector);
             var steam1 = await repository.CreateProvider(
                 user.Id, "steam", IntegrationType.Steam, "steam-key-1", "steam-id-1", default);
             var steam2 = await repository.CreateProvider(
@@ -263,13 +264,14 @@ public sealed class ProvidersRepositoryTests(PostgresFixture postgres)
             Assert.Equal(5, persisted.Count);
             Assert.All(persisted, integration => Assert.True(integration.Active));
             Assert.Equal(3, persisted.Count(item => item.Type == IntegrationType.Steam));
+            Assert.All(persisted, integration => Assert.True(CredentialProtector.IsProtected(integration.ApiKey)));
             Assert.Equal(
                 ["steam-key-1", "steam-key-2", "steam-key-3"],
                 persisted.Where(item => item.Type == IntegrationType.Steam)
                     .OrderBy(item => item.AccountId)
-                    .Select(item => item.ApiKey));
-            Assert.Equal("npsso-token", persisted.Single(item => item.Type == IntegrationType.Psn).ApiKey);
-            Assert.Equal("openxbl-key", persisted.Single(item => item.Type == IntegrationType.Xbox).ApiKey);
+                    .Select(item => TestCredentials.Protector.Unprotect(item.ApiKey)));
+            Assert.Equal("npsso-token", TestCredentials.Protector.Unprotect(persisted.Single(item => item.Type == IntegrationType.Psn).ApiKey));
+            Assert.Equal("openxbl-key", TestCredentials.Protector.Unprotect(persisted.Single(item => item.Type == IntegrationType.Xbox).ApiKey));
         }
         finally
         {
@@ -293,7 +295,7 @@ public sealed class ProvidersRepositoryTests(PostgresFixture postgres)
             var results = await Task.WhenAll(Enumerable.Range(1, 6).Select(async index =>
             {
                 await using var db = CreateDb();
-                return await new ProvidersRepository(db, TestSessions.Lifecycle(db)).CreateProvider(
+                return await new ProvidersRepository(db, TestSessions.Lifecycle(db), TestCredentials.Protector).CreateProvider(
                     userId, "steam", IntegrationType.Steam, $"key-{index}", $"steam-id-{index}", default);
             }));
 
@@ -320,7 +322,7 @@ public sealed class ProvidersRepositoryTests(PostgresFixture postgres)
         try
         {
             await using var db = CreateDb();
-            var repository = new ProvidersRepository(db, TestSessions.Lifecycle(db));
+            var repository = new ProvidersRepository(db, TestSessions.Lifecycle(db), TestCredentials.Protector);
             var first = await repository.CreateProvider(
                 userId, "steam", IntegrationType.Steam, "key-1", "76561190000000003", default);
             var duplicate = await repository.CreateProvider(
@@ -335,7 +337,7 @@ public sealed class ProvidersRepositoryTests(PostgresFixture postgres)
                 userId, second.Provider!.Id, false, null, true, "76561190000000003", ProvidersService.ValidateCredential, default));
 
             await using var serviceDb = CreateDb();
-            var service = new ProvidersService(new ProvidersRepository(serviceDb, TestSessions.Lifecycle(serviceDb)));
+            var service = new ProvidersService(new ProvidersRepository(serviceDb, TestSessions.Lifecycle(serviceDb), TestCredentials.Protector));
             var conflict = await Assert.ThrowsAsync<Api.Infrastructure.Http.AppProblemException>(() =>
                 service.CreateProvider(userId, new CreateProviderRequest("steam", "key-4", "76561190000000004"), default));
             Assert.Equal(409, conflict.StatusCode);
@@ -361,7 +363,7 @@ public sealed class ProvidersRepositoryTests(PostgresFixture postgres)
         {
             await using var db = CreateDb();
             var user = await db.Users.SingleAsync(row => row.Id == userId);
-            var repository = new ProvidersRepository(db, TestSessions.Lifecycle(db));
+            var repository = new ProvidersRepository(db, TestSessions.Lifecycle(db), TestCredentials.Protector);
             var service = new ProvidersService(repository);
             var steam = (await repository.CreateProvider(
                 user.Id, "steam", IntegrationType.Steam, "steam-key", "76561198000000000", default)).Provider!;
@@ -378,7 +380,7 @@ public sealed class ProvidersRepositoryTests(PostgresFixture postgres)
 
             db.ChangeTracker.Clear();
             var stored = await db.Integrations.AsNoTracking().SingleAsync(item => item.Id == steam.Id);
-            Assert.Equal(("steam-key", "76561198000000000"), (stored.ApiKey, stored.AccountId));
+            Assert.Equal(("steam-key", "76561198000000000"), (TestCredentials.Protector.Unprotect(stored.ApiKey), stored.AccountId));
 
             var updated = await service.UpdateCredential(user.Id, xbox.Id, new(false, null, true, "2533274817903789"), default);
             Assert.Equal("2533274817903789", updated.Provider.AccountId);
@@ -404,7 +406,7 @@ public sealed class ProvidersRepositoryTests(PostgresFixture postgres)
             await using var db = CreateDb();
             var user = await db.Users.SingleAsync(row => row.Id == userId);
             var otherUser = await db.Users.SingleAsync(row => row.Id == otherUserId);
-            var repository = new ProvidersRepository(db, TestSessions.Lifecycle(db));
+            var repository = new ProvidersRepository(db, TestSessions.Lifecycle(db), TestCredentials.Protector);
             var service = new ProvidersService(repository);
 
             // Without an Xbox integration, connecting creates one.
@@ -419,7 +421,7 @@ public sealed class ProvidersRepositoryTests(PostgresFixture postgres)
                 otherUser.Id, "xbox", IntegrationType.Xbox, "foreign-key", null, default)).Provider!;
 
             async Task<string?> StoredKey(long id) =>
-                (await db.Integrations.AsNoTracking().SingleAsync(item => item.Id == id)).ApiKey;
+                TestCredentials.Protector.Unprotect((await db.Integrations.AsNoTracking().SingleAsync(item => item.Id == id)).ApiKey);
 
             // Without providerId the oldest is updated, whichever order the rows come back in.
             var oldest = await service.ConnectOpenXbl(user.Id, new OpenXblConnectRequest("key-1b", "2533274817903789"), default);

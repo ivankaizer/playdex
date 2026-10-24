@@ -1,4 +1,5 @@
 using Api.Infrastructure.Common;
+using Api.Infrastructure.Credentials;
 using Microsoft.EntityFrameworkCore;
 using Playdex.Persistence;
 
@@ -8,7 +9,7 @@ public sealed record AdminTransferTarget(long Id, long UserId, IntegrationType T
 
 public sealed record AdminGenerationRecord(string Email, AiGeneration Generation);
 
-public sealed class AdminRepository(PlaydexDbContext db)
+public sealed class AdminRepository(PlaydexDbContext db, CredentialProtector protector)
 {
     public const int SessionPageSize = 25;
     public const int GenerationPageSize = 25;
@@ -202,19 +203,26 @@ public sealed class AdminRepository(PlaydexDbContext db)
         return (platformRow.Key, integrations.Count);
     }
 
-    public async Task<IReadOnlyList<AdminIntegrationDto>> ListIntegrations(CancellationToken ct) =>
-        await (from integration in db.Integrations.AsNoTracking()
-               join user in db.Users.AsNoTracking() on integration.UserId equals user.Id
-               join platform in db.Platforms.AsNoTracking() on integration.PlatformId equals (long?)platform.Id
-                   into platforms
-               from platform in platforms.DefaultIfEmpty()
-               orderby user.Email,
-                   integration.Type == IntegrationType.Api ? "api" : platform!.Key,
-                   integration.Id
-               select new AdminIntegrationDto(integration.Id, user.Email,
-                   integration.Type == IntegrationType.Api ? "api" : platform!.Key,
-                   integration.AccountId, integration.Active, integration.ApiKey))
+    public async Task<IReadOnlyList<AdminIntegrationDto>> ListIntegrations(CancellationToken ct)
+    {
+        var rows = await (from integration in db.Integrations.AsNoTracking()
+                          join user in db.Users.AsNoTracking() on integration.UserId equals user.Id
+                          join platform in db.Platforms.AsNoTracking() on integration.PlatformId equals (long?)platform.Id
+                              into platforms
+                          from platform in platforms.DefaultIfEmpty()
+                          orderby user.Email,
+                              integration.Type == IntegrationType.Api ? "api" : platform!.Key,
+                              integration.Id
+                          select new
+                          {
+                              Dto = new AdminIntegrationDto(integration.Id, user.Email,
+                                  integration.Type == IntegrationType.Api ? "api" : platform!.Key,
+                                  integration.AccountId, integration.Active, integration.ApiKey),
+                              integration.Type,
+                          })
             .ToListAsync(ct);
+        return rows.ConvertAll(row => row.Dto with { ApiKey = protector.Unprotect(row.Type, row.Dto.ApiKey) });
+    }
 
     public async Task<bool> UpdateIntegration(long id, bool apiKeyChanged, string? apiKey, bool accountIdChanged,
         string? accountId, CancellationToken ct)
@@ -227,7 +235,7 @@ public sealed class AdminRepository(PlaydexDbContext db)
 
         if (apiKeyChanged)
         {
-            integration.ApiKey = apiKey;
+            integration.ApiKey = protector.Protect(integration.Type, apiKey);
         }
 
         if (accountIdChanged)

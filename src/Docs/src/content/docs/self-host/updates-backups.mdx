@@ -13,6 +13,9 @@ docker compose pull && docker compose up -d
 
 The API migrates the database on start. To stay on one version, set `PLAYDEX_VERSION=sha-<commit>` in `.env`.
 
+Installed before October 2026? The API now needs `CREDENTIALS_KEY`. Add it to `.env` (`openssl rand -hex 32`) and
+download `docker-compose.yml` again before you update. On its first start the API encrypts the keys already stored.
+
 ## Back up
 
 Everything is in Postgres. Dump it:
@@ -31,4 +34,4 @@ docker compose exec -T db pg_restore -U playdex -d playdex --clean --if-exists <
 docker compose up -d
 ```
 
-Keep `.env` with your backups. `JWT_SECRET` only signs sign-ins, so losing it just signs everyone out. `POSTGRES_PASSWORD` must match the database volume.
+Keep `.env` with your backups. `JWT_SECRET` only signs sign-ins, so losing it just signs everyone out. `CREDENTIALS_KEY` decrypts the Steam, PSN and OpenXBL keys in the dump: without it, each of those integrations needs its key entered again. `POSTGRES_PASSWORD` must match the database volume.

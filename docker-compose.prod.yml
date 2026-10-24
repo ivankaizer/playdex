@@ -1,7 +1,7 @@
 # Production stack: https://dash.playdex.dev (UI at /, API at /api). Deployed by preview-kit on every push
 # to main that passes the tests: CI builds the images on the macserv runner and pushes them to the
 # registry on that host; Dokploy runs this file without its build sections, with IMAGE_TAG,
-# DATABASE_URL, JWT_SECRET and CORS_ORIGINS in the stack's .env. Optional keys (IGDB, Telegram,
+# DATABASE_URL, JWT_SECRET, CREDENTIALS_KEY and CORS_ORIGINS in the stack's .env. Optional keys (IGDB, Telegram,
 # AI drafts, Sentry, R2 posters) are set in that .env by hand from Dokploy.
 #
 # Rules: plain ${VAR} for runtime settings (CI builds without them), mem_limit on every service, no
@@ -37,6 +37,7 @@ services:
       DATABASE_URL: ${DATABASE_URL}
       CORS_ORIGINS: ${CORS_ORIGINS}
       Auth__JwtSecret: ${JWT_SECRET}
+      Credentials__EncryptionKey: ${CREDENTIALS_KEY}
       Auth__AccessTokenTtl: 30m
       Apprise__BaseUrl: http://apprise:8000
       Apprise__TelegramBotToken: ${TELEGRAM_BOT_TOKEN}

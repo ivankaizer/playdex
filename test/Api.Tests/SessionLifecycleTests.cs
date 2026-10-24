@@ -116,7 +116,7 @@ public sealed class SessionLifecycleTests(PostgresFixture postgres)
         var open = await world.AddOpenSession(world.Steam, world.GameA, lastSeen.AddHours(-1), lastSeen);
         var recorder = new SessionEventRecorder();
 
-        var status = await new ProvidersRepository(world.Db, TestSessions.Lifecycle(world.Db, recorder))
+        var status = await new ProvidersRepository(world.Db, TestSessions.Lifecycle(world.Db, recorder), TestCredentials.Protector)
             .UpdateProviderStatus(world.User.Id, world.Steam.Id, "paused", default);
 
         Assert.Equal("paused", status!.Status);
@@ -401,7 +401,7 @@ public sealed class SessionLifecycleTests(PostgresFixture postgres)
         }
 
         public Task<SuccessfulPollOutcome> Poll(SessionLifecycle lifecycle, Game game, DateTimeOffset polledAt) =>
-            new PollingRepository(db, new TitleGameResolver(this), lifecycle).ApplySuccessfulPoll(
+            new PollingRepository(db, new TitleGameResolver(this), lifecycle, TestCredentials.Protector).ApplySuccessfulPoll(
                 steam.Id,
                 new CurrentlyPlayingResult(game.Title, game.Title, null, "steam"),
                 polledAt,

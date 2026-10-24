@@ -1,7 +1,7 @@
 # Playdex on your own server: Postgres, the API, the web app and Caddy for HTTPS, on one host.
 # Guide: https://docs.playdex.dev
 #
-#   cp .env.example .env     # set PLAYDEX_DOMAIN, POSTGRES_PASSWORD, JWT_SECRET
+#   cp .env.example .env     # set PLAYDEX_DOMAIN, POSTGRES_PASSWORD, JWT_SECRET, CREDENTIALS_KEY
 #   docker compose up -d     # pulls the images from ghcr.io
 #   docker compose exec app dotnet Api.dll create-user you@example.com --admin
 #
@@ -48,6 +48,7 @@ services:
       ASPNETCORE_URLS: http://0.0.0.0:3000
       DATABASE_URL: postgresql://playdex:${POSTGRES_PASSWORD}@db:5432/playdex
       Auth__JwtSecret: ${JWT_SECRET:?set JWT_SECRET in .env}
+      Credentials__EncryptionKey: ${CREDENTIALS_KEY:?set CREDENTIALS_KEY in .env}
       Auth__AccessTokenTtl: 30m
       Apprise__BaseUrl: http://apprise:8000
       Apprise__TelegramBotToken: ${TELEGRAM_BOT_TOKEN:-}
