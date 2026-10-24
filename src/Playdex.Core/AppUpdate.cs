@@ -234,8 +234,9 @@ public sealed class ReleaseFeed(HttpMessageHandler? handler = null) : IDisposabl
 /// <summary>
 /// The desktop app's self-update, a whole folder at a time (Playdex.exe, Playdex.Run.exe, the Windows App SDK, ui/).
 /// <list type="number">
-/// <item><see cref="StageAsync"/>: download playdex-windows-v&lt;version&gt;.zip and its .sha256 from the release,
-/// check the hash, extract it safely into the update folder.</item>
+/// <item><see cref="StageAsync"/>: download the release's playdex-windows-v&lt;version&gt;.zip.sha256 and its signature,
+/// check the signature (<see cref="UpdateSigningKeys"/>), then download the zip, check its hash and extract it safely
+/// into the update folder.</item>
 /// <item>The app copies Playdex.Run.exe out of its own folder, starts it with --apply-update and exits.</item>
 /// <item><see cref="ApplyAsync"/> (in that helper): wait for the app to exit, move its folder aside, move the new one
 /// in, start it and wait for it to confirm a healthy start; otherwise stop it, wait for it to exit, put the old folder
@@ -248,6 +249,21 @@ public static class AppUpdate
     public const string AppExecutable = "Playdex.exe";
     public const string HelperExecutable = "Playdex.Run.exe";
     internal const long MaximumArchiveBytes = 512L * 1024 * 1024;
+
+    /// <summary>
+    /// The public halves of the keys an update's checksum file may be signed with (ECDSA P-256 over SHA-256, the signature
+    /// in IEEE P1363 form as base64, in &lt;archive&gt;.sha256.sig; .NET has no Ed25519), as base64 SubjectPublicKeyInfo.
+    /// The checksum names the archive and its version, so a signature vouches for that archive of that release. The
+    /// release workflow signs with the UPDATE_SIGNING_KEY secret; the owner keeps an offline copy. Any key here is
+    /// accepted, so a new key goes in one release before updates are signed with it (docs/windows-releases.md,
+    /// "Signing updates").
+    /// </summary>
+    internal static readonly IReadOnlyList<string> UpdateSigningKeys =
+    [
+        "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEqxqLKoWd+pmIkG3e3KPB0jD/yoFVibga8QtJAmtSYFhZdzQvM1jaRRiAzXEv6egEjh5dQnzXi2IMDgoqoZqZvQ==",
+    ];
+
+    internal const string SignatureSuffix = ".sig";
 
     /// <summary>Extraction limits, far above the app (v2.1.4: about 140 MB in about 320 files), far below a zip bomb.</summary>
     internal const long MaximumExtractedBytes = 2L * 1024 * 1024 * 1024;
@@ -320,12 +336,21 @@ public static class AppUpdate
     public static string ArchiveName(ReleaseVersion version) => $"{AssetPrefix}{version.Tag}.zip";
 
     /// <summary>Download, verify and extract <paramref name="release"/>. Returns the manifest's path.</summary>
-    public static async Task<string> StageAsync(
-        ReleaseFeed releases, Release release, string targetDirectory, string updateRoot, CancellationToken cancellationToken = default)
+    public static Task<string> StageAsync(
+        ReleaseFeed releases, Release release, string targetDirectory, string updateRoot, CancellationToken cancellationToken = default) =>
+        StageAsync(releases, release, targetDirectory, updateRoot, UpdateSigningKeys, cancellationToken);
+
+    /// <param name="signingKeys">The keys the checksum may be signed with (<see cref="UpdateSigningKeys"/>); tests use their own.</param>
+    internal static async Task<string> StageAsync(
+        ReleaseFeed releases, Release release, string targetDirectory, string updateRoot, IReadOnlyList<string> signingKeys,
+        CancellationToken cancellationToken)
     {
         var archiveName = ArchiveName(release.Version);
         var archive = release.Asset(archiveName) ?? throw new InvalidDataException($"The release has no {archiveName}.");
         var checksum = release.Asset(archiveName + ".sha256") ?? throw new InvalidDataException($"The release has no {archiveName}.sha256.");
+        // Releases made before updates were signed have none; Playdex doesn't install them.
+        var signature = release.Asset(archiveName + ".sha256" + SignatureSuffix)
+            ?? throw new InvalidDataException($"The release has no {archiveName}.sha256{SignatureSuffix}; Playdex only installs signed updates.");
 
         var staging = Path.Combine(updateRoot, release.Version.Tag);
         if (Directory.Exists(staging))
@@ -337,9 +362,18 @@ public static class AppUpdate
         {
             var archivePath = Path.Combine(staging, archiveName);
             var checksumPath = archivePath + ".sha256";
-            await releases.DownloadAsync(archive, archivePath, MaximumArchiveBytes, cancellationToken);
+            var signaturePath = checksumPath + SignatureSuffix;
+            // The small signed files first: an update that isn't signed is refused before its archive is downloaded.
             await releases.DownloadAsync(checksum, checksumPath, 4096, cancellationToken);
-            var expected = ParseChecksum(await File.ReadAllTextAsync(checksumPath, cancellationToken), archiveName);
+            await releases.DownloadAsync(signature, signaturePath, 4096, cancellationToken);
+            var checksumFile = await File.ReadAllBytesAsync(checksumPath, cancellationToken);
+            var signed = await File.ReadAllTextAsync(signaturePath, cancellationToken);
+            if (!signingKeys.Any(key => IsSigned(checksumFile, signed, key)))
+            {
+                throw new InvalidDataException("The update is not signed by Playdex; it was not installed.");
+            }
+            var expected = ParseChecksum(System.Text.Encoding.UTF8.GetString(checksumFile), archiveName);
+            await releases.DownloadAsync(archive, archivePath, MaximumArchiveBytes, cancellationToken);
             var actual = await HashFileAsync(archivePath, cancellationToken);
             if (!CryptographicOperations.FixedTimeEquals(Convert.FromHexString(expected), Convert.FromHexString(actual)))
             {
@@ -358,6 +392,26 @@ public static class AppUpdate
             TryDeleteDirectory(staging);
             throw;
         }
+    }
+
+    /// <summary>
+    /// Whether <paramref name="signature"/> (base64, IEEE P1363) is a signature of <paramref name="data"/> by the key in
+    /// <paramref name="publicKey"/> (base64 SubjectPublicKeyInfo, ECDSA P-256).
+    /// </summary>
+    internal static bool IsSigned(ReadOnlySpan<byte> data, string signature, string publicKey)
+    {
+        byte[] signatureBytes;
+        try
+        {
+            signatureBytes = Convert.FromBase64String(signature.Trim());
+        }
+        catch (FormatException)
+        {
+            return false;
+        }
+        using var key = ECDsa.Create();
+        key.ImportSubjectPublicKeyInfo(Convert.FromBase64String(publicKey), out _);
+        return key.KeySize == 256 && key.VerifyData(data, signatureBytes, HashAlgorithmName.SHA256);
     }
 
     /// <summary>"&lt;sha256&gt;  &lt;file&gt;", as `sha256sum` and the release workflow write it.</summary>

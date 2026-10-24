@@ -4,7 +4,7 @@ The Windows apps release together from one `v<major>.<minor>.<patch>` tag (`.git
 
 | Asset | What it is |
 |---|---|
-| `playdex-windows-v<version>.zip` + `.sha256` | The app's folder (`Playdex.exe`, `Playdex.Run.exe`, `Playdex-Setup.exe` as its uninstaller, the Windows App SDK, `ui/`). What Playdex updates itself from. |
+| `playdex-windows-v<version>.zip` + `.sha256` + `.sha256.sig` | The app's folder (`Playdex.exe`, `Playdex.Run.exe`, `Playdex-Setup.exe` as its uninstaller, the Windows App SDK, `ui/`). What Playdex updates itself from. The `.sig` signs the checksum file; see [Signing updates](#signing-updates). |
 | `Playdex-Setup.exe` | The offline installer: the setup with the app folder (and the Full Screen Experience package, when signed) appended. Installs Playdex for the current user into `%LOCALAPPDATA%\Programs\Playdex`, updates an older install in place, adds the Start menu shortcut and the Settings → Apps entry, and starts it. |
 | `playdex-wrapper-windows-v<version>.zip` + `.sha256` | The online setup (no payload; it downloads the app from the release) named `Wrapper.exe`: how WinForms Wrapper installs (v1.x) move to the app. **Every release must keep it**, because a v1.x Wrapper only ever looks for this asset in the latest release. |
 | `playdex-launcher-v<version>.msix`, `playdex-launcher.cer` | The Full Screen Experience package, signed, and its public certificate. Only when the signing secrets are set. |
@@ -44,9 +44,25 @@ Users trust the certificate once: the desktop app's "Use as Full Screen Experien
 
 The certificate is pinned: `FsePackage.SigningCertificateSha256` (`src/Playdex.Core/FsePackage.cs`) holds its SHA-256 thumbprint, and the app and the setup refuse a `.cer` with any other thumbprint and a package Windows doesn't report as signed with it, before the admin prompt. The release workflow fails when `LAUNCHER_SIGNING_PFX` holds a different certificate. **Rotating the signing certificate** therefore needs a new app release: change the secrets and the thumbprint in `FsePackage.cs` together. Each app and setup installs the package of its own release, so older installs keep using the packages signed with the old certificate. A package built on another machine with its own dev certificate (`tools/package.ps1`) can only be installed with `tools/install-dev.ps1`.
 
+## Signing updates
+
+The desktop app's self-update, and a setup that has to download the app (one without the app inside), only install `playdex-windows-v<version>.zip` when its `.sha256` is signed with an update signing key: ECDSA P-256 over SHA-256, the signature in IEEE P1363 form as base64 in `.sha256.sig` (.NET has no Ed25519). The checksum file names the archive and its version, so a signature can't be moved to another archive or release. Without this, the `.sha256` only proved that the zip arrived whole: anyone who could write to the bucket or cut a release could ship code to every install.
+
+- **Public keys:** `AppUpdate.UpdateSigningKeys` in `src/Playdex.Core/AppUpdate.cs` (base64 SubjectPublicKeyInfo). A signature that checks with any of them is accepted.
+- **Private key:** the repository secret `UPDATE_SIGNING_KEY` (PKCS#8 PEM), and an offline copy the owner keeps outside the repository. The release workflow's "Sign the update" step signs the checksum and checks the signature against the pinned keys, so a secret that matches none of them fails the release before anything is published. A missing secret fails it too.
+- **Order in the app:** the checksum and its signature are downloaded and checked first; the archive is only downloaded after that.
+- **Releases from before signing** have no `.sig`, and an app that checks signatures refuses them. That never blocks an update: the first app that checks is itself released signed, and it only ever installs newer releases, which are all signed. Apps from before signing don't look for the `.sig` and update as before.
+
+**Rotating the key** takes two releases, because installs only trust the keys they were released with:
+
+1. Generate the new key (`openssl ecparam -name prime256v1 -genkey -noout | openssl pkcs8 -topk8 -nocrypt -out update-signing-key.pem`) and add its public key (`openssl pkey -in update-signing-key.pem -pubout -outform DER | base64`) to `AppUpdate.UpdateSigningKeys`, next to the old one. Release that version; it is still signed with the old key.
+2. Set the new key as `UPDATE_SIGNING_KEY` and remove the old public key. The next release is signed with the new key, and every install that took step 1 accepts it.
+
+A leaked key can't be retired that gently: installs trust it until they update. Do both steps at once (new key in, old key out, signed with the new key) and tell users to update by running `Playdex-Setup.exe`, which carries the app and doesn't depend on the old key.
+
 ## Updates
 
-- **Desktop app.** Checks `download.playdex.dev/windows/releases/latest.json` at startup and daily, downloads and verifies `playdex-windows-v<version>.zip`, and offers "Restart to update". A copy of `Playdex.Run.exe` swaps the app folder, starts the new version and waits up to 60 s for it to confirm; otherwise the old folder is restored and started, and the next start reports why. Details: `src/Desktop/README.md`.
+- **Desktop app.** Checks `download.playdex.dev/windows/releases/latest.json` at startup and daily, checks the signed checksum, downloads and verifies `playdex-windows-v<version>.zip`, and offers "Restart to update". A copy of `Playdex.Run.exe` swaps the app folder, starts the new version and waits up to 60 s for it to confirm; otherwise the old folder is restored and started, and the next start reports why. Details: `src/Desktop/README.md`.
 - **From the WinForms Wrapper.** A v1.x Wrapper's updater downloads `playdex-wrapper-windows-v<version>.zip`, verifies it, and on "Restart to update" replaces `Wrapper.exe` with the setup and starts it with `--update-health`. The setup confirms at once (the Wrapper waits only 30 s), then installs the desktop app from the same release and starts it. The desktop app migrates the Wrapper's config (`%LOCALAPPDATA%\PlaydexWrapper\config.json` into `%LOCALAPPDATA%\Playdex\config.json`; the old file stays), keeps its storage folders and backup state, and regenerates every generated launcher from `Playdex.Run.exe`, so Steam shortcuts keep working. From then on `Wrapper.exe` just opens Playdex.
 - **Launcher.** Installing a newer MSIX over an older one updates it (Settings → This app → Install in the desktop app, or `tools/install-dev.ps1` for local builds).
 

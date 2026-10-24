@@ -62,6 +62,7 @@ const contentTypes = {
   '.exe': 'application/vnd.microsoft.portable-executable',
   '.zip': 'application/zip',
   '.sha256': 'text/plain; charset=utf-8',
+  '.sig': 'text/plain; charset=utf-8',
   '.msix': 'application/msix',
   '.cer': 'application/pkix-cert',
   '.json': 'application/json',
@@ -98,6 +99,7 @@ async function release(tag, dir) {
   const required = [
     `playdex-windows-${tag}.zip`,
     `playdex-windows-${tag}.zip.sha256`,
+    `playdex-windows-${tag}.zip.sha256.sig`,
     'Playdex-Setup.exe',
     `playdex-wrapper-windows-${tag}.zip`,
     `playdex-wrapper-windows-${tag}.zip.sha256`,

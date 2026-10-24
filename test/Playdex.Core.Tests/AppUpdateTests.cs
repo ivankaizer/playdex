@@ -167,27 +167,30 @@ public sealed class AppUpdateTests
     }
 
     [Fact]
-    public async Task StagingVerifiesTheChecksumAndWritesAManifest()
+    public async Task StagingVerifiesTheSignatureAndTheChecksumAndWritesAManifest()
     {
         var directory = NewTempDir();
         var zipPath = Zip(directory, "source.zip", ("Playdex.exe", "new app"), ("Playdex.Run.exe", "new helper"));
         var zipBytes = await File.ReadAllBytesAsync(zipPath);
         var name = "playdex-windows-v2.1.0.zip";
         var goodHash = Convert.ToHexStringLower(SHA256.HashData(zipBytes));
-        var release = new Release(new ReleaseVersion(2, 1, 0),
-        [
-            new ReleaseAsset(name, new Uri($"{Feed}/{name}"), zipBytes.Length),
-            new ReleaseAsset(name + ".sha256", new Uri($"{Feed}/{name}.sha256"), null),
-        ]);
+        var release = SignedRelease(name, zipBytes.Length);
         var install = Path.Combine(directory, "install");
         Directory.CreateDirectory(install);
+        using var signing = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+        // A key added for a rotation sits next to the one in use: either is accepted.
+        using var next = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+        string[] keys = [PublicKey(next), PublicKey(signing)];
 
-        using (var bad = new ReleaseFeed(new AssetHandler(zipBytes, $"{new string('0', 64)}  {name}")))
+        var badChecksum = $"{new string('0', 64)}  {name}";
+        using (var bad = new ReleaseFeed(new AssetHandler(zipBytes, badChecksum, Sign(signing, badChecksum))))
         {
-            await Assert.ThrowsAsync<InvalidDataException>(() => AppUpdate.StageAsync(bad, release, install, Path.Combine(directory, "updates")));
+            await Assert.ThrowsAsync<InvalidDataException>(
+                () => AppUpdate.StageAsync(bad, release, install, Path.Combine(directory, "updates"), keys, CancellationToken.None));
         }
-        using var good = new ReleaseFeed(new AssetHandler(zipBytes, $"{goodHash}  {name}"));
-        var manifestPath = await AppUpdate.StageAsync(good, release, install, Path.Combine(directory, "updates"));
+        var checksum = $"{goodHash}  {name}";
+        using var good = new ReleaseFeed(new AssetHandler(zipBytes, checksum, Sign(signing, checksum)));
+        var manifestPath = await AppUpdate.StageAsync(good, release, install, Path.Combine(directory, "updates"), keys, CancellationToken.None);
 
         var manifest = AppUpdate.Load(manifestPath);
         Assert.Equal("2.1.0", manifest.Version);
@@ -195,6 +198,72 @@ public sealed class AppUpdateTests
         Assert.Equal("new app", await File.ReadAllTextAsync(Path.Combine(manifest.StagedDirectory, "Playdex.exe")));
         Assert.Equal(Path.GetFullPath(install), manifest.TargetDirectory);
     }
+
+    [Theory]
+    [InlineData("missing")]
+    [InlineData("other key")]
+    [InlineData("tampered")]
+    [InlineData("not base64")]
+    [InlineData("empty")]
+    public async Task AnUpdateThatIsNotSignedIsRefusedBeforeItsArchiveIsDownloaded(string signature)
+    {
+        var directory = NewTempDir();
+        var zipBytes = await File.ReadAllBytesAsync(Zip(directory, "source.zip", ("Playdex.exe", "app"), ("Playdex.Run.exe", "helper")));
+        var name = "playdex-windows-v2.1.0.zip";
+        var checksum = $"{Convert.ToHexStringLower(SHA256.HashData(zipBytes))}  {name}";
+        using var signing = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+        using var other = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+        var release = SignedRelease(name, zipBytes.Length);
+        var served = signature switch
+        {
+            "other key" => Sign(other, checksum),
+            // Signed for another archive (another release's checksum).
+            "tampered" => Sign(signing, checksum.Replace("v2.1.0", "v2.0.9", StringComparison.Ordinal)),
+            "not base64" => "not a signature!",
+            "empty" => "",
+            _ => Sign(signing, checksum),
+        };
+        if (signature == "missing")
+        {
+            release = release with { Assets = release.Assets.Where(a => !a.Name.EndsWith(".sig", StringComparison.Ordinal)).ToList() };
+        }
+        var handler = new AssetHandler(zipBytes, checksum, served);
+        using var feed = new ReleaseFeed(handler);
+
+        var refused = await Assert.ThrowsAsync<InvalidDataException>(
+            () => AppUpdate.StageAsync(feed, release, directory, Path.Combine(directory, "updates"), [PublicKey(signing)], CancellationToken.None));
+
+        Assert.Contains("signed", refused.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain(handler.Requested, uri => uri.AbsolutePath.EndsWith(".zip", StringComparison.Ordinal));
+        Assert.False(Directory.Exists(Path.Combine(directory, "updates", "v2.1.0")));
+    }
+
+    [Fact]
+    public void TheReleasedSigningKeysAreP256PublicKeys()
+    {
+        Assert.NotEmpty(AppUpdate.UpdateSigningKeys);
+        foreach (var key in AppUpdate.UpdateSigningKeys)
+        {
+            using var ecdsa = ECDsa.Create();
+            ecdsa.ImportSubjectPublicKeyInfo(Convert.FromBase64String(key), out _);
+            Assert.Equal(256, ecdsa.KeySize);
+            // A public key only: nothing to sign with.
+            Assert.ThrowsAny<CryptographicException>(() => ecdsa.ExportECPrivateKey());
+        }
+    }
+
+    private static Release SignedRelease(string name, long size) => new(new ReleaseVersion(2, 1, 0),
+    [
+        new ReleaseAsset(name, new Uri($"{Feed}/{name}"), size),
+        new ReleaseAsset(name + ".sha256", new Uri($"{Feed}/{name}.sha256"), null),
+        new ReleaseAsset(name + ".sha256.sig", new Uri($"{Feed}/{name}.sha256.sig"), null),
+    ]);
+
+    /// <summary>What the release workflow writes to the .sig: the checksum file's bytes signed, as base64.</summary>
+    private static string Sign(ECDsa key, string checksum) =>
+        Convert.ToBase64String(key.SignData(Encoding.ASCII.GetBytes(checksum), HashAlgorithmName.SHA256));
+
+    private static string PublicKey(ECDsa key) => Convert.ToBase64String(key.ExportSubjectPublicKeyInfo());
 
     [Fact]
     public async Task StartingPlaydexWaitsWhileTheHelperAppliesAnUpdate()
@@ -335,15 +404,21 @@ public sealed class AppUpdateTests
         return path;
     }
 
-    private sealed class AssetHandler(byte[] archive, string checksum) : HttpMessageHandler
+    private sealed class AssetHandler(byte[] archive, string checksum, string signature) : HttpMessageHandler
     {
-        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) =>
-            Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+        public List<Uri> Requested { get; } = [];
+
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            var path = request.RequestUri!.AbsolutePath;
+            Requested.Add(request.RequestUri);
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
             {
-                Content = request.RequestUri!.AbsolutePath.EndsWith(".zip", StringComparison.Ordinal)
-                    ? new ByteArrayContent(archive)
+                Content = path.EndsWith(".zip", StringComparison.Ordinal) ? new ByteArrayContent(archive)
+                    : path.EndsWith(".sig", StringComparison.Ordinal) ? new StringContent(signature)
                     : new StringContent(checksum),
             });
+        }
     }
 
     /// <summary>Serves <paramref name="json"/> for every feed request, or 404 when it is null.</summary>

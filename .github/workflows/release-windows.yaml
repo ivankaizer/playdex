@@ -1,7 +1,9 @@
 name: Release Windows apps
 
 # A v<major>.<minor>.<patch> tag releases the Windows apps (see docs/windows-releases.md):
-#   playdex-windows-v<version>.zip (+ .sha256)          the app folder; what Playdex updates itself from
+#   playdex-windows-v<version>.zip (+ .sha256, .sha256.sig)
+#                                                       the app folder; what Playdex updates itself from. The .sig
+#                                                       signs the .sha256 with the UPDATE_SIGNING_KEY secret
 #   Playdex-Setup.exe                                   the offline installer: installs, updates and uninstalls Playdex
 #                                                       for the current user; the app (and the FSE package) is inside
 #   playdex-wrapper-windows-v<version>.zip (+ .sha256)  the online setup as Wrapper.exe: how WinForms Wrapper
@@ -167,6 +169,51 @@ jobs:
           }
           ./tools/package-windows.ps1 @package
 
+      # The app only installs an update whose checksum file is signed with a key pinned in AppUpdate.UpdateSigningKeys
+      # (docs/windows-releases.md, "Signing updates"). The signature is checked against those keys here, so a secret that
+      # matches none of them stops the release instead of publishing an update nobody can install.
+      - name: Sign the update
+        shell: pwsh
+        env:
+          UPDATE_SIGNING_KEY: ${{ secrets.UPDATE_SIGNING_KEY }}
+        run: |
+          if (-not $env:UPDATE_SIGNING_KEY) { throw "UPDATE_SIGNING_KEY is not set; Playdex only installs signed updates." }
+          # Spans can't be passed from PowerShell, so the crypto runs in a few lines of C#.
+          Add-Type -TypeDefinition @'
+          using System;
+          using System.Security.Cryptography;
+          public static class UpdateSignature
+          {
+              public static string Sign(string privateKeyPem, byte[] data)
+              {
+                  using (var key = ECDsa.Create())
+                  {
+                      key.ImportFromPem(privateKeyPem);
+                      return Convert.ToBase64String(key.SignData(data, HashAlgorithmName.SHA256));
+                  }
+              }
+
+              public static bool Verify(string publicKey, byte[] data, string signature)
+              {
+                  using (var key = ECDsa.Create())
+                  {
+                      int read;
+                      key.ImportSubjectPublicKeyInfo(Convert.FromBase64String(publicKey), out read);
+                      return key.KeySize == 256 && key.VerifyData(data, Convert.FromBase64String(signature), HashAlgorithmName.SHA256);
+                  }
+              }
+          }
+          '@
+          $checksum = Join-Path $PWD "artifacts/playdex-windows-$env:TAG.zip.sha256"
+          $data = [IO.File]::ReadAllBytes($checksum)
+          $signature = [UpdateSignature]::Sign($env:UPDATE_SIGNING_KEY, $data)
+          $list = [regex]::Match((Get-Content -Raw src/Playdex.Core/AppUpdate.cs), '(?s)UpdateSigningKeys =\s*\[(.*?)\];').Groups[1].Value
+          $pinned = @([regex]::Matches($list, '"([A-Za-z0-9+/=]+)"') | ForEach-Object { $_.Groups[1].Value })
+          if (-not ($pinned | Where-Object { [UpdateSignature]::Verify($_, $data, $signature) })) {
+            throw "UPDATE_SIGNING_KEY matches none of the $($pinned.Count) keys in AppUpdate.UpdateSigningKeys; add its public key there one release before signing with it."
+          }
+          Set-Content -LiteralPath "$checksum.sig" -Value $signature -Encoding ascii -NoNewline
+
       - name: Verify the release contract
         shell: pwsh
         env:
@@ -204,6 +251,7 @@ jobs:
           files: |
             artifacts/playdex-windows-${{ github.ref_name }}.zip
             artifacts/playdex-windows-${{ github.ref_name }}.zip.sha256
+            artifacts/playdex-windows-${{ github.ref_name }}.zip.sha256.sig
             artifacts/Playdex-Setup.exe
             artifacts/playdex-wrapper-windows-${{ github.ref_name }}.zip
             artifacts/playdex-wrapper-windows-${{ github.ref_name }}.zip.sha256
