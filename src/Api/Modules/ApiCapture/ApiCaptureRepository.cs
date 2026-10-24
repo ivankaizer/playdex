@@ -1,3 +1,4 @@
+using Api.Infrastructure.Auth;
 using Microsoft.EntityFrameworkCore;
 using Playdex.Persistence;
 
@@ -7,13 +8,12 @@ public sealed class ApiCaptureRepository(PlaydexDbContext db)
 {
     public async Task<ApiIntegrationRow?> LoadCredentialByApiKey(string apiKey, CancellationToken ct)
     {
-        var credentials = await db.Integrations
+        var hash = PlaydexAppKeys.Hash(apiKey);
+        return await db.Integrations
             .AsNoTracking()
-            .Where(pc => pc.ApiKey == apiKey && pc.Type == IntegrationType.Api && pc.Active)
+            .Where(pc => pc.ApiKey == hash && pc.Type == IntegrationType.Api && pc.Active)
             .Select(pc => new ApiIntegrationRow { Id = pc.Id, UserId = pc.UserId })
-            .Take(2)
-            .ToListAsync(ct);
-        return credentials.Count == 1 ? credentials[0] : null;
+            .FirstOrDefaultAsync(ct);
     }
 
     public async Task<List<ApiCapturePlatformDto>> ListPcPlatforms(CancellationToken ct)

@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using Api.Infrastructure.Auth;
 using Api.Infrastructure.Credentials;
 using Api.Modules.Games;
 using Api.Modules.Polling;
@@ -47,10 +48,14 @@ public sealed class CredentialProtectorTests(PostgresFixture postgres)
         Assert.Equal("legacy-plaintext", _protector.Unprotect("legacy-plaintext"));
 
     [Fact]
-    public void OnlyPolledIntegrationsAreEncrypted()
+    public void PolledCredentialsAreEncryptedAndPlaydexAppKeysHashed()
     {
-        Assert.Equal("plx_abc", _protector.Protect(IntegrationType.Api, "plx_abc"));
+        Assert.Equal(PlaydexAppKeys.Hash("plx_abc"), _protector.Protect(IntegrationType.Api, "plx_abc"));
+        Assert.Equal(
+            "sha256:ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
+            PlaydexAppKeys.Hash("abc"));
         Assert.True(CredentialProtector.IsProtected(_protector.Protect(IntegrationType.Xbox, "openxbl")));
+        Assert.Null(_protector.Protect(IntegrationType.Api, null));
     }
 
     [Fact]

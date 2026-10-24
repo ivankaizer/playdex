@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
+using Api.Infrastructure.Auth;
 using Microsoft.Extensions.Options;
 using Playdex.Persistence;
 
@@ -8,6 +9,7 @@ namespace Api.Infrastructure.Credentials;
 /// <summary>
 /// Encrypts the third-party secrets polling needs back (Steam Web API key, PSN NPSSO, OpenXBL key) with AES-256-GCM,
 /// under a key derived from CREDENTIALS_KEY. Stored values look like <c>enc:v1:&lt;base64 nonce|ciphertext|tag&gt;</c>.
+/// Playdex app keys are only ever compared, so they are hashed instead (<see cref="PlaydexAppKeys"/>).
 /// </summary>
 public sealed class CredentialProtector
 {
@@ -22,14 +24,15 @@ public sealed class CredentialProtector
     public CredentialProtector(IOptions<CredentialOptions> options) =>
         _key = HKDF.DeriveKey(HashAlgorithmName.SHA256, Encoding.UTF8.GetBytes(options.Value.EncryptionKey), 32, info: _keyInfo);
 
-    /// <summary>Playdex app keys are not polled, so they are never encrypted.</summary>
-    public static bool Encrypts(IntegrationType type) => type != IntegrationType.Api;
-
     public static bool IsProtected(string? value) => value?.StartsWith(Prefix, StringComparison.Ordinal) == true;
 
-    public string? Protect(IntegrationType type, string? value) => Encrypts(type) ? Protect(value) : value;
-
-    public string? Unprotect(IntegrationType type, string? value) => Encrypts(type) ? Unprotect(value) : value;
+    /// <summary>What integrations.api_key stores for a credential of this type.</summary>
+    public string? Protect(IntegrationType type, string? value) => type switch
+    {
+        _ when value is null => null,
+        IntegrationType.Api => PlaydexAppKeys.Hash(value),
+        _ => Protect(value),
+    };
 
     public string? Protect(string? value)
     {

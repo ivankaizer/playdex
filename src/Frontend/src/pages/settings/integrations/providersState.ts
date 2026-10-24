@@ -16,6 +16,10 @@ export interface ProvidersState {
   pendingSessionPlatformProviderId: number | null;
   selectedSessionPlatformKey: string;
   sessionPlatformError: string;
+  /** The Playdex app key just created or replaced. The server keeps only its hash, so it can't be shown again later. */
+  issuedAppKey: string | null;
+  isAppKeyIssuing: boolean;
+  appKeyError: string;
 }
 
 export interface ProviderPresentation {
@@ -26,6 +30,7 @@ export interface ProviderPresentation {
 }
 
 export const providersPath = "/providers";
+export const appKeyPath = "/key";
 
 export class ProviderChangePendingError extends Error {}
 
@@ -44,6 +49,9 @@ export function createProvidersState(): ProvidersState {
     pendingSessionPlatformProviderId: null,
     selectedSessionPlatformKey: "",
     sessionPlatformError: "",
+    issuedAppKey: null,
+    isAppKeyIssuing: false,
+    appKeyError: "",
   };
 }
 
@@ -133,7 +141,7 @@ export function beginCredentialEdit(state: ProvidersState, provider: ProviderSta
     ...base,
     editingCredentialId: provider.id,
     editingAccountId: provider.accountId ?? "",
-    editingApiKey: provider.apiKey ?? "",
+    editingApiKey: "",
     selectedSessionPlatformKey: provider.sessionPlatform?.key ?? "",
     credentialError: "",
   };
@@ -169,21 +177,16 @@ export function buildCredentialSubmission(state: ProvidersState): {
 
   const noChanges = { state: { ...state, credentialError: "No changes to save." }, submission: null };
   const savedAccountId = provider.accountId ?? "";
-  const savedApiKey = provider.apiKey ?? "";
-
-  if (state.editingAccountId === savedAccountId && (provider.apiKeyLocked || state.editingApiKey === savedApiKey)) {
-    return noChanges;
-  }
-
   const trimmedAccountId = state.editingAccountId.trim();
+  // The saved key never comes back, so the field starts empty and stays empty to keep it.
   const trimmedApiKey = state.editingApiKey.trim();
   const accountIdChanged = trimmedAccountId !== savedAccountId;
-  const apiKeyChanged = !provider.apiKeyLocked && trimmedApiKey !== savedApiKey;
+  const apiKeyChanged = !provider.apiKeyLocked && trimmedApiKey !== "";
   if (!accountIdChanged && !apiKeyChanged) return noChanges;
 
   const body: Record<string, unknown> = {};
   if (accountIdChanged) body.accountId = trimmedAccountId === "" ? null : trimmedAccountId;
-  if (apiKeyChanged) body.apiKey = trimmedApiKey === "" ? null : trimmedApiKey;
+  if (apiKeyChanged) body.apiKey = trimmedApiKey;
 
   return { state: cleared, submission: { path: `/providers/${providerId}`, method: "PUT", body } };
 }
@@ -288,11 +291,25 @@ export function appendProvider(state: ProvidersState, provider: ProviderStatus):
   return { ...state, providers: [...state.providers, provider] };
 }
 
+// Playdex app key
+
+export function beginAppKeyIssue(state: ProvidersState): ProvidersState {
+  return { ...state, isAppKeyIssuing: true, appKeyError: "" };
+}
+
+export function completeAppKeyIssue(state: ProvidersState, apiKey: string): ProvidersState {
+  return { ...state, issuedAppKey: apiKey, isAppKeyIssuing: false };
+}
+
+export function failAppKeyIssue(state: ProvidersState, error: string): ProvidersState {
+  return { ...state, isAppKeyIssuing: false, appKeyError: error };
+}
+
 // Presentation
 
 export function presentProvider(provider: ProviderStatus): ProviderPresentation {
   const label = providerMark(provider.platform);
-  const subtitle = provider.platform === "playnite" ? (provider.apiKey ?? "Local") : (provider.accountId ?? "Local");
+  const subtitle = provider.accountId ?? "Local";
   return { label, name: formatProviderName(provider.platform), subtitle };
 }
 

@@ -86,7 +86,7 @@ export interface CredentialForm {
 export function credentialFormFor(integration: IntegrationSummary): CredentialForm {
   return {
     replaceApiKey: false,
-    apiKey: integration.apiKey ?? "",
+    apiKey: "",
     changeAccountId: false,
     accountId: integration.accountId ?? "",
   };

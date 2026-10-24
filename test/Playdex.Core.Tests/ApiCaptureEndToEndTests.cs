@@ -81,7 +81,7 @@ public sealed class ApiCaptureEndToEndTests(WrapperPostgresFixture postgres)
             Parameters =
             {
                 new() { Value = userId },
-                new() { Value = apiKey },
+                new() { Value = Api.Infrastructure.Auth.PlaydexAppKeys.Hash(apiKey) },
                 new() { Value = now },
             }
         }.ExecuteScalarAsync())!;

@@ -203,26 +203,19 @@ public sealed class AdminRepository(PlaydexDbContext db, CredentialProtector pro
         return (platformRow.Key, integrations.Count);
     }
 
-    public async Task<IReadOnlyList<AdminIntegrationDto>> ListIntegrations(CancellationToken ct)
-    {
-        var rows = await (from integration in db.Integrations.AsNoTracking()
-                          join user in db.Users.AsNoTracking() on integration.UserId equals user.Id
-                          join platform in db.Platforms.AsNoTracking() on integration.PlatformId equals (long?)platform.Id
-                              into platforms
-                          from platform in platforms.DefaultIfEmpty()
-                          orderby user.Email,
-                              integration.Type == IntegrationType.Api ? "api" : platform!.Key,
-                              integration.Id
-                          select new
-                          {
-                              Dto = new AdminIntegrationDto(integration.Id, user.Email,
-                                  integration.Type == IntegrationType.Api ? "api" : platform!.Key,
-                                  integration.AccountId, integration.Active, integration.ApiKey),
-                              integration.Type,
-                          })
+    public async Task<IReadOnlyList<AdminIntegrationDto>> ListIntegrations(CancellationToken ct) =>
+        await (from integration in db.Integrations.AsNoTracking()
+               join user in db.Users.AsNoTracking() on integration.UserId equals user.Id
+               join platform in db.Platforms.AsNoTracking() on integration.PlatformId equals (long?)platform.Id
+                   into platforms
+               from platform in platforms.DefaultIfEmpty()
+               orderby user.Email,
+                   integration.Type == IntegrationType.Api ? "api" : platform!.Key,
+                   integration.Id
+               select new AdminIntegrationDto(integration.Id, user.Email,
+                   integration.Type == IntegrationType.Api ? "api" : platform!.Key,
+                   integration.AccountId, integration.Active, integration.ApiKey != null))
             .ToListAsync(ct);
-        return rows.ConvertAll(row => row.Dto with { ApiKey = protector.Unprotect(row.Type, row.Dto.ApiKey) });
-    }
 
     public async Task<bool> UpdateIntegration(long id, bool apiKeyChanged, string? apiKey, bool accountIdChanged,
         string? accountId, CancellationToken ct)

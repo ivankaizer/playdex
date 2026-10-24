@@ -1,3 +1,4 @@
+using Api.Infrastructure.Auth;
 using Api.Infrastructure.Common;
 using Api.Modules.ApiCapture;
 using Api.Modules.Games;
@@ -289,7 +290,7 @@ public sealed class SessionLifecycleTests(PostgresFixture postgres)
             .Options);
 
     /// <summary>A user with a Steam polling integration, an API integration and two games; removed on dispose.</summary>
-    private sealed class World(PlaydexDbContext db, User user, Game gameA, Game gameB, Integration steam, Integration api)
+    private sealed class World(PlaydexDbContext db, User user, Game gameA, Game gameB, Integration steam, Integration api, string apiKey)
         : IAsyncDisposable
     {
         public PlaydexDbContext Db => db;
@@ -298,7 +299,7 @@ public sealed class SessionLifecycleTests(PostgresFixture postgres)
         public Game GameB => gameB;
         public Integration Steam => steam;
         public Integration Api => api;
-        public string ApiKey => api.ApiKey!;
+        public string ApiKey => apiKey;
 
         public static async Task<World> Create(PlaydexDbContext db)
         {
@@ -325,7 +326,7 @@ public sealed class SessionLifecycleTests(PostgresFixture postgres)
             {
                 UserId = user.Id,
                 Type = IntegrationType.Api,
-                ApiKey = $"lifecycle-{suffix}",
+                ApiKey = PlaydexAppKeys.Hash($"lifecycle-{suffix}"),
                 AccountId = "api",
                 Active = true,
                 CreatedAt = now,
@@ -333,7 +334,7 @@ public sealed class SessionLifecycleTests(PostgresFixture postgres)
             };
             db.AddRange(steam, api);
             await db.SaveChangesAsync();
-            return new World(db, user, gameA, gameB, steam, api);
+            return new World(db, user, gameA, gameB, steam, api, $"lifecycle-{suffix}");
         }
 
         public bool OwnsSession(long sessionId) =>

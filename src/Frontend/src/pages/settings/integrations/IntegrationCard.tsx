@@ -84,7 +84,7 @@ export function IntegrationCard({ provider, integrations }: IntegrationCardProps
         </p>
       ) : null}
 
-      {provider.platform === "api" && provider.apiKey ? <PlaydexAppSetup apiKey={provider.apiKey} /> : null}
+      {provider.platform === "api" ? <PlaydexAppSetup integrations={integrations} /> : null}
 
       {editing ? (
         <div id={panelId} className="flex flex-col gap-4 pb-5 pl-[84px] pr-5 max-[600px]:px-4 max-[600px]:pb-4">
@@ -99,21 +99,7 @@ export function IntegrationCard({ provider, integrations }: IntegrationCardProps
                 className={fieldInputClass}
               />
             </label>
-            {provider.platform === "api" ? (
-              <div className="flex min-w-0 flex-col gap-1.5">
-                <label className={fieldLabelClass}>
-                  API key
-                  <input
-                    type="text"
-                    value={state.editingApiKey}
-                    readOnly
-                    aria-readonly="true"
-                    className={cx(fieldInputClass, "!bg-tile font-mono text-ink-2")}
-                  />
-                </label>
-                <span className="px-1 text-xs text-muted">Generated locally and read-only.</span>
-              </div>
-            ) : provider.apiKeyLocked ? (
+            {provider.platform === "api" ? null : provider.apiKeyLocked ? (
               <div className={fieldLabelClass}>
                 API key
                 <div className="flex h-11 items-center gap-2 rounded-full border border-line bg-tile px-[18px] text-sm normal-case tracking-normal text-muted">
@@ -123,12 +109,14 @@ export function IntegrationCard({ provider, integrations }: IntegrationCardProps
               </div>
             ) : (
               <label className={fieldLabelClass}>
-                API key
+                {provider.hasApiKey ? "New API key" : "API key"}
                 <input
-                  type="text"
+                  type="password"
                   value={state.editingApiKey}
                   onChange={(event) => integrations.setEditingApiKey(event.target.value)}
                   disabled={credentialSaving}
+                  autoComplete="off"
+                  placeholder={provider.hasApiKey ? "Saved. Leave empty to keep it" : ""}
                   className={fieldInputClass}
                 />
               </label>

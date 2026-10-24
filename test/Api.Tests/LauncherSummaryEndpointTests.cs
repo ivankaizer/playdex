@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text.Json;
+using Api.Infrastructure.Auth;
 using Playdex.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Xunit;
@@ -46,7 +47,7 @@ public sealed class LauncherSummaryEndpointTests(PostgresFixture postgres)
         {
             UserId = user.Id,
             Type = IntegrationType.Api,
-            ApiKey = $"key-{suffix}",
+            ApiKey = PlaydexAppKeys.Hash($"key-{suffix}"),
             Active = true,
             CreatedAt = now,
             UpdatedAt = now,
@@ -91,7 +92,7 @@ public sealed class LauncherSummaryEndpointTests(PostgresFixture postgres)
             client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", "key-that-does-not-exist");
             Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/api/launcher/summary")).StatusCode);
 
-            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", integration.ApiKey);
+            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", $"key-{suffix}");
             // The key reads only what is made for it: the account endpoints still need a signed-in user.
             Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/api/sessions")).StatusCode);
 
@@ -173,7 +174,7 @@ public sealed class LauncherSummaryEndpointTests(PostgresFixture postgres)
         {
             UserId = user.Id,
             Type = IntegrationType.Api,
-            ApiKey = $"key-{suffix}",
+            ApiKey = PlaydexAppKeys.Hash($"key-{suffix}"),
             Active = true,
             CreatedAt = now,
             UpdatedAt = now,
@@ -203,7 +204,7 @@ public sealed class LauncherSummaryEndpointTests(PostgresFixture postgres)
 
         try
         {
-            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", integration.ApiKey);
+            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", $"key-{suffix}");
             async Task<JsonElement> Recap(string query)
             {
                 var response = await client.GetAsync($"/api/launcher/recap?{query}");

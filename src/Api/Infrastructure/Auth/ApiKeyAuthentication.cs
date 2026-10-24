@@ -43,20 +43,18 @@ public sealed class ApiKeyAuthenticationHandler(
             return AuthenticateResult.NoResult();
         }
 
-        // As the capture routes: valid only when exactly one active API integration has this key.
-        var integrations = await db.Database.SqlQuery<ApiKeyIntegrationRow>($"""
+        var integration = await db.Database.SqlQuery<ApiKeyIntegrationRow>($"""
             SELECT i.id AS "Id", i.user_id AS "UserId"
             FROM integrations i
-            WHERE i.api_key = {apiKey}
+            WHERE i.api_key = {PlaydexAppKeys.Hash(apiKey)}
               AND i.type = 'api'
               AND i.active = true
-            """).Take(2).ToListAsync(Context.RequestAborted);
-        if (integrations.Count != 1)
+            """).FirstOrDefaultAsync(Context.RequestAborted);
+        if (integration is null)
         {
             return AuthenticateResult.Fail("Invalid api key.");
         }
 
-        var integration = integrations[0];
         var identity = new ClaimsIdentity(
             [
                 new Claim("sub", integration.UserId.ToString(System.Globalization.CultureInfo.InvariantCulture)),

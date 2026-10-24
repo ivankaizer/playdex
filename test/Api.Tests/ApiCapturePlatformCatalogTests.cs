@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text.Json;
+using Api.Infrastructure.Auth;
 using Playdex.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Xunit;
@@ -48,7 +49,7 @@ public sealed class ApiCapturePlatformCatalogTests(PostgresFixture postgres)
         {
             UserId = user.Id,
             Type = IntegrationType.Api,
-            ApiKey = $"key-{suffix}",
+            ApiKey = PlaydexAppKeys.Hash($"key-{suffix}"),
             Active = true,
             CreatedAt = now,
             UpdatedAt = now,
@@ -59,7 +60,7 @@ public sealed class ApiCapturePlatformCatalogTests(PostgresFixture postgres)
         try
         {
             client.DefaultRequestHeaders.Authorization =
-                new AuthenticationHeaderValue("Bearer", integration.ApiKey);
+                new AuthenticationHeaderValue("Bearer", $"key-{suffix}");
             var response = await client.GetAsync("/api/capture/platforms");
             var body = await response.Content.ReadAsStringAsync();
             Assert.Equal(HttpStatusCode.OK, response.StatusCode);

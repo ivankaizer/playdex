@@ -3,7 +3,7 @@ import type { ProviderStatus } from "../models";
 import * as c from "./creatorState";
 
 function provider(id: number, platform: string): ProviderStatus {
-  return { id, platform, accountId: `account-${id}`, status: "active", apiKey: null, apiKeyLocked: false };
+  return { id, platform, accountId: `account-${id}`, status: "active", hasApiKey: true, apiKeyLocked: false };
 }
 
 function openCreator(providers: ProviderStatus[] = []) {

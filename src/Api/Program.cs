@@ -74,6 +74,7 @@ builder.Services.AddSingleton(new MigrationCatalog([
     new OpenSessionGuardMigration(),
     new IndexesAndConstraintsMigration(),
     new DurableNotificationsAndBackoffMigration(),
+    new HashPlaydexAppKeysMigration(),
 ]));
 builder.Services.AddSingleton<MigrationRunner>();
 builder.Services.AddScoped<EventBus>();
