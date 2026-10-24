@@ -32,6 +32,25 @@ public sealed class PlaydexSummaryTests : IDisposable
     }
 
     [Fact]
+    public async Task TheKeyIsNotSentOverPlainHttpToAnotherHost()
+    {
+        var handler = new SummaryHandler(Envelope("""{"generatedAt":"2026-10-10T16:00:00Z"}"""));
+        using var api = new CaptureClient("plx_key", "http://playdex.test/api", handler);
+
+        Assert.Null(await api.GetLauncherSummaryAsync());
+        var check = await api.CheckKeyAsync();
+
+        Assert.Empty(handler.Requests);
+        Assert.Equal(ApiKeyStatus.Unreachable, check.Status);
+        Assert.Contains("HTTPS", check.Detail, StringComparison.Ordinal);
+
+        // A server on this PC is fine over HTTP.
+        using var local = new CaptureClient("plx_key", "http://localhost:5000/api", handler);
+        Assert.NotNull(await local.GetLauncherSummaryAsync());
+        Assert.Equal("Bearer plx_key", Assert.Single(handler.Requests).Authorization);
+    }
+
+    [Fact]
     public async Task ASummaryThatOnlyDiffersInGeneratedAtIsNoChange()
     {
         var handler = new SummaryHandler(Envelope("""{"generatedAt":"2026-10-10T16:00:00Z","today":{"totalSeconds":60}}"""));

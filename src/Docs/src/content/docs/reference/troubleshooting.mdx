@@ -18,3 +18,4 @@ sidebar:
 | Saving a Telegram chat ID fails | `TELEGRAM_BOT_TOKEN` is missing or wrong. Run `docker compose up -d` after you fix it. |
 | AI drafts are missing from the app | All three are needed: `AI_DRAFTS_ENABLED=true`, a key and a model. |
 | The Windows app says the key is wrong | The server must end in `/api`: `https://playdex.example.com/api`. |
+| The Windows app says the server address must use HTTPS | Put the server behind HTTPS (the self-host Caddy setup does this). Plain `http://` works only for `localhost`. |

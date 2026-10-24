@@ -21,4 +21,6 @@ Playdex for Windows records the PC games you play, backs up saves, and includes 
 
 To change the server later, open the app's **Settings → Playdex account**.
 
+The server address must start with `https://`: the app sends your API key with every request and won't send it over plain HTTP. The one exception is a server on the same PC (`http://localhost`). The app keeps the key encrypted for your Windows user in `%LOCALAPPDATA%\Playdex\config.json`.
+
 The installer and app updates always come from `download.playdex.dev`. Your play data only goes to your server.

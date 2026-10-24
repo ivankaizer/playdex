@@ -1,3 +1,4 @@
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -29,7 +30,8 @@ public sealed record ConfigReset(string Path, string? MovedTo)
 }
 
 /// <summary>
-/// Reads and writes a <see cref="AppConfig"/>. Saves are atomic (a temporary file, then a move). The install's store,
+/// Reads and writes a <see cref="AppConfig"/>. Saves are atomic (a temporary file, then a move); the keys in it are
+/// encrypted for the Windows user (<see cref="ConfigSecret"/>). The install's store,
 /// <see cref="Default"/>, is created on first use from the Wrapper's and the launcher's configs from before the merge,
 /// which are left in place.
 /// </summary>
@@ -82,8 +84,14 @@ public sealed class ConfigStore
             return created;
         }
 
-        using var stream = File.OpenRead(PathToConfig);
-        return Normalize(JsonSerializer.Deserialize(stream, ConfigJson.Default.AppConfig) ?? new AppConfig());
+        var json = WithoutBom(File.ReadAllBytes(PathToConfig));
+        var config = Normalize(JsonSerializer.Deserialize(json.Span, ConfigJson.Default.AppConfig) ?? new AppConfig());
+        if (HasPlainTextKey(json))
+        {
+            Save(config);
+            Log.Info("config: encrypted the keys saved in plain text");
+        }
+        return config;
     }
 
     /// <summary>
@@ -129,9 +137,14 @@ public sealed class ConfigStore
             return created;
         }
 
-        await using var stream = File.OpenRead(PathToConfig);
-        var config = await JsonSerializer.DeserializeAsync(stream, ConfigJson.Default.AppConfig, cancellationToken);
-        return Normalize(config ?? new AppConfig());
+        var json = WithoutBom(await File.ReadAllBytesAsync(PathToConfig, cancellationToken));
+        var config = Normalize(JsonSerializer.Deserialize(json.Span, ConfigJson.Default.AppConfig) ?? new AppConfig());
+        if (HasPlainTextKey(json))
+        {
+            await SaveAsync(config, cancellationToken);
+            Log.Info("config: encrypted the keys saved in plain text");
+        }
+        return config;
     }
 
     public void Save(AppConfig config)
@@ -273,6 +286,26 @@ public sealed class ConfigStore
         }
         Log.Info($"config: dropped the per-game API key of {keys.Count} game(s); every game now uses the install's key");
     }
+
+    /// <summary>
+    /// Whether the file has a key in plain text: saved before keys were encrypted (<see cref="ConfigSecret"/>), or typed
+    /// into the file by hand. Loading it saves the config again, so the key is encrypted from then on.
+    /// </summary>
+    private static bool HasPlainTextKey(ReadOnlyMemory<byte> json)
+    {
+        using var document = JsonDocument.Parse(json);
+        return PlainTextKey(document.RootElement, "api") || PlainTextKey(document.RootElement, "steamGridDb");
+
+        static bool PlainTextKey(JsonElement root, string section) =>
+            root.ValueKind == JsonValueKind.Object
+            && root.TryGetProperty(section, out var value) && value.ValueKind == JsonValueKind.Object
+            && value.TryGetProperty("apiKey", out var key) && key.ValueKind == JsonValueKind.String
+            && !string.IsNullOrWhiteSpace(key.GetString()) && !ConfigSecret.IsProtected(key.GetString());
+    }
+
+    /// <summary>A file saved as "UTF-8 with BOM" (Notepad can) reads like any other; the JSON reader takes no BOM.</summary>
+    private static ReadOnlyMemory<byte> WithoutBom(byte[] json) =>
+        json.AsSpan().StartsWith(Encoding.UTF8.Preamble) ? json.AsMemory(Encoding.UTF8.Preamble.Length) : json;
 
     private static AppConfig Normalize(AppConfig config)
     {

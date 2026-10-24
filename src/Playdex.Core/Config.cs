@@ -113,6 +113,8 @@ public sealed class ApiConfig
     public const string DefaultBaseUrl = "https://dash.playdex.dev/api";
 
     public string BaseUrl { get; set; } = DefaultBaseUrl;
+
+    [JsonConverter(typeof(ConfigSecretJsonConverter))]
     public string ApiKey { get; set; } = "";
     public string Platform { get; set; } = DefaultPlatform;
     public int PingIntervalSeconds { get; set; } = 30;
@@ -158,14 +160,27 @@ public sealed class ApiConfig
             throw new InvalidOperationException("API base URL must be an absolute HTTP or HTTPS URL.");
         }
 
+        if (!IsSecure(uri))
+        {
+            throw new InvalidOperationException("API base URL must use HTTPS. HTTP is only for a server on this PC (localhost).");
+        }
+
         return normalized;
     }
+
+    /// <summary>
+    /// Whether the API key may be sent to <paramref name="uri"/>: HTTPS, or HTTP to this PC. The key is a bearer token, so
+    /// over HTTP anyone on the network path could read it and use it.
+    /// </summary>
+    public static bool IsSecure(Uri uri) =>
+        uri.Scheme == Uri.UriSchemeHttps || (uri.Scheme == Uri.UriSchemeHttp && uri.IsLoopback);
 }
 
 public sealed class SteamGridDbConfig
 {
     public const int MaximumApiKeyLength = 4096;
 
+    [JsonConverter(typeof(ConfigSecretJsonConverter))]
     public string ApiKey { get; set; } = "";
     public bool IsConfigured => !string.IsNullOrWhiteSpace(ApiKey);
 
