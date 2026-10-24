@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -88,8 +89,15 @@ public sealed class ConfigStore
         var config = Normalize(JsonSerializer.Deserialize(json.Span, ConfigJson.Default.AppConfig) ?? new AppConfig());
         if (HasPlainTextKey(json))
         {
-            Save(config);
-            Log.Info("config: encrypted the keys saved in plain text");
+            try
+            {
+                Save(config);
+                Log.Info("config: encrypted the keys saved in plain text");
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or CryptographicException)
+            {
+                Log.Error($"config: could not save {PathToConfig} with its keys encrypted; they stay in plain text until it can", ex);
+            }
         }
         return config;
     }
@@ -141,8 +149,15 @@ public sealed class ConfigStore
         var config = Normalize(JsonSerializer.Deserialize(json.Span, ConfigJson.Default.AppConfig) ?? new AppConfig());
         if (HasPlainTextKey(json))
         {
-            await SaveAsync(config, cancellationToken);
-            Log.Info("config: encrypted the keys saved in plain text");
+            try
+            {
+                await SaveAsync(config, cancellationToken);
+                Log.Info("config: encrypted the keys saved in plain text");
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or CryptographicException)
+            {
+                Log.Error($"config: could not save {PathToConfig} with its keys encrypted; they stay in plain text until it can", ex);
+            }
         }
         return config;
     }
@@ -289,7 +304,8 @@ public sealed class ConfigStore
 
     /// <summary>
     /// Whether the file has a key in plain text: saved before keys were encrypted (<see cref="ConfigSecret"/>), or typed
-    /// into the file by hand. Loading it saves the config again, so the key is encrypted from then on.
+    /// into the file by hand. Loading it saves the config again, so the key is encrypted from then on; a file that can't be
+    /// written (a read-only config a generated launcher names) is still loaded.
     /// </summary>
     private static bool HasPlainTextKey(ReadOnlyMemory<byte> json)
     {

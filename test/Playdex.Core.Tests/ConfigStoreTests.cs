@@ -257,6 +257,26 @@ public sealed class ConfigStoreTests : IDisposable
     }
 
     [Fact]
+    public void AReadOnlyConfigWithAPlainTextKeyStillLoads()
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(ConfigPath)!);
+        File.WriteAllText(ConfigPath, """{ "api": { "apiKey": "plx_old" } }""");
+        // Saving replaces the file, which Windows refuses for a read-only one.
+        var folder = new DirectoryInfo(Path.GetDirectoryName(ConfigPath)!);
+        File.SetAttributes(ConfigPath, FileAttributes.ReadOnly);
+        try
+        {
+            Assert.Equal("plx_old", Store().LoadOrCreate().Api.ApiKey);
+            Assert.Contains("plx_old", File.ReadAllText(ConfigPath), StringComparison.Ordinal);
+        }
+        finally
+        {
+            File.SetAttributes(ConfigPath, FileAttributes.Normal);
+        }
+        Assert.Empty(folder.GetFiles("*.tmp"));
+    }
+
+    [Fact]
     public void AKeyThisUserCantDecryptReadsAsNone()
     {
         Directory.CreateDirectory(Path.GetDirectoryName(ConfigPath)!);
