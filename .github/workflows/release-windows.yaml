@@ -13,36 +13,20 @@ name: Release Windows apps
 #                                                       LAUNCHER_SIGNING_PFX and LAUNCHER_SIGNING_PASSWORD secrets are set
 # The files are made by tools/package-windows.ps1, which also builds them locally for a test.
 # The same files go to download.playdex.dev, the public feed that installs, updates and the landing use.
-# A tag builds on the PC when its runner is online and on GitHub otherwise; to choose, run the workflow by hand on the
-# tag: gh workflow run release-windows.yaml --ref v<version> -f runner=pc (docs/windows-pc-runner.md).
 
 on:
   push:
     tags:
       - "v*"
   workflow_dispatch:
-    inputs:
-      runner:
-        description: Where to build (auto is the PC when its runner is online); run it on the tag
-        type: choice
-        options: [auto, pc, github]
-        default: auto
 
 permissions:
   contents: write
 
 jobs:
-  runner:
-    uses: ./.github/workflows/windows-runner.yaml
-    with:
-      choice: ${{ inputs.runner || 'auto' }}
-    secrets:
-      RUNNERS_TOKEN: ${{ secrets.RUNNERS_TOKEN }}
-
   release:
-    name: Build and release the Windows apps (${{ needs.runner.outputs.where }})
-    needs: runner
-    runs-on: ${{ fromJSON(needs.runner.outputs.runner) }}
+    name: Build and release the Windows apps
+    runs-on: windows-latest
     # Scripts read the tag (and the version taken from it) from the environment: an expression expanded into a script's
     # text would run whatever a crafted ref name holds.
     env:
@@ -78,15 +62,6 @@ jobs:
         uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
         with:
           dotnet-version: "10.0.x"
-        env:
-          # The PC's runner service can't write to the default C:\Program Files\dotnet.
-          DOTNET_INSTALL_DIR: ${{ runner.environment == 'self-hosted' && format('{0}\dotnet', runner.tool_cache) || '' }}
-
-      # Native AOT links with MSVC, which it finds through vswhere; windows-latest has vswhere on PATH already.
-      - name: Put vswhere on PATH
-        if: runner.environment == 'self-hosted'
-        shell: pwsh
-        run: Add-Content $env:GITHUB_PATH "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer"
 
       - name: Set up Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0

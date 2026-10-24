@@ -17,8 +17,7 @@ concurrency:
 
 jobs:
   publish:
-    # macserv while the repository is private (GitHub-hosted minutes are limited), GitHub-hosted once it is public.
-    runs-on: ${{ github.event.repository.private && fromJSON('["self-hosted","macserv"]') || 'ubuntu-latest' }}
+    runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
