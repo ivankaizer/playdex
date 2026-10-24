@@ -26,6 +26,7 @@ public sealed class GameLockTests
         // The backup scheduler checks the lock while the game may be starting: the check must not take the lock.
         var directory = NewTempDir();
         using var stop = new CancellationTokenSource();
+        var checking = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var checks = Task.Run(() =>
         {
             var count = 0;
@@ -33,10 +34,13 @@ public sealed class GameLockTests
             {
                 _ = GameLock.IsHeld(directory, "hades");
                 count++;
+                checking.TrySetResult();
             }
             return count;
         });
 
+        // On a busy runner the checks can start after the loop below has finished; make them overlap.
+        await checking.Task;
         for (var i = 0; i < 500; i++)
         {
             using var held = GameLock.Acquire(directory, "hades");

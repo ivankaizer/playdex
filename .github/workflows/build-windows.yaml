@@ -93,8 +93,9 @@ jobs:
           bun install --frozen-lockfile
           bun run build
 
+      # Warning-free like Playdex.sln in test.yaml; these projects aren't in the solution, so this is their only check.
       - name: Build the desktop app, the launcher and the setup
         run: |
-          dotnet build src/Desktop/Playdex.Desktop.csproj -c Release
-          dotnet build src/Launcher/Host/Playdex.Launcher.Host.csproj -c Release
-          dotnet build src/Playdex.Setup/Playdex.Setup.csproj -c Release
+          dotnet build src/Desktop/Playdex.Desktop.csproj -c Release --warnaserror
+          dotnet build src/Launcher/Host/Playdex.Launcher.Host.csproj -c Release --warnaserror
+          dotnet build src/Playdex.Setup/Playdex.Setup.csproj -c Release --warnaserror
