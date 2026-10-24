@@ -216,6 +216,92 @@ public sealed class ConfigStoreTests : IDisposable
         Assert.DoesNotContain("corrupt", reset.Message, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task KeysAreSavedEncryptedForThisWindowsUser()
+    {
+        var store = Store();
+        var config = store.LoadOrCreate();
+        config.Api.ApiKey = "plx_install-key";
+        config.SteamGridDb.ApiKey = "artwork-key";
+        await store.SaveAsync(config);
+
+        var saved = File.ReadAllText(ConfigPath);
+        Assert.DoesNotContain("plx_install-key", saved, StringComparison.Ordinal);
+        Assert.DoesNotContain("artwork-key", saved, StringComparison.Ordinal);
+        Assert.Contains("\"apiKey\": \"dpapi:", saved, StringComparison.Ordinal);
+
+        var loaded = Store().LoadOrCreate();
+        Assert.Equal("plx_install-key", loaded.Api.ApiKey);
+        Assert.Equal("artwork-key", loaded.SteamGridDb.ApiKey);
+        Assert.Equal(saved, File.ReadAllText(ConfigPath)); // nothing to encrypt: not saved again
+    }
+
+    [Fact]
+    public async Task KeysSavedInPlainTextAreEncryptedWhenLoaded()
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(ConfigPath)!);
+        const string PlainText = """{ "api": { "apiKey": "plx_old" }, "steamGridDb": { "apiKey": "artwork-old" } }""";
+        File.WriteAllText(ConfigPath, PlainText);
+
+        var config = Store().LoadOrCreate();
+
+        Assert.Equal("plx_old", config.Api.ApiKey);
+        Assert.Equal("artwork-old", config.SteamGridDb.ApiKey);
+        var saved = File.ReadAllText(ConfigPath);
+        Assert.DoesNotContain("plx_old", saved, StringComparison.Ordinal);
+        Assert.DoesNotContain("artwork-old", saved, StringComparison.Ordinal);
+
+        File.WriteAllText(ConfigPath, PlainText);
+        Assert.Equal("plx_old", (await Store().LoadOrCreateAsync()).Api.ApiKey);
+        Assert.DoesNotContain("plx_old", File.ReadAllText(ConfigPath), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AReadOnlyConfigWithAPlainTextKeyStillLoads()
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(ConfigPath)!);
+        File.WriteAllText(ConfigPath, """{ "api": { "apiKey": "plx_old" } }""");
+        // Saving replaces the file, which Windows refuses for a read-only one.
+        var folder = new DirectoryInfo(Path.GetDirectoryName(ConfigPath)!);
+        File.SetAttributes(ConfigPath, FileAttributes.ReadOnly);
+        try
+        {
+            Assert.Equal("plx_old", Store().LoadOrCreate().Api.ApiKey);
+            Assert.Contains("plx_old", File.ReadAllText(ConfigPath), StringComparison.Ordinal);
+        }
+        finally
+        {
+            File.SetAttributes(ConfigPath, FileAttributes.Normal);
+        }
+        Assert.Empty(folder.GetFiles("*.tmp"));
+    }
+
+    [Fact]
+    public void AKeyThisUserCantDecryptReadsAsNone()
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(ConfigPath)!);
+        // As if copied from another PC: a DPAPI value this user's keys don't open, and one that isn't base64.
+        File.WriteAllText(ConfigPath, """
+            { "api": { "apiKey": "dpapi:AQAAANCMnd8BFdERjHoAwE/Cl+sBAAAA" }, "steamGridDb": { "apiKey": "dpapi:not base64" } }
+            """);
+
+        var store = Store();
+        var config = store.LoadOrRecover();
+
+        Assert.Equal("", config.Api.ApiKey);
+        Assert.Equal("", config.SteamGridDb.ApiKey);
+        Assert.Null(store.Reset); // the rest of the config is kept
+    }
+
+    [Fact]
+    public void AConfigSavedWithABomIsRead()
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(ConfigPath)!);
+        File.WriteAllText(ConfigPath, """{ "api": { "baseUrl": "https://example.test/api" } }""", new System.Text.UTF8Encoding(encoderShouldEmitUTF8Identifier: true));
+
+        Assert.Equal("https://example.test/api", Store().LoadOrCreate().Api.BaseUrl);
+    }
+
     public void Dispose() => Directory.Delete(_directory, recursive: true);
 
     private ConfigStore Store() => new(ConfigPath, WrapperConfig, LauncherConfig);

@@ -371,7 +371,11 @@ public sealed class ConfigurationTests
         game.Platform = "gog";
         Assert.Equal("gog", api.ResolvePlatform(game));
 
-        foreach (var invalid in new[] { "example.test/api", "file:///C:/example", "http://" })
+        Assert.Equal("http://127.0.0.1:5000/api", ApiConfig.NormalizeBaseUrl("http://127.0.0.1:5000/api"));
+        Assert.Equal("http://[::1]/api", ApiConfig.NormalizeBaseUrl("http://[::1]/api"));
+
+        // The key is a bearer token: plain HTTP only to this PC.
+        foreach (var invalid in new[] { "example.test/api", "file:///C:/example", "http://", "http://example.test/api", "http://192.168.1.20:8080/api" })
         {
             try
             {

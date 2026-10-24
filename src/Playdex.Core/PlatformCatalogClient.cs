@@ -36,6 +36,11 @@ public sealed class PlatformCatalogClient : IDisposable
             return new PlatformCatalogLoad([], "Enter an API key to load Platforms.");
         }
 
+        if (!ApiConfig.IsSecure(_http.BaseAddress!))
+        {
+            return new PlatformCatalogLoad([], "The API URL must use HTTPS (HTTP only for localhost).");
+        }
+
         try
         {
             using var request = new HttpRequestMessage(HttpMethod.Get, "capture/platforms");

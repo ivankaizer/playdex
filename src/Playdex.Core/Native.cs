@@ -124,6 +124,30 @@ internal static unsafe partial class Native
     [return: MarshalAs(UnmanagedType.Bool)]
     public static partial bool AllowSetForegroundWindow(uint processId);
 
+    // ---- DPAPI ----
+
+    public const uint CryptProtectUiForbidden = 0x1;
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct DataBlob
+    {
+        public uint Size;
+        public byte* Data;
+    }
+
+    [LibraryImport("crypt32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool CryptProtectData(
+        DataBlob* dataIn, nint description, DataBlob* entropy, nint reserved, nint prompt, uint flags, DataBlob* dataOut);
+
+    [LibraryImport("crypt32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool CryptUnprotectData(
+        DataBlob* dataIn, nint description, DataBlob* entropy, nint reserved, nint prompt, uint flags, DataBlob* dataOut);
+
+    [LibraryImport("kernel32.dll")]
+    public static partial nint LocalFree(nint memory);
+
     /// <summary>Wall-clock now as a FILETIME (100 ns ticks), comparable with GetProcessTimes.</summary>
     public static long PreciseNow()
     {

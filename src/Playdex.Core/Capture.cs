@@ -128,7 +128,7 @@ public sealed record ApiKeyCheck(ApiKeyStatus Status, string? Detail = null);
 /// Playdex API client for what the API key reaches: capture (POST /capture/sessions/start, /ping, /end and
 /// /capture/sessions) and the launcher's read endpoint (GET /launcher/summary). The API key and URL
 /// come from PLAYDEX_API_KEY and PLAYDEX_API_URL, or the install's config (<see cref="ConfigStore.Default"/>); the key
-/// is never logged.
+/// is never logged, and is sent only over HTTPS (or HTTP to localhost).
 /// </summary>
 public sealed class CaptureClient : IDisposable
 {
@@ -166,7 +166,20 @@ public sealed class CaptureClient : IDisposable
 
     public bool IsConfigured => !string.IsNullOrWhiteSpace(_apiKey());
 
-    private Uri BaseAddress => new(_baseUrl().Trim().TrimEnd('/') + "/");
+    /// <summary>
+    /// The API's address. A config saved before HTTP was refused, or PLAYDEX_API_URL, can still name an HTTP server on
+    /// the network: requests to it fail without sending the key (logged, and a finished session stays queued).
+    /// </summary>
+    private Uri BaseAddress
+    {
+        get
+        {
+            var address = new Uri(_baseUrl().Trim().TrimEnd('/') + "/");
+            return ApiConfig.IsSecure(address)
+                ? address
+                : throw new HttpRequestException($"the API URL {address} must use HTTPS (HTTP only for localhost); the key was not sent");
+        }
+    }
 
     public Task<bool> StartAsync(CaptureGame game) => PostAsync("capture/sessions/start", game, CaptureJson.Default.CaptureGame);
 
