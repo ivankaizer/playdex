@@ -190,7 +190,7 @@ export function IntegrationsPage() {
                       <Td className="text-center">{integration.active ? <Badge tone="success">Yes</Badge> : <Badge>No</Badge>}</Td>
                       <Td>
                         <div className="flex min-w-[220px] items-center justify-between gap-3">
-                          <span className="break-all font-mono text-xs text-ink-2">{integration.apiKey ?? "Not set"}</span>
+                          <span className="text-xs text-ink-2">{integration.hasApiKey ? "Set" : "Not set"}</span>
                           <Button variant="accent" size="sm" className="shrink-0" onClick={() => beginEdit(integration)}>
                             Edit
                           </Button>
@@ -260,9 +260,11 @@ export function IntegrationsPage() {
               {form.replaceApiKey ? (
                 <TextInput
                   className="!h-11"
+                  type="password"
+                  autoComplete="off"
                   value={form.apiKey}
                   onChange={(event) => setForm({ ...form, apiKey: event.target.value })}
-                  placeholder="API key (empty clears it)"
+                  placeholder="New API key (empty clears it)"
                   aria-label="API key"
                 />
               ) : null}

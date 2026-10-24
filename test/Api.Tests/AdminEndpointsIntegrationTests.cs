@@ -2,6 +2,7 @@ using System.Data.Common;
 using System.Globalization;
 using System.Net;
 using System.Net.Http.Json;
+using Api.Infrastructure.Auth;
 using Api.Infrastructure.Common;
 using Api.Modules.Admin;
 using Microsoft.EntityFrameworkCore;
@@ -178,10 +179,12 @@ public sealed class AdminEndpointsIntegrationTests(AdminApiFixture fixture)
         var platformIntegration = await scenario.AddIntegrationAsync(IntegrationType.Steam, scenario.Platform.Id, true, "z-account", "old-secret");
         var apiIntegration = await scenario.AddIntegrationAsync(IntegrationType.Api, null, true, "a-account", "api-secret");
 
-        var rows = (await AdminApiFixture.ReadDataAsync<List<AdminIntegrationDto>>(await client.GetAsync("/api/admin/integrations")))
+        using var listing = await client.GetAsync("/api/admin/integrations");
+        Assert.DoesNotContain("secret", await listing.Content.ReadAsStringAsync());
+        var rows = (await AdminApiFixture.ReadDataAsync<List<AdminIntegrationDto>>(listing))
             .Where(row => row.Email == scenario.User.Email).ToList();
-        Assert.Equal("old-secret", Assert.Single(rows, row => row.Id == platformIntegration.Id).ApiKey);
-        Assert.Equal("api-secret", Assert.Single(rows, row => row.Id == apiIntegration.Id).ApiKey);
+        Assert.True(Assert.Single(rows, row => row.Id == platformIntegration.Id).HasApiKey);
+        Assert.True(Assert.Single(rows, row => row.Id == apiIntegration.Id).HasApiKey);
         Assert.Equal(new[] { "api", scenario.Platform.Key }.Order(), rows.Select(row => row.Platform));
 
         using (var response = await client.PatchAsJsonAsync($"/api/admin/integrations/{platformIntegration.Id}",
@@ -203,7 +206,7 @@ public sealed class AdminEndpointsIntegrationTests(AdminApiFixture fixture)
         }
 
         var api = await db.Integrations.AsNoTracking().SingleAsync(row => row.Id == apiIntegration.Id);
-        Assert.Equal("replacement-secret", api.ApiKey);
+        Assert.Equal(PlaydexAppKeys.Hash("replacement-secret"), api.ApiKey);
         Assert.Equal("a-account", api.AccountId);
 
         using (var response = await client.PatchAsJsonAsync($"/api/admin/integrations/{apiIntegration.Id}",
@@ -554,7 +557,7 @@ public sealed class AdminEndpointsIntegrationTests(AdminApiFixture fixture)
         await using (var failing = new PlaydexDbContext(options))
         {
             await Assert.ThrowsAsync<InvalidOperationException>(() =>
-                new AdminRepository(failing).MergeGames(source.Id, scenario.Game.Id, CancellationToken.None));
+                new AdminRepository(failing, TestCredentials.Protector).MergeGames(source.Id, scenario.Game.Id, CancellationToken.None));
         }
 
         await using var verification = fixture.CreateDb();

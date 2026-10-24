@@ -16,7 +16,7 @@ namespace Api.Tests;
 public sealed class PlaydexApiFactory : WebApplicationFactory<Program>
 {
     protected override void ConfigureWebHost(IWebHostBuilder builder) =>
-        builder.ConfigureTestServices(services =>
+        builder.UseSetting("Credentials:EncryptionKey", TestCredentials.Key).ConfigureTestServices(services =>
         {
             var apiAssembly = typeof(Program).Assembly;
             var workers = services

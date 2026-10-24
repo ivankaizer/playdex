@@ -26,12 +26,13 @@ import { Steps, Aside } from '@astrojs/starlight/components';
 
 2. **Fill in `.env`**
 
-   Three values are required:
+   Four values are required:
 
    ```sh title=".env"
    PLAYDEX_DOMAIN=playdex.example.com
    POSTGRES_PASSWORD=   # openssl rand -hex 32
    JWT_SECRET=          # openssl rand -hex 32
+   CREDENTIALS_KEY=     # openssl rand -hex 32
    ```
 
    Everything else is optional. See [Configuration](/reference/configuration/).

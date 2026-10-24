@@ -1,4 +1,4 @@
-using System.Security.Cryptography;
+using Api.Infrastructure.Auth;
 using Api.Infrastructure.Http;
 using Playdex.Persistence;
 
@@ -9,7 +9,7 @@ public sealed class ProvidersService(ProvidersRepository repository)
     public async Task<ProvidersResponseDto> ListProviders(long userId, CancellationToken ct)
     {
         var providers = await repository.ListProviders(userId, ct);
-        return new ProvidersResponseDto(providers.Select(ToResponse).ToList());
+        return new ProvidersResponseDto(providers);
     }
 
     public async Task<CreateProviderResponseDto> CreateProvider(
@@ -41,7 +41,7 @@ public sealed class ProvidersService(ProvidersRepository repository)
             throw AppProblemException.NotFound($"{PlatformName(creation.Platform)} platform is not installed.");
         }
 
-        return new CreateProviderResponseDto(ToResponse(result.Provider));
+        return new CreateProviderResponseDto(result.Provider);
     }
 
     public async Task<ProviderUpdateResponseDto> UpdateProviderStatus(long userId, ProviderUpdateRequest request, CancellationToken ct)
@@ -57,14 +57,15 @@ public sealed class ProvidersService(ProvidersRepository repository)
             throw AppProblemException.NotFound("Provider not found.");
         }
 
-        return new ProviderUpdateResponseDto(ToResponse(provider));
+        return new ProviderUpdateResponseDto(provider);
     }
 
-    public async Task<ApiKeyResponseDto> GetOrCreateApiKey(long userId, CancellationToken ct)
+    /// <summary>A new Playdex app key, replacing the user's old one. This is the only time the key is shown.</summary>
+    public async Task<ApiKeyResponseDto> IssueAppKey(long userId, CancellationToken ct)
     {
-        var apiKey = GenerateApiKey();
-        var key = await repository.GetOrCreateApiKey(userId, apiKey, ct);
-        return new ApiKeyResponseDto(key);
+        var apiKey = PlaydexAppKeys.Generate();
+        await repository.IssueAppKey(userId, apiKey, ct);
+        return new ApiKeyResponseDto(apiKey);
     }
 
     public async Task<ProviderCredentialUpdateResponseDto> UpdateCredential(
@@ -107,7 +108,7 @@ public sealed class ProvidersService(ProvidersRepository repository)
             throw AppProblemException.NotFound("Provider not found.");
         }
 
-        return new ProviderCredentialUpdateResponseDto(ToResponse(provider));
+        return new ProviderCredentialUpdateResponseDto(provider);
     }
 
     public async Task<ProviderSessionPlatformUpdateResponseDto> UpdateSessionPlatform(
@@ -138,7 +139,7 @@ public sealed class ProvidersService(ProvidersRepository repository)
             throw AppProblemException.NotFound("Provider not found.");
         }
 
-        return new ProviderSessionPlatformUpdateResponseDto(ToResponse(result.Provider));
+        return new ProviderSessionPlatformUpdateResponseDto(result.Provider);
     }
 
     public async Task<OpenXblConnectResponseDto> ConnectOpenXbl(
@@ -193,13 +194,7 @@ public sealed class ProvidersService(ProvidersRepository repository)
             throw AppProblemException.NotFound("Xbox provider is not installed.");
         }
 
-        return new OpenXblConnectResponseDto(ToResponse(result.Provider));
-    }
-
-    internal static string GenerateApiKey()
-    {
-        var bytes = RandomNumberGenerator.GetBytes(16);
-        return "plx_" + Convert.ToHexString(bytes).ToLowerInvariant();
+        return new OpenXblConnectResponseDto(result.Provider);
     }
 
     internal static string NormalizeSessionPlatformKey(string? value)
@@ -263,12 +258,6 @@ public sealed class ProvidersService(ProvidersRepository repository)
             throw AppProblemException.Validation("Xbox XUID must contain digits only.");
         }
     }
-
-    internal static ProviderStatusDto ToResponse(ProviderStatusDto provider) =>
-        provider with
-        {
-            ApiKey = provider.ApiKeyLocked && provider.Platform != "api" ? null : provider.ApiKey,
-        };
 
     private static AppProblemException DuplicateAccount(string platform) =>
         AppProblemException.Conflict($"This {PlatformName(platform)} account is already connected.");

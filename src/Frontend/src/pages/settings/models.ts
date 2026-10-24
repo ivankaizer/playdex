@@ -10,7 +10,8 @@ export interface ProviderStatus {
   platform: string;
   accountId: string | null;
   status: string;
-  apiKey: string | null;
+  /** Whether a key is saved; the server never sends it back. */
+  hasApiKey: boolean;
   apiKeyLocked: boolean;
   sessionPlatform?: ProviderPlatform | null;
   sessionPlatformOptions?: ProviderPlatform[] | null;
@@ -37,6 +38,11 @@ export interface ProviderSessionPlatformUpdateResponse {
 
 export interface ProviderCreateResponse {
   provider: ProviderStatus;
+}
+
+/** A new Playdex app key, from POST /key. The only time the server shows it. */
+export interface AppKeyResponse {
+  apiKey: string;
 }
 
 export interface UserSettingsResponse {

@@ -47,7 +47,7 @@ const steam: ProviderStatus = {
   platform: "steam",
   accountId: "steam-account",
   status: "active",
-  apiKey: null,
+  hasApiKey: true,
   apiKeyLocked: false,
 };
 
@@ -244,7 +244,7 @@ describe("SettingsPage", () => {
     expect(screen.getAllByRole("button", { name: "Manage" })).toHaveLength(7);
   });
   it("creates the Playdex app key when there is none and then shows its setup values", async () => {
-    const app: ProviderStatus = { id: 2, platform: "api", accountId: null, status: "active", apiKey: "plx_new", apiKeyLocked: false };
+    const app: ProviderStatus = { id: 2, platform: "api", accountId: null, status: "active", hasApiKey: true, apiKeyLocked: false };
     let providers: ProviderStatus[] = [steam];
     const post = vi.fn(() => {
       providers = [steam, app];
@@ -256,7 +256,29 @@ describe("SettingsPage", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Create API key" }));
 
     expect(await screen.findByLabelText("API key")).toHaveValue("plx_new");
+    expect(screen.getByText(/won't show it again/)).toBeInTheDocument();
     expect(post).toHaveBeenCalledWith("/key", expect.objectContaining({ method: "POST" }));
     expect(screen.queryByRole("button", { name: "Create API key" })).toBeNull();
+  });
+
+  it("never shows a saved Playdex app key, and replaces it only after confirming", async () => {
+    const app: ProviderStatus = { id: 2, platform: "api", accountId: "api", status: "active", hasApiKey: true, apiKeyLocked: true };
+    const post = vi.fn(() => Promise.resolve({ apiKey: "plx_replacement" }));
+    routeApi({ "GET /providers": () => Promise.resolve({ providers: [steam, app] }), "POST /key": post });
+    renderPage();
+
+    expect(await screen.findByText("Shown only when it's created")).toBeInTheDocument();
+    expect(screen.queryByLabelText("API key")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Lost the key? Replace it" }));
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(post).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Lost the key? Replace it" }));
+    expect(screen.getByText(/stops recording until you enter the new key/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Replace key" }));
+
+    expect(await screen.findByLabelText("API key")).toHaveValue("plx_replacement");
+    expect(post).toHaveBeenCalledTimes(1);
   });
 });

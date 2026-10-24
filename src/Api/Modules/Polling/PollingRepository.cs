@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using Api.Infrastructure.Credentials;
 using Microsoft.EntityFrameworkCore;
 using Playdex.Persistence;
 using Api.Modules.Games;
@@ -5,7 +7,8 @@ using Api.Modules.Sessions;
 
 namespace Api.Modules.Polling;
 
-public sealed class PollingRepository(PlaydexDbContext db, IGameResolver gameResolver, SessionLifecycle sessions)
+public sealed class PollingRepository(
+    PlaydexDbContext db, IGameResolver gameResolver, SessionLifecycle sessions, CredentialProtector protector)
 {
     public async Task<SuccessfulPollOutcome> ApplySuccessfulPoll(
         long credentialId,
@@ -102,7 +105,7 @@ public sealed class PollingRepository(PlaydexDbContext db, IGameResolver gameRes
             {
                 Id = r.Id,
                 UserId = r.UserId,
-                ApiKey = r.ApiKey,
+                ApiKey = Decrypt(r.Id, r.ApiKey),
                 AccountId = r.AccountId,
                 CreatedAt = r.CreatedAt,
                 UpdatedAt = r.UpdatedAt,
@@ -112,6 +115,19 @@ public sealed class PollingRepository(PlaydexDbContext db, IGameResolver gameRes
             GetProviderKey(r.Type),
             r.NextPollAt
         )).ToList();
+    }
+
+    private string? Decrypt(long integrationId, string? apiKey)
+    {
+        try
+        {
+            return protector.Unprotect(apiKey);
+        }
+        catch (CryptographicException exception)
+        {
+            throw new CryptographicException(
+                $"The credential of integration {integrationId} can't be decrypted. Was CREDENTIALS_KEY changed?", exception);
+        }
     }
 
     /// <summary>

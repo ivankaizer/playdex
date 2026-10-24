@@ -1,29 +1,16 @@
-import { useState } from "react";
-import { apiRequest, errorMessage } from "@/lib/api";
 import { setupUrl } from "@/lib/downloads";
+import type { Integrations } from "./useIntegrations";
 
 interface PlaydexAppKeyCreatorProps {
-  /** Reloads the integrations, so the new Playdex app integration shows with its setup values. */
-  onCreated: () => Promise<void>;
+  integrations: Integrations;
 }
 
-/** Before a user has a Playdex app key: one button that creates it (POST /key returns the existing key if any). */
-export function PlaydexAppKeyCreator({ onCreated }: PlaydexAppKeyCreatorProps) {
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  async function create() {
-    setBusy(true);
-    setError(null);
-    try {
-      await apiRequest<{ apiKey: string }>("/key", { method: "POST" });
-      await onCreated();
-    } catch (failure) {
-      setError(errorMessage(failure));
-    } finally {
-      setBusy(false);
-    }
-  }
+/**
+ * Before a user has a Playdex app key: one button that creates it. The new Playdex app integration then shows the key
+ * with its setup values, once.
+ */
+export function PlaydexAppKeyCreator({ integrations }: PlaydexAppKeyCreatorProps) {
+  const { isAppKeyIssuing: busy, appKeyError: error } = integrations.state;
 
   return (
     <div
@@ -45,7 +32,12 @@ export function PlaydexAppKeyCreator({ onCreated }: PlaydexAppKeyCreatorProps) {
           </p>
         ) : null}
       </div>
-      <button type="button" onClick={() => void create()} disabled={busy} className="pdx-btn-primary !h-10 !px-5 !text-[13px]">
+      <button
+        type="button"
+        onClick={() => void integrations.issueAppKey()}
+        disabled={busy}
+        className="pdx-btn-primary !h-10 !px-5 !text-[13px]"
+      >
         {busy ? "Creating..." : "Create API key"}
       </button>
     </div>

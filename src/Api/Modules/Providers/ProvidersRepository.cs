@@ -1,3 +1,4 @@
+using Api.Infrastructure.Credentials;
 using Api.Modules.Sessions;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
@@ -5,7 +6,7 @@ using Playdex.Persistence;
 
 namespace Api.Modules.Providers;
 
-public sealed class ProvidersRepository(PlaydexDbContext db, SessionLifecycle sessions)
+public sealed class ProvidersRepository(PlaydexDbContext db, SessionLifecycle sessions, CredentialProtector protector)
 {
     public const int MaxIntegrationsPerType = 3;
 
@@ -92,7 +93,7 @@ public sealed class ProvidersRepository(PlaydexDbContext db, SessionLifecycle se
             UserId = userId,
             Type = type,
             PlatformId = platformId.Value,
-            ApiKey = apiKey,
+            ApiKey = protector.Protect(type, apiKey),
             AccountId = accountId,
             Active = true,
             CreatedAt = now,
@@ -191,11 +192,16 @@ public sealed class ProvidersRepository(PlaydexDbContext db, SessionLifecycle se
             return null;
         }
 
+        // The stored key is only checked for being there, so it isn't decrypted.
         var mergedApiKey = apiKeyChanged ? apiKey : credential.ApiKey;
         var mergedAccountId = accountIdChanged ? accountId : credential.AccountId;
         validate(credential.Type, mergedApiKey, mergedAccountId);
 
-        credential.ApiKey = mergedApiKey;
+        if (apiKeyChanged)
+        {
+            credential.ApiKey = protector.Protect(credential.Type, apiKey);
+        }
+
         credential.AccountId = mergedAccountId;
         credential.UpdatedAt = DateTimeOffset.UtcNow;
         if (!await TrySaveAccount(credential, ct))
@@ -326,7 +332,7 @@ public sealed class ProvidersRepository(PlaydexDbContext db, SessionLifecycle se
             db.Integrations.Add(credential);
         }
 
-        credential.ApiKey = apiKey;
+        credential.ApiKey = protector.Protect(credential.Type, apiKey);
         credential.AccountId = xuid;
         credential.Active = true;
         credential.PausedReason = null;
@@ -343,40 +349,39 @@ public sealed class ProvidersRepository(PlaydexDbContext db, SessionLifecycle se
         return new OpenXblConnectResult(ToStatus(credential, platforms));
     }
 
-    public async Task<string> GetOrCreateApiKey(long userId, string apiKey, CancellationToken ct)
+    /// <summary>
+    /// Gives the user's Playdex app integration the key <paramref name="apiKey"/>, replacing its old one, or creates the
+    /// integration. Only the key's hash is stored.
+    /// </summary>
+    public async Task IssueAppKey(long userId, string apiKey, CancellationToken ct)
     {
-        var existing = await db.Integrations
-            .Where(credential => credential.UserId == userId && credential.Type == IntegrationType.Api)
-            .FirstOrDefaultAsync(ct);
-
-        if (!string.IsNullOrEmpty(existing?.ApiKey))
-        {
-            return existing.ApiKey;
-        }
-
-        if (existing is not null)
-        {
-            existing.ApiKey = apiKey;
-            existing.UpdatedAt = DateTimeOffset.UtcNow;
-            await db.SaveChangesAsync(ct);
-            return apiKey;
-        }
-
+        // One app integration per user, even when two requests race.
+        await using var transaction = await db.Database.BeginTransactionAsync(ct);
+        var lockKey = $"integration-limit:{userId}:{IntegrationType.Api}";
+        await db.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock(hashtextextended({lockKey}, 0))", ct);
         var now = DateTimeOffset.UtcNow;
-        db.Integrations.Add(new Integration
+        var integration = await db.Integrations
+            .Where(credential => credential.UserId == userId && credential.Type == IntegrationType.Api)
+            .OrderBy(credential => credential.Id)
+            .FirstOrDefaultAsync(ct);
+        if (integration is null)
         {
-            UserId = userId,
-            Type = IntegrationType.Api,
-            PlatformId = null,
-            ApiKey = apiKey,
-            AccountId = "api",
-            Active = true,
-            CreatedAt = now,
-            UpdatedAt = now,
-        });
-        await db.SaveChangesAsync(ct);
+            integration = new Integration
+            {
+                UserId = userId,
+                Type = IntegrationType.Api,
+                PlatformId = null,
+                AccountId = "api",
+                Active = true,
+                CreatedAt = now,
+            };
+            db.Integrations.Add(integration);
+        }
 
-        return apiKey;
+        integration.ApiKey = protector.Protect(IntegrationType.Api, apiKey);
+        integration.UpdatedAt = now;
+        await db.SaveChangesAsync(ct);
+        await transaction.CommitAsync(ct);
     }
 
     private static ProviderStatusDto ToStatus(
@@ -402,7 +407,7 @@ public sealed class ProvidersRepository(PlaydexDbContext db, SessionLifecycle se
             },
             integration.AccountId,
             integration.Active ? "active" : "paused",
-            integration.ApiKey,
+            integration.ApiKey is not null,
             integration.ApiKeyLocked || integration.Type == IntegrationType.Api,
             effectivePlatform is null
                 ? null

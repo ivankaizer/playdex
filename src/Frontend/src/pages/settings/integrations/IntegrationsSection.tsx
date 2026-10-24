@@ -80,7 +80,7 @@ export function IntegrationsSection({ integrations }: IntegrationsSectionProps) 
         )}
 
         {!state.isProvidersLoading && !state.providersError && !visible.some((provider) => provider.platform === "api") ? (
-          <PlaydexAppKeyCreator onCreated={integrations.loadProviders} />
+          <PlaydexAppKeyCreator integrations={integrations} />
         ) : null}
 
         {!state.isProvidersLoading ? <IntegrationCreator integrations={integrations} /> : null}

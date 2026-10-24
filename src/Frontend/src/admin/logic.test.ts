@@ -97,12 +97,12 @@ describe("credential edits", () => {
     platform: "steam",
     accountId: "steam-account",
     active: true,
-    apiKey: "steam-test-key",
+    hasApiKey: true,
   };
 
-  it("prefills current values but changes nothing until a field is selected", () => {
+  it("prefills the account but never a key, and changes nothing until a field is selected", () => {
     const form = credentialFormFor(integration);
-    expect(form).toEqual({ replaceApiKey: false, apiKey: "steam-test-key", changeAccountId: false, accountId: "steam-account" });
+    expect(form).toEqual({ replaceApiKey: false, apiKey: "", changeAccountId: false, accountId: "steam-account" });
     expect(integrationUpdateFor(form)).toBeNull();
   });
 

@@ -47,7 +47,7 @@ public sealed record AdminIntegrationDto(
     string Platform,
     string? AccountId,
     bool Active,
-    string? ApiKey);
+    bool HasApiKey);
 
 public sealed record AdminUpdateIntegrationRequest(
     bool ApiKeyChanged,

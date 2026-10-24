@@ -64,6 +64,9 @@ public sealed class Integration : IHasTimestamps
     public IntegrationType Type { get; set; }
     public long? PlatformId { get; set; }
     public long? SessionPlatformId { get; set; }
+    /// <summary>
+    /// The credential: encrypted (<c>enc:v1:</c>) for polled integrations, a SHA-256 hash (<c>sha256:</c>) for Playdex app keys.
+    /// </summary>
     public string? ApiKey { get; set; }
     public string? AccountId { get; set; }
     public bool ApiKeyLocked { get; set; }

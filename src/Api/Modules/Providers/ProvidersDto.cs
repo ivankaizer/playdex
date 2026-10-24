@@ -6,7 +6,7 @@ public sealed record ProviderStatusDto(
     string Platform,
     string? AccountId,
     string Status,
-    string? ApiKey,
+    bool HasApiKey,
     bool ApiKeyLocked,
     ProviderPlatformDto? SessionPlatform = null,
     IReadOnlyList<ProviderPlatformDto>? SessionPlatformOptions = null,

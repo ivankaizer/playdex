@@ -62,7 +62,8 @@ export interface IntegrationSummary {
   platform: string;
   accountId: string | null;
   active: boolean;
-  apiKey: string | null;
+  /** Whether a key is saved; the server never sends it back. */
+  hasApiKey: boolean;
 }
 
 export interface SessionSummary {

@@ -5,8 +5,16 @@ import { getConfig, setConfig } from "@/lib/config";
 import { setupUrl } from "@/lib/downloads";
 import { formatProviderName } from "@/lib/format";
 import { PlaydexAppSetup } from "./PlaydexAppSetup";
+import { completeAppKeyIssue, createProvidersState } from "./providersState";
+import type { Integrations } from "./useIntegrations";
 
 const original = getConfig();
+
+/** The hook's state with a key that was just issued; PlaydexAppSetup reads nothing else from it. */
+function withIssuedKey(apiKey: string | null): Integrations {
+  const state = apiKey === null ? createProvidersState() : completeAppKeyIssue(createProvidersState(), apiKey);
+  return { state, issueAppKey: vi.fn() } as unknown as Integrations;
+}
 
 afterEach(() => {
   setConfig(original);
@@ -21,7 +29,7 @@ describe("PlaydexAppSetup", () => {
     vi.stubGlobal("navigator", { ...navigator, clipboard: { writeText } });
     vi.useFakeTimers();
 
-    render(<PlaydexAppSetup apiKey="plx_secret" />);
+    render(<PlaydexAppSetup integrations={withIssuedKey("plx_secret")} />);
 
     expect(screen.getByRole("link", { name: "Playdex-Setup.exe" })).toHaveAttribute("href", setupUrl);
     expect(screen.getByLabelText("Playdex server")).toHaveValue("https://dash.playdex.test/api");
@@ -48,12 +56,23 @@ describe("PlaydexAppSetup", () => {
   it("keeps Copy when the browser refuses the clipboard", async () => {
     vi.stubGlobal("navigator", { ...navigator, clipboard: { writeText: vi.fn().mockRejectedValue(new Error("denied")) } });
 
-    render(<PlaydexAppSetup apiKey="plx_secret" />);
+    render(<PlaydexAppSetup integrations={withIssuedKey("plx_secret")} />);
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: "Copy api key" }));
     });
 
     expect(screen.getByRole("button", { name: "Copy api key" })).toHaveTextContent("Copy");
+  });
+
+  it("has no key to show once the issued one is gone, only a way to replace it", () => {
+    const integrations = withIssuedKey(null);
+    render(<PlaydexAppSetup integrations={integrations} />);
+
+    expect(screen.queryByLabelText("API key")).toBeNull();
+    expect(screen.getByText("Shown only when it's created")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Lost the key? Replace it" }));
+    fireEvent.click(screen.getByRole("button", { name: "Replace key" }));
+    expect(integrations.issueAppKey).toHaveBeenCalledTimes(1);
   });
 });
 

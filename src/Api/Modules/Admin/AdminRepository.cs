@@ -1,4 +1,5 @@
 using Api.Infrastructure.Common;
+using Api.Infrastructure.Credentials;
 using Microsoft.EntityFrameworkCore;
 using Playdex.Persistence;
 
@@ -8,7 +9,7 @@ public sealed record AdminTransferTarget(long Id, long UserId, IntegrationType T
 
 public sealed record AdminGenerationRecord(string Email, AiGeneration Generation);
 
-public sealed class AdminRepository(PlaydexDbContext db)
+public sealed class AdminRepository(PlaydexDbContext db, CredentialProtector protector)
 {
     public const int SessionPageSize = 25;
     public const int GenerationPageSize = 25;
@@ -213,7 +214,7 @@ public sealed class AdminRepository(PlaydexDbContext db)
                    integration.Id
                select new AdminIntegrationDto(integration.Id, user.Email,
                    integration.Type == IntegrationType.Api ? "api" : platform!.Key,
-                   integration.AccountId, integration.Active, integration.ApiKey))
+                   integration.AccountId, integration.Active, integration.ApiKey != null))
             .ToListAsync(ct);
 
     public async Task<bool> UpdateIntegration(long id, bool apiKeyChanged, string? apiKey, bool accountIdChanged,
@@ -227,7 +228,7 @@ public sealed class AdminRepository(PlaydexDbContext db)
 
         if (apiKeyChanged)
         {
-            integration.ApiKey = apiKey;
+            integration.ApiKey = protector.Protect(integration.Type, apiKey);
         }
 
         if (accountIdChanged)

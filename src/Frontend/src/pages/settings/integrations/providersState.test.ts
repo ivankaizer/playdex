@@ -8,7 +8,7 @@ function provider(id: number, platform: string, status: string): ProviderStatus 
     platform,
     accountId: `account-${id}`,
     status,
-    apiKey: platform === "playnite" ? `key-${id}` : null,
+    hasApiKey: true,
     apiKeyLocked: false,
   };
 }
@@ -163,7 +163,7 @@ describe("providersState", () => {
       platform: "psn",
       accountId: "account-2",
       status: "active",
-      apiKey: "secret",
+      hasApiKey: true,
       apiKeyLocked: true,
     };
     let state = s.beginCredentialEdit(loaded(steam, locked), steam);
@@ -180,12 +180,35 @@ describe("providersState", () => {
     expect(Object.keys(s.buildCredentialSubmission(state).submission!.body)).toEqual(["accountId"]);
   });
 
-  it("api credential edit presents the key but never submits a key change", () => {
-    const api: ProviderStatus = { id: 2, platform: "api", accountId: "local", status: "active", apiKey: "plx_secret", apiKeyLocked: true };
+  it("api credential edit never submits a key change", () => {
+    const api: ProviderStatus = { id: 2, platform: "api", accountId: "local", status: "active", hasApiKey: true, apiKeyLocked: true };
     let state = s.beginCredentialEdit(loaded(api), api);
-    expect(state.editingApiKey).toBe("plx_secret");
+    expect(state.editingApiKey).toBe("");
     state = s.setEditingAccountId(s.setEditingApiKey(state, "replacement"), "renamed");
     expect(Object.keys(s.buildCredentialSubmission(state).submission!.body)).toEqual(["accountId"]);
+  });
+
+  it("an empty key field keeps the saved key: the key is never prefilled, sent only when typed", () => {
+    const steam = provider(1, "steam", "active");
+    let state = s.beginCredentialEdit(loaded(steam), steam);
+    expect(state.editingApiKey).toBe("");
+    expect(s.buildCredentialSubmission(s.setEditingApiKey(state, "   ")).submission).toBeNull();
+
+    state = s.setEditingApiKey(state, "  new-key  ");
+    expect(s.buildCredentialSubmission(state).submission!.body).toEqual({ apiKey: "new-key" });
+  });
+
+  it("keeps the issued Playdex app key until the page is left, and the error of a failed issue", () => {
+    let state = s.beginAppKeyIssue(s.createProvidersState());
+    expect(state.isAppKeyIssuing).toBe(true);
+    state = s.completeAppKeyIssue(state, "plx_new");
+    expect(state).toMatchObject({ issuedAppKey: "plx_new", isAppKeyIssuing: false, appKeyError: "" });
+    state = s.completeProvidersLoad(state, { providers: [] });
+    expect(state.issuedAppKey).toBe("plx_new");
+
+    state = s.failAppKeyIssue(s.beginAppKeyIssue(state), "Server error.");
+    expect(state).toMatchObject({ issuedAppKey: "plx_new", isAppKeyIssuing: false, appKeyError: "Server error." });
+    expect(s.beginAppKeyIssue(state).appKeyError).toBe("");
   });
 
   it("credential edit rejects no changes (including whitespace-only edits) and completes by replacing the provider", () => {
@@ -239,11 +262,9 @@ describe("providersState", () => {
   });
 
   it("presentation preserves empty subtitles and uses null fallbacks", () => {
-    const base = { id: 1, status: "active", apiKeyLocked: false };
-    expect(s.presentProvider({ ...base, platform: "steam", accountId: null, apiKey: "secret" }).subtitle).toBe("Local");
-    expect(s.presentProvider({ ...base, platform: "steam", accountId: "", apiKey: "secret" }).subtitle).toBe("");
-    expect(s.presentProvider({ ...base, platform: "playnite", accountId: "account", apiKey: null }).subtitle).toBe("Local");
-    expect(s.presentProvider({ ...base, platform: "playnite", accountId: "account", apiKey: "" }).subtitle).toBe("");
-    expect(s.presentProvider({ ...base, platform: "psn", accountId: "a", apiKey: null }).name).toBe("PlayStation");
+    const base = { id: 1, status: "active", hasApiKey: true, apiKeyLocked: false };
+    expect(s.presentProvider({ ...base, platform: "steam", accountId: null }).subtitle).toBe("Local");
+    expect(s.presentProvider({ ...base, platform: "steam", accountId: "" }).subtitle).toBe("");
+    expect(s.presentProvider({ ...base, platform: "psn", accountId: "a" }).name).toBe("PlayStation");
   });
 });

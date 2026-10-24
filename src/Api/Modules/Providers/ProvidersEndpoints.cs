@@ -79,7 +79,7 @@ public static class ProvidersEndpoints
             await result.ExecuteAsync(http);
         });
 
-        api.MapPost("/key", GetApiKey).RequireAuthorization();
+        api.MapPost("/key", IssueAppKey).RequireAuthorization();
     }
 
     private static async Task<IResult> ListProviders(
@@ -90,12 +90,12 @@ public static class ProvidersEndpoints
         return TypedResults.Ok(await service.ListProviders(principal.GetUserId(), ct));
     }
 
-    private static async Task<IResult> GetApiKey(
+    private static async Task<IResult> IssueAppKey(
         ClaimsPrincipal principal,
         ProvidersService service,
         CancellationToken ct)
     {
-        return TypedResults.Ok(await service.GetOrCreateApiKey(principal.GetUserId(), ct));
+        return TypedResults.Ok(await service.IssueAppKey(principal.GetUserId(), ct));
     }
 
     private static ProviderCredentialChanges ParseCredentialChanges(JsonElement payload)

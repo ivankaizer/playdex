@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
+using Api.Infrastructure.Auth;
 using Api.Infrastructure.Common;
 using Playdex.Persistence;
 using Api.Modules.ApiCapture;
@@ -106,7 +107,7 @@ public sealed class ApiCaptureRecordingIntegrationTests(PostgresFixture postgres
         {
             UserId = user.Id,
             Type = IntegrationType.Api,
-            ApiKey = $"record-{suffix}",
+            ApiKey = PlaydexAppKeys.Hash($"record-{suffix}"),
             Active = true,
             CreatedAt = now,
             UpdatedAt = now,
@@ -122,7 +123,7 @@ public sealed class ApiCaptureRecordingIntegrationTests(PostgresFixture postgres
                 new FixedGameResolver(game.Id),
                 TestSessions.Lifecycle(db),
                 new PosterUrls(Options.Create(new PostersOptions())));
-            await test(db, service, new Seed(now, integration.ApiKey, user.Id, integration.Id, game.Id, platform.Id));
+            await test(db, service, new Seed(now, $"record-{suffix}", user.Id, integration.Id, game.Id, platform.Id));
         }
         finally
         {

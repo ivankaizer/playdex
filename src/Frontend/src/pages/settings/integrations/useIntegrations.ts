@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef } from "react";
 import { apiRequest, errorMessage, isAbortError } from "@/lib/api";
 import type {
+  AppKeyResponse,
   ProviderCreateResponse,
   ProviderCredentialUpdateResponse,
   ProviderSessionPlatformUpdateResponse,
@@ -49,6 +50,23 @@ export function useIntegrations() {
       request.finish();
     }
   }, [update]);
+
+  /** Creates the Playdex app key, or replaces it; the new key is in state.issuedAppKey until the page is left. */
+  const issueAppKey = useCallback(async () => {
+    if (get().isAppKeyIssuing) return;
+    update(providers.beginAppKeyIssue);
+    const signal = lifetime.current.signal;
+    try {
+      const response = await apiRequest<AppKeyResponse>(providers.appKeyPath, { method: "POST", signal });
+      update((current) => providers.completeAppKeyIssue(current, response.apiKey));
+    } catch (error) {
+      if (!isLifetimeCancellation(error, signal)) {
+        update((current) => providers.failAppKeyIssue(current, errorMessage(error)));
+      }
+      return;
+    }
+    await loadProviders();
+  }, [get, update, loadProviders]);
 
   const toggleProvider = useCallback(
     async (provider: ProviderStatus) => {
@@ -202,6 +220,7 @@ export function useIntegrations() {
     state,
     creatorState,
     loadProviders,
+    issueAppKey,
     toggleProvider,
     toggleCredentialEditor,
     setEditingAccountId,

@@ -55,6 +55,7 @@ services:
       DATABASE_URL: postgresql://playdex:playdex@db:5432/playdex
       Polling__IntervalSeconds: 10
       Auth__JwtSecret: ${JWT_SECRET:-preview-only-jwt-secret-not-for-production-use}
+      Credentials__EncryptionKey: ${CREDENTIALS_KEY:-preview-only-credentials-key-not-for-production-use}
       Auth__AccessTokenTtl: 30m
       Apprise__BaseUrl: http://apprise:8000
       Apprise__TelegramBotToken: ${TELEGRAM_BOT_TOKEN:-}

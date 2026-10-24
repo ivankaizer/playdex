@@ -11,7 +11,8 @@ Playdex for Windows records the PC games you play, backs up saves, and includes 
 
 <Steps>
 
-1. In your Playdex, open **Settings → Connected services** and click **Create API key**.
+1. In your Playdex, open **Settings → Connected services** and click **Create API key**. Copy the key right away:
+   Playdex stores only a hash of it and shows it once.
 2. Download [Playdex-Setup.exe](https://download.playdex.dev/windows/Playdex-Setup.exe) and run it.
 3. Enter the two values from Settings:
    - **Playdex server:** `https://playdex.example.com/api`
@@ -19,7 +20,8 @@ Playdex for Windows records the PC games you play, backs up saves, and includes 
 
 </Steps>
 
-To change the server later, open the app's **Settings → Playdex account**.
+To change the server later, open the app's **Settings → Playdex account**. Lost the key? Replace it under
+**Settings → Connected services → Playdex app**, then enter the new one in the app on each PC: the old key stops working.
 
 The server address must start with `https://`: the app sends your API key with every request and won't send it over plain HTTP. The one exception is a server on the same PC (`http://localhost`). The app keeps the key encrypted for your Windows user in `%LOCALAPPDATA%\Playdex\config.json`.
 

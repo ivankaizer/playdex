@@ -26,7 +26,7 @@ mkdir playdex && cd playdex
 base=https://raw.githubusercontent.com/ivankaizer/playdex/main/selfhost
 curl -fsSLO $base/docker-compose.yml
 curl -fsSLO $base/Caddyfile
-curl -fsSL $base/.env.example -o .env   # set PLAYDEX_DOMAIN, POSTGRES_PASSWORD, JWT_SECRET
+curl -fsSL $base/.env.example -o .env   # set PLAYDEX_DOMAIN, POSTGRES_PASSWORD, JWT_SECRET, CREDENTIALS_KEY
 docker compose up -d
 ```
 
