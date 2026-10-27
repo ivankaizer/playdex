@@ -17,9 +17,8 @@ permissions:
 jobs:
   test:
     name: .NET and frontend tests
-    # A private repository runs on macserv to save GitHub-hosted minutes. A public one gets those minutes for free
-    # and runs on GitHub, so code from pull requests (forks included) never runs on macserv.
-    runs-on: ${{ github.event.repository.private && fromJSON('["self-hosted","macserv"]') || 'ubuntu-latest' }}
+    # GitHub-hosted, so code from pull requests (forks included) never runs on macserv.
+    runs-on: ubuntu-latest
     services:
       db:
         image: postgres:16
@@ -28,7 +27,7 @@ jobs:
           POSTGRES_PASSWORD: playdex
           POSTGRES_DB: playdex_db_test
         ports:
-          - 5432   # a free host port: macserv runs other Postgres containers
+          - 5432
         options: >-
           --health-cmd="pg_isready -U playdex"
           --health-interval=10s
@@ -42,8 +41,6 @@ jobs:
         uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
         with:
           dotnet-version: '10.0.x'
-        env:
-          DOTNET_INSTALL_DIR: ${{ runner.tool_cache }}/dotnet   # the default /usr/share/dotnet isn't writable on macserv
 
       - name: Set up Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0

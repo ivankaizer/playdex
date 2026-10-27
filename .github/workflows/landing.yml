@@ -20,8 +20,7 @@ env:
 jobs:
   deploy:
     if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
-    # macserv while the repository is private (GitHub-hosted minutes are limited), GitHub-hosted once it is public.
-    runs-on: ${{ github.event.repository.private && fromJSON('["self-hosted","macserv"]') || 'ubuntu-latest' }}
+    runs-on: ubuntu-latest
     permissions:
       contents: read
       pull-requests: write   # the preview link comment
