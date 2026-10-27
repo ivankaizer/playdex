@@ -123,9 +123,8 @@ jobs:
     needs: test
     # Secrets are unavailable to fork PRs.
     if: github.event.pull_request.head.repo.full_name == github.repository
-    uses: ivankaizer/preview-kit/.github/workflows/preview.yml@96a4c23d83f1bf93aa924e29adc101db7837a6a0 # v1
+    uses: ivankaizer/preview-kit/.github/workflows/preview.yml@58d07e03ab648756e8eea86fb73bcef632892682 # v1
     with:
-      runner: '["self-hosted","macserv"]'
       # One comment per deploy, so earlier demos stay in the PR thread.
       comment: new
     permissions:
@@ -134,16 +133,26 @@ jobs:
     secrets:
       DOKPLOY_API_KEY: ${{ secrets.DOKPLOY_API_KEY }}
 
-  # A push to main that passes the tests builds the production images on the macserv runner and
-  # deploys them to https://dash.playdex.dev (preview-kit's release workflow; see the "production"
-  # section of .preview/config.json). Roll back with `preview prod deploy main-<older sha>`.
-  production:
-    name: Production
+  # A push to main that passes the tests publishes the images to GHCR (latest and sha-<commit>)...
+  images:
+    name: Images
     needs: test
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    uses: ivankaizer/preview-kit/.github/workflows/release.yml@96a4c23d83f1bf93aa924e29adc101db7837a6a0 # v1
+    uses: ./.github/workflows/images.yml
+    permissions:
+      contents: read
+      packages: write
+
+  # ...and deploys sha-<commit> to https://dash.playdex.dev: preview-kit's release workflow, without
+  # building (see the "production" section of .preview/config.json). Dokploy pulls the public images.
+  # Roll back with `preview prod deploy sha-<older commit>`.
+  production:
+    name: Production
+    needs: images
+    uses: ivankaizer/preview-kit/.github/workflows/release.yml@58d07e03ab648756e8eea86fb73bcef632892682 # v1
     with:
-      runner: '["self-hosted","macserv"]'
-      tag: main-${{ github.sha }}
+      runner: '"ubuntu-latest"'
+      build: false
+      tag: sha-${{ github.sha }}
     secrets:
       DOKPLOY_API_KEY: ${{ secrets.DOKPLOY_API_KEY }}

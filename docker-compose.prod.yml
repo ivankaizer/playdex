@@ -1,6 +1,6 @@
 # Production stack: https://dash.playdex.dev (UI at /, API at /api). Deployed by preview-kit on every push
-# to main that passes the tests: CI builds the images on the macserv runner and pushes them to the
-# registry on that host; Dokploy runs this file without its build sections, with IMAGE_TAG,
+# to main that passes the tests: images.yml publishes the images to GHCR as sha-<commit>; Dokploy runs
+# this file without its build sections, with IMAGE_TAG=sha-<commit>,
 # DATABASE_URL, JWT_SECRET, CREDENTIALS_KEY and CORS_ORIGINS in the stack's .env. Optional keys (IGDB, Telegram,
 # AI drafts, Sentry, R2 posters) are set in that .env by hand from Dokploy.
 #
@@ -26,7 +26,7 @@ services:
     mem_limit: 192m
 
   app:
-    image: localhost:5000/playdex/app:${IMAGE_TAG:?}
+    image: ghcr.io/ivankaizer/playdex-app:${IMAGE_TAG:?}
     build:
       context: .
       dockerfile: src/Api/Dockerfile
@@ -61,7 +61,7 @@ services:
     mem_limit: 512m
 
   ui:
-    image: localhost:5000/playdex/ui:${IMAGE_TAG:?}
+    image: ghcr.io/ivankaizer/playdex-ui:${IMAGE_TAG:?}
     build:
       context: .
       dockerfile: src/Frontend/Dockerfile

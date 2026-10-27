@@ -7,9 +7,7 @@ on:
 jobs:
   cleanup:
     if: github.event.pull_request.head.repo.full_name == github.repository
-    uses: ivankaizer/preview-kit/.github/workflows/cleanup.yml@96a4c23d83f1bf93aa924e29adc101db7837a6a0 # v1
-    with:
-      runner: '["self-hosted","macserv"]'
+    uses: ivankaizer/preview-kit/.github/workflows/cleanup.yml@58d07e03ab648756e8eea86fb73bcef632892682 # v1
     permissions:
       contents: write
     secrets:

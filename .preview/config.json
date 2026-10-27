@@ -24,7 +24,8 @@
     "compose": "docker-compose.prod.yml",
     "database": "dedicated",
     "generate": {
-      "JWT_SECRET": "base64:48"
+      "JWT_SECRET": "base64:48",
+      "CREDENTIALS_KEY": "hex:32"
     },
     "env": "CORS_ORIGINS=https://dash.playdex.dev",
     "domains": [

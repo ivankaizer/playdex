@@ -1,14 +1,13 @@
 # Public images for self-hosting (selfhost/docker-compose.yml, docs.playdex.dev):
 #   ghcr.io/ivankaizer/playdex-app   the API (src/Api/Dockerfile)
 #   ghcr.io/ivankaizer/playdex-ui    the web app (src/Frontend/Dockerfile)
-# Every push to main is tagged latest and sha-<commit>. linux/amd64 only for now.
-# GHCR packages start private: make each one public once, under the package's settings on GitHub.
+# test.yaml runs this after the tests pass on a push to main: the images are tagged latest and
+# sha-<commit>, and production deploys sha-<commit>. linux/amd64 only for now.
+# The callers need `permissions: { contents: read, packages: write }`.
 name: Images
 
 on:
-  push:
-    branches: [main]
-    paths: ['src/Api/**', 'src/Persistence/**', 'src/ServiceDefaults/**', 'src/Frontend/**', 'Directory.*.props', '.github/workflows/images.yml']
+  workflow_call:
   workflow_dispatch:
 
 concurrency:
