@@ -1546,12 +1546,21 @@ html[data-input="pointer"] .dk :is([data-nav][data-focused], :focus-visible) {
   gap: 14px;
   margin-top: 8px;
 }
-.dk-manage-xbox {
+.dk-manage-found {
+  display: grid;
+  gap: 14px;
+}
+.dk-found-store {
   display: grid;
   gap: 8px;
 }
-.dk-manage-xbox p {
+.dk-found-store p {
   margin: 0;
+}
+.dk-found-name {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
 }
 .dk-table-wrap {
   padding: 0;

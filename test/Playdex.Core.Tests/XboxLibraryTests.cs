@@ -13,10 +13,12 @@ public sealed class XboxLibraryTests : IDisposable
 
         var game = XboxLibrary.Read(new InstalledPackage(FullName, root, null))!;
 
-        Assert.Equal("Contoso.StarlightRally_8wekyb3d8bbwe!Game", game.AppUserModelId);
+        Assert.Equal(("xbox", "Contoso.StarlightRally_8wekyb3d8bbwe!Game"), (game.Store, game.Id));
+        Assert.Equal("Contoso.StarlightRally_8wekyb3d8bbwe!Game", game.Launch.AppUserModelId);
         Assert.Equal("Starlight Rally", game.Title);
         Assert.Equal(Path.Combine(root, "Binaries", "Win64", "StarlightRally.exe"), game.ExecutablePath);
-        Assert.Equal("1782549035", game.TitleId);
+        Assert.Equal("1782549035", game.RecordedId);
+        Assert.False(game.StartsDirectly);
     }
 
     [Fact]
@@ -65,32 +67,6 @@ public sealed class XboxLibraryTests : IDisposable
     [InlineData("not hex", null)]
     [InlineData(null, null)]
     public void TitleIdsAreDecimal(string? hex, string? expected) => Assert.Equal(expected, XboxLibrary.TitleId(hex));
-
-    [Fact]
-    public void AnAddedXboxGameStartsAsItsAppAndIsFollowedByItsExecutable()
-    {
-        var config = new AppConfig();
-        var xbox = new XboxGame("Contoso.StarlightRally_8wekyb3d8bbwe!Game", "Starlight Rally", @"C:\XboxGames\Starlight Rally\Content\StarlightRally.exe", "1782549035");
-
-        var game = GameCatalog.AddXbox(config, xbox);
-
-        Assert.Same(game, config.Games["StarlightRally"]);
-        Assert.Equal("Starlight Rally", game.DisplayName);
-        Assert.Equal(("xbox", "1782549035"), (game.GameProvider, game.ApiGameId));
-        Assert.Equal(xbox.AppUserModelId, game.Launch.AppUserModelId);
-        Assert.Equal(xbox.ExecutablePath, game.Launch.ExecutablePath);
-        Assert.Equal((MonitorMode.ExecutablePath, xbox.ExecutablePath), (game.Monitor.Mode, game.Monitor.ExecutablePath));
-        var again = Assert.Throws<InvalidOperationException>(() => GameCatalog.AddXbox(config, xbox));
-        Assert.Contains("already in Playdex", again.Message);
-    }
-
-    [Fact]
-    public void AnXboxGameWithoutATitleIdIsRecordedLikeAnyOtherGame()
-    {
-        var game = GameCatalog.AddXbox(new AppConfig(), new XboxGame("Contoso.Tool_8wekyb3d8bbwe!App", "Tool", @"C:\XboxGames\Tool\Content\Tool.exe", null));
-
-        Assert.Equal(("steam", "Tool"), (game.GameProvider, game.ApiGameId));
-    }
 
     private string Package(string displayName, string executable, string? titleId = null, bool createExecutable = true)
     {

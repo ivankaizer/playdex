@@ -50,34 +50,40 @@ public static class GameCatalog
     }
 
     /// <summary>
-    /// Add a game installed through the Xbox app. It is started as its packaged app and followed by its executable,
-    /// and recorded as its Xbox title (when it has one), so its sessions join those Xbox presence finds.
+    /// Add a game another launcher installed (<see cref="StoreGames"/>), recorded by its id there when it has one. One
+    /// its launcher starts is followed by its executable; one started directly, like any added executable.
     /// </summary>
-    public static GameConfig AddXbox(AppConfig config, XboxGame xbox)
+    public static GameConfig AddFromStore(AppConfig config, StoreGame found)
     {
-        if (config.Games.Values.FirstOrDefault(g => string.Equals(g.Launch.AppUserModelId, xbox.AppUserModelId, StringComparison.OrdinalIgnoreCase)) is { } added)
+        if (config.Games.Values.FirstOrDefault(g => StoreGames.IsAdded(g, found)) is { } added)
         {
             throw new InvalidOperationException($"{added.DisplayName} is already in Playdex.");
         }
 
-        var gameId = Path.GetFileNameWithoutExtension(xbox.ExecutablePath).Trim();
-        if (config.Games.ContainsKey(gameId))
+        // Another game may have the same executable name (a launcher's Game.exe): the next free id then.
+        var baseId = Path.GetFileNameWithoutExtension(found.ExecutablePath).Trim();
+        var gameId = baseId;
+        for (var number = 2; config.Games.ContainsKey(gameId); number++)
         {
-            throw new InvalidOperationException($"Game '{gameId}' already exists. Add a game cannot change an existing entry; use Settings instead.");
+            gameId = $"{baseId}-{number}";
         }
 
-        var title = xbox.Title.Length > MaximumDisplayNameLength ? xbox.Title[..MaximumDisplayNameLength] : xbox.Title;
+        var title = found.Title.Length > MaximumDisplayNameLength ? found.Title[..MaximumDisplayNameLength] : found.Title;
         var game = new GameConfig
         {
             GameId = gameId,
             DisplayName = NormalizeDisplayName(title),
-            ApiGameId = xbox.TitleId ?? gameId,
-            Launch = new LaunchConfig { ExecutablePath = xbox.ExecutablePath, AppUserModelId = xbox.AppUserModelId },
-            Monitor = new MonitorConfig { Mode = MonitorMode.ExecutablePath, ExecutablePath = xbox.ExecutablePath }
+            ApiGameId = found.RecordedId ?? gameId,
+            Store = found.Store,
+            StoreId = found.Id,
+            Launch = found.Launch,
+            Monitor = found.StartsDirectly
+                ? new MonitorConfig { Mode = MonitorMode.LaunchedProcess }
+                : new MonitorConfig { Mode = MonitorMode.ExecutablePath, ExecutablePath = found.ExecutablePath }
         };
-        if (xbox.TitleId is not null)
+        if (found.RecordedId is not null)
         {
-            game.GameProvider = "xbox";
+            game.GameProvider = found.Store;
         }
         config.Games.Add(gameId, game);
         return game;

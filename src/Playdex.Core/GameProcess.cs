@@ -8,7 +8,7 @@ namespace Playdex.Core;
 /// Starts a game from the config: its executable, launch options and working folder, through the shell. A batch script
 /// (.bat, .cmd) runs in a minimized console and is followed as a <see cref="ProcessTree"/>, so a script that starts the
 /// game and returns at once ("start game.exe") still records the whole session. An Xbox app game is started as its
-/// packaged app (<see cref="LaunchConfig.AppUserModelId"/>).
+/// packaged app (<see cref="LaunchConfig.AppUserModelId"/>), an Epic game by its launcher (<see cref="LaunchConfig.Uri"/>).
 /// </summary>
 public static class GameProcess
 {
@@ -29,11 +29,19 @@ public static class GameProcess
         {
             return new StartedGame(Running(PackagedApp.Start(game.Launch.AppUserModelId, game.Launch.Arguments)), null);
         }
+        if (!string.IsNullOrWhiteSpace(game.Launch.Uri))
+        {
+            // The launcher starts the game: what the shell returns, if anything, is the launcher.
+            Process.Start(new ProcessStartInfo(game.Launch.Uri) { UseShellExecute = true })?.Dispose();
+            return new StartedGame(null, null);
+        }
         var script = IsScript(game.Launch.ExecutablePath);
         var start = new ProcessStartInfo(game.Launch.ExecutablePath)
         {
             UseShellExecute = true,
-            WorkingDirectory = Path.GetDirectoryName(game.Launch.ExecutablePath),
+            WorkingDirectory = string.IsNullOrWhiteSpace(game.Launch.WorkingDirectory)
+                ? Path.GetDirectoryName(game.Launch.ExecutablePath)
+                : game.Launch.WorkingDirectory,
             // The script's console stays out of the game's way, but can still be brought up if the script asks something.
             WindowStyle = script ? ProcessWindowStyle.Minimized : ProcessWindowStyle.Normal,
         };
@@ -60,8 +68,9 @@ public static class GameProcess
 }
 
 /// <summary>
-/// A game Playdex started: its process and, for a script, everything the script starts. No process for an Xbox app
-/// game whose starter already exited: it is followed by its executable (<see cref="MonitorMode.ExecutablePath"/>).
+/// A game Playdex started: its process and, for a script, everything the script starts. No process for a game its
+/// launcher starts, or an Xbox app game whose starter already exited: it is followed by its executable
+/// (<see cref="MonitorMode.ExecutablePath"/>).
 /// </summary>
 public sealed class StartedGame(Process? process, ProcessTree? tree) : IDisposable
 {

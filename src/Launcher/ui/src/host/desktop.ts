@@ -56,9 +56,11 @@ export interface DesktopApp {
   available: boolean;
 }
 
-/** A game installed through the Xbox app that isn't added to Playdex yet. */
-export interface DesktopXboxGame {
-  /** Its app user model id, what game.addXbox takes. */
+/** A game another launcher installed that isn't added to Playdex yet. */
+export interface DesktopFoundGame {
+  /** "xbox", "epic" or "gog". */
+  store: string;
+  /** Its id in that launcher; game.addFound takes it with the store. */
   id: string;
   title: string;
   executablePath: string;
@@ -95,8 +97,8 @@ export interface DesktopState {
   apps: DesktopApp[];
   /** Apps found on this PC that aren't in the list (Discord, the default browser). */
   suggestedApps: DesktopApp[];
-  /** Xbox app games on this PC that aren't added yet. */
-  xboxGames: DesktopXboxGame[];
+  /** Xbox app, Epic and GOG games on this PC that aren't added yet. */
+  foundGames: DesktopFoundGame[];
   settings: DesktopSettings;
   update: UpdateView;
   fse: FseView;
@@ -258,11 +260,24 @@ let demoState: DesktopState = {
       available: true,
     },
   ],
-  xboxGames: [
+  foundGames: [
     {
+      store: "xbox",
       id: "Contoso.StarlightRally_8wekyb3d8bbwe!Game",
       title: "Starlight Rally",
       executablePath: "C:\\XboxGames\\Starlight Rally\\Content\\StarlightRally.exe",
+    },
+    {
+      store: "epic",
+      id: "HarborLights",
+      title: "Harbor Lights",
+      executablePath: "C:\\Program Files\\Epic Games\\HarborLights\\HarborLights.exe",
+    },
+    {
+      store: "gog",
+      id: "1207658930",
+      title: "Old Lighthouse",
+      executablePath: "C:\\Program Files (x86)\\GOG Galaxy\\Games\\Old Lighthouse\\Lighthouse.exe",
     },
   ],
   settings: {
@@ -343,8 +358,8 @@ async function demo(method: string, params?: Record<string, unknown>): Promise<u
     case "game.add":
     case "app.add":
       return demoState;
-    case "game.addXbox": {
-      const found = demoState.xboxGames.find((g) => g.id === params?.id);
+    case "game.addFound": {
+      const found = demoState.foundGames.find((g) => g.store === params?.store && g.id === params?.id);
       if (!found) return demoState;
       const gameId = found.executablePath.replace(/^.*\\|\.exe$/gi, "");
       return (demoState = {
@@ -355,8 +370,8 @@ async function demo(method: string, params?: Record<string, unknown>): Promise<u
             gameId,
             libraryId: `playdex-${gameId}`,
             displayName: found.title,
-            apiGameId: "1234567890",
-            gameProvider: "xbox",
+            apiGameId: found.store === "epic" ? found.id : "1234567890",
+            gameProvider: found.store,
             platform: null,
             launchOptions: "",
             executablePath: found.executablePath,
@@ -365,7 +380,7 @@ async function demo(method: string, params?: Record<string, unknown>): Promise<u
             backup: { kind: "off", text: "No backups yet." },
           },
         ],
-        xboxGames: demoState.xboxGames.filter((g) => g !== found),
+        foundGames: demoState.foundGames.filter((g) => g !== found),
       });
     }
     case "app.addFound": {

@@ -27,8 +27,8 @@ internal sealed record DesktopGame(
 /// <param name="Available">It is on this PC, so Big Picture lists it.</param>
 internal sealed record DesktopApp(string Id, string Name, string Kind, string Path, string LaunchOptions, bool Available);
 
-/// <param name="Id">Its app user model id, what game.addXbox takes.</param>
-internal sealed record DesktopXboxGame(string Id, string Title, string ExecutablePath);
+/// <summary>A game another launcher installed that isn't added yet; game.addFound takes its store and id.</summary>
+internal sealed record DesktopFoundGame(string Store, string Id, string Title, string ExecutablePath);
 
 internal sealed record DesktopSettings(
     string BaseUrl, bool ApiKeySet, string Platform, bool SteamGridDbKeySet, string LudusaviPath, bool StartWithWindows);
@@ -43,7 +43,7 @@ internal sealed record DesktopState(
     IReadOnlyList<DesktopGame> Games,
     IReadOnlyList<DesktopApp> Apps,
     IReadOnlyList<DesktopApp> SuggestedApps,
-    IReadOnlyList<DesktopXboxGame> XboxGames,
+    IReadOnlyList<DesktopFoundGame> FoundGames,
     DesktopSettings Settings,
     UpdateView Update,
     FseView Fse,
@@ -85,6 +85,7 @@ internal sealed partial class DesktopHost : IDisposable
 {
     private const string RunKey = @"Software\Microsoft\Windows\CurrentVersion\Run";
     private const string RunValue = "Playdex";
+    private static readonly TimeSpan _foundGamesMaxAge = TimeSpan.FromSeconds(30);
 
     private readonly ConfigStore _store;
     private readonly AppConfig _config;
@@ -97,6 +98,8 @@ internal sealed partial class DesktopHost : IDisposable
     private readonly BackupStateStore _backupStore;
     private readonly BackupCoordinator _backups;
     private readonly string? _runExecutable;
+    private IReadOnlyList<StoreGame> _found = [];
+    private long _foundAt;
 
     /// <param name="modeChanged">Show Playdex in the saved mode (called once the reply has reached the page).</param>
     public DesktopHost(ConfigStore store, AppConfig config, ShellServices services, Func<ShellWindow?> window, Action quit, Action modeChanged)
@@ -186,8 +189,8 @@ internal sealed partial class DesktopHost : IDisposable
                 return StateJson();
             case "game.add":
                 return await AddGameAsync();
-            case "game.addXbox":
-                return await AddXboxGameAsync(Text(parameters, "id"));
+            case "game.addFound":
+                return await AddFoundGameAsync(Text(parameters, "store"), Text(parameters, "id"));
             case "game.update":
                 return await UpdateGameAsync(parameters);
             case "game.remove":
@@ -270,18 +273,35 @@ internal sealed partial class DesktopHost : IDisposable
         {
             return StateJson();
         }
-        // An Xbox app game's executable doesn't start on its own: it is added as the Xbox game it is.
-        var xbox = await Task.Run(() => XboxLibrary.FindByExecutable(path));
-        var game = xbox is null ? await GameCatalog.AddFromExecutableAsync(_config, path) : GameCatalog.AddXbox(_config, xbox);
+        // A launcher's game is added as what it is: an Xbox or Epic game's executable doesn't start on its own, and
+        // a GOG game is recorded by its GOG id.
+        var found = await Task.Run(() => StoreGames.FindByExecutable(path));
+        var game = found is null ? await GameCatalog.AddFromExecutableAsync(_config, path) : GameCatalog.AddFromStore(_config, found);
         return await AddedAsync(game);
     }
 
-    /// <summary>Add a game installed through the Xbox app, by its app user model id (from the state's Xbox games).</summary>
-    private async Task<string> AddXboxGameAsync(string appUserModelId)
+    /// <summary>Add a game another launcher installed, by its store and id there (from the state's found games).</summary>
+    private async Task<string> AddFoundGameAsync(string store, string id)
     {
-        var xbox = (await Task.Run(XboxLibrary.Scan)).FirstOrDefault(g => string.Equals(g.AppUserModelId, appUserModelId, StringComparison.OrdinalIgnoreCase))
-            ?? throw new InvalidOperationException("That Xbox game is no longer installed on this PC.");
-        return await AddedAsync(GameCatalog.AddXbox(_config, xbox));
+        var found = (await Task.Run(StoreGames.Scan))
+            .FirstOrDefault(g => g.Store == store && string.Equals(g.Id, id, StringComparison.OrdinalIgnoreCase))
+            ?? throw new InvalidOperationException("That game is no longer installed on this PC.");
+        _foundAt = 0;
+        return await AddedAsync(GameCatalog.AddFromStore(_config, found));
+    }
+
+    /// <summary>
+    /// The other launchers' games, scanned again once <see cref="_foundGamesMaxAge"/> old: the state is built for every
+    /// reply, and a scan reads the registry and a few files.
+    /// </summary>
+    private IReadOnlyList<StoreGame> FoundGames()
+    {
+        if (_foundAt == 0 || Stopwatch.GetElapsedTime(_foundAt) > _foundGamesMaxAge)
+        {
+            _found = StoreGames.Scan();
+            _foundAt = Stopwatch.GetTimestamp();
+        }
+        return _found;
     }
 
     /// <summary>Save a game just added, generate its launcher and show it in the library.</summary>
@@ -550,10 +570,9 @@ internal sealed partial class DesktopHost : IDisposable
             .ToList();
         var apps = _config.Apps.Select(App).ToList();
         var suggested = AppShortcuts.Suggestions(_config).Select(App).ToList();
-        var added = _config.Games.Values.Select(g => g.Launch.AppUserModelId).OfType<string>().ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var xboxGames = XboxLibrary.Scan()
-            .Where(g => !added.Contains(g.AppUserModelId))
-            .Select(g => new DesktopXboxGame(g.AppUserModelId, g.Title, g.ExecutablePath))
+        var found = FoundGames()
+            .Where(f => !_config.Games.Values.Any(g => StoreGames.IsAdded(g, f)))
+            .Select(f => new DesktopFoundGame(f.Store, f.Id, f.Title, f.ExecutablePath))
             .ToList();
         var settings = new DesktopSettings(
             _config.Api.BaseUrl,
@@ -563,7 +582,7 @@ internal sealed partial class DesktopHost : IDisposable
             _config.Ludusavi.ExecutablePath,
             StartsWithWindows());
         return new DesktopState(
-            Version, games, apps, suggested, xboxGames, settings, Updates?.View ?? new UpdateView("unavailable", "This build of Playdex doesn't update itself (installed builds do).", null),
+            Version, games, apps, suggested, found, settings, Updates?.View ?? new UpdateView("unavailable", "This build of Playdex doesn't update itself (installed builds do).", null),
             Fse?.View ?? new FseView("unavailable", "Not available in this build."), _config.Shell.Mode, _config.Storage.LauncherDirectory, _runExecutable is not null);
     }
 

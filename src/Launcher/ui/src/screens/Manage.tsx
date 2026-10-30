@@ -22,7 +22,7 @@ import {
   rpc,
   type DesktopApp,
   type DesktopGame,
-  type DesktopXboxGame,
+  type DesktopFoundGame,
   type MessageView,
   type PlatformOption,
 } from "../host/desktop";
@@ -85,8 +85,8 @@ export function Manage() {
           <span className="dk-kicker">Added to Playdex</span>
           <h1 className="dk-h1">Your games</h1>
           <p className="dk-muted">
-            Games Playdex starts and records from their .exe or .bat, or from the Xbox app. Steam games installed on this PC are in the
-            Library already.
+            Games Playdex starts and records from their .exe or .bat, or from the Xbox app, Epic Games or GOG. Steam games installed on this
+            PC are in the Library already.
           </p>
         </div>
         <div className="dk-head-actions" data-nav-group="manage-actions">
@@ -116,15 +116,15 @@ export function Manage() {
         </div>
       </header>
 
-      {state.xboxGames.length > 0 && <XboxGames games={state.xboxGames} busy={busy} run={run} />}
+      {state.foundGames.length > 0 && <FoundGames games={state.foundGames} busy={busy} run={run} />}
 
       {state.games.length === 0 ? (
         <div className="dk-card dk-manage-empty">
           <Gamepad2 aria-hidden />
           <h2>No games added yet</h2>
           <p className="dk-muted">
-            Add a game's .exe or .bat, or a game from the Xbox app, to track its sessions, start it from here or from Steam, and back up its
-            saves. Steam games installed on this PC are in the Library already.
+            Add a game's .exe or .bat, or a game from the Xbox app, Epic Games or GOG, to track its sessions, start it from here or from
+            Steam, and back up its saves. Steam games installed on this PC are in the Library already.
           </p>
         </div>
       ) : (
@@ -165,37 +165,59 @@ export function Manage() {
   );
 }
 
-/** Games installed through the Xbox app that aren't added yet: one click adds one, recorded as its Xbox title. */
-function XboxGames({
+/** The launchers whose games Playdex finds, in the order they're listed, and how each starts them. */
+const STORES: { store: string; name: string; note: string }[] = [
+  { store: "xbox", name: "Xbox app", note: "Started through the Xbox app, recorded as their Xbox title." },
+  { store: "epic", name: "Epic Games", note: "Started through the Epic Games Launcher, recorded as their Epic game." },
+  { store: "gog", name: "GOG", note: "Started directly, recorded as their GOG game." },
+];
+
+/** What a game is recorded as, in words: "steam" → "Steam". */
+const PROVIDERS: Record<string, string> = { steam: "Steam", xbox: "Xbox", epic: "Epic", gog: "GOG" };
+
+/**
+ * Games other launchers installed that aren't added yet, by launcher: one click adds one, recorded as that launcher's
+ * game.
+ */
+function FoundGames({
   games,
   busy,
   run,
 }: {
-  games: DesktopXboxGame[];
+  games: DesktopFoundGame[];
   busy: string | null;
   run: (key: string, work: () => Promise<unknown>) => Promise<void>;
 }) {
   return (
-    <section className="dk-manage-xbox" aria-labelledby="desk-xbox-title">
-      <h2 id="desk-xbox-title" className="dk-h2">
-        In the Xbox app
+    <section className="dk-manage-found" aria-labelledby="desk-found-title">
+      <h2 id="desk-found-title" className="dk-h2">
+        Found on this PC
       </h2>
-      <p className="dk-muted">Playdex starts them through the Xbox app and records them as their Xbox title.</p>
-      <div className="dk-head-actions" data-nav-group="xbox-actions">
-        {games.map((g) => (
-          <button
-            key={g.id}
-            className="dk-btn dk-btn-outline"
-            data-nav
-            data-kind="desk"
-            disabled={busy === `xbox:${g.id}`}
-            title={g.executablePath}
-            onClick={() => run(`xbox:${g.id}`, () => rpc("game.addXbox", { id: g.id }))}
-          >
-            <Plus aria-hidden /> {g.title}
-          </button>
-        ))}
-      </div>
+      {STORES.map(({ store, name, note }) => {
+        const found = games.filter((g) => g.store === store);
+        if (found.length === 0) return null;
+        return (
+          <div key={store} className="dk-found-store">
+            <h3 className="dk-found-name">{name}</h3>
+            <p className="dk-muted">{note}</p>
+            <div className="dk-head-actions" data-nav-group={`found-${store}`}>
+              {found.map((g) => (
+                <button
+                  key={g.id}
+                  className="dk-btn dk-btn-outline"
+                  data-nav
+                  data-kind="desk"
+                  disabled={busy === `found:${store}:${g.id}`}
+                  title={g.executablePath}
+                  onClick={() => run(`found:${store}:${g.id}`, () => rpc("game.addFound", { store, id: g.id }))}
+                >
+                  <Plus aria-hidden /> {g.title}
+                </button>
+              ))}
+            </div>
+          </div>
+        );
+      })}
     </section>
   );
 }
@@ -261,7 +283,7 @@ function GameRow({
         <td>
           <div className="dk-cell-text">
             <span className="num">
-              {game.gameProvider === "steam" ? "Steam" : game.gameProvider} · {game.apiGameId}
+              {PROVIDERS[game.gameProvider] ?? game.gameProvider} · {game.apiGameId}
             </span>
             <span className="dk-muted">{game.platform ?? `Default (${settings?.platform ?? "pc"})`}</span>
           </div>
