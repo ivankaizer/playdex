@@ -80,6 +80,6 @@ public sealed record LauncherGameDto(
 /// <param name="Sessions">The newest of them, at most 5, newest first.</param>
 public sealed record LauncherGameRecentDto(IReadOnlyList<long> DaySeconds, int SessionCount, IReadOnlyList<LauncherSessionDto> Sessions);
 
-/// <param name="Type">steam, psn, xbox or igdb: what the capture routes call gameIdProvider.</param>
+/// <param name="Type">steam, psn, xbox, igdb, gog or epic: what the capture routes call gameIdProvider.</param>
 /// <param name="ExternalId">The id the game was captured with (a Steam app id, or what a client sent).</param>
 public sealed record LauncherGameIdentityDto(string Type, string ExternalId);

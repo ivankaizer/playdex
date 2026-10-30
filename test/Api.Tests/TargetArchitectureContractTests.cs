@@ -38,7 +38,7 @@ public sealed class TargetArchitectureContractTests
     [Fact]
     public void DomainEnumsMatchTargetContract()
     {
-        Assert.Equal(["Steam", "Psn", "Xbox", "Igdb"], Enum.GetNames<GameExternalIdentityType>());
+        Assert.Equal(["Steam", "Psn", "Xbox", "Igdb", "Gog", "Epic"], Enum.GetNames<GameExternalIdentityType>());
         Assert.Equal(["Steam", "Psn", "Xbox", "Api"], Enum.GetNames<IntegrationType>());
         Assert.Equal(["Polling", "Api", "Manual"], Enum.GetNames<CaptureMethod>());
     }

@@ -9,7 +9,7 @@ Separate the canonical game, its external identities, the selected gaming platfo
 ## Domain model
 
 - **Game** is a platform-independent game known to Playdex.
-- **Game external identity** identifies a Game in a system outside Playdex. Provider identities (`steam`, `psn`, `xbox`) may be observed during session capture; the catalog identity `igdb` is used for reconciliation and metadata enrichment.
+- **Game external identity** identifies a Game in a system outside Playdex. Provider identities (`steam`, `psn`, `xbox`, and `gog` and `epic` from the Windows app's launcher games) may be observed during session capture; the catalog identity `igdb` is used for reconciliation and metadata enrichment.
 - **Platform** is the gaming service, store, or console ecosystem selected for an event: for example `steam`, `gog`, `ps5`, or `xbox`.
 - **Game ID provider** is the external namespace in which an incoming game ID is meaningful. In the API contract, `gameIdProvider` maps directly to `GameExternalIdentity.type` and is independent of Platform.
 - **Integration** is a configured user connection used for polling or API authentication. Polling integrations are bound to a provider-level Platform; API integrations are not.
