@@ -1546,6 +1546,13 @@ html[data-input="pointer"] .dk :is([data-nav][data-focused], :focus-visible) {
   gap: 14px;
   margin-top: 8px;
 }
+.dk-manage-xbox {
+  display: grid;
+  gap: 8px;
+}
+.dk-manage-xbox p {
+  margin: 0;
+}
 .dk-table-wrap {
   padding: 0;
   overflow-x: auto;

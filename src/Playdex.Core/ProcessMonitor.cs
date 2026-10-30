@@ -25,11 +25,18 @@ public sealed class ProcessMonitor(MonitorConfig config)
             ? tree.WaitForExitAsync(cancellationToken)
             : WaitForExitAsync(started.Process, cancellationToken);
 
-    /// <summary>Waits until the game has exited and returns when its last process exited.</summary>
-    public async Task<DateTimeOffset> WaitForExitAsync(Process launched, CancellationToken cancellationToken)
+    /// <summary>
+    /// Waits until the game has exited and returns when its last process exited. <paramref name="launched"/> is only
+    /// needed for <see cref="MonitorMode.LaunchedProcess"/>.
+    /// </summary>
+    public async Task<DateTimeOffset> WaitForExitAsync(Process? launched, CancellationToken cancellationToken)
     {
         if (config.Mode == MonitorMode.LaunchedProcess)
         {
+            if (launched is null)
+            {
+                throw new InvalidOperationException("The game's process is gone, and it has no executable to follow.");
+            }
             await launched.WaitForExitAsync(cancellationToken);
             return ExitTime(launched) ?? DateTimeOffset.Now;
         }

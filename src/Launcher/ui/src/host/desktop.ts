@@ -56,6 +56,14 @@ export interface DesktopApp {
   available: boolean;
 }
 
+/** A game installed through the Xbox app that isn't added to Playdex yet. */
+export interface DesktopXboxGame {
+  /** Its app user model id, what game.addXbox takes. */
+  id: string;
+  title: string;
+  executablePath: string;
+}
+
 export interface DesktopSettings {
   baseUrl: string;
   /** Keys never reach the page; only whether one is saved. */
@@ -87,6 +95,8 @@ export interface DesktopState {
   apps: DesktopApp[];
   /** Apps found on this PC that aren't in the list (Discord, the default browser). */
   suggestedApps: DesktopApp[];
+  /** Xbox app games on this PC that aren't added yet. */
+  xboxGames: DesktopXboxGame[];
   settings: DesktopSettings;
   update: UpdateView;
   fse: FseView;
@@ -248,6 +258,13 @@ let demoState: DesktopState = {
       available: true,
     },
   ],
+  xboxGames: [
+    {
+      id: "Contoso.StarlightRally_8wekyb3d8bbwe!Game",
+      title: "Starlight Rally",
+      executablePath: "C:\\XboxGames\\Starlight Rally\\Content\\StarlightRally.exe",
+    },
+  ],
   settings: {
     baseUrl: "https://dash.playdex.dev/api",
     // ?nokey shows Playdex without an API key.
@@ -326,6 +343,31 @@ async function demo(method: string, params?: Record<string, unknown>): Promise<u
     case "game.add":
     case "app.add":
       return demoState;
+    case "game.addXbox": {
+      const found = demoState.xboxGames.find((g) => g.id === params?.id);
+      if (!found) return demoState;
+      const gameId = found.executablePath.replace(/^.*\\|\.exe$/gi, "");
+      return (demoState = {
+        ...demoState,
+        games: [
+          ...demoState.games,
+          {
+            gameId,
+            libraryId: `playdex-${gameId}`,
+            displayName: found.title,
+            apiGameId: "1234567890",
+            gameProvider: "xbox",
+            platform: null,
+            launchOptions: "",
+            executablePath: found.executablePath,
+            executableExists: true,
+            dailyBackup: false,
+            backup: { kind: "off", text: "No backups yet." },
+          },
+        ],
+        xboxGames: demoState.xboxGames.filter((g) => g !== found),
+      });
+    }
     case "app.addFound": {
       const found = demoState.suggestedApps.find((a) => a.kind === params?.kind);
       if (!found) return demoState;

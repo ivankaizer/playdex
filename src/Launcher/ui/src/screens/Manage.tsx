@@ -17,7 +17,15 @@ import { launch, openApp, showToast } from "../app-state";
 import { SaveGlyph } from "../components/saves";
 import { Cover } from "../components/shared";
 import { gameById, type Game } from "../data/games";
-import { desktopState, rpc, type DesktopApp, type DesktopGame, type MessageView, type PlatformOption } from "../host/desktop";
+import {
+  desktopState,
+  rpc,
+  type DesktopApp,
+  type DesktopGame,
+  type DesktopXboxGame,
+  type MessageView,
+  type PlatformOption,
+} from "../host/desktop";
 import { focusEl, focusScreenDefault } from "../nav/focus";
 import { useStore } from "../nav/store";
 import "./desk.css";
@@ -77,7 +85,8 @@ export function Manage() {
           <span className="dk-kicker">Added to Playdex</span>
           <h1 className="dk-h1">Your games</h1>
           <p className="dk-muted">
-            Games Playdex starts and records from their .exe or .bat. Steam games installed on this PC are in the Library already.
+            Games Playdex starts and records from their .exe or .bat, or from the Xbox app. Steam games installed on this PC are in the
+            Library already.
           </p>
         </div>
         <div className="dk-head-actions" data-nav-group="manage-actions">
@@ -107,13 +116,15 @@ export function Manage() {
         </div>
       </header>
 
+      {state.xboxGames.length > 0 && <XboxGames games={state.xboxGames} busy={busy} run={run} />}
+
       {state.games.length === 0 ? (
         <div className="dk-card dk-manage-empty">
           <Gamepad2 aria-hidden />
           <h2>No games added yet</h2>
           <p className="dk-muted">
-            Add a game's .exe or .bat to track its sessions, start it from here or from Steam, and back up its saves. Steam games installed
-            on this PC are in the Library already.
+            Add a game's .exe or .bat, or a game from the Xbox app, to track its sessions, start it from here or from Steam, and back up its
+            saves. Steam games installed on this PC are in the Library already.
           </p>
         </div>
       ) : (
@@ -151,6 +162,41 @@ export function Manage() {
       )}
       <AppsSection apps={state.apps} suggested={state.suggestedApps} busy={busy} run={run} />
     </div>
+  );
+}
+
+/** Games installed through the Xbox app that aren't added yet: one click adds one, recorded as its Xbox title. */
+function XboxGames({
+  games,
+  busy,
+  run,
+}: {
+  games: DesktopXboxGame[];
+  busy: string | null;
+  run: (key: string, work: () => Promise<unknown>) => Promise<void>;
+}) {
+  return (
+    <section className="dk-manage-xbox" aria-labelledby="desk-xbox-title">
+      <h2 id="desk-xbox-title" className="dk-h2">
+        In the Xbox app
+      </h2>
+      <p className="dk-muted">Playdex starts them through the Xbox app and records them as their Xbox title.</p>
+      <div className="dk-head-actions" data-nav-group="xbox-actions">
+        {games.map((g) => (
+          <button
+            key={g.id}
+            className="dk-btn dk-btn-outline"
+            data-nav
+            data-kind="desk"
+            disabled={busy === `xbox:${g.id}`}
+            title={g.executablePath}
+            onClick={() => run(`xbox:${g.id}`, () => rpc("game.addXbox", { id: g.id }))}
+          >
+            <Plus aria-hidden /> {g.title}
+          </button>
+        ))}
+      </div>
+    </section>
   );
 }
 

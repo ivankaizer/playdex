@@ -11,6 +11,8 @@ public sealed class ConfiguredGameWatcher(AppConfig config, GameConfig game) : I
 {
     private readonly CancellationTokenSource _stop = new();
     private GameLock? _lock;
+
+    // 0 until started; -1 started, but its process (an Xbox app game's starter) was already gone.
     private int _processId;
 
     public event Action? Running;
@@ -30,7 +32,7 @@ public sealed class ConfiguredGameWatcher(AppConfig config, GameConfig game) : I
                 return [];
             }
             var folder = Path.GetDirectoryName(game.Launch.ExecutablePath);
-            return [started, .. ProcessTree.ProcessesOf(game.GameId), .. folder is null ? [] : ProcessMonitor.ProcessesIn(folder)];
+            return [.. started > 0 ? [started] : Array.Empty<int>(), .. ProcessTree.ProcessesOf(game.GameId), .. folder is null ? [] : ProcessMonitor.ProcessesIn(folder)];
         }
     }
 
@@ -47,7 +49,7 @@ public sealed class ConfiguredGameWatcher(AppConfig config, GameConfig game) : I
             _lock.Dispose();
             throw;
         }
-        Volatile.Write(ref _processId, started.Process.Id);
+        Volatile.Write(ref _processId, started.Process?.Id ?? -1);
         Log.Info($"game: started {game.DisplayName} ({game.Launch.ExecutablePath})");
         Running?.Invoke();
         _ = Task.Run(async () =>

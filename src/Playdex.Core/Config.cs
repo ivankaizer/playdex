@@ -86,6 +86,12 @@ public sealed class LaunchConfig
 
     public string? ExecutablePath { get; set; }
     public List<string> Arguments { get; set; } = [];
+
+    /// <summary>
+    /// For a game from the Xbox app (<see cref="XboxLibrary"/>): the packaged app Windows starts it as. Its executable
+    /// can't be started directly, so <see cref="ExecutablePath"/> is then only what is followed and looked for.
+    /// </summary>
+    public string? AppUserModelId { get; set; }
 }
 
 public sealed class MonitorConfig

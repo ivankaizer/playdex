@@ -27,6 +27,9 @@ internal sealed record DesktopGame(
 /// <param name="Available">It is on this PC, so Big Picture lists it.</param>
 internal sealed record DesktopApp(string Id, string Name, string Kind, string Path, string LaunchOptions, bool Available);
 
+/// <param name="Id">Its app user model id, what game.addXbox takes.</param>
+internal sealed record DesktopXboxGame(string Id, string Title, string ExecutablePath);
+
 internal sealed record DesktopSettings(
     string BaseUrl, bool ApiKeySet, string Platform, bool SteamGridDbKeySet, string LudusaviPath, bool StartWithWindows);
 
@@ -40,6 +43,7 @@ internal sealed record DesktopState(
     IReadOnlyList<DesktopGame> Games,
     IReadOnlyList<DesktopApp> Apps,
     IReadOnlyList<DesktopApp> SuggestedApps,
+    IReadOnlyList<DesktopXboxGame> XboxGames,
     DesktopSettings Settings,
     UpdateView Update,
     FseView Fse,
@@ -182,6 +186,8 @@ internal sealed partial class DesktopHost : IDisposable
                 return StateJson();
             case "game.add":
                 return await AddGameAsync();
+            case "game.addXbox":
+                return await AddXboxGameAsync(Text(parameters, "id"));
             case "game.update":
                 return await UpdateGameAsync(parameters);
             case "game.remove":
@@ -264,9 +270,25 @@ internal sealed partial class DesktopHost : IDisposable
         {
             return StateJson();
         }
-        var game = await GameCatalog.AddFromExecutableAsync(_config, path);
+        // An Xbox app game's executable doesn't start on its own: it is added as the Xbox game it is.
+        var xbox = await Task.Run(() => XboxLibrary.FindByExecutable(path));
+        var game = xbox is null ? await GameCatalog.AddFromExecutableAsync(_config, path) : GameCatalog.AddXbox(_config, xbox);
+        return await AddedAsync(game);
+    }
+
+    /// <summary>Add a game installed through the Xbox app, by its app user model id (from the state's Xbox games).</summary>
+    private async Task<string> AddXboxGameAsync(string appUserModelId)
+    {
+        var xbox = (await Task.Run(XboxLibrary.Scan)).FirstOrDefault(g => string.Equals(g.AppUserModelId, appUserModelId, StringComparison.OrdinalIgnoreCase))
+            ?? throw new InvalidOperationException("That Xbox game is no longer installed on this PC.");
+        return await AddedAsync(GameCatalog.AddXbox(_config, xbox));
+    }
+
+    /// <summary>Save a game just added, generate its launcher and show it in the library.</summary>
+    private async Task<string> AddedAsync(GameConfig game)
+    {
         await _store.SaveAsync(_config);
-        Log.Info($"desktop: added {game.GameId} ({path})");
+        Log.Info($"desktop: added {game.GameId} ({game.Launch.AppUserModelId ?? game.Launch.ExecutablePath})");
         if (_runExecutable is not null)
         {
             try
@@ -528,6 +550,11 @@ internal sealed partial class DesktopHost : IDisposable
             .ToList();
         var apps = _config.Apps.Select(App).ToList();
         var suggested = AppShortcuts.Suggestions(_config).Select(App).ToList();
+        var added = _config.Games.Values.Select(g => g.Launch.AppUserModelId).OfType<string>().ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var xboxGames = XboxLibrary.Scan()
+            .Where(g => !added.Contains(g.AppUserModelId))
+            .Select(g => new DesktopXboxGame(g.AppUserModelId, g.Title, g.ExecutablePath))
+            .ToList();
         var settings = new DesktopSettings(
             _config.Api.BaseUrl,
             !string.IsNullOrWhiteSpace(_config.Api.ApiKey),
@@ -536,7 +563,7 @@ internal sealed partial class DesktopHost : IDisposable
             _config.Ludusavi.ExecutablePath,
             StartsWithWindows());
         return new DesktopState(
-            Version, games, apps, suggested, settings, Updates?.View ?? new UpdateView("unavailable", "This build of Playdex doesn't update itself (installed builds do).", null),
+            Version, games, apps, suggested, xboxGames, settings, Updates?.View ?? new UpdateView("unavailable", "This build of Playdex doesn't update itself (installed builds do).", null),
             Fse?.View ?? new FseView("unavailable", "Not available in this build."), _config.Shell.Mode, _config.Storage.LauncherDirectory, _runExecutable is not null);
     }
 

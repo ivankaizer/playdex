@@ -49,6 +49,40 @@ public static class GameCatalog
         return game;
     }
 
+    /// <summary>
+    /// Add a game installed through the Xbox app. It is started as its packaged app and followed by its executable,
+    /// and recorded as its Xbox title (when it has one), so its sessions join those Xbox presence finds.
+    /// </summary>
+    public static GameConfig AddXbox(AppConfig config, XboxGame xbox)
+    {
+        if (config.Games.Values.FirstOrDefault(g => string.Equals(g.Launch.AppUserModelId, xbox.AppUserModelId, StringComparison.OrdinalIgnoreCase)) is { } added)
+        {
+            throw new InvalidOperationException($"{added.DisplayName} is already in Playdex.");
+        }
+
+        var gameId = Path.GetFileNameWithoutExtension(xbox.ExecutablePath).Trim();
+        if (config.Games.ContainsKey(gameId))
+        {
+            throw new InvalidOperationException($"Game '{gameId}' already exists. Add a game cannot change an existing entry; use Settings instead.");
+        }
+
+        var title = xbox.Title.Length > MaximumDisplayNameLength ? xbox.Title[..MaximumDisplayNameLength] : xbox.Title;
+        var game = new GameConfig
+        {
+            GameId = gameId,
+            DisplayName = NormalizeDisplayName(title),
+            ApiGameId = xbox.TitleId ?? gameId,
+            Launch = new LaunchConfig { ExecutablePath = xbox.ExecutablePath, AppUserModelId = xbox.AppUserModelId },
+            Monitor = new MonitorConfig { Mode = MonitorMode.ExecutablePath, ExecutablePath = xbox.ExecutablePath }
+        };
+        if (xbox.TitleId is not null)
+        {
+            game.GameProvider = "xbox";
+        }
+        config.Games.Add(gameId, game);
+        return game;
+    }
+
     public static GameConfig Remove(AppConfig config, string gameId)
     {
         if (!config.Games.Remove(gameId, out var removed))
