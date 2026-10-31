@@ -1,0 +1,58 @@
+{
+  "url": "https://feature-mcp.playdex.deployment.lat",
+  "sha": "7d568d1ac1fe26d3a94c5b688fbe41af171ba7e0",
+  "clock": "2026-10-31T23:17:09.799Z",
+  "platform": "linux-x64 chromium-153.0.8010.12",
+  "recordedAt": "2026-10-31T23:17:55.641Z",
+  "steps": [
+    {
+      "name": "landing",
+      "file": "01-landing.png"
+    },
+    {
+      "name": "login",
+      "file": "02-login.png"
+    },
+    {
+      "name": "dashboard",
+      "file": "03-dashboard.png"
+    },
+    {
+      "name": "sessions",
+      "file": "04-sessions.png"
+    },
+    {
+      "name": "recap",
+      "file": "05-recap.png"
+    },
+    {
+      "name": "settings",
+      "file": "06-settings.png"
+    },
+    {
+      "name": "admin-login",
+      "file": "07-admin-login.png"
+    },
+    {
+      "name": "admin-dashboard",
+      "file": "08-admin-dashboard.png"
+    },
+    {
+      "name": "admin-integrations",
+      "file": "09-admin-integrations.png"
+    },
+    {
+      "name": "admin-sessions",
+      "file": "10-admin-sessions.png"
+    },
+    {
+      "name": "admin-ai-generations",
+      "file": "11-admin-ai-generations.png"
+    },
+    {
+      "name": "admin-games",
+      "file": "12-admin-games.png"
+    }
+  ],
+  "failures": []
+}
