@@ -15,6 +15,9 @@ const SessionCreatePage = lazy(() =>
 const SessionsPage = lazy(() => import("@/pages/sessions/SessionsPage").then((module) => ({ default: module.SessionsPage })));
 const SettingsPage = lazy(() => import("@/pages/settings/SettingsPage").then((module) => ({ default: module.SettingsPage })));
 const AdminApp = lazy(() => import("@/admin/AdminApp"));
+const OAuthAuthorizePage = lazy(() =>
+  import("@/pages/oauth/OAuthAuthorizePage").then((module) => ({ default: module.OAuthAuthorizePage })),
+);
 
 function RequireLogin({ children }: { children: React.ReactNode }) {
   if (!authSession.isLoggedIn()) return <Navigate to="/" replace />;
@@ -41,6 +44,8 @@ export function App() {
       <Routes>
         <Route path="/" element={<HomePage />} />
         <Route path="/privacy" element={<PrivacyPage />} />
+        {/* OAuth clients, such as assistants, send the user here to connect Playdex; the page signs them in itself. */}
+        <Route path="/oauth/authorize" element={<OAuthAuthorizePage />} />
         <Route
           path="/dashboard"
           element={
