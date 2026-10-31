@@ -58,10 +58,13 @@ public sealed class DraftTools(DraftService drafts, ManualService manual, DraftC
                 rows, TimeSpan.FromSeconds(Math.Max(1, options.Value.SearchTimeoutSeconds)), clock.GetUtcNow(), ct);
             var platforms = (await manual.ListPlatforms(ct)).Platforms
                 .Where(p => p.Key != ManualService.PlaynitePlatformKey).ToArray();
+            var summary = Summary(batch);
             return new CallToolResult
             {
-                Content = [new TextContentBlock { Text = Summary(batch) }],
-                StructuredContent = JsonSerializer.SerializeToElement(new { batch, platforms }, _json),
+                Content = [new TextContentBlock { Text = summary }],
+                // Some clients (Claude Code) hand the model the structured content instead of the text, so the
+                // summary, and with it "nothing is logged yet", travels in both.
+                StructuredContent = JsonSerializer.SerializeToElement(new { message = summary, batch, platforms }, _json),
                 Meta = new JsonObject { ["confirmToken"] = confirmation.Issue(userId, batch.Id) },
             };
         });

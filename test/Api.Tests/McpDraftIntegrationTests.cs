@@ -85,6 +85,8 @@ public sealed class McpDraftIntegrationTests(AdminApiFixture fixture)
             });
 
             Assert.NotEqual(true, drafted.IsError);
+            Assert.Contains("Nothing is logged until the user accepts",
+                drafted.StructuredContent!.Value.GetProperty("message").GetString());
             var batch = drafted.StructuredContent!.Value.GetProperty("batch");
             var batchId = batch.GetProperty("id").GetGuid();
             var row = Assert.Single(batch.GetProperty("rows").EnumerateArray().ToArray());
