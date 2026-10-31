@@ -1,0 +1,346 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Playdex drafts</title>
+<style>
+  /* The host's variables (hostContext.styles.variables) override these neutral fallbacks. */
+  :root {
+    color-scheme: light dark;
+    --color-background-primary: light-dark(#ffffff, #1f1f1f);
+    --color-background-secondary: light-dark(#f5f5f4, #2a2a2a);
+    --color-text-primary: light-dark(#1c1917, #f5f5f4);
+    --color-text-secondary: light-dark(#57534e, #a8a29e);
+    --color-text-warning: light-dark(#a16207, #facc15);
+    --color-text-danger: light-dark(#b91c1c, #f87171);
+    --color-text-success: light-dark(#15803d, #4ade80);
+    --color-text-inverse: light-dark(#ffffff, #1c1917);
+    --color-background-inverse: light-dark(#1c1917, #f5f5f4);
+    --color-border-primary: light-dark(#e7e5e4, #3f3f46);
+    --color-ring-primary: light-dark(#2563eb, #60a5fa);
+    --font-sans: system-ui, -apple-system, "Segoe UI", sans-serif;
+    --font-text-sm-size: 13px;
+    --font-text-md-size: 14px;
+    --font-weight-medium: 500;
+    --border-radius-sm: 6px;
+    --border-radius-md: 8px;
+    --border-radius-lg: 12px;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: transparent; }
+  body {
+    font-family: var(--font-sans);
+    font-size: var(--font-text-md-size);
+    color: var(--color-text-primary);
+  }
+  main { padding: 4px 0; }
+  ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+  li { border-radius: var(--border-radius-md); }
+  li.editing { background: var(--color-background-secondary); }
+  .row { display: flex; align-items: center; gap: 10px; padding: 6px; }
+  .cover {
+    flex: none; width: 32px; height: 43px; border-radius: var(--border-radius-sm);
+    background: var(--color-background-secondary); object-fit: cover;
+  }
+  .text { flex: 1; min-width: 0; text-align: left; }
+  .title { font-weight: var(--font-weight-medium); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .meta, .note { font-size: var(--font-text-sm-size); color: var(--color-text-secondary); }
+  .note.warning { color: var(--color-text-warning); }
+  .note.danger { color: var(--color-text-danger); }
+  .note.success { color: var(--color-text-success); }
+  button, input, select { font: inherit; color: inherit; }
+  button { cursor: pointer; border-radius: var(--border-radius-sm); }
+  button:focus-visible, input:focus-visible, select:focus-visible {
+    outline: 2px solid var(--color-ring-primary); outline-offset: 1px;
+  }
+  button:disabled { cursor: default; opacity: .5; }
+  .open { all: unset; flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; cursor: pointer; border-radius: var(--border-radius-sm); }
+  .open:focus-visible { outline: 2px solid var(--color-ring-primary); }
+  .ghost { border: 0; background: transparent; padding: 4px 8px; color: var(--color-text-secondary); }
+  .ghost:hover { color: var(--color-text-primary); }
+  .primary {
+    border: 0; padding: 7px 14px; background: var(--color-background-inverse);
+    color: var(--color-text-inverse); font-weight: var(--font-weight-medium);
+  }
+  .secondary { border: 1px solid var(--color-border-primary); background: transparent; padding: 6px 12px; }
+  .editor { display: grid; gap: 8px; padding: 2px 6px 10px 48px; }
+  .editor label { display: grid; gap: 3px; font-size: var(--font-text-sm-size); color: var(--color-text-secondary); }
+  .editor .fields { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+  input, select {
+    width: 100%; padding: 5px 8px; border-radius: var(--border-radius-sm);
+    border: 1px solid var(--color-border-primary); background: var(--color-background-primary);
+  }
+  .candidates { display: grid; gap: 2px; max-height: 180px; overflow: auto; }
+  .candidate { all: unset; display: flex; gap: 8px; align-items: center; padding: 4px; border-radius: var(--border-radius-sm); cursor: pointer; }
+  .candidate:hover, .candidate[aria-pressed="true"] { background: var(--color-background-primary); }
+  .candidate:focus-visible { outline: 2px solid var(--color-ring-primary); }
+  .candidate .cover { width: 24px; height: 32px; }
+  .actions { display: flex; gap: 8px; align-items: center; }
+  footer { display: flex; align-items: center; gap: 12px; padding: 10px 6px 4px; }
+  @media (max-width: 420px) { .editor { padding-left: 6px; } .editor .fields { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<main>
+  <p class="note" id="status" role="status">Loading drafts…</p>
+  <ul id="rows" aria-label="Draft play sessions"></ul>
+  <footer id="footer" hidden>
+    <button class="primary" id="accept" type="button"></button>
+    <span class="note" id="summary"></span>
+  </footer>
+</main>
+<script>
+(() => {
+  "use strict";
+  const state = { error: null, batch: null, platforms: [], token: null, editing: null, busy: false, results: {}, candidates: [], pick: null };
+  const $ = (id) => document.getElementById(id);
+
+  // ---- Host bridge: MCP Apps (JSON-RPC over postMessage), with ChatGPT's window.openai as a fallback. ----
+  let nextId = 1;
+  const pending = new Map();
+  const send = (message) => window.parent.postMessage({ jsonrpc: "2.0", ...message }, "*");
+  const request = (method, params) => new Promise((resolve, reject) => {
+    const id = nextId++;
+    pending.set(id, { resolve, reject });
+    send({ id, method, params });
+  });
+
+  window.addEventListener("message", (event) => {
+    if (event.source !== window.parent) return;
+    const message = event.data;
+    if (!message || message.jsonrpc !== "2.0") return;
+    if (message.id !== undefined && pending.has(message.id) && !message.method) {
+      const { resolve, reject } = pending.get(message.id);
+      pending.delete(message.id);
+      message.error ? reject(new Error(message.error.message || "Request failed")) : resolve(message.result);
+      return;
+    }
+    if (message.method === "ui/notifications/tool-result") receive(message.params);
+    else if (message.method === "ui/notifications/host-context-changed") applyContext(message.params);
+    else if (message.method === "ui/resource-teardown" && message.id !== undefined) send({ id: message.id, result: {} });
+  });
+
+  async function callTool(name, args) {
+    const result = window.openai?.callTool && !bridged
+      ? await window.openai.callTool(name, args)
+      : await request("tools/call", { name, arguments: args });
+    if (result?.isError) throw new Error(result.content?.[0]?.text || "Something went wrong.");
+    return result.structuredContent ?? {};
+  }
+
+  function applyContext(context) {
+    if (!context) return;
+    const root = document.documentElement;
+    for (const [name, value] of Object.entries(context.styles?.variables ?? {})) {
+      if (value) root.style.setProperty(name, value);
+    }
+    if (context.styles?.css?.fonts && !$("host-fonts")) {
+      const style = document.createElement("style");
+      style.id = "host-fonts";
+      style.textContent = context.styles.css.fonts;
+      document.head.append(style);
+    }
+    if (context.theme) root.style.colorScheme = context.theme;
+  }
+
+  let bridged = false;
+  async function connect() {
+    try {
+      const result = await Promise.race([
+        request("ui/initialize", {
+          protocolVersion: "2026-01-26",
+          appInfo: { name: "playdex-drafts", version: "1.0.0" },
+          clientInfo: { name: "playdex-drafts", version: "1.0.0" },
+          appCapabilities: { availableDisplayModes: ["inline"] },
+        }),
+        new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), 3000)),
+      ]);
+      bridged = true;
+      applyContext(result?.hostContext);
+      send({ method: "ui/notifications/initialized", params: {} });
+    } catch {
+      // No MCP Apps host answered: ChatGPT hands the result over on window.openai instead.
+      if (window.openai) {
+        applyContext({ theme: window.openai.theme });
+        if (window.openai.toolOutput) receive({ structuredContent: window.openai.toolOutput, _meta: window.openai.toolResponseMetadata });
+      }
+    }
+  }
+
+  new ResizeObserver(() => {
+    if (bridged) send({ method: "ui/notifications/size-changed", params: { width: document.documentElement.scrollWidth, height: document.documentElement.scrollHeight } });
+  }).observe(document.documentElement);
+
+  // ---- Rendering ----
+  function h(tag, props, ...children) {
+    const node = document.createElement(tag);
+    for (const [key, value] of Object.entries(props ?? {})) {
+      if (value === undefined || value === null || value === false) continue;
+      if (key.startsWith("on")) node.addEventListener(key.slice(2), value);
+      else if (key === "class") node.className = value;
+      else node.setAttribute(key, value === true ? "" : value);
+    }
+    for (const child of children.flat()) if (child !== null && child !== undefined && child !== false) node.append(child);
+    return node;
+  }
+
+  const minutes = (value) => value == null ? "no duration" : value >= 60 ? `${Math.floor(value / 60)}h${value % 60 ? ` ${value % 60}m` : ""}` : `${value}m`;
+  const platformName = (key) => state.platforms.find((p) => p.key === key)?.name ?? key;
+  const cover = (url, alt) => url
+    ? h("img", { class: "cover", src: url, alt, loading: "lazy", onerror: (e) => e.target.replaceWith(h("span", { class: "cover", "aria-hidden": "true" })) })
+    : h("span", { class: "cover", "aria-hidden": "true" });
+
+  function receive(result) {
+    const data = result?.structuredContent;
+    if (!data?.batch) return;
+    state.batch = data.batch;
+    state.platforms = data.platforms ?? [];
+    state.token = result._meta?.confirmToken ?? null;
+    render();
+  }
+
+  function render() {
+    const rows = state.batch?.rows ?? [];
+    const status = $("status");
+    status.className = state.error ? "note danger" : "note";
+    status.textContent = state.error ?? (rows.length ? "" : "No drafts left.");
+    status.hidden = !status.textContent;
+    $("rows").replaceChildren(...rows.map(renderRow));
+    const ready = rows.filter((r) => r.ready && !state.results[r.id]?.sessionId);
+    const open = rows.filter((r) => r.status === "pending" && !state.results[r.id]?.sessionId);
+    const logged = rows.filter((r) => r.status === "accepted" || state.results[r.id]?.sessionId).length;
+    $("footer").hidden = rows.length === 0;
+    const accept = $("accept");
+    accept.textContent = ready.length ? `Log ${ready.length} session${ready.length === 1 ? "" : "s"}` : "Log sessions";
+    accept.disabled = state.busy || !ready.length || !state.token;
+    accept.hidden = open.length === 0;
+    $("summary").textContent = [
+      logged ? `${logged} logged` : "",
+      open.length > ready.length ? `${open.length - ready.length} need${open.length - ready.length === 1 ? "s" : ""} a fix` : "",
+    ].filter(Boolean).join(" · ");
+  }
+
+  function renderRow(row) {
+    const result = state.results[row.id];
+    const done = row.status === "accepted" || result?.sessionId;
+    const title = row.selection?.title ?? row.title;
+    const notes = done
+      ? [h("div", { class: "note success" }, "Logged")]
+      : result?.error
+        ? [h("div", { class: "note danger" }, result.error)]
+        : row.warnings.map((w) => h("div", { class: "note warning" }, w));
+    const editing = state.editing === row.id;
+    return h("li", { class: editing ? "editing" : "" },
+      h("div", { class: "row" },
+        h("button", { class: "open", type: "button", disabled: done || state.busy, "aria-expanded": String(editing), onclick: () => toggle(row) },
+          cover(row.selection?.capsuleUrl, ""),
+          h("div", { class: "text" },
+            h("div", { class: "title", title }, title),
+            h("div", { class: "meta" }, `${row.date ?? "no date"} · ${minutes(row.durationMinutes)} · ${platformName(row.platformKey)}`),
+            notes)),
+        done ? null : h("button", { class: "ghost", type: "button", disabled: state.busy, "aria-label": `Remove ${title}`, onclick: () => remove(row) }, "Remove")),
+      editing ? renderEditor(row) : null);
+  }
+
+  function renderEditor(row) {
+    const search = h("input", { type: "search", value: row.title, "aria-label": "Game", autocomplete: "off" });
+    const date = h("input", { type: "date", value: row.date ?? "" });
+    const duration = h("input", { type: "number", min: "1", max: "1440", value: row.durationMinutes ?? "" });
+    const platform = h("select", {}, state.platforms.map((p) => h("option", { value: p.key, selected: p.key === row.platformKey }, p.name)));
+    const list = h("div", { class: "candidates", role: "list" });
+    const drawCandidates = () => list.replaceChildren(...state.candidates.map((c) => h("button", {
+      class: "candidate", type: "button", "aria-pressed": String(isPick(c)),
+      onclick: () => { state.pick = c; search.value = c.title; drawCandidates(); },
+    }, cover(c.capsuleUrl, ""), h("span", {}, c.title, c.previouslyPlayed ? h("span", { class: "note" }, " · played") : null))));
+    let timer;
+    search.addEventListener("input", () => {
+      state.pick = null;
+      clearTimeout(timer);
+      timer = setTimeout(async () => {
+        try { state.candidates = (await callTool("search_games", { query: search.value })).results ?? []; }
+        catch { state.candidates = []; }
+        drawCandidates();
+      }, 300);
+    });
+    drawCandidates();
+    const save = async () => {
+      const pick = state.pick;
+      // The server keeps a selection only when the title it is sent with is the row's saved title.
+      const titleValue = pick ? pick.title : search.value.trim();
+      await mutate(async () => {
+        let updated = row;
+        if (pick && titleValue !== row.title) {
+          updated = (await callTool("update_draft", fields(row, { title: titleValue }))).row;
+        }
+        updated = (await callTool("update_draft", fields(updated, {
+          title: titleValue, date: date.value || null, durationMinutes: duration.value ? Number(duration.value) : null,
+          platform: platform.value, gameId: pick?.gameId ?? null, igdbId: pick?.igdbId ?? null,
+          ...(pick ? {} : keepSelection(updated, titleValue)),
+        }))).row;
+        replace(updated);
+        state.editing = null;
+      });
+    };
+    return h("div", { class: "editor" },
+      h("label", {}, "Game", search), list,
+      h("div", { class: "fields" },
+        h("label", {}, "Date", date), h("label", {}, "Minutes", duration), h("label", {}, "Platform", platform)),
+      h("div", { class: "actions" },
+        h("button", { class: "primary", type: "button", disabled: state.busy, onclick: save }, "Save"),
+        h("button", { class: "secondary", type: "button", onclick: () => { state.editing = null; render(); } }, "Cancel")));
+  }
+
+  const isPick = (c) => state.pick && (c.gameId ? c.gameId === state.pick.gameId : c.igdbId === state.pick.igdbId);
+  const keepSelection = (row, title) => title === row.title && row.selection
+    ? { gameId: row.selection.gameId ?? null, igdbId: row.selection.igdbId ?? null } : {};
+  const fields = (row, changes) => ({
+    batchId: state.batch.id, rowId: row.id, revision: row.revision, confirmToken: state.token,
+    title: row.title, date: row.date, durationMinutes: row.durationMinutes, platform: row.platformKey,
+    gameId: row.selection?.gameId ?? null, igdbId: row.selection?.igdbId ?? null, ...changes,
+  });
+  const replace = (row) => { state.batch.rows = state.batch.rows.map((r) => r.id === row.id ? row : r); };
+
+  async function toggle(row) {
+    state.editing = state.editing === row.id ? null : row.id;
+    state.pick = null;
+    state.candidates = [];
+    render();
+    if (state.editing && row.title) {
+      try { state.candidates = (await callTool("search_games", { query: row.title })).results ?? []; render(); } catch { /* the user can search again */ }
+    }
+  }
+
+  async function remove(row) {
+    await mutate(async () => {
+      await callTool("delete_draft", { batchId: state.batch.id, rowId: row.id, revision: row.revision, confirmToken: state.token });
+      state.batch.rows = state.batch.rows.filter((r) => r.id !== row.id);
+      if (state.editing === row.id) state.editing = null;
+    });
+  }
+
+  async function acceptAll() {
+    const rows = state.batch.rows.filter((r) => r.ready && !state.results[r.id]?.sessionId);
+    await mutate(async () => {
+      const response = await callTool("accept_drafts", {
+        batchId: state.batch.id, confirmToken: state.token, rows: rows.map((r) => ({ id: r.id, revision: r.revision })),
+      });
+      for (const result of response.results ?? []) state.results[result.id] = result;
+    });
+  }
+
+  async function mutate(action) {
+    state.busy = true;
+    state.error = null;
+    render();
+    try { await action(); }
+    catch (error) { state.error = error.message; }
+    finally { state.busy = false; render(); }
+  }
+
+  $("accept").addEventListener("click", acceptAll);
+  connect();
+})();
+</script>
+</body>
+</html>

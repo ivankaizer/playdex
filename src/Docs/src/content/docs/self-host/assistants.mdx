@@ -1,0 +1,82 @@
+---
+title: Assistants (MCP)
+description: Log play sessions by telling Claude, ChatGPT or Claude Code what you played.
+sidebar:
+  order: 5
+---
+
+import { Steps } from '@astrojs/starlight/components';
+
+Playdex runs an [MCP](https://modelcontextprotocol.io) server, so an assistant can log sessions for you. Write
+"2 hours of Hades yesterday on Switch", or paste a screenshot of your playtime. The assistant drafts the sessions and
+shows a card in the chat. Check the matched games there and accept them. Nothing reaches your history until you do.
+
+The server address is your Playdex address with `/api/mcp`:
+
+```text
+https://playdex.example.com/api/mcp
+```
+
+## Requirements
+
+- **Public HTTPS.** Claude and ChatGPT connect from their own servers, so your Playdex has to be reachable from the
+  internet over HTTPS. The [standard install](/self-host/install/) with Caddy does this. A Playdex that only your
+  home network can reach works with Claude Code only.
+- **One origin.** Assistants look up how to sign in at `/.well-known/oauth-authorization-server` and
+  `/.well-known/oauth-protected-resource/api/mcp`. The web app's container forwards these paths to the API. If you run
+  your own reverse proxy, send everything outside `/api` to the web app, as the bundled Caddyfile does.
+
+## Connect Claude
+
+<Steps>
+
+1. In Claude, open **Settings → Connectors** and click **Add custom connector**.
+2. Enter the server address and click **Add**, then **Connect**.
+3. Playdex opens. Sign in if asked, check that the app is Claude and that you return to `claude.ai`, then click
+   **Allow**.
+
+</Steps>
+
+The connector works in Claude on the web, in the desktop app and on mobile. The card appears in Claude's chat when
+the assistant drafts sessions.
+
+## Connect ChatGPT
+
+In ChatGPT, add an app (a custom connector) with the server address and choose OAuth. ChatGPT then sends you to
+Playdex to allow it. Custom apps need ChatGPT's developer mode.
+
+## Connect Claude Code
+
+```sh
+claude mcp add --transport http playdex https://playdex.example.com/api/mcp
+```
+
+Then run `/mcp`, pick **playdex** and choose **Authenticate**. Your browser opens Playdex to allow the connection.
+
+Instead of signing in, you can use a Playdex app key, for example on a server without a browser. Create the key under
+**Settings → Connected services**:
+
+```sh
+claude mcp add --transport http playdex https://playdex.example.com/api/mcp \
+  --header "Authorization: Bearer plx_..."
+```
+
+Claude Code shows the drafted sessions as text. Review and accept them in Playdex: open **Log a session** and the
+**AI batch** tab, where drafts waiting for review are listed.
+
+## What an assistant can do
+
+An assistant you connect can:
+
+- draft play sessions and search games to match them, among the games you've played and the IGDB catalog
+- log those drafts once you accept them in the card
+
+It can't read your history beyond those matches, and it can't edit or delete existing sessions. The assistant itself
+can only create drafts. Changing, removing and accepting them is done by the buttons on the card, which the assistant
+cannot press.
+
+## Disconnect an assistant
+
+Open **Settings → Connected apps** and click **Disconnect**. The assistant is signed out at once. A new password set
+with `create-user` (see [Users](/self-host/users/)) disconnects every assistant too. A connection that uses an app key
+ends when you replace the key.

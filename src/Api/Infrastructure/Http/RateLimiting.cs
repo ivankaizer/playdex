@@ -19,6 +19,7 @@ public static class RateLimiting
     public const string Refresh = "refresh";
     public const string Capture = "capture";
     public const string Posters = "posters";
+    public const string Mcp = "mcp";
 
     private static readonly IPNetwork[] _privateNetworks =
     [
@@ -64,6 +65,8 @@ public static class RateLimiting
             // The Windows app pings every 30 seconds per running game, and a session start/end now and then.
             limiter.AddPolicy(Capture, context => PerClient(context, permitsPerMinute: 120));
             limiter.AddPolicy(Posters, context => PerClient(context, permitsPerMinute: 60));
+            // An assistant's draft card searches games as the user types.
+            limiter.AddPolicy(Mcp, context => PerClient(context, permitsPerMinute: 120));
         });
         return services;
     }
