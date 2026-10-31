@@ -1,4 +1,4 @@
-import { ChevronDown, LayoutGrid, List, Plus, Search } from "lucide-react";
+import { LayoutGrid, List, Plus, Search } from "lucide-react";
 import { memo, useMemo, useState } from "react";
 import { showToast, useIsRunning } from "../app-state";
 import { Cover } from "../components/shared";
@@ -9,68 +9,50 @@ import { rpc } from "../host/desktop";
 import { useStore } from "../nav/store";
 import { byTitle, deskTab, inScope, libraryView, openGamePage, selectedGame, totalMinutes, type Scope } from "./state";
 
-const SCOPES: { id: Scope; label: string }[] = [
+/** The list's tabs: Recent, and the library's scopes. */
+type Tab = "recent" | Scope;
+
+const TABS: { id: Tab; label: string }[] = [
   { id: "all", label: "All" },
+  { id: "recent", label: "Recent" },
   { id: "installed", label: "Installed" },
   { id: "favorites", label: "Favorites" },
 ];
 
 /** Played within this many days counts as recent. */
 const RECENT_DAYS = 14;
-const RECENT_MAX = 6;
 
-interface Group {
-  id: string;
-  label: string;
-  games: Game[];
-}
+const EMPTY: Record<Tab, string> = {
+  all: "Nothing here yet.",
+  recent: `Nothing played in the last ${RECENT_DAYS} days.`,
+  installed: "No games installed.",
+  favorites: "No favorites yet.",
+};
 
 /**
- * The game list down the left, as in Steam's library: search, All / Installed / Favorites, and the games grouped as
- * Recent, Favorites and the rest A–Z. Picking one opens its page in the Library.
+ * The game list down the left, as in Steam's library: search, then All / Recent / Installed / Favorites, each one list
+ * with every game once: Recent by when it was last played, the others A–Z. Picking one opens its page in the Library.
  */
 export function Sidebar() {
   const [query, setQuery] = useState("");
-  const [scope, setScope] = useState<Scope>("all");
-  const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
+  const [tab, setTab] = useState<Tab>("all");
   const recent = useRecentGames();
   const favorites = useFavorites();
   const view = useStore(libraryView);
 
-  const counts = useMemo(
-    () => Object.fromEntries(SCOPES.map((s) => [s.id, games.filter((g) => inScope(s.id, g, favorites)).length])) as Record<Scope, number>,
-    [favorites],
-  );
-
-  const groups = useMemo<Group[]>(() => {
-    const visible = games.filter((g) => inScope(scope, g, favorites));
-    const q = query.trim().toLowerCase();
-    if (q) return [{ id: "results", label: "Results", games: visible.filter((g) => g.title.toLowerCase().includes(q)).sort(byTitle) }];
-    const recentGames = recent
+  const lists = useMemo(() => {
+    const played = recent
       .filter((r) => {
         const day = lastPlayedDay(r);
-        return day !== undefined && day <= RECENT_DAYS && inScope(scope, r.game, favorites);
+        return day !== undefined && day <= RECENT_DAYS;
       })
-      .slice(0, RECENT_MAX)
       .map((r) => r.game);
-    return [
-      { id: "recent", label: "Recent", games: recentGames },
-      { id: "favorites", label: "Favorites", games: scope === "favorites" ? [] : visible.filter((g) => favorites.has(g.id)).sort(byTitle) },
-      {
-        id: "all",
-        label: scope === "installed" ? "Installed" : scope === "favorites" ? "Favorites" : "All games",
-        games: [...visible].sort(byTitle),
-      },
-    ].filter((g) => g.games.length > 0);
-  }, [query, scope, favorites, recent]);
+    const list = (id: Tab) => (id === "recent" ? played : games.filter((g) => inScope(id, g, favorites)).sort(byTitle));
+    return Object.fromEntries(TABS.map((t) => [t.id, list(t.id)])) as Record<Tab, Game[]>;
+  }, [favorites, recent]);
 
-  const toggle = (id: string) =>
-    setCollapsed((c) => {
-      const next = new Set(c);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
+  const q = query.trim().toLowerCase();
+  const shown = q ? lists[tab].filter((g) => g.title.toLowerCase().includes(q)) : lists[tab];
 
   return (
     <aside className="dk-side" aria-label="Games">
@@ -80,7 +62,7 @@ export function Sidebar() {
             <Search aria-hidden />
             <input
               type="search"
-              placeholder={`Search ${games.length} games`}
+              placeholder={`Search ${lists[tab].length} games`}
               aria-label="Search games"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
@@ -89,25 +71,18 @@ export function Sidebar() {
           <ViewToggle view={view} />
         </div>
         <div className="dk-seg" role="radiogroup" aria-label="Show" data-nav-group="side-scope">
-          {SCOPES.map((s) => (
-            <button key={s.id} role="radio" aria-checked={scope === s.id} data-nav data-kind="filter" onClick={() => setScope(s.id)}>
-              {s.label} <span className="num">{counts[s.id]}</span>
+          {TABS.map((t) => (
+            <button key={t.id} role="radio" aria-checked={tab === t.id} data-nav data-kind="filter" onClick={() => setTab(t.id)}>
+              {t.label}
             </button>
           ))}
         </div>
       </div>
 
       <div className="dk-side-list" data-scroll="y" data-nav-group="side-games">
-        {groups.length === 0 && <p className="dk-side-empty">{query ? "No games match." : "Nothing here yet."}</p>}
-        {groups.map((g) => (
-          <section key={g.id} className="dk-group" aria-label={g.label}>
-            <button className="dk-group-head" aria-expanded={!collapsed.has(g.id)} onClick={() => toggle(g.id)}>
-              <ChevronDown aria-hidden />
-              <span>{g.label}</span>
-              <span className="num">{g.games.length}</span>
-            </button>
-            {!collapsed.has(g.id) && g.games.map((game) => <Row key={game.id} game={game} />)}
-          </section>
+        {shown.length === 0 && <p className="dk-side-empty">{q ? "No games match." : EMPTY[tab]}</p>}
+        {shown.map((game) => (
+          <Row key={game.id} game={game} />
         ))}
       </div>
 

@@ -593,16 +593,15 @@ html[data-input="pointer"] .dk :is([data-nav][data-focused], :focus-visible) {
   flex: 1 1 auto;
   min-width: 0;
   height: 28px;
-  padding: 0 8px;
+  padding: 0 6px;
+  overflow: hidden;
+  text-overflow: ellipsis;
   text-align: center;
   border-radius: 999px;
   font-size: 12.5px;
   font-weight: 500;
   color: rgb(var(--ink-2));
   white-space: nowrap;
-}
-.dk-seg button span {
-  opacity: 0.75;
 }
 .dk-seg button:hover {
   color: rgb(var(--ink));
@@ -617,43 +616,11 @@ html[data-input="pointer"] .dk :is([data-nav][data-focused], :focus-visible) {
   min-height: 0;
   overflow-y: auto;
   scrollbar-width: thin;
-  padding: 0 8px 12px;
+  padding: 6px 8px 12px;
 }
 .dk-side-empty {
   margin: 16px 8px;
   color: rgb(var(--muted));
-}
-.dk-group {
-  padding-top: 6px;
-}
-.dk-group-head {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 8px;
-  border-radius: 6px;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: rgb(var(--muted));
-}
-.dk-group-head:hover {
-  color: rgb(var(--ink-2));
-}
-.dk-group-head svg {
-  width: 13px;
-  height: 13px;
-  transition: transform 0.18s var(--ease-out);
-}
-.dk-group-head[aria-expanded="false"] svg {
-  transform: rotate(-90deg);
-}
-.dk-group-head .num {
-  margin-left: auto;
-  letter-spacing: 0;
-  font-weight: 500;
 }
 .dk-row {
   width: 100%;
