@@ -12,6 +12,7 @@
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
     <PackageReference Include="Microsoft.OpenApi" />
+    <PackageReference Include="ModelContextProtocol.AspNetCore" />
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
     <PackageReference Include="Npgsql.OpenTelemetry" />
     <PackageReference Include="Sentry.AspNetCore" />
@@ -31,5 +32,6 @@
     <EmbeddedResource Remove="Resources\**\*" />
     <None Remove="Resources\**\*" />
     <EmbeddedResource Include="Resources\Fonts\**\*.ttf" />
+    <EmbeddedResource Include="Modules\Manual\Mcp\drafts.html" LogicalName="Api.Modules.Manual.Mcp.drafts.html" />
   </ItemGroup>
 </Project>

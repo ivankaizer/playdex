@@ -6,8 +6,10 @@ public sealed class ApiEnvelopeMiddleware(RequestDelegate next)
 {
     public async Task InvokeAsync(HttpContext context)
     {
-        // OAuth clients expect RFC 6749 token responses, which an envelope would break.
+        // MCP speaks JSON-RPC (and streams it as server-sent events) and OAuth clients expect RFC 6749 token
+        // responses; an envelope would break both.
         if (!context.Request.Path.StartsWithSegments("/api") ||
+            context.Request.Path.StartsWithSegments("/api/mcp") ||
             context.Request.Path.StartsWithSegments("/api/oauth/token") ||
             HttpMethods.IsOptions(context.Request.Method))
         {
