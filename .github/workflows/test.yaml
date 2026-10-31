@@ -15,8 +15,37 @@ permissions:
   contents: read
 
 jobs:
+  # observability/ (Grafana dashboards and alerts, applied with push.sh) is not part of the build: a change that only
+  # touches it skips the tests and with them the preview, the images and the production deploy. Not a paths-ignore:
+  # the tests are a required check, and a skipped job passes it where a workflow that never ran blocks the merge.
+  changes:
+    name: Changes
+    runs-on: ubuntu-latest
+    outputs:
+      build: ${{ steps.diff.outputs.build }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 0
+      - id: diff
+        env:
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+        # Unless the diff surely touches nothing else, build: a diff that fails builds too.
+        run: |
+          if files="$(git diff --name-only "$BASE...$HEAD")" && [[ -n "$files" ]] &&
+             ! grep -qv '^observability/' <<<"$files"; then
+            echo "build=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "build=true" >> "$GITHUB_OUTPUT"
+          fi
+          echo "$files"
+
   test:
     name: .NET and frontend tests
+    needs: changes
+    # Also when the changes job failed: only a diff known to be observability-only skips the tests.
+    if: ${{ !cancelled() && needs.changes.outputs.build != 'false' }}
     # GitHub-hosted, so code from pull requests (forks included) never runs on macserv.
     runs-on: ubuntu-latest
     services:
