@@ -96,6 +96,8 @@ public enum GameExternalIdentityType
     Psn,
     Xbox,
     Igdb,
+    Gog,
+    Epic,
 }
 
 public sealed class GameExternalIdentity : IHasTimestamps

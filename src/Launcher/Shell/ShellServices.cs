@@ -23,7 +23,7 @@ internal sealed class ShellServices : IDisposable
             Queue,
             (gameId, state, seconds) => SessionChanged?.Invoke(gameId, state, seconds),
             detected => GameExited?.Invoke(detected),
-            () => Summary.SteamPolling);
+            Summary.IsPolled);
         Input = new ControllerInput(new InputQueue(dispatcher, (code, timestamp) => InputReceived?.Invoke(code, timestamp)));
         _libraryScannedAt = Stopwatch.GetTimestamp();
         LibraryScan = Task.Run(() => Library.Scan(Config));

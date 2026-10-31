@@ -67,19 +67,34 @@ public sealed class PlaydexSummaryTests : IDisposable
     }
 
     [Fact]
-    public async Task SteamPollingComesFromTheSummaryAndIsOffWithoutOne()
+    public async Task PolledProvidersComeFromTheSummaryAndAreOffWithoutOne()
+    {
+        var handler = new SummaryHandler(Envelope("""{"generatedAt":"2026-10-10T16:00:00Z","steamPolling":true,"polledProviders":["steam","xbox"]}"""));
+        using var api = new CaptureClient("plx_key", "https://playdex.test/api", handler);
+        using var summary = new PlaydexSummary(api, CacheFile);
+        Assert.False(summary.IsPolled("xbox"));
+
+        Assert.True(await summary.RefreshAsync());
+        Assert.True(summary.IsPolled("steam"));
+        Assert.True(summary.IsPolled("xbox"));
+        Assert.False(summary.IsPolled("psn"));
+
+        handler.Body = Envelope("""{"generatedAt":"2026-10-10T16:05:00Z","steamPolling":false,"polledProviders":[]}""");
+        Assert.True(await summary.RefreshAsync());
+        Assert.False(summary.IsPolled("steam"));
+        Assert.False(summary.IsPolled("xbox"));
+    }
+
+    [Fact]
+    public async Task AnOlderServerOnlySaysWhetherItPollsSteam()
     {
         var handler = new SummaryHandler(Envelope("""{"generatedAt":"2026-10-10T16:00:00Z","steamPolling":true}"""));
         using var api = new CaptureClient("plx_key", "https://playdex.test/api", handler);
         using var summary = new PlaydexSummary(api, CacheFile);
-        Assert.False(summary.SteamPolling);
 
         Assert.True(await summary.RefreshAsync());
-        Assert.True(summary.SteamPolling);
-
-        handler.Body = Envelope("""{"generatedAt":"2026-10-10T16:05:00Z","steamPolling":false}""");
-        Assert.True(await summary.RefreshAsync());
-        Assert.False(summary.SteamPolling);
+        Assert.True(summary.IsPolled("steam"));
+        Assert.False(summary.IsPolled("xbox"));
     }
 
     [Theory]

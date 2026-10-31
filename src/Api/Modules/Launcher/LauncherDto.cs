@@ -16,7 +16,13 @@ namespace Api.Modules.Launcher;
 /// <param name="MonthDays">This calendar month's local days, from the 1st to today.</param>
 /// <param name="SteamPolling">
 /// The user has an active Steam integration, so Playdex records Steam games by polling; the launcher then starts them
-/// without recording them itself, which would count each session twice.
+/// without recording them itself, which would count each session twice. For launchers older than
+/// <paramref name="PolledProviders"/>.
+/// </param>
+/// <param name="PolledProviders">
+/// The game id providers ("steam", "psn", "xbox") of the user's active polling integrations: Playdex records the games
+/// played on those accounts by polling, so the launcher starts a game recorded under one of them (an Xbox app game)
+/// without recording it itself.
 /// </param>
 public sealed record LauncherSummaryDto(
     string TimeZone,
@@ -31,7 +37,8 @@ public sealed record LauncherSummaryDto(
     IReadOnlyList<LauncherGameDto> Games,
     LauncherPeriodsDto Periods,
     IReadOnlyList<LauncherDayDto> MonthDays,
-    bool SteamPolling = false);
+    bool SteamPolling = false,
+    IReadOnlyList<string>? PolledProviders = null);
 
 public sealed record LauncherPeriodsDto(LauncherPeriodDetailDto Today, LauncherPeriodDetailDto Week, LauncherPeriodDetailDto Month);
 
@@ -80,6 +87,6 @@ public sealed record LauncherGameDto(
 /// <param name="Sessions">The newest of them, at most 5, newest first.</param>
 public sealed record LauncherGameRecentDto(IReadOnlyList<long> DaySeconds, int SessionCount, IReadOnlyList<LauncherSessionDto> Sessions);
 
-/// <param name="Type">steam, psn, xbox or igdb: what the capture routes call gameIdProvider.</param>
+/// <param name="Type">steam, psn, xbox, igdb, gog or epic: what the capture routes call gameIdProvider.</param>
 /// <param name="ExternalId">The id the game was captured with (a Steam app id, or what a client sent).</param>
 public sealed record LauncherGameIdentityDto(string Type, string ExternalId);

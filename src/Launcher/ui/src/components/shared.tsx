@@ -65,6 +65,7 @@ export const Cover = memo(function Cover({
   className = "",
   eager = false,
   compact = false,
+  untitled = false,
 }: {
   game: Game;
   kind: CoverKind;
@@ -72,6 +73,8 @@ export const Cover = memo(function Cover({
   eager?: boolean;
   /** Small thumbnails fall back to an initial instead of the full title. */
   compact?: boolean;
+  /** The title is set over the cover (a Logo): without art, the fallback is only the backdrop, not the title again. */
+  untitled?: boolean;
 }) {
   useStore(artVersion);
   const src = art[kind](game);
@@ -93,6 +96,8 @@ export const Cover = memo(function Cover({
         <div className="cover-initial" aria-hidden>
           {game.title.replace(/^The /, "").charAt(0)}
         </div>
+      ) : untitled ? (
+        <div className="cover-fallback" aria-hidden />
       ) : (
         <div className="cover-fallback">
           <small>{SOURCE_LABEL[game.source]}</small>

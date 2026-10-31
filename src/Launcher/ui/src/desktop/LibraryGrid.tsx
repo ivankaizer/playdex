@@ -14,6 +14,7 @@ import {
   isOnPc,
   lastPlayedDay,
   sessionEnd,
+  launcherOf,
   SOURCE_LABEL,
   useRecentGames,
   type Game,
@@ -84,7 +85,7 @@ export function LibraryGrid() {
 
   const sourceCounts = useMemo(() => {
     const m = new Map<Source, number>();
-    for (const g of games) m.set(g.source, (m.get(g.source) ?? 0) + 1);
+    for (const g of games) m.set(launcherOf(g), (m.get(launcherOf(g)) ?? 0) + 1);
     return [...m.entries()].sort((a, b) => b[1] - a[1]);
   }, []);
   const statusCounts = useMemo(() => {
@@ -98,7 +99,7 @@ export function LibraryGrid() {
     const q = query.trim().toLowerCase();
     return games
       .filter((g) => !q || g.title.toLowerCase().includes(q))
-      .filter((g) => sources.size === 0 || sources.has(g.source))
+      .filter((g) => sources.size === 0 || sources.has(launcherOf(g)))
       .filter((g) => statuses.size === 0 || statuses.has(statusOf(g)))
       .filter((g) => !favoritesOnly || favorites.has(g.id))
       .filter((g) => {
@@ -234,7 +235,7 @@ const CoverItem = memo(function CoverItem({ game, selected }: { game: Game; sele
           </span>
         )}
         {status !== "installed" && (
-          <span className="dk-cover-badge" title={status === "missing" ? "Not installed" : `Played on ${SOURCE_LABEL[game.source]}`}>
+          <span className="dk-cover-badge" title={status === "missing" ? "Not installed" : `Played on ${SOURCE_LABEL[launcherOf(game)]}`}>
             {status === "missing" ? <Download aria-hidden /> : <MonitorSmartphone aria-hidden />}
           </span>
         )}
@@ -247,7 +248,7 @@ const CoverItem = memo(function CoverItem({ game, selected }: { game: Game; sele
       <span className="dk-cover-title">{game.title}</span>
       <span className="dk-cover-sub num">
         {minutes ? `${fmtHours(minutes)} · ` : ""}
-        {SOURCE_LABEL[game.source]}
+        {SOURCE_LABEL[launcherOf(game)]}
       </span>
     </button>
   );
@@ -273,7 +274,7 @@ function Details({ gameId }: { gameId: string }) {
         <div>
           <h2 className="dk-details-title">{game.title}</h2>
           <p className="dk-muted">
-            {SOURCE_LABEL[game.source]} · {STATUS_LABEL[status]}
+            {SOURCE_LABEL[launcherOf(game)]} · {STATUS_LABEL[status]}
           </p>
         </div>
         <div className="dk-details-actions" data-nav-group="details-actions">

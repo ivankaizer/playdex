@@ -31,6 +31,8 @@ public static class GameExternalIdentityTypes
         "psn" => GameExternalIdentityType.Psn,
         "xbox" => GameExternalIdentityType.Xbox,
         "igdb" => GameExternalIdentityType.Igdb,
+        "gog" => GameExternalIdentityType.Gog,
+        "epic" => GameExternalIdentityType.Epic,
         _ => null,
     };
 
@@ -40,6 +42,8 @@ public static class GameExternalIdentityTypes
         GameExternalIdentityType.Psn => "psn",
         GameExternalIdentityType.Xbox => "xbox",
         GameExternalIdentityType.Igdb => "igdb",
+        GameExternalIdentityType.Gog => "gog",
+        GameExternalIdentityType.Epic => "epic",
         _ => throw new ArgumentOutOfRangeException(nameof(type), type, null),
     };
 }

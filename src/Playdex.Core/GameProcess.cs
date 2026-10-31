@@ -7,7 +7,8 @@ namespace Playdex.Core;
 /// <summary>
 /// Starts a game from the config: its executable, launch options and working folder, through the shell. A batch script
 /// (.bat, .cmd) runs in a minimized console and is followed as a <see cref="ProcessTree"/>, so a script that starts the
-/// game and returns at once ("start game.exe") still records the whole session.
+/// game and returns at once ("start game.exe") still records the whole session. An Xbox app game is started as its
+/// packaged app (<see cref="LaunchConfig.AppUserModelId"/>), an Epic game by its launcher (<see cref="LaunchConfig.Uri"/>).
 /// </summary>
 public static class GameProcess
 {
@@ -24,11 +25,23 @@ public static class GameProcess
         {
             throw new InvalidOperationException($"Game '{game.GameId}' has no executable configured.");
         }
+        if (!string.IsNullOrWhiteSpace(game.Launch.AppUserModelId))
+        {
+            return new StartedGame(Running(PackagedApp.Start(game.Launch.AppUserModelId, game.Launch.Arguments)), null);
+        }
+        if (!string.IsNullOrWhiteSpace(game.Launch.Uri))
+        {
+            // The launcher starts the game: what the shell returns, if anything, is the launcher.
+            Process.Start(new ProcessStartInfo(game.Launch.Uri) { UseShellExecute = true })?.Dispose();
+            return new StartedGame(null, null);
+        }
         var script = IsScript(game.Launch.ExecutablePath);
         var start = new ProcessStartInfo(game.Launch.ExecutablePath)
         {
             UseShellExecute = true,
-            WorkingDirectory = Path.GetDirectoryName(game.Launch.ExecutablePath),
+            WorkingDirectory = string.IsNullOrWhiteSpace(game.Launch.WorkingDirectory)
+                ? Path.GetDirectoryName(game.Launch.ExecutablePath)
+                : game.Launch.WorkingDirectory,
             // The script's console stays out of the game's way, but can still be brought up if the script asks something.
             WindowStyle = script ? ProcessWindowStyle.Minimized : ProcessWindowStyle.Normal,
         };
@@ -39,12 +52,29 @@ public static class GameProcess
         var process = Process.Start(start) ?? throw new InvalidOperationException($"{game.DisplayName} did not start.");
         return new StartedGame(process, script ? ProcessTree.Follow(game.GameId, process) : null);
     }
+
+    /// <summary>The process Windows started for a packaged app; null once it has handed over to the game and exited.</summary>
+    private static Process? Running(int processId)
+    {
+        try
+        {
+            return Process.GetProcessById(processId);
+        }
+        catch (ArgumentException)
+        {
+            return null;
+        }
+    }
 }
 
-/// <summary>A game Playdex started: its process and, for a script, everything the script starts.</summary>
-public sealed class StartedGame(Process process, ProcessTree? tree) : IDisposable
+/// <summary>
+/// A game Playdex started: its process and, for a script, everything the script starts. No process for a game its
+/// launcher starts, or an Xbox app game whose starter already exited: it is followed by its executable
+/// (<see cref="MonitorMode.ExecutablePath"/>).
+/// </summary>
+public sealed class StartedGame(Process? process, ProcessTree? tree) : IDisposable
 {
-    public Process Process => process;
+    public Process? Process => process;
 
     /// <summary>Null for an executable, or when the script could not be followed (then only its own process is).</summary>
     public ProcessTree? Tree => tree;
@@ -52,7 +82,7 @@ public sealed class StartedGame(Process process, ProcessTree? tree) : IDisposabl
     public void Dispose()
     {
         tree?.Dispose();
-        process.Dispose();
+        process?.Dispose();
     }
 }
 

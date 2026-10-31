@@ -5,7 +5,8 @@ namespace Playdex.Core;
 
 /// <summary>
 /// Runs one configured game: launches it, follows it to exit (<see cref="ProcessMonitor"/>) and records the session
-/// (<see cref="SessionRecorder"/>). Holds the game's <see cref="GameLock"/>, so a game is never tracked twice.
+/// (<see cref="SessionRecorder"/>). Holds the game's <see cref="GameLock"/>, so a game is never tracked twice. A game
+/// Playdex records by polling (<see cref="CaptureGame.IsLeftToPolling"/>) is only started and followed.
 /// </summary>
 
 public sealed partial class SessionCoordinator : IDisposable
@@ -16,12 +17,15 @@ public sealed partial class SessionCoordinator : IDisposable
     private readonly CaptureClient? _api;
     private readonly SessionQueue? _queue;
     private readonly GameLock _gameLock;
+    private readonly Func<string, bool> _polled;
 
-    private SessionCoordinator(AppConfig config, GameConfig game, ILogger<SessionCoordinator> logger, string? queueFile, HttpMessageHandler? handler)
+    private SessionCoordinator(
+        AppConfig config, GameConfig game, ILogger<SessionCoordinator> logger, string? queueFile, HttpMessageHandler? handler, Func<string, bool>? polled)
     {
         this._config = config;
         this._game = game;
         this._logger = logger;
+        _polled = polled ?? (_ => false);
 
         if (config.Api.IsEnabled)
         {
@@ -33,9 +37,11 @@ public sealed partial class SessionCoordinator : IDisposable
 
     /// <param name="queueFile">The offline queue; null for the install's, shared with the launcher.</param>
     /// <param name="handler">For tests; null sends real requests.</param>
+    /// <param name="polled">The game id providers Playdex polls the user's accounts of (<see cref="PlaydexSummary.IsPolled"/>); null: none.</param>
     public static SessionCoordinator Create(
-        AppConfig config, GameConfig game, ILogger<SessionCoordinator> logger, string? queueFile = null, HttpMessageHandler? handler = null) =>
-        new(config, game, logger, queueFile, handler);
+        AppConfig config, GameConfig game, ILogger<SessionCoordinator> logger, string? queueFile = null, HttpMessageHandler? handler = null,
+        Func<string, bool>? polled = null) =>
+        new(config, game, logger, queueFile, handler, polled);
 
     public async Task RunAsync(CancellationToken cancellationToken)
     {
@@ -46,16 +52,24 @@ public sealed partial class SessionCoordinator : IDisposable
         }
 
         using var started = LaunchGame(_game);
-        if (_api is null || _queue is null)
+        var capture = CaptureGame.From(_game, _config.Api);
+        if (_api is null || _queue is null || capture.IsLeftToPolling(_polled))
         {
-            LogApiTrackingDisabled(_logger, _game.GameId);
+            if (_api is null || _queue is null)
+            {
+                LogApiTrackingDisabled(_logger, _game.GameId);
+            }
+            else
+            {
+                LogRecordedByPolling(_logger, _game.GameId, capture.GameIdProvider);
+            }
             await new ProcessMonitor(_game.Monitor).WaitForExitAsync(started, cancellationToken);
             return;
         }
 
         // Start, a ping every interval, then end; or the whole session to the offline queue if start failed.
         using var recorder = new SessionRecorder(
-            _api, _queue, CaptureGame.From(_game, _config.Api), TimeSpan.FromSeconds(Math.Max(1, _config.Api.PingIntervalSeconds)));
+            _api, _queue, capture, TimeSpan.FromSeconds(Math.Max(1, _config.Api.PingIntervalSeconds)));
         recorder.Start();
         DateTimeOffset? exitedAt = null;
         try
@@ -86,6 +100,9 @@ public sealed partial class SessionCoordinator : IDisposable
 
     [LoggerMessage(EventId = 4, Level = LogLevel.Information, Message = "Session of {GameId} finished: {Outcome}")]
     private static partial void LogSessionFinished(ILogger logger, string gameId, SessionOutcome outcome);
+
+    [LoggerMessage(EventId = 5, Level = LogLevel.Information, Message = "{GameId} is recorded by {Provider} polling, not here")]
+    private static partial void LogRecordedByPolling(ILogger logger, string gameId, string provider);
 
     public void Dispose()
     {

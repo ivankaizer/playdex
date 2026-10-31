@@ -75,6 +75,7 @@ builder.Services.AddSingleton(new MigrationCatalog([
     new IndexesAndConstraintsMigration(),
     new DurableNotificationsAndBackoffMigration(),
     new HashPlaydexAppKeysMigration(),
+    new GogEpicIdentityTypesMigration(),
 ]));
 builder.Services.AddSingleton<MigrationRunner>();
 builder.Services.AddScoped<EventBus>();

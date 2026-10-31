@@ -105,6 +105,36 @@ public sealed class SessionCoordinatorTests
         Assert.False(File.Exists(Path.Combine(directory, "queue.jsonl")));
     }
 
+    [Theory]
+    [InlineData("xbox", "1782549035", false)]
+    [InlineData("steam", "Hades2", true)]
+    public async Task AGamePlaydexPollsIsOnlyStartedAndFollowed(string provider, string apiGameId, bool recorded)
+    {
+        var directory = NewTempDir();
+        var handler = new RecordingHandler(HttpStatusCode.OK);
+        var config = new AppConfig
+        {
+            Api = new ApiConfig { BaseUrl = "https://example.test/api", ApiKey = "key" },
+            Storage = new StorageConfig { StateDirectory = directory, LogDirectory = directory }
+        };
+        var game = config.GetOrCreateGame($"polled-{Guid.NewGuid():N}");
+        game.GameProvider = provider;
+        game.ApiGameId = apiGameId;
+        game.Launch.ExecutablePath = TestProcess.ExecutablePath;
+        game.Launch.Arguments = [.. TestProcess.Arguments];
+        game.Monitor.ExitDebounceSeconds = 1;
+        using var logging = TestLogging.CreateInDirectory(directory);
+        // Both accounts are polled: an Xbox game is left to Xbox polling, but a game added from its .exe runs outside
+        // Steam, so Steam polling never sees it and it is recorded here.
+        using var coordinator = SessionCoordinator.Create(
+            config, game, logging.CreateLogger<SessionCoordinator>(), Path.Combine(directory, "queue.jsonl"), handler, polled: _ => true);
+
+        await coordinator.RunAsync(CancellationToken.None);
+
+        Assert.Equal(recorded, handler.Requests.Count > 0);
+        Assert.Equal(!recorded, File.ReadAllText(logging.FilePath).Contains("recorded by xbox polling", StringComparison.OrdinalIgnoreCase));
+    }
+
     [Fact]
     public async Task TestApiDisabledSession()
     {

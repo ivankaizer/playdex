@@ -36,6 +36,39 @@ public sealed class LibraryTests
     }
 
     [Fact]
+    public void ALaunchersGameIsListedUnderItsStoreAndRecordedAsItWouldBeOnceAdded()
+    {
+        var found = new StoreGame("xbox", "Contoso.Harbor_8wekyb3d8bbwe!Game", "Harbor Lights", "1782549035",
+            new LaunchConfig { ExecutablePath = @"C:\XboxGames\Harbor\Content\Harbor.exe", AppUserModelId = "Contoso.Harbor_8wekyb3d8bbwe!Game" });
+
+        var game = Library.FoundGame(found, new ApiConfig());
+
+        Assert.Equal(("xbox-Contoso.Harbor_8wekyb3d8bbwe!Game", "Harbor Lights", "xbox"), (game.Id, game.Title, game.Source));
+        Assert.Equal(("xbox", "1782549035"), (game.CaptureProvider, game.CaptureId));
+        Assert.Same(found, game.Found);
+        Assert.Contains("\"store\":\"xbox\"", Library.ToJson(Scan(game)));
+    }
+
+    [Fact]
+    public void AGameWithoutALauncherSendsNoStore()
+    {
+        Assert.DoesNotContain("\"store\"", Library.ToJson(Scan(Steam(1145350, "Hades II"))));
+    }
+
+    [Fact]
+    public void AFoundGameScannedAgainIsTheSameGameUntilItMoves()
+    {
+        StoreGame Epic(string executable) => new("epic", "Harbor", "Harbor Lights", "Harbor",
+            new LaunchConfig { ExecutablePath = executable, Uri = "com.epicgames.launcher://apps/ns%3Aitem%3AHarbor?action=launch&silent=true" });
+        var before = Scan(Library.FoundGame(Epic(@"C:\Epic\Harbor\Harbor.exe"), new ApiConfig()));
+        var again = Scan(Library.FoundGame(Epic(@"C:\Epic\Harbor\Harbor.exe"), new ApiConfig()));
+        var moved = Scan(Library.FoundGame(Epic(@"D:\Epic\Harbor\Harbor.exe"), new ApiConfig()));
+
+        Assert.True(Library.SameGames(before, again));
+        Assert.False(Library.SameGames(before, moved));
+    }
+
+    [Fact]
     public void NewArtworkIsAChange()
     {
         var before = Scan(Steam(1145350, "Hades II"));

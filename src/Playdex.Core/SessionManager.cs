@@ -6,8 +6,10 @@ namespace Playdex.Core;
 /// Launches games, follows each to exit, records its session to Playdex (<see cref="SessionRecorder"/>) and reports each
 /// state change (gameId, "starting" | "steam" | "running" | "ended", seconds played; "steam": waiting for the Steam client
 /// to start and log in before the game can be started) through <paramref name="report"/>, from any
-/// thread. A Steam game is not recorded while <paramref name="steamPolling"/> says Playdex polls the user's Steam
-/// account: that records it already, and recording it here too would count the session twice. Several games can run at
+/// thread. A game is not recorded while <paramref name="polled"/> says Playdex polls the account it is played with (a
+/// Steam game and the user's Steam account, an Xbox app game and their Xbox account; see
+/// <see cref="CaptureGame.IsLeftToPolling"/>): that records it already, and recording it here too would count the
+/// session twice. Several games can run at
 /// once (the launcher asks before starting a second one), each with its own session; a game that is already starting
 /// or running is not launched again.
 /// </summary>
@@ -17,7 +19,7 @@ public sealed class SessionManager(
     SessionQueue queue,
     Action<string, string, int> report,
     Action<long> gameExited,
-    Func<bool> steamPolling)
+    Func<string, bool> polled)
 {
     private static readonly TimeSpan _pingInterval = TimeSpan.FromSeconds(30);
 
@@ -98,10 +100,17 @@ public sealed class SessionManager(
             watcher = new ConfiguredGameWatcher(config, configured);
             capture = CaptureGame.From(configured, config.Api);
         }
+        else if (game?.Found is { } found)
+        {
+            // Another launcher's game that isn't added: started and recorded as it would be once added.
+            var settings = GameCatalog.FromStore(found, game.Id);
+            watcher = new ConfiguredGameWatcher(config, settings);
+            capture = CaptureGame.From(settings, config.Api);
+        }
         else if (game?.SteamAppId is { } appId)
         {
             watcher = SteamGameWatcher.Create(appId);
-            if (steamPolling())
+            if (polled("steam"))
             {
                 Log.Info($"session: {gameId} is recorded by Steam polling, not here");
             }
@@ -109,6 +118,11 @@ public sealed class SessionManager(
             {
                 capture = new CaptureGame(game.Title, appId.ToString(System.Globalization.CultureInfo.InvariantCulture), "steam", "pc");
             }
+        }
+        if (capture is not null && capture.IsLeftToPolling(polled))
+        {
+            Log.Info($"session: {gameId} is recorded by {capture.GameIdProvider} polling, not here");
+            capture = null;
         }
         if (watcher is null)
         {

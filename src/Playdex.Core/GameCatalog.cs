@@ -49,6 +49,58 @@ public static class GameCatalog
         return game;
     }
 
+    /// <summary>
+    /// Add a game another launcher installed (<see cref="StoreGames"/>), recorded by its id there when it has one. One
+    /// its launcher starts is followed by its executable; one started directly, like any added executable.
+    /// </summary>
+    public static GameConfig AddFromStore(AppConfig config, StoreGame found)
+    {
+        if (config.Games.Values.FirstOrDefault(g => StoreGames.IsAdded(g, found)) is { } added)
+        {
+            throw new InvalidOperationException($"{added.DisplayName} is already in Playdex.");
+        }
+
+        // Another game may have the same executable name (a launcher's Game.exe): the next free id then.
+        var baseId = Path.GetFileNameWithoutExtension(found.ExecutablePath).Trim();
+        var gameId = baseId;
+        for (var number = 2; config.Games.ContainsKey(gameId); number++)
+        {
+            gameId = $"{baseId}-{number}";
+        }
+
+        var game = FromStore(found, gameId);
+        config.Games.Add(gameId, game);
+        return game;
+    }
+
+    /// <summary>
+    /// A launcher's game as a game's settings, under <paramref name="gameId"/>: what <see cref="AddFromStore"/> saves,
+    /// and what the library starts a found game that isn't added with.
+    /// </summary>
+    public static GameConfig FromStore(StoreGame found, string gameId)
+    {
+        var title = found.Title.Length > MaximumDisplayNameLength ? found.Title[..MaximumDisplayNameLength] : found.Title;
+        var game = new GameConfig
+        {
+            GameId = gameId,
+            DisplayName = NormalizeDisplayName(title),
+            ApiGameId = found.RecordedId ?? gameId,
+            Store = found.Store,
+            StoreId = found.Id,
+            Launch = found.Launch,
+            Monitor = found.StartsDirectly
+                ? new MonitorConfig { Mode = MonitorMode.LaunchedProcess }
+                // Started by its launcher, perhaps through a stub (Black Ops 6's bootstrapper.exe): it runs while
+                // anything from its install does.
+                : new MonitorConfig { Mode = MonitorMode.Folder, Folder = found.InstallFolder ?? Path.GetDirectoryName(found.ExecutablePath) }
+        };
+        if (found.RecordedId is not null)
+        {
+            game.GameProvider = found.Store;
+        }
+        return game;
+    }
+
     public static GameConfig Remove(AppConfig config, string gameId)
     {
         if (!config.Games.Remove(gameId, out var removed))

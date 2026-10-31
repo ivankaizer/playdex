@@ -49,6 +49,14 @@ public sealed class GameConfig
     public string? ApiGameId { get; set; }
     public string GameProvider { get; set; } = "steam";
     public string? Platform { get; set; }
+
+    /// <summary>
+    /// The launcher the game was found in (<see cref="StoreGames"/>: "xbox", "epic", "gog") and its id there; null for a
+    /// game added from its executable.
+    /// </summary>
+    public string? Store { get; set; }
+
+    public string? StoreId { get; set; }
     public LaunchConfig Launch { get; set; } = new();
     public MonitorConfig Monitor { get; set; } = new();
     public BackupConfig Backup { get; set; } = new();
@@ -86,6 +94,21 @@ public sealed class LaunchConfig
 
     public string? ExecutablePath { get; set; }
     public List<string> Arguments { get; set; } = [];
+
+    /// <summary>The folder the game starts in; null for its executable's.</summary>
+    public string? WorkingDirectory { get; set; }
+
+    /// <summary>
+    /// For a game from the Xbox app (<see cref="XboxLibrary"/>): the packaged app Windows starts it as. Its executable
+    /// can't be started directly, so <see cref="ExecutablePath"/> is then only what is followed and looked for.
+    /// </summary>
+    public string? AppUserModelId { get; set; }
+
+    /// <summary>
+    /// For a game its launcher must start (an Epic game, <see cref="EpicLibrary"/>): the link that asks the launcher to.
+    /// <see cref="ExecutablePath"/> is then only what is followed and looked for, and <see cref="Arguments"/> don't apply.
+    /// </summary>
+    public string? Uri { get; set; }
 }
 
 public sealed class MonitorConfig
@@ -93,6 +116,10 @@ public sealed class MonitorConfig
     public MonitorMode Mode { get; set; } = MonitorMode.LaunchedProcess;
     public string? ExecutablePath { get; set; }
     public string? ExecutableName { get; set; }
+
+    /// <summary>For <see cref="MonitorMode.Folder"/>: the game's install folder.</summary>
+    public string? Folder { get; set; }
+
     public int ExitDebounceSeconds { get; set; } = 10;
 }
 
@@ -101,7 +128,13 @@ public enum MonitorMode
 {
     LaunchedProcess,
     ExecutablePath,
-    ExecutableName
+    ExecutableName,
+
+    /// <summary>
+    /// Any process running from the game's install folder: for a game its launcher starts through a stub (Black Ops 6's
+    /// bootstrapper.exe starts cod24-cod.exe and exits).
+    /// </summary>
+    Folder
 }
 
 public sealed class ApiConfig

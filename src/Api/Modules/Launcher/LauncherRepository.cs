@@ -27,8 +27,24 @@ public sealed class LauncherRepository(PlaydexDbContext db)
         return rows.Select(row => new LauncherSessionRow(row.SessionId, row.GameId, row.PlatformKey, row.PlatformName, row.StartedAt, row.EndedAt)).ToList();
     }
 
-    public Task<bool> HasActiveSteamIntegration(long userId, CancellationToken ct) =>
-        db.Integrations.AnyAsync(row => row.UserId == userId && row.Type == IntegrationType.Steam && row.Active, ct);
+    /// <summary>The game id providers of the user's active polling integrations, in order: "psn", "steam", "xbox".</summary>
+    public async Task<IReadOnlyList<string>> ListPolledProviders(long userId, CancellationToken ct)
+    {
+        var types = await db.Integrations
+            .Where(row => row.UserId == userId && row.Active && row.Type != IntegrationType.Api)
+            .Select(row => row.Type)
+            .Distinct()
+            .ToListAsync(ct);
+        return [.. types.Select(ProviderKey).Order(StringComparer.Ordinal)];
+    }
+
+    private static string ProviderKey(IntegrationType type) => type switch
+    {
+        IntegrationType.Steam => "steam",
+        IntegrationType.Psn => "psn",
+        IntegrationType.Xbox => "xbox",
+        _ => throw new InvalidOperationException($"Integration type '{type}' is not polled."),
+    };
 
     public async Task<Dictionary<long, LauncherGameRow>> LoadGames(long[] gameIds, CancellationToken ct)
     {

@@ -59,6 +59,7 @@ public static class LauncherEndpoints
         var identities = await repository.LoadIdentities(gameIds, ct);
         var zone = LauncherSummaryBuilder.ResolveTimeZone(tz, utcOffsetMinutes);
         var summary = LauncherSummaryBuilder.Build(sessions, games, identities, DateTimeOffset.UtcNow, zone);
-        return TypedResults.Ok(summary with { SteamPolling = await repository.HasActiveSteamIntegration(userId, ct) });
+        var polled = await repository.ListPolledProviders(userId, ct);
+        return TypedResults.Ok(summary with { SteamPolling = polled.Contains("steam"), PolledProviders = polled });
     }
 }

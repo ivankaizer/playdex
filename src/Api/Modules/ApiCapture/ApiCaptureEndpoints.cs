@@ -6,7 +6,7 @@ namespace Api.Modules.ApiCapture;
 
 public static class ApiCaptureEndpoints
 {
-    private static readonly HashSet<string> _allowedIdentityProviders = ["steam", "psn", "xbox", "igdb"];
+    private static readonly HashSet<string> _allowedIdentityProviders = ["steam", "psn", "xbox", "igdb", "gog", "epic"];
     // A capture body is a few short fields; anything bigger is a mistake or abuse.
     private const long MaxBodyBytes = 16 * 1024;
     private const int MaxTitleLength = 200;
@@ -219,7 +219,7 @@ public static class ApiCaptureEndpoints
         var provider = request.GameIdProvider?.Trim().ToLowerInvariant();
         if (string.IsNullOrWhiteSpace(provider) || !_allowedIdentityProviders.Contains(provider))
         {
-            throw AppProblemException.Validation("gameIdProvider must be steam, psn, xbox, or igdb.");
+            throw AppProblemException.Validation("gameIdProvider must be steam, psn, xbox, igdb, gog, or epic.");
         }
 
         var platform = request.Platform?.Trim().ToLowerInvariant();

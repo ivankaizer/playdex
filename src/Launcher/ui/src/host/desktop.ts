@@ -56,6 +56,16 @@ export interface DesktopApp {
   available: boolean;
 }
 
+/** A game another launcher installed that isn't added to Playdex yet. */
+export interface DesktopFoundGame {
+  /** "xbox", "epic" or "gog". */
+  store: string;
+  /** Its id in that launcher; game.addFound takes it with the store. */
+  id: string;
+  title: string;
+  executablePath: string;
+}
+
 export interface DesktopSettings {
   baseUrl: string;
   /** Keys never reach the page; only whether one is saved. */
@@ -87,6 +97,8 @@ export interface DesktopState {
   apps: DesktopApp[];
   /** Apps found on this PC that aren't in the list (Discord, the default browser). */
   suggestedApps: DesktopApp[];
+  /** Xbox app, Epic and GOG games on this PC that aren't added yet. */
+  foundGames: DesktopFoundGame[];
   settings: DesktopSettings;
   update: UpdateView;
   fse: FseView;
@@ -248,6 +260,26 @@ let demoState: DesktopState = {
       available: true,
     },
   ],
+  foundGames: [
+    {
+      store: "xbox",
+      id: "Contoso.StarlightRally_8wekyb3d8bbwe!Game",
+      title: "Starlight Rally",
+      executablePath: "C:\\XboxGames\\Starlight Rally\\Content\\StarlightRally.exe",
+    },
+    {
+      store: "epic",
+      id: "HarborLights",
+      title: "Harbor Lights",
+      executablePath: "C:\\Program Files\\Epic Games\\HarborLights\\HarborLights.exe",
+    },
+    {
+      store: "gog",
+      id: "1207658930",
+      title: "Old Lighthouse",
+      executablePath: "C:\\Program Files (x86)\\GOG Galaxy\\Games\\Old Lighthouse\\Lighthouse.exe",
+    },
+  ],
   settings: {
     baseUrl: "https://dash.playdex.dev/api",
     // ?nokey shows Playdex without an API key.
@@ -326,6 +358,31 @@ async function demo(method: string, params?: Record<string, unknown>): Promise<u
     case "game.add":
     case "app.add":
       return demoState;
+    case "game.addFound": {
+      const found = demoState.foundGames.find((g) => g.store === params?.store && g.id === params?.id);
+      if (!found) return demoState;
+      const gameId = found.executablePath.replace(/^.*\\|\.exe$/gi, "");
+      return (demoState = {
+        ...demoState,
+        games: [
+          ...demoState.games,
+          {
+            gameId,
+            libraryId: `playdex-${gameId}`,
+            displayName: found.title,
+            apiGameId: found.store === "epic" ? found.id : "1234567890",
+            gameProvider: found.store,
+            platform: null,
+            launchOptions: "",
+            executablePath: found.executablePath,
+            executableExists: true,
+            dailyBackup: false,
+            backup: { kind: "off", text: "No backups yet." },
+          },
+        ],
+        foundGames: demoState.foundGames.filter((g) => g !== found),
+      });
+    }
     case "app.addFound": {
       const found = demoState.suggestedApps.find((a) => a.kind === params?.kind);
       if (!found) return demoState;

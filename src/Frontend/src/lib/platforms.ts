@@ -1,8 +1,17 @@
+// The Windows app has the same colors (src/Launcher/ui/src/data/platforms.ts): change both together.
+
 /** Brand colors per platform from the design tokens. */
 const PlatformColors: Record<string, string> = {
   steam: "#e07a0f",
+  // GOG's purple, toward magenta so it doesn't read as PlayStation's violet.
+  gog: "#a3369f",
+  // Epic's brand is black and white, which a chart can't show on both themes.
+  epic: "#64748b",
   psn: "#7c3aed",
   playstation: "#7c3aed",
+  ps5: "#7c3aed",
+  ps4: "#7c3aed",
+  ps3: "#7c3aed",
   pc: "#0f7491",
   playnite: "#0f7491",
   xbox: "#2f9e44",

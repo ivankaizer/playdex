@@ -57,6 +57,25 @@ public sealed class ProcessMonitorTests : IDisposable
     }
 
     [Fact]
+    public async Task FolderFollowsTheRealGameAStubInTheInstallStarts()
+    {
+        // Like Black Ops 6: the install's stub starts the real game from a subfolder and exits; the game runs about 2 s.
+        var install = Path.GetDirectoryName(_game)!;
+        var stub = Path.Combine(install, $"stub-{Guid.NewGuid():N}.exe");
+        File.Copy(_cmd, stub);
+        var real = Path.Combine(Directory.CreateDirectory(Path.Combine(install, "sp")).FullName, Path.GetFileName(_game));
+        File.Move(_game, real);
+        using var launcher = Start(_cmd, $"/c \"\"{stub}\" /c start \"\" \"{real}\" /c ping -n 3 127.0.0.1 >nul\"");
+        var monitor = new ProcessMonitor(new MonitorConfig { Mode = MonitorMode.Folder, Folder = install, ExitDebounceSeconds = 2 });
+        var started = DateTimeOffset.Now;
+
+        var exitedAt = await monitor.WaitForExitAsync((Process?)null, CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(15));
+
+        Assert.True(exitedAt - started > TimeSpan.FromSeconds(1.5), $"the real game's exit, not the stub's ({(exitedAt - started).TotalSeconds:N1} s)");
+        Assert.True(DateTimeOffset.Now - exitedAt >= TimeSpan.FromSeconds(1.9), "returned only after the debounce");
+    }
+
+    [Fact]
     public async Task AGameThatNeverAppearsEndsAfterTheDebounce()
     {
         using var launcher = Start(_cmd, "/c exit");
