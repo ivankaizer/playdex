@@ -236,6 +236,14 @@ html[data-input="pointer"] .dk :is([data-nav][data-focused], :focus-visible) {
   background: rgb(var(--page) / 0.82);
   border-bottom: 1px solid rgb(var(--line) / 0.6);
 }
+/*
+ * In the Windows app the top bar is the window's title bar (desktop/titleBar.ts): as tall as the caption buttons
+ * Windows draws over its right end, with their room left free.
+ */
+:root[data-caption] .dk-top {
+  height: var(--caption-h);
+  padding-right: calc(var(--caption-right) + 12px);
+}
 /* Only the game starting or playing gives way (its title ellipsizes); the rest keeps its size. */
 .dk-top > * {
   flex: none;

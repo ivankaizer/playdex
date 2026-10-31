@@ -37,7 +37,9 @@ export type HostMessage =
   /** The desktop app's reply to a {type:"desktop"} request (see host/desktop.ts). */
   | { type: "desktop-result"; id: number; ok: boolean; result?: unknown; error?: unknown }
   /** The desktop app's state changed (backups, updates). */
-  | { type: "desktop-state"; state: unknown };
+  | { type: "desktop-state"; state: unknown }
+  /** Desktop mode: the room the window's caption buttons take over the top bar, in CSS pixels (desktop/titleBar.ts). */
+  | { type: "caption"; right: number; height: number };
 
 export type AudioOutput = { id: string; name: string; isDefault: boolean };
 export type DisplayState = {
@@ -108,7 +110,12 @@ export type UiMessage =
    */
   | { type: "playdex-recap"; year: number; timeZone: string }
   /** A desktop app request (see host/desktop.ts). */
-  | { type: "desktop"; id: number; method: string; params?: object };
+  | { type: "desktop"; id: number; method: string; params?: object }
+  /**
+   * Desktop mode: where the top bar is empty, which drags the window, and the theme's ink ([r, g, b]) for the caption
+   * buttons; rectangles in CSS pixels (desktop/titleBar.ts).
+   */
+  | { type: "title-bar"; ink?: number[]; drag: { x: number; y: number; width: number; height: number }[] };
 
 interface WebView2 {
   postMessage(message: unknown): void;

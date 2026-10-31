@@ -174,6 +174,7 @@ internal sealed partial class ShellWindow : Window
         }
         else
         {
+            ExtendIntoTitleBar();
             // The size it restores to; it opens maximized (Show).
             var scale = Native.GetDpiForWindow(_hwnd) / 96.0;
             AppWindow.Resize(new SizeInt32((int)(1360 * scale), (int)(860 * scale)));
@@ -326,7 +327,8 @@ internal sealed partial class ShellWindow : Window
         $"window.__PLAYDEX_LIBRARY__ = {Library.ToJson(library)}; " +
         $"window.__PLAYDEX_SUMMARY__ = {_services.Summary.Current ?? "null"}; " +
         $"window.__PLAYDEX_API__ = {(_services.Api.IsConfigured ? "true" : "false")}; " +
-        $"window.__PLAYDEX_MODE__ = \"{(_mode == ShellMode.Desktop ? "desktop" : "fse")}\";";
+        $"window.__PLAYDEX_MODE__ = \"{(_mode == ShellMode.Desktop ? "desktop" : "fse")}\"; " +
+        CaptionScript();
 
     private async Task InitializeWebViewAsync()
     {
@@ -449,6 +451,9 @@ internal sealed partial class ShellWindow : Window
                 break;
             case "quick-settings":
                 PostQuickSettings(null, "read quick settings");
+                break;
+            case "title-bar":
+                SetTitleBar(message);
                 break;
             case "audio-output":
                 var outputId = message.GetProperty("id").GetString()!;

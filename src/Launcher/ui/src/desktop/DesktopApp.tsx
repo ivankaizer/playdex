@@ -1,5 +1,5 @@
 import { Gamepad2, Moon, SlidersHorizontal, Sun, UserRound, UserRoundCheck, UserRoundX, X } from "lucide-react";
-import { lazy, Suspense, useEffect } from "react";
+import { lazy, Suspense, useEffect, useRef } from "react";
 import {
   closeGame,
   launchGuard,
@@ -28,6 +28,7 @@ import { PlaydexScreen } from "../screens/Playdex";
 import { scheme, setScheme } from "../theme";
 import { GameView } from "./GameView";
 import { Home } from "./Home";
+import { useTitleBar } from "./titleBar";
 import { LibraryGrid } from "./LibraryGrid";
 import { Sidebar } from "./Sidebar";
 import { DESK_TABS, deskTab, goTo, libraryView, openGamePage, selectedGame } from "./state";
@@ -214,9 +215,11 @@ function useLaunchInWindow() {
 
 function TopBar({ tab }: { tab: (typeof DESK_TABS)[number] }) {
   const theme = useStore(scheme);
+  const bar = useRef<HTMLElement>(null);
+  useTitleBar(bar);
   return (
-    <header className="dk-top">
-      <span className="brand">
+    <header className="dk-top" ref={bar}>
+      <span className="brand" data-titlebar-drag>
         <span className="brand-dot" />
         <span className="dk-top-label">PLAYDEX</span>
       </span>
@@ -228,7 +231,7 @@ function TopBar({ tab }: { tab: (typeof DESK_TABS)[number] }) {
           </button>
         ))}
       </nav>
-      <span className="dk-spacer" />
+      <span className="dk-spacer" data-titlebar-drag />
       <LaunchStatus />
       <SyncStatus />
       <div className="dk-top-tools" data-nav-group="top-tools">
