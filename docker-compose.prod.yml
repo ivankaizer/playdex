@@ -54,6 +54,9 @@ services:
       Sentry__Dsn: ${SENTRY_DSN}
       Sentry__Environment: production
       Sentry__Release: ${IMAGE_TAG}
+      OTLP_ENDPOINT: ${OTLP_ENDPOINT:-}
+      OTLP_HEADERS: ${OTLP_HEADERS:-}
+      OTEL_SERVICE_NAME: playdex-api
     depends_on:
       apprise:
         condition: service_healthy
