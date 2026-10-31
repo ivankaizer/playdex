@@ -1,0 +1,301 @@
+{
+  "title": "playdex",
+  "interval": 60,
+  "rules": [
+    {
+      "uid": "playdex-polling-stopped",
+      "title": "Polling stopped",
+      "condition": "C",
+      "for": "5m",
+      "noDataState": "Alerting",
+      "execErrState": "Error",
+      "labels": {
+        "service": "playdex-api",
+        "severity": "critical"
+      },
+      "annotations": {
+        "summary": "Playdex has not completed a poll cycle in 10 minutes.",
+        "description": "No instance completed a poll cycle: the API is down, can't reach the database, or stopped exporting telemetry. Sessions are not being recorded."
+      },
+      "data": [
+        {
+          "refId": "A",
+          "relativeTimeRange": {
+            "from": 600,
+            "to": 0
+          },
+          "datasourceUid": "$PROMETHEUS_UID",
+          "model": {
+            "refId": "A",
+            "expr": "sum(increase(playdex_poll_cycles_total{job=\"playdex-api\",outcome=\"completed\"}[10m])) or vector(0)",
+            "instant": true,
+            "range": false
+          }
+        },
+        {
+          "refId": "C",
+          "relativeTimeRange": {
+            "from": 0,
+            "to": 0
+          },
+          "datasourceUid": "__expr__",
+          "model": {
+            "refId": "C",
+            "type": "threshold",
+            "expression": "A",
+            "conditions": [
+              {
+                "evaluator": {
+                  "type": "lt",
+                  "params": [
+                    1
+                  ]
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "notification_settings": {
+        "receiver": "$CONTACT_POINT",
+        "repeat_interval": "4h"
+      }
+    },
+    {
+      "uid": "playdex-integration-failing",
+      "title": "Integration failing",
+      "condition": "C",
+      "for": "0s",
+      "noDataState": "OK",
+      "execErrState": "Error",
+      "labels": {
+        "service": "playdex-api",
+        "severity": "warning"
+      },
+      "annotations": {
+        "summary": "Integration {{ $labels.integration_id }} ({{ $labels.platform }}, user {{ $labels.user_id }}) has failed every poll for over 30 minutes.",
+        "description": "The provider keeps failing or rate limiting. The user is not told unless the credential gets rejected and the integration is paused. See the 'Log of integration' panel for the errors."
+      },
+      "data": [
+        {
+          "refId": "A",
+          "relativeTimeRange": {
+            "from": 600,
+            "to": 0
+          },
+          "datasourceUid": "$PROMETHEUS_UID",
+          "model": {
+            "refId": "A",
+            "expr": "max by (integration_id, user_id, platform) (playdex_integration_failing_for_seconds{job=\"playdex-api\"})",
+            "instant": true,
+            "range": false
+          }
+        },
+        {
+          "refId": "C",
+          "relativeTimeRange": {
+            "from": 0,
+            "to": 0
+          },
+          "datasourceUid": "__expr__",
+          "model": {
+            "refId": "C",
+            "type": "threshold",
+            "expression": "A",
+            "conditions": [
+              {
+                "evaluator": {
+                  "type": "gt",
+                  "params": [
+                    1800
+                  ]
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "notification_settings": {
+        "receiver": "$CONTACT_POINT",
+        "repeat_interval": "4h"
+      }
+    },
+    {
+      "uid": "playdex-integration-paused",
+      "title": "Integration paused",
+      "condition": "C",
+      "for": "0s",
+      "noDataState": "OK",
+      "execErrState": "Error",
+      "labels": {
+        "service": "playdex-api",
+        "severity": "info"
+      },
+      "annotations": {
+        "summary": "Integration {{ $labels.integration_id }} ({{ $labels.platform }}, user {{ $labels.user_id }}) was paused: its credential was rejected.",
+        "description": "The user was told to update the credential. This repeats daily while it stays paused."
+      },
+      "data": [
+        {
+          "refId": "A",
+          "relativeTimeRange": {
+            "from": 600,
+            "to": 0
+          },
+          "datasourceUid": "$PROMETHEUS_UID",
+          "model": {
+            "refId": "A",
+            "expr": "max by (integration_id, user_id, platform) (playdex_integration_state{job=\"playdex-api\",state=\"paused\"})",
+            "instant": true,
+            "range": false
+          }
+        },
+        {
+          "refId": "C",
+          "relativeTimeRange": {
+            "from": 0,
+            "to": 0
+          },
+          "datasourceUid": "__expr__",
+          "model": {
+            "refId": "C",
+            "type": "threshold",
+            "expression": "A",
+            "conditions": [
+              {
+                "evaluator": {
+                  "type": "gt",
+                  "params": [
+                    0
+                  ]
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "notification_settings": {
+        "receiver": "$CONTACT_POINT",
+        "repeat_interval": "24h"
+      }
+    },
+    {
+      "uid": "playdex-notifications-failed",
+      "title": "Notifications given up",
+      "condition": "C",
+      "for": "0s",
+      "noDataState": "OK",
+      "execErrState": "Error",
+      "labels": {
+        "service": "playdex-api",
+        "severity": "warning"
+      },
+      "annotations": {
+        "summary": "{{ $labels.kind }} notifications were given up after every retry: users did not get them.",
+        "description": "Apprise or Telegram rejected them for hours. The notification ids and errors are in the logs ('Gave up the ... notification')."
+      },
+      "data": [
+        {
+          "refId": "A",
+          "relativeTimeRange": {
+            "from": 1800,
+            "to": 0
+          },
+          "datasourceUid": "$PROMETHEUS_UID",
+          "model": {
+            "refId": "A",
+            "expr": "sum by (kind) ((playdex_notifications_total{job=\"playdex-api\",outcome=\"failed\"} unless playdex_notifications_total{job=\"playdex-api\",outcome=\"failed\"} offset 30m) or increase(playdex_notifications_total{job=\"playdex-api\",outcome=\"failed\"}[30m]))",
+            "instant": true,
+            "range": false
+          }
+        },
+        {
+          "refId": "C",
+          "relativeTimeRange": {
+            "from": 0,
+            "to": 0
+          },
+          "datasourceUid": "__expr__",
+          "model": {
+            "refId": "C",
+            "type": "threshold",
+            "expression": "A",
+            "conditions": [
+              {
+                "evaluator": {
+                  "type": "gt",
+                  "params": [
+                    0
+                  ]
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "notification_settings": {
+        "receiver": "$CONTACT_POINT",
+        "repeat_interval": "4h"
+      }
+    },
+    {
+      "uid": "playdex-notifications-retrying",
+      "title": "Notifications failing",
+      "condition": "C",
+      "for": "0s",
+      "noDataState": "OK",
+      "execErrState": "Error",
+      "labels": {
+        "service": "playdex-api",
+        "severity": "warning"
+      },
+      "annotations": {
+        "summary": "More than 5 notification deliveries failed in 15 minutes.",
+        "description": "Apprise or Telegram is failing; deliveries are retried for about three hours before they are given up."
+      },
+      "data": [
+        {
+          "refId": "A",
+          "relativeTimeRange": {
+            "from": 900,
+            "to": 0
+          },
+          "datasourceUid": "$PROMETHEUS_UID",
+          "model": {
+            "refId": "A",
+            "expr": "sum((playdex_notifications_total{job=\"playdex-api\",outcome=\"retrying\"} unless playdex_notifications_total{job=\"playdex-api\",outcome=\"retrying\"} offset 15m) or increase(playdex_notifications_total{job=\"playdex-api\",outcome=\"retrying\"}[15m]))",
+            "instant": true,
+            "range": false
+          }
+        },
+        {
+          "refId": "C",
+          "relativeTimeRange": {
+            "from": 0,
+            "to": 0
+          },
+          "datasourceUid": "__expr__",
+          "model": {
+            "refId": "C",
+            "type": "threshold",
+            "expression": "A",
+            "conditions": [
+              {
+                "evaluator": {
+                  "type": "gt",
+                  "params": [
+                    5
+                  ]
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "notification_settings": {
+        "receiver": "$CONTACT_POINT",
+        "repeat_interval": "4h"
+      }
+    }
+  ]
+}

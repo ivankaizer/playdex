@@ -19,6 +19,8 @@ Notification Channel, Transport, Destination) and PRODUCT.md before UI work.
 - `src/Desktop`, `src/Launcher/Host`, `src/Launcher/Shell` — WinUI/WebView2 apps. Not in `Playdex.sln`; they build
   on Windows only, in CI's build-windows workflow.
 - `src/Docs` — docs.playdex.dev (Astro Starlight). `selfhost/` — the self-hosting compose file and Caddyfile.
+- `observability/grafana` — the Grafana dashboard and alert rules for what the API exports over OTLP, and
+  `push.sh` to apply them. A new metric or label the dashboard should show goes there too.
 - `tools/Seeder` (demo data, truncates the database it points at), `tools/Wiremock` (fake Steam/PSN/Xbox APIs).
 - `test/Api.Tests` (xUnit; integration tests need `PLAYDEX_INTEGRATION_DATABASE_URL`), `test/Playdex.Core.Tests`
   (Windows only).
