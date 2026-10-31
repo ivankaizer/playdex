@@ -62,7 +62,11 @@ internal static class Program
             Log.DeleteOlderThan(config.Storage.LogDirectory, "run-*.log", TimeSpan.FromDays(14));
             var game = config.GetGameForLaunch(manifest.GameId);
             Log.Info($"run: {game.DisplayName} ({manifest.GameId})");
-            using var coordinator = SessionCoordinator.Create(config, game, LogLoggerFactory.Instance.CreateLogger<SessionCoordinator>());
+            // The launcher's last summary says which accounts Playdex polls: a game it records by polling isn't recorded here.
+            using var summaryApi = new CaptureClient(config.Api);
+            using var summary = new PlaydexSummary(summaryApi);
+            using var coordinator = SessionCoordinator.Create(
+                config, game, LogLoggerFactory.Instance.CreateLogger<SessionCoordinator>(), polled: summary.IsPolled);
             coordinator.RunAsync(CancellationToken.None).GetAwaiter().GetResult();
             return 0;
         }

@@ -27,26 +27,30 @@ public sealed partial class PlaydexSummary(CaptureClient api, string? file = nul
     }
 
     /// <summary>
-    /// Playdex polls the user's Steam account (an active Steam integration), so it records Steam games itself. False
-    /// without a summary: the launcher records them then, as an offline launcher with no history must.
+    /// Playdex polls the user's account of <paramref name="provider"/> ("steam", "xbox": an active integration), so it
+    /// records the games played there itself. From the summary's polledProviders, or its steamPolling from a server older
+    /// than that. False without a summary: the launcher records them then, as an offline launcher with no history must.
     /// </summary>
-    public bool SteamPolling
+    public bool IsPolled(string provider)
     {
-        get
+        if (Current is not { } json)
         {
-            if (Current is not { } json)
+            return false;
+        }
+        try
+        {
+            using var document = System.Text.Json.JsonDocument.Parse(json);
+            var root = document.RootElement;
+            if (root.TryGetProperty("polledProviders", out var providers) && providers.ValueKind == System.Text.Json.JsonValueKind.Array)
             {
-                return false;
+                return providers.EnumerateArray().Any(p => p.ValueKind == System.Text.Json.JsonValueKind.String
+                    && string.Equals(p.GetString(), provider, StringComparison.OrdinalIgnoreCase));
             }
-            try
-            {
-                using var document = System.Text.Json.JsonDocument.Parse(json);
-                return document.RootElement.TryGetProperty("steamPolling", out var value) && value.ValueKind == System.Text.Json.JsonValueKind.True;
-            }
-            catch (System.Text.Json.JsonException)
-            {
-                return false;
-            }
+            return provider == "steam" && root.TryGetProperty("steamPolling", out var steam) && steam.ValueKind == System.Text.Json.JsonValueKind.True;
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return false;
         }
     }
 

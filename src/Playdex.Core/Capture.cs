@@ -16,6 +16,16 @@ public sealed record CaptureGame(string GameTitle, string GameId, string GameIdP
         string.IsNullOrWhiteSpace(game.ApiGameId) ? game.GameId : game.ApiGameId,
         game.GameProvider,
         api.ResolvePlatform(game));
+
+    /// <summary>
+    /// Whether Playdex already records this game by polling the account it is played with (<paramref name="polled"/>
+    /// says which providers it polls): an Xbox app game while the user's Xbox integration is active. Recording it here
+    /// too would count each session twice. Never for "steam": a game added from its executable runs outside Steam, where
+    /// Steam polling doesn't see it (and one with no Steam id is recorded as "steam" too); Steam's own games are left to
+    /// polling where the launcher starts them through Steam.
+    /// </summary>
+    public bool IsLeftToPolling(Func<string, bool> polled) =>
+        !string.Equals(GameIdProvider, "steam", StringComparison.OrdinalIgnoreCase) && polled(GameIdProvider);
 }
 
 /// <param name="StartedAt">When it started, for a session sent after it ended (the offline queue); null: it just ended.</param>

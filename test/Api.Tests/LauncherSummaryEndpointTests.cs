@@ -86,6 +86,18 @@ public sealed class LauncherSummaryEndpointTests(PostgresFixture postgres)
             CreatedAt = now,
             UpdatedAt = now,
         };
+        // Paused: Playdex doesn't poll it, so the launcher records Xbox games itself.
+        var pausedXbox = new Integration
+        {
+            UserId = user.Id,
+            Type = IntegrationType.Xbox,
+            PlatformId = (await db.Platforms.SingleAsync(platform => platform.Key == "xbox")).Id,
+            AccountId = $"xbox-{suffix}",
+            ApiKey = $"xbox-key-{suffix}",
+            Active = false,
+            CreatedAt = now,
+            UpdatedAt = now,
+        };
 
         try
         {
@@ -129,18 +141,25 @@ public sealed class LauncherSummaryEndpointTests(PostgresFixture postgres)
             Assert.Equal(HttpStatusCode.BadRequest, (await client.GetAsync("/api/launcher/recap?year=1")).StatusCode);
 
             Assert.False(data.GetProperty("steamPolling").GetBoolean());
+            Assert.Equal(0, data.GetProperty("polledProviders").GetArrayLength());
 
             // With Steam polling on, Playdex records Steam games itself and the launcher must not record them too.
-            db.Integrations.Add(steamIntegration);
+            db.Integrations.AddRange(steamIntegration, pausedXbox);
             await db.SaveChangesAsync();
             using var polled = JsonDocument.Parse(await client.GetStringAsync("/api/launcher/summary"));
-            Assert.True(polled.RootElement.GetProperty("data").GetProperty("steamPolling").GetBoolean());
+            var polledData = polled.RootElement.GetProperty("data");
+            Assert.True(polledData.GetProperty("steamPolling").GetBoolean());
+            Assert.Equal(["steam"], polledData.GetProperty("polledProviders").EnumerateArray().Select(provider => provider.GetString()));
         }
         finally
         {
             if (steamIntegration.Id != 0)
             {
                 db.Integrations.Remove(steamIntegration);
+            }
+            if (pausedXbox.Id != 0)
+            {
+                db.Integrations.Remove(pausedXbox);
             }
             db.PlaySessions.RemoveRange(sessions);
             db.Integrations.Remove(integration);
