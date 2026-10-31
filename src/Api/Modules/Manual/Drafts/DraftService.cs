@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Text.Json;
 using Api.Infrastructure.Common;
 using Api.Infrastructure.Http;
+using Api.Modules.Manual.Drafts.Extraction;
 using Microsoft.EntityFrameworkCore;
 using Playdex.Persistence;
 
@@ -12,6 +13,9 @@ public sealed class DraftService(DraftRepository repository, PlaydexDbContext db
 {
     /// <summary>IGDB searches one extraction runs at once (IGDB allows four requests per second).</summary>
     public const int MaxParallelIgdbSearches = 3;
+
+    /// <summary>Rows one batch may hold; review accepts at most this many at once.</summary>
+    public const int MaxRows = 50;
 
     public async Task<DraftBatchDto> Get(long userId, Guid id, CancellationToken ct) =>
         ToDto(await RequireBatch(userId, id, ct));
@@ -79,7 +83,7 @@ public sealed class DraftService(DraftRepository repository, PlaydexDbContext db
         // Loaded once: each row is re-read and its revision checked under a row lock before it is accepted, so a
         // snapshot taken here cannot accept a row that changed since.
         var batch = await RequireBatch(userId, batchId, ct);
-        if (request.Rows is null || request.Rows.Count is < 1 or > 50 || request.Rows.Select(r => r.Id).Distinct().Count() != request.Rows.Count)
+        if (request.Rows is null || request.Rows.Count is < 1 or > MaxRows || request.Rows.Select(r => r.Id).Distinct().Count() != request.Rows.Count)
         {
             throw AppProblemException.Validation("Select between 1 and 50 different draft rows.");
         }
@@ -138,6 +142,92 @@ public sealed class DraftService(DraftRepository repository, PlaydexDbContext db
             catch (Exception) { results.Add(new(requested.Id, null, "This draft could not be accepted. Retry after checking its game selection.")); }
         }
         return new(results);
+    }
+
+    /// <summary>
+    /// A batch from sessions a client already parsed, as an assistant does over MCP: the same game matching and
+    /// review as AI extraction, without the server's model or its quota. Each call is a new batch.
+    /// </summary>
+    public async Task<DraftBatchDto> CreateFromRows(long userId, string timezone, IReadOnlyList<ExtractedSession>? rows,
+        TimeSpan searchBudget, DateTimeOffset now, CancellationToken ct)
+    {
+        if (rows is null || rows.Count is < 1 or > MaxRows)
+        {
+            throw AppProblemException.Validation($"Send between 1 and {MaxRows} sessions.");
+        }
+
+        var cleaned = new List<ExtractedSession>(rows.Count);
+        foreach (var row in rows)
+        {
+            var title = row.Title?.Trim() ?? "";
+            if (title.Length is 0 or > 500)
+            {
+                throw AppProblemException.Validation("Each session needs a game title of at most 500 characters.");
+            }
+
+            // A malformed date or duration is kept for the review to correct, as extraction keeps it.
+            var date = row.Date?.Trim() is { Length: > 0 and <= 10 } d ? d : null;
+            var platform = row.PlatformKey?.Trim().ToLowerInvariant();
+            cleaned.Add(new(title, date, row.DurationMinutes, platform, []));
+        }
+
+        var day = DraftExtractionService.ReferenceDate(timezone, now);
+        return await SaveBatch(userId, Guid.NewGuid(), timezone, day, now, cleaned, searchBudget, ct);
+    }
+
+    /// <summary>
+    /// Saves sessions as a pending batch: each row gets the game it most likely means (the one game the user played
+    /// under a similar title, else the only candidate) and, when its platform is unknown, the platform the user last
+    /// played that game on. A row whose IGDB search runs out of <paramref name="searchBudget"/> is saved without
+    /// IGDB candidates. A repeated <paramref name="requestId"/> returns the batch saved for it.
+    /// </summary>
+    internal async Task<DraftBatchDto> SaveBatch(long userId, Guid requestId, string timezone, DateOnly referenceDate,
+        DateTimeOffset createdAt, IReadOnlyList<ExtractedSession> rows, TimeSpan searchBudget, CancellationToken ct)
+    {
+        var platforms = (await manualRepository.ListPlatforms(ct))
+            .Where(p => p.Key != ManualService.PlaynitePlatformKey).Select(p => p.Key).ToHashSet(StringComparer.Ordinal);
+        var searches = await SearchCandidates(userId, rows.Select(row => row.Title), searchBudget, ct);
+        var batch = new SessionDraftBatch
+        {
+            Id = Guid.NewGuid(),
+            UserId = userId,
+            RequestId = requestId,
+            CreatedAt = createdAt,
+            Timezone = timezone,
+            ReferenceDate = referenceDate
+        };
+        foreach (var row in rows)
+        {
+            var candidates = searches.GetValueOrDefault(row.Title.Trim()) ?? [];
+            var playedCandidates = candidates.Where(candidate => candidate.PreviouslyPlayed).ToArray();
+            var selected = playedCandidates.Length == 1
+                ? playedCandidates[0]
+                : candidates.Count == 1 ? candidates[0] : null;
+            var platform = row.PlatformKey is { } key && platforms.Contains(key) ? key : "unknown";
+            var warnings = row.Warnings.ToList();
+            if (platform == "unknown" && selected?.PreviouslyPlayed == true && selected.Platform is { } played
+                && platforms.Contains(played))
+            {
+                platform = played;
+                warnings.RemoveAll(warning => warning.StartsWith("Platform:", StringComparison.OrdinalIgnoreCase));
+            }
+            batch.Rows.Add(new SessionDraftRow
+            {
+                Id = Guid.NewGuid(),
+                BatchId = batch.Id,
+                Position = batch.Rows.Count,
+                Title = row.Title,
+                Date = row.Date,
+                DurationMinutes = row.DurationMinutes,
+                PlatformKey = platform,
+                Warnings = warnings.ToArray(),
+                GameId = selected?.GameId,
+                IgdbId = selected?.IgdbId,
+                SelectionJson = selected is null ? null : JsonSerializer.Serialize(selected)
+            });
+        }
+
+        return ToDto(await repository.CreateBatch(batch, ct));
     }
 
     /// <summary>

@@ -1,5 +1,4 @@
 using System.Diagnostics.Metrics;
-using System.Text.Json;
 using Api.Infrastructure.Http;
 using Api.Modules.Manual.Drafts.Extraction;
 using Microsoft.Extensions.Options;
@@ -83,50 +82,8 @@ public sealed class DraftExtractionService(DraftRepository repository, DraftServ
             }
             // Game search has its own budget. It used to share the extraction timeout, so slow IGDB searches turned a
             // successful (paid) extraction into a 504; now rows whose search runs out are saved without IGDB matches.
-            var searches = await drafts.SearchCandidates(userId, rows.Select(row => row.Title),
+            var result = await drafts.SaveBatch(userId, requestId, timezone, day, clock.GetUtcNow(), rows,
                 TimeSpan.FromSeconds(Math.Max(1, opts.SearchTimeoutSeconds)), ct);
-            var batch = new SessionDraftBatch
-            {
-                Id = Guid.NewGuid(),
-                UserId = userId,
-                RequestId = requestId,
-                CreatedAt = clock.GetUtcNow(),
-                Timezone = timezone,
-                ReferenceDate = day
-            };
-            foreach (var row in rows)
-            {
-                var candidates = searches.GetValueOrDefault(row.Title.Trim()) ?? [];
-                var playedCandidates = candidates.Where(candidate => candidate.PreviouslyPlayed).ToArray();
-                var selected = playedCandidates.Length == 1
-                    ? playedCandidates[0]
-                    : candidates.Count == 1 ? candidates[0] : null;
-                var platform = platforms.Any(p => p.Key == row.PlatformKey && p.Key != ManualService.PlaynitePlatformKey) ? row.PlatformKey! : "unknown";
-                var warnings = row.Warnings.ToList();
-                if (platform == "unknown"
-                    && selected?.PreviouslyPlayed == true
-                    && platforms.Any(candidate => candidate.Key == selected.Platform && candidate.Key != ManualService.PlaynitePlatformKey))
-                {
-                    platform = selected.Platform!;
-                    warnings.RemoveAll(warning => warning.StartsWith("Platform:", StringComparison.OrdinalIgnoreCase));
-                }
-                batch.Rows.Add(new SessionDraftRow
-                {
-                    Id = Guid.NewGuid(),
-                    BatchId = batch.Id,
-                    Position = batch.Rows.Count,
-                    Title = row.Title,
-                    Date = row.Date,
-                    DurationMinutes = row.DurationMinutes,
-                    PlatformKey = platform,
-                    Warnings = warnings.ToArray(),
-                    GameId = selected?.GameId,
-                    IgdbId = selected?.IgdbId,
-                    SelectionJson = selected is null ? null : JsonSerializer.Serialize(selected)
-                });
-            }
-            var saved = await repository.CreateBatch(batch, ct);
-            var result = DraftService.ToDto(saved);
             await history.Complete(generationId, "success", result: result);
             _requests.Add(1, new KeyValuePair<string, object?>("outcome", "success"));
             return result;
