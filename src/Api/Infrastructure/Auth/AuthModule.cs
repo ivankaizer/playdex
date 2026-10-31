@@ -1,3 +1,4 @@
+using Api.Infrastructure.Auth.OAuth;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Playdex.Persistence;
 
@@ -20,12 +21,14 @@ public static class AuthModule
         services.AddScoped<AuthRepository>();
         services.AddScoped<AuthService>();
         services.AddPlaydexAuthentication();
+        services.AddOAuthServer();
         return services;
     }
 
     public static RouteGroupBuilder MapAuth(this RouteGroupBuilder api)
     {
         AuthEndpoints.MapAuthEndpoints(api);
+        api.MapOAuthEndpoints();
         return api;
     }
 }
