@@ -101,7 +101,7 @@ public sealed class SessionLifecycleTests(PostgresFixture postgres)
         Assert.NotNull(await notifications.GetSessionEndedTarget(ended.SessionId, default));
 
         var ignoredSession = await world.AddOpenSession(world.Steam, world.GameB, switchedAt, switchedAt);
-        Assert.Null(await notifications.GetSessionStartedTarget(ignoredSession.Id, default));
+        Assert.True((await notifications.GetSessionStartedTarget(ignoredSession.Id, default))?.Ignored);
     }
 
     [Fact]

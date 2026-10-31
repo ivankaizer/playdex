@@ -271,19 +271,24 @@ public sealed class AppriseNotificationTests(PostgresFixture postgres)
                 CancellationToken.None);
             Assert.EndsWith("/notify/telegram_4242", appriseHandler.Requests[1]);
 
-            // A failed delivery throws, so that the dispatcher retries it. The provider's error text is not sent.
+            // A failed delivery throws, so that the dispatcher retries it.
             await Assert.ThrowsAsync<AppriseApiException>(() => handler.Send(
-                new PollFailed(integration.Id, "steam", "rate limited <provider detail>", TimeSpan.FromMinutes(1), now),
+                new IntegrationPaused(integration.Id, "steam", "Steam rejected the Web API key (403).", 10, now),
                 CancellationToken.None));
-            Assert.DoesNotContain("provider detail", appriseHandler.Bodies[2], StringComparison.Ordinal);
-            Assert.Contains("could not check your Steam activity", appriseHandler.Bodies[2], StringComparison.Ordinal);
-            Assert.Contains("Retrying in 1m 0s", appriseHandler.Bodies[2], StringComparison.Ordinal);
+            Assert.Contains("Polling for Steam is paused", appriseHandler.Bodies[2], StringComparison.Ordinal);
+
+            // Poll failures are not the user's to act on: nothing is sent.
+            var pollFailed = await handler.Send(
+                (object)new PollFailed(integration.Id, "steam", "rate limited", TimeSpan.FromMinutes(1), now),
+                CancellationToken.None);
+            Assert.Equal(NotificationOutcome.RetiredKind, pollFailed.SkipReason);
 
             db.NotificationChannels.Remove(notificationChannel);
             await db.SaveChangesAsync();
-            await handler.Send(
+            var withoutChannel = await handler.Send(
                 new SessionStarted(session.Id, integration.Id, game.Id, now),
                 CancellationToken.None);
+            Assert.Equal(NotificationOutcome.Skipped(user.Id, NotificationOutcome.NoChannel), withoutChannel);
             Assert.Equal(3, appriseHandler.Requests.Count);
         }
         finally

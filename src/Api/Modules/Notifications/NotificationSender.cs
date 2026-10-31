@@ -6,7 +6,8 @@ namespace Api.Modules.Notifications;
 /// <summary>
 /// Delivers notifications for domain events. It renders cards and calls Apprise (seconds to minutes), so it runs on
 /// <see cref="NotificationDispatcher"/>, never inline in the request or poll that raised the event. A delivery that
-/// fails throws, and the dispatcher retries it; a card that cannot be rendered falls back to text first.
+/// fails throws, and the dispatcher retries it; a card that cannot be rendered falls back to text first. One that is
+/// not sent says why.
 /// </summary>
 public sealed partial class NotificationSender(
     NotificationsRepository repository,
@@ -17,94 +18,91 @@ public sealed partial class NotificationSender(
     [LoggerMessage(Level = LogLevel.Warning, Message = "Notification card rendering or attachment delivery failed; using text fallback")]
     private partial void LogCardRenderingFailed(Exception exception);
 
-    public Task Send(object notification, CancellationToken ct) => notification switch
+    public Task<NotificationOutcome> Send(object notification, CancellationToken ct) => notification switch
     {
         SessionStarted started => Send(started, ct),
         SessionEnded ended => Send(ended, ct),
-        PollFailed failed => Send(failed, ct),
         IntegrationPaused paused => Send(paused, ct),
-        _ => Task.CompletedTask,
+        _ => Task.FromResult(NotificationOutcome.Skipped(null, NotificationOutcome.RetiredKind)),
     };
 
-    public async Task Send(SessionStarted @event, CancellationToken ct)
+    public async Task<NotificationOutcome> Send(SessionStarted @event, CancellationToken ct)
     {
         if (!client.IsEnabled)
         {
-            return;
+            return NotificationOutcome.Skipped(null, NotificationOutcome.Disabled);
         }
 
         var target = await repository.GetSessionStartedTarget(@event.SessionId, ct);
-        if (target is null || string.IsNullOrWhiteSpace(target.TelegramChatId))
+        if (target is null)
         {
-            return;
+            return NotificationOutcome.Skipped(null, NotificationOutcome.NoTarget);
+        }
+
+        if (SkipReason(target) is { } skipped)
+        {
+            return skipped;
         }
 
         var (title, platform) = CleanNames(target);
         await SendSessionCard(
-            target.TelegramChatId,
+            target.TelegramChatId!,
             target,
             new NotificationCard(title, platform, false, null),
             $"Session started: {title} on {platform}",
             ct);
+        return NotificationOutcome.Delivered(target.UserId);
     }
 
-    public async Task Send(SessionEnded @event, CancellationToken ct)
+    public async Task<NotificationOutcome> Send(SessionEnded @event, CancellationToken ct)
     {
         if (!client.IsEnabled)
         {
-            return;
+            return NotificationOutcome.Skipped(null, NotificationOutcome.Disabled);
         }
 
         var target = await repository.GetSessionEndedTarget(@event.SessionId, ct);
-        if (target is null || string.IsNullOrWhiteSpace(target.TelegramChatId))
+        if (target is null)
         {
-            return;
+            return NotificationOutcome.Skipped(null, NotificationOutcome.NoTarget);
+        }
+
+        if (SkipReason(target) is { } skipped)
+        {
+            return skipped;
         }
 
         var duration = FormatDuration(@event.EndedAt - @event.StartedAt);
         var (title, platform) = CleanNames(target);
         await SendSessionCard(
-            target.TelegramChatId,
+            target.TelegramChatId!,
             target,
             new NotificationCard(title, platform, true, duration),
             $"Session ended: {title} on {platform}\nDuration: {duration}",
             ct);
+        return NotificationOutcome.Delivered(target.UserId);
     }
 
-    public async Task Send(PollFailed @event, CancellationToken ct)
+    /// <summary>
+    /// The one integration problem users are told about, because only they can fix it. Failures that retrying can
+    /// fix are an operator's concern: they are logged and counted, and alerting on them is left to the monitoring.
+    /// </summary>
+    public async Task<NotificationOutcome> Send(IntegrationPaused @event, CancellationToken ct)
     {
         if (!client.IsEnabled)
         {
-            return;
+            return NotificationOutcome.Skipped(null, NotificationOutcome.Disabled);
         }
 
         var target = await repository.GetCredentialTarget(@event.CredentialId, ct);
-        if (target is null || string.IsNullOrWhiteSpace(target.TelegramChatId))
+        if (target is null)
         {
-            return;
-        }
-        // The provider's error text stays in the server log, where the poller already records it with the
-        // credential: it can be long, carries provider internals, and is nothing the user can act on.
-        var platform = NotificationText.Clean(target.Platform, NotificationText.MaxPlatformLength);
-        await client.SendMessageAsync(
-            target.TelegramChatId,
-            $"Playdex could not check your {platform} activity. " +
-            $"Retrying in {FormatDuration(@event.RetryDelay)}; no further failure messages until it works again. " +
-            "If it keeps failing, check the connection in Settings.",
-            ct);
-    }
-
-    public async Task Send(IntegrationPaused @event, CancellationToken ct)
-    {
-        if (!client.IsEnabled)
-        {
-            return;
+            return NotificationOutcome.Skipped(null, NotificationOutcome.NoTarget);
         }
 
-        var target = await repository.GetCredentialTarget(@event.CredentialId, ct);
-        if (target is null || string.IsNullOrWhiteSpace(target.TelegramChatId))
+        if (string.IsNullOrWhiteSpace(target.TelegramChatId))
         {
-            return;
+            return NotificationOutcome.Skipped(target.UserId, NotificationOutcome.NoChannel);
         }
 
         var platform = NotificationText.Clean(target.Platform, NotificationText.MaxPlatformLength);
@@ -114,7 +112,17 @@ public sealed partial class NotificationSender(
             $"It was rejected {@event.AuthFailures} times in a row. " +
             "Update the credential in Playdex settings, then resume the integration.",
             ct);
+        return NotificationOutcome.Delivered(target.UserId);
     }
+
+    private static NotificationOutcome? SkipReason(NotificationTarget target) => target switch
+    {
+        { Ignored: true } => NotificationOutcome.Skipped(target.UserId, NotificationOutcome.IgnoredGame),
+        { Overlapping: true } => NotificationOutcome.Skipped(target.UserId, NotificationOutcome.OverlappingSession),
+        { TelegramChatId: var chatId } when string.IsNullOrWhiteSpace(chatId) =>
+            NotificationOutcome.Skipped(target.UserId, NotificationOutcome.NoChannel),
+        _ => null,
+    };
 
     private async Task SendSessionCard(
         string telegramChatId,
