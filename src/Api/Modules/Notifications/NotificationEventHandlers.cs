@@ -11,14 +11,11 @@ namespace Api.Modules.Notifications;
 public sealed class NotificationEventHandlers(AppriseClient client, NotificationOutbox outbox, NotificationSignal signal) :
     IEventSubscriber<SessionStarted>,
     IEventSubscriber<SessionEnded>,
-    IEventSubscriber<PollFailed>,
     IEventSubscriber<IntegrationPaused>
 {
     public Task Handle(SessionStarted domainEvent, CancellationToken ct) => Enqueue(domainEvent);
 
     public Task Handle(SessionEnded domainEvent, CancellationToken ct) => Enqueue(domainEvent);
-
-    public Task Handle(PollFailed domainEvent, CancellationToken ct) => Enqueue(domainEvent);
 
     public Task Handle(IntegrationPaused domainEvent, CancellationToken ct) => Enqueue(domainEvent);
 
@@ -26,6 +23,9 @@ public sealed class NotificationEventHandlers(AppriseClient client, Notification
     {
         if (!client.IsEnabled)
         {
+            NotificationMetrics.Record(
+                domainEvent.GetType().Name,
+                NotificationOutcome.Skipped(null, NotificationOutcome.Disabled));
             return;
         }
 
@@ -90,6 +90,12 @@ public sealed partial class NotificationDispatcher(
 
     [LoggerMessage(Level = LogLevel.Error, Message = "Dropped notification {NotificationId} of unknown kind {Kind}")]
     private partial void LogUnknownKind(long notificationId, string kind);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Sent the {Kind} notification {NotificationId} to user {UserId}")]
+    private partial void LogSent(string kind, long notificationId, long? userId);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Skipped the {Kind} notification {NotificationId} for user {UserId}: {Reason}")]
+    private partial void LogSkipped(string kind, long notificationId, long? userId, string? reason);
 
     [LoggerMessage(Level = LogLevel.Error, Message = "Notification outbox is unavailable; will retry")]
     private partial void LogOutboxFailed(Exception exception);
@@ -163,12 +169,14 @@ public sealed partial class NotificationDispatcher(
         {
             LogUnknownKind(claimed.Id, claimed.Kind);
             await outbox.MarkFailed(claimed, $"Unknown notification kind '{claimed.Kind}'.", permanent: true, ct);
+            NotificationMetrics.RecordFailure(claimed.Kind, gaveUp: true);
             return true;
         }
 
+        NotificationOutcome outcome;
         try
         {
-            await scope.ServiceProvider.GetRequiredService<NotificationSender>().Send(notification, ct);
+            outcome = await scope.ServiceProvider.GetRequiredService<NotificationSender>().Send(notification, ct);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
@@ -178,7 +186,8 @@ public sealed partial class NotificationDispatcher(
         catch (Exception exception)
         {
             // Not cancellable: the attempt happened and must be recorded even during shutdown.
-            if (await outbox.MarkFailed(claimed, exception.Message, permanent: false, CancellationToken.None))
+            var gaveUp = await outbox.MarkFailed(claimed, exception.Message, permanent: false, CancellationToken.None);
+            if (gaveUp)
             {
                 LogGaveUp(exception, claimed.Kind, claimed.Id, claimed.Attempts);
             }
@@ -187,11 +196,22 @@ public sealed partial class NotificationDispatcher(
                 LogSendFailed(exception, claimed.Kind, claimed.Id, claimed.Attempts);
             }
 
+            NotificationMetrics.RecordFailure(claimed.Kind, gaveUp);
             return true;
         }
 
-        // Sent: recorded even during shutdown, or it would be sent again after the restart.
+        // Done: recorded even during shutdown, or it would be sent again after the restart.
         await outbox.MarkDelivered(claimed.Id, CancellationToken.None);
+        NotificationMetrics.Record(claimed.Kind, outcome);
+        if (outcome.Sent)
+        {
+            LogSent(claimed.Kind, claimed.Id, outcome.UserId);
+        }
+        else
+        {
+            LogSkipped(claimed.Kind, claimed.Id, outcome.UserId, outcome.SkipReason);
+        }
+
         return true;
     }
 

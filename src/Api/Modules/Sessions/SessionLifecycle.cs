@@ -257,9 +257,11 @@ public sealed partial class SessionLifecycle(
             switch (@event)
             {
                 case SessionStarted started:
+                    SessionMetrics.Record("started", started.CredentialId);
                     await SafePublish(started, ct);
                     break;
                 case SessionEnded ended:
+                    SessionMetrics.Record("ended", ended.CredentialId);
                     await SafePublish(ended, ct);
                     break;
             }

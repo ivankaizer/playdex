@@ -42,7 +42,8 @@ public sealed record PlaydexSentrySettings(
         options.Environment = Environment;
         options.Release = Release;
         options.TracesSampleRate = TracesSampleRate;
-        options.EnableLogs = true;
+        // Errors and their breadcrumbs only: logs are exported over OTLP (OTLP_ENDPOINT), not paid for twice.
+        options.EnableLogs = false;
         options.MinimumBreadcrumbLevel = LogLevel.Information;
         options.MinimumEventLevel = LogLevel.Error;
         options.SendDefaultPii = false;

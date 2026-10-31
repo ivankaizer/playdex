@@ -117,6 +117,41 @@ public sealed class PollingRepository(
         )).ToList();
     }
 
+    /// <summary>Every polled integration, active or not, with its failures and when it last polled successfully.</summary>
+    public async Task<List<IntegrationHealth>> LoadIntegrationHealth(CancellationToken ct)
+    {
+        var rows = await (
+            from integration in db.Integrations.AsNoTracking()
+            where integration.Type != IntegrationType.Api
+            join backoff in db.IntegrationPollBackoffs.AsNoTracking()
+                on integration.Id equals backoff.IntegrationId into backoffs
+            from backoff in backoffs.DefaultIfEmpty()
+            select new
+            {
+                integration.Id,
+                integration.UserId,
+                integration.Type,
+                integration.Active,
+                integration.PausedAt,
+                Failures = backoff == null ? 0 : backoff.Failures,
+                FailingSince = backoff == null ? null : backoff.FailingSince,
+                LastPolledAt = db.PollResults
+                    .Where(poll => poll.IntegrationId == integration.Id)
+                    .Max(poll => (DateTimeOffset?)poll.PolledAt),
+            })
+            .ToListAsync(ct);
+
+        return rows.Select(row => new IntegrationHealth(
+            row.Id,
+            row.UserId,
+            GetProviderKey(row.Type),
+            row.Active,
+            row.PausedAt,
+            row.Failures,
+            row.FailingSince,
+            row.LastPolledAt)).ToList();
+    }
+
     private string? Decrypt(long integrationId, string? apiKey)
     {
         try

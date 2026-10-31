@@ -1,7 +1,6 @@
 using System.Globalization;
 using Api.Infrastructure.Common;
 using Api.Modules.Games;
-using Api.Modules.Metrics;
 using Api.Modules.Polling;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -169,7 +168,7 @@ public sealed class CredentialBackoffTests(PostgresFixture postgres)
     private PollingBackgroundService CreatePolling(IServiceProvider services) => new(
         services,
         Options.Create(new PollingOptions()),
-        new MetricsCollector(),
+        new IntegrationHealthGauges(TimeProvider.System, Options.Create(new PollingOptions())),
         new PollingLease(postgres.DataSource!),
         new CapsuleLookupBackoff(),
         NullLogger<PollingBackgroundService>.Instance);

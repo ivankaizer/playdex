@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Net;
+using System.Text.Json;
 using Api.Infrastructure.Common;
 using Api.Modules.Notifications;
 using Microsoft.EntityFrameworkCore;
@@ -18,6 +19,8 @@ namespace Api.Tests;
 [Collection(PostgresCollectionDefinition.Name)]
 public sealed class NotificationOutboxTests(PostgresFixture postgres)
 {
+    private static readonly JsonSerializerOptions _webJson = new(JsonSerializerDefaults.Web);
+
     [Fact]
     public async Task AnEventPublishedTwiceIsQueuedOnceAndEveryKindRoundTrips()
     {
@@ -29,7 +32,6 @@ public sealed class NotificationOutboxTests(PostgresFixture postgres)
         await using var scope = await Scope.Create(postgres);
         var started = new SessionStarted(scope.Id(1), scope.IntegrationId, 3, scope.Clock.Now);
         var ended = new SessionEnded(scope.Id(2), scope.IntegrationId, 3, scope.Clock.Now, scope.Clock.Now.AddHours(1));
-        var failed = new PollFailed(scope.IntegrationId, "steam", "down", TimeSpan.FromSeconds(5), scope.Clock.Now);
         var paused = new IntegrationPaused(
             scope.IntegrationId, "steam", "Steam rejected the Web API key (403).", 10, scope.Clock.Now);
 
@@ -37,7 +39,6 @@ public sealed class NotificationOutboxTests(PostgresFixture postgres)
         {
             await scope.Publish(started);
             await scope.Publish(ended);
-            await scope.Publish(failed);
             await scope.Publish(paused);
         }
 
@@ -49,7 +50,7 @@ public sealed class NotificationOutboxTests(PostgresFixture postgres)
             claimed.Add(NotificationOutbox.Deserialize(next));
         }
 
-        Assert.Equal([started, ended, failed, paused], claimed);
+        Assert.Equal([started, ended, paused], claimed);
     }
 
     [Fact]
@@ -61,7 +62,7 @@ public sealed class NotificationOutboxTests(PostgresFixture postgres)
         }
 
         await using var scope = await Scope.Create(postgres);
-        await scope.Publish(new PollFailed(scope.IntegrationId, "steam", "down", TimeSpan.FromSeconds(5), scope.Clock.Now));
+        await scope.Publish(new IntegrationPaused(scope.IntegrationId, "steam", "down", 10, scope.Clock.Now));
 
         // A new dispatcher, as after a restart: the queued notification was not in its memory.
         Assert.Equal(1, await scope.CreateDispatcher().DeliverDue(CancellationToken.None));
@@ -85,8 +86,8 @@ public sealed class NotificationOutboxTests(PostgresFixture postgres)
         await using var scope = await Scope.Create(postgres, appriseDelay: TimeSpan.FromMilliseconds(30));
         for (var index = 0; index < 8; index++)
         {
-            await scope.Publish(new PollFailed(
-                scope.IntegrationId, "steam", $"down {index}", TimeSpan.FromSeconds(5), scope.Clock.Now.AddTicks(index * 10)));
+            await scope.Publish(new IntegrationPaused(
+                scope.IntegrationId, "steam", $"down {index}", 10, scope.Clock.Now.AddTicks(index * 10)));
         }
 
         var handled = await Task.WhenAll(
@@ -108,7 +109,7 @@ public sealed class NotificationOutboxTests(PostgresFixture postgres)
         }
 
         await using var scope = await Scope.Create(postgres, appriseStatus: HttpStatusCode.ServiceUnavailable);
-        await scope.Publish(new PollFailed(scope.IntegrationId, "steam", "down", TimeSpan.FromSeconds(5), scope.Clock.Now));
+        await scope.Publish(new IntegrationPaused(scope.IntegrationId, "steam", "down", 10, scope.Clock.Now));
         var dispatcher = scope.CreateDispatcher();
 
         Assert.True(await dispatcher.DeliverNext(CancellationToken.None));
@@ -143,7 +144,7 @@ public sealed class NotificationOutboxTests(PostgresFixture postgres)
         }
 
         await using var scope = await Scope.Create(postgres);
-        await scope.Publish(new PollFailed(scope.IntegrationId, "steam", "down", TimeSpan.FromSeconds(5), scope.Clock.Now));
+        await scope.Publish(new IntegrationPaused(scope.IntegrationId, "steam", "down", 10, scope.Clock.Now));
         await using (var db = scope.CreateDb())
         {
             Assert.NotNull(await new NotificationOutbox(db, scope.Clock).ClaimNext(
@@ -168,7 +169,7 @@ public sealed class NotificationOutboxTests(PostgresFixture postgres)
 
         using var stopping = new CancellationTokenSource();
         await using var scope = await Scope.Create(postgres, onSend: stopping.Cancel);
-        await scope.Publish(new PollFailed(scope.IntegrationId, "steam", "down", TimeSpan.FromSeconds(5), scope.Clock.Now));
+        await scope.Publish(new IntegrationPaused(scope.IntegrationId, "steam", "down", 10, scope.Clock.Now));
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
             scope.CreateDispatcher().DeliverNext(stopping.Token));
@@ -197,7 +198,7 @@ public sealed class NotificationOutboxTests(PostgresFixture postgres)
             await insert.ExecuteNonQueryAsync();
         }
 
-        await scope.Publish(new PollFailed(scope.IntegrationId, "steam", "down", TimeSpan.FromSeconds(5), scope.Clock.Now));
+        await scope.Publish(new IntegrationPaused(scope.IntegrationId, "steam", "down", 10, scope.Clock.Now));
         Assert.Equal(2, await scope.CreateDispatcher().DeliverDue(CancellationToken.None));
         Assert.Single(scope.Apprise.Requests);
 
@@ -206,6 +207,39 @@ public sealed class NotificationOutboxTests(PostgresFixture postgres)
         Assert.Equal(0, await outbox.DeleteFinished(scope.Clock.Now - NotificationDispatcher.Retention, CancellationToken.None));
         scope.Clock.Advance(NotificationDispatcher.Retention + TimeSpan.FromSeconds(1));
         Assert.Equal(2, await outbox.DeleteFinished(scope.Clock.Now - NotificationDispatcher.Retention, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task PollFailuresAreNotQueuedAndOnesQueuedBeforeAreSkipped()
+    {
+        if (!postgres.IsConfigured)
+        {
+            return;
+        }
+
+        await using var scope = await Scope.Create(postgres);
+        var failed = new PollFailed(scope.IntegrationId, "steam", "down", TimeSpan.FromSeconds(5), scope.Clock.Now);
+        await using (var db = scope.CreateDb())
+        {
+            Assert.False(await new NotificationOutbox(db, scope.Clock).Enqueue(failed, CancellationToken.None));
+        }
+
+        // A row an earlier release queued: drained without telling the user.
+        await using (var insert = postgres.DataSource!.CreateCommand("""
+            insert into notification_outbox (dedupe_key, kind, payload, next_attempt_at, created_at)
+            values (@key, 'PollFailed', cast(@payload as jsonb), @now, @now)
+            """))
+        {
+            insert.Parameters.AddWithValue("key", $"{scope.KeyPrefix}poll-failed");
+            insert.Parameters.AddWithValue("payload", JsonSerializer.Serialize(failed, _webJson));
+            insert.Parameters.AddWithValue("now", scope.Clock.Now);
+            await insert.ExecuteNonQueryAsync();
+        }
+
+        Assert.Equal(1, await scope.CreateDispatcher().DeliverDue(CancellationToken.None));
+        Assert.Empty(scope.Apprise.Requests);
+        await using var rows = scope.CreateDb();
+        Assert.NotNull((await scope.Rows(rows).SingleAsync()).DeliveredAt);
     }
 
     private sealed class Scope : IAsyncDisposable
@@ -273,7 +307,6 @@ public sealed class NotificationOutboxTests(PostgresFixture postgres)
                 .AddScoped<NotificationEventHandlers>()
                 .AddScoped<IEventSubscriber<SessionStarted>>(provider => provider.GetRequiredService<NotificationEventHandlers>())
                 .AddScoped<IEventSubscriber<SessionEnded>>(provider => provider.GetRequiredService<NotificationEventHandlers>())
-                .AddScoped<IEventSubscriber<PollFailed>>(provider => provider.GetRequiredService<NotificationEventHandlers>())
                 .AddScoped<IEventSubscriber<IntegrationPaused>>(provider => provider.GetRequiredService<NotificationEventHandlers>())
                 .AddScoped<EventBus>()
                 .BuildServiceProvider();

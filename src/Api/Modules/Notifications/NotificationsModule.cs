@@ -1,5 +1,6 @@
 using Api.Infrastructure.Common;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using OpenTelemetry.Metrics;
 
 namespace Api.Modules.Notifications;
 
@@ -34,12 +35,11 @@ public static class NotificationsModule
         services.AddSingleton<NotificationSignal>();
         services.TryAddSingleton(TimeProvider.System);
         services.AddHostedService<NotificationDispatcher>();
+        services.AddOpenTelemetry().WithMetrics(metrics => metrics.AddMeter(NotificationMetrics.MeterName));
         services.AddScoped<NotificationEventHandlers>();
         services.AddScoped<IEventSubscriber<SessionStarted>>(
             provider => provider.GetRequiredService<NotificationEventHandlers>());
         services.AddScoped<IEventSubscriber<SessionEnded>>(
-            provider => provider.GetRequiredService<NotificationEventHandlers>());
-        services.AddScoped<IEventSubscriber<PollFailed>>(
             provider => provider.GetRequiredService<NotificationEventHandlers>());
         services.AddScoped<IEventSubscriber<IntegrationPaused>>(
             provider => provider.GetRequiredService<NotificationEventHandlers>());

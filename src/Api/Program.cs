@@ -14,7 +14,6 @@ using Api.Modules.ApiCapture;
 using Api.Modules.Games;
 using Api.Modules.Launcher;
 using Api.Modules.Manual;
-using Api.Modules.Metrics;
 using Api.Modules.Notifications;
 using Api.Modules.Polling;
 using Api.Modules.Posters;
@@ -30,6 +29,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Logging.ClearProviders();
 builder.Logging.AddJsonConsole(cfg =>
 {
+    cfg.IncludeScopes = true;
     cfg.JsonWriterOptions = new JsonWriterOptions { Indented = false };
 });
 
@@ -93,7 +93,6 @@ builder.Services
     .AddLauncher()
     .AddProviders()
     .AddRecap()
-    .AddPlaydexMetrics()
     .AddPosters(builder.Configuration)
     .AddPolling(builder.Configuration)
     .AddNotifications(builder.Configuration)
@@ -125,6 +124,9 @@ builder.Services.AddHealthChecks()
     .AddCheck<MigrationHealthCheck>("migrations");
 
 var app = builder.Build();
+app.Logger.LogTelemetryTargets(
+    sentrySettings.IsEnabled ? "enabled" : "disabled (SENTRY_DSN is not set)",
+    OtlpSettings.From(builder.Configuration)?.Endpoint.Host ?? "disabled (OTLP_ENDPOINT is not set)");
 await RunMigrations(app.Services.GetRequiredService<MigrationRunner>());
 
 if (args.Contains("migrate", StringComparer.OrdinalIgnoreCase))
@@ -164,7 +166,6 @@ api
     .MapLauncher()
     .MapProviders()
     .MapRecap()
-    .MapMetrics()
     .MapPosters()
     .MapAdmin();
 

@@ -124,6 +124,7 @@ public sealed class NotificationOutbox(PlaydexDbContext db, TimeProvider clock)
     {
         nameof(SessionStarted) => JsonSerializer.Deserialize<SessionStarted>(notification.Payload, _jsonOptions),
         nameof(SessionEnded) => JsonSerializer.Deserialize<SessionEnded>(notification.Payload, _jsonOptions),
+        // Queued before users stopped being told about poll failures: drained as skipped, never sent.
         nameof(PollFailed) => JsonSerializer.Deserialize<PollFailed>(notification.Payload, _jsonOptions),
         nameof(IntegrationPaused) => JsonSerializer.Deserialize<IntegrationPaused>(notification.Payload, _jsonOptions),
         _ => null,
@@ -134,7 +135,6 @@ public sealed class NotificationOutbox(PlaydexDbContext db, TimeProvider clock)
     {
         SessionStarted started => (nameof(SessionStarted), $"session-started:{started.SessionId}"),
         SessionEnded ended => (nameof(SessionEnded), $"session-ended:{ended.SessionId}"),
-        PollFailed failed => (nameof(PollFailed), $"poll-failed:{failed.CredentialId}:{failed.FailingSince.UtcTicks}"),
         IntegrationPaused paused =>
             (nameof(IntegrationPaused), $"integration-paused:{paused.CredentialId}:{paused.PausedAt.UtcTicks}"),
         _ => null,

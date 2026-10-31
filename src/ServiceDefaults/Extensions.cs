@@ -6,6 +6,9 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Hosting;
 using Npgsql;
+using Microsoft.Extensions.Logging;
+using OpenTelemetry.Logs;
+using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
 
@@ -29,22 +32,50 @@ public static class Extensions
     public static IHostApplicationBuilder ConfigureOpenTelemetry(this IHostApplicationBuilder builder)
     {
         var sentryDsn = GetSentryDsn(builder.Configuration);
+        var otlp = OtlpSettings.From(builder.Configuration);
         var traceSampleRate = GetTraceSampleRate(builder.Configuration);
+        var serviceName = NormalizeSetting(builder.Configuration["OTEL_SERVICE_NAME"]) ?? builder.Environment.ApplicationName;
+        var environment = NormalizeSetting(builder.Configuration["SENTRY_ENVIRONMENT"]) ?? builder.Environment.EnvironmentName;
 
-        builder.Services.AddOpenTelemetry()
-            .ConfigureResource(resource => resource.AddService(builder.Environment.ApplicationName))
+        var telemetry = builder.Services.AddOpenTelemetry()
+            .ConfigureResource(resource => resource
+                .AddService(serviceName)
+                .AddAttributes([new("deployment.environment.name", environment)]))
             .WithTracing(tracing =>
             {
                 tracing.AddAspNetCoreInstrumentation()
                        .AddHttpClientInstrumentation()
                        .AddNpgsql();
 
+                if (sentryDsn is not null || otlp is not null)
+                {
+                    tracing.SetSampler(new ParentBasedSampler(new TraceIdRatioBasedSampler(traceSampleRate)));
+                }
+
                 if (sentryDsn is not null)
                 {
-                    tracing.SetSampler(new ParentBasedSampler(new TraceIdRatioBasedSampler(traceSampleRate)))
-                           .AddSentryOtlpExporter(sentryDsn);
+                    tracing.AddSentryOtlpExporter(sentryDsn);
                 }
+
+                otlp?.AddTo(tracing);
+            })
+            // Modules add their meters; without an OTLP endpoint nothing reads them.
+            .WithMetrics(metrics => otlp?.AddTo(metrics));
+
+        if (otlp is not null)
+        {
+            telemetry.WithLogging(otlp.AddTo, options =>
+            {
+                options.IncludeScopes = true;
+                options.IncludeFormattedMessage = true;
             });
+            // Framework chatter (a line per request, per SQL command, per outgoing HTTP call, per retry) stays on the
+            // console: what failed is logged by the code that gave up.
+            builder.Logging.AddFilter<OpenTelemetryLoggerProvider>("Microsoft", LogLevel.Warning);
+            builder.Logging.AddFilter<OpenTelemetryLoggerProvider>("System", LogLevel.Warning);
+            builder.Logging.AddFilter<OpenTelemetryLoggerProvider>("Polly", LogLevel.Error);
+            builder.Logging.AddFilter<OpenTelemetryLoggerProvider>("Microsoft.Hosting.Lifetime", LogLevel.Information);
+        }
 
         return builder;
     }

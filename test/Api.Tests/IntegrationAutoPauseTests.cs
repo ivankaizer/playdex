@@ -1,6 +1,5 @@
 using Api.Infrastructure.Common;
 using Api.Modules.Games;
-using Api.Modules.Metrics;
 using Api.Modules.Polling;
 using Api.Modules.Providers;
 using Api.Modules.Sessions;
@@ -135,7 +134,7 @@ public sealed class IntegrationAutoPauseTests(PostgresFixture postgres)
             Polling = new PollingBackgroundService(
                 services,
                 Options.Create(new PollingOptions { AuthFailuresBeforePause = 3 }),
-                new MetricsCollector(),
+                new IntegrationHealthGauges(TimeProvider.System, Options.Create(new PollingOptions())),
                 new PollingLease(dataSource),
                 new CapsuleLookupBackoff(),
                 NullLogger<PollingBackgroundService>.Instance);
