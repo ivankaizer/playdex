@@ -1,4 +1,4 @@
-using Api.Infrastructure.Auth;
+using Api.Infrastructure.Auth.OAuth;
 using Api.Infrastructure.Http;
 using Api.Modules.Manual.Drafts;
 using Api.Modules.Manual.Drafts.Extraction;
@@ -9,7 +9,7 @@ namespace Api.Modules.Manual;
 
 public static class ManualModule
 {
-    /// <summary>The MCP endpoint.</summary>
+    /// <summary>The MCP endpoint, and the OAuth resource its access tokens are issued for.</summary>
     public const string McpPath = "/api/mcp";
 
     public static IServiceCollection AddManual(this IServiceCollection services)
@@ -34,6 +34,11 @@ public static class ManualModule
             .WithHttpTransport()
             .WithTools<DraftTools>()
             .WithResources<DraftCard>();
+        services.AddOAuthResource(new OAuthResource(McpPath, "Playdex for assistants",
+        [
+            new(DraftTools.Scope, "Draft play sessions from what you tell it, matched to games you’ve played or found in the catalog, " +
+                "and log them to your history once you accept them. It can’t edit or delete the sessions you already have."),
+        ]));
         return services;
     }
 
@@ -41,8 +46,9 @@ public static class ManualModule
     {
         ManualEndpoints.MapManualEndpoints(api);
         api.MapDraftEndpoints();
-        // Assistants (Claude, ChatGPT, Claude Code) log sessions through MCP with the user's Playdex app key.
-        api.MapMcp(McpPath["/api".Length..]).RequireAuthorization(ApiKeyAuthentication.Policy)
+        // Assistants (Claude, ChatGPT, Claude Code) log sessions through MCP: signed in with OAuth, or with the
+        // user's Playdex app key.
+        api.MapMcp(McpPath["/api".Length..]).RequireAuthorization(OAuthServer.ApiKeyOrAccessTokenPolicy)
             .RequireRateLimiting(RateLimiting.Mcp);
         return api;
     }

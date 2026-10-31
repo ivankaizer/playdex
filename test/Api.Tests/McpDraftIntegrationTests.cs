@@ -2,9 +2,11 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
+using Api.Infrastructure.Auth.OAuth;
 using Api.Infrastructure.Common;
 using Api.Modules.Manual.Mcp;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using ModelContextProtocol.Client;
 using ModelContextProtocol.Protocol;
 using Playdex.Persistence;
@@ -173,6 +175,64 @@ public sealed class McpDraftIntegrationTests(AdminApiFixture fixture)
             ["revision"] = updated.GetProperty("revision").GetInt32(),
         });
         Assert.NotEqual(true, deleted.IsError);
+    }
+
+    [Fact]
+    public async Task McpIsAnOAuthProtectedResource()
+    {
+        if (fixture.Factory is null)
+        {
+            return;
+        }
+
+        using var client = fixture.CreateClient();
+        using var challenge = await client.PostAsync("/api/mcp", Initialize());
+        Assert.Contains("resource_metadata=\"http://localhost/.well-known/oauth-protected-resource/api/mcp\"",
+            challenge.Headers.WwwAuthenticate.ToString());
+        using var metadata = JsonDocument.Parse(await client.GetStringAsync("/.well-known/oauth-protected-resource/api/mcp"));
+        Assert.Equal("http://localhost/api/mcp", metadata.RootElement.GetProperty("resource").GetString());
+        Assert.Equal(["drafts"], metadata.RootElement.GetProperty("scopes_supported").EnumerateArray().Select(e => e.GetString()));
+
+        Guid grantId;
+        await using (var db = fixture.CreateDb())
+        {
+            var version = await db.Users.Where(u => u.Id == fixture.UserId).Select(u => u.TokenVersion).SingleAsync();
+            var grant = new OAuthGrant
+            {
+                Id = Guid.NewGuid(),
+                UserId = fixture.UserId,
+                ClientId = "https://assistant.example/client.json",
+                ClientName = "Assistant",
+                Scope = "drafts",
+                Resource = "http://localhost/api/mcp",
+                TokenVersion = version,
+                CreatedAt = DateTimeOffset.UtcNow,
+            };
+            db.OAuthGrants.Add(grant);
+            await db.SaveChangesAsync();
+            grantId = grant.Id;
+        }
+
+        var tokens = fixture.Factory.Services.GetRequiredService<OAuthTokens>();
+        var accessToken = tokens.IssueAccessToken("http://localhost", "http://localhost/api/mcp", fixture.UserId, grantId,
+            "https://assistant.example/client.json", "drafts", DateTime.UtcNow);
+        await using (var mcp = await ConnectWith(accessToken))
+        {
+            Assert.Contains(await mcp.ListToolsAsync(), tool => tool.Name == "draft_sessions");
+        }
+
+        // A token for another resource, or with a scope MCP does not offer, is refused.
+        var elsewhere = tokens.IssueAccessToken("http://localhost", "http://localhost/api/other", fixture.UserId, grantId,
+            "https://assistant.example/client.json", "drafts", DateTime.UtcNow);
+        var otherScope = tokens.IssueAccessToken("http://localhost", "http://localhost/api/mcp", fixture.UserId, grantId,
+            "https://assistant.example/client.json", "sessions", DateTime.UtcNow);
+        foreach (var refused in new[] { elsewhere, otherScope })
+        {
+            using var http = fixture.CreateClient();
+            http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", refused);
+            using var response = await http.PostAsync("/api/mcp", Initialize());
+            Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        }
     }
 
     [Fact]

@@ -30,6 +30,9 @@ public sealed record DraftSessionInput(
 public sealed class DraftTools(DraftService drafts, ManualService manual, DraftConfirmation confirmation,
     IOptions<AiDraftOptions> options, TimeProvider clock)
 {
+    /// <summary>The OAuth scope that lets a client use these tools.</summary>
+    public const string Scope = "drafts";
+
     private static readonly JsonSerializerOptions _json = JsonSerializerOptions.Web;
 
     [McpServerTool(Name = "draft_sessions", Title = "Draft play sessions", Destructive = false, Idempotent = false,
