@@ -13,6 +13,7 @@ import {
   type PlaydexSummary,
 } from "../data/playdex";
 import { loadRecap, recaps, type Recap } from "../data/recap";
+import { platformColor } from "../data/platforms";
 import { useStore } from "../nav/store";
 import "./playdex.css";
 
@@ -258,7 +259,7 @@ function Sessions({ sessions, summary }: { sessions: PlaydexSession[]; summary: 
   );
 }
 
-/** Time per platform as one bar, with a legend. */
+/** Time per platform as one bar, with a legend, each platform in its color (the web app's, platformColor). */
 function Platforms({ platforms }: { platforms: { platformKey: string; platformName: string; totalSeconds: number }[] }) {
   const total = Math.max(
     platforms.reduce((t, p) => t + p.totalSeconds, 0),
@@ -268,14 +269,17 @@ function Platforms({ platforms }: { platforms: { platformKey: string; platformNa
     <div className="pdx-block">
       <span className="label">Platforms</span>
       <div className="pdx-share" aria-hidden>
-        {platforms.map((p, i) => (
-          <i key={p.platformKey} data-tone={i % 4} style={{ width: `${(p.totalSeconds / total) * 100}%` }} />
+        {platforms.map((p) => (
+          <i
+            key={p.platformKey}
+            style={{ width: `${(p.totalSeconds / total) * 100}%`, background: platformColor(p.platformKey, p.platformName) }}
+          />
         ))}
       </div>
       <ul className="pdx-legend">
-        {platforms.map((p, i) => (
+        {platforms.map((p) => (
           <li key={p.platformKey}>
-            <span className="pdx-dot" data-tone={i % 4} aria-hidden />
+            <span className="pdx-dot" style={{ background: platformColor(p.platformKey, p.platformName) }} aria-hidden />
             <span className="pdx-legend-name">{p.platformName}</span>
             <span className="pdx-sub num">
               {fmtMinutes(minutes(p.totalSeconds))} · {Math.round((p.totalSeconds / total) * 100)}%
