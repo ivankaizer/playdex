@@ -1,4 +1,5 @@
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using OpenTelemetry.Metrics;
 using OpenTelemetry.Trace;
 
 namespace Api.Modules.Polling;
@@ -26,7 +27,9 @@ public static class PollingModule
         services.AddHttpClient<IProviderClient, OpenXblClient>(c => c.Timeout = TimeSpan.FromSeconds(15));
         services.AddHttpClient<IgdbClient>(c => c.Timeout = TimeSpan.FromSeconds(15));
         services.AddOpenTelemetry()
-            .WithTracing(tracing => tracing.AddSource(PollingBackgroundService.ActivitySourceName));
+            .WithTracing(tracing => tracing.AddSource(PollingBackgroundService.ActivitySourceName))
+            .WithMetrics(metrics => metrics.AddMeter(PollingMetrics.MeterName));
+        services.AddSingleton<IntegrationHealthGauges>();
         services.AddSingleton<PollingLease>();
         services.AddSingleton<CapsuleLookupBackoff>();
         services.AddHostedService<PollingBackgroundService>();

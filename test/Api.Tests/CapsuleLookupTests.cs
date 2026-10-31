@@ -1,6 +1,5 @@
 using Api.Infrastructure.Common;
 using Api.Modules.Games;
-using Api.Modules.Metrics;
 using Api.Modules.Polling;
 using Api.Modules.Sessions;
 using Microsoft.EntityFrameworkCore;
@@ -153,7 +152,7 @@ public sealed class CapsuleLookupTests(PostgresFixture postgres)
             var polling = new PollingBackgroundService(
                 services,
                 Options.Create(new PollingOptions()),
-                new MetricsCollector(),
+                new IntegrationHealthGauges(TimeProvider.System, Options.Create(new PollingOptions())),
                 new PollingLease(dataSource),
                 new CapsuleLookupBackoff(),
                 NullLogger<PollingBackgroundService>.Instance);

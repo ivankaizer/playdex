@@ -5,25 +5,10 @@ using Xunit;
 
 namespace Api.Tests;
 
-/// <summary>What the host publishes beyond the user API: metrics for administrators, Swagger only in Development.</summary>
+/// <summary>What the host publishes beyond the user API: Swagger only in Development.</summary>
 [Collection(AdminApiCollectionDefinition.Name)]
 public sealed class HostExposureIntegrationTests(AdminApiFixture fixture)
 {
-    [Fact]
-    public async Task AdministratorsCanReadMetrics()
-    {
-        if (fixture.Factory is null)
-        {
-            return;
-        }
-
-        using var client = await fixture.LoginAsync(AdminApiFixture.AdminEmail);
-
-        using var response = await client.GetAsync("/api/metrics");
-
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-    }
-
     [Fact]
     public async Task SwaggerIsServedInDevelopment()
     {

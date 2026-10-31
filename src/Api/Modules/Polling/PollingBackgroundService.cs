@@ -3,21 +3,22 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Api.Infrastructure.Common;
-using Playdex.Persistence;
-using Api.Modules.Metrics;
 using Api.Modules.Sessions;
+using Sentry;
 
 namespace Api.Modules.Polling;
 
 public sealed partial class PollingBackgroundService(
     IServiceProvider serviceProvider,
     IOptions<PollingOptions> pollingOptions,
-    MetricsCollector metrics,
+    IntegrationHealthGauges healthGauges,
     PollingLease lease,
     CapsuleLookupBackoff capsuleLookups,
     ILogger<PollingBackgroundService> logger) : BackgroundService
 {
     internal const string ActivitySourceName = "Playdex.Api.Polling";
+    /// <summary>The Sentry cron monitor the polling instance checks in with after every cycle.</summary>
+    internal const string MonitorSlug = "playdex-polling";
     private static readonly ActivitySource _activitySource = new(ActivitySourceName);
 
     [LoggerMessage(Level = LogLevel.Information, Message = "PollingBackgroundService will start after {Delay} ms")]
@@ -62,6 +63,9 @@ public sealed partial class PollingBackgroundService(
     [LoggerMessage(Level = LogLevel.Error, Message = "Could not pause credential {CredentialId}")]
     private partial void LogPauseFailed(Exception exception, long credentialId);
 
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Could not read integration health for monitoring")]
+    private partial void LogHealthRefreshFailed(Exception exception);
+
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         var initialDelayMs = Random.Shared.Next(0, 5001);
@@ -82,10 +86,13 @@ public sealed partial class PollingBackgroundService(
                     {
                         activity?.SetTag("polling.skipped", true);
                         LogLeaseHeldElsewhere();
+                        PollingMetrics.RecordCycle("skipped");
                     }
                     else
                     {
                         await RunCycle(activity, stoppingToken);
+                        PollingMetrics.RecordCycle("completed", cycleStart.Elapsed);
+                        CheckIn(CheckInStatus.Ok, cycleStart.Elapsed);
                     }
                 }
                 catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
@@ -96,7 +103,8 @@ public sealed partial class PollingBackgroundService(
                 {
                     activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
                     LogPollCycleFailed(ex);
-                    metrics.RecordPollFailure("all", DateTimeOffset.UtcNow);
+                    PollingMetrics.RecordCycle("failed");
+                    CheckIn(CheckInStatus.Error, cycleStart.Elapsed);
 
                     activity?.Stop();
                     await Task.Delay(TimeSpan.FromSeconds(5), stoppingToken);
@@ -105,8 +113,6 @@ public sealed partial class PollingBackgroundService(
             }
 
             var elapsed = cycleStart.ElapsedMilliseconds;
-            metrics.RecordCycleDuration(elapsed);
-
             var delayMs = Math.Max(0, (pollingOptions.Value.IntervalSeconds * 1000L) - elapsed);
             await Task.Delay((int)delayMs, stoppingToken);
         }
@@ -146,7 +152,45 @@ public sealed partial class PollingBackgroundService(
         }
 
         await PollAll(due, stoppingToken);
+        await RefreshHealth(stoppingToken);
     }
+
+    /// <summary>Reads every integration's state for <see cref="IntegrationHealthGauges"/>; monitoring, so a failure
+    /// here never fails the cycle.</summary>
+    private async Task RefreshHealth(CancellationToken ct)
+    {
+        try
+        {
+            using var scope = serviceProvider.GetRequiredService<IServiceScopeFactory>().CreateScope();
+            healthGauges.Update(await scope.ServiceProvider
+                .GetRequiredService<PollingRepository>()
+                .LoadIntegrationHealth(ct));
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException || !ct.IsCancellationRequested)
+        {
+            LogHealthRefreshFailed(ex);
+        }
+    }
+
+    /// <summary>
+    /// Tells Sentry's cron monitor a cycle ran, creating the monitor on first use: Sentry raises an issue when the
+    /// check-ins stop. Only the instance holding the lease checks in. Without a DSN it does nothing.
+    /// </summary>
+    private void CheckIn(CheckInStatus status, TimeSpan duration) =>
+        SentrySdk.CaptureCheckIn(
+            MonitorSlug,
+            status,
+            duration: duration,
+            configureMonitorOptions: monitor =>
+            {
+                monitor.Interval(
+                    Math.Max(1, (int)Math.Ceiling(pollingOptions.Value.IntervalSeconds / 60.0)),
+                    SentryMonitorInterval.Minute);
+                monitor.CheckInMargin = TimeSpan.FromMinutes(5);
+                monitor.MaxRuntime = TimeSpan.FromMinutes(10);
+                monitor.FailureIssueThreshold = 2;
+                monitor.RecoveryThreshold = 1;
+            });
 
     /// <summary>
     /// Bounded parallelism: one provider taking its full HTTP timeout used to delay every credential behind it.
@@ -167,6 +211,13 @@ public sealed partial class PollingBackgroundService(
     /// <summary>Polls one credential; a failure is recorded and never escapes, except shutdown cancellation.</summary>
     internal async Task PollCredential(ActiveCredential active, CancellationToken stoppingToken)
     {
+        // Every log line of this poll carries the integration, so its history can be filtered out of the logs.
+        using var logScope = logger.BeginScope(new Dictionary<string, object>
+        {
+            ["integration_id"] = active.Credential.Id,
+            ["user_id"] = active.Credential.UserId,
+            ["platform"] = active.PlatformKey,
+        });
         DateTimeOffset? deferUntil;
         try
         {
@@ -218,8 +269,10 @@ public sealed partial class PollingBackgroundService(
 
     private async Task RecordFailure(ActiveCredential active, Exception exception, CancellationToken ct)
     {
-        metrics.RecordPollFailure(active.PlatformKey, DateTimeOffset.UtcNow);
         var providerFailure = exception as ProviderPollException;
+        PollingMetrics.RecordPoll(
+            active,
+            providerFailure?.IsAuthenticationFailure == true ? "auth_failure" : "failure");
         using var scope = serviceProvider.GetRequiredService<IServiceScopeFactory>().CreateScope();
         CredentialFailure failure;
         try
@@ -341,7 +394,7 @@ public sealed partial class PollingBackgroundService(
         var deferUntil = await EnrichGameIfNeeded(client, credential, pollResult.Game, outcome, pollingRepo, ct);
         // Announced after the capsule lookup, so the notification card has the cover.
         await sessions.PublishPending(ct);
-        metrics.RecordPollSuccess(platformKey, polledAt);
+        PollingMetrics.RecordPoll(active, "success");
         LogSuccessfulPoll(credential.Id, outcome.GameId);
         return deferUntil;
     }

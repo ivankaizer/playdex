@@ -14,7 +14,6 @@ using Api.Modules.ApiCapture;
 using Api.Modules.Games;
 using Api.Modules.Launcher;
 using Api.Modules.Manual;
-using Api.Modules.Metrics;
 using Api.Modules.Notifications;
 using Api.Modules.Polling;
 using Api.Modules.Posters;
@@ -94,7 +93,6 @@ builder.Services
     .AddLauncher()
     .AddProviders()
     .AddRecap()
-    .AddPlaydexMetrics()
     .AddPosters(builder.Configuration)
     .AddPolling(builder.Configuration)
     .AddNotifications(builder.Configuration)
@@ -168,7 +166,6 @@ api
     .MapLauncher()
     .MapProviders()
     .MapRecap()
-    .MapMetrics()
     .MapPosters()
     .MapAdmin();
 

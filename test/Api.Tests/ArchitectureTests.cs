@@ -2,7 +2,6 @@ using System.Reflection;
 using System.Text.RegularExpressions;
 using Api.Modules.Accounts;
 using Api.Modules.Games;
-using Api.Modules.Metrics;
 using Api.Modules.Notifications;
 using Api.Modules.Polling;
 using Api.Modules.Posters;
@@ -57,8 +56,6 @@ public sealed class ArchitectureTests
         new("Manual", typeof(IgdbClient)),
         new("Manual", typeof(IgdbOptions)),
         new("Manual", typeof(IgdbSearchResult)),
-        // The poller records poll outcomes on the Metrics collector.
-        new("Polling", typeof(MetricsCollector)),
         // Settings configures and tests Telegram delivery through the Apprise client.
         new("Settings", typeof(AppriseClient)),
     ];
