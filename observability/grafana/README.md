@@ -11,7 +11,8 @@ TELEGRAM_BOT_TOKEN=<bot token> TELEGRAM_CHAT_ID=<your chat id> \
 ```
 
 The Telegram variables create the `playdex-admin` contact point that every alert goes to; leave them out once it
-exists. Edit a dashboard in Grafana, export it (Share → Export, "Export for sharing externally" off) over
+exists. Its messages use `templates/playdex-telegram.tmpl`: one short block per alert with a link to the
+dashboard panel it concerns. Edit a dashboard in Grafana, export it (Share → Export, "Export for sharing externally" off) over
 `dashboards/playdex.json`, and commit it: the next push would overwrite the edit otherwise.
 
 ## What the API exports

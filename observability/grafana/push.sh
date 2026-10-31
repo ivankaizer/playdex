@@ -46,9 +46,18 @@ if ! exists "/api/folders/$FOLDER_UID"; then
   echo "Created folder $FOLDER_UID"
 fi
 
+for file in "$here"/templates/*.tmpl; do
+  name="$(basename "$file" .tmpl)"
+  api PUT "/api/v1/provisioning/templates/$name" "$(jq -n --arg name "$name" --rawfile template "$file" \
+    '{name: $name, template: $template}')" >/dev/null
+  echo "Notification template: $name"
+done
+
 if [[ -n "${TELEGRAM_BOT_TOKEN:-}" && -n "${TELEGRAM_CHAT_ID:-}" ]]; then
   contact="$(jq -n --arg name "$CONTACT_POINT" --arg token "$TELEGRAM_BOT_TOKEN" --arg chat "$TELEGRAM_CHAT_ID" \
-    '{uid: $name, name: $name, type: "telegram", settings: {bottoken: $token, chatid: $chat, parse_mode: "HTML"}}')"
+    '{uid: $name, name: $name, type: "telegram", settings: {
+      bottoken: $token, chatid: $chat, parse_mode: "HTML", disable_web_page_preview: true,
+      message: "{{ template \"playdex.telegram.message\" . }}"}}')"
   if api GET "/api/v1/provisioning/contact-points?name=$CONTACT_POINT" | jq -e 'length > 0' >/dev/null; then
     api PUT "/api/v1/provisioning/contact-points/$CONTACT_POINT" "$contact" >/dev/null
   else

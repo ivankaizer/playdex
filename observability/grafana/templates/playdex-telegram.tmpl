@@ -1,0 +1,16 @@
+{{/* Telegram messages for Playdex alerts (parse mode HTML): one short block per alert, firing first. */}}
+{{ define "playdex.telegram.message" -}}
+{{ range .Alerts.Firing }}{{ template "playdex.telegram.alert" . }}{{ end -}}
+{{ range .Alerts.Resolved }}{{ template "playdex.telegram.alert" . }}{{ end -}}
+{{ end }}
+
+{{ define "playdex.telegram.alert" -}}
+{{ if eq .Status "resolved" }}✅{{ else if eq .Labels.severity "critical" }}🔴{{ else if eq .Labels.severity "warning" }}🟠{{ else }}🔵{{ end }} <b>{{ .Labels.alertname }}</b>{{ if eq .Status "resolved" }} · resolved{{ end }}
+{{ .Annotations.summary }}
+{{- if eq .Status "firing" }}
+<i>{{ .Annotations.description }}</i>
+{{- end }}
+{{ if .DashboardURL }}<a href="{{ .DashboardURL }}">Dashboard</a> · {{ end }}<a href="{{ .GeneratorURL }}">Rule</a>
+{{- if eq .Status "firing" }} · <a href="{{ .SilenceURL }}">Silence</a>{{ end }}
+
+{{ end }}

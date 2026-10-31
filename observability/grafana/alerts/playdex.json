@@ -15,7 +15,9 @@
       },
       "annotations": {
         "summary": "Playdex has not completed a poll cycle in 10 minutes.",
-        "description": "No instance completed a poll cycle: the API is down, can't reach the database, or stopped exporting telemetry. Sessions are not being recorded."
+        "description": "No instance completed a poll cycle: the API is down, can't reach the database, or stopped exporting telemetry. Sessions are not being recorded.",
+        "__dashboardUid__": "playdex-operations",
+        "__panelId__": "2"
       },
       "data": [
         {
@@ -74,7 +76,9 @@
       },
       "annotations": {
         "summary": "Integration {{ $labels.integration_id }} ({{ $labels.platform }}, user {{ $labels.user_id }}) has failed every poll for over 30 minutes.",
-        "description": "The provider keeps failing or rate limiting. The user is not told unless the credential gets rejected and the integration is paused. See the 'Log of integration' panel for the errors."
+        "description": "The provider keeps failing or rate limiting. The user is not told unless the credential gets rejected and the integration is paused. See the 'Log of integration' panel for the errors.",
+        "__dashboardUid__": "playdex-operations",
+        "__panelId__": "9"
       },
       "data": [
         {
@@ -133,7 +137,9 @@
       },
       "annotations": {
         "summary": "Integration {{ $labels.integration_id }} ({{ $labels.platform }}, user {{ $labels.user_id }}) was paused: its credential was rejected.",
-        "description": "The user was told to update the credential. This repeats daily while it stays paused."
+        "description": "The user was told to update the credential. This repeats daily while it stays paused.",
+        "__dashboardUid__": "playdex-operations",
+        "__panelId__": "9"
       },
       "data": [
         {
@@ -192,7 +198,9 @@
       },
       "annotations": {
         "summary": "{{ $labels.kind }} notifications were given up after every retry: users did not get them.",
-        "description": "Apprise or Telegram rejected them for hours. The notification ids and errors are in the logs ('Gave up the ... notification')."
+        "description": "Apprise or Telegram rejected them for hours. The notification ids and errors are in the logs ('Gave up the ... notification').",
+        "__dashboardUid__": "playdex-operations",
+        "__panelId__": "12"
       },
       "data": [
         {
@@ -251,7 +259,9 @@
       },
       "annotations": {
         "summary": "More than 5 notification deliveries failed in 15 minutes.",
-        "description": "Apprise or Telegram is failing; deliveries are retried for about three hours before they are given up."
+        "description": "Apprise or Telegram is failing; deliveries are retried for about three hours before they are given up.",
+        "__dashboardUid__": "playdex-operations",
+        "__panelId__": "12"
       },
       "data": [
         {
