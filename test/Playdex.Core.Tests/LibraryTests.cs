@@ -46,6 +46,13 @@ public sealed class LibraryTests
         Assert.Equal(("xbox-Contoso.Harbor_8wekyb3d8bbwe!Game", "Harbor Lights", "xbox"), (game.Id, game.Title, game.Source));
         Assert.Equal(("xbox", "1782549035"), (game.CaptureProvider, game.CaptureId));
         Assert.Same(found, game.Found);
+        Assert.Contains("\"store\":\"xbox\"", Library.ToJson(Scan(game)));
+    }
+
+    [Fact]
+    public void AGameWithoutALauncherSendsNoStore()
+    {
+        Assert.DoesNotContain("\"store\"", Library.ToJson(Scan(Steam(1145350, "Hades II"))));
     }
 
     [Fact]

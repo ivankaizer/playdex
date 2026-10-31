@@ -9,7 +9,9 @@ namespace Playdex.Core;
 /// launcher installed and that isn't added, started as its <see cref="Found"/> game would be once added. <see cref="LauncherPath"/> is that game's
 /// generated Steam-shortcut launcher, used only to find its Steam grid art. <see cref="CaptureProvider"/> and
 /// <see cref="CaptureId"/> are how a "playdex" game is recorded to Playdex (<see cref="CaptureGame.From"/>), so the page can
-/// match it to the user's Playdex games; a Steam game is recorded as ("steam", its app id).
+/// match it to the user's Playdex games; a Steam game is recorded as ("steam", its app id). <see cref="Store"/> is the
+/// launcher a game came from ("xbox", "epic", "gog"), added to Playdex or not, so the page can list it with that
+/// launcher's games; null for Steam's and for one added from its executable.
 /// </summary>
 public sealed record LibraryGame(
     string Id,
@@ -22,7 +24,8 @@ public sealed record LibraryGame(
     [property: JsonIgnore] string? ConfigGameId = null,
     string? CaptureProvider = null,
     string? CaptureId = null,
-    [property: JsonIgnore] StoreGame? Found = null);
+    [property: JsonIgnore] StoreGame? Found = null,
+    string? Store = null);
 
 [JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase, DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull)]
 [JsonSerializable(typeof(List<LibraryGame>))]
@@ -135,7 +138,8 @@ public static class Library
         var id = $"{found.Store}-{string.Concat(found.Id.Select(c => invalid.Contains(c) ? '_' : c))}";
         var capture = CaptureGame.From(GameCatalog.FromStore(found, id), api);
         return new LibraryGame(
-            id, found.Title, found.Store, null, null, null, CaptureProvider: capture.GameIdProvider, CaptureId: capture.GameId, Found: found);
+            id, found.Title, found.Store, null, null, null, CaptureProvider: capture.GameIdProvider, CaptureId: capture.GameId, Found: found,
+            Store: found.Store);
     }
 
     public static string ToJson(IReadOnlyDictionary<string, LibraryGame> games) =>
@@ -179,7 +183,7 @@ public static class Library
             var capture = CaptureGame.From(game, config.Api);
             games.Add(new LibraryGame(
                 PlaydexId(game.GameId), title, "playdex", steamAppId, null, File.Exists(launcher) ? launcher : null, ConfigGameId: game.GameId,
-                CaptureProvider: capture.GameIdProvider, CaptureId: capture.GameId));
+                CaptureProvider: capture.GameIdProvider, CaptureId: capture.GameId, Store: game.Store?.ToLowerInvariant()));
         }
         return games;
     }

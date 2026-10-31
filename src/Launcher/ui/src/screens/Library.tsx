@@ -3,22 +3,44 @@ import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from "rea
 import { openGame, openSteam } from "../app-state";
 import { SaveGlyph, useSaves } from "../components/saves";
 import { Cover } from "../components/shared";
-import { fmtHours, games, isInstalled, isOnPc, recentGames, SOURCE_LABEL, useRecentGames, type Game, type GameStats } from "../data/games";
+import {
+  fmtHours,
+  games,
+  isInstalled,
+  isOnPc,
+  launcherOf,
+  recentGames,
+  SOURCE_LABEL,
+  useRecentGames,
+  type Game,
+  type GameStats,
+} from "../data/games";
 import { playdexGame, playdexSummary } from "../data/playdex";
 import { useStore } from "../nav/store";
 import "./library.css";
 
-/* By source: Steam's own games, and local games (added to Playdex through the desktop app / Wrapper). */
+/*
+ * By launcher (launcherOf: a launcher's game stays under it once added to Playdex), and local games: added from their
+ * .exe through the desktop app or Wrapper. Steam and Local are always there; another launcher's tab only once it has
+ * games on this PC.
+ */
 const SCOPES = [
-  { id: "all", label: "All", test: () => true, empty: "Nothing here yet." },
-  { id: "steam", label: "Steam", test: (g: Game) => g.source === "steam", empty: "No Steam games installed." },
+  { id: "all", label: "All", test: () => true, empty: "Nothing here yet.", always: true },
+  { id: "steam", label: "Steam", test: (g: Game) => launcherOf(g) === "steam", empty: "No Steam games installed.", always: true },
+  { id: "xbox", label: "Xbox", test: (g: Game) => launcherOf(g) === "xbox", empty: "No Xbox app games installed.", always: false },
+  { id: "epic", label: "Epic", test: (g: Game) => launcherOf(g) === "epic", empty: "No Epic games installed.", always: false },
+  { id: "gog", label: "GOG", test: (g: Game) => launcherOf(g) === "gog", empty: "No GOG games installed.", always: false },
   {
     id: "local",
     label: "Local",
-    test: (g: Game) => g.source === "playdex",
+    test: (g: Game) => launcherOf(g) === "playdex",
     empty: "Games you add in the Playdex desktop app show up here.",
+    always: true,
   },
 ] as const;
+
+/** The tabs with their counts; the library is read once, so this is too. */
+const TABS = SCOPES.map((s) => ({ ...s, count: games.filter(s.test).length })).filter((s) => s.always || s.count > 0);
 
 /** Position in the recent games, rebuilt when a game is played (the order is live). */
 let rank: { of: GameStats[]; at: Map<string, number> } = { of: [], at: new Map() };
@@ -68,10 +90,10 @@ export function Library() {
     <main className="library">
       <header className="lib-head">
         <div className="seg" role="group" aria-label="Source" data-nav-group="scope">
-          {SCOPES.map((s) => (
+          {TABS.map((s) => (
             <button key={s.id} className="seg-btn" aria-pressed={scope === s.id} data-nav data-kind="filter" onClick={() => setScope(s.id)}>
               {s.label}
-              <span className="lib-count num">{games.filter(s.test).length}</span>
+              <span className="lib-count num">{s.count}</span>
             </button>
           ))}
         </div>
@@ -176,7 +198,7 @@ const CoverItem = memo(function CoverItem({ game, isDefault }: { game: Game; isD
         {!installed && (
           <span className="lcover-badge">
             {onPc ? <Download /> : <MonitorSmartphone />}
-            {onPc ? "Not installed" : SOURCE_LABEL[game.source]}
+            {onPc ? "Not installed" : SOURCE_LABEL[launcherOf(game)]}
           </span>
         )}
         {saves && (
@@ -187,7 +209,7 @@ const CoverItem = memo(function CoverItem({ game, isDefault }: { game: Game; isD
       </span>
       <span className="lcover-title">{game.title}</span>
       <span className="lcover-sub num">
-        {fmtHours(played ? Math.round(played.totalSeconds / 60) : 0)} · {SOURCE_LABEL[game.source]}
+        {fmtHours(played ? Math.round(played.totalSeconds / 60) : 0)} · {SOURCE_LABEL[launcherOf(game)]}
       </span>
     </button>
   );

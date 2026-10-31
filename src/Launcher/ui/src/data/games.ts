@@ -29,6 +29,8 @@ interface HostGame {
   /** Local games: how they are recorded to Playdex (provider and game id). */
   captureProvider?: string;
   captureId?: string;
+  /** The launcher it came from, added to Playdex or not; absent for Steam's and for one added from its .exe. */
+  store?: "xbox" | "epic" | "gog";
 }
 
 declare global {
@@ -58,7 +60,15 @@ export interface Game {
   images?: GameImages;
   /** Local games (host only): the identity they are recorded to Playdex with; Steam games use `art`. */
   capture?: { provider: string; id: string };
+  /** Host only: the launcher a game added to Playdex came from (see {@link launcherOf}). */
+  store?: Source;
 }
+
+/**
+ * Where a game is listed: the launcher it came from, even once added to Playdex (an added Xbox game is still an Xbox
+ * game), else its source. "playdex" is then only what was added from an .exe or .bat.
+ */
+export const launcherOf = (g: Game): Source => g.store ?? g.source;
 
 export interface Session {
   gameId: string;
@@ -164,6 +174,7 @@ export const games: Game[] = hostLibrary
       lastPlayed: g.lastPlayed,
       images: g.images,
       capture: g.captureProvider && g.captureId ? { provider: g.captureProvider, id: g.captureId } : undefined,
+      store: g.store,
     }))
   : demoGames;
 
