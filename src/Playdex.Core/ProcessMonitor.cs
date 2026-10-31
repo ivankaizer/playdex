@@ -11,6 +11,8 @@ namespace Playdex.Core;
 /// <item><see cref="MonitorMode.ExecutablePath"/> / <see cref="MonitorMode.ExecutableName"/>: any process running that
 /// executable, for games started through a launcher or that restart themselves. The game has exited once none has run
 /// for <see cref="MonitorConfig.ExitDebounceSeconds"/>.</item>
+/// <item><see cref="MonitorMode.Folder"/>: any process running from the game's install folder, the same way: a launcher's
+/// game whose executable is a stub that starts the real one.</item>
 /// </list>
 /// Waits on process handles. The process list is only scanned (once a second) while no matching process is known: while
 /// the game boots and during the exit debounce.
@@ -68,7 +70,12 @@ public sealed class ProcessMonitor(MonitorConfig config)
         }
     }
 
-    private string Target => config.Mode == MonitorMode.ExecutablePath ? config.ExecutablePath ?? "" : config.ExecutableName ?? "";
+    private string Target => config.Mode switch
+    {
+        MonitorMode.ExecutablePath => config.ExecutablePath ?? "",
+        MonitorMode.Folder => config.Folder ?? "",
+        _ => config.ExecutableName ?? "",
+    };
 
     private List<Process> FindMatching()
     {
@@ -91,7 +98,8 @@ public sealed class ProcessMonitor(MonitorConfig config)
 
     /// <summary>
     /// Whether <paramref name="process"/> is the monitored executable (<see cref="MonitorMode.ExecutablePath"/> or
-    /// <see cref="MonitorMode.ExecutableName"/>; false for <see cref="MonitorMode.LaunchedProcess"/>).
+    /// <see cref="MonitorMode.ExecutableName"/>) or runs from the monitored folder (<see cref="MonitorMode.Folder"/>);
+    /// false for <see cref="MonitorMode.LaunchedProcess"/>.
     /// </summary>
     public static bool Matches(MonitorConfig config, Process process)
     {
@@ -100,6 +108,7 @@ public sealed class ProcessMonitor(MonitorConfig config)
             return config.Mode switch
             {
                 MonitorMode.ExecutablePath => !string.IsNullOrWhiteSpace(config.ExecutablePath) && IsImage(process, config.ExecutablePath),
+                MonitorMode.Folder => !string.IsNullOrWhiteSpace(config.Folder) && IsIn(process, config.Folder),
                 MonitorMode.ExecutableName => !string.IsNullOrWhiteSpace(config.ExecutableName)
                     && (string.Equals(process.ProcessName + ".exe", config.ExecutableName, StringComparison.OrdinalIgnoreCase)
                         || string.Equals(process.ProcessName, config.ExecutableName, StringComparison.OrdinalIgnoreCase)),
@@ -115,6 +124,11 @@ public sealed class ProcessMonitor(MonitorConfig config)
     /// <summary>Whether <paramref name="process"/> runs <paramref name="executablePath"/>. False if it can't be opened.</summary>
     public static bool IsImage(Process process, string executablePath) =>
         ImagePath(process) is { } path && string.Equals(path, Path.GetFullPath(executablePath), StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>Whether <paramref name="process"/> runs from <paramref name="folder"/> or below it. False if it can't be opened.</summary>
+    public static bool IsIn(Process process, string folder) =>
+        ImagePath(process) is { } path
+        && path.StartsWith(Path.TrimEndingDirectorySeparator(Path.GetFullPath(folder)) + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>The processes running from <paramref name="folder"/> or below it.</summary>
     internal static List<int> ProcessesIn(string folder)

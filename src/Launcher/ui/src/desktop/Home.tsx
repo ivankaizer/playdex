@@ -94,7 +94,7 @@ function LeadCard({ stats }: { stats: GameStats }) {
   const total = totalMinutes(useStore(playdexSummary), game);
   return (
     <article className="dk-lead">
-      <Cover game={game} kind="hero" className="dk-card-art" eager />
+      <Cover game={game} kind="hero" className="dk-card-art" eager untitled />
       <div className="dk-lead-scrim" />
       <button
         className="dk-stretch"

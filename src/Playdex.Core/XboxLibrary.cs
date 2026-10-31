@@ -75,18 +75,45 @@ public static partial class XboxLibrary
             {
                 return null;
             }
-            var title = Literal(Elements(config, "ShellVisuals").FirstOrDefault()?.Attribute("DefaultDisplayName")?.Value)
+            var visuals = Elements(config, "ShellVisuals").FirstOrDefault();
+            var title = Literal(visuals?.Attribute("DefaultDisplayName")?.Value)
                 ?? Indirect(package.DisplayName)
                 ?? package.FullName.Split('_')[0];
             var appUserModelId = $"{family}!{app}";
             var launch = new LaunchConfig { ExecutablePath = executablePath, AppUserModelId = appUserModelId };
-            return new StoreGame(StoreGames.Xbox, appUserModelId, title.Trim(), TitleId(Elements(config, "TitleId").FirstOrDefault()?.Value), launch);
+            return new StoreGame(
+                StoreGames.Xbox, appUserModelId, title.Trim(), TitleId(Elements(config, "TitleId").FirstOrDefault()?.Value), launch,
+                Image(package.RootFolder, visuals?.Attribute("SplashScreenImage")?.Value), Path.GetFullPath(package.RootFolder));
         }
         catch (Exception ex) when (ex is XmlException or IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
         {
             Log.Info($"xbox: {package.FullName} skipped ({ex.Message})");
             return null;
         }
+    }
+
+    /// <summary>
+    /// A package image as the config names it ("SplashScreen.png"), or, when only qualified copies ship
+    /// ("SplashScreen.scale-200.png"), the largest of them; null when there is none. A PC GDK game's splash screen is
+    /// 1920x1080 key art.
+    /// </summary>
+    internal static string? Image(string root, string? name)
+    {
+        if (string.IsNullOrWhiteSpace(name) || name.StartsWith("ms-resource:", StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+        var path = Path.GetFullPath(Path.Combine(root, name));
+        if (File.Exists(path))
+        {
+            return path;
+        }
+        var folder = Path.GetDirectoryName(path)!;
+        return Directory.Exists(folder)
+            ? new DirectoryInfo(folder)
+                .EnumerateFiles($"{Path.GetFileNameWithoutExtension(path)}.*{Path.GetExtension(path)}")
+                .MaxBy(f => f.Length)?.FullName
+            : null;
     }
 
     /// <summary>

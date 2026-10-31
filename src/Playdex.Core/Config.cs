@@ -116,6 +116,10 @@ public sealed class MonitorConfig
     public MonitorMode Mode { get; set; } = MonitorMode.LaunchedProcess;
     public string? ExecutablePath { get; set; }
     public string? ExecutableName { get; set; }
+
+    /// <summary>For <see cref="MonitorMode.Folder"/>: the game's install folder.</summary>
+    public string? Folder { get; set; }
+
     public int ExitDebounceSeconds { get; set; } = 10;
 }
 
@@ -124,7 +128,13 @@ public enum MonitorMode
 {
     LaunchedProcess,
     ExecutablePath,
-    ExecutableName
+    ExecutableName,
+
+    /// <summary>
+    /// Any process running from the game's install folder: for a game its launcher starts through a stub (Black Ops 6's
+    /// bootstrapper.exe starts cod24-cod.exe and exits).
+    /// </summary>
+    Folder
 }
 
 public sealed class ApiConfig

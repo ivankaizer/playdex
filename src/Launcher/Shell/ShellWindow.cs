@@ -373,6 +373,10 @@ internal sealed partial class ShellWindow : Window
             var customArt = CustomArt.Root(_services.Config.Storage);
             Directory.CreateDirectory(customArt);
             web.SetVirtualHostNameToFolderMapping(Library.CustomArtHost, customArt, CoreWebView2HostResourceAccessKind.Allow);
+            // Launcher games' own key art (StoreArt), copied out of their installs.
+            var storeArt = StoreArt.Root(_services.Config.Storage);
+            Directory.CreateDirectory(storeArt);
+            web.SetVirtualHostNameToFolderMapping(Library.StoreArtHost, storeArt, CoreWebView2HostResourceAccessKind.Allow);
 
             var dist = Path.Combine(AppContext.BaseDirectory, "ui");
             string url;

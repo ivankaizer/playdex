@@ -151,7 +151,7 @@ function CardArt({ game }: { game: Game }) {
   if (style === "hero") {
     return (
       <span className="jtile-art jtile-frame jtile-hero">
-        <Cover game={game} kind="hero" className="jtile-hero-art" />
+        <Cover game={game} kind="hero" className="jtile-hero-art" untitled />
         <span className="jtile-hero-scrim" aria-hidden />
         <Logo game={game} className="jtile-logo" titleClass="jtile-logo-title" />
       </span>

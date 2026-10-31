@@ -68,7 +68,7 @@ public static class EpicLibrary
                 return null;
             }
             var launch = new LaunchConfig { ExecutablePath = executablePath, Uri = LaunchUri(catalogNamespace, catalogItem, appName) };
-            return new StoreGame(StoreGames.Epic, appName, Text("DisplayName") ?? appName, appName, launch);
+            return new StoreGame(StoreGames.Epic, appName, Text("DisplayName") ?? appName, appName, launch, InstallFolder: Path.GetFullPath(folder));
         }
         catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
         {

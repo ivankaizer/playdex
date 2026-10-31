@@ -1,5 +1,5 @@
-// Inside the Windows host the library is what the host found on this PC (installed Steam games and games added
-// through the Playdex Wrapper), injected as window.__PLAYDEX_LIBRARY__ before this module runs. In a plain browser it
+// Inside the Windows host the library is what the host found on this PC (installed Steam games, games added
+// through the Playdex Wrapper, and the Xbox app's, Epic's and GOG's games), injected as window.__PLAYDEX_LIBRARY__ before this module runs. In a plain browser it
 // is the design prototype's demo library: titles and artwork are real (Steam CDN), playtimes and sessions synthetic.
 
 import { createStore, useStore } from "../nav/store";
@@ -19,7 +19,8 @@ export interface GameImages {
 interface HostGame {
   id: string;
   title: string;
-  source: "steam" | "playdex";
+  /** "xbox", "epic", "gog": a game that launcher installed, not added to Playdex. */
+  source: "steam" | "playdex" | "xbox" | "epic" | "gog";
   steamAppId?: number;
   /** Unix ms; Steam's own record of the last launch. */
   lastPlayed?: number;
@@ -73,7 +74,7 @@ export const SOURCE_LABEL: Record<Source, string> = {
   playdex: "Playdex",
   epic: "Epic Games",
   gog: "GOG",
-  xbox: "PC Game Pass",
+  xbox: "Xbox",
   emulator: "RetroArch",
   psn: "PlayStation 5",
   switch: "Nintendo Switch",

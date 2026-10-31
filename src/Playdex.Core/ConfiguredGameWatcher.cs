@@ -31,7 +31,7 @@ public sealed class ConfiguredGameWatcher(AppConfig config, GameConfig game) : I
             {
                 return [];
             }
-            var folder = Path.GetDirectoryName(game.Launch.ExecutablePath);
+            var folder = game.Monitor.Mode == MonitorMode.Folder ? game.Monitor.Folder : Path.GetDirectoryName(game.Launch.ExecutablePath);
             return [.. started > 0 ? [started] : Array.Empty<int>(), .. ProcessTree.ProcessesOf(game.GameId), .. folder is null ? [] : ProcessMonitor.ProcessesIn(folder)];
         }
     }

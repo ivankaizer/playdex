@@ -14,6 +14,7 @@ public sealed class StoreGamesTests : IDisposable
 
         Assert.Equal(("epic", "Harbor", "Harbor", "Harbor Lights"), (game.Store, game.Id, game.RecordedId, game.Title));
         Assert.Equal(executable, game.ExecutablePath);
+        Assert.Equal(Path.Combine(_directory, "Harbor Lights"), game.InstallFolder);
         Assert.Equal("com.epicgames.launcher://apps/ns1%3Aitem1%3AHarbor?action=launch&silent=true", game.Launch.Uri);
         Assert.False(game.StartsDirectly);
     }
@@ -63,7 +64,7 @@ public sealed class StoreGamesTests : IDisposable
     [Theory]
     [InlineData("xbox")]
     [InlineData("epic")]
-    public void AGameItsLauncherStartsIsFollowedByItsExecutableAndRecordedByItsStoreId(string store)
+    public void AGameItsLauncherStartsIsFollowedByItsInstallFolderAndRecordedByItsStoreId(string store)
     {
         var config = new AppConfig();
         var launch = store == "xbox"
@@ -78,7 +79,7 @@ public sealed class StoreGamesTests : IDisposable
         Assert.Equal((store, "1234"), (game.GameProvider, game.ApiGameId));
         Assert.Equal((store, "harbor-id"), (game.Store, game.StoreId));
         Assert.Same(launch, game.Launch);
-        Assert.Equal((MonitorMode.ExecutablePath, @"C:\Games\Harbor\Harbor.exe"), (game.Monitor.Mode, game.Monitor.ExecutablePath));
+        Assert.Equal((MonitorMode.Folder, @"C:\Games\Harbor"), (game.Monitor.Mode, game.Monitor.Folder));
         var again = Assert.Throws<InvalidOperationException>(() => GameCatalog.AddFromStore(config, found));
         Assert.Contains("already in Playdex", again.Message);
     }

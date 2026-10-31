@@ -98,6 +98,13 @@ public sealed class SessionManager(
             watcher = new ConfiguredGameWatcher(config, configured);
             capture = CaptureGame.From(configured, config.Api);
         }
+        else if (game?.Found is { } found)
+        {
+            // Another launcher's game that isn't added: started and recorded as it would be once added.
+            var settings = GameCatalog.FromStore(found, game.Id);
+            watcher = new ConfiguredGameWatcher(config, settings);
+            capture = CaptureGame.From(settings, config.Api);
+        }
         else if (game?.SteamAppId is { } appId)
         {
             watcher = SteamGameWatcher.Create(appId);

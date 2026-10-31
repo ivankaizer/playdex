@@ -4,9 +4,12 @@ namespace Playdex.Core;
 /// A game another launcher installed on this PC, which can be added to Playdex. <paramref name="Store"/> is the
 /// launcher ("xbox", "epic", "gog") and also how it is recorded, with <paramref name="RecordedId"/> (an Xbox title id,
 /// an Epic app name, a GOG game id); null when it has none. <paramref name="Id"/> is its id in the launcher, and
-/// <paramref name="Launch"/> how it starts.
+/// <paramref name="Launch"/> how it starts. <paramref name="KeyArt"/> is a 16:9 image of the game in its install (an
+/// Xbox game's splash screen), shown until other art is picked (<see cref="StoreArt"/>); null when it has none.
+/// <paramref name="InstallFolder"/> is where it is installed; null for its executable's folder.
 /// </summary>
-public sealed record StoreGame(string Store, string Id, string Title, string? RecordedId, LaunchConfig Launch)
+public sealed record StoreGame(
+    string Store, string Id, string Title, string? RecordedId, LaunchConfig Launch, string? KeyArt = null, string? InstallFolder = null)
 {
     public string ExecutablePath => Launch.ExecutablePath!;
 

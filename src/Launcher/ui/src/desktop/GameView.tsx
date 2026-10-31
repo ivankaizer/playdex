@@ -25,7 +25,7 @@ export function GameView({ gameId }: { gameId: string }) {
   return (
     <article className="dk-game" aria-labelledby="dk-game-title">
       <header className="dk-hero">
-        <Cover game={game} kind="hero" className="dk-hero-art" eager />
+        <Cover game={game} kind="hero" className="dk-hero-art" eager untitled />
         <div className="dk-hero-scrim" />
         <div className="dk-hero-logo" id="dk-game-title">
           <Logo game={game} className="dk-logo" titleClass="dk-hero-title" />

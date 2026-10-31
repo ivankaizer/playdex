@@ -68,6 +68,17 @@ public static class GameCatalog
             gameId = $"{baseId}-{number}";
         }
 
+        var game = FromStore(found, gameId);
+        config.Games.Add(gameId, game);
+        return game;
+    }
+
+    /// <summary>
+    /// A launcher's game as a game's settings, under <paramref name="gameId"/>: what <see cref="AddFromStore"/> saves,
+    /// and what the library starts a found game that isn't added with.
+    /// </summary>
+    public static GameConfig FromStore(StoreGame found, string gameId)
+    {
         var title = found.Title.Length > MaximumDisplayNameLength ? found.Title[..MaximumDisplayNameLength] : found.Title;
         var game = new GameConfig
         {
@@ -79,13 +90,14 @@ public static class GameCatalog
             Launch = found.Launch,
             Monitor = found.StartsDirectly
                 ? new MonitorConfig { Mode = MonitorMode.LaunchedProcess }
-                : new MonitorConfig { Mode = MonitorMode.ExecutablePath, ExecutablePath = found.ExecutablePath }
+                // Started by its launcher, perhaps through a stub (Black Ops 6's bootstrapper.exe): it runs while
+                // anything from its install does.
+                : new MonitorConfig { Mode = MonitorMode.Folder, Folder = found.InstallFolder ?? Path.GetDirectoryName(found.ExecutablePath) }
         };
         if (found.RecordedId is not null)
         {
             game.GameProvider = found.Store;
         }
-        config.Games.Add(gameId, game);
         return game;
     }
 

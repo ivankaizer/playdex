@@ -18,6 +18,7 @@ public sealed class XboxLibraryTests : IDisposable
         Assert.Equal("Starlight Rally", game.Title);
         Assert.Equal(Path.Combine(root, "Binaries", "Win64", "StarlightRally.exe"), game.ExecutablePath);
         Assert.Equal("1782549035", game.RecordedId);
+        Assert.Equal(root, game.InstallFolder);
         Assert.False(game.StartsDirectly);
     }
 
@@ -68,6 +69,21 @@ public sealed class XboxLibraryTests : IDisposable
     [InlineData(null, null)]
     public void TitleIdsAreDecimal(string? hex, string? expected) => Assert.Equal(expected, XboxLibrary.TitleId(hex));
 
+    [Fact]
+    public void TheSplashScreenIsTheKeyArtOrItsLargestQualifiedCopy()
+    {
+        var root = Package("Starlight Rally", "StarlightRally.exe");
+        Assert.Null(XboxLibrary.Read(new InstalledPackage(FullName, root, null))!.KeyArt);
+
+        File.WriteAllBytes(Path.Combine(root, "SplashScreen.scale-100.png"), new byte[10]);
+        File.WriteAllBytes(Path.Combine(root, "SplashScreen.scale-200.png"), new byte[20]);
+        Assert.Equal(Path.Combine(root, "SplashScreen.scale-200.png"), XboxLibrary.Read(new InstalledPackage(FullName, root, null))!.KeyArt);
+
+        File.WriteAllBytes(Path.Combine(root, "SplashScreen.png"), new byte[5]);
+        Assert.Equal(Path.Combine(root, "SplashScreen.png"), XboxLibrary.Read(new InstalledPackage(FullName, root, null))!.KeyArt);
+        Assert.Null(XboxLibrary.Image(root, "ms-resource:Splash"));
+    }
+
     private string Package(string displayName, string executable, string? titleId = null, bool createExecutable = true)
     {
         var root = Directory.CreateDirectory(Path.Combine(_directory, Guid.NewGuid().ToString("N"))).FullName;
@@ -79,7 +95,7 @@ public sealed class XboxLibraryTests : IDisposable
                 <Executable Name="Console.exe" TargetDeviceFamily="Scarlett" Id="Game" />
                 <Executable Name="{executable}" TargetDeviceFamily="PC" Id="Game" />
               </ExecutableList>
-              <ShellVisuals DefaultDisplayName="{displayName}" PublisherDisplayName="Contoso" />
+              <ShellVisuals DefaultDisplayName="{displayName}" PublisherDisplayName="Contoso" SplashScreenImage="SplashScreen.png" />
               {(titleId is null ? "" : $"<TitleId>{titleId}</TitleId>")}
             </Game>
             """);
