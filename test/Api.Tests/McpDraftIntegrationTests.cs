@@ -127,6 +127,55 @@ public sealed class McpDraftIntegrationTests(AdminApiFixture fixture)
     }
 
     [Fact]
+    public async Task CardToolsNeedTheBatchTokenOfTheirOwnUser()
+    {
+        if (fixture.Factory is null)
+        {
+            return;
+        }
+
+        await using var mcp = await Connect(AdminApiFixture.UserEmail);
+        var drafted = await mcp.CallToolAsync("draft_sessions", new Dictionary<string, object?>
+        {
+            ["sessions"] = new[] { new { title = $"Unmatched {Guid.NewGuid():N}", date = "2026-01-01", durationMinutes = 30 } },
+        });
+        var batch = drafted.StructuredContent!.Value.GetProperty("batch");
+        var row = batch.GetProperty("rows")[0];
+        var token = drafted.Meta!["confirmToken"]!.GetValue<string>();
+        var target = new Dictionary<string, object?>
+        {
+            ["batchId"] = batch.GetProperty("id").GetGuid(),
+            ["rowId"] = row.GetProperty("id").GetGuid(),
+            ["revision"] = row.GetProperty("revision").GetInt32(),
+        };
+        var update = new Dictionary<string, object?>(target) { ["title"] = "Renamed", ["platform"] = "pc" };
+
+        Assert.True((await mcp.CallToolAsync("update_draft", new Dictionary<string, object?>(update) { ["confirmToken"] = "AAAA" })).IsError);
+        Assert.True((await mcp.CallToolAsync("delete_draft", new Dictionary<string, object?>(target) { ["confirmToken"] = "AAAA" })).IsError);
+        await using (var admin = await Connect(AdminApiFixture.AdminEmail))
+        {
+            Assert.True((await admin.CallToolAsync("update_draft", new Dictionary<string, object?>(update) { ["confirmToken"] = token })).IsError);
+            Assert.True((await admin.CallToolAsync("delete_draft", new Dictionary<string, object?>(target) { ["confirmToken"] = token })).IsError);
+        }
+
+        var renamed = await mcp.CallToolAsync("update_draft", new Dictionary<string, object?>(update) { ["confirmToken"] = token });
+        Assert.NotEqual(true, renamed.IsError);
+        var updated = renamed.StructuredContent!.Value.GetProperty("row");
+        Assert.Equal("Renamed", updated.GetProperty("title").GetString());
+
+        // The revision moved on: a card holding the old one is told to reload rather than overwrite.
+        var stale = await mcp.CallToolAsync("delete_draft", new Dictionary<string, object?>(target) { ["confirmToken"] = token });
+        Assert.True(stale.IsError);
+        Assert.Contains("changed", Text(stale));
+        var deleted = await mcp.CallToolAsync("delete_draft", new Dictionary<string, object?>(target)
+        {
+            ["confirmToken"] = token,
+            ["revision"] = updated.GetProperty("revision").GetInt32(),
+        });
+        Assert.NotEqual(true, deleted.IsError);
+    }
+
+    [Fact]
     public async Task InvalidRowsAreReportedToTheModel()
     {
         if (fixture.Factory is null)
