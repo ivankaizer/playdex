@@ -60,6 +60,9 @@ services:
       AiDrafts__ApiKey: ${AI_DRAFTS_API_KEY:-}
       AiDrafts__Model: ${AI_DRAFTS_MODEL:-}
       SENTRY_DSN: ${SENTRY_DSN:-}
+      OTLP_ENDPOINT: ${OTLP_ENDPOINT:-}
+      OTLP_HEADERS: ${OTLP_HEADERS:-}
+      OTEL_SERVICE_NAME: ${OTEL_SERVICE_NAME:-playdex-api}
     depends_on:
       db:
         condition: service_healthy

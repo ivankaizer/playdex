@@ -28,7 +28,10 @@ Set these in `.env` next to `docker-compose.yml`, then run `docker compose up -d
 | `AI_DRAFTS_BASE_URL` | OpenAI Responses API | The provider's endpoint. Set it for OpenRouter. |
 | `AI_DRAFTS_API_KEY` | | The provider's API key. |
 | `AI_DRAFTS_MODEL` | | The model ID. |
-| `SENTRY_DSN` | | Sends errors to [Sentry](https://sentry.io). |
+| `SENTRY_DSN` | | Sends errors to [Sentry](https://sentry.io), and checks polling in with a Sentry cron monitor (`playdex-polling`) after every cycle, so Sentry tells you when polling stops. |
+| `OTLP_ENDPOINT` | | Sends metrics, logs and traces to an OpenTelemetry (OTLP/HTTP) endpoint, such as Grafana Cloud's (*Stack → OpenTelemetry → Configure*). |
+| `OTLP_HEADERS` | | Headers for that endpoint, as `name=value` pairs separated by commas. For Grafana Cloud: `Authorization=Basic <base64 of instance ID:token>`. |
+| `OTEL_SERVICE_NAME` | `playdex-api` | The service name the telemetry is sent under: Grafana's `job` label. |
 
 ## Advanced
 
