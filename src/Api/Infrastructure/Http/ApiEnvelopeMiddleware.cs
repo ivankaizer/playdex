@@ -6,7 +6,9 @@ public sealed class ApiEnvelopeMiddleware(RequestDelegate next)
 {
     public async Task InvokeAsync(HttpContext context)
     {
+        // OAuth clients expect RFC 6749 token responses, which an envelope would break.
         if (!context.Request.Path.StartsWithSegments("/api") ||
+            context.Request.Path.StartsWithSegments("/api/oauth/token") ||
             HttpMethods.IsOptions(context.Request.Method))
         {
             await next(context);

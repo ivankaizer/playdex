@@ -3,6 +3,7 @@ using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Api.Infrastructure.Auth;
+using Api.Infrastructure.Auth.OAuth;
 using Api.Infrastructure.Common;
 using Api.Infrastructure.Credentials;
 using Api.Infrastructure.Http;
@@ -76,6 +77,7 @@ builder.Services.AddSingleton(new MigrationCatalog([
     new DurableNotificationsAndBackoffMigration(),
     new HashPlaydexAppKeysMigration(),
     new GogEpicIdentityTypesMigration(),
+    new OAuthMigration(),
 ]));
 builder.Services.AddSingleton<MigrationRunner>();
 builder.Services.AddScoped<EventBus>();
@@ -169,6 +171,7 @@ api
     .MapPosters()
     .MapAdmin();
 
+app.MapOAuthDiscovery();
 app.MapHealthChecks("/health/live", new HealthCheckOptions { Predicate = _ => false });
 app.MapHealthChecks("/health/ready", HealthEndpoints.Readiness);
 

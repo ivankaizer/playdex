@@ -27,12 +27,17 @@ public sealed class PlaydexDbContext(DbContextOptions<PlaydexDbContext> options)
     public DbSet<SessionDraftRow> SessionDraftRows => Set<SessionDraftRow>();
     public DbSet<AiGeneration> AiGenerations => Set<AiGeneration>();
 
+    public DbSet<OAuthGrant> OAuthGrants => Set<OAuthGrant>();
+    public DbSet<OAuthAuthorizationCode> OAuthAuthorizationCodes => Set<OAuthAuthorizationCode>();
+    public DbSet<OAuthRefreshToken> OAuthRefreshTokens => Set<OAuthRefreshToken>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         ConfigureSessionDrafts(modelBuilder);
         ConfigureAiGenerations(modelBuilder);
         ConfigureUsers(modelBuilder);
         ConfigureRefreshTokens(modelBuilder);
+        ConfigureOAuth(modelBuilder);
         ConfigurePlatforms(modelBuilder);
         ConfigureIntegrations(modelBuilder);
         ConfigureGames(modelBuilder);
@@ -169,6 +174,57 @@ public sealed class PlaydexDbContext(DbContextOptions<PlaydexDbContext> options)
         entity.Property(row => row.IsAdmin).HasColumnName("is_admin");
         entity.Property(row => row.TokenVersion).HasColumnName("token_version");
         entity.HasIndex(row => row.Email).IsUnique();
+    }
+
+    private static void ConfigureOAuth(ModelBuilder modelBuilder)
+    {
+        var grant = modelBuilder.Entity<OAuthGrant>();
+        grant.ToTable("oauth_grants");
+        grant.HasKey(row => row.Id);
+        grant.Property(row => row.Id).HasColumnName("id");
+        grant.Property(row => row.UserId).HasColumnName("user_id");
+        grant.Property(row => row.ClientId).HasColumnName("client_id");
+        grant.Property(row => row.ClientName).HasColumnName("client_name");
+        grant.Property(row => row.Scope).HasColumnName("scope");
+        grant.Property(row => row.Resource).HasColumnName("resource");
+        grant.Property(row => row.TokenVersion).HasColumnName("token_version");
+        grant.Property(row => row.CreatedAt).HasColumnName("created_at");
+        grant.Property(row => row.LastUsedAt).HasColumnName("last_used_at");
+        grant.Property(row => row.RevokedAt).HasColumnName("revoked_at");
+        grant.HasIndex(row => row.UserId);
+        grant.HasOne<User>().WithMany().HasForeignKey(row => row.UserId).OnDelete(DeleteBehavior.Cascade);
+
+        var code = modelBuilder.Entity<OAuthAuthorizationCode>();
+        code.ToTable("oauth_authorization_codes");
+        code.HasKey(row => row.CodeHash);
+        code.Property(row => row.CodeHash).HasColumnName("code_hash");
+        code.Property(row => row.UserId).HasColumnName("user_id");
+        code.Property(row => row.ClientId).HasColumnName("client_id");
+        code.Property(row => row.ClientName).HasColumnName("client_name");
+        code.Property(row => row.RedirectUri).HasColumnName("redirect_uri");
+        code.Property(row => row.CodeChallenge).HasColumnName("code_challenge");
+        code.Property(row => row.Scope).HasColumnName("scope");
+        code.Property(row => row.Resource).HasColumnName("resource");
+        code.Property(row => row.CreatedAt).HasColumnName("created_at");
+        code.Property(row => row.ExpiresAt).HasColumnName("expires_at");
+        code.Property(row => row.UsedAt).HasColumnName("used_at");
+        code.Property(row => row.GrantId).HasColumnName("grant_id");
+        code.HasIndex(row => row.ExpiresAt);
+        code.HasOne<User>().WithMany().HasForeignKey(row => row.UserId).OnDelete(DeleteBehavior.Cascade);
+        code.HasOne<OAuthGrant>().WithMany().HasForeignKey(row => row.GrantId).OnDelete(DeleteBehavior.Cascade);
+
+        var refresh = modelBuilder.Entity<OAuthRefreshToken>();
+        refresh.ToTable("oauth_refresh_tokens");
+        refresh.HasKey(row => row.Id);
+        refresh.Property(row => row.Id).HasColumnName("id").ValueGeneratedOnAdd();
+        refresh.Property(row => row.GrantId).HasColumnName("grant_id");
+        refresh.Property(row => row.TokenHash).HasColumnName("token_hash");
+        refresh.Property(row => row.CreatedAt).HasColumnName("created_at");
+        refresh.Property(row => row.ExpiresAt).HasColumnName("expires_at");
+        refresh.Property(row => row.RotatedAt).HasColumnName("rotated_at");
+        refresh.HasIndex(row => row.TokenHash).IsUnique();
+        refresh.HasIndex(row => row.GrantId);
+        refresh.HasOne<OAuthGrant>().WithMany().HasForeignKey(row => row.GrantId).OnDelete(DeleteBehavior.Cascade);
     }
 
     private static void ConfigureRefreshTokens(ModelBuilder modelBuilder)
