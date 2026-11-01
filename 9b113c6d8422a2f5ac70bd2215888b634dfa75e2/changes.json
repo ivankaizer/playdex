@@ -1,0 +1,21 @@
+{
+  "before": "116fd84e977021696b8aa46142c44ea45c3b3e5f",
+  "after": "9b113c6d8422a2f5ac70bd2215888b634dfa75e2",
+  "changed": [],
+  "unchanged": [
+    "landing",
+    "login",
+    "dashboard",
+    "sessions",
+    "recap",
+    "settings",
+    "admin-login",
+    "admin-dashboard",
+    "admin-integrations",
+    "admin-sessions",
+    "admin-ai-generations",
+    "admin-games"
+  ],
+  "added": [],
+  "removed": []
+}
