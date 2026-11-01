@@ -1,1 +1,7 @@
 apps/millenium/** text eol=lf
+
+# GitHub's language bar: count only C# and TypeScript (later lines win)
+* linguist-detectable=false
+*.cs linguist-detectable
+*.ts linguist-detectable
+*.tsx linguist-detectable
