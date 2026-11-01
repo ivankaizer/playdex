@@ -65,7 +65,10 @@ public static class FsePackage
             Log.Info("fse: trusting the package certificate (admin prompt)");
             await RunPowerShellAsync(TrustCommand(certificate), elevated: true);
         }
-        await RunPowerShellAsync($"Add-AppxPackage -Path {Quote(msixPath)} -ForceApplicationShutdown", elevated: false);
+        // Any version: the package always matches the app that installs it, even when that is a lower version (a
+        // rollback, or the 2.x pre-releases before the public 1.0).
+        await RunPowerShellAsync(
+            $"Add-AppxPackage -Path {Quote(msixPath)} -ForceApplicationShutdown -ForceUpdateFromAnyVersion", elevated: false);
         if (!await IsInstalledAsync())
         {
             throw new InvalidOperationException("Windows did not install the Full Screen Experience package.");
